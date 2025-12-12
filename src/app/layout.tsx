@@ -6,7 +6,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 const satoshi = localFont({
   src: [
     {
-      path: '../../public/fonts/Satoshi/Satoshi-Regular.woff2', // Nota: dos niveles arriba
+      path: '../../public/fonts/Satoshi/Satoshi-Regular.woff2', 
       weight: '400',
       style: 'normal',
     },

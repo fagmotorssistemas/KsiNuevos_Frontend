@@ -26,12 +26,13 @@ export const Button = ({
     const baseStyles = "inline-flex items-center justify-center rounded-lg font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
 
     const variants = {
-        primary: "bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500 shadow-sm",
-        secondary: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-200 shadow-sm",
-        "link-gray": "text-slate-600 hover:text-slate-900 bg-transparent hover:bg-slate-50 shadow-none border-none",
-        "link-color": "text-indigo-600 hover:text-indigo-700 bg-transparent hover:bg-indigo-50 shadow-none border-none",
-        danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm",
+        primary: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm",
+        secondary: "bg-white text-black border border-black hover:bg-neutral-100 focus:ring-neutral-300 shadow-sm",
+        "link-gray": "text-black hover:text-red-600 bg-transparent hover:bg-neutral-200 shadow-none border-none",
+        "link-color": "text-red-600 hover:text-red-700 bg-transparent hover:bg-red-100 shadow-none border-none",
+        danger: "bg-black text-white hover:bg-neutral-900 focus:ring-black shadow-sm",
     };
+
 
     const sizes = {
         sm: "px-3 py-2 text-sm",

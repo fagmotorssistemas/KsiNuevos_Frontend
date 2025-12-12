@@ -9,7 +9,7 @@ const TableContext = createContext<{
 
 export const TableCard = {
     Root: ({ children }: { children: React.ReactNode }) => (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl  bg-white shadow-sm">
             {children}
         </div>
     )
@@ -24,7 +24,7 @@ export const Table = ({
     return (
         <TableContext.Provider value={{ sortDescriptor, onSortChange }}>
             <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200" {...props}>
+                <table className="min-w-full divide-y divide-gray-200" {...props}>
                     {children}
                 </table>
             </div>
@@ -32,9 +32,9 @@ export const Table = ({
     );
 };
 
-// Header Components (CORREGIDO: Ahora envuelve los children en <tr>)
+// Header Components
 Table.Header = ({ children }: any) => (
-    <thead className="bg-slate-50">
+    <thead className="bg-black">
         <tr>
             {children}
         </tr>
@@ -59,12 +59,14 @@ Table.Head = ({ id, label, allowsSorting, className = "" }: any) => {
         <th
             scope="col"
             onClick={handleClick}
-            className={`px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider ${allowsSorting ? 'cursor-pointer hover:bg-slate-100 select-none' : ''} ${className}`}
+            className={`px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider
+                ${allowsSorting ? 'cursor-pointer hover:bg-gray-900 select-none' : ''}
+                ${className}`}
         >
             <div className="flex items-center gap-1">
                 {label}
-                {direction === "ascending" && <ArrowUp className="h-3 w-3" />}
-                {direction === "descending" && <ArrowDown className="h-3 w-3" />}
+                {direction === "ascending" && <ArrowUp className="h-3 w-3 text-red-600" />}
+                {direction === "descending" && <ArrowDown className="h-3 w-3 text-red-600" />}
             </div>
         </th>
     );
@@ -72,7 +74,7 @@ Table.Head = ({ id, label, allowsSorting, className = "" }: any) => {
 
 // Body Components
 Table.Body = ({ items, children }: any) => (
-    <tbody className="divide-y divide-slate-200 bg-white">
+    <tbody className="divide-y divide-gray-200 bg-white">
         {items && items.length > 0 ? (
             items.map((item: any) => (
                 <React.Fragment key={item.id || Math.random()}>
@@ -81,7 +83,7 @@ Table.Body = ({ items, children }: any) => (
             ))
         ) : (
             <tr>
-                <td colSpan={100} className="px-6 py-10 text-center text-slate-500 text-sm">
+                <td colSpan={100} className="px-6 py-10 text-center text-neutral-700 text-sm">
                     No se encontraron datos.
                 </td>
             </tr>
@@ -89,10 +91,14 @@ Table.Body = ({ items, children }: any) => (
     </tbody>
 );
 
-Table.Row = ({ children }: any) => <tr className="hover:bg-slate-50 transition-colors">{children}</tr>;
+Table.Row = ({ children }: any) => (
+    <tr className="hover:bg-neutral-100 transition-colors">
+        {children}
+    </tr>
+);
 
 Table.Cell = ({ children, className = "" }: any) => (
-    <td className={`px-6 py-4 text-sm text-slate-700 ${className}`}>
+    <td className={`px-6 py-4 text-sm text-black ${className}`}>
         {children}
     </td>
 );
