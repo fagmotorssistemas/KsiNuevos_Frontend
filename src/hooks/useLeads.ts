@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 // --- TIPOS ---
-// Exportamos este tipo para que el componente de Tabla lo pueda usar
 export type LeadWithDetails = Database['public']['Tables']['leads']['Row'] & {
     interested_cars: Database['public']['Tables']['interested_cars']['Row'][];
 };
@@ -13,79 +12,144 @@ export type SortDescriptor = {
     direction: "ascending" | "descending";
 };
 
+export type DateFilter = 'all' | 'today' | '7days' | '15days' | '30days';
+
+// Tipo para el estado de los filtros
+export type LeadsFilters = {
+    search: string;
+    status: string | 'all';
+    temperature: string | 'all';
+    dateRange: DateFilter;
+};
+
 export function useLeads() {
-    // 1. Obtenemos cliente y usuario del AuthContext
     const { supabase, user, isLoading: isAuthLoading } = useAuth();
 
-    // 2. Estados locales
+    // Estado de Datos
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Estado de UI (Orden y Filtros)
     const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
         column: "created_at",
         direction: "descending",
     });
 
-    // 3. Función de carga (Memoizada con useCallback para poder exportarla)
-    const fetchLeads = useCallback(async () => {
-        // Si no hay usuario cargado, no hacemos nada (evita errores 401)
-        if (!user) return;
+    const [filters, setFilters] = useState<LeadsFilters>({
+        search: '',
+        status: 'all',
+        temperature: 'all',
+        dateRange: 'all'
+    });
 
+    // Carga de Datos (Trae TODO y filtramos en cliente por velocidad)
+    const fetchLeads = useCallback(async () => {
+        if (!user) return;
         setIsLoading(true);
 
         const { data, error } = await supabase
             .from('leads')
-            .select('*, interested_cars(*)') // Traemos la relación
+            .select('*, interested_cars(*)')
             .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error cargando leads:", error);
-            // Aquí podrías agregar un estado de error si quisieras mostrar una alerta
         } else {
-            // @ts-ignore: Supabase types join workaround
+            // @ts-ignore
             setLeads(data || []);
         }
         setIsLoading(false);
     }, [supabase, user]);
 
-    // 4. Efecto: Cargar datos cuando el usuario esté listo
     useEffect(() => {
         if (!isAuthLoading && user) {
             fetchLeads();
         }
     }, [isAuthLoading, user, fetchLeads]);
 
-    // 5. Lógica de Ordenamiento (Memoizada)
-    const sortedLeads = useMemo(() => {
-        return [...leads].sort((a, b) => {
+    // --- LÓGICA DE FILTRADO Y ORDENAMIENTO ---
+    const processedLeads = useMemo(() => {
+        let filtered = [...leads];
+
+        // 1. Filtro por Buscador (Nombre, Teléfono o ID)
+        if (filters.search.trim()) {
+            const query = filters.search.toLowerCase();
+            filtered = filtered.filter(l => 
+                l.name.toLowerCase().includes(query) || 
+                l.phone?.includes(query) ||
+                l.lead_id_kommo?.toLowerCase().includes(query)
+            );
+        }
+
+        // 2. Filtro por Estado
+        if (filters.status !== 'all') {
+            filtered = filtered.filter(l => l.status === filters.status);
+        }
+
+        // 3. Filtro por Temperatura
+        if (filters.temperature !== 'all') {
+            filtered = filtered.filter(l => l.temperature === filters.temperature);
+        }
+
+        // 4. Filtro por Fecha
+        if (filters.dateRange !== 'all') {
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            
+            filtered = filtered.filter(l => {
+                if (!l.created_at) return false;
+                const leadDate = new Date(l.created_at).getTime();
+
+                switch (filters.dateRange) {
+                    case 'today':
+                        return leadDate >= todayStart;
+                    case '7days':
+                        return leadDate >= (todayStart - (7 * 24 * 60 * 60 * 1000));
+                    case '15days':
+                        return leadDate >= (todayStart - (15 * 24 * 60 * 60 * 1000));
+                    case '30days':
+                        return leadDate >= (todayStart - (30 * 24 * 60 * 60 * 1000));
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // 5. Ordenamiento
+        return filtered.sort((a, b) => {
             const col = sortDescriptor.column as keyof LeadWithDetails;
             const first = a[col];
             const second = b[col];
 
-            // Manejo de nulos (siempre al final)
             if (first === null || first === undefined) return 1;
             if (second === null || second === undefined) return -1;
 
-            // Comparación de Strings
             if (typeof first === "string" && typeof second === "string") {
                 let cmp = first.localeCompare(second);
                 if (sortDescriptor.direction === "descending") cmp *= -1;
                 return cmp;
             }
 
-            // Comparación Numérica / Booleana
             const aNum = Number(first);
             const bNum = Number(second);
             return sortDescriptor.direction === "descending" ? bNum - aNum : aNum - bNum;
         });
-    }, [leads, sortDescriptor]);
+    }, [leads, filters, sortDescriptor]);
 
-    // 6. Retornamos todo lo que la UI necesita
+    // Helpers para actualizar filtros individuales
+    const updateFilter = (key: keyof LeadsFilters, value: any) => {
+        setFilters(prev => ({ ...prev, [key]: value }));
+    };
+
     return {
-        leads: sortedLeads,      // La lista ya ordenada
-        rawLeads: leads,         // La lista original (por si acaso)
-        isLoading: isLoading || isAuthLoading, // Carga combinada
-        reload: fetchLeads,      // Función para recargar manualmente
-        sortDescriptor,          // Estado del ordenamiento
-        setSortDescriptor,       // Función para cambiar orden
+        leads: processedLeads,      // Devolvemos la lista YA filtrada
+        rawCount: leads.length,     // Total sin filtros (para mostrar "Viendo 5 de 100")
+        isLoading: isLoading || isAuthLoading,
+        reload: fetchLeads,
+        sortDescriptor,
+        setSortDescriptor,
+        filters,
+        updateFilter,
+        resetFilters: () => setFilters({ search: '', status: 'all', temperature: 'all', dateRange: 'all' })
     };
 }
