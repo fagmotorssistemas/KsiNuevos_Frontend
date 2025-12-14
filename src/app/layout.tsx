@@ -2,11 +2,12 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import './global.css'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { Navbar } from '@/components/layout/Navbar'
 
 const satoshi = localFont({
   src: [
     {
-      path: '../../public/fonts/Satoshi/Satoshi-Regular.woff2', 
+      path: '../../public/fonts/Satoshi/Satoshi-Regular.woff2',
       weight: '400',
       style: 'normal',
     },
@@ -28,8 +29,8 @@ const satoshi = localFont({
 export const metadata: Metadata = {
   title: 'KSI-NUEVOS',
   description: 'Concesionaria Cuenca.',
-    icons: {
-    icon: '/logo.png', 
+  icons: {
+    icon: '/logo.png',
   },
 }
 
@@ -42,7 +43,8 @@ export default function RootLayout({
     <html lang="es" className={satoshi.variable}>
       <body className="font-sans bg-[#f2f2f2] text-[#000]">
         <AuthProvider>
-            {children}
+          <Navbar />
+          {children}
         </AuthProvider>
       </body>
     </html>

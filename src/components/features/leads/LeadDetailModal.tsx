@@ -10,15 +10,19 @@ import {
     FileText,
     Edit3,
     CheckCircle2,
-    Loader2
+    Loader2,
+    ExternalLink,
+    Calendar,
+    MapPin,
+    AlertTriangle
 } from "lucide-react";
 
 // Hooks y Tipos
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
-import type { LeadWithDetails } from "../../../hooks/useLeads"; // Importamos el tipo compartido
+import type { LeadWithDetails } from "../../../hooks/useLeads";
 
-// Componentes UI Básicos Mejorados
+// --- COMPONENTES UI LOCALES ---
 const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input
         className={`flex w-full outline-none transition-all duration-200 ${className}`}
@@ -42,90 +46,160 @@ const Button = ({ children, className, ...props }: React.ButtonHTMLAttributes<HT
     </button>
 );
 
-
+// --- TIPOS ---
 type Interaction = Database['public']['Tables']['interactions']['Row'];
+type Appointment = Database['public']['Tables']['appointments']['Row'];
 
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
 }
 
+// Opciones de resultado según el tipo de interacción
+const RESULT_OPTIONS: Record<string, string[]> = {
+    llamada: ['contestó', 'buzón', 'ocupado', 'número_equivocado', 'volver_a_llamar'],
+    whatsapp: ['enviado', 'leído', 'respondido', 'bloqueado'],
+    visita: ['asistió', 'no_asistió', 'reprogramó', 'venta_cerrada'],
+    email: ['enviado', 'rebotado', 'respondido'],
+    nota_interna: ['informativo', 'urgente']
+};
+
 export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
     const { supabase, user } = useAuth();
 
-    // Estados locales
+    // --- ESTADOS GLOBALES ---
+    const [activeTab, setActiveTab] = useState<'history' | 'agenda'>('history');
+
+    // --- ESTADOS RESUMEN ---
     const [resume, setResume] = useState(lead.resume || "");
     const [isSavingResume, setIsSavingResume] = useState(false);
 
-    // Estados para interacciones
+    // --- ESTADOS INTERACCIONES ---
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [newInteractionNote, setNewInteractionNote] = useState("");
     const [interactionType, setInteractionType] = useState<string>("llamada");
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [interactionResult, setInteractionResult] = useState<string | null>(null);
+    const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
 
-    // 1. Cargar historial al abrir
+    // --- ESTADOS AGENDA ---
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [apptDate, setApptDate] = useState("");
+    const [apptTime, setApptTime] = useState("");
+    const [apptTitle, setApptTitle] = useState("");
+    const [isSubmittingAppt, setIsSubmittingAppt] = useState(false);
+
+    // --- EFECTOS DE CARGA ---
     useEffect(() => {
+        // 1. Cargar Interacciones
         const fetchInteractions = async () => {
             const { data } = await supabase
                 .from('interactions')
                 .select('*')
                 .eq('lead_id', lead.id)
                 .order('created_at', { ascending: false });
-
             if (data) setInteractions(data);
         };
 
+        // 2. Cargar Citas
+        const fetchAppointments = async () => {
+            const { data } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('lead_id', lead.id)
+                .order('start_time', { ascending: true }); // Las más próximas primero
+            if (data) setAppointments(data);
+        };
+
         fetchInteractions();
+        fetchAppointments();
     }, [lead.id, supabase]);
 
-    // 2. Guardar Resumen Ejecutivo (Auto-save on blur)
+    // --- LOGICA RESUMEN ---
     const handleSaveResume = async () => {
-        // Solo guardamos si hubo cambios
         if (resume === lead.resume) return;
-
         setIsSavingResume(true);
-        const { error } = await supabase
-            .from('leads')
-            .update({ resume: resume })
-            .eq('id', lead.id);
-
-        if (error) {
-            console.error("Error guardando resumen:", error);
-        } else {
-            // Opcional: Feedback visual o actualización de contexto
-        }
+        await supabase.from('leads').update({ resume }).eq('id', lead.id);
         setIsSavingResume(false);
     };
 
-    // 3. Crear Nueva Interacción
+    // --- LOGICA KOMMO ---
+    const handleOpenKommo = () => {
+        if (!lead.lead_id_kommo) {
+            alert("Este lead no tiene ID de Kommo asociado.");
+            return;
+        }
+        // URL Estándar de Kommo para detalle de leads
+        const url = `https://marketingfagmotorsurfacom.kommo.com/leads/detail/${lead.lead_id_kommo}`;
+        window.open(url, '_blank');
+    };
+
+    // --- LOGICA INTERACCIONES ---
     const handleSubmitInteraction = async (e: FormEvent) => {
         e.preventDefault();
-        if (!newInteractionNote.trim() || !user) return;
+        if ((!newInteractionNote.trim() && !interactionResult) || !user) return;
 
-        setIsSubmitting(true);
+        setIsSubmittingInteraction(true);
 
         const { data, error } = await supabase
             .from('interactions')
             .insert({
                 lead_id: lead.id,
-                type: interactionType as any, // Cast a enum de la DB
+                type: interactionType as any,
                 content: newInteractionNote,
-                result: 'completado',
+                result: interactionResult || 'completado', // Usamos el chip seleccionado
                 responsible_id: user.id
             })
             .select()
             .single();
 
-        if (error) {
-            console.error("Error creando interacción:", error);
-        } else if (data) {
+        if (!error && data) {
             setInteractions([data, ...interactions]);
             setNewInteractionNote("");
+            setInteractionResult(null); // Resetear chip
         }
-        setIsSubmitting(false);
+        setIsSubmittingInteraction(false);
     };
 
-    // Helper para iconos
+    // --- LOGICA AGENDA ---
+    const handleSubmitAppointment = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!apptDate || !apptTime || !apptTitle || !user) return;
+
+        setIsSubmittingAppt(true);
+
+        // Construir Timestamp (Fecha + Hora)
+        const startDateTime = new Date(`${apptDate}T${apptTime}`);
+        const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // +1 Hora fija
+
+        const { data, error } = await supabase
+            .from('appointments')
+            .insert({
+                lead_id: lead.id,
+                responsible_id: user.id,
+                title: apptTitle,
+                start_time: startDateTime.toISOString(),
+                end_time: endDateTime.toISOString(),
+                status: 'pendiente',
+                location: 'Showroom' // Default por ahora
+            })
+            .select()
+            .single();
+
+        if (!error && data) {
+            setAppointments([...appointments, data].sort((a, b) =>
+                new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+            ));
+            // Limpiar form
+            setApptTitle("");
+            setApptTime("");
+        } else {
+            console.error(error);
+            alert("Error al agendar. Verifica los datos.");
+        }
+        setIsSubmittingAppt(false);
+    };
+
+    // Helpers UI
     const getInteractionIcon = (type: string) => {
         switch (type) {
             case 'llamada': return <Phone className="h-4 w-4 text-blue-500" />;
@@ -135,10 +209,16 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
         }
     };
 
+    // Formatear fecha para mostrar en lista de agenda
+    const formatDate = (isoString: string) => {
+        return new Date(isoString).toLocaleString('es-EC', {
+            weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+        });
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            {/* Contenedor Principal con animación de zoom */}
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
 
                 {/* --- HEADER --- */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -146,87 +226,71 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                         <h2 className="text-xl font-bold text-slate-800">{lead.name}</h2>
                         <div className="flex items-center gap-2 mt-1">
                             <span className="text-sm text-slate-500 font-medium">{lead.phone || 'Sin teléfono'}</span>
-                            {/* <span className="text-slate-300">•</span> */}
-                            {/* <span className="text-sm text-slate-500">{lead.email || 'Sin email'}</span> */}
                             <span className="text-slate-300">•</span>
                             <span className="text-sm text-slate-500 capitalize">{lead.source}</span>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* BOTÓN KOMMO */}
+                        <Button
+                            onClick={handleOpenKommo}
+                            className="bg-[#2c86fe]/10 text-[#2c86fe] hover:bg-[#2c86fe]/20 px-3 py-1.5 rounded-full text-xs gap-1.5 transition-colors"
+                            title="Abrir en Kommo CRM"
+                        >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Abrir en Kommo
+                        </Button>
+
+                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
 
                     {/* --- COLUMNA IZQUIERDA (Info Estática & Resumen) --- */}
                     <div className="w-1/3 bg-slate-50 p-6 border-r border-slate-200 overflow-y-auto custom-scrollbar">
-
-                        {/* Sección 1: Resumen Ejecutivo Mejorado */}
+                        {/* (Mismo contenido de Resumen y Vehículos que tenías antes) */}
                         <div className="mb-8">
                             <div className="flex justify-between items-center mb-3">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                    <Edit3 className="h-3 w-3" /> Resumen
+                                    <Edit3 className="h-3 w-3" /> Resumen Ejecutivo
                                 </label>
                                 <div className="flex items-center gap-1.5 h-4">
                                     {isSavingResume ? (
-                                        <>
-                                            <Loader2 className="h-3 w-3 animate-spin text-brand-600" />
-                                            <span className="text-[10px] text-brand-600 font-medium">Guardando...</span>
-                                        </>
+                                        <><Loader2 className="h-3 w-3 animate-spin text-brand-600" /><span className="text-[10px] text-brand-600 font-medium">Guardando...</span></>
                                     ) : (
-                                        <>
-                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                            <span className="text-[10px] text-slate-400 font-medium">Guardado</span>
-                                        </>
+                                        <><CheckCircle2 className="h-3 w-3 text-emerald-500" /><span className="text-[10px] text-slate-400 font-medium">Guardado</span></>
                                     )}
                                 </div>
                             </div>
-
                             <TextArea
                                 value={resume || ''}
                                 onChange={(e) => setResume(e.target.value)}
                                 onBlur={handleSaveResume}
-                                placeholder="Escribe aquí el estatus actual del cliente para el reporte..."
-                                className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 shadow-sm min-h-[140px] resize-none leading-relaxed"
+                                placeholder="Estatus actual del cliente..."
+                                className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm min-h-[140px] resize-none leading-relaxed"
                             />
                         </div>
 
-                        {/* Sección 2: Vehículos */}
+                        {/* Vehículos (Simplificado para el ejemplo) */}
                         <div className="mb-8">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">
-                                Vehículos de Interés
-                            </label>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">Vehículos de Interés</label>
                             {lead.interested_cars && lead.interested_cars.length > 0 ? (
                                 <div className="space-y-3">
                                     {lead.interested_cars.map((car) => (
-                                        <div key={car.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-shadow hover:shadow-md">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="p-1.5 bg-brand-50 rounded-lg">
-                                                    <Car className="h-4 w-4 text-brand-600" />
-                                                </div>
+                                        <div key={car.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Car className="h-4 w-4 text-brand-600" />
                                                 <span className="font-semibold text-slate-800">{car.brand} {car.model}</span>
                                             </div>
-                                            <div className="text-xs text-slate-500 space-y-1 pl-9">
-                                                <p><span className="font-medium text-slate-600">Año:</span> {car.year}</p>
-                                                {car.color_preference && <p><span className="font-medium text-slate-600">Color:</span> {car.color_preference}</p>}
-                                            </div>
-                                            {car.notes && (
-                                                <div className="mt-3 ml-9 pt-2 border-t border-slate-100 text-xs text-slate-600 italic">
-                                                    "{car.notes}"
-                                                </div>
-                                            )}
+                                            <p className="text-xs text-slate-500 pl-6">{car.year} • {car.color_preference}</p>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center p-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                                    <Car className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                                    <p className="text-slate-400 text-sm">No hay vehículos seleccionados.</p>
-                                </div>
+                                <p className="text-sm text-slate-400 italic">No hay vehículos seleccionados.</p>
                             )}
                         </div>
 
@@ -250,124 +314,213 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                                         </span>
                                     </div>
                                 )}
+
                             </div>
                         </div>
+
                     </div>
 
-                    {/* --- COLUMNA DERECHA (Timeline Chat) --- */}
+                    {/* --- COLUMNA DERECHA (Tabs: Historial / Agenda) --- */}
                     <div className="w-2/3 flex flex-col bg-white">
 
-                        {/* Header del Timeline */}
-                        <div className="px-6 py-3 border-b border-slate-100 bg-white flex justify-between items-center shadow-sm z-10">
-                            <h3 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <MessageCircle className="h-4 w-4 text-slate-400" />
-                                Historial de Interacciones
-                            </h3>
-                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                {interactions.length}
-                            </span>
+                        {/* Selector de Pestañas */}
+                        <div className="flex border-b border-slate-100">
+                            <button
+                                onClick={() => setActiveTab('history')}
+                                className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history'
+                                    ? 'border-slate-800 text-slate-800'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    <MessageCircle className="h-4 w-4" /> Historial
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('agenda')}
+                                className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'agenda'
+                                    ? 'border-slate-800 text-slate-800'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    <Calendar className="h-4 w-4" /> Agenda
+                                </div>
+                            </button>
                         </div>
 
-                        {/* Lista Scrollable */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30">
-                            {interactions.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                                    <div className="bg-slate-100 p-4 rounded-full mb-3">
-                                        <Clock className="h-8 w-8 text-slate-300" />
-                                    </div>
-                                    <p className="font-medium text-slate-500">Sin historial reciente</p>
-                                    <p className="text-sm opacity-75">Registra la primera interacción abajo.</p>
-                                </div>
-                            ) : (
-                                interactions.map((interaction) => (
-                                    <div key={interaction.id} className="flex gap-4 group">
-                                        {/* Icono Vertical */}
-                                        <div className="flex flex-col items-center pt-1">
-                                            <div className="h-8 w-8 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-200 ring-4 ring-slate-50 z-10">
-                                                {getInteractionIcon(interaction.type)}
+                        {/* --- CONTENIDO PESTAÑA HISTORIAL --- */}
+                        {activeTab === 'history' && (
+                            <>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30">
+                                    {interactions.length === 0 ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                            <Clock className="h-8 w-8 mb-2 opacity-50" />
+                                            <p className="text-sm">Sin interacciones.</p>
+                                        </div>
+                                    ) : (
+                                        interactions.map((interaction) => (
+                                            <div key={interaction.id} className="flex gap-4">
+                                                <div className="flex flex-col items-center pt-1">
+                                                    <div className="h-8 w-8 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-200 z-10">
+                                                        {getInteractionIcon(interaction.type)}
+                                                    </div>
+                                                    <div className="w-0.5 h-full bg-slate-200 -mb-6 mt-2"></div>
+                                                </div>
+                                                <div className="flex-1 pb-2">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-xs font-bold uppercase text-slate-600">{interaction.type}</span>
+                                                        <span className="text-[10px] text-slate-400">{new Date(interaction.created_at || '').toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="bg-white border border-slate-200 p-3 rounded-xl text-sm text-slate-700 shadow-sm">
+                                                        {interaction.content}
+                                                    </div>
+                                                    {interaction.result && (
+                                                        <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium uppercase tracking-wide">
+                                                            {interaction.result.replace('_', ' ')}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="w-0.5 h-full bg-slate-200 group-last:hidden -mb-6 mt-2"></div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Input Area Mejorado con Chips */}
+                                <div className="p-4 bg-white border-t border-slate-200 shadow-up z-20">
+                                    <form onSubmit={handleSubmitInteraction} className="flex flex-col gap-3">
+                                        {/* Selector Tipo */}
+                                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                            {Object.keys(RESULT_OPTIONS).map(type => (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => { setInteractionType(type); setInteractionResult(null); }}
+                                                    className={`text-xs px-3 py-1.5 rounded-full border font-medium capitalize transition-all ${interactionType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'
+                                                        }`}
+                                                >
+                                                    {type.replace('_', ' ')}
+                                                </button>
+                                            ))}
                                         </div>
 
-                                        {/* Contenido */}
-                                        <div className="flex-1 pb-2">
-                                            <div className="flex justify-between items-center mb-1.5">
-                                                <span className="text-xs font-bold uppercase text-slate-600 tracking-wider">
-                                                    {interaction.type.replace('_', ' ')}
-                                                </span>
-                                                <span className="text-[10px] text-slate-400 font-medium">
-                                                    {interaction.created_at ? new Date(interaction.created_at).toLocaleString() : ''}
-                                                </span>
-                                            </div>
+                                        {/* Selector de Resultado (CHIPS) */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {RESULT_OPTIONS[interactionType]?.map(option => (
+                                                <button
+                                                    key={option}
+                                                    type="button"
+                                                    onClick={() => setInteractionResult(option)}
+                                                    className={`text-[10px] px-2.5 py-1 rounded-md border uppercase tracking-wide font-semibold transition-all ${interactionResult === option
+                                                        ? 'bg-brand-50 border-brand-200 text-brand-700 ring-1 ring-brand-200'
+                                                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    {option.replace('_', ' ')}
+                                                </button>
+                                            ))}
+                                        </div>
 
-                                            <div className="bg-white border border-slate-200 p-3.5 rounded-2xl rounded-tl-sm text-sm text-slate-700 shadow-sm leading-relaxed">
-                                                {interaction.content}
+                                        {/* Input y Botón */}
+                                        <div className="relative flex items-center gap-2">
+                                            <Input
+                                                placeholder={`Resultado de la ${interactionType}...`}
+                                                value={newInteractionNote}
+                                                onChange={(e) => setNewInteractionNote(e.target.value)}
+                                                className="w-full rounded-full border border-slate-300 bg-slate-50 pl-5 pr-14 py-3 text-sm focus:border-brand-500 focus:bg-white shadow-inner"
+                                            />
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                <Button
+                                                    type="submit"
+                                                    disabled={isSubmittingInteraction}
+                                                    className="h-9 w-9 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-sm"
+                                                >
+                                                    {isSubmittingInteraction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
+                                                </Button>
                                             </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </>
+                        )}
 
-                                            <div className="mt-2 flex gap-2">
-                                                {interaction.result && (
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${interaction.result === 'sin_respuesta'
-                                                            ? 'bg-red-50 text-red-600 border-red-100'
-                                                            : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        {/* --- CONTENIDO PESTAÑA AGENDA --- */}
+                        {activeTab === 'agenda' && (
+                            <>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-slate-50/30">
+                                    {appointments.length === 0 ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                            <Calendar className="h-10 w-10 mb-2 opacity-50" />
+                                            <p className="text-sm font-medium">Agenda vacía</p>
+                                            <p className="text-xs">Programa una cita abajo.</p>
+                                        </div>
+                                    ) : (
+                                        appointments.map(appt => (
+                                            <div key={appt.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4 hover:border-brand-200 transition-colors">
+                                                <div className="bg-brand-50 text-brand-700 p-2.5 rounded-lg flex flex-col items-center min-w-[60px]">
+                                                    <span className="text-xs font-bold uppercase">{new Date(appt.start_time).toLocaleString('es-EC', { month: 'short' })}</span>
+                                                    <span className="text-xl font-bold">{new Date(appt.start_time).getDate()}</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold text-slate-800">{appt.title}</h4>
+                                                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                                                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(appt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {appt.location || 'Showroom'}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="self-center">
+                                                    <span className={`text-[10px] px-2 py-1 rounded-full uppercase font-bold tracking-wider ${appt.status === 'pendiente' ? 'bg-yellow-100 text-yellow-700' :
+                                                        appt.status === 'completada' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
                                                         }`}>
-                                                        {interaction.result.replace('_', ' ')}
+                                                        {appt.status}
                                                     </span>
-                                                )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        {/* Input Area (Sticky Bottom) - DISEÑO MEJORADO */}
-                        <div className="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)] z-20">
-                            <form onSubmit={handleSubmitInteraction} className="flex flex-col gap-3">
-                                {/* Selector de Tipo */}
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
-                                    {['llamada', 'whatsapp', 'visita', 'email', 'nota_interna'].map(type => (
-                                        <button
-                                            key={type}
-                                            type="button"
-                                            onClick={() => setInteractionType(type)}
-                                            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all whitespace-nowrap active:scale-95 ${interactionType === type
-                                                    ? 'bg-slate-800 text-white border-slate-800 shadow-md ring-2 ring-slate-800/20'
-                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                                } capitalize`}
-                                        >
-                                            {type.replace('_', ' ')}
-                                        </button>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
 
-                                {/* Campo de Texto y Botón Rediseñados */}
-                                <div className="relative flex items-center gap-2">
-                                    <Input
-                                        placeholder={`Escribe el resultado de la ${interactionType.replace('_', ' ')}...`}
-                                        value={newInteractionNote}
-                                        onChange={(e) => setNewInteractionNote(e.target.value)}
-                                        className="w-full rounded-full border border-slate-300 bg-slate-50 pl-5 pr-14 py-3 text-sm focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20 shadow-inner transition-all"
-                                        autoFocus
-                                    />
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                {/* Formulario de Agendamiento */}
+                                <div className="p-5 bg-white border-t border-slate-200 shadow-up z-20">
+                                    <h4 className="text-xs font-bold uppercase text-slate-400 mb-3 flex items-center gap-2">
+                                        <Calendar className="h-3 w-3" /> Nueva Cita
+                                    </h4>
+                                    <form onSubmit={handleSubmitAppointment} className="space-y-3">
+                                        <Input
+                                            placeholder="Título (Ej: Visita Showroom)"
+                                            value={apptTitle}
+                                            onChange={(e) => setApptTitle(e.target.value)}
+                                            className="bg-slate-50 border-slate-200 focus:bg-white"
+                                        />
+                                        <div className="flex gap-3">
+                                            <Input
+                                                type="date"
+                                                value={apptDate}
+                                                onChange={(e) => setApptDate(e.target.value)}
+                                                className="bg-slate-50 border-slate-200 focus:bg-white"
+                                                min={new Date().toISOString().split('T')[0]}
+                                            />
+                                            <Input
+                                                type="time"
+                                                value={apptTime}
+                                                onChange={(e) => setApptTime(e.target.value)}
+                                                className="bg-slate-50 border-slate-200 focus:bg-white"
+                                            />
+                                        </div>
                                         <Button
                                             type="submit"
-                                            disabled={isSubmitting || !newInteractionNote}
-                                            className={`h-9 w-9 rounded-full shadow-sm transition-all ${!newInteractionNote
-                                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                                    : 'bg-brand-600 hover:bg-brand-700 text-white hover:scale-105 active:scale-95 shadow-brand-500/30'
-                                                }`}
+                                            disabled={isSubmittingAppt || !apptTitle || !apptDate || !apptTime}
+                                            className="w-full bg-slate-800 hover:bg-slate-900 text-white h-10 rounded-lg shadow-sm mt-1"
                                         >
-                                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
+                                            {isSubmittingAppt ? "Agendando..." : "Agendar Cita"}
                                         </Button>
-                                    </div>
+                                    </form>
                                 </div>
-                            </form>
-                        </div>
-
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
