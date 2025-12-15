@@ -29,7 +29,10 @@ export function useLeads() {
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Estado de UI (Orden y Filtros)
+    // Estado de Paginación y UI
+    const [page, setPage] = useState(1);
+    const [rowsPerPage] = useState(10); // Límite por página
+
     const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
         column: "created_at",
         direction: "descending",
@@ -42,7 +45,7 @@ export function useLeads() {
         dateRange: 'all'
     });
 
-    // Carga de Datos (Trae TODO y filtramos en cliente por velocidad)
+    // Carga de Datos
     const fetchLeads = useCallback(async () => {
         if (!user) return;
         setIsLoading(true);
@@ -55,7 +58,7 @@ export function useLeads() {
         if (error) {
             console.error("Error cargando leads:", error);
         } else {
-            // @ts-ignore
+            // @ts-ignore: Supabase types complexity handling
             setLeads(data || []);
         }
         setIsLoading(false);
@@ -71,7 +74,7 @@ export function useLeads() {
     const processedLeads = useMemo(() => {
         let filtered = [...leads];
 
-        // 1. Filtro por Buscador (Nombre, Teléfono o ID)
+        // 1. Filtro por Buscador
         if (filters.search.trim()) {
             const query = filters.search.toLowerCase();
             filtered = filtered.filter(l => 
@@ -101,16 +104,11 @@ export function useLeads() {
                 const leadDate = new Date(l.created_at).getTime();
 
                 switch (filters.dateRange) {
-                    case 'today':
-                        return leadDate >= todayStart;
-                    case '7days':
-                        return leadDate >= (todayStart - (7 * 24 * 60 * 60 * 1000));
-                    case '15days':
-                        return leadDate >= (todayStart - (15 * 24 * 60 * 60 * 1000));
-                    case '30days':
-                        return leadDate >= (todayStart - (30 * 24 * 60 * 60 * 1000));
-                    default:
-                        return true;
+                    case 'today': return leadDate >= todayStart;
+                    case '7days': return leadDate >= (todayStart - (7 * 24 * 60 * 60 * 1000));
+                    case '15days': return leadDate >= (todayStart - (15 * 24 * 60 * 60 * 1000));
+                    case '30days': return leadDate >= (todayStart - (30 * 24 * 60 * 60 * 1000));
+                    default: return true;
                 }
             });
         }
@@ -136,14 +134,31 @@ export function useLeads() {
         });
     }, [leads, filters, sortDescriptor]);
 
-    // Helpers para actualizar filtros individuales
+    // --- EFECTO DE RESETEO ---
+    // Si cambian los filtros, volvemos a la página 1
+    useEffect(() => {
+        setPage(1);
+    }, [filters, sortDescriptor]);
+
+    // --- LÓGICA DE PAGINACIÓN (SLICE) ---
+    const paginatedLeads = useMemo(() => {
+        const startIndex = (page - 1) * rowsPerPage;
+        const endIndex = startIndex + rowsPerPage;
+        return processedLeads.slice(startIndex, endIndex);
+    }, [processedLeads, page, rowsPerPage]);
+
+    // Helpers
     const updateFilter = (key: keyof LeadsFilters, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 
     return {
-        leads: processedLeads,      // Devolvemos la lista YA filtrada
-        rawCount: leads.length,     // Total sin filtros (para mostrar "Viendo 5 de 100")
+        leads: paginatedLeads,      // Datos cortados (10 items)
+        totalCount: processedLeads.length, // Total real filtrado (ej: 45 items)
+        rawCount: leads.length,     // Total en base de datos
+        page,
+        setPage,
+        rowsPerPage,
         isLoading: isLoading || isAuthLoading,
         reload: fetchLeads,
         sortDescriptor,

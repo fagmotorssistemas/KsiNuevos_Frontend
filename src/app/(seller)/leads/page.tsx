@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useLeads, type LeadWithDetails } from "@/hooks/useLeads";
 import { LeadsList } from "@/components/features/leads/LeadsList";
 import { LeadDetailModal } from "@/components/features/leads/LeadDetailModal";
-import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar"; // <--- NUEVO IMPORT
+import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
 
 // UI
 import { Button } from "@/components/ui/buttontable";
@@ -14,17 +14,20 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function LeadsPage() {
     // Hooks & Lógica
-    // Ahora extraemos también los filtros y sus funciones de control
     const { 
-        leads,            // Estos leads YA vienen filtrados
-        rawCount,         // Total real (opcional, para stats)
+        leads,            // Solo los 10 de la página actual
+        totalCount,       // Total real filtrado (ej: 50)
         isLoading, 
         sortDescriptor, 
         setSortDescriptor, 
-        filters,          // Estado de filtros
-        updateFilter,     // Función para cambiar un filtro
-        resetFilters,     // Función para limpiar
-        reload 
+        filters, 
+        updateFilter, 
+        resetFilters, 
+        reload,
+        // Paginación
+        page,
+        setPage,
+        rowsPerPage
     } = useLeads();
     
     const { profile } = useAuth();
@@ -54,6 +57,7 @@ export default function LeadsPage() {
                     <h1 className="text-3xl font-semibold text-slate-900">Tablero de Leads</h1>
                     <p className="text-md text-slate-500 mt-1">
                         {profile ? `Hola, ${profile.full_name}` : 'Gestión de prospectos'}
+                        <span className="ml-1 text-slate-400">• {totalCount} leads totales</span>
                     </p>
                 </div>
                 <div className="flex gap-3">
@@ -68,12 +72,12 @@ export default function LeadsPage() {
                 </div>
             </div>
 
-            {/* 2. BARRA DE HERRAMIENTAS (Filtros y Buscador) */}
+            {/* 2. BARRA DE HERRAMIENTAS */}
             <LeadsToolbar 
                 filters={filters}
                 onFilterChange={updateFilter}
                 onReset={resetFilters}
-                totalResults={leads.length}
+                totalResults={totalCount} // Usamos totalCount aquí
             />
 
             {/* 3. TABLA DE LEADS */}
@@ -83,6 +87,11 @@ export default function LeadsPage() {
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
                 onLeadSelect={handleOpenModal}
+                // Props de Paginación conectadas
+                page={page}
+                totalCount={totalCount}
+                rowsPerPage={rowsPerPage}
+                onPageChange={setPage}
             />
 
             {/* 4. MODAL DE DETALLE */}

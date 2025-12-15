@@ -16,8 +16,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
 
-// Importamos los tipos que definimos en el hook (o podrías moverlos a un archivo types.ts compartido)
-import type { LeadWithDetails, SortDescriptor } from "../../../hooks/useLeads";
+import type { LeadWithDetails, SortDescriptor } from "@/hooks/useLeads";
 
 interface LeadsListProps {
     leads: LeadWithDetails[];
@@ -25,6 +24,11 @@ interface LeadsListProps {
     onSortChange: (descriptor: SortDescriptor) => void;
     onLeadSelect: (lead: LeadWithDetails) => void;
     isLoading?: boolean;
+    // Props de Paginación Nuevas
+    page: number;
+    totalCount: number;
+    rowsPerPage: number;
+    onPageChange: (newPage: number) => void;
 }
 
 export function LeadsList({ 
@@ -32,10 +36,14 @@ export function LeadsList({
     sortDescriptor, 
     onSortChange, 
     onLeadSelect,
-    isLoading = false
+    isLoading = false,
+    page,
+    totalCount,
+    rowsPerPage,
+    onPageChange
 }: LeadsListProps) {
 
-    // --- Helpers Visuales (Locales al componente de UI) ---
+    // --- Helpers Visuales ---
     const getInitials = (name: string | null) => 
         name ? name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() : "??";
 
@@ -60,15 +68,14 @@ export function LeadsList({
     };
 
     if (isLoading) {
-        // Un estado de carga simple (podrías poner un Skeleton aquí luego)
         return <div className="p-10 text-center text-slate-400">Cargando leads...</div>;
     }
 
-    if (leads.length === 0) {
+    if (leads.length === 0 && totalCount === 0) {
         return (
             <TableCard.Root>
                 <div className="p-10 text-center text-slate-500">
-                    No se encontraron leads.
+                    No se encontraron leads con los filtros actuales.
                 </div>
             </TableCard.Root>
         );
@@ -171,8 +178,14 @@ export function LeadsList({
                 </Table.Body>
             </Table>
             
-            {/* Aquí podrías recibir props de paginación si decides implementarla dinámicamente */}
-            <PaginationPageMinimalCenter page={1} total={leads.length} className="px-6 py-4" />
+            {/* Paginación Conectada Dinámicamente */}
+            <PaginationPageMinimalCenter 
+                page={page} 
+                total={totalCount} 
+                limit={rowsPerPage}
+                onChange={onPageChange}
+                className="px-6 py-4" 
+            />
         </TableCard.Root>
     );
 }
