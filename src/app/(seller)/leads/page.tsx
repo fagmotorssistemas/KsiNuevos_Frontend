@@ -17,7 +17,7 @@ export default function LeadsPage() {
     const { 
         leads, 
         totalCount,
-        respondedCount, // <--- 1. RECUPERAMOS EL DATO
+        respondedCount,
         isLoading, 
         sortDescriptor, 
         setSortDescriptor, 
