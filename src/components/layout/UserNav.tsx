@@ -44,7 +44,7 @@ export function UserNav() {
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-2 outline-none rounded-full focus:ring-2 focus:ring-slate-200 transition-all"
             >
-                <Avatar initials={initials} alt="User" size="sm" className="bg-slate-900 text-white" />
+                <Avatar initials={initials} alt="User" size="sm" />
                 <div className="hidden md:block text-left">
                     <p className="text-xs font-medium text-slate-700">{profile?.full_name || 'Usuario'}</p>
                     <p className="text-[10px] text-slate-500 capitalize">{profile?.role || 'Vendedor'}</p>
