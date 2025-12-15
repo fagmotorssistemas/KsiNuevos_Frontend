@@ -5,7 +5,6 @@ import type { Database } from "@/types/supabase";
 // --- TIPOS ---
 export type LeadWithDetails = Database['public']['Tables']['leads']['Row'] & {
     interested_cars: Database['public']['Tables']['interested_cars']['Row'][];
-    // Agregamos la relación con profiles para el responsable
     profiles: { full_name: string } | null;
 };
 
@@ -16,12 +15,12 @@ export type SortDescriptor = {
 
 export type DateFilter = 'all' | 'today' | '7days' | '15days' | '30days';
 
-// Tipo para el estado de los filtros
 export type LeadsFilters = {
     search: string;
     status: string | 'all';
     temperature: string | 'all';
     dateRange: DateFilter;
+    assignedTo: string | 'all';
 };
 
 export function useLeads() {
@@ -29,11 +28,12 @@ export function useLeads() {
 
     // Estado de Datos
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
+    const [sellers, setSellers] = useState<{ id: string; full_name: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Estado de Paginación y UI
     const [page, setPage] = useState(1);
-    const [rowsPerPage] = useState(10); // Límite por página
+    const [rowsPerPage] = useState(10); 
 
     const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
         column: "created_at",
@@ -44,62 +44,81 @@ export function useLeads() {
         search: '',
         status: 'all',
         temperature: 'all',
-        dateRange: 'all'
+        dateRange: 'all',
+        assignedTo: 'all'
     });
 
-    // Carga de Datos
+    // Carga de Leads
     const fetchLeads = useCallback(async () => {
         if (!user) return;
         setIsLoading(true);
 
         const { data, error } = await supabase
             .from('leads')
-            // AQUI ESTA EL CAMBIO IMPORTANTE: traemos profiles:assigned_to(full_name)
             .select('*, interested_cars(*), profiles:assigned_to(full_name)')
             .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error cargando leads:", error);
         } else {
-            // @ts-ignore: Supabase types complexity handling
+            // @ts-ignore
             setLeads(data || []);
         }
         setIsLoading(false);
     }, [supabase, user]);
 
+    // Carga de Vendedores
+    const fetchSellers = useCallback(async () => {
+        if (!user) return;
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .order('full_name');
+            
+        if (data) {
+            // @ts-ignore
+            setSellers(data);
+        }
+    }, [supabase, user]);
+
     useEffect(() => {
         if (!isAuthLoading && user) {
             fetchLeads();
+            fetchSellers();
         }
-    }, [isAuthLoading, user, fetchLeads]);
+    }, [isAuthLoading, user, fetchLeads, fetchSellers]);
 
-    // --- LÓGICA DE FILTRADO Y ORDENAMIENTO ---
+    // --- LÓGICA DE FILTRADO ---
     const processedLeads = useMemo(() => {
         let filtered = [...leads];
 
-        // 1. Filtro por Buscador
+        // Filtro Buscador
         if (filters.search.trim()) {
             const query = filters.search.toLowerCase();
             filtered = filtered.filter(l =>
                 l.name.toLowerCase().includes(query) ||
                 l.phone?.includes(query) ||
-                (l.lead_id_kommo !== undefined && l.lead_id_kommo !== null && l.lead_id_kommo.toString().toLowerCase().includes(query)) ||
-                // Opcional: permitir buscar por nombre del responsable también
+                (l.lead_id_kommo && l.lead_id_kommo.toString().toLowerCase().includes(query)) ||
                 (l.profiles?.full_name && l.profiles.full_name.toLowerCase().includes(query))
             );
         }
 
-        // 2. Filtro por Estado
+        // Filtro Estado
         if (filters.status !== 'all') {
             filtered = filtered.filter(l => l.status === filters.status);
         }
 
-        // 3. Filtro por Temperatura
+        // Filtro Temperatura
         if (filters.temperature !== 'all') {
             filtered = filtered.filter(l => l.temperature === filters.temperature);
         }
 
-        // 4. Filtro por Fecha
+        // Filtro Responsable
+        if (filters.assignedTo !== 'all') {
+            filtered = filtered.filter(l => l.assigned_to === filters.assignedTo);
+        }
+
+        // Filtro Fecha
         if (filters.dateRange !== 'all') {
             const now = new Date();
             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -118,17 +137,15 @@ export function useLeads() {
             });
         }
 
-        // 5. Ordenamiento
+        // Ordenamiento
         return filtered.sort((a, b) => {
             const col = sortDescriptor.column as keyof LeadWithDetails;
-
-            // Manejo especial si intentan ordenar por responsable (si decides agregarlo al sortDescriptor)
+            
             if (col === 'assigned_to') {
                 const first = a.profiles?.full_name || '';
                 const second = b.profiles?.full_name || '';
                 let cmp = first.localeCompare(second);
-                if (sortDescriptor.direction === "descending") cmp *= -1;
-                return cmp;
+                return sortDescriptor.direction === "descending" ? cmp * -1 : cmp;
             }
 
             const first = a[col];
@@ -139,8 +156,7 @@ export function useLeads() {
 
             if (typeof first === "string" && typeof second === "string") {
                 let cmp = first.localeCompare(second);
-                if (sortDescriptor.direction === "descending") cmp *= -1;
-                return cmp;
+                return sortDescriptor.direction === "descending" ? cmp * -1 : cmp;
             }
 
             const aNum = Number(first);
@@ -149,28 +165,31 @@ export function useLeads() {
         });
     }, [leads, filters, sortDescriptor]);
 
-    // --- EFECTO DE RESETEO ---
-    // Si cambian los filtros, volvemos a la página 1
+    // --- NUEVO CÁLCULO: Leads Respondidos ---
+    // Contamos cuántos de los leads filtrados tienen algo en 'resume' (no es null ni vacío)
+    const respondedCount = useMemo(() => {
+        return processedLeads.filter(l => l.resume !== null && l.resume.trim() !== '').length;
+    }, [processedLeads]);
+
+    // Resetear página al filtrar
     useEffect(() => {
         setPage(1);
     }, [filters, sortDescriptor]);
 
-    // --- LÓGICA DE PAGINACIÓN (SLICE) ---
     const paginatedLeads = useMemo(() => {
         const startIndex = (page - 1) * rowsPerPage;
-        const endIndex = startIndex + rowsPerPage;
-        return processedLeads.slice(startIndex, endIndex);
+        return processedLeads.slice(startIndex, startIndex + rowsPerPage);
     }, [processedLeads, page, rowsPerPage]);
 
-    // Helpers
     const updateFilter = (key: keyof LeadsFilters, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 
     return {
-        leads: paginatedLeads,      // Datos cortados (10 items)
-        totalCount: processedLeads.length, // Total real filtrado (ej: 45 items)
-        rawCount: leads.length,     // Total en base de datos
+        leads: paginatedLeads,
+        totalCount: processedLeads.length,
+        rawCount: leads.length,
+        respondedCount, // <--- EXPORTAMOS EL DATO NUEVO
         page,
         setPage,
         rowsPerPage,
@@ -180,6 +199,7 @@ export function useLeads() {
         setSortDescriptor,
         filters,
         updateFilter,
-        resetFilters: () => setFilters({ search: '', status: 'all', temperature: 'all', dateRange: 'all' })
+        resetFilters: () => setFilters({ search: '', status: 'all', temperature: 'all', dateRange: 'all', assignedTo: 'all' }),
+        sellers
     };
 }

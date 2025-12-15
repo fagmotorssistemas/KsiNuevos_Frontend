@@ -15,8 +15,9 @@ import { useAuth } from "@/hooks/useAuth";
 export default function LeadsPage() {
     // Hooks & Lógica
     const { 
-        leads,            // Solo los 10 de la página actual
-        totalCount,       // Total real filtrado (ej: 50)
+        leads, 
+        totalCount,
+        respondedCount, // <--- 1. RECUPERAMOS EL DATO
         isLoading, 
         sortDescriptor, 
         setSortDescriptor, 
@@ -24,10 +25,10 @@ export default function LeadsPage() {
         updateFilter, 
         resetFilters, 
         reload,
-        // Paginación
         page,
         setPage,
-        rowsPerPage
+        rowsPerPage,
+        sellers 
     } = useLeads();
     
     const { profile } = useAuth();
@@ -77,7 +78,10 @@ export default function LeadsPage() {
                 filters={filters}
                 onFilterChange={updateFilter}
                 onReset={resetFilters}
-                totalResults={totalCount} // Usamos totalCount aquí
+                totalResults={totalCount}
+                respondedCount={respondedCount} // <--- 2. PASAMOS LA PROP
+                currentUserRole={profile?.role} 
+                sellers={sellers}               
             />
 
             {/* 3. TABLA DE LEADS */}
@@ -87,12 +91,10 @@ export default function LeadsPage() {
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
                 onLeadSelect={handleOpenModal}
-                // Props de Paginación conectadas
                 page={page}
                 totalCount={totalCount}
                 rowsPerPage={rowsPerPage}
                 onPageChange={setPage}
-                // PROP AGREGADA: Pasamos el rol para mostrar la columna de responsable
                 currentUserRole={profile?.role}
             />
 
