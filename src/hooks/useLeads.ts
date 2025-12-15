@@ -80,7 +80,7 @@ export function useLeads() {
             filtered = filtered.filter(l => 
                 l.name.toLowerCase().includes(query) || 
                 l.phone?.includes(query) ||
-                l.lead_id_kommo?.toLowerCase().includes(query)
+                l.lead_id_kommo !== undefined && l.lead_id_kommo !== null && l.lead_id_kommo.toString().toLowerCase().includes(query)
             );
         }
 
