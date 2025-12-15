@@ -23,6 +23,8 @@ import type { Database } from "@/types/supabase";
 import type { LeadWithDetails } from "../../../hooks/useLeads";
 
 // --- COMPONENTES UI LOCALES ---
+
+// Corregido: Input recibe props correctamente
 const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input
         className={`flex w-full outline-none transition-all duration-200 ${className}`}
@@ -30,6 +32,7 @@ const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
     />
 );
 
+// Corregido: TextArea recibe props correctamente
 const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
     <textarea
         className={`flex w-full outline-none transition-all duration-200 ${className}`}
@@ -37,6 +40,8 @@ const TextArea = ({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
     />
 );
 
+// ¡CORRECCIÓN CRÍTICA AQUÍ!: 
+// Antes 'children' se extraía pero no se usaba. Ahora se renderiza dentro del button.
 const Button = ({ children, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
         className={`inline-flex items-center justify-center font-medium transition-all disabled:opacity-50 disabled:pointer-events-none ${className}`}
@@ -55,6 +60,16 @@ interface LeadDetailModalProps {
     onClose: () => void;
 }
 
+// --- CONFIGURACIÓN DE ESTADOS (ENUM SQL) ---
+const STATUS_OPTIONS = [
+    { value: 'nuevo', label: 'Nuevo', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+    { value: 'contactado', label: 'Contactado', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { value: 'interesado', label: 'Interesado', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    { value: 'negociando', label: 'Negociando', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { value: 'ganado', label: 'Ganado', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { value: 'perdido', label: 'Perdido', color: 'bg-red-50 text-red-700 border-red-200' }
+];
+
 // Opciones de resultado según el tipo de interacción
 const RESULT_OPTIONS: Record<string, string[]> = {
     llamada: ['contestó', 'buzón', 'ocupado', 'número_equivocado', 'volver_a_llamar'],
@@ -69,6 +84,10 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
 
     // --- ESTADOS GLOBALES ---
     const [activeTab, setActiveTab] = useState<'history' | 'agenda'>('history');
+
+    // --- ESTADOS DEL LEAD (STATUS) ---
+    const [currentStatus, setCurrentStatus] = useState<string>(lead.status || 'nuevo');
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
     // --- ESTADOS RESUMEN ---
     const [resume, setResume] = useState(lead.resume || "");
@@ -113,6 +132,26 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
         fetchInteractions();
         fetchAppointments();
     }, [lead.id, supabase]);
+
+    // --- LOGICA CAMBIO DE ESTADO ---
+    const handleStatusChange = async (newStatus: string) => {
+        if (newStatus === currentStatus) return;
+        setIsUpdatingStatus(true);
+
+        const { error } = await supabase
+            .from('leads')
+            // Corregido: Usamos 'as any' para evitar el error de tipado estricto de TS con el ENUM
+            .update({ status: newStatus as any })
+            .eq('id', lead.id);
+
+        if (!error) {
+            setCurrentStatus(newStatus);
+        } else {
+            console.error("Error actualizando estado:", error);
+            alert("No se pudo actualizar el estado. Inténtalo de nuevo.");
+        }
+        setIsUpdatingStatus(false);
+    };
 
     // --- LOGICA RESUMEN ---
     const handleSaveResume = async () => {
@@ -222,26 +261,60 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
 
                 {/* --- HEADER --- */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-800">{lead.name}</h2>
+                    <div className="min-w-0 pr-4"> {/* Agregado min-w-0 para evitar empujar demasiado */}
+                        <h2 className="text-xl font-bold text-slate-800 truncate">{lead.name}</h2>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm text-slate-500 font-medium">{lead.phone || 'Sin teléfono'}</span>
+                            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">{lead.phone || 'Sin teléfono'}</span>
                             <span className="text-slate-300">•</span>
                             <span className="text-sm text-slate-500 capitalize">{lead.source}</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {/* BOTÓN KOMMO */}
+
+                    <div className="flex items-center gap-3 shrink-0 flex-nowrap"> {/* Agregado flex-nowrap */}
+
+                        {/* SELECTOR DE ESTADO (Integrado) */}
+                        <div className="relative group shrink-0">
+                            <select
+                                disabled={isUpdatingStatus}
+                                value={currentStatus}
+                                onChange={(e) => handleStatusChange(e.target.value)}
+                                className={`
+                                    appearance-none pl-3 pr-8 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide cursor-pointer outline-none border transition-all
+                                    ${STATUS_OPTIONS.find(o => o.value === currentStatus)?.color || 'bg-gray-100'}
+                                    ${isUpdatingStatus ? 'opacity-50 cursor-wait' : 'hover:brightness-95'}
+                                `}
+                            >
+                                {STATUS_OPTIONS.map(option => (
+                                    <option key={option.value} value={option.value} className="bg-white text-slate-700">
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {/* Icono estado/carga */}
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-current opacity-60">
+                                {isUpdatingStatus ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* BOTÓN KOMMO CORREGIDO Y BLINDADO */}
                         <Button
                             onClick={handleOpenKommo}
-                            className="bg-[#2c86fe]/10 text-[#2c86fe] hover:bg-[#2c86fe]/20 px-3 py-1.5 rounded-full text-xs gap-1.5 transition-colors"
+                            // Clases clave añadidas:
+                            // 1. shrink-0: Nunca encogerse.
+                            // 2. whitespace-nowrap: Texto en una línea.
+                            // 3. px-4: Padding horizontal adecuado.
+                            className="bg-[#2c86fe]/10 text-[#2c86fe] hover:bg-[#2c86fe]/20 px-4 py-2 rounded-full text-xs font-bold gap-2 transition-colors whitespace-nowrap shrink-0"
                             title="Abrir en Kommo CRM"
                         >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Abrir en Kommo
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                            <span className="shrink-0">Abrir en Kommo</span>
                         </Button>
 
-                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600 shrink-0">
                             <X className="h-5 w-5" />
                         </button>
                     </div>
