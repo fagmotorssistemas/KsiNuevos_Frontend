@@ -24,11 +24,13 @@ interface LeadsListProps {
     onSortChange: (descriptor: SortDescriptor) => void;
     onLeadSelect: (lead: LeadWithDetails) => void;
     isLoading?: boolean;
-    // Props de Paginación Nuevas
+    // Props de Paginación
     page: number;
     totalCount: number;
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
+    // NUEVA PROP: Rol del usuario actual
+    currentUserRole: string | null | undefined;
 }
 
 export function LeadsList({ 
@@ -40,8 +42,12 @@ export function LeadsList({
     page,
     totalCount,
     rowsPerPage,
-    onPageChange
+    onPageChange,
+    currentUserRole
 }: LeadsListProps) {
+
+    // Helper: Solo mostrar columna si es admin
+    const isAdmin = currentUserRole === 'admin';
 
     // --- Helpers Visuales ---
     const getInitials = (name: string | null) => 
@@ -91,6 +97,12 @@ export function LeadsList({
                 <Table.Header>
                     <Table.Head id="lead_id_kommo" label="ID" allowsSorting />
                     <Table.Head id="name" label="Cliente" allowsSorting />
+                    
+                    {/* COLUMNA CONDICIONAL: Solo visible para admins */}
+                    {isAdmin && (
+                        <Table.Head id="assigned_to" label="Responsable" />
+                    )}
+
                     <Table.Head id="status" label="Estado" allowsSorting />
                     <Table.Head id="vehicle" label="Interés" />
                     <Table.Head id="resume" label="Resumen" className="hidden md:table-cell" />
@@ -102,6 +114,8 @@ export function LeadsList({
                     {(item: LeadWithDetails) => {
                         const statusConfig = getStatusConfig(item.status);
                         const primaryCar = item.interested_cars?.[0];
+                        // Obtenemos el nombre del responsable desde la relación
+                        const responsableName = item.profiles?.full_name;
 
                         return (
                             <Table.Row id={item.id}>
@@ -121,6 +135,28 @@ export function LeadsList({
                                         </div>
                                     </div>
                                 </Table.Cell>
+
+                                {/* CELDA CONDICIONAL: Responsable */}
+                                {isAdmin && (
+                                    <Table.Cell>
+                                        {responsableName ? (
+                                            <div className="flex items-center gap-2">
+                                                {/* Mini Avatar Generado */}
+                                                <div className="h-6 w-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 text-[10px] font-bold">
+                                                    {getInitials(responsableName)}
+                                                </div>
+                                                <span className="text-sm text-slate-700 capitalize">
+                                                    {responsableName}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400 italic flex items-center gap-1">
+                                                <AlertCircle className="h-3 w-3" />
+                                                Sin asignar
+                                            </span>
+                                        )}
+                                    </Table.Cell>
+                                )}
 
                                 <Table.Cell>
                                     <BadgeWithIcon

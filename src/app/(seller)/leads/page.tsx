@@ -92,6 +92,8 @@ export default function LeadsPage() {
                 totalCount={totalCount}
                 rowsPerPage={rowsPerPage}
                 onPageChange={setPage}
+                // PROP AGREGADA: Pasamos el rol para mostrar la columna de responsable
+                currentUserRole={profile?.role}
             />
 
             {/* 4. MODAL DE DETALLE */}

@@ -5,6 +5,8 @@ import type { Database } from "@/types/supabase";
 // --- TIPOS ---
 export type LeadWithDetails = Database['public']['Tables']['leads']['Row'] & {
     interested_cars: Database['public']['Tables']['interested_cars']['Row'][];
+    // Agregamos la relación con profiles para el responsable
+    profiles: { full_name: string } | null;
 };
 
 export type SortDescriptor = {
@@ -52,7 +54,8 @@ export function useLeads() {
 
         const { data, error } = await supabase
             .from('leads')
-            .select('*, interested_cars(*)')
+            // AQUI ESTA EL CAMBIO IMPORTANTE: traemos profiles:assigned_to(full_name)
+            .select('*, interested_cars(*), profiles:assigned_to(full_name)')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -77,10 +80,12 @@ export function useLeads() {
         // 1. Filtro por Buscador
         if (filters.search.trim()) {
             const query = filters.search.toLowerCase();
-            filtered = filtered.filter(l => 
-                l.name.toLowerCase().includes(query) || 
+            filtered = filtered.filter(l =>
+                l.name.toLowerCase().includes(query) ||
                 l.phone?.includes(query) ||
-                l.lead_id_kommo !== undefined && l.lead_id_kommo !== null && l.lead_id_kommo.toString().toLowerCase().includes(query)
+                (l.lead_id_kommo !== undefined && l.lead_id_kommo !== null && l.lead_id_kommo.toString().toLowerCase().includes(query)) ||
+                // Opcional: permitir buscar por nombre del responsable también
+                (l.profiles?.full_name && l.profiles.full_name.toLowerCase().includes(query))
             );
         }
 
@@ -98,7 +103,7 @@ export function useLeads() {
         if (filters.dateRange !== 'all') {
             const now = new Date();
             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-            
+
             filtered = filtered.filter(l => {
                 if (!l.created_at) return false;
                 const leadDate = new Date(l.created_at).getTime();
@@ -116,6 +121,16 @@ export function useLeads() {
         // 5. Ordenamiento
         return filtered.sort((a, b) => {
             const col = sortDescriptor.column as keyof LeadWithDetails;
+
+            // Manejo especial si intentan ordenar por responsable (si decides agregarlo al sortDescriptor)
+            if (col === 'assigned_to') {
+                const first = a.profiles?.full_name || '';
+                const second = b.profiles?.full_name || '';
+                let cmp = first.localeCompare(second);
+                if (sortDescriptor.direction === "descending") cmp *= -1;
+                return cmp;
+            }
+
             const first = a[col];
             const second = b[col];
 
