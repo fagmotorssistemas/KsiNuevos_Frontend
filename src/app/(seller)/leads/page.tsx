@@ -7,8 +7,6 @@ import { useLeads, type LeadWithDetails } from "@/hooks/useLeads";
 import { LeadsList } from "@/components/features/leads/LeadsList";
 import { LeadDetailModal } from "@/components/features/leads/LeadDetailModal";
 import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
-
-// UI
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth"; 
 
