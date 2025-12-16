@@ -7,7 +7,9 @@ const navItems = [
     { href: "/leads", label: "Leads" },
     { href: "/agenda", label: "Agenda" },
     { href: "/inventory", label: "Inventario" },
-    { href: "/requests", label: "Pedidos" }, // Nueva opción agregada
+    { href: "/requests", label: "Pedidos" }, 
+    { href: "/finance", label: "Financiamiento" }, 
+    { href: "/tareas", label: "Tareas" }, 
 ];
 
 export function MainNav({ className }: { className?: string }) {
