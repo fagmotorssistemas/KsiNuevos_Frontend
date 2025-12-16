@@ -5,7 +5,7 @@ import { useState } from "react";
 // Features
 import { useLeads, type LeadWithDetails } from "@/hooks/useLeads";
 import { LeadsList } from "@/components/features/leads/LeadsList";
-import { LeadDetailModal } from "@/components/features/leads/LeadDetailModal";
+import { LeadDetailModal } from "@/components/features/leads/Detail/LeadDetailModal";
 import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth"; 

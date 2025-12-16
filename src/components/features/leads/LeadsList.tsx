@@ -33,10 +33,10 @@ interface LeadsListProps {
     currentUserRole: string | null | undefined;
 }
 
-export function LeadsList({ 
-    leads, 
-    sortDescriptor, 
-    onSortChange, 
+export function LeadsList({
+    leads,
+    sortDescriptor,
+    onSortChange,
     onLeadSelect,
     isLoading = false,
     page,
@@ -50,7 +50,7 @@ export function LeadsList({
     const isAdmin = currentUserRole === 'admin';
 
     // --- Helpers Visuales ---
-    const getInitials = (name: string | null) => 
+    const getInitials = (name: string | null) =>
         name ? name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() : "??";
 
     const getStatusConfig = (status: string | null) => {
@@ -71,6 +71,31 @@ export function LeadsList({
             case 'tibio': return 'warning';
             default: return 'gray';
         }
+    };
+
+    // --- NUEVOS HELPERS PARA FUENTE (SOURCE) ---
+
+    // 1. Formatear texto (Igual que en LeadDetailHeader)
+    const getFormattedSource = (source: string | null) => {
+        if (!source) return 'Desconocido';
+        const lowerSource = String(source).toLowerCase();
+
+        if (lowerSource === 'waba') return 'WhatsApp';
+        if (lowerSource === 'tiktok_kommo') return 'TikTok';
+        if (lowerSource === 'instagram_business') return 'Instagram';
+
+        return source;
+    };
+
+    // 2. Obtener icono correcto (waba ahora usa MessageCircle)
+    const getSourceIcon = (source: string | null) => {
+        const lowerSource = String(source || '').toLowerCase();
+        // Si es whatsapp o waba, mostramos icono de mensaje
+        if (lowerSource === 'whatsapp' || lowerSource === 'waba') {
+            return <MessageCircle className="h-3 w-3" />;
+        }
+        // Default icono usuario
+        return <User className="h-3 w-3" />;
     };
 
     if (isLoading) {
@@ -97,7 +122,7 @@ export function LeadsList({
                 <Table.Header>
                     <Table.Head id="lead_id_kommo" label="ID" allowsSorting />
                     <Table.Head id="name" label="Cliente" allowsSorting />
-                    
+
                     {/* COLUMNA CONDICIONAL: Solo visible para admins */}
                     {isAdmin && (
                         <Table.Head id="assigned_to" label="Responsable" />
@@ -117,6 +142,10 @@ export function LeadsList({
                         // Obtenemos el nombre del responsable desde la relación
                         const responsableName = item.profiles?.full_name;
 
+                        // Determinar si desactivamos capitalize (para TikTok, WhatsApp, etc)
+                        const lowerSource = String(item.source || '').toLowerCase();
+                        const isSpecialSource = ['waba', 'tiktok_kommo', 'instagram_business'].includes(lowerSource);
+
                         return (
                             <Table.Row id={item.id}>
                                 <Table.Cell className="font-medium text-slate-500 text-xs">
@@ -129,8 +158,13 @@ export function LeadsList({
                                         <div className="flex flex-col">
                                             <span className="font-medium text-slate-900">{item.name}</span>
                                             <div className="flex items-center gap-1 text-slate-500 text-xs">
-                                                {item.source === 'whatsapp' ? <MessageCircle className="h-3 w-3" /> : <User className="h-3 w-3" />}
-                                                <span className="capitalize">{item.source || 'Desconocido'}</span>
+                                                {/* Usamos el nuevo helper de Icono */}
+                                                {getSourceIcon(item.source)}
+
+                                                {/* Usamos el nuevo helper de Texto + lógica de clase CSS */}
+                                                <span className={isSpecialSource ? '' : 'capitalize'}>
+                                                    {getFormattedSource(item.source)}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -213,14 +247,14 @@ export function LeadsList({
                     }}
                 </Table.Body>
             </Table>
-            
+
             {/* Paginación Conectada Dinámicamente */}
-            <PaginationPageMinimalCenter 
-                page={page} 
-                total={totalCount} 
+            <PaginationPageMinimalCenter
+                page={page}
+                total={totalCount}
                 limit={rowsPerPage}
                 onChange={onPageChange}
-                className="px-6 py-4" 
+                className="px-6 py-4"
             />
         </TableCard.Root>
     );
