@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Edit3, Loader2, CheckCircle2, Car, Gauge } from "lucide-react"; // Agregamos Gauge
+import { Edit3, Loader2, CheckCircle2, Car, Gauge } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea } from "./ui-components";
 import type { LeadWithDetails } from "../../../../hooks/useLeads";
 
-// Extendemos el tipo temporalmente por si no has regenerado los tipos de Supabase
-type LeadWithExtension = LeadWithDetails & { test_drive_done?: boolean };
+// CORRECCIÓN: Permitimos 'null' explícitamente para evitar el error de TS(2322)
+type LeadWithExtension = LeadWithDetails & { test_drive_done?: boolean | null };
 
 export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const { supabase } = useAuth();
@@ -15,6 +15,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const [isSavingResume, setIsSavingResume] = useState(false);
 
     // --- ESTADOS TEST DRIVE ---
+    // Usamos (|| false) para convertir null/undefined a false y manejarlo como booleano puro en el UI
     const [testDriveDone, setTestDriveDone] = useState(lead.test_drive_done || false);
     const [isUpdatingTestDrive, setIsUpdatingTestDrive] = useState(false);
 
@@ -28,7 +29,6 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
 
     // Lógica Toggle Test Drive
     const handleToggleTestDrive = async () => {
-        // Optimistic UI: Cambiamos visualmente antes de esperar a la DB para que se sienta rápido
         const newValue = !testDriveDone;
         setTestDriveDone(newValue);
         setIsUpdatingTestDrive(true);
@@ -40,7 +40,6 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
 
         if (error) {
             console.error("Error actualizando test drive", error);
-            // Si falla, revertimos el cambio visual
             setTestDriveDone(!newValue);
             alert("No se pudo actualizar el estado del Test Drive");
         }
@@ -74,7 +73,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
                 />
             </div>
 
-            {/* --- SECCIÓN 2: TEST DRIVE (NUEVO) --- */}
+            {/* --- SECCIÓN 2: TEST DRIVE --- */}
             <div className="mb-8">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block flex items-center gap-2">
                     <Gauge className="h-3 w-3" /> Test Drive
