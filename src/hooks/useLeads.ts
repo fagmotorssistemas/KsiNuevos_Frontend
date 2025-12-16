@@ -99,7 +99,12 @@ export function useLeads() {
                 l.name.toLowerCase().includes(query) ||
                 l.phone?.includes(query) ||
                 (l.lead_id_kommo && l.lead_id_kommo.toString().toLowerCase().includes(query)) ||
-                (l.profiles?.full_name && l.profiles.full_name.toLowerCase().includes(query))
+                (l.profiles?.full_name && l.profiles.full_name.toLowerCase().includes(query)) ||
+                // MODIFICADO: Nueva lógica para buscar por vehículos de interés (Marca o Modelo)
+                (l.interested_cars && l.interested_cars.some(car => 
+                    car.brand.toLowerCase().includes(query) || 
+                    car.model.toLowerCase().includes(query)
+                ))
             );
         }
 

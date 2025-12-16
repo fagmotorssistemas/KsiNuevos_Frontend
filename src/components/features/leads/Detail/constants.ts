@@ -8,6 +8,13 @@ export const STATUS_OPTIONS = [
     { value: 'perdido', label: 'Perdido', color: 'bg-red-50 text-red-700 border-red-200' }
 ];
 
+// NUEVO: Opciones de Temperatura
+export const TEMPERATURE_OPTIONS = [
+    { value: 'frio', label: '❄️ Frío', color: 'bg-sky-50 text-sky-700 border-sky-200' },
+    { value: 'tibio', label: '🌤️ Tibio', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+    { value: 'caliente', label: '🔥 Caliente', color: 'bg-red-50 text-red-700 border-red-200' }
+];
+
 // Opciones de resultado según el tipo de interacción
 export const RESULT_OPTIONS: Record<string, string[]> = {
     llamada: ['contestó', 'buzón', 'ocupado', 'número_equivocado', 'volver_a_llamar'],

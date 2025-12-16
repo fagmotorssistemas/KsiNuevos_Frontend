@@ -1,14 +1,24 @@
 import { useState } from "react";
-import { Edit3, Loader2, CheckCircle2, Car } from "lucide-react";
+import { Edit3, Loader2, CheckCircle2, Car, Gauge } from "lucide-react"; // Agregamos Gauge
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea } from "./ui-components";
 import type { LeadWithDetails } from "../../../../hooks/useLeads";
 
-export function LeadInfoSidebar({ lead }: { lead: LeadWithDetails }) {
+// Extendemos el tipo temporalmente por si no has regenerado los tipos de Supabase
+type LeadWithExtension = LeadWithDetails & { test_drive_done?: boolean };
+
+export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const { supabase } = useAuth();
+    
+    // --- ESTADOS RESUMEN ---
     const [resume, setResume] = useState(lead.resume || "");
     const [isSavingResume, setIsSavingResume] = useState(false);
 
+    // --- ESTADOS TEST DRIVE ---
+    const [testDriveDone, setTestDriveDone] = useState(lead.test_drive_done || false);
+    const [isUpdatingTestDrive, setIsUpdatingTestDrive] = useState(false);
+
+    // Lógica Guardar Resumen
     const handleSaveResume = async () => {
         if (resume === lead.resume) return;
         setIsSavingResume(true);
@@ -16,9 +26,32 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithDetails }) {
         setIsSavingResume(false);
     };
 
+    // Lógica Toggle Test Drive
+    const handleToggleTestDrive = async () => {
+        // Optimistic UI: Cambiamos visualmente antes de esperar a la DB para que se sienta rápido
+        const newValue = !testDriveDone;
+        setTestDriveDone(newValue);
+        setIsUpdatingTestDrive(true);
+
+        const { error } = await supabase
+            .from('leads')
+            .update({ test_drive_done: newValue })
+            .eq('id', lead.id);
+
+        if (error) {
+            console.error("Error actualizando test drive", error);
+            // Si falla, revertimos el cambio visual
+            setTestDriveDone(!newValue);
+            alert("No se pudo actualizar el estado del Test Drive");
+        }
+        
+        setIsUpdatingTestDrive(false);
+    };
+
     return (
         <div className="w-1/3 bg-slate-50 p-6 border-r border-slate-200 overflow-y-auto custom-scrollbar">
-            {/* Resumen */}
+            
+            {/* --- SECCIÓN 1: RESUMEN --- */}
             <div className="mb-8">
                 <div className="flex justify-between items-center mb-3">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -41,7 +74,44 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithDetails }) {
                 />
             </div>
 
-            {/* Vehículos */}
+            {/* --- SECCIÓN 2: TEST DRIVE (NUEVO) --- */}
+            <div className="mb-8">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block flex items-center gap-2">
+                    <Gauge className="h-3 w-3" /> Test Drive
+                </label>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span className="text-sm font-semibold text-slate-800 block">
+                            {testDriveDone ? "¡Test Drive Realizado!" : "Pendiente de Prueba"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                            {testDriveDone ? "El cliente ya probó el vehículo." : "Aún no se ha realizado prueba."}
+                        </span>
+                    </div>
+
+                    {/* SWITCH / TOGGLE BUTTON */}
+                    <button
+                        onClick={handleToggleTestDrive}
+                        disabled={isUpdatingTestDrive}
+                        className={`
+                            relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2
+                            ${testDriveDone ? 'bg-emerald-500' : 'bg-slate-200'}
+                            ${isUpdatingTestDrive ? 'opacity-50 cursor-wait' : ''}
+                        `}
+                    >
+                        <span className="sr-only">Toggle Test Drive</span>
+                        <span
+                            aria-hidden="true"
+                            className={`
+                                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
+                                ${testDriveDone ? 'translate-x-5' : 'translate-x-0'}
+                            `}
+                        />
+                    </button>
+                </div>
+            </div>
+
+            {/* --- SECCIÓN 3: VEHÍCULOS --- */}
             <div className="mb-8">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">Vehículos de Interés</label>
                 {lead.interested_cars && lead.interested_cars.length > 0 ? (
@@ -61,7 +131,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithDetails }) {
                 )}
             </div>
 
-            {/* Finanzas */}
+            {/* --- SECCIÓN 4: FINANZAS --- */}
             <div>
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">
                     Detalles Financieros
