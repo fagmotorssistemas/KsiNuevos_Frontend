@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { 
-    X, Save, Car, DollarSign, Gauge, 
-    Calendar, Hash, FileText, Loader2, 
+import {
+    X, Save, Car, DollarSign, Gauge,
+    Calendar, Hash, FileText, Loader2,
     MapPin, Tag, Image as ImageIcon
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ const InputGroup = ({ label, required = false, children }: { label: string; requ
 );
 
 const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input 
+    <input
         className={`w-full h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 ${className}`}
         {...props}
     />
@@ -27,7 +27,7 @@ const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
 
 const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
     <div className="relative">
-        <select 
+        <select
             className={`w-full h-10 px-3 pr-8 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 appearance-none cursor-pointer ${className}`}
             {...props}
         />
@@ -45,7 +45,7 @@ interface InventoryCreateModalProps {
 export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModalProps) {
     const { supabase } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
-    
+
     // Estado del Formulario
     const [formData, setFormData] = useState({
         // Datos Obligatorios
@@ -53,11 +53,11 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
         model: '',
         year: new Date().getFullYear(),
         price: '',
-        
+
         // Datos Identificación
         plate: '',        // Placa Real
         plate_short: '',  // Placa Corta / Código Interno
-        
+
         // Datos Opcionales Comunes
         mileage: '',
         color: '',
@@ -88,10 +88,10 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                     model: formData.model.toLowerCase(),
                     year: Number(formData.year),
                     price: Number(formData.price),
-                    
+
                     plate: formData.plate.toUpperCase() || null, // Placa en mayúsculas o NULL si está vacía
                     plate_short: formData.plate_short.toUpperCase() || null,
-                    
+
                     mileage: Number(formData.mileage) || 0,
                     color: formData.color.toLowerCase(),
                     type_body: formData.type_body.toLowerCase(),
@@ -99,14 +99,14 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                     location: formData.location as any,
                     description: formData.description,
                     img_main_url: formData.img_main_url,
-                    
+
                     // Valores por defecto
                     marketing_in_patio: false,
                     stock: 1
                 });
 
             if (error) throw error;
-            
+
             onSuccess();
             onClose();
         } catch (error: any) {
@@ -125,7 +125,7 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
-                
+
                 {/* HEADER */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
                     <div>
@@ -139,20 +139,20 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
 
                 {/* BODY (Formulario) */}
                 <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6">
-                    
+
                     {/* SECCIÓN 1: DATOS PRINCIPALES */}
                     <div className="grid grid-cols-2 gap-4">
                         <InputGroup label="Marca" required>
-                            <Input 
-                                placeholder="Ej: Toyota" 
+                            <Input
+                                placeholder="Ej: Toyota"
                                 value={formData.brand}
                                 onChange={(e) => handleChange('brand', e.target.value)}
                                 autoFocus
                             />
                         </InputGroup>
                         <InputGroup label="Modelo" required>
-                            <Input 
-                                placeholder="Ej: Fortuner" 
+                            <Input
+                                placeholder="Ej: Fortuner"
                                 value={formData.model}
                                 onChange={(e) => handleChange('model', e.target.value)}
                             />
@@ -165,8 +165,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                     <DollarSign className="h-4 w-4" />
                                 </div>
-                                <Input 
-                                    type="number" 
+                                <Input
+                                    type="number"
                                     className="pl-9"
                                     placeholder="0.00"
                                     value={formData.price}
@@ -179,8 +179,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                     <Calendar className="h-4 w-4" />
                                 </div>
-                                <Input 
-                                    type="number" 
+                                <Input
+                                    type="number"
                                     className="pl-9"
                                     value={formData.year}
                                     onChange={(e) => handleChange('year', e.target.value)}
@@ -197,8 +197,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                         </h3>
                         <div className="grid grid-cols-2 gap-4">
                             <InputGroup label="Placa Real">
-                                <Input 
-                                    placeholder="Ej: ABC-1234" 
+                                <Input
+                                    placeholder="Ej: ABC-1234"
                                     value={formData.plate}
                                     onChange={(e) => handleChange('plate', e.target.value)}
                                     className="uppercase font-mono"
@@ -206,8 +206,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <p className="text-[10px] text-slate-400 mt-1">Si la tiene, es obligatoria para documentos.</p>
                             </InputGroup>
                             <InputGroup label="Código Interno / Placa Corta">
-                                <Input 
-                                    placeholder="Ej: A1, P5" 
+                                <Input
+                                    placeholder="Ej: A1, P5"
                                     value={formData.plate_short}
                                     onChange={(e) => handleChange('plate_short', e.target.value)}
                                     className="uppercase font-mono"
@@ -224,8 +224,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                     <Gauge className="h-4 w-4" />
                                 </div>
-                                <Input 
-                                    type="number" 
+                                <Input
+                                    type="number"
                                     className="pl-9"
                                     placeholder="0"
                                     value={formData.mileage}
@@ -234,14 +234,14 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                             </div>
                         </InputGroup>
                         <InputGroup label="Color">
-                            <Input 
+                            <Input
                                 placeholder="Ej: Blanco"
                                 value={formData.color}
                                 onChange={(e) => handleChange('color', e.target.value)}
                             />
                         </InputGroup>
                         <InputGroup label="Tipo">
-                            <Input 
+                            <Input
                                 placeholder="Ej: SUV"
                                 value={formData.type_body}
                                 onChange={(e) => handleChange('type_body', e.target.value)}
@@ -255,14 +255,18 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                     <Tag className="h-4 w-4" />
                                 </div>
-                                <Select 
-                                    value={formData.status} 
+                                <Select
+                                    value={formData.status}
                                     onChange={(e) => handleChange('status', e.target.value)}
                                     className="pl-9"
                                 >
                                     <option value="disponible">🟢 Disponible</option>
                                     <option value="reservado">🟡 Reservado</option>
                                     <option value="mantenimiento">🔧 En Taller</option>
+                                    <option value="devuelto">🔙 Devuelto</option>
+                                    <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
+                                    <option value="consignacion">🚗 En consignacion</option>
+
                                 </Select>
                             </div>
                         </InputGroup>
@@ -271,8 +275,8 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                     <MapPin className="h-4 w-4" />
                                 </div>
-                                <Select 
-                                    value={formData.location} 
+                                <Select
+                                    value={formData.location}
                                     onChange={(e) => handleChange('location', e.target.value)}
                                     className="pl-9"
                                 >
@@ -289,7 +293,7 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                 <ImageIcon className="h-4 w-4" />
                             </div>
-                            <Input 
+                            <Input
                                 placeholder="https://ejemplo.com/foto.jpg"
                                 value={formData.img_main_url}
                                 onChange={(e) => handleChange('img_main_url', e.target.value)}
@@ -303,7 +307,7 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                             <div className="absolute left-3 top-3 text-slate-400">
                                 <FileText className="h-4 w-4" />
                             </div>
-                            <textarea 
+                            <textarea
                                 className="w-full min-h-[80px] pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-none"
                                 placeholder="Detalles importantes..."
                                 value={formData.description}
@@ -316,13 +320,13 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
 
                 {/* FOOTER */}
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button 
+                    <button
                         onClick={onClose}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
                     >
                         Cancelar
                     </button>
-                    <button 
+                    <button
                         onClick={handleCreate}
                         disabled={isSaving}
                         className="px-6 py-2 rounded-lg text-sm font-medium text-black bg-brand-600 hover:bg-brand-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
