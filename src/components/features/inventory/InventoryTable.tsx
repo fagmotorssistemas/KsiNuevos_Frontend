@@ -13,7 +13,7 @@ import { Table, TableCard } from "@/components/ui/table";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
 
-import type { InventoryCar } from "../../../hooks/useInventory";
+import type { InventoryCar } from "@/hooks/useInventory";
 
 interface InventoryTableProps {
     cars: InventoryCar[];
@@ -23,6 +23,8 @@ interface InventoryTableProps {
     totalCount: number;
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
+    // NUEVA PROP: Rol del usuario
+    currentUserRole?: string | null;
 }
 
 export function InventoryTable({ 
@@ -31,8 +33,15 @@ export function InventoryTable({
     page, 
     totalCount, 
     rowsPerPage,
-    onPageChange 
+    onPageChange,
+    currentUserRole 
 }: InventoryTableProps) {
+
+    // --- LÓGICA DE PERMISOS ---
+    // Verificamos si el usuario tiene permiso para ver las acciones
+    // Normalizamos a minúsculas para evitar errores (ej: "Admin" vs "admin")
+    const role = currentUserRole?.toLowerCase() || '';
+    const canEdit = role === 'admin' || role === 'marketing';
 
     // Helpers de Formato
     const formatPrice = (price: number) => 
@@ -63,8 +72,6 @@ export function InventoryTable({
     };
 
     if (cars.length === 0 && totalCount === 0) {
-        // Solo mostramos "No encontrado" si realmente no hay datos totales (no solo en esta página)
-        // O si estás filtrando y no hay resultados.
         return (
             <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                 <Car className="h-10 w-10 text-slate-300 mb-4" />
@@ -87,7 +94,9 @@ export function InventoryTable({
                     <Table.Head id="km" label="Kilometraje" className="hidden md:table-cell" />
                     <Table.Head id="status" label="Estado" />
                     <Table.Head id="location" label="Ubicación" className="hidden lg:table-cell" />
-                    <Table.Head id="actions" label="" />
+                    
+                    {/* COLUMNA CONDICIONAL: Solo visible si canEdit es true */}
+                    {canEdit && <Table.Head id="actions" label="" />}
                 </Table.Header>
 
                 <Table.Body items={cars}>
@@ -145,17 +154,20 @@ export function InventoryTable({
                                     </div>
                                 </Table.Cell>
 
-                                <Table.Cell>
-                                    <div className="flex justify-end">
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() => onEdit && onEdit(car)}
-                                        >
-                                            Gestionar
-                                        </Button>
-                                    </div>
-                                </Table.Cell>
+                                {/* CELDA CONDICIONAL: Solo renderizamos el botón si canEdit es true */}
+                                {canEdit && (
+                                    <Table.Cell>
+                                        <div className="flex justify-end">
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => onEdit && onEdit(car)}
+                                            >
+                                                Gestionar
+                                            </Button>
+                                        </div>
+                                    </Table.Cell>
+                                )}
                             </Table.Row>
                         );
                     }}
@@ -166,7 +178,7 @@ export function InventoryTable({
             <PaginationPageMinimalCenter 
                 page={page} 
                 total={totalCount} 
-                limit={rowsPerPage} // Importante: pasamos el límite para calcular totalPages
+                limit={rowsPerPage}
                 className="px-6 py-4" 
                 onChange={onPageChange} 
             />

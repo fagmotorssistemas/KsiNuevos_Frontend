@@ -13,6 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function InventoryPage() {
     const { profile } = useAuth();
+    
+    // Validamos rol para botón crear
+    const role = profile?.role?.toLowerCase() || '';
+    const canCreate = role === 'admin' || role === 'marketing';
+
     const { 
         cars, 
         isLoading, 
@@ -73,16 +78,20 @@ export default function InventoryPage() {
                         Gestión total de la flota ({totalCount} vehículos).
                     </p>
                 </div>
+                
+                {/* BOTÓN CREAR: Solo visible si tiene permisos */}
                 <div className="flex gap-3">
-                    <Button 
-                        variant="primary" 
-                        size="sm" 
-                        className="gap-2"
-                        onClick={handleOpenCreateModal}
-                    >
-                        <Plus className="h-4 w-4" />
-                        Nuevo Vehículo
-                    </Button>
+                    {canCreate && (
+                        <Button 
+                            variant="primary" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={handleOpenCreateModal}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Nuevo Vehículo
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -106,11 +115,13 @@ export default function InventoryPage() {
                     <InventoryTable 
                         cars={cars}
                         onEdit={handleEditCar}
-                        // --- PROPS DE PAGINACIÓN AÑADIDAS ---
+                        // --- PROPS DE PAGINACIÓN ---
                         page={page}
-                        totalCount={totalCount}   // El total real (ej: 60)
-                        rowsPerPage={rowsPerPage} // El límite (ej: 10)
-                        onPageChange={setPage}    // Función para cambiar página
+                        totalCount={totalCount}   
+                        rowsPerPage={rowsPerPage} 
+                        onPageChange={setPage}  
+                        // --- NUEVA PROP DE ROL ---
+                        currentUserRole={profile?.role}  
                     />
                 </div>
             )}
