@@ -5,7 +5,9 @@ export const STATUS_OPTIONS = [
     { value: 'interesado', label: 'Interesado', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
     { value: 'negociando', label: 'Negociando', color: 'bg-purple-50 text-purple-700 border-purple-200' },
     { value: 'ganado', label: 'Ganado', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    { value: 'perdido', label: 'Perdido', color: 'bg-red-50 text-red-700 border-red-200' }
+    { value: 'perdido', label: 'Perdido', color: 'bg-red-50 text-red-700 border-red-200' },
+    { value: 'en_proceso', label: 'En Proceso', color: 'bg-gray-50 text-gray-700 border-gray-200' }
+
 ];
 
 // NUEVO: Opciones de Temperatura

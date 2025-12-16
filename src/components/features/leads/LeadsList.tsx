@@ -61,6 +61,7 @@ export function LeadsList({
             case 'negociando': return { color: 'warning' as const, icon: Clock };
             case 'interesado': return { color: 'primary' as const, icon: HelpCircle };
             case 'contactado': return { color: 'primary' as const, icon: Phone };
+            case 'en_proceso': return { color: 'gray' as const, icon: Clock, label: 'En Proceso' };
             default: return { color: 'gray' as const, icon: HelpCircle };
         }
     };
