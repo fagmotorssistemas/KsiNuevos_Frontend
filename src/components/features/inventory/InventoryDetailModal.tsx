@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { 
-    X, Save, Car, Share2, MapPin, Tag, 
+import {
+    X, Save, Car, Share2, MapPin, Tag,
     DollarSign, Gauge, Calendar, AlertCircle,
     CheckCircle2, Loader2, Image as ImageIcon
 } from "lucide-react";
@@ -20,7 +20,7 @@ const InputGroup = ({ label, required = false, children }: { label: string; requ
 );
 
 const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input 
+    <input
         className={`w-full h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 ${className}`}
         {...props}
     />
@@ -28,7 +28,7 @@ const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
 
 const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
     <div className="relative">
-        <select 
+        <select
             className={`w-full h-10 px-3 pr-8 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 appearance-none cursor-pointer ${className}`}
             {...props}
         />
@@ -48,7 +48,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
     const { supabase } = useAuth();
     const [activeTab, setActiveTab] = useState<'general' | 'marketing'>('general');
     const [isSaving, setIsSaving] = useState(false);
-    
+
     // Estado del Formulario (Inicializado con los datos del auto)
     const [formData, setFormData] = useState({
         price: car.price || 0,
@@ -94,7 +94,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                 .eq('id', car.id);
 
             if (error) throw error;
-            
+
             onUpdate(); // Recargar datos en la tabla
             onClose();  // Cerrar modal
         } catch (error) {
@@ -108,7 +108,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
-                
+
                 {/* HEADER */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
                     <div>
@@ -134,21 +134,19 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                 <div className="flex border-b border-slate-100 bg-slate-50/50 px-6">
                     <button
                         onClick={() => setActiveTab('general')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === 'general' 
-                            ? 'border-brand-600 text-brand-600' 
-                            : 'border-transparent text-slate-500 hover:text-slate-700'
-                        }`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general'
+                                ? 'border-brand-600 text-brand-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                            }`}
                     >
                         <Car className="h-4 w-4" /> Datos Generales
                     </button>
                     <button
                         onClick={() => setActiveTab('marketing')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                            activeTab === 'marketing' 
-                            ? 'border-brand-600 text-brand-600' 
-                            : 'border-transparent text-slate-500 hover:text-slate-700'
-                        }`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'marketing'
+                                ? 'border-brand-600 text-brand-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                            }`}
                     >
                         <Share2 className="h-4 w-4" /> Marketing
                     </button>
@@ -156,32 +154,35 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
 
                 {/* BODY (Scrollable) */}
                 <div className="flex-1 overflow-y-auto p-6 bg-white">
-                    
+
                     {/* --- PESTAÑA GENERAL --- */}
                     {activeTab === 'general' && (
                         <div className="space-y-6">
-                            
+
                             {/* Estado y Ubicación (Fila 1) */}
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Estado del Vehículo" required>
-                                    <Select 
-                                        value={formData.status} 
+                                    <Select
+                                        value={formData.status}
                                         onChange={(e) => handleChange('status', e.target.value)}
                                         className={
-                                            formData.status === 'vendido' ? 'text-red-600 font-medium bg-red-50 border-red-200' : 
-                                            formData.status === 'disponible' ? 'text-emerald-600 font-medium bg-emerald-50 border-emerald-200' : ''
+                                            formData.status === 'vendido' ? 'text-red-600 font-medium bg-red-50 border-red-200' :
+                                                formData.status === 'disponible' ? 'text-emerald-600 font-medium bg-emerald-50 border-emerald-200' : ''
                                         }
                                     >
                                         <option value="disponible">🟢 Disponible</option>
                                         <option value="reservado">🟡 Reservado</option>
                                         <option value="vendido">🔴 Vendido</option>
                                         <option value="mantenimiento">🔧 En Taller</option>
+                                        <option value="devuelto">🔙 Devuelto</option>
+                                        <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
+                                        <option value="consignacion">🚗 En consignacion</option>
                                     </Select>
                                 </InputGroup>
 
                                 <InputGroup label="Ubicación Actual">
-                                    <Select 
-                                        value={formData.location} 
+                                    <Select
+                                        value={formData.location}
                                         onChange={(e) => handleChange('location', e.target.value)}
                                     >
                                         <option value="patio">🏠 Patio Principal</option>
@@ -199,8 +200,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                             <DollarSign className="h-4 w-4" />
                                         </div>
-                                        <Input 
-                                            type="number" 
+                                        <Input
+                                            type="number"
                                             className="pl-9 font-mono font-medium"
                                             value={formData.price}
                                             onChange={(e) => handleChange('price', e.target.value)}
@@ -213,8 +214,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                             <Gauge className="h-4 w-4" />
                                         </div>
-                                        <Input 
-                                            type="number" 
+                                        <Input
+                                            type="number"
                                             className="pl-9"
                                             value={formData.mileage}
                                             onChange={(e) => handleChange('mileage', e.target.value)}
@@ -226,14 +227,14 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                             {/* Detalles Adicionales */}
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Color">
-                                    <Input 
-                                        value={formData.color} 
+                                    <Input
+                                        value={formData.color}
                                         onChange={(e) => handleChange('color', e.target.value)}
                                         placeholder="Ej: Rojo, Plata..."
                                     />
                                 </InputGroup>
                                 <InputGroup label="Año Modelo">
-                                    <Input 
+                                    <Input
                                         type="number"
                                         value={formData.year}
                                         onChange={(e) => handleChange('year', e.target.value)}
@@ -242,7 +243,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                             </div>
 
                             <InputGroup label="Observaciones Internas">
-                                <textarea 
+                                <textarea
                                     className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-none"
                                     placeholder="Detalles sobre llaves, rayones, estado mecánico..."
                                     value={formData.description}
@@ -255,7 +256,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                     {/* --- PESTAÑA MARKETING --- */}
                     {activeTab === 'marketing' && (
                         <div className="space-y-8">
-                            
+
                             {/* Toggle Principal */}
                             <div className="flex items-center justify-between bg-purple-50 p-4 rounded-xl border border-purple-100">
                                 <div>
@@ -263,8 +264,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                     <p className="text-xs text-purple-600 mt-1">Activa esto si el auto está físicamente listo para fotos.</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
+                                    <input
+                                        type="checkbox"
                                         className="sr-only peer"
                                         checked={formData.marketing_in_patio}
                                         onChange={(e) => handleChange('marketing_in_patio', e.target.checked)}
@@ -277,8 +278,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
                                     <span className="text-xs font-bold text-slate-500 uppercase">Posts</span>
-                                    <Input 
-                                        type="number" 
+                                    <Input
+                                        type="number"
                                         min="0"
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_posts_count}
@@ -287,8 +288,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                 </div>
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
                                     <span className="text-xs font-bold text-slate-500 uppercase">Videos</span>
-                                    <Input 
-                                        type="number" 
+                                    <Input
+                                        type="number"
                                         min="0"
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_videos_count}
@@ -297,8 +298,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                 </div>
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
                                     <span className="text-xs font-bold text-slate-500 uppercase">Historias</span>
-                                    <Input 
-                                        type="number" 
+                                    <Input
+                                        type="number"
                                         min="0"
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_stories_count}
@@ -313,7 +314,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                                         <ImageIcon className="h-4 w-4" />
                                     </div>
-                                    <Input 
+                                    <Input
                                         placeholder="https://..."
                                         className="pl-9"
                                         value={formData.img_main_url}
@@ -329,13 +330,13 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
 
                 {/* FOOTER (Acciones) */}
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button 
+                    <button
                         onClick={onClose}
                         className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
                     >
                         Cancelar
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
                         disabled={isSaving}
                         className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

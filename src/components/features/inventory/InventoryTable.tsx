@@ -43,11 +43,22 @@ export function InventoryTable({
 
     const getStatusConfig = (status: string | null) => {
         switch (status) {
-            case 'disponible': return { color: 'success' as const, icon: Check, label: 'Disponible' };
-            case 'vendido': return { color: 'error' as const, icon: X, label: 'Vendido' };
-            case 'reservado': return { color: 'warning' as const, icon: Clock, label: 'Reservado' };
-            case 'mantenimiento': return { color: 'gray' as const, icon: AlertCircle, label: 'Taller' };
-            default: return { color: 'gray' as const, icon: AlertCircle, label: status || 'Desconocido' };
+            case 'disponible':
+                return { color: 'success' as const, icon: Check, label: 'Disponible' };
+            case 'vendido':
+                return { color: 'error' as const, icon: X, label: 'Vendido' };
+            case 'reservado':
+                return { color: 'warning' as const, icon: Clock, label: 'Reservado' };
+            case 'mantenimiento':
+                return { color: 'gray' as const, icon: AlertCircle, label: 'Taller' };
+            case 'devuelto':
+                return { color: 'brand' as const, icon: AlertCircle, label: 'Devuelto' };
+            case 'conwilsonhernan':
+                return { color: 'brand' as const, icon: AlertCircle, label: 'Con Wilson Hernan' };
+            case 'consignacion':
+                return { color: 'brand' as const, icon: Car, label: 'En consignación' };
+            default:
+                return { color: 'gray' as const, icon: AlertCircle, label: status || 'Desconocido' };
         }
     };
 
