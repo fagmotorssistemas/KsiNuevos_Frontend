@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
     { href: "/leads", label: "Leads" },
+    { href: "/showroom", label: "Showroom" },
     { href: "/agenda", label: "Agenda" },
     { href: "/inventory", label: "Inventario" },
-    { href: "/requests", label: "Pedidos" }, 
-    { href: "/finance", label: "Financiamiento" }, 
-    { href: "/tareas", label: "Tareas" }, 
-    { href: "/showroom", label: "Showroom" }, 
+    { href: "/requests", label: "Pedidos" },
+    { href: "/finance", label: "Financiamiento" },
+    { href: "/tareas", label: "Tareas" },
+
 ];
 
 export function MainNav({ className }: { className?: string }) {
@@ -24,11 +25,10 @@ export function MainNav({ className }: { className?: string }) {
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
-                            isActive
+                        className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${isActive
                                 ? "bg-slate-900 text-white shadow-sm"
                                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                        }`}
+                            }`}
                     >
                         {item.label}
                     </Link>

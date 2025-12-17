@@ -1,5 +1,19 @@
-import { useState, useEffect } from "react";
-import { XCircle, Loader2, Save, Car } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+    X,
+    Loader2,
+    Save,
+    CarFront,
+    User,
+    Clock,
+    MapPin,
+    CreditCard,
+    FileText,
+    CheckCircle2,
+    Circle,
+    Search,
+    ChevronDown
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem } from "./constants";
 
@@ -15,10 +29,15 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess }: VisitForm
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
+    // --- ESTADOS PARA EL BUSCADOR (NUEVO) ---
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
     // Estado del Formulario
     const [formData, setFormData] = useState({
         client_name: '',
-        inventory_id: '', // Esto ahora guarda un UUID string
+        inventory_id: '',
         source: 'showroom' as VisitSource,
         visit_start_time: '',
         visit_end_time: '',
@@ -33,23 +52,56 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess }: VisitForm
             const fetchInventory = async () => {
                 setIsLoadingInventory(true);
                 const { data } = await supabase
-                    .from('inventory') 
+                    .from('inventory')
                     .select('id, brand, model, year, price, status')
                     .eq('status', 'disponible')
                     .order('brand', { ascending: true });
-                
+
                 if (data) setInventory(data as any);
                 setIsLoadingInventory(false);
             };
             fetchInventory();
-            
+
             const now = new Date();
             setFormData(prev => ({
                 ...prev,
                 visit_start_time: now.toTimeString().slice(0, 5)
             }));
+            // Resetear búsqueda
+            setSearchTerm("");
         }
     }, [isOpen]);
+
+    // Cerrar dropdown si clic afuera
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // --- LÓGICA DE FILTRADO (NUEVO) ---
+    const filteredInventory = inventory.filter(car => {
+        if (!searchTerm) return true;
+        const searchLower = searchTerm.toLowerCase();
+        const carString = `${car.brand} ${car.model} ${car.year}`.toLowerCase();
+        return carString.includes(searchLower);
+    });
+
+    const handleSelectCar = (car: InventoryItem) => {
+        setFormData({ ...formData, inventory_id: car.id });
+        setSearchTerm(`${car.brand} ${car.model} (${car.year})`);
+        setIsDropdownOpen(false);
+    };
+
+    const handleClearCarSelection = () => {
+        setFormData({ ...formData, inventory_id: '' });
+        setSearchTerm("");
+        setIsDropdownOpen(true);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -63,10 +115,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess }: VisitForm
         const { error } = await supabase.from('showroom_visits').insert({
             salesperson_id: user.id,
             client_name: formData.client_name,
-            
-            // CORRECCIÓN: No usamos parseInt aquí porque es UUID
             inventory_id: formData.inventory_id && formData.inventory_id !== '' ? formData.inventory_id : null,
-            
             source: formData.source,
             visit_start: startFull,
             visit_end: endFull,
@@ -79,6 +128,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess }: VisitForm
             onSuccess();
             onClose();
             setFormData({ client_name: '', inventory_id: '', source: 'showroom', visit_start_time: '', visit_end_time: '', test_drive: false, credit_status: 'pendiente', observation: '' });
+            setSearchTerm("");
         } else {
             console.error(error);
             alert("Error al registrar visita");
@@ -86,121 +136,288 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess }: VisitForm
         setIsSubmitting(false);
     };
 
+    // --- Componentes de UI Reutilizables ---
+
+    const InputLabel = ({ label, required = false }: { label: string, required?: boolean }) => (
+        <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
+            {label}
+            {required ? (
+                <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>
+            ) : (
+                <span className="text-slate-400 font-normal text-[11px] ml-2 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded-full">
+                    Opcional
+                </span>
+            )}
+        </label>
+    );
+
+    const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm";
+    const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 max-h-[90vh] flex flex-col">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <span className="bg-slate-900 text-white p-1 rounded">SR</span> 
-                        Registrar Visita / Showroom
-                    </h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><XCircle className="h-6 w-6" /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+
+                {/* Header */}
+                <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-slate-900 text-white text-xs font-bold px-2 py-0.5 rounded">SR</span>
+                            <h3 className="font-bold text-xl text-slate-900">Registrar Visita</h3>
+                        </div>
+                        <p className="text-sm text-slate-500">Control de tráfico y prospectos en showroom</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        <X className="h-6 w-6" />
+                    </button>
                 </div>
-                
-                <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-                    {/* Fila 1: Cliente y Origen */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="label-text">Nombre del Cliente</label>
-                            <input required type="text" className="input-field" placeholder="Ej: Juan Pérez" 
-                                value={formData.client_name} onChange={e => setFormData({...formData, client_name: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="label-text">Medio de Visita</label>
-                            <select className="input-field" value={formData.source} onChange={e => setFormData({...formData, source: e.target.value as VisitSource})}>
-                                <option value="showroom">Pasó Caminando (Showroom)</option>
-                                <option value="redes_sociales">Redes Sociales (FB/IG)</option>
-                                <option value="referido">Referido</option>
-                                <option value="cita">Cita Agendada</option>
-                                <option value="otro">Otro</option>
-                            </select>
-                        </div>
-                    </div>
 
-                    {/* Fila 2: Inventario */}
-                    <div>
-                        <label className="label-text flex justify-between">
-                            Vehículo de Interés
-                            {isLoadingInventory && <span className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> Cargando autos...</span>}
-                        </label>
-                        <div className="relative">
-                            <Car className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                            <select 
-                                className="input-field pl-9" 
-                                value={formData.inventory_id} 
-                                onChange={e => setFormData({...formData, inventory_id: e.target.value})}
-                            >
-                                <option value="">-- Seleccionar del Inventario --</option>
-                                {inventory.map(car => (
-                                    <option key={car.id} value={car.id}>
-                                        {car.brand} {car.model} ({car.year}) - ${car.price?.toLocaleString()}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">Si el cliente busca algo que no tenemos, dejar vacío y detallar en notas.</p>
-                    </div>
+                {/* Body */}
+                <div className="overflow-y-auto custom-scrollbar bg-white">
+                    <form onSubmit={handleSubmit} className="p-8 space-y-8">
 
-                    {/* Fila 3: Tiempos */}
-                    <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <div>
-                            <label className="label-text">Hora Inicio Atención</label>
-                            <input type="time" required className="input-field bg-white" 
-                                value={formData.visit_start_time} onChange={e => setFormData({...formData, visit_start_time: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="label-text">Hora Fin (Opcional)</label>
-                            <input type="time" className="input-field bg-white" 
-                                value={formData.visit_end_time} onChange={e => setFormData({...formData, visit_end_time: e.target.value})} />
-                        </div>
-                    </div>
+                        {/* SECCIÓN 1: DATOS DE LA VISITA */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-5">
+                            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/60">
+                                <div className="p-2 bg-slate-200 rounded-lg text-slate-700">
+                                    <User className="w-5 h-5" />
+                                </div>
+                                <h4 className="text-base font-bold text-slate-800">Cliente y Origen</h4>
+                            </div>
 
-                    {/* Fila 4: Resultados */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setFormData(p => ({...p, test_drive: !p.test_drive}))}>
-                            <input type="checkbox" checked={formData.test_drive} readOnly className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
-                            <label className="text-sm font-medium text-slate-700 cursor-pointer">¿Realizó Test Drive?</label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <InputLabel label="Nombre del Cliente" required />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <User className="h-5 w-5" />
+                                        </div>
+                                        <input
+                                            required
+                                            type="text"
+                                            className={inputClasses}
+                                            placeholder="Ej: Juan Pérez"
+                                            value={formData.client_name}
+                                            onChange={e => setFormData({ ...formData, client_name: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <InputLabel label="Medio de Visita" required />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <MapPin className="h-5 w-5" />
+                                        </div>
+                                        <select
+                                            className={`${inputClasses} appearance-none cursor-pointer`}
+                                            value={formData.source}
+                                            onChange={e => setFormData({ ...formData, source: e.target.value as VisitSource })}
+                                        >
+                                            <option value="showroom">Pasó Caminando (Showroom)</option>
+                                            <option value="redes_sociales">Redes Sociales (FB/IG)</option>
+                                            <option value="referido">Referido</option>
+                                            <option value="cita">Cita Agendada</option>
+                                            <option value="otro">Otro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div>
-                            <label className="label-text">Estatus Crédito</label>
-                            <select className="input-field" value={formData.credit_status} onChange={e => setFormData({...formData, credit_status: e.target.value as CreditStatus})}>
-                                <option value="pendiente">Pendiente / No se habló</option>
-                                <option value="aplica">Aplica / Interesado</option>
-                                <option value="no_aplica">No Aplica</option>
-                                <option value="no_interesa">Pago de Contado</option>
-                            </select>
+
+                        {/* SECCIÓN 2: INTERÉS Y TIEMPOS */}
+                        <div className="space-y-6">
+
+                            {/* --- BUSCADOR DE VEHÍCULOS (MODIFICADO) --- */}
+                            <div ref={dropdownRef} className="relative z-20">
+                                <InputLabel label="Vehículo de Interés" />
+                                <div className="relative">
+                                    <div className={iconContainerClass}>
+                                        {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className={`${inputClasses} pr-10`}
+                                        placeholder="Buscar por marca, modelo o año..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            setIsDropdownOpen(true);
+                                            // Opcional: Si borra todo, limpiar ID
+                                            if (e.target.value === '') setFormData(prev => ({ ...prev, inventory_id: '' }));
+                                        }}
+                                        onFocus={() => setIsDropdownOpen(true)}
+                                    />
+                                    {/* Icono de borrado o flecha a la derecha */}
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer hover:text-slate-600">
+                                        {searchTerm ? (
+                                            <X className="h-5 w-5" onClick={handleClearCarSelection} />
+                                        ) : (
+                                            <ChevronDown className="h-5 w-5" onClick={() => setIsDropdownOpen(!isDropdownOpen)} />
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-2 ml-1">Escribe para filtrar el inventario disponible.</p>
+
+                                {/* Dropdown de Resultados */}
+                                {isDropdownOpen && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-200">
+                                        {filteredInventory.length > 0 ? (
+                                            <ul className="py-2">
+                                                {/* Opción "Ninguno" */}
+                                                <li
+                                                    className="px-4 py-3 hover:bg-slate-50 cursor-pointer text-slate-500 text-sm border-b border-slate-50"
+                                                    onClick={handleClearCarSelection}
+                                                >
+                                                    -- Ninguno específico / Solo consultando --
+                                                </li>
+                                                {filteredInventory.map(car => (
+                                                    <li
+                                                        key={car.id}
+                                                        onClick={() => handleSelectCar(car)}
+                                                        className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors"
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium text-slate-800 group-hover:text-slate-900">
+                                                                {car.brand} {car.model}
+                                                            </span>
+                                                            <span className="text-xs text-slate-400">
+                                                                Año {car.year} • {car.status}
+                                                            </span>
+                                                        </div>
+                                                        <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-1 rounded text-xs group-hover:bg-white border border-transparent group-hover:border-slate-200">
+                                                            ${car.price?.toLocaleString()}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <div className="p-4 text-center text-slate-400 text-sm">
+                                                No se encontraron vehículos.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Tiempos */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <InputLabel label="Hora Inicio" required />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <Clock className="h-5 w-5" />
+                                        </div>
+                                        <input
+                                            type="time"
+                                            required
+                                            className={`${inputClasses} appearance-none`}
+                                            value={formData.visit_start_time}
+                                            onChange={e => setFormData({ ...formData, visit_start_time: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <InputLabel label="Hora Fin" />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <Clock className="h-5 w-5 text-slate-300" />
+                                        </div>
+                                        <input
+                                            type="time"
+                                            className={`${inputClasses} appearance-none`}
+                                            value={formData.visit_end_time}
+                                            onChange={e => setFormData({ ...formData, visit_end_time: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Fila 5: Notas */}
-                    <div>
-                        <label className="label-text">Observaciones / Resultado</label>
-                        <textarea 
-                            rows={3} 
-                            className="input-field resize-none" 
-                            placeholder="Ej: Le gustó el auto pero busca color rojo. Quedamos en llamar mañana."
-                            value={formData.observation} 
-                            onChange={e => setFormData({...formData, observation: e.target.value})} 
-                        />
-                    </div>
+                        {/* SECCIÓN 3: RESULTADO Y NOTAS */}
+                        <div className="pt-6 border-t border-slate-100 space-y-6">
 
-                    <div className="pt-2">
-                        <button type="submit" disabled={isSubmitting} className="w-full btn-primary flex justify-center items-center gap-2">
-                            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                            Registrar Visita
-                        </button>
-                    </div>
-                </form>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Toggle Test Drive */}
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Experiencia</label>
+                                    <div
+                                        onClick={() => setFormData(p => ({ ...p, test_drive: !p.test_drive }))}
+                                        className={`
+                                            h-12 w-full rounded-xl border flex items-center px-4 cursor-pointer transition-all select-none
+                                            ${formData.test_drive
+                                                ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                                            }
+                                        `}
+                                    >
+                                        <div className="mr-3">
+                                            {formData.test_drive ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                                        </div>
+                                        <span className="text-sm font-medium">
+                                            {formData.test_drive ? 'Realizó Test Drive' : 'No realizó Test Drive'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Estatus Crédito */}
+                                <div>
+                                    <InputLabel label="Estatus Crédito" />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <CreditCard className="h-5 w-5" />
+                                        </div>
+                                        <select
+                                            className={`${inputClasses} appearance-none cursor-pointer`}
+                                            value={formData.credit_status}
+                                            onChange={e => setFormData({ ...formData, credit_status: e.target.value as CreditStatus })}
+                                        >
+                                            <option value="pendiente">Pendiente / No se habló</option>
+                                            <option value="aplica">Aplica / Interesado</option>
+                                            <option value="no_aplica">No Aplica</option>
+                                            <option value="no_interesa">Pago de Contado</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Notas */}
+                            <div>
+                                <InputLabel label="Observaciones / Resultado" />
+                                <div className="relative">
+                                    <div className="absolute left-4 top-4 text-slate-400 pointer-events-none">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <textarea
+                                        rows={3}
+                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed`}
+                                        placeholder="Ej: Le gustó el auto pero busca color rojo. Quedamos en llamar mañana..."
+                                        value={formData.observation}
+                                        onChange={e => setFormData({ ...formData, observation: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10">
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-base py-4 rounded-xl shadow-xl shadow-slate-900/10 transition-all flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.99] hover:translate-y-[-1px]"
+                    >
+                        {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                        Registrar Visita
+                    </button>
+                </div>
             </div>
-            
-            <style jsx>{`
-                .label-text { @apply block text-xs font-bold text-slate-500 uppercase mb-1; }
-                .input-field { @apply w-full rounded-lg border-slate-200 text-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all; }
-                .btn-primary { @apply bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl shadow-lg transition-all; }
-            `}</style>
         </div>
     );
 }

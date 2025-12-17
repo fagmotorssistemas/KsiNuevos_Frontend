@@ -1,7 +1,5 @@
-import { Clock, Car, SteeringWheel, CreditCard, User } from "lucide-react";
+import { Clock, Car, CreditCard } from "lucide-react";
 import { ShowroomVisit, getSourceLabel, getCreditLabel } from "./constants";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 interface ShowroomCardProps {
     visit: ShowroomVisit;
@@ -10,10 +8,16 @@ interface ShowroomCardProps {
 export default function ShowroomCard({ visit }: ShowroomCardProps) {
     const sourceInfo = getSourceLabel(visit.source);
     const creditInfo = getCreditLabel(visit.credit_status);
-
+    
+    // Formato de fecha nativo (Sin date-fns)
     const visitDate = new Date(visit.visit_start);
-    const visitTime = format(visitDate, "h:mm a", { locale: es });
-    const duration = visit.visit_end
+    const visitTime = new Intl.DateTimeFormat('es-ES', { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        hour12: true 
+    }).format(visitDate);
+
+    const duration = visit.visit_end 
         ? `${Math.round((new Date(visit.visit_end).getTime() - visitDate.getTime()) / 60000)} min`
         : 'En curso';
 
@@ -26,7 +30,7 @@ export default function ShowroomCard({ visit }: ShowroomCardProps) {
                         {visit.client_name}
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ${sourceInfo.color}`}>
+                        <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ${sourceInfo.color}`}>
                             {sourceInfo.label}
                         </span>
                         <div className="flex items-center gap-1 text-xs text-slate-400">
@@ -37,9 +41,9 @@ export default function ShowroomCard({ visit }: ShowroomCardProps) {
                 </div>
                 {/* Avatar del vendedor (iniciales) */}
                 {visit.profiles && (
-                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200" title={visit.profiles.full_name}>
-                        {visit.profiles.full_name.substring(0, 2).toUpperCase()}
-                    </div>
+                     <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200" title={visit.profiles.full_name}>
+                        {visit.profiles.full_name.substring(0,2).toUpperCase()}
+                     </div>
                 )}
             </div>
 
@@ -65,7 +69,8 @@ export default function ShowroomCard({ visit }: ShowroomCardProps) {
                 {/* Detalles (Test Drive & Crédito) */}
                 <div className="grid grid-cols-2 gap-2">
                     <div className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium ${visit.test_drive ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                        <SteeringWheel className="h-4 w-4" />
+                        {/* Reemplazo de SteeringWheel por Car (icono seguro) */}
+                        <Car className="h-4 w-4" />
                         <span>{visit.test_drive ? 'Test Drive Realizado' : 'Sin Test Drive'}</span>
                     </div>
                     <div className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium ${creditInfo.color}`}>

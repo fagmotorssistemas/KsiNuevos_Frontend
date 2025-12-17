@@ -1,23 +1,29 @@
-import { Search, Filter, CalendarDays, User } from "lucide-react";
+import { Search, CalendarDays, User } from "lucide-react";
 
 interface ShowroomToolbarProps {
     searchTerm: string;
     onSearchChange: (val: string) => void;
     dateFilter: string;
     onDateFilterChange: (val: string) => void;
-    adminView?: boolean; // Si es true, muestra filtro de usuarios
+    currentUserRole?: string | null; // Nuevo prop para manejar el rol
     salespersons?: any[]; // Lista de vendedores para el select
     selectedSalesperson: string;
     onSalespersonChange: (val: string) => void;
 }
 
 export default function ShowroomToolbar({
-    searchTerm, onSearchChange,
-    dateFilter, onDateFilterChange,
-    adminView = false,
+    searchTerm, 
+    onSearchChange,
+    dateFilter, 
+    onDateFilterChange,
+    currentUserRole,
     salespersons = [],
-    selectedSalesperson, onSalespersonChange
+    selectedSalesperson, 
+    onSalespersonChange
 }: ShowroomToolbarProps) {
+
+    // Determinamos si es admin basándonos en el rol (igual que en LeadsToolbar)
+    const isAdmin = currentUserRole?.toLowerCase() === 'admin';
 
     return (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 md:space-y-0 md:flex md:items-center md:justify-between gap-4">
@@ -52,8 +58,8 @@ export default function ShowroomToolbar({
                     </select>
                 </div>
 
-                {/* Filtro de Responsable (Solo Admins) */}
-                {adminView && (
+                {/* Filtro de Responsable (Solo visible para Admin) */}
+                {isAdmin && (
                     <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
                         <User className="h-4 w-4 text-slate-400 ml-2" />
                         <select 
