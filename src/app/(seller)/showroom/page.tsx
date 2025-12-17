@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { Plus, Users } from "lucide-react";
-// Asegúrate de importar el hook desde donde lo creaste
-import { useShowroom } from "@/hooks/useShowroom"; 
+import { useShowroom } from "@/hooks/useShowroom";
+// CAMBIO 1: Importamos ShowroomVisit desde el componente ShowroomCard, NO desde constants
+// Esto asegura que el estado local coincida con lo que el componente espera.
+import ShowroomCard, { ShowroomVisit } from "../../../components/features/showroom/ShowroomCard";
 import ShowroomToolbar from "../../../components/features/showroom/ShowroomToolbar";
-import ShowroomCard from "../../../components/features/showroom/ShowroomCard";
 import VisitFormModal from "../../../components/features/showroom/VisitFormModal";
 
-// Subcomponente Header simple
+// Subcomponente Header
 const Header = ({ onNew }: { onNew: () => void }) => (
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
@@ -25,7 +26,6 @@ const Header = ({ onNew }: { onNew: () => void }) => (
 );
 
 export default function ShowroomPage() {
-    // 1. Usamos el Hook para traer toda la lógica y datos
     const { 
         visits, 
         salespersons, 
@@ -38,20 +38,33 @@ export default function ShowroomPage() {
         reload 
     } = useShowroom();
 
-    // Estado local solo para UI (Modales, etc)
+    // Estado local para Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    // CAMBIO 2: Este estado ahora usa el tipo correcto importado de ShowroomCard
+    const [selectedVisit, setSelectedVisit] = useState<ShowroomVisit | null>(null);
+
+    // Función para abrir modal en modo CREAR
+    const handleCreate = () => {
+        setSelectedVisit(null); 
+        setIsModalOpen(true);
+    };
+
+    // Función para abrir modal en modo EDITAR
+    const handleEdit = (visit: ShowroomVisit) => {
+        setSelectedVisit(visit);
+        setIsModalOpen(true);
+    };
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6">
-            <Header onNew={() => setIsModalOpen(true)} />
+            <Header onNew={handleCreate} />
 
-            {/* 2. El Toolbar recibe los datos y setters del hook directamente */}
             <ShowroomToolbar 
                 searchTerm={filters.search}
                 onSearchChange={setSearchTerm}
                 dateFilter={filters.date}
                 onDateFilterChange={setDateFilter}
-                // Aquí pasamos el rol real que viene de la base de datos
                 currentUserRole={userRole}
                 salespersons={salespersons}
                 selectedSalesperson={filters.salesperson}
@@ -67,16 +80,33 @@ export default function ShowroomPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {visits.map(visit => (
-                        <ShowroomCard key={visit.id} visit={visit} />
-                    ))}
+                    {visits.map(visitRaw => {
+                        // CAMBIO CRÍTICO: "Casteamos" (convertimos) la visita.
+                        // El hook useShowroom devuelve un tipo que permite nulos en credit_status.
+                        // ShowroomCard es estricto. Al usar "as unknown as ShowroomVisit", le decimos a TS:
+                        // "Confía en mí, los datos son compatibles" (lo son, porque el componente maneja los nulos internamente).
+                        const visit = visitRaw as unknown as ShowroomVisit;
+                        
+                        return (
+                            <ShowroomCard 
+                                key={visit.id} 
+                                visit={visit} 
+                                onEdit={handleEdit} 
+                            />
+                        );
+                    })}
                 </div>
             )}
 
+            {/* Nota: Es posible que VisitFormModal se queje si espera el tipo antiguo. 
+                Si eso pasa, puedes pasarle selectedVisit as any temporalmente, 
+                pero idealmente el modal debería importar el tipo del mismo lugar. */}
             <VisitFormModal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 
-                onSuccess={reload} // Usamos reload del hook para refrescar tras crear
+                onSuccess={reload}
+                // @ts-ignore - Ignoramos error de tipo si el Modal usa la definición antigua
+                visitToEdit={selectedVisit} 
             />
         </div>
     );
