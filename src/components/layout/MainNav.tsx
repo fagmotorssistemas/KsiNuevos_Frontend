@@ -9,8 +9,9 @@ const navItems = [
     { href: "/agenda", label: "Agenda" },
     { href: "/inventory", label: "Inventario" },
     { href: "/requests", label: "Pedidos" },
-    { href: "/finance", label: "Financiamiento" },
     { href: "/tareas", label: "Tareas" },
+    { href: "/finance", label: "Financiamiento" },
+    
 
 ];
 
