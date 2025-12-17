@@ -6,7 +6,8 @@ import {
     Flame,
     Activity,
     User,
-    MessageSquare // Icono para respondidos
+    MessageSquare,
+    ClipboardList // Icono para interacciones/gestión
 } from "lucide-react";
 
 import type { LeadsFilters } from "@/hooks/useLeads";
@@ -16,31 +17,29 @@ interface LeadsToolbarProps {
     onFilterChange: (key: keyof LeadsFilters, value: any) => void;
     onReset: () => void;
     totalResults: number;
-    // NUEVA PROP: Cantidad de respondidos
-    respondedCount?: number;
+    respondedCount?: number;     // Métrica 1: De la lista actual
+    interactionsCount?: number;  // Métrica 2: Trabajo realizado en fecha X
     currentUserRole?: string | null;
     sellers?: { id: string; full_name: string }[];
 }
 
-// --- SUB-COMPONENTE: SELECTOR PERSONALIZADO ---
 const CustomSelect = ({
     value,
     onChange,
     icon: Icon,
-    children
+    children,
+    className = ""
 }: {
     value: string;
     onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     icon: any;
     children: React.ReactNode;
+    className?: string;
 }) => (
-    <div className="relative group w-full">
-        {/* Icono Izquierdo */}
+    <div className={`relative group w-full ${className}`}>
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors">
             <Icon className="h-4 w-4" />
         </div>
-
-        {/* Select Nativo */}
         <select
             className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-8 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-white focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer"
             value={value}
@@ -48,8 +47,6 @@ const CustomSelect = ({
         >
             {children}
         </select>
-
-        {/* Icono Flecha Derecha */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
             <ChevronDown className="h-3.5 w-3.5" />
         </div>
@@ -61,30 +58,39 @@ export function LeadsToolbar({
     onFilterChange,
     onReset,
     totalResults,
-    respondedCount = 0, // Default a 0
+    respondedCount = 0,
+    interactionsCount = 0,
     currentUserRole,
     sellers = []
 }: LeadsToolbarProps) {
 
-    // Verificamos si es admin
     const isAdmin = currentUserRole?.toLowerCase() === 'admin';
-
-    // Asignamos directamente
     const assignedToValue = filters.assignedTo || 'all';
 
     const hasActiveFilters =
         filters.status !== 'all' ||
         filters.temperature !== 'all' ||
         filters.dateRange !== 'all' ||
+        filters.exactDate !== '' ||
         filters.search !== '' ||
         (isAdmin && assignedToValue !== 'all');
 
-    // Calculamos el porcentaje para mostrarlo visualmente bonito (opcional)
+    // Porcentaje para la métrica vieja
     const responseRate = totalResults > 0 ? Math.round((respondedCount / totalResults) * 100) : 0;
+
+    // Texto dinámico para la nueva métrica
+    const getInteractionLabel = () => {
+        if (filters.exactDate) {
+            // Convertir YYYY-MM-DD a formato legible
+            const [y, m, d] = filters.exactDate.split('-');
+            return `Gestión del ${d}/${m}`;
+        }
+        return "Gestión de Hoy";
+    };
 
     return (
         <div className="space-y-4">
-            {/* Contenedor Principal */}
+            {/* Contenedor Principal de Filtros */}
             <div className="flex flex-col xl:flex-row gap-4 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
 
                 {/* 1. BUSCADOR */}
@@ -94,7 +100,6 @@ export function LeadsToolbar({
                     </div>
                     <input
                         type="text"
-                        // MODIFICADO: Agregado "o vehículo" al placeholder
                         placeholder="Buscar por nombre, teléfono, ID o vehículo..."
                         className="h-11 w-full rounded-xl border-none bg-transparent pl-11 pr-4 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:ring-0 focus:bg-slate-50/50 transition-all"
                         value={filters.search}
@@ -105,8 +110,7 @@ export function LeadsToolbar({
                 {/* 2. FILTROS */}
                 <div className="p-1 xl:p-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:flex gap-3 items-center">
 
-                    {/* Filtro Estado */}
-                    <div className="min-w-[160px]">
+                    <div className="min-w-[150px]">
                         <CustomSelect
                             icon={Activity}
                             value={filters.status}
@@ -123,8 +127,7 @@ export function LeadsToolbar({
                         </CustomSelect>
                     </div>
 
-                    {/* Filtro Temperatura */}
-                    <div className="min-w-[160px]">
+                    <div className="min-w-[150px]">
                         <CustomSelect
                             icon={Flame}
                             value={filters.temperature}
@@ -137,33 +140,61 @@ export function LeadsToolbar({
                         </CustomSelect>
                     </div>
 
-                    {/* Filtro Fecha */}
-                    <div className="min-w-[160px]">
-                        <CustomSelect
-                            icon={Calendar}
-                            value={filters.dateRange}
-                            onChange={(e) => onFilterChange('dateRange', e.target.value)}
-                        >
-                            <option value="all">Fecha: Todas</option>
-                            <option value="today">📅 Hoy</option>
-                            <option value="7days">7 días</option>
-                            <option value="15days">15 días</option>
-                            <option value="30days">30 días</option>
-                        </CustomSelect>
+                    {/* Filtro Fecha (Exacta o Rango) */}
+                    <div className="flex items-center gap-2 bg-slate-50 rounded-lg border border-slate-200 p-0.5 min-w-[200px]">
+                        <div className="relative flex-1">
+                            {filters.exactDate ? (
+                                <div className="relative flex items-center">
+                                    <div className="absolute left-2.5 text-brand-500 pointer-events-none">
+                                        <Calendar className="h-4 w-4" />
+                                    </div>
+                                    <input 
+                                        type="date"
+                                        className="h-9 w-full rounded-md border-0 bg-white pl-8 pr-2 text-sm text-slate-700 focus:ring-2 focus:ring-brand-500 shadow-sm"
+                                        value={filters.exactDate}
+                                        onChange={(e) => onFilterChange('exactDate', e.target.value)}
+                                    />
+                                    <button 
+                                        onClick={() => onFilterChange('exactDate', '')} 
+                                        className="absolute right-8 hover:bg-slate-100 p-0.5 rounded text-slate-400 hover:text-red-500"
+                                        title="Volver a rangos"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <CustomSelect
+                                    icon={Calendar}
+                                    value={filters.dateRange}
+                                    onChange={(e) => {
+                                        if (e.target.value === 'custom') {
+                                            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                                            onFilterChange('exactDate', today);
+                                        } else {
+                                            onFilterChange('dateRange', e.target.value);
+                                        }
+                                    }}
+                                    className="border-none shadow-none bg-transparent"
+                                >
+                                    <option value="all">📅 Todo el tiempo</option>
+                                    <option value="today">Hoy (Creados hoy)</option>
+                                    <option value="7days">Últimos 7 días</option>
+                                    <option value="15days">Últimos 15 días</option>
+                                    <option value="30days">Últimos 30 días</option>
+                                    <option value="custom">🔎 Fecha exacta...</option>
+                                </CustomSelect>
+                            )}
+                        </div>
                     </div>
 
-                    {/* --- FILTRO RESPONSABLE (SOLO ADMIN) --- */}
                     {isAdmin && (
-                        <div className="min-w-[180px] animate-in fade-in zoom-in-95 duration-300">
+                        <div className="min-w-[160px]">
                             <CustomSelect
                                 icon={User}
                                 value={assignedToValue}
                                 onChange={(e) => onFilterChange('assignedTo', e.target.value)}
                             >
-                                <option value="all">Responsable: Todos</option>
-                                {sellers?.length === 0 && (
-                                    <option disabled>Cargando...</option>
-                                )}
+                                <option value="all">Resp: Todos</option>
                                 {sellers?.map((seller) => (
                                     <option key={seller.id} value={seller.id}>
                                         {seller.full_name}
@@ -172,23 +203,20 @@ export function LeadsToolbar({
                             </CustomSelect>
                         </div>
                     )}
-
                 </div>
             </div>
 
-            {/* Footer de filtros */}
+            {/* Footer de métricas */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-2">
 
-                {/* MÉTRICAS DE RESULTADOS */}
-                <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-500">
                     <span>
                         Resultados: <strong className="text-slate-900 text-sm">{totalResults}</strong>
                     </span>
 
-                    {/* SEPARADOR */}
-                    <span className="h-1 w-1 rounded-full bg-slate-300"></span>
+                    <span className="hidden sm:inline h-1 w-1 rounded-full bg-slate-300"></span>
 
-                    {/* NUEVO: CONTADOR DE RESPONDIDOS */}
+                    {/* MÉTRICA 1 (Original): Respondidos en la lista visual actual */}
                     <div className="flex items-center gap-1.5 text-brand-600 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-100">
                         <MessageSquare className="h-3.5 w-3.5" />
                         <span>
@@ -197,6 +225,19 @@ export function LeadsToolbar({
                         {totalResults > 0 && (
                             <span className="text-brand-400 ml-0.5">({responseRate}%)</span>
                         )}
+                    </div>
+
+                     {/* SEPARADOR */}
+                     <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
+
+                    {/* MÉTRICA 2 (Nueva Inteligente): Interacciones realizadas en la fecha X */}
+                    {/* Esta reacciona a los filtros de Responsable y Fecha */}
+                    <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-sm animate-in fade-in" 
+                         title="Leads gestionados en la fecha seleccionada por el responsable seleccionado">
+                        <ClipboardList className="h-3.5 w-3.5 text-orange-500" />
+                        <span>
+                            {getInteractionLabel()}: <strong className="text-slate-900 text-sm">{interactionsCount}</strong> interacciones
+                        </span>
                     </div>
                 </div>
 

@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth"; 
 
 export default function LeadsPage() {
-    // Hooks & Lógica
     const { 
         leads, 
         totalCount,
-        respondedCount,
+        respondedCount,    // Métrica 1
+        interactionsCount, // Métrica 2
         isLoading, 
         sortDescriptor, 
         setSortDescriptor, 
@@ -31,11 +31,9 @@ export default function LeadsPage() {
     
     const { profile } = useAuth();
 
-    // Estado Local UI
     const [selectedLead, setSelectedLead] = useState<LeadWithDetails | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Handlers
     const handleOpenModal = (lead: LeadWithDetails) => {
         setSelectedLead(lead);
         setIsModalOpen(true);
@@ -50,7 +48,6 @@ export default function LeadsPage() {
     return (
         <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
             
-            {/* 1. HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                 <div>
                     <h1 className="text-3xl font-semibold text-slate-900">Tablero de Leads</h1>
@@ -71,18 +68,17 @@ export default function LeadsPage() {
                 </div>
             </div>
 
-            {/* 2. BARRA DE HERRAMIENTAS */}
             <LeadsToolbar 
                 filters={filters}
                 onFilterChange={updateFilter}
                 onReset={resetFilters}
                 totalResults={totalCount}
-                respondedCount={respondedCount} // <--- 2. PASAMOS LA PROP
+                respondedCount={respondedCount}
+                interactionsCount={interactionsCount} // Pasamos la nueva métrica
                 currentUserRole={profile?.role} 
                 sellers={sellers}               
             />
 
-            {/* 3. TABLA DE LEADS */}
             <LeadsList 
                 leads={leads}
                 isLoading={isLoading}
@@ -96,7 +92,6 @@ export default function LeadsPage() {
                 currentUserRole={profile?.role}
             />
 
-            {/* 4. MODAL DE DETALLE */}
             {isModalOpen && selectedLead && (
                 <LeadDetailModal 
                     lead={selectedLead} 
