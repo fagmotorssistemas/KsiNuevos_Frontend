@@ -24,7 +24,6 @@ export type LeadsFilters = {
     assignedTo: string | 'all';
 };
 
-// Función auxiliar para comparar fechas (ignora horas)
 const isSameDate = (date1: Date, date2: Date) => {
     return date1.getFullYear() === date2.getFullYear() &&
            date1.getMonth() === date2.getMonth() &&
@@ -37,7 +36,11 @@ export function useLeads() {
     // Estado de Datos
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
     const [sellers, setSellers] = useState<{ id: string; full_name: string }[]>([]);
+    
+    // UI States
     const [isLoading, setIsLoading] = useState(true);
+    // Agregamos un estado opcional para saber si se está recargando en background (opcional)
+    const [isRefetching, setIsRefetching] = useState(false);
 
     // Estado de Paginación y UI
     const [page, setPage] = useState(1);
@@ -57,12 +60,17 @@ export function useLeads() {
         assignedTo: 'all'
     });
 
-    // 1. CARGA DE DATOS (Misma lógica que tenías)
-    const fetchLeads = useCallback(async () => {
+    // 1. CARGA DE DATOS INTELIGENTE
+    // showLoading: true -> Bloquea la UI o muestra spinner (Carga inicial o Botón Manual)
+    // showLoading: false -> Actualiza en silencio (Realtime)
+    const fetchLeads = useCallback(async (showLoading = false) => {
         if (!user) return;
-        // Nota: Opcionalmente puedes quitar el setIsLoading(true) aquí si no quieres que parpadee 
-        // la tabla cada vez que llega una actualización en tiempo real.
-        // setIsLoading(true); 
+        
+        if (showLoading) {
+            setIsLoading(true);
+        } else {
+            setIsRefetching(true);
+        }
 
         const { data, error } = await supabase
             .from('leads')
@@ -75,15 +83,21 @@ export function useLeads() {
             // @ts-ignore
             setLeads(data || []);
         }
-        setIsLoading(false);
+        
+        if (showLoading) {
+            setIsLoading(false);
+        } else {
+            setIsRefetching(false);
+        }
     }, [supabase, user]);
 
-    // Carga de Vendedores
+    // 2. CARGA DE VENDEDORES
     const fetchSellers = useCallback(async () => {
         if (!user) return;
         const { data } = await supabase
             .from('profiles')
             .select('id, full_name')
+            .eq('status', 'activo')
             .order('full_name');
             
         if (data) {
@@ -92,49 +106,39 @@ export function useLeads() {
         }
     }, [supabase, user]);
 
-    // 2. EFECTO INICIAL DE CARGA
+    // 3. EFECTO INICIAL (Carga con Spinner)
     useEffect(() => {
         if (!isAuthLoading && user) {
-            fetchLeads();
+            fetchLeads(true); // true = Mostrar 'Cargando...'
             fetchSellers();
         }
     }, [isAuthLoading, user, fetchLeads, fetchSellers]);
 
-    // 3. --- NUEVO: SUSCRIPCIÓN EN TIEMPO REAL ---
+    // 4. SUSCRIPCIÓN EN TIEMPO REAL (Carga Silenciosa)
     useEffect(() => {
         if (!user) return;
 
-        // Creamos un canal para escuchar cambios en la tabla 'leads'
         const channel = supabase
             .channel('realtime leads')
             .on(
                 'postgres_changes',
-                {
-                    event: '*', // Escuchar INSERT, UPDATE, DELETE
-                    schema: 'public',
-                    table: 'leads'
-                },
+                { event: '*', schema: 'public', table: 'leads' },
                 (payload) => {
-                    console.log('Cambio detectado en tiempo real:', payload);
-                    // Cuando ocurra un cambio, recargamos los datos para tener lo último
-                    // Esto actualizará automáticamente los contadores
-                    fetchLeads();
+                    console.log('Cambio realtime:', payload);
+                    fetchLeads(false); // false = No molestar al usuario visualmente
                 }
             )
             .subscribe();
 
-        // Limpieza al desmontar
         return () => {
             supabase.removeChannel(channel);
         };
     }, [supabase, user, fetchLeads]);
 
-
-    // --- 4. PROCESAMIENTO Y FILTROS (Misma lógica de antes) ---
+    // --- PROCESAMIENTO Y FILTROS ---
     const processedLeads = useMemo(() => {
         let filtered = [...leads];
 
-        // Filtro Buscador
         if (filters.search.trim()) {
             const query = filters.search.toLowerCase();
             filtered = filtered.filter(l =>
@@ -198,21 +202,16 @@ export function useLeads() {
         });
     }, [leads, filters, sortDescriptor]);
 
-    // --- 5. MÉTRICAS (Se recalculan solas cuando 'leads' cambia por el Realtime) ---
-
-    // A. Métrica Original
+    // --- MÉTRICAS ---
     const filteredRespondedCount = useMemo(() => {
         return processedLeads.filter(l => l.resume !== null && l.resume.trim() !== '').length;
     }, [processedLeads]);
 
-    // B. Métrica Nueva: Interacciones
     const interactionsCount = useMemo(() => {
         let interactions = leads;
-
         if (filters.assignedTo !== 'all') {
             interactions = interactions.filter(l => l.assigned_to === filters.assignedTo);
         }
-
         const targetDate = filters.exactDate 
             ? new Date(filters.exactDate + 'T00:00:00')
             : new Date(); 
@@ -227,7 +226,6 @@ export function useLeads() {
         return interactions.length;
     }, [leads, filters.assignedTo, filters.exactDate]);
 
-    // Resetear página
     useEffect(() => {
         setPage(1);
     }, [filters, sortDescriptor]);
@@ -256,8 +254,8 @@ export function useLeads() {
         page,
         setPage,
         rowsPerPage,
-        isLoading: isLoading || isAuthLoading,
-        reload: fetchLeads,
+        isLoading: isLoading || isAuthLoading, // Esto controla el estado visual del botón
+        reload: () => fetchLeads(true), // <--- AQUÍ ESTÁ EL FIX: Forzamos el spinner al hacer click manual
         sortDescriptor,
         setSortDescriptor,
         filters,

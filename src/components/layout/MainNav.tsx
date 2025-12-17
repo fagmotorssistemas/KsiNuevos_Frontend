@@ -10,6 +10,7 @@ const navItems = [
     { href: "/requests", label: "Pedidos" }, 
     { href: "/finance", label: "Financiamiento" }, 
     { href: "/tareas", label: "Tareas" }, 
+    { href: "/showroom", label: "Showroom" }, 
 ];
 
 export function MainNav({ className }: { className?: string }) {
