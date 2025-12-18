@@ -25,7 +25,7 @@ export const Navbar = () => {
             {/* Usamos el componente Image de Next.js para el logo */}
             <Image
               src="/logo.png"
-              alt="Logo de AzoCRM"
+              alt="Logo de Ksi"
               width={90}  // Ajusta este ancho según tu imagen
               height={30} // Ajusta esta altura para mantener proporción
               priority    // Carga prioritaria para el logo (LCP)

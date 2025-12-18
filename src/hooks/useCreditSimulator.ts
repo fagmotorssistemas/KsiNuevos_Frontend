@@ -2,7 +2,13 @@ import { useState, useMemo } from "react";
 
 // Definimos los tipos para mantener TypeScript feliz
 export interface SimulatorValues {
+    // Datos Cliente
     clientName: string;
+    clientId: string;      // Nuevo: Cédula/RUC
+    clientPhone: string;   // Nuevo: Teléfono
+    clientAddress: string; // Nuevo: Dirección
+
+    // Datos Financieros
     vehiclePrice: number;
     downPaymentPercentage: number;
     termMonths: number;
@@ -31,6 +37,9 @@ export function useCreditSimulator() {
     // Valores por defecto
     const defaultValues: SimulatorValues = {
         clientName: "",
+        clientId: "",
+        clientPhone: "",
+        clientAddress: "",
         vehiclePrice: 10000,
         downPaymentPercentage: 60, // 60%
         termMonths: 36,

@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Calculator, RefreshCcw, Printer } from "lucide-react";
+import React, { useState } from "react";
+import { Calculator, RefreshCcw, Printer, FileCheck } from "lucide-react";
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
 import { CreditForm, CreditProforma } from "@/components/features/financing/CreditComponents";
 
@@ -13,6 +13,10 @@ export default function CreditSimulatorPage() {
         updateDownPaymentByAmount,
         resetDefaults
     } = useCreditSimulator();
+
+    // Estado para controlar si la tabla sale o no en el PDF
+    // Default: false (No imprimir tabla)
+    const [includeTableInPdf, setIncludeTableInPdf] = useState(false);
 
     const handlePrint = () => {
         window.print();
@@ -33,14 +37,33 @@ export default function CreditSimulatorPage() {
                             Simulación de crédito automotriz (Interés Flat)
                         </p>
                     </div>
-                    <div className="flex gap-3">
+
+                    <div className="flex flex-wrap gap-3 items-center">
+                        {/* Toggle Switch para Tabla en PDF */}
+                        <label className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 select-none shadow-sm transition-colors">
+                            <div className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={includeTableInPdf}
+                                    onChange={(e) => setIncludeTableInPdf(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </div>
+                            <span className={`text-sm font-medium ${includeTableInPdf ? 'text-blue-600' : 'text-slate-500'}`}>
+                                {includeTableInPdf ? "Con Tabla en PDF" : "Sin Tabla en PDF"}
+                            </span>
+                        </label>
+
                         <button
                             onClick={resetDefaults}
                             className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors font-medium shadow-sm"
+                            title="Reiniciar valores"
                         >
                             <RefreshCcw className="w-4 h-4" />
-                            Reiniciar
+                            <span className="hidden sm:inline">Reiniciar</span>
                         </button>
+
                         <button
                             onClick={handlePrint}
                             className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium shadow-md shadow-blue-600/20"
@@ -68,6 +91,7 @@ export default function CreditSimulatorPage() {
                         <CreditProforma
                             values={values}
                             results={results}
+                            includeTableInPdf={includeTableInPdf}
                         />
                     </div>
                 </div>

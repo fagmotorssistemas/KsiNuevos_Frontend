@@ -43,7 +43,9 @@ export default function RootLayout({
     <html lang="es" className={satoshi.variable}>
       <body className="font-sans bg-[#f2f2f2] text-[#000]">
         <AuthProvider>
-          <Navbar />
+<div className="print:hidden">
+            <Navbar />
+          </div>
           {children}
         </AuthProvider>
       </body>
