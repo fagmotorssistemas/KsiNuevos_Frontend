@@ -20,14 +20,13 @@ export type LeadsFilters = {
     status: string | 'all';
     temperature: string | 'all';
     dateRange: DateFilter;
-    exactDate: string; // Formato YYYY-MM-DD
+    exactDate: string; 
     assignedTo: string | 'all';
 };
 
+// --- HELPER DE FECHAS ---
 const isSameDate = (date1: Date, date2: Date) => {
-    return date1.getFullYear() === date2.getFullYear() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getDate() === date2.getDate();
+    return date1.toLocaleDateString('en-CA') === date2.toLocaleDateString('en-CA');
 };
 
 export function useLeads() {
@@ -39,7 +38,6 @@ export function useLeads() {
     
     // UI States
     const [isLoading, setIsLoading] = useState(true);
-    // Agregamos un estado opcional para saber si se está recargando en background (opcional)
     const [isRefetching, setIsRefetching] = useState(false);
 
     // Estado de Paginación y UI
@@ -60,22 +58,21 @@ export function useLeads() {
         assignedTo: 'all'
     });
 
-    // 1. CARGA DE DATOS INTELIGENTE
-    // showLoading: true -> Bloquea la UI o muestra spinner (Carga inicial o Botón Manual)
-    // showLoading: false -> Actualiza en silencio (Realtime)
+    // 1. CARGA DE DATOS OPTIMIZADA
     const fetchLeads = useCallback(async (showLoading = false) => {
         if (!user) return;
         
-        if (showLoading) {
-            setIsLoading(true);
-        } else {
-            setIsRefetching(true);
-        }
+        if (showLoading) setIsLoading(true);
+        else setIsRefetching(true);
 
+        // ESTRATEGIA: Traemos los leads ordenados por 'updated_at' (última modificación).
+        // Esto garantiza que cualquier lead que hayas tocado hoy (sea nuevo o viejo) 
+        // esté incluido en la descarga, haciendo que el contador de interacciones sea exacto.
         const { data, error } = await supabase
             .from('leads')
             .select('*, interested_cars(*), profiles:assigned_to(full_name)')
-            .order('created_at', { ascending: false });
+            .order('updated_at', { ascending: false }) // <--- EL CAMBIO CLAVE
+            .limit(10000); // <--- Límite aumentado a 10,000 (Seguro para el navegador)
 
         if (error) {
             console.error("Error cargando leads:", error);
@@ -84,14 +81,10 @@ export function useLeads() {
             setLeads(data || []);
         }
         
-        if (showLoading) {
-            setIsLoading(false);
-        } else {
-            setIsRefetching(false);
-        }
+        if (showLoading) setIsLoading(false);
+        else setIsRefetching(false);
     }, [supabase, user]);
 
-    // 2. CARGA DE VENDEDORES
     const fetchSellers = useCallback(async () => {
         if (!user) return;
         const { data } = await supabase
@@ -106,15 +99,13 @@ export function useLeads() {
         }
     }, [supabase, user]);
 
-    // 3. EFECTO INICIAL (Carga con Spinner)
     useEffect(() => {
         if (!isAuthLoading && user) {
-            fetchLeads(true); // true = Mostrar 'Cargando...'
+            fetchLeads(true); 
             fetchSellers();
         }
     }, [isAuthLoading, user, fetchLeads, fetchSellers]);
 
-    // 4. SUSCRIPCIÓN EN TIEMPO REAL (Carga Silenciosa)
     useEffect(() => {
         if (!user) return;
 
@@ -124,8 +115,8 @@ export function useLeads() {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'leads' },
                 (payload) => {
-                    console.log('Cambio realtime:', payload);
-                    fetchLeads(false); // false = No molestar al usuario visualmente
+                    console.log('Cambio realtime detectado...');
+                    fetchLeads(false); 
                 }
             )
             .subscribe();
@@ -135,7 +126,7 @@ export function useLeads() {
         };
     }, [supabase, user, fetchLeads]);
 
-    // --- PROCESAMIENTO Y FILTROS ---
+    // --- PROCESAMIENTO ---
     const processedLeads = useMemo(() => {
         let filtered = [...leads];
 
@@ -160,8 +151,8 @@ export function useLeads() {
         if (filters.exactDate) {
             filtered = filtered.filter(l => {
                 if (!l.created_at) return false;
+                const filterDate = new Date(filters.exactDate + 'T12:00:00');
                 const leadDate = new Date(l.created_at);
-                const filterDate = new Date(filters.exactDate + 'T00:00:00'); 
                 return isSameDate(leadDate, filterDate);
             });
         } else if (filters.dateRange !== 'all') {
@@ -180,6 +171,9 @@ export function useLeads() {
             });
         }
 
+        // RE-ORDENAMIENTO VISUAL
+        // Aunque descargamos por 'updated_at' para tener los datos frescos,
+        // aquí los reordenamos visualmente por lo que el usuario quiera (default: created_at)
         return filtered.sort((a, b) => {
             const col = sortDescriptor.column as keyof LeadWithDetails;
             if (col === 'assigned_to') {
@@ -202,23 +196,26 @@ export function useLeads() {
         });
     }, [leads, filters, sortDescriptor]);
 
-    // --- MÉTRICAS ---
     const filteredRespondedCount = useMemo(() => {
         return processedLeads.filter(l => l.resume !== null && l.resume.trim() !== '').length;
     }, [processedLeads]);
 
+    // --- CÁLCULO DE INTERACCIONES ---
     const interactionsCount = useMemo(() => {
         let interactions = leads;
+        
         if (filters.assignedTo !== 'all') {
             interactions = interactions.filter(l => l.assigned_to === filters.assignedTo);
         }
+
         const targetDate = filters.exactDate 
-            ? new Date(filters.exactDate + 'T00:00:00')
+            ? new Date(filters.exactDate + 'T12:00:00')
             : new Date(); 
 
         interactions = interactions.filter(l => {
             if (!l.resume || l.resume.trim() === '') return false;
             if (!l.updated_at) return false;
+            
             const updateDate = new Date(l.updated_at);
             return isSameDate(updateDate, targetDate);
         });
@@ -254,8 +251,8 @@ export function useLeads() {
         page,
         setPage,
         rowsPerPage,
-        isLoading: isLoading || isAuthLoading, // Esto controla el estado visual del botón
-        reload: () => fetchLeads(true), // <--- AQUÍ ESTÁ EL FIX: Forzamos el spinner al hacer click manual
+        isLoading: isLoading || isAuthLoading,
+        reload: () => fetchLeads(true),
         sortDescriptor,
         setSortDescriptor,
         filters,
