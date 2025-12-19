@@ -3,7 +3,9 @@
 import React, { useState } from "react";
 import { Calculator, RefreshCcw, Printer, Save, Loader2 } from "lucide-react";
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
-import { CreditForm, CreditProforma } from "@/components/features/financing/CreditComponents";
+// ACTUALIZACIÓN: Importamos los componentes desde sus nuevos archivos individuales
+import { CreditForm } from "@/components/features/financing/CreditForm";
+import { CreditProforma } from "@/components/features/financing/CreditProforma";
 
 // Logo oficial de WhatsApp SVG
 const WhatsAppIcon = () => (
