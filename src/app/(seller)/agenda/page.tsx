@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { 
     CalendarCheck, 
     History, 
     CalendarX, 
-    Plus 
+    Filter,
+    Users
 } from "lucide-react";
 
 // Features
-import { useAgenda, type AppointmentWithDetails } from "@/features/../hooks/useAgenda";
+import { useAgenda, type AppointmentWithDetails, type DateFilterOption } from "@/hooks/useAgenda";
 import { AppointmentCard } from "@/components/features/agenda/AppointmentCard";
 
 // UI
@@ -21,19 +21,20 @@ export default function AgendaPage() {
     
     const { 
         isLoading, 
+        isAdmin,
+        agents,
         groupedPending, 
         groupedHistory,
+        pendingCount,
         activeTab,
         setActiveTab,
+        filters,
+        setFilters,
         actions: { markAsCompleted, cancelAppointment },
         refresh
     } = useAgenda();
 
-    // Calculamos totales para los badges de las pestañas
-    const pendingCount = Object.values(groupedPending).flat().length;
-    const historyCount = Object.values(groupedHistory).flat().length;
-
-    // Helper para renderizar una sección de día
+    // Helper para renderizar secciones (igual que antes)
     const renderDaySection = (dateLabel: string, appointments: AppointmentWithDetails[]) => (
         <div key={dateLabel} className="animate-in fade-in slide-in-from-bottom-2 duration-500 mb-8">
             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 px-1">
@@ -45,6 +46,8 @@ export default function AgendaPage() {
                     <AppointmentCard 
                         key={appt.id} 
                         appointment={appt} 
+                        // Pasamos el prop isAdmin para que la tarjeta sepa si mostrar el dueño
+                        isAdminView={isAdmin} 
                         onComplete={markAsCompleted}
                         onCancel={cancelAppointment}
                     />
@@ -59,12 +62,14 @@ export default function AgendaPage() {
             {/* 1. HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-semibold text-slate-900">Mi Agenda</h1>
+                    <h1 className="text-3xl font-semibold text-slate-900">
+                        {isAdmin ? 'Agenda General' : 'Mi Agenda'}
+                    </h1>
                     <p className="text-md text-slate-500 mt-1">
                         {profile ? `Hola, ${profile.full_name}.` : 'Bienvenido.'} 
                         {pendingCount > 0 
-                            ? ` Tienes ${pendingCount} citas pendientes.` 
-                            : ' No tienes citas pendientes.'}
+                            ? ` Hay ${pendingCount} citas filtradas pendientes.` 
+                            : ' No hay citas pendientes.'}
                     </p>
                 </div>
                 <div>
@@ -78,6 +83,65 @@ export default function AgendaPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* --- SECCIÓN ADMIN: FILTROS --- */}
+            {isAdmin && (
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mr-2">
+                        <Filter className="h-4 w-4" />
+                        Filtros Admin:
+                    </div>
+
+                    {/* Filtro de Responsable */}
+                    <div className="flex-1 w-full md:w-auto">
+                        <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
+                        <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <select
+                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer"
+                                value={filters.responsibleId}
+                                onChange={(e) => setFilters(prev => ({ ...prev, responsibleId: e.target.value }))}
+                            >
+                                <option value="all">Todos los Responsables</option>
+                                <option disabled>──────────</option>
+                                {agents.map(agent => (
+                                    <option key={agent.id} value={agent.id}>
+                                        {agent.full_name || 'Agente Sin Nombre'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Filtro de Tiempo */}
+                    <div className="flex-1 w-full md:w-auto">
+                        <label className="text-xs text-slate-400 font-semibold block mb-1">Período de Tiempo</label>
+                        <select
+                            className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none cursor-pointer"
+                            value={filters.dateRange}
+                            onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value as DateFilterOption }))}
+                        >
+                            <option value="all">Todas las fechas</option>
+                            <option disabled>──────────</option>
+                            <option value="today">Solo Hoy</option>
+                            <option value="tomorrow">Mañana</option>
+                            <option value="week">Próximos 7 días</option>
+                            <option value="fortnight">Próximos 15 días</option>
+                            <option value="month">Próximos 30 días</option>
+                        </select>
+                    </div>
+
+                    {/* Botón para limpiar filtros */}
+                    {(filters.responsibleId !== 'all' || filters.dateRange !== 'all') && (
+                        <button 
+                            onClick={() => setFilters({ responsibleId: 'all', dateRange: 'all' })}
+                            className="mt-5 text-xs text-red-500 hover:text-red-700 font-medium underline"
+                        >
+                            Limpiar filtros
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* 2. PESTAÑAS (TABS) */}
             <div className="flex border-b border-slate-200">
@@ -113,9 +177,8 @@ export default function AgendaPage() {
             {/* 3. CONTENIDO PRINCIPAL */}
             <div className="min-h-[400px]">
                 {isLoading ? (
-                    // Estado de Carga
                     <div className="flex items-center justify-center h-64 text-slate-400 animate-pulse">
-                        Cargando tu agenda...
+                        Cargando agenda...
                     </div>
                 ) : activeTab === 'pending' ? (
                     // --- VISTA PENDIENTES ---
@@ -124,14 +187,17 @@ export default function AgendaPage() {
                             renderDaySection(date, list)
                         )
                     ) : (
-                        // Empty State (Pendientes)
                         <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                             <div className="bg-green-50 p-4 rounded-full mb-4">
                                 <CalendarCheck className="h-10 w-10 text-green-500" />
                             </div>
-                            <h3 className="text-lg font-medium text-slate-900">¡Estás al día!</h3>
+                            <h3 className="text-lg font-medium text-slate-900">
+                                {filters.responsibleId !== 'all' || filters.dateRange !== 'all' ? 'Sin resultados' : '¡Estás al día!'}
+                            </h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                No tienes citas pendientes por ahora. Ve al tablero de Leads para agendar nuevas visitas.
+                                {filters.responsibleId !== 'all' || filters.dateRange !== 'all' 
+                                    ? 'No hay citas que coincidan con los filtros seleccionados.' 
+                                    : 'No tienes citas pendientes por ahora.'}
                             </p>
                         </div>
                     )
@@ -142,14 +208,13 @@ export default function AgendaPage() {
                             renderDaySection(date, list)
                         )
                     ) : (
-                        // Empty State (Historial)
                         <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                             <div className="bg-slate-50 p-4 rounded-full mb-4">
                                 <CalendarX className="h-10 w-10 text-slate-300" />
                             </div>
                             <h3 className="text-lg font-medium text-slate-900">Sin historial</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                Aún no has completado o cancelado ninguna cita.
+                                No se encontraron citas completadas o canceladas con estos filtros.
                             </p>
                         </div>
                     )
