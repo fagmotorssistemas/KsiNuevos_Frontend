@@ -56,7 +56,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 const { data } = await supabase
                     .from('inventory') 
                     .select('id, brand, model, year, price, status')
-                    .eq('status', 'disponible')
+                    .in('status', ['disponible','vendido'])
                     .order('brand', { ascending: true });
                 
                 if (data) setInventory(data as any);
