@@ -1,24 +1,30 @@
 "use client";
 
+import { useState } from "react";
 import { 
     CalendarCheck, 
     History, 
     CalendarX, 
     Filter,
-    Users
+    Users,
+    Plus
 } from "lucide-react";
 
 // Features
 import { useAgenda, type AppointmentWithDetails, type DateFilterOption } from "@/hooks/useAgenda";
 import { AppointmentCard } from "@/components/features/agenda/AppointmentCard";
+import { AppointmentModal } from "@/components/features/agenda/AppointmentModal";
 
 // UI
-import { Button } from "@/components/ui/buttontable";
+import { Button } from "@/components/ui/buttontable"; // Asegúrate de que la ruta sea correcta
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AgendaPage() {
     const { profile } = useAuth();
     
+    // Estado para controlar el Modal
+    const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+
     const { 
         isLoading, 
         isAdmin,
@@ -34,7 +40,6 @@ export default function AgendaPage() {
         refresh
     } = useAgenda();
 
-    // Helper para renderizar secciones (igual que antes)
     const renderDaySection = (dateLabel: string, appointments: AppointmentWithDetails[]) => (
         <div key={dateLabel} className="animate-in fade-in slide-in-from-bottom-2 duration-500 mb-8">
             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 px-1">
@@ -46,7 +51,6 @@ export default function AgendaPage() {
                     <AppointmentCard 
                         key={appt.id} 
                         appointment={appt} 
-                        // Pasamos el prop isAdmin para que la tarjeta sepa si mostrar el dueño
                         isAdminView={isAdmin} 
                         onComplete={markAsCompleted}
                         onCancel={cancelAppointment}
@@ -68,18 +72,29 @@ export default function AgendaPage() {
                     <p className="text-md text-slate-500 mt-1">
                         {profile ? `Hola, ${profile.full_name}.` : 'Bienvenido.'} 
                         {pendingCount > 0 
-                            ? ` Hay ${pendingCount} citas filtradas pendientes.` 
-                            : ' No hay citas pendientes.'}
+                            ? ` Tienes ${pendingCount} eventos pendientes.` 
+                            : ' No hay eventos pendientes.'}
                     </p>
                 </div>
-                <div>
+                <div className="flex items-center gap-3">
+                    {/* Botón para abrir el Modal */}
                     <Button 
                         variant="primary" 
+                        size="sm"
+                        className="bg-black hover:bg-gray-700 text-white"
+                        onClick={() => setIsNewAppointmentOpen(true)}
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nueva Cita
+                    </Button>
+
+                    <Button 
+                        variant="secondary" 
                         size="sm" 
                         onClick={refresh} 
                         disabled={isLoading}
                     >
-                        {isLoading ? 'Sincronizando...' : 'Actualizar Agenda'}
+                        {isLoading ? '...' : 'Actualizar'}
                     </Button>
                 </div>
             </div>
@@ -131,7 +146,6 @@ export default function AgendaPage() {
                         </select>
                     </div>
 
-                    {/* Botón para limpiar filtros */}
                     {(filters.responsibleId !== 'all' || filters.dateRange !== 'all') && (
                         <button 
                             onClick={() => setFilters({ responsibleId: 'all', dateRange: 'all' })}
@@ -181,7 +195,6 @@ export default function AgendaPage() {
                         Cargando agenda...
                     </div>
                 ) : activeTab === 'pending' ? (
-                    // --- VISTA PENDIENTES ---
                     Object.keys(groupedPending).length > 0 ? (
                         Object.entries(groupedPending).map(([date, list]) => 
                             renderDaySection(date, list)
@@ -197,12 +210,11 @@ export default function AgendaPage() {
                             <p className="text-slate-500 max-w-sm mt-2">
                                 {filters.responsibleId !== 'all' || filters.dateRange !== 'all' 
                                     ? 'No hay citas que coincidan con los filtros seleccionados.' 
-                                    : 'No tienes citas pendientes por ahora.'}
+                                    : 'No tienes citas ni eventos pendientes.'}
                             </p>
                         </div>
                     )
                 ) : (
-                    // --- VISTA HISTORIAL ---
                     Object.keys(groupedHistory).length > 0 ? (
                         Object.entries(groupedHistory).map(([date, list]) => 
                             renderDaySection(date, list)
@@ -214,12 +226,21 @@ export default function AgendaPage() {
                             </div>
                             <h3 className="text-lg font-medium text-slate-900">Sin historial</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                No se encontraron citas completadas o canceladas con estos filtros.
+                                No se encontraron citas completadas o canceladas.
                             </p>
                         </div>
                     )
                 )}
             </div>
+
+            {/* 4. MODAL DE NUEVA CITA */}
+            <AppointmentModal 
+                isOpen={isNewAppointmentOpen}
+                onClose={() => setIsNewAppointmentOpen(false)}
+                onSuccess={refresh}
+                // Si tienes un lead preseleccionado, puedes pasarlo aquí: leadId={null}
+            />
+
         </div>
     );
 }

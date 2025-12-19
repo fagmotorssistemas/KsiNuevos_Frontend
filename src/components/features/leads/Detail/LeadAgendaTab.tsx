@@ -34,7 +34,6 @@ export function LeadAgendaTab({ lead }: { lead: LeadWithDetails }) {
         setIsSubmittingAppt(true);
 
         const startDateTime = new Date(`${apptDate}T${apptTime}`);
-        const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
 
         const { data, error } = await supabase
             .from('appointments')
@@ -43,7 +42,6 @@ export function LeadAgendaTab({ lead }: { lead: LeadWithDetails }) {
                 responsible_id: user.id,
                 title: apptTitle,
                 start_time: startDateTime.toISOString(),
-                end_time: endDateTime.toISOString(),
                 status: 'pendiente',
                 location: 'Showroom'
             })

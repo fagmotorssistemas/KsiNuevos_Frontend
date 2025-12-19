@@ -6,14 +6,14 @@ import type { Database } from "@/types/supabase";
 type AppointmentRow = Database['public']['Tables']['appointments']['Row'];
 type LeadRow = Database['public']['Tables']['leads']['Row'];
 type CarRow = Database['public']['Tables']['interested_cars']['Row'];
-type ProfileRow = Database['public']['Tables']['profiles']['Row']; // Asumiendo que existe tabla profiles
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
-// Tipo Extendido: Cita + Datos del Cliente + Auto + (Opcional) Responsable
+// ACTUALIZACIÓN: Lead ahora puede ser null | undefined
 export type AppointmentWithDetails = AppointmentRow & {
-    lead: LeadRow & {
+    lead: (LeadRow & {
         interested_cars: CarRow[];
-    };
-    responsible?: ProfileRow; // Para mostrar quién es el dueño de la cita en vista admin
+    }) | null; 
+    responsible?: ProfileRow;
 };
 
 export type AgendaTab = 'pending' | 'history';
@@ -26,11 +26,11 @@ export interface AgendaFilters {
 }
 
 export function useAgenda() {
-    const { supabase, user, profile } = useAuth(); // Asumo que profile trae el rol
+    const { supabase, user, profile } = useAuth();
 
     // Estados de Datos
     const [allAppointments, setAllAppointments] = useState<AppointmentWithDetails[]>([]);
-    const [agents, setAgents] = useState<ProfileRow[]>([]); // Lista de agentes para el filtro
+    const [agents, setAgents] = useState<ProfileRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // Estado de Filtros (Solo Admin)
@@ -44,7 +44,7 @@ export function useAgenda() {
 
     const isAdmin = profile?.role === 'admin';
 
-    // 1. CARGAR USUARIOS (Solo si es admin, para el dropdown)
+    // 1. CARGAR USUARIOS
     const fetchAgents = useCallback(async () => {
         if (!isAdmin) return;
         
@@ -61,6 +61,8 @@ export function useAgenda() {
         if (!user) return;
         setIsLoading(true);
 
+        // NOTA: Supabase manejará el LEFT JOIN automáticamente. 
+        // Si lead_id es null, el objeto 'lead' vendrá como null.
         let query = supabase
             .from('appointments')
             .select(`
@@ -72,8 +74,6 @@ export function useAgenda() {
                 responsible:profiles (*) 
             `);
 
-        // LÓGICA CLAVE: Si NO es admin, forzar filtro por su ID.
-        // Si ES admin, traemos todo (y luego filtramos en memoria o UI).
         if (!isAdmin) {
             query = query.eq('responsible_id', user.id);
         }
@@ -90,18 +90,17 @@ export function useAgenda() {
         setIsLoading(false);
     }, [supabase, user, isAdmin]);
 
-    // Ejecutar cargas iniciales
     useEffect(() => {
         fetchAppointments();
         fetchAgents();
     }, [fetchAppointments, fetchAgents]);
 
 
-    // 3. LOGICA DE FILTRADO (Memoizada para rendimiento)
+    // 3. LOGICA DE FILTRADO
     const filteredList = useMemo(() => {
         let result = allAppointments;
 
-        // A. Filtro por Responsable (Solo afecta si es admin y seleccionó a alguien)
+        // A. Filtro por Responsable
         if (isAdmin && filters.responsibleId !== 'all') {
             result = result.filter(a => a.responsible_id === filters.responsibleId);
         }
@@ -124,15 +123,15 @@ export function useAgenda() {
                         const tmrEnd = new Date(todayEnd); tmrEnd.setDate(tmrEnd.getDate() + 1);
                         return apptDate >= tmrStart && apptDate <= tmrEnd;
 
-                    case 'week': // Próximos 7 días
+                    case 'week':
                         const weekEnd = new Date(todayEnd); weekEnd.setDate(weekEnd.getDate() + 7);
                         return apptDate >= todayStart && apptDate <= weekEnd;
 
-                    case 'fortnight': // Próximos 15 días
+                    case 'fortnight':
                         const fortnightEnd = new Date(todayEnd); fortnightEnd.setDate(fortnightEnd.getDate() + 15);
                         return apptDate >= todayStart && apptDate <= fortnightEnd;
                         
-                    case 'month': // Próximos 30 días
+                    case 'month':
                         const monthEnd = new Date(todayEnd); monthEnd.setDate(monthEnd.getDate() + 30);
                         return apptDate >= todayStart && apptDate <= monthEnd;
                         
@@ -146,7 +145,7 @@ export function useAgenda() {
     }, [allAppointments, filters, isAdmin]);
 
 
-    // 4. PROCESAMIENTO (Separar Pendientes vs Historial sobre la lista YA filtrada)
+    // 4. PROCESAMIENTO
     const { pendingAppointments, historyAppointments } = useMemo(() => {
         const activeStatuses = ['pendiente', 'confirmada', 'reprogramada'];
         
@@ -162,18 +161,15 @@ export function useAgenda() {
     }, [filteredList]);
 
 
-    // 5. ACCIONES (Check, Cancelar)
+    // 5. ACCIONES
     const markAsCompleted = async (id: number) => {
-        // Optimista
         setAllAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'completada' } : a));
-        
         const { error } = await supabase.from('appointments').update({ status: 'completada' }).eq('id', id);
         if (error) fetchAppointments();
     };
 
     const cancelAppointment = async (id: number) => {
         setAllAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'cancelada' } : a));
-        
         const { error } = await supabase.from('appointments').update({ status: 'cancelada' }).eq('id', id);
         if (error) fetchAppointments();
     };
@@ -206,25 +202,16 @@ export function useAgenda() {
 
 
     return {
-        // Datos procesados
         groupedPending: groupAppointmentsByDate(pendingAppointments),
         groupedHistory: groupAppointmentsByDate(historyAppointments),
-        pendingCount: pendingAppointments.length, // Conteo exacto de lo filtrado
-        
-        // Estado
+        pendingCount: pendingAppointments.length,
         isLoading,
         isAdmin,
-        agents, // Lista para el dropdown
-        
-        // Filtros
+        agents,
         filters,
         setFilters,
-
-        // UI Tabs
         activeTab,
         setActiveTab,
-        
-        // Acciones
         refresh: fetchAppointments,
         actions: { markAsCompleted, cancelAppointment }
     };
