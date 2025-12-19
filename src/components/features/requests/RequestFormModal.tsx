@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     X,
     Loader2,
@@ -12,7 +12,11 @@ import {
     AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { RequestPriorityType } from "./constants";
+// Asegúrate de que este archivo exista en tu proyecto o ajusta la importación
+// import { RequestPriorityType } from "./constants"; 
+
+// Definición temporal si no tienes el archivo de constantes a mano
+type RequestPriorityType = 'baja' | 'media' | 'alta';
 
 interface RequestFormModalProps {
     isOpen: boolean;
@@ -35,6 +39,7 @@ interface NewRequestState {
 export default function RequestFormModal({ isOpen, onClose, onSuccess }: RequestFormModalProps) {
     const { supabase, user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null); // Estado para el mensaje de error personalizado
 
     const [newRequest, setNewRequest] = useState<NewRequestState>({
         brand: '',
@@ -48,46 +53,80 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
         notes: ''
     });
 
+    // Limpiar error cuando el modal se cierra o cambia
+    useEffect(() => {
+        if (!isOpen) setError(null);
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null); // Limpiamos errores previos
+
+        // --- VALIDACIÓN MEJORADA ---
+        // Lista de campos requeridos y su nombre legible para el usuario
+        const requiredFields = [
+            { key: 'brand', label: 'Marca' },
+            { key: 'model', label: 'Modelo' },
+            { key: 'year_min', label: 'Año Mínimo' },
+            { key: 'year_max', label: 'Año Máximo' },
+            { key: 'budget_max', label: 'Presupuesto' },
+            { key: 'color_preference', label: 'Color' },
+            { key: 'client_name', label: 'Nombre del Cliente' },
+            { key: 'notes', label: 'Notas' }
+        ];
+
+        // Filtramos los campos que están vacíos
+        const missingFields = requiredFields.filter(field => {
+            const value = newRequest[field.key as keyof NewRequestState];
+            return !value || value.toString().trim() === '';
+        });
+
+        // Si hay campos faltantes, mostramos el error personalizado
+        if (missingFields.length > 0) {
+            const missingLabels = missingFields.map(f => f.label).join(', ');
+            setError(`Por favor completa los siguientes campos: ${missingLabels}.`);
+            return;
+        }
+
         if (!user) return;
         setIsSubmitting(true);
 
-        const cleanBudget = newRequest.budget_max ? parseFloat(newRequest.budget_max) : null;
-        const cleanYearMin = newRequest.year_min ? parseInt(newRequest.year_min) : null;
-        const cleanYearMax = newRequest.year_max ? parseInt(newRequest.year_max) : null;
+        const cleanBudget = parseFloat(newRequest.budget_max);
+        const cleanYearMin = parseInt(newRequest.year_min);
+        const cleanYearMax = parseInt(newRequest.year_max);
 
-        const { error } = await supabase.from('vehicle_requests').insert({
+        const { error: insertError } = await supabase.from('vehicle_requests').insert({
             requested_by: user.id,
             brand: newRequest.brand,
             model: newRequest.model,
             year_min: cleanYearMin,
             year_max: cleanYearMax,
             budget_max: cleanBudget,
-            color_preference: newRequest.color_preference || null,
-            client_name: newRequest.client_name || null,
+            color_preference: newRequest.color_preference,
+            client_name: newRequest.client_name,
             priority: newRequest.priority,
-            notes: newRequest.notes || null
+            notes: newRequest.notes
         });
 
-        if (!error) {
+        if (!insertError) {
             onSuccess();
             onClose();
+            // Reset form
             setNewRequest({
                 brand: '', model: '', year_min: '', year_max: '',
                 budget_max: '', color_preference: '', client_name: '',
                 priority: 'media', notes: ''
             });
         } else {
-            console.error("Error creando pedido:", error);
-            alert("Error al crear el pedido.");
+            console.error("Error creando pedido:", insertError);
+            setError("Ocurrió un error al intentar guardar el pedido. Inténtalo de nuevo.");
         }
         setIsSubmitting(false);
     };
 
-    // Componente de etiqueta mejorado con más espacio inferior
+    // Componente de etiqueta mejorado
     const InputLabel = ({ label, required = false }: { label: string, required?: boolean }) => (
         <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
             {label}
@@ -101,10 +140,7 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
         </label>
     );
 
-    // Inputs más altos (h-12) y con más padding a la izquierda para el icono
     const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm";
-
-    // Clase para centrar iconos verticalmente en los inputs más altos
     const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none";
 
     return (
@@ -139,7 +175,6 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
                                 <h4 className="text-base font-bold text-slate-800">Datos del Vehículo</h4>
                             </div>
 
-                            {/* Grid Responsivo: 1 columna en móvil, 2 en pantallas medianas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <InputLabel label="Marca" required />
@@ -148,9 +183,8 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
                                             <CarFront className="h-5 w-5" />
                                         </div>
                                         <input
-                                            required
                                             type="text"
-                                            className={inputClasses}
+                                            className={`${inputClasses} ${error && !newRequest.brand ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
                                             placeholder="Ej: Toyota"
                                             value={newRequest.brand}
                                             onChange={e => setNewRequest({ ...newRequest, brand: e.target.value })}
@@ -164,9 +198,8 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
                                             <CarFront className="h-5 w-5" />
                                         </div>
                                         <input
-                                            required
                                             type="text"
-                                            className={inputClasses}
+                                            className={`${inputClasses} ${error && !newRequest.model ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
                                             placeholder="Ej: Fortuner"
                                             value={newRequest.model}
                                             onChange={e => setNewRequest({ ...newRequest, model: e.target.value })}
@@ -178,30 +211,39 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
 
                         {/* SECCIÓN 2: DETALLES */}
                         <div className="space-y-6">
-                            {/* Grid para años y prioridad: se adapta de 1 a 3 columnas */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
-                                    <InputLabel label="Año Min" />
+                                    <InputLabel label="Año Min" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}>
                                             <Calendar className="h-5 w-5" />
                                         </div>
-                                        <input type="number" className={inputClasses} placeholder="2018"
-                                            value={newRequest.year_min} onChange={e => setNewRequest({ ...newRequest, year_min: e.target.value })} />
+                                        <input
+                                            type="number"
+                                            className={`${inputClasses} ${error && !newRequest.year_min ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                            placeholder="2018"
+                                            value={newRequest.year_min}
+                                            onChange={e => setNewRequest({ ...newRequest, year_min: e.target.value })}
+                                        />
                                     </div>
                                 </div>
                                 <div>
-                                    <InputLabel label="Año Max" />
+                                    <InputLabel label="Año Max" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}>
                                             <Calendar className="h-5 w-5" />
                                         </div>
-                                        <input type="number" className={inputClasses} placeholder="2024"
-                                            value={newRequest.year_max} onChange={e => setNewRequest({ ...newRequest, year_max: e.target.value })} />
+                                        <input
+                                            type="number"
+                                            className={`${inputClasses} ${error && !newRequest.year_max ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                            placeholder="2024"
+                                            value={newRequest.year_max}
+                                            onChange={e => setNewRequest({ ...newRequest, year_max: e.target.value })}
+                                        />
                                     </div>
                                 </div>
                                 <div>
-                                    <InputLabel label="Prioridad" />
+                                    <InputLabel label="Prioridad" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}>
                                             <AlertCircle className="h-5 w-5" />
@@ -221,23 +263,33 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <InputLabel label="Presupuesto Máximo" />
+                                    <InputLabel label="Presupuesto Máximo" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}>
-                                            <DollarSign className="h-5 w-5 text-green-600" />
+                                            <DollarSign className={`h-5 w-5 ${error && !newRequest.budget_max ? 'text-red-400' : 'text-green-600'}`} />
                                         </div>
-                                        <input type="number" className={`${inputClasses} focus:ring-green-500/20 focus:border-green-600`} placeholder="0.00"
-                                            value={newRequest.budget_max} onChange={e => setNewRequest({ ...newRequest, budget_max: e.target.value })} />
+                                        <input
+                                            type="number"
+                                            className={`${inputClasses} focus:ring-green-500/20 focus:border-green-600 ${error && !newRequest.budget_max ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                                            placeholder="0.00"
+                                            value={newRequest.budget_max}
+                                            onChange={e => setNewRequest({ ...newRequest, budget_max: e.target.value })}
+                                        />
                                     </div>
                                 </div>
                                 <div>
-                                    <InputLabel label="Color Preferido" />
+                                    <InputLabel label="Color Preferido" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}>
                                             <Palette className="h-5 w-5" />
                                         </div>
-                                        <input type="text" className={inputClasses} placeholder="Ej: Blanco"
-                                            value={newRequest.color_preference} onChange={e => setNewRequest({ ...newRequest, color_preference: e.target.value })} />
+                                        <input
+                                            type="text"
+                                            className={`${inputClasses} ${error && !newRequest.color_preference ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                            placeholder="Ej: Blanco"
+                                            value={newRequest.color_preference}
+                                            onChange={e => setNewRequest({ ...newRequest, color_preference: e.target.value })}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -246,38 +298,54 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
                         {/* SECCIÓN 3: CLIENTE Y NOTAS */}
                         <div className="pt-6 border-t border-slate-100 space-y-6">
                             <div>
-                                <InputLabel label="Cliente / Referencia" />
+                                <InputLabel label="Cliente / Referencia" required />
                                 <div className="relative">
                                     <div className={iconContainerClass}>
                                         <User className="h-5 w-5" />
                                     </div>
-                                    <input type="text" className={inputClasses} placeholder="Nombre del interesado"
-                                        value={newRequest.client_name} onChange={e => setNewRequest({ ...newRequest, client_name: e.target.value })} />
+                                    <input
+                                        type="text"
+                                        className={`${inputClasses} ${error && !newRequest.client_name ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                        placeholder="Nombre del interesado"
+                                        value={newRequest.client_name}
+                                        onChange={e => setNewRequest({ ...newRequest, client_name: e.target.value })}
+                                    />
                                 </div>
                             </div>
 
                             <div>
-                                <InputLabel label="Notas Adicionales" />
+                                <InputLabel label="Notas Adicionales" required />
                                 <div className="relative">
                                     <div className="absolute left-4 top-4 text-slate-400 pointer-events-none">
                                         <FileText className="h-5 w-5" />
                                     </div>
                                     <textarea
                                         rows={3}
-                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed`}
-                                        placeholder="Escribe detalles específicos aquí (ej: transmisión automática, interior de cuero, sin choques...)"
+                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed ${error && !newRequest.notes ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                        placeholder="Escribe detalles específicos aquí..."
                                         value={newRequest.notes}
                                         onChange={e => setNewRequest({ ...newRequest, notes: e.target.value })}
                                     />
                                 </div>
                             </div>
                         </div>
-
                     </form>
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10">
+                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10 flex flex-col gap-4">
+                    
+                    {/* Alerta de Error Personalizada */}
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-300">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                            <div className="text-sm">
+                                <h4 className="font-bold text-red-900">Faltan datos requeridos</h4>
+                                <p className="text-red-700 mt-1 leading-relaxed">{error}</p>
+                            </div>
+                        </div>
+                    )}
+
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting}

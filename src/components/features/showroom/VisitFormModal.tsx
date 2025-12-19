@@ -13,7 +13,8 @@ import {
     Search,
     ChevronDown,
     Pencil,
-    Phone // Importamos el icono del teléfono
+    Phone,
+    AlertCircle
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem, ShowroomVisit } from "./constants";
@@ -25,11 +26,25 @@ interface VisitFormModalProps {
     visitToEdit?: ShowroomVisit | null;
 }
 
+// Interfaz para el estado del formulario para mejor tipado
+interface VisitFormData {
+    client_name: string;
+    phone: string;
+    inventory_id: string;
+    source: VisitSource;
+    visit_start_time: string;
+    visit_end_time: string;
+    test_drive: boolean;
+    credit_status: CreditStatus;
+    observation: string;
+}
+
 export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit }: VisitFormModalProps) {
     const { supabase, user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // --- ESTADOS PARA EL BUSCADOR ---
     const [searchTerm, setSearchTerm] = useState("");
@@ -37,9 +52,9 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Estado del Formulario
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<VisitFormData>({
         client_name: '',
-        phone: '', // NUEVO CAMPO
+        phone: '',
         inventory_id: '',
         source: 'showroom' as VisitSource,
         visit_start_time: '',
@@ -50,6 +65,11 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     });
 
     const isEditing = !!visitToEdit;
+
+    // Limpiar errores al abrir/cerrar
+    useEffect(() => {
+        if (!isOpen) setError(null);
+    }, [isOpen]);
 
     useEffect(() => {
         if (isOpen) {
@@ -75,8 +95,8 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
                 setFormData({
                     client_name: visitToEdit.client_name,
-                    // @ts-ignore: Asumimos que la DB ya devuelve el campo phone aunque la interfaz local no esté actualizada
-                    phone: visitToEdit.phone || '', 
+                    // @ts-ignore
+                    phone: visitToEdit.phone || '',
                     inventory_id: visitToEdit.inventory_id || '',
                     source: visitToEdit.source as VisitSource,
                     visit_start_time: startTime,
@@ -99,7 +119,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
                 setFormData({
                     client_name: '',
-                    phone: '', // Inicializamos vacío
+                    phone: '',
                     inventory_id: '',
                     source: 'showroom',
                     visit_start_time: currentTime,
@@ -144,6 +164,37 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError(null); // Limpiar errores previos
+
+        // --- VALIDACIÓN DE CAMPOS ---
+        // Ahora incluimos TODOS los campos en la validación
+        const requiredFields = [
+            { key: 'client_name', label: 'Nombre del Cliente' },
+            { key: 'phone', label: 'Teléfono' },
+            { key: 'source', label: 'Medio de Visita' },
+            { key: 'inventory_id', label: 'Vehículo de Interés' }, // Ahora obligatorio
+            { key: 'visit_start_time', label: 'Hora Inicio' },
+            { key: 'visit_end_time', label: 'Hora Fin' }, // Ahora obligatorio
+            { key: 'credit_status', label: 'Estatus Crédito' }, // Ahora obligatorio
+            { key: 'observation', label: 'Observaciones' } // Ahora obligatorio
+        ];
+
+        const missingFields = requiredFields.filter(field => {
+            const value = formData[field.key as keyof VisitFormData];
+            return !value || value.toString().trim() === '';
+        });
+
+        if (missingFields.length > 0) {
+            // Mensaje de error más genérico si son muchos, o específico si son pocos
+            if (missingFields.length > 3) {
+                setError("Por favor completa todos los campos obligatorios marcados en rojo.");
+            } else {
+                const missingLabels = missingFields.map(f => f.label).join(', ');
+                setError(`Por favor completa: ${missingLabels}.`);
+            }
+            return;
+        }
+
         if (!user) return;
         setIsSubmitting(true);
 
@@ -154,13 +205,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         }
 
         const startFull = `${dateBaseStr}T${formData.visit_start_time}:00Z`;
-        const endFull = formData.visit_end_time ? `${dateBaseStr}T${formData.visit_end_time}:00Z` : null;
+        const endFull = `${dateBaseStr}T${formData.visit_end_time}:00Z`; // Ya no es opcional
 
         const payload = {
             salesperson_id: user.id,
             client_name: formData.client_name,
-            phone: formData.phone || 'desconocido', // Si está vacío, mandamos 'desconocido'
-            inventory_id: formData.inventory_id && formData.inventory_id !== '' ? formData.inventory_id : null,
+            phone: formData.phone,
+            inventory_id: formData.inventory_id,
             source: formData.source,
             visit_start: startFull,
             visit_end: endFull,
@@ -169,26 +220,26 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             observation: formData.observation
         };
 
-        let error;
+        let dbError;
         if (isEditing && visitToEdit) {
             const { error: updateError } = await supabase
                 .from('showroom_visits')
                 .update(payload)
                 .eq('id', visitToEdit.id);
-            error = updateError;
+            dbError = updateError;
         } else {
             const { error: insertError } = await supabase
                 .from('showroom_visits')
                 .insert(payload);
-            error = insertError;
+            dbError = insertError;
         }
 
-        if (!error) {
+        if (!dbError) {
             onSuccess();
             onClose();
         } else {
-            console.error(error);
-            alert("Error al guardar la visita");
+            console.error(dbError);
+            setError("Error al guardar la visita. Inténtalo nuevamente.");
         }
         setIsSubmitting(false);
     };
@@ -197,7 +248,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
             {label}
             {required ? (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>
             ) : (
                 <span className="text-slate-400 font-normal text-[11px] ml-2 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded-full">
                     Opcional
@@ -208,6 +259,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
     const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm";
     const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
+
+    // Función helper para clases de error condicionales
+    const getErrorClass = (fieldName: keyof VisitFormData) => {
+        return error && (!formData[fieldName] || formData[fieldName].toString().trim() === '')
+            ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/10'
+            : '';
+    };
 
     if (!isOpen) return null;
 
@@ -253,9 +311,8 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     <div className="relative">
                                         <div className={iconContainerClass}><User className="h-5 w-5" /></div>
                                         <input
-                                            required
                                             type="text"
-                                            className={inputClasses}
+                                            className={`${inputClasses} ${getErrorClass('client_name')}`}
                                             placeholder="Ej: Juan Pérez"
                                             value={formData.client_name}
                                             onChange={e => setFormData({ ...formData, client_name: e.target.value })}
@@ -263,14 +320,14 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     </div>
                                 </div>
 
-                                {/* TELÉFONO (NUEVO CAMPO) */}
+                                {/* TELÉFONO */}
                                 <div>
-                                    <InputLabel label="Teléfono / Celular" />
+                                    <InputLabel label="Teléfono / Celular" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><Phone className="h-5 w-5" /></div>
                                         <input
                                             type="tel"
-                                            className={inputClasses}
+                                            className={`${inputClasses} ${getErrorClass('phone')}`}
                                             placeholder="Ej: 0981234567"
                                             value={formData.phone}
                                             onChange={e => setFormData({ ...formData, phone: e.target.value })}
@@ -278,13 +335,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     </div>
                                 </div>
 
-                                {/* MEDIO DE VISITA (Ahora ocupa ancho completo o se acomoda en la rejilla) */}
+                                {/* MEDIO DE VISITA */}
                                 <div className="md:col-span-2">
                                     <InputLabel label="Medio de Visita" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><MapPin className="h-5 w-5" /></div>
                                         <select
-                                            className={`${inputClasses} appearance-none cursor-pointer`}
+                                            className={`${inputClasses} appearance-none cursor-pointer ${getErrorClass('source')}`}
                                             value={formData.source}
                                             onChange={e => setFormData({ ...formData, source: e.target.value as VisitSource })}
                                         >
@@ -301,14 +358,16 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
                         <div className="space-y-6">
                             <div ref={dropdownRef} className="relative z-20">
-                                <InputLabel label="Vehículo de Interés" />
+                                {/* VEHÍCULO AHORA OBLIGATORIO */}
+                                <InputLabel label="Vehículo de Interés" required />
                                 <div className="relative">
                                     <div className={iconContainerClass}>
                                         {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                                     </div>
+                                    {/* Aplicamos la clase de error también al input de búsqueda si inventory_id está vacío */}
                                     <input
                                         type="text"
-                                        className={`${inputClasses} pr-10`}
+                                        className={`${inputClasses} pr-10 ${getErrorClass('inventory_id')}`}
                                         placeholder="Buscar por marca, modelo o año..."
                                         value={searchTerm}
                                         onChange={(e) => {
@@ -331,9 +390,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-200">
                                         {filteredInventory.length > 0 ? (
                                             <ul className="py-2">
-                                                <li className="px-4 py-3 hover:bg-slate-50 cursor-pointer text-slate-500 text-sm border-b border-slate-50" onClick={handleClearCarSelection}>
-                                                    -- Ninguno específico / Solo consultando --
-                                                </li>
+                                                {/* Eliminada la opción de "Ninguno específico" ya que ahora es obligatorio seleccionar algo */}
                                                 {filteredInventory.map(car => (
                                                     <li key={car.id} onClick={() => handleSelectCar(car)} className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors">
                                                         <div className="flex flex-col">
@@ -360,20 +417,20 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                         <div className={iconContainerClass}><Clock className="h-5 w-5" /></div>
                                         <input
                                             type="time"
-                                            required
-                                            className={`${inputClasses} appearance-none`}
+                                            className={`${inputClasses} appearance-none ${getErrorClass('visit_start_time')}`}
                                             value={formData.visit_start_time}
                                             onChange={e => setFormData({ ...formData, visit_start_time: e.target.value })}
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <InputLabel label="Hora Fin" />
+                                    {/* HORA FIN AHORA OBLIGATORIA */}
+                                    <InputLabel label="Hora Fin" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><Clock className="h-5 w-5 text-slate-300" /></div>
                                         <input
                                             type="time"
-                                            className={`${inputClasses} appearance-none`}
+                                            className={`${inputClasses} appearance-none ${getErrorClass('visit_end_time')}`}
                                             value={formData.visit_end_time}
                                             onChange={e => setFormData({ ...formData, visit_end_time: e.target.value })}
                                         />
@@ -396,11 +453,11 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                 </div>
 
                                 <div>
-                                    <InputLabel label="Estatus Crédito" />
+                                    <InputLabel label="Estatus Crédito" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><CreditCard className="h-5 w-5" /></div>
                                         <select
-                                            className={`${inputClasses} appearance-none cursor-pointer`}
+                                            className={`${inputClasses} appearance-none cursor-pointer ${getErrorClass('credit_status')}`}
                                             value={formData.credit_status}
                                             onChange={e => setFormData({ ...formData, credit_status: e.target.value as CreditStatus })}
                                         >
@@ -414,12 +471,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                             </div>
 
                             <div>
-                                <InputLabel label="Observaciones / Resultado" />
+                                {/* OBSERVACIONES AHORA OBLIGATORIAS */}
+                                <InputLabel label="Observaciones / Resultado" required />
                                 <div className="relative">
                                     <div className="absolute left-4 top-4 text-slate-400 pointer-events-none"><FileText className="h-5 w-5" /></div>
                                     <textarea
                                         rows={3}
-                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed`}
+                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed ${getErrorClass('observation')}`}
                                         placeholder="Ej: Le gustó el auto pero busca color rojo..."
                                         value={formData.observation}
                                         onChange={e => setFormData({ ...formData, observation: e.target.value })}
@@ -431,7 +489,19 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10">
+                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10 flex flex-col gap-4">
+
+                    {/* Alerta de Error Visual */}
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-300">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                            <div className="text-sm">
+                                <h4 className="font-bold text-red-900">Faltan datos requeridos</h4>
+                                <p className="text-red-700 mt-1 leading-relaxed">{error}</p>
+                            </div>
+                        </div>
+                    )}
+
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting}
