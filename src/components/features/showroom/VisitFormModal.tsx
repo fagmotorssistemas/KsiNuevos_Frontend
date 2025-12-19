@@ -1,18 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { 
-  X, 
-  Loader2, 
-  Save, 
-  User, 
-  Clock, 
-  MapPin, 
-  CreditCard, 
-  FileText, 
-  CheckCircle2,
-  Circle,
-  Search,
-  ChevronDown,
-  Pencil
+import {
+    X,
+    Loader2,
+    Save,
+    User,
+    Clock,
+    MapPin,
+    CreditCard,
+    FileText,
+    CheckCircle2,
+    Circle,
+    Search,
+    ChevronDown,
+    Pencil,
+    Phone // Importamos el icono del teléfono
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem, ShowroomVisit } from "./constants";
@@ -38,6 +39,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     // Estado del Formulario
     const [formData, setFormData] = useState({
         client_name: '',
+        phone: '', // NUEVO CAMPO
         inventory_id: '',
         source: 'showroom' as VisitSource,
         visit_start_time: '',
@@ -54,26 +56,27 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             const fetchInventory = async () => {
                 setIsLoadingInventory(true);
                 const { data } = await supabase
-                    .from('inventory') 
+                    .from('inventory')
                     .select('id, brand, model, year, price, status')
-                    .in('status', ['disponible','vendido'])
+                    .in('status', ['disponible', 'vendido'])
                     .order('brand', { ascending: true });
-                
+
                 if (data) setInventory(data as any);
                 setIsLoadingInventory(false);
             };
             fetchInventory();
-            
+
             if (visitToEdit) {
-                // MODO EDICIÓN: Extraemos la hora directamente del string para evitar desfases de Timezone
-                // Asumiendo formato ISO: "YYYY-MM-DDTHH:mm:ss..."
+                // MODO EDICIÓN
                 const startTime = visitToEdit.visit_start.split('T')[1].slice(0, 5);
-                const endTime = visitToEdit.visit_end 
-                    ? visitToEdit.visit_end.split('T')[1].slice(0, 5) 
+                const endTime = visitToEdit.visit_end
+                    ? visitToEdit.visit_end.split('T')[1].slice(0, 5)
                     : '';
 
                 setFormData({
                     client_name: visitToEdit.client_name,
+                    // @ts-ignore: Asumimos que la DB ya devuelve el campo phone aunque la interfaz local no esté actualizada
+                    phone: visitToEdit.phone || '', 
                     inventory_id: visitToEdit.inventory_id || '',
                     source: visitToEdit.source as VisitSource,
                     visit_start_time: startTime,
@@ -92,11 +95,11 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             } else {
                 // MODO CREACIÓN
                 const now = new Date();
-                // Aquí usamos toLocaleTimeString para la hora inicial de creación
                 const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                
+
                 setFormData({
                     client_name: '',
+                    phone: '', // Inicializamos vacío
                     inventory_id: '',
                     source: 'showroom',
                     visit_start_time: currentTime,
@@ -147,16 +150,16 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         // Determinamos la fecha base
         let dateBaseStr = new Date().toISOString().split('T')[0];
         if (isEditing && visitToEdit) {
-             dateBaseStr = visitToEdit.visit_start.split('T')[0];
+            dateBaseStr = visitToEdit.visit_start.split('T')[0];
         }
 
-        // Construimos ISO con "Z" para indicar UTC y evitar que el servidor lo mueva de nuevo
         const startFull = `${dateBaseStr}T${formData.visit_start_time}:00Z`;
         const endFull = formData.visit_end_time ? `${dateBaseStr}T${formData.visit_end_time}:00Z` : null;
 
         const payload = {
             salesperson_id: user.id,
             client_name: formData.client_name,
+            phone: formData.phone || 'desconocido', // Si está vacío, mandamos 'desconocido'
             inventory_id: formData.inventory_id && formData.inventory_id !== '' ? formData.inventory_id : null,
             source: formData.source,
             visit_start: startFull,
@@ -211,7 +214,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-                
+
                 {/* Header */}
                 <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <div>
@@ -231,7 +234,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                         <X className="h-6 w-6" />
                     </button>
                 </div>
-                
+
                 {/* Body */}
                 <div className="overflow-y-auto custom-scrollbar bg-white">
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -240,32 +243,50 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                 <div className="p-2 bg-slate-200 rounded-lg text-slate-700">
                                     <User className="w-5 h-5" />
                                 </div>
-                                <h4 className="text-base font-bold text-slate-800">Cliente y Origen</h4>
+                                <h4 className="text-base font-bold text-slate-800">Cliente y Contacto</h4>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* NOMBRE DEL CLIENTE */}
                                 <div>
                                     <InputLabel label="Nombre del Cliente" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><User className="h-5 w-5" /></div>
-                                        <input 
-                                            required 
-                                            type="text" 
-                                            className={inputClasses} 
-                                            placeholder="Ej: Juan Pérez" 
-                                            value={formData.client_name} 
-                                            onChange={e => setFormData({...formData, client_name: e.target.value})} 
+                                        <input
+                                            required
+                                            type="text"
+                                            className={inputClasses}
+                                            placeholder="Ej: Juan Pérez"
+                                            value={formData.client_name}
+                                            onChange={e => setFormData({ ...formData, client_name: e.target.value })}
                                         />
                                     </div>
                                 </div>
+
+                                {/* TELÉFONO (NUEVO CAMPO) */}
                                 <div>
+                                    <InputLabel label="Teléfono / Celular" />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}><Phone className="h-5 w-5" /></div>
+                                        <input
+                                            type="tel"
+                                            className={inputClasses}
+                                            placeholder="Ej: 0981234567"
+                                            value={formData.phone}
+                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* MEDIO DE VISITA (Ahora ocupa ancho completo o se acomoda en la rejilla) */}
+                                <div className="md:col-span-2">
                                     <InputLabel label="Medio de Visita" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><MapPin className="h-5 w-5" /></div>
-                                        <select 
+                                        <select
                                             className={`${inputClasses} appearance-none cursor-pointer`}
-                                            value={formData.source} 
-                                            onChange={e => setFormData({...formData, source: e.target.value as VisitSource})}
+                                            value={formData.source}
+                                            onChange={e => setFormData({ ...formData, source: e.target.value as VisitSource })}
                                         >
                                             <option value="showroom">Pasó Caminando (Showroom)</option>
                                             <option value="redes_sociales">Redes Sociales (FB/IG)</option>
@@ -283,9 +304,9 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                 <InputLabel label="Vehículo de Interés" />
                                 <div className="relative">
                                     <div className={iconContainerClass}>
-                                        {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin"/> : <Search className="h-5 w-5" />}
+                                        {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                                     </div>
-                                    <input 
+                                    <input
                                         type="text"
                                         className={`${inputClasses} pr-10`}
                                         placeholder="Buscar por marca, modelo o año..."
@@ -293,7 +314,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                         onChange={(e) => {
                                             setSearchTerm(e.target.value);
                                             setIsDropdownOpen(true);
-                                            if (e.target.value === '') setFormData(prev => ({...prev, inventory_id: ''}));
+                                            if (e.target.value === '') setFormData(prev => ({ ...prev, inventory_id: '' }));
                                         }}
                                         onFocus={() => setIsDropdownOpen(true)}
                                     />
@@ -337,12 +358,12 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     <InputLabel label="Hora Inicio" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><Clock className="h-5 w-5" /></div>
-                                        <input 
-                                            type="time" 
-                                            required 
+                                        <input
+                                            type="time"
+                                            required
                                             className={`${inputClasses} appearance-none`}
-                                            value={formData.visit_start_time} 
-                                            onChange={e => setFormData({...formData, visit_start_time: e.target.value})} 
+                                            value={formData.visit_start_time}
+                                            onChange={e => setFormData({ ...formData, visit_start_time: e.target.value })}
                                         />
                                     </div>
                                 </div>
@@ -350,11 +371,11 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     <InputLabel label="Hora Fin" />
                                     <div className="relative">
                                         <div className={iconContainerClass}><Clock className="h-5 w-5 text-slate-300" /></div>
-                                        <input 
-                                            type="time" 
+                                        <input
+                                            type="time"
                                             className={`${inputClasses} appearance-none`}
-                                            value={formData.visit_end_time} 
-                                            onChange={e => setFormData({...formData, visit_end_time: e.target.value})} 
+                                            value={formData.visit_end_time}
+                                            onChange={e => setFormData({ ...formData, visit_end_time: e.target.value })}
                                         />
                                     </div>
                                 </div>
@@ -365,8 +386,8 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">Experiencia</label>
-                                    <div 
-                                        onClick={() => setFormData(p => ({...p, test_drive: !p.test_drive}))}
+                                    <div
+                                        onClick={() => setFormData(p => ({ ...p, test_drive: !p.test_drive }))}
                                         className={`h-12 w-full rounded-xl border flex items-center px-4 cursor-pointer transition-all select-none ${formData.test_drive ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
                                     >
                                         <div className="mr-3">{formData.test_drive ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}</div>
@@ -378,10 +399,10 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     <InputLabel label="Estatus Crédito" />
                                     <div className="relative">
                                         <div className={iconContainerClass}><CreditCard className="h-5 w-5" /></div>
-                                        <select 
+                                        <select
                                             className={`${inputClasses} appearance-none cursor-pointer`}
-                                            value={formData.credit_status} 
-                                            onChange={e => setFormData({...formData, credit_status: e.target.value as CreditStatus})}
+                                            value={formData.credit_status}
+                                            onChange={e => setFormData({ ...formData, credit_status: e.target.value as CreditStatus })}
                                         >
                                             <option value="pendiente">Pendiente / No se habló</option>
                                             <option value="aplica">Aplica / Interesado</option>
@@ -396,12 +417,12 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                 <InputLabel label="Observaciones / Resultado" />
                                 <div className="relative">
                                     <div className="absolute left-4 top-4 text-slate-400 pointer-events-none"><FileText className="h-5 w-5" /></div>
-                                    <textarea 
-                                        rows={3} 
-                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed`} 
+                                    <textarea
+                                        rows={3}
+                                        className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed`}
                                         placeholder="Ej: Le gustó el auto pero busca color rojo..."
-                                        value={formData.observation} 
-                                        onChange={e => setFormData({...formData, observation: e.target.value})} 
+                                        value={formData.observation}
+                                        onChange={e => setFormData({ ...formData, observation: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -411,9 +432,9 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
                 {/* Footer Actions */}
                 <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10">
-                    <button 
-                        onClick={handleSubmit} 
-                        disabled={isSubmitting} 
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
                         className={`w-full text-white font-bold text-base py-4 rounded-xl shadow-xl shadow-slate-900/10 transition-all flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.99] hover:translate-y-[-1px] ${isEditing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-900 hover:bg-slate-800'}`}
                     >
                         {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : isEditing ? <Pencil className="h-5 w-5" /> : <Save className="h-5 w-5" />}
