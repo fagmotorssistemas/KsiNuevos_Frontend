@@ -87,15 +87,6 @@ export default function AgendaPage() {
                         <Plus className="h-4 w-4 mr-2" />
                         Nueva Cita
                     </Button>
-
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={refresh} 
-                        disabled={isLoading}
-                    >
-                        {isLoading ? '...' : 'Actualizar'}
-                    </Button>
                 </div>
             </div>
 

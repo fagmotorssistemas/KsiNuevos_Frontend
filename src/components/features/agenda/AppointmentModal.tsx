@@ -5,7 +5,11 @@ import {
     MapPin, 
     AlignLeft, 
     Loader2,
-    User
+    User,
+    Type,
+    Save,
+    AlertCircle,
+    Link as LinkIcon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -25,13 +29,14 @@ interface AppointmentFormData {
     notes: string;
 }
 
-// Definimos el tipo exacto para el status según tu base de datos
 type AppointmentStatus = "pendiente" | "confirmada" | "completada" | "cancelada" | "reprogramada" | "no_asistio";
 
 export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = null }: AppointmentModalProps) {
     const { supabase, user } = useAuth();
     
+    // Estados
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     
     const [formData, setFormData] = useState<AppointmentFormData>({
         title: "",
@@ -42,199 +47,286 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
         notes: ""
     });
 
+    // Validar si todos los campos tienen datos
+    const isFormValid = 
+        formData.title.trim().length > 0 &&
+        formData.external_client_name.trim().length > 0 &&
+        formData.start_time.length > 0 &&
+        formData.location.trim().length > 0 &&
+        formData.notes.trim().length > 0;
+
+    // Efectos
     useEffect(() => {
         if (isOpen) {
             setFormData(prev => ({
                 ...prev,
                 lead_id: initialLeadId || null
             }));
+            // Pre-llenar fecha con la hora actual redondeada a la siguiente hora si está vacío
+            if (!formData.start_time) {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Ajuste local simple
+                setFormData(prev => ({...prev, start_time: now.toISOString().slice(0, 16)}));
+            }
+            setError(null);
         }
     }, [isOpen, initialLeadId]);
+
+    // Estilos reutilizables
+    const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm text-slate-700";
+    const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
+    
+    // Modificado: Ahora siempre muestra que es obligatorio
+    const InputLabel = ({ label }: { label: string }) => (
+        <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
+            {label}
+            <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>
+        </label>
+    );
+
+    // Modificado: Ahora marca error en cualquier campo vacío
+    const getErrorClass = (fieldName: keyof AppointmentFormData) => {
+        // Si hay error general y el campo específico está vacío
+        return error && !formData[fieldName]
+            ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/10' 
+            : '';
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
+        setError(null);
+
+        // Validación Estricta de todos los campos
+        if (!isFormValid) {
+            setError("Todos los campos son obligatorios para guardar la cita.");
+            return;
+        }
 
         setLoading(true);
         try {
-            if (!formData.start_time) {
-                throw new Error("La fecha de inicio es obligatoria.");
-            }
-
             const startTime = new Date(formData.start_time);
             
             if (isNaN(startTime.getTime())) {
                 throw new Error("La fecha de inicio no es válida.");
             }
 
-            // Preparar payload
-            // NOTA: Hemos eliminado end_time porque no aparecía en los tipos de error que enviaste.
-            // Hemos asegurado que 'status' tenga el tipo correcto.
             const payload = {
                 title: formData.title,
                 lead_id: formData.lead_id ?? null,
                 responsible_id: user.id,
                 start_time: startTime.toISOString(),
-                location: formData.location || null,
-                notes: formData.notes || null,
-                external_client_name: formData.external_client_name || null,
-                status: "pendiente" as AppointmentStatus // Casting explícito para arreglar el error TS
+                location: formData.location, // Ya no es opcional
+                notes: formData.notes,       // Ya no es opcional
+                external_client_name: formData.external_client_name, // Ya no es opcional
+                status: "pendiente" as AppointmentStatus
             };
 
-            console.log("Enviando payload a Supabase:", payload);
-
-            const { error } = await supabase
+            const { error: dbError } = await supabase
                 .from('appointments')
                 .insert([payload]);
 
-            if (error) {
-                throw new Error(error.message || "Error al guardar en base de datos");
+            if (dbError) {
+                throw new Error(dbError.message || "Error al guardar en base de datos");
             }
 
             onSuccess();
-            onClose();
+            handleClose();
             
-            setFormData({
-                title: "",
-                lead_id: null,
-                external_client_name: "",
-                start_time: "",
-                location: "",
-                notes: ""
-            });
         } catch (err: any) {
             console.error("Error creando cita:", err);
-            const errorMessage = err.message || "Error al guardar.";
-            alert(`Error: ${errorMessage}`);
+            setError(err.message || "Ocurrió un error al guardar la cita.");
         } finally {
             setLoading(false);
         }
     };
 
+    const handleClose = () => {
+        setFormData({
+            title: "",
+            lead_id: null,
+            external_client_name: "",
+            start_time: "",
+            location: "",
+            notes: ""
+        });
+        setError(null);
+        onClose();
+    };
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
                 
-                {/* Header Minimalista */}
-                <div className="px-6 py-4 border-b border-black flex justify-between items-center bg-white">
+                {/* Header */}
+                <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <div>
-                        <h2 className="text-lg font-bold text-black uppercase tracking-wide">Nueva Cita</h2>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-slate-900 text-white text-xs font-bold px-2 py-0.5 rounded">
+                                NUEVA
+                            </span>
+                            <h2 className="font-bold text-xl text-slate-900">Agendar Cita</h2>
+                        </div>
+                        <p className="text-sm text-slate-500">
+                            Completa todos los campos para programar el evento.
+                        </p>
                     </div>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors" type="button">
-                        <X className="h-6 w-6 text-black" />
+                    <button 
+                        onClick={handleClose} 
+                        className="p-2.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                        type="button"
+                    >
+                        <X className="h-6 w-6" />
                     </button>
                 </div>
 
-                {/* Formulario */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                {/* Body Scrollable */}
+                <div className="overflow-y-auto custom-scrollbar bg-white flex-1">
+                    <form id="appointment-form" onSubmit={handleSubmit} className="p-8 space-y-6">
+                        
+                        {/* Info Principal */}
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-5">
+                            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/60">
+                                <div className="p-2 bg-slate-200 rounded-lg text-slate-700">
+                                    <Type className="w-5 h-5" />
+                                </div>
+                                <h4 className="text-base font-bold text-slate-800">Detalles Principales</h4>
+                            </div>
+
+                            {/* Título */}
+                            <div>
+                                <InputLabel label="Asunto / Título" />
+                                <div className="relative">
+                                    <div className={iconContainerClass}><Type className="h-5 w-5" /></div>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Ej: Reunión de seguimiento..."
+                                        className={`${inputClasses} ${getErrorClass('title')}`}
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Cliente Externo */}
+                            <div>
+                                <InputLabel label="Cliente / Contacto" />
+                                <div className="relative">
+                                    <div className={iconContainerClass}><User className="h-5 w-5" /></div>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Nombre del cliente"
+                                        className={`${inputClasses} ${getErrorClass('external_client_name')}`}
+                                        value={formData.external_client_name}
+                                        onChange={(e) => setFormData({...formData, external_client_name: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Lead ID Indicator (Si existe) */}
+                            {initialLeadId && (
+                                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
+                                    <LinkIcon className="h-3 w-3" />
+                                    <span>Se vinculará automáticamente al Lead #{initialLeadId}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Logística */}
+                        <div className="space-y-5">
+                            <div className="grid grid-cols-1 gap-5">
+                                {/* Fecha y Hora */}
+                                <div>
+                                    <InputLabel label="Fecha y Hora de Inicio" />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}><Calendar className="h-5 w-5 text-slate-500" /></div>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            className={`${inputClasses} ${getErrorClass('start_time')}`}
+                                            value={formData.start_time}
+                                            onChange={(e) => setFormData({...formData, start_time: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Ubicación */}
+                                <div>
+                                    <InputLabel label="Ubicación" />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}><MapPin className="h-5 w-5" /></div>
+                                        <input
+                                            required
+                                            type="text"
+                                            placeholder="Oficina, Zoom, Dirección..."
+                                            className={`${inputClasses} ${getErrorClass('location')}`}
+                                            value={formData.location}
+                                            onChange={(e) => setFormData({...formData, location: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Notas */}
+                            <div>
+                                <InputLabel label="Notas Adicionales" />
+                                <div className="relative">
+                                    <div className="absolute left-4 top-4 text-slate-400 pointer-events-none"><AlignLeft className="h-5 w-5" /></div>
+                                    <textarea
+                                        required
+                                        rows={3}
+                                        placeholder="Detalles importantes para la cita..."
+                                        className={`${inputClasses} ${getErrorClass('notes')} h-auto py-3.5 resize-none leading-relaxed`}
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10 flex flex-col gap-4">
                     
-                    {/* Título */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-bold text-black uppercase tracking-wider">
-                            Asunto *
-                        </label>
-                        <input
-                            required
-                            type="text"
-                            placeholder="Ej: Reunión Inicial"
-                            className="w-full px-3 py-2 bg-white border border-gray-400 rounded focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-all placeholder:text-gray-400 text-black"
-                            value={formData.title}
-                            onChange={(e) => setFormData({...formData, title: e.target.value})}
-                        />
-                    </div>
-
-                    {/* Cliente */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-bold text-black uppercase tracking-wider flex items-center gap-2">
-                            Cliente
-                        </label>
-                        <div className="relative">
-                            <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Nombre del contacto"
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-400 rounded focus:border-black focus:ring-1 focus:ring-black outline-none transition-all text-black"
-                                value={formData.external_client_name}
-                                onChange={(e) => setFormData({...formData, external_client_name: e.target.value})}
-                            />
+                    {/* Mensaje de Error */}
+                    {error && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-300">
+                            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+                            <div className="text-sm">
+                                <h4 className="font-bold text-red-900">Campos incompletos</h4>
+                                <p className="text-red-700 mt-1 leading-relaxed">{error}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Fecha y Hora */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-bold text-black uppercase tracking-wider flex items-center gap-2">
-                            Fecha y Hora *
-                        </label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-red-600" />
-                            <input
-                                required
-                                type="datetime-local"
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-400 rounded focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-all text-black"
-                                value={formData.start_time}
-                                onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Ubicación */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-bold text-black uppercase tracking-wider">
-                            Ubicación
-                        </label>
-                        <div className="relative">
-                            <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
-                            <input
-                                type="text"
-                                placeholder="Lugar"
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-400 rounded focus:border-black focus:ring-1 focus:ring-black outline-none transition-all text-black"
-                                value={formData.location}
-                                onChange={(e) => setFormData({...formData, location: e.target.value})}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Notas */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-bold text-black uppercase tracking-wider flex items-center gap-2">
-                            Notas
-                        </label>
-                        <div className="relative">
-                            <AlignLeft className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
-                            <textarea
-                                rows={2}
-                                placeholder="Detalles..."
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-400 rounded focus:border-black focus:ring-1 focus:ring-black resize-none outline-none transition-all text-black"
-                                value={formData.notes}
-                                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Botones */}
-                    <div className="pt-4 flex gap-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2 border border-black text-black font-bold uppercase text-xs rounded hover:bg-gray-100 transition-colors"
-                        >
-                            Cancelar
-                        </button>
+                    <div className="flex gap-3">
                         <button
                             type="submit"
-                            disabled={loading}
-                            className="flex-[2] px-4 py-2 bg-black text-white font-bold uppercase text-xs rounded hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            form="appointment-form"
+                            disabled={loading || !isFormValid} // Deshabilitado si carga O si el form no es válido
+                            className={`
+                                flex-[2] text-white font-bold text-sm uppercase tracking-wide py-4 rounded-xl shadow-xl shadow-slate-900/10 
+                                transition-all flex justify-center items-center gap-2 
+                                ${!isFormValid || loading ? 'opacity-50 cursor-not-allowed bg-slate-400' : 'bg-slate-900 hover:bg-slate-800 transform active:scale-[0.99]'}
+                            `}
                         >
                             {loading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-5 w-5 animate-spin" />
                             ) : (
-                                "Agendar Cita"
+                                <>
+                                    <Save className="h-5 w-5" />
+                                    Confirmar Cita
+                                </>
                             )}
                         </button>
                     </div>
-                </form>
+                </div>
+
             </div>
         </div>
     );
