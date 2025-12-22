@@ -44,13 +44,15 @@ export function useAgenda() {
 
     const isAdmin = profile?.role === 'admin';
 
-    // 1. CARGAR USUARIOS
+    // 1. CARGAR USUARIOS (FILTRADO POR ROL VENDEDOR)
     const fetchAgents = useCallback(async () => {
         if (!isAdmin) return;
         
         const { data } = await supabase
             .from('profiles')
             .select('*')
+            .eq('status', 'activo') // Solo usuarios activos
+            .eq('role', 'vendedor') // <--- CAMBIO: Solo Vendedores
             .order('full_name', { ascending: true });
             
         if (data) setAgents(data);

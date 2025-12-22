@@ -82,12 +82,14 @@ export function useLeads() {
         else setIsRefetching(false);
     }, [supabase, user]);
 
+    // 2. CARGA DE VENDEDORES (MODIFICADO)
     const fetchSellers = useCallback(async () => {
         if (!user) return;
         const { data } = await supabase
             .from('profiles')
             .select('id, full_name')
             .eq('status', 'activo')
+            .eq('role', 'vendedor') // <--- AQUÍ ESTÁ EL CAMBIO: Filtramos solo vendedores
             .order('full_name');
             
         if (data) {
@@ -125,8 +127,7 @@ export function useLeads() {
 
     // --- PROCESAMIENTO ---
     const processedLeads = useMemo(() => {
-        // FILTRO PRINCIPAL: Excluimos el ID específico solicitado ANTES de cualquier otro filtro.
-        // Esto asegura que no aparezca en búsquedas, filtros de estado, etc.
+        // Mantenemos la exclusión del ID específico que pediste anteriormente
         let filtered = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
 
         if (filters.search.trim()) {
@@ -199,7 +200,7 @@ export function useLeads() {
 
     // --- CÁLCULO DE INTERACCIONES ---
     const interactionsCount = useMemo(() => {
-        // También aplicamos el filtro de exclusión aquí para el conteo de interacciones
+        // También aplicamos el filtro de exclusión aquí
         let interactions = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
         
         if (filters.assignedTo !== 'all') {

@@ -55,8 +55,8 @@ export function useShowroom() {
                 const { data } = await supabase
                     .from('profiles')
                     .select('id, full_name')
-                    // Opcional: filtrar solo usuarios activos o con rol de ventas
-                    // .eq('status', 'active') 
+                    .eq('status', 'activo') // Filtramos activos
+                    .eq('role', 'vendedor') // <--- CAMBIO: Filtramos solo Vendedores
                     .order('full_name');
                 
                 if (data) setSalespersons(data);
