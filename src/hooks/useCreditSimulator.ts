@@ -61,7 +61,7 @@ export function useCreditSimulator() {
         
         // Inicializamos en modo porcentaje por defecto
         downPaymentMode: 'percentage',
-        customDownPaymentAmount: 3000, // 30% de 10000
+        customDownPaymentAmount: 6000, // 60% de 10000
         
         termMonths: 36,
         interestRateMonthly: 1.5,
