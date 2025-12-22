@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const navItems = [
-    { href: "/leads", label: "Leads" },
-    { href: "/showroom", label: "Showroom" },
-    { href: "/agenda", label: "Agenda" },
-    { href: "/inventory", label: "Inventario" },
-    { href: "/requests", label: "Pedidos" },
-    { href: "/tareas", label: "Tareas" },
-    { href: "/finance", label: "Financiamiento" },
-    
-
-];
+import { useAuth } from "@/hooks/useAuth"; // Importamos el hook de autenticación
 
 export function MainNav({ className }: { className?: string }) {
     const pathname = usePathname();
+    const { profile } = useAuth(); // Obtenemos el perfil del usuario actual
+
+    // Definimos los items dentro del componente para acceder a 'profile'
+    const navItems = [
+        { href: "/leads", label: "Leads" },
+        { href: "/showroom", label: "Showroom" },
+        { href: "/agenda", label: "Agenda" },
+        { href: "/inventory", label: "Inventario" },
+        { href: "/requests", label: "Pedidos" },
+        { href: "/tareas", label: "Tareas" },
+        { href: "/finance", label: "Financiamiento" },
+        // Condicional: Solo agregamos este objeto al array si el rol es 'admin'
+        ...(profile?.role === 'admin' ? [{ href: "/report", label: "Admin" }] : []),
+    ];
 
     return (
         <nav className={`flex items-center space-x-1 ${className}`}>
@@ -27,8 +30,8 @@ export function MainNav({ className }: { className?: string }) {
                         key={item.href}
                         href={item.href}
                         className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${isActive
-                                ? "bg-slate-900 text-white shadow-sm"
-                                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                            ? "bg-slate-900 text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                             }`}
                     >
                         {item.label}
