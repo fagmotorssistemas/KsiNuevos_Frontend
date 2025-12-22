@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Calculator, RefreshCcw, Printer, Save, Loader2 } from "lucide-react";
+import { Calculator, RefreshCcw, Printer, Loader2 } from "lucide-react"; // Removed Save icon
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
 // ACTUALIZACIÓN: Importamos los componentes desde sus nuevos archivos individuales
 import { CreditForm } from "@/components/features/financing/CreditForm";
@@ -31,14 +31,13 @@ export default function CreditSimulatorPage() {
     const [includeTableInPdf, setIncludeTableInPdf] = useState(false);
 
     const handlePrint = async () => {
-        // Opción: Guardar automáticamente al imprimir si deseas
-        // await saveProforma(); 
+        // Guardamos automáticamente antes de imprimir
+        await saveProforma();
+        // Abrimos el diálogo de impresión
         window.print();
     };
 
-    const handleSave = async () => {
-        await saveProforma();
-    };
+    // Eliminamos handleSave ya que se integra en handlePrint
 
     const handleWhatsApp = () => {
         // Limpiar caracteres no numéricos
@@ -99,23 +98,19 @@ export default function CreditSimulatorPage() {
                             <span className="hidden sm:inline">Reiniciar</span>
                         </button>
 
-                        {/* NUEVO BOTÓN DE GUARDAR */}
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="flex items-center gap-2 px-4 py-2 text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition-colors font-medium shadow-md"
-                            title="Guardar en Base de Datos"
-                        >
-                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            Reportar
-                        </button>
+                        {/* Botón Reportar ELIMINADO */}
 
                         <button
                             onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium shadow-md shadow-blue-600/20"
+                            disabled={isSaving} // Deshabilitamos si está guardando
+                            className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium shadow-md shadow-blue-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            <Printer className="w-4 h-4" />
-                            Imprimir / PDF
+                            {isSaving ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Printer className="w-4 h-4" />
+                            )}
+                            {isSaving ? 'Guardando...' : 'Imprimir / PDF'}
                         </button>
 
                         {/* BOTÓN WHATSAPP */}
