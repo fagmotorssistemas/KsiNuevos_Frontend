@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useSearchParams } from "next/navigation"; // Importar hook de URL
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import type { Database } from "@/types/supabase";
 
@@ -13,6 +13,11 @@ export interface SimulatorValues {
     clientAddress: string;
     vehiclePrice: number;
     downPaymentPercentage: number;
+    
+    // NUEVOS CAMPOS PARA SOLUCIONAR EL BUG
+    downPaymentMode: 'percentage' | 'amount'; // 'percentage' | 'amount'
+    customDownPaymentAmount: number; // Guarda el valor exacto en $
+    
     termMonths: number;
     interestRateMonthly: number;
     adminFee: number;
@@ -38,7 +43,7 @@ export interface SimulatorResults {
 
 export function useCreditSimulator() {
     const { supabase, user } = useAuth();
-    const searchParams = useSearchParams(); // Hook para leer parámetros
+    const searchParams = useSearchParams();
 
     // --- ESTADOS ---
     const [inventory, setInventory] = useState<InventoryCarRow[]>([]);
@@ -52,7 +57,12 @@ export function useCreditSimulator() {
         clientPhone: "",
         clientAddress: "",
         vehiclePrice: 10000,
-        downPaymentPercentage: 60,
+        downPaymentPercentage: 60, // Valor inicial razonable
+        
+        // Inicializamos en modo porcentaje por defecto
+        downPaymentMode: 'percentage',
+        customDownPaymentAmount: 3000, // 30% de 10000
+        
         termMonths: 36,
         interestRateMonthly: 1.5,
         adminFee: 386,
@@ -80,7 +90,7 @@ export function useCreditSimulator() {
             setInventory(data || []);
         }
         setIsLoadingInventory(false);
-        return data || []; // Retornamos datos para usarlos inmediatamente
+        return data || [];
     }, [supabase]);
 
     // --- 2. INICIALIZACIÓN INTELIGENTE ---
@@ -88,7 +98,6 @@ export function useCreditSimulator() {
         const init = async () => {
             const loadedInventory = await fetchInventory();
             
-            // Leer parámetros de URL
             const urlName = searchParams.get('clientName');
             const urlPhone = searchParams.get('clientPhone');
             const urlClientId = searchParams.get('clientId');
@@ -97,13 +106,10 @@ export function useCreditSimulator() {
             setValues(prev => {
                 let updated = { ...prev };
                 
-                // Rellenar datos cliente
                 if (urlName) updated.clientName = urlName;
                 if (urlPhone) updated.clientPhone = urlPhone;
                 if (urlClientId) updated.clientId = urlClientId;
 
-                // Intentar encontrar el vehículo si hay un término de búsqueda
-                // (Estrategia simple: Coincidencia en Marca y Modelo)
                 if (vehicleSearch && loadedInventory.length > 0) {
                     const foundCar = loadedInventory.find(car => {
                         const fullName = `${car.brand} ${car.model}`.toLowerCase();
@@ -114,6 +120,8 @@ export function useCreditSimulator() {
                         updated.selectedVehicle = foundCar;
                         updated.vehiclePrice = foundCar.price || 0;
                         updated.insuranceFee = Math.round((foundCar.price || 0) * 0.03);
+                        // Al cambiar vehículo, solemos querer mantener el porcentaje o resetear a uno estándar
+                        // Mantenemos el modo actual o reseteamos a porcentaje si se prefiere
                     }
                 }
 
@@ -122,16 +130,27 @@ export function useCreditSimulator() {
         };
 
         init();
-    }, [fetchInventory, searchParams]); // Se ejecuta al montar y cuando cambian params
+    }, [fetchInventory, searchParams]);
 
-    // --- 3. Lógica de Negocio ---
+    // --- 3. Lógica de Negocio (SOLUCIÓN AQUÍ) ---
     const results = useMemo<SimulatorResults>(() => {
-        const downPaymentAmount = values.vehiclePrice * (values.downPaymentPercentage / 100);
+        
+        // LÓGICA CRÍTICA: Determinar la entrada exacta
+        let downPaymentAmount = 0;
+        
+        if (values.downPaymentMode === 'amount') {
+            // Si el usuario escribió un monto ($7000), USAMOS ESE EXACTAMENTE
+            downPaymentAmount = values.customDownPaymentAmount;
+        } else {
+            // Si el usuario usa porcentaje, calculamos
+            downPaymentAmount = values.vehiclePrice * (values.downPaymentPercentage / 100);
+        }
+
         const vehicleBalance = values.vehiclePrice - downPaymentAmount;
         const totalCapital = vehicleBalance + values.adminFee + values.gpsFee + values.insuranceFee;
         const totalInterest = totalCapital * (values.interestRateMonthly / 100) * values.termMonths;
         const totalDebt = totalCapital + totalInterest;
-        const monthlyPayment = totalDebt / values.termMonths;
+        const monthlyPayment = values.termMonths > 0 ? totalDebt / values.termMonths : 0;
 
         const schedule = Array.from({ length: values.termMonths }).map((_, index) => {
             const date = new Date(values.startDate);
@@ -150,19 +169,37 @@ export function useCreditSimulator() {
     const updateField = (field: keyof SimulatorValues, value: any) => {
         setValues(prev => {
             const updates: any = { [field]: value };
+            
+            // Si seleccionan vehículo, actualizamos precio
             if (field === 'selectedVehicle' && value) {
                 const car = value as InventoryCarRow;
                 updates.vehiclePrice = car.price || 0; 
+                // Opcional: Al cambiar carro, ¿reseteamos a porcentaje?
+                // updates.downPaymentMode = 'percentage'; 
             }
+
+            // Si el usuario edita el PORCENTAJE manualmente, cambiamos a modo porcentaje
+            if (field === 'downPaymentPercentage') {
+                updates.downPaymentMode = 'percentage';
+            }
+
             return { ...prev, ...updates };
         });
     };
 
+    // ESTA ES LA FUNCIÓN QUE CAUSABA EL BUG - AHORA CORREGIDA
     const updateDownPaymentByAmount = (amount: number) => {
-        if (values.vehiclePrice > 0) {
-            const percentage = (amount / values.vehiclePrice) * 100;
-            setValues(prev => ({ ...prev, downPaymentPercentage: percentage }));
-        }
+        setValues(prev => {
+            const price = prev.vehiclePrice > 0 ? prev.vehiclePrice : 1;
+            const newPercentage = (amount / price) * 100;
+
+            return {
+                ...prev,
+                downPaymentMode: 'amount', // Activamos modo monto exacto
+                customDownPaymentAmount: amount, // Guardamos los $7000 exactos
+                downPaymentPercentage: newPercentage // Actualizamos el % solo visualmente
+            };
+        });
     };
 
     const resetDefaults = () => setValues(defaultValues);
@@ -190,7 +227,10 @@ export function useCreditSimulator() {
                 ? `${values.selectedVehicle.brand} ${values.selectedVehicle.model} ${values.selectedVehicle.year}` 
                 : 'Vehículo Personalizado / No listado',
             vehicle_price: values.vehiclePrice,
+            
+            // Guardamos el monto final calculado (que ahora será exacto)
             down_payment_amount: results.downPaymentAmount,
+            
             term_months: values.termMonths,
             interest_rate: values.interestRateMonthly,
             monthly_payment: results.monthlyPayment,

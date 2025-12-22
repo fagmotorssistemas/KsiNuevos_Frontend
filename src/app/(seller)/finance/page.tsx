@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import { Calculator, RefreshCcw, Printer, Loader2 } from "lucide-react"; // Removed Save icon
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
 // ACTUALIZACIÓN: Importamos los componentes desde sus nuevos archivos individuales
@@ -14,7 +14,8 @@ const WhatsAppIcon = () => (
     </svg>
 );
 
-export default function CreditSimulatorPage() {
+// Componente interno con toda la lógica (ya no se exporta por defecto)
+function CreditSimulatorContent() {
     const {
         values,
         results,
@@ -165,5 +166,21 @@ export default function CreditSimulatorPage() {
                 }
             `}</style>
         </div>
+    );
+}
+
+// Exportación por defecto envuelta en Suspense para solucionar el error de compilación
+export default function CreditSimulatorPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <span className="text-slate-500 text-sm font-medium">Cargando cotizador...</span>
+                </div>
+            </div>
+        }>
+            <CreditSimulatorContent />
+        </Suspense>
     );
 }
