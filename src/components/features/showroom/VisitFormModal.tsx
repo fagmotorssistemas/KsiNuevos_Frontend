@@ -14,7 +14,8 @@ import {
     ChevronDown,
     Pencil,
     Phone,
-    AlertCircle
+    AlertCircle,
+    Car
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem, ShowroomVisit } from "./constants";
@@ -26,11 +27,12 @@ interface VisitFormModalProps {
     visitToEdit?: ShowroomVisit | null;
 }
 
-// Interfaz para el estado del formulario para mejor tipado
+// Actualizamos la interfaz para incluir el campo manual
 interface VisitFormData {
     client_name: string;
     phone: string;
     inventory_id: string;
+    manual_vehicle: string; // Nuevo campo
     source: VisitSource;
     visit_start_time: string;
     visit_end_time: string;
@@ -46,9 +48,10 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     const [isLoadingInventory, setIsLoadingInventory] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // --- ESTADOS PARA EL BUSCADOR ---
+    // --- ESTADOS PARA EL BUSCADOR Y MODO MANUAL ---
     const [searchTerm, setSearchTerm] = useState("");
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isManualVehicle, setIsManualVehicle] = useState(false); // Nuevo estado para el toggle
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Estado del Formulario
@@ -56,6 +59,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         client_name: '',
         phone: '',
         inventory_id: '',
+        manual_vehicle: '', // Inicializar vacío
         source: 'showroom' as VisitSource,
         visit_start_time: '',
         visit_end_time: '',
@@ -93,11 +97,21 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     ? visitToEdit.visit_end.split('T')[1].slice(0, 5)
                     : '';
 
+                // Determinar si es vehículo manual o de inventario
+                // @ts-ignore - Asumiendo que ya agregaste la columna manual_vehicle_description
+                const manualDesc = visitToEdit.manual_vehicle_description || '';
+                const hasInventoryId = !!visitToEdit.inventory_id;
+                
+                // Si no tiene ID de inventario pero tiene descripción manual, activamos el modo manual
+                const isManualMode = !hasInventoryId && !!manualDesc;
+                setIsManualVehicle(isManualMode);
+
                 setFormData({
                     client_name: visitToEdit.client_name,
                     // @ts-ignore
                     phone: visitToEdit.phone || '',
                     inventory_id: visitToEdit.inventory_id || '',
+                    manual_vehicle: manualDesc,
                     source: visitToEdit.source as VisitSource,
                     visit_start_time: startTime,
                     visit_end_time: endTime,
@@ -121,6 +135,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     client_name: '',
                     phone: '',
                     inventory_id: '',
+                    manual_vehicle: '',
                     source: 'showroom',
                     visit_start_time: currentTime,
                     visit_end_time: '',
@@ -129,6 +144,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     observation: ''
                 });
                 setSearchTerm("");
+                setIsManualVehicle(false);
             }
         }
     }, [isOpen, visitToEdit, supabase]);
@@ -151,7 +167,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     });
 
     const handleSelectCar = (car: InventoryItem) => {
-        setFormData({ ...formData, inventory_id: car.id });
+        setFormData({ ...formData, inventory_id: car.id, manual_vehicle: '' });
         setSearchTerm(`${car.brand} ${car.model} (${car.year})`);
         setIsDropdownOpen(false);
     };
@@ -164,19 +180,17 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError(null); // Limpiar errores previos
+        setError(null);
 
         // --- VALIDACIÓN DE CAMPOS ---
-        // Ahora incluimos TODOS los campos en la validación
         const requiredFields = [
             { key: 'client_name', label: 'Nombre del Cliente' },
             { key: 'phone', label: 'Teléfono' },
             { key: 'source', label: 'Medio de Visita' },
-            { key: 'inventory_id', label: 'Vehículo de Interés' }, // Ahora obligatorio
             { key: 'visit_start_time', label: 'Hora Inicio' },
-            { key: 'visit_end_time', label: 'Hora Fin' }, // Ahora obligatorio
-            { key: 'credit_status', label: 'Estatus Crédito' }, // Ahora obligatorio
-            { key: 'observation', label: 'Observaciones' } // Ahora obligatorio
+            { key: 'visit_end_time', label: 'Hora Fin' },
+            { key: 'credit_status', label: 'Estatus Crédito' },
+            { key: 'observation', label: 'Observaciones' }
         ];
 
         const missingFields = requiredFields.filter(field => {
@@ -184,8 +198,18 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             return !value || value.toString().trim() === '';
         });
 
+        // Validación condicional del vehículo
+        if (isManualVehicle) {
+            if (!formData.manual_vehicle.trim()) {
+                missingFields.push({ key: 'manual_vehicle', label: 'Descripción del Vehículo' });
+            }
+        } else {
+            if (!formData.inventory_id) {
+                missingFields.push({ key: 'inventory_id', label: 'Vehículo de Inventario' });
+            }
+        }
+
         if (missingFields.length > 0) {
-            // Mensaje de error más genérico si son muchos, o específico si son pocos
             if (missingFields.length > 3) {
                 setError("Por favor completa todos los campos obligatorios marcados en rojo.");
             } else {
@@ -198,20 +222,22 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         if (!user) return;
         setIsSubmitting(true);
 
-        // Determinamos la fecha base
         let dateBaseStr = new Date().toISOString().split('T')[0];
         if (isEditing && visitToEdit) {
             dateBaseStr = visitToEdit.visit_start.split('T')[0];
         }
 
         const startFull = `${dateBaseStr}T${formData.visit_start_time}:00Z`;
-        const endFull = `${dateBaseStr}T${formData.visit_end_time}:00Z`; // Ya no es opcional
+        const endFull = `${dateBaseStr}T${formData.visit_end_time}:00Z`;
 
         const payload = {
             salesperson_id: user.id,
             client_name: formData.client_name,
             phone: formData.phone,
-            inventory_id: formData.inventory_id,
+            // Lógica condicional para guardar
+            inventory_id: isManualVehicle ? null : formData.inventory_id,
+            manual_vehicle_description: isManualVehicle ? formData.manual_vehicle : null,
+            
             source: formData.source,
             visit_start: startFull,
             visit_end: endFull,
@@ -260,8 +286,11 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm";
     const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
 
-    // Función helper para clases de error condicionales
     const getErrorClass = (fieldName: keyof VisitFormData) => {
+        // Lógica especial para el campo de vehículo que depende del modo
+        if (fieldName === 'inventory_id' && isManualVehicle) return '';
+        if (fieldName === 'manual_vehicle' && !isManualVehicle) return '';
+
         return error && (!formData[fieldName] || formData[fieldName].toString().trim() === '')
             ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/10'
             : '';
@@ -357,54 +386,98 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                         </div>
 
                         <div className="space-y-6">
-                            <div ref={dropdownRef} className="relative z-20">
-                                {/* VEHÍCULO AHORA OBLIGATORIO */}
-                                <InputLabel label="Vehículo de Interés" required />
-                                <div className="relative">
-                                    <div className={iconContainerClass}>
-                                        {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                                    </div>
-                                    {/* Aplicamos la clase de error también al input de búsqueda si inventory_id está vacío */}
-                                    <input
-                                        type="text"
-                                        className={`${inputClasses} pr-10 ${getErrorClass('inventory_id')}`}
-                                        placeholder="Buscar por marca, modelo o año..."
-                                        value={searchTerm}
-                                        onChange={(e) => {
-                                            setSearchTerm(e.target.value);
-                                            setIsDropdownOpen(true);
-                                            if (e.target.value === '') setFormData(prev => ({ ...prev, inventory_id: '' }));
-                                        }}
-                                        onFocus={() => setIsDropdownOpen(true)}
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer hover:text-slate-600">
-                                        {searchTerm ? (
-                                            <X className="h-5 w-5" onClick={handleClearCarSelection} />
-                                        ) : (
-                                            <ChevronDown className="h-5 w-5" onClick={() => setIsDropdownOpen(!isDropdownOpen)} />
-                                        )}
-                                    </div>
+                            {/* SECCIÓN VEHÍCULO MEJORADA */}
+                            <div className="relative z-20">
+                                <div className="flex justify-between items-center mb-2">
+                                    <InputLabel label="Vehículo de Interés" required />
+                                    
+                                    {/* SWITCH MANUAL / INVENTARIO */}
+                                    <label className="flex items-center gap-2 cursor-pointer text-xs select-none p-1.5 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isManualVehicle}
+                                            onChange={(e) => {
+                                                setIsManualVehicle(e.target.checked);
+                                                // Opcional: limpiar campos al cambiar
+                                                if (e.target.checked) {
+                                                    setSearchTerm("");
+                                                    setFormData(prev => ({...prev, inventory_id: ''}));
+                                                } else {
+                                                    setFormData(prev => ({...prev, manual_vehicle: ''}));
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                        />
+                                        <span className={`font-medium ${isManualVehicle ? 'text-slate-900' : 'text-slate-500'}`}>
+                                            No está en inventario
+                                        </span>
+                                    </label>
                                 </div>
 
-                                {isDropdownOpen && (
-                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-200">
-                                        {filteredInventory.length > 0 ? (
-                                            <ul className="py-2">
-                                                {/* Eliminada la opción de "Ninguno específico" ya que ahora es obligatorio seleccionar algo */}
-                                                {filteredInventory.map(car => (
-                                                    <li key={car.id} onClick={() => handleSelectCar(car)} className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-medium text-slate-800 group-hover:text-slate-900">{car.brand} {car.model}</span>
-                                                            <span className="text-xs text-slate-400">Año {car.year} • {car.status}</span>
-                                                        </div>
-                                                        <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-1 rounded text-xs group-hover:bg-white border border-transparent group-hover:border-slate-200">
-                                                            ${car.price?.toLocaleString()}
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="p-4 text-center text-slate-400 text-sm">No se encontraron vehículos.</div>
+                                {isManualVehicle ? (
+                                    /* INPUT MANUAL */
+                                    <div className="relative animate-in fade-in duration-200">
+                                        <div className={iconContainerClass}><Car className="h-5 w-5" /></div>
+                                        <input
+                                            type="text"
+                                            className={`${inputClasses} ${getErrorClass('manual_vehicle')}`}
+                                            placeholder="Escribe Marca, Modelo y Año (Ej: Toyota Hilux 2024)"
+                                            value={formData.manual_vehicle}
+                                            onChange={(e) => setFormData({ ...formData, manual_vehicle: e.target.value })}
+                                            autoFocus
+                                        />
+                                        <p className="text-xs text-slate-400 mt-1.5 ml-1">
+                                            Ingresa manualmente los detalles del auto que busca el cliente.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    /* BUSCADOR INVENTARIO (Lógica Original) */
+                                    <div ref={dropdownRef} className="relative animate-in fade-in duration-200">
+                                        <div className="relative">
+                                            <div className={iconContainerClass}>
+                                                {isLoadingInventory ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className={`${inputClasses} pr-10 ${getErrorClass('inventory_id')}`}
+                                                placeholder="Buscar por marca, modelo o año..."
+                                                value={searchTerm}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setIsDropdownOpen(true);
+                                                    if (e.target.value === '') setFormData(prev => ({ ...prev, inventory_id: '' }));
+                                                }}
+                                                onFocus={() => setIsDropdownOpen(true)}
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer hover:text-slate-600">
+                                                {searchTerm ? (
+                                                    <X className="h-5 w-5" onClick={handleClearCarSelection} />
+                                                ) : (
+                                                    <ChevronDown className="h-5 w-5" onClick={() => setIsDropdownOpen(!isDropdownOpen)} />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {isDropdownOpen && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-200">
+                                                {filteredInventory.length > 0 ? (
+                                                    <ul className="py-2">
+                                                        {filteredInventory.map(car => (
+                                                            <li key={car.id} onClick={() => handleSelectCar(car)} className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-colors">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium text-slate-800 group-hover:text-slate-900">{car.brand} {car.model}</span>
+                                                                    <span className="text-xs text-slate-400">Año {car.year} • {car.status}</span>
+                                                                </div>
+                                                                <span className="font-semibold text-slate-900 bg-slate-100 px-2 py-1 rounded text-xs group-hover:bg-white border border-transparent group-hover:border-slate-200">
+                                                                    ${car.price?.toLocaleString()}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <div className="p-4 text-center text-slate-400 text-sm">No se encontraron vehículos.</div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 )}
@@ -424,7 +497,6 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                     </div>
                                 </div>
                                 <div>
-                                    {/* HORA FIN AHORA OBLIGATORIA */}
                                     <InputLabel label="Hora Fin" required />
                                     <div className="relative">
                                         <div className={iconContainerClass}><Clock className="h-5 w-5 text-slate-300" /></div>
@@ -471,7 +543,6 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                             </div>
 
                             <div>
-                                {/* OBSERVACIONES AHORA OBLIGATORIAS */}
                                 <InputLabel label="Observaciones / Resultado" required />
                                 <div className="relative">
                                     <div className="absolute left-4 top-4 text-slate-400 pointer-events-none"><FileText className="h-5 w-5" /></div>
