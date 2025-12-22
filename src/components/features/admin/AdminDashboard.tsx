@@ -1,15 +1,14 @@
 "use client";
 
 import { useAdminStats } from "@/hooks/useAdminStats";
-import { AdminToolbar } from "./AdminToolbar";
+// Importamos desde la carpeta de componentes features, no relativa
+import { AdminToolbar } from "@/components/features/admin/AdminToolbar"; 
 import { 
-    Users, 
     MessageCircle, 
     MapPin, 
     CalendarCheck, 
     Car, 
-    FileText, 
-    TrendingUp
+    FileText
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -18,8 +17,8 @@ export default function AdminDashboard() {
         isLoading,
         dateFilter,
         setDateFilter,
-        customRange,
-        setCustomRange,
+        customDate,      // <--- CORREGIDO: Usamos customDate
+        setCustomDate,   // <--- CORREGIDO: Usamos setCustomDate
         reload
     } = useAdminStats();
 
@@ -49,8 +48,8 @@ export default function AdminDashboard() {
             <AdminToolbar 
                 currentFilter={dateFilter}
                 onFilterChange={setDateFilter}
-                customRange={customRange}
-                onCustomRangeChange={setCustomRange}
+                customDate={customDate}           // <--- CORREGIDO: Pasamos la fecha única
+                onCustomDateChange={setCustomDate} // <--- CORREGIDO: Pasamos el setter de fecha única
                 onRefresh={reload}
                 isLoading={isLoading}
             />

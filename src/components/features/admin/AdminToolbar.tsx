@@ -1,16 +1,15 @@
 import { 
-    Calendar, 
-    RefreshCw, 
-    Download
+    RefreshCw
 } from "lucide-react";
 import type { AdminDateFilter } from "@/hooks/useAdminStats";
-import { Button } from "@/components/ui/buttontable";
+import { Button } from "@/components/ui/buttontable"; 
 
 interface AdminToolbarProps {
     currentFilter: AdminDateFilter;
     onFilterChange: (filter: AdminDateFilter) => void;
-    customDate: string; // Recibimos string
-    onCustomDateChange: (date: string) => void; // Setter de string
+    // CAMBIO: Ahora recibimos un string simple, no un objeto rango
+    customDate: string;
+    onCustomDateChange: (date: string) => void;
     onRefresh: () => void;
     isLoading: boolean;
 }
@@ -26,7 +25,7 @@ export function AdminToolbar({
     return (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
             
-            {/* Selector de Rangos Rápidos */}
+            {/* Selector de Filtros Rápidos */}
             <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
                 <FilterButton 
                     active={currentFilter === 'today'} 
@@ -50,10 +49,10 @@ export function AdminToolbar({
                 />
             </div>
 
-            {/* Selector de Fecha Única (Solo visible si 'custom' está activo) */}
+            {/* Selector de Fecha ÚNICA (Reemplaza al rango) */}
             {currentFilter === 'custom' && (
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200 animate-in fade-in">
-                    <span className="text-slate-500 text-xs font-medium pl-1">Seleccionar día:</span>
+                    <span className="text-xs text-slate-500 font-medium pl-1">Ver día:</span>
                     <input 
                         type="date" 
                         value={customDate}
@@ -80,7 +79,7 @@ export function AdminToolbar({
     );
 }
 
-// Subcomponente simple para los botones de filtro
+// Subcomponente de botón
 function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
     return (
         <button
