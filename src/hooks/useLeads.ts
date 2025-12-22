@@ -65,14 +65,11 @@ export function useLeads() {
         if (showLoading) setIsLoading(true);
         else setIsRefetching(true);
 
-        // ESTRATEGIA: Traemos los leads ordenados por 'updated_at' (última modificación).
-        // Esto garantiza que cualquier lead que hayas tocado hoy (sea nuevo o viejo) 
-        // esté incluido en la descarga, haciendo que el contador de interacciones sea exacto.
         const { data, error } = await supabase
             .from('leads')
             .select('*, interested_cars(*), profiles:assigned_to(full_name)')
-            .order('updated_at', { ascending: false }) // <--- EL CAMBIO CLAVE
-            .limit(10000); // <--- Límite aumentado a 10,000 (Seguro para el navegador)
+            .order('updated_at', { ascending: false }) 
+            .limit(10000);
 
         if (error) {
             console.error("Error cargando leads:", error);
@@ -128,7 +125,9 @@ export function useLeads() {
 
     // --- PROCESAMIENTO ---
     const processedLeads = useMemo(() => {
-        let filtered = [...leads];
+        // FILTRO PRINCIPAL: Excluimos el ID específico solicitado ANTES de cualquier otro filtro.
+        // Esto asegura que no aparezca en búsquedas, filtros de estado, etc.
+        let filtered = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
 
         if (filters.search.trim()) {
             const query = filters.search.toLowerCase();
@@ -172,8 +171,6 @@ export function useLeads() {
         }
 
         // RE-ORDENAMIENTO VISUAL
-        // Aunque descargamos por 'updated_at' para tener los datos frescos,
-        // aquí los reordenamos visualmente por lo que el usuario quiera (default: created_at)
         return filtered.sort((a, b) => {
             const col = sortDescriptor.column as keyof LeadWithDetails;
             if (col === 'assigned_to') {
@@ -202,7 +199,8 @@ export function useLeads() {
 
     // --- CÁLCULO DE INTERACCIONES ---
     const interactionsCount = useMemo(() => {
-        let interactions = leads;
+        // También aplicamos el filtro de exclusión aquí para el conteo de interacciones
+        let interactions = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
         
         if (filters.assignedTo !== 'all') {
             interactions = interactions.filter(l => l.assigned_to === filters.assignedTo);
