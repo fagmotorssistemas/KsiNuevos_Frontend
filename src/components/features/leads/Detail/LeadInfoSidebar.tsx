@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Edit3, Loader2, CheckCircle2, Car, Gauge, DollarSign, CreditCard } from "lucide-react";
+import { Edit3, Loader2, CheckCircle2, Car, DollarSign, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea, Input } from "./ui-components";
 import type { LeadWithDetails } from "../../../../hooks/useLeads";
 
-type LeadWithExtension = LeadWithDetails & { test_drive_done?: boolean | null };
+// Hemos eliminado la extensión manual de test_drive_done
+type LeadWithExtension = LeadWithDetails;
 
 export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const { supabase } = useAuth();
@@ -13,8 +14,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const [resume, setResume] = useState(lead.resume || "");
     const [isSavingResume, setIsSavingResume] = useState(false);
 
-    const [testDriveDone, setTestDriveDone] = useState(lead.test_drive_done || false);
-    const [isUpdatingTestDrive, setIsUpdatingTestDrive] = useState(false);
+    // ELIMINADO: Estados de Test Drive (testDriveDone, isUpdatingTestDrive)
 
     // NUEVO: Estados Financieros Editables
     const [budget, setBudget] = useState(lead.budget?.toString() || "");
@@ -29,18 +29,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
         setIsSavingResume(false);
     };
 
-    // Toggle Test Drive
-    const handleToggleTestDrive = async () => {
-        const newValue = !testDriveDone;
-        setTestDriveDone(newValue);
-        setIsUpdatingTestDrive(true);
-        const { error } = await supabase.from('leads').update({ test_drive_done: newValue }).eq('id', lead.id);
-        if (error) {
-            setTestDriveDone(!newValue); // Revertir en error
-            alert("Error al actualizar");
-        }
-        setIsUpdatingTestDrive(false);
-    };
+    // ELIMINADO: handleToggleTestDrive
 
     // NUEVO: Guardar Datos Financieros (Al salir del input o cambiar toggle)
     const handleSaveFinance = async (newBudget?: string, newFinancing?: boolean) => {
@@ -85,29 +74,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
                 />
             </div>
 
-            {/* 2. TEST DRIVE */}
-            <div className="mb-8">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Gauge className="h-3 w-3" /> Test Drive
-                </label>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                    <div>
-                        <span className="text-sm font-semibold text-slate-800 block">
-                            {testDriveDone ? "Realizado" : "Pendiente"}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                            {testDriveDone ? "Prueba completada." : "Cliente aún no prueba."}
-                        </span>
-                    </div>
-                    <button
-                        onClick={handleToggleTestDrive}
-                        disabled={isUpdatingTestDrive}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${testDriveDone ? 'bg-emerald-500' : 'bg-slate-200'} ${isUpdatingTestDrive ? 'opacity-50' : ''}`}
-                    >
-                        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${testDriveDone ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                </div>
-            </div>
+            {/* 2. TEST DRIVE - SECCIÓN ELIMINADA */}
 
             {/* 3. VEHÍCULOS */}
             <div className="mb-8">
