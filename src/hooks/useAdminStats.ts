@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import type { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase"; // <--- 1. Importamos los tipos de la BD
 
 export type AdminDateFilter = 'today' | '7days' | 'thisMonth' | 'custom';
 
@@ -44,14 +44,8 @@ export function useAdminStats() {
             start.setDate(1);
             start.setHours(0, 0, 0, 0);
         } else if (dateFilter === 'custom') {
-            // Desglosamos la fecha string (YYYY-MM-DD) para crear la fecha local correctamente
-            // y evitar problemas de zona horaria UTC.
             const [year, month, day] = customDate.split('-').map(Number);
-
-            // Inicio: 00:00:00.000
             start = new Date(year, month - 1, day, 0, 0, 0, 0);
-            
-            // Fin: 23:59:59.999
             end = new Date(year, month - 1, day, 23, 59, 59, 999);
         }
 
@@ -60,6 +54,57 @@ export function useAdminStats() {
             endISO: end.toISOString()
         };
     }, [dateFilter, customDate]);
+
+    // --- FUNCIÓN HELPER PARA DESCARGA MASIVA (Evita el límite de 1000 filas) ---
+    const fetchAllData = useCallback(async (
+        table: keyof Database['public']['Tables'], // <--- 2. CORRECCIÓN: Usamos el tipo exacto de tabla
+        select: string, 
+        dateCol: string, 
+        startISO: string, 
+        endISO: string,
+        additionalFilters?: (query: any) => any
+    ) => {
+        let allRows: any[] = [];
+        let hasMore = true;
+        let page = 0;
+        const PAGE_SIZE = 1000;
+
+        while (hasMore) {
+            let query = supabase
+                .from(table)
+                .select(select)
+                .gte(dateCol, startISO)
+                .lte(dateCol, endISO)
+                .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+            // Aplicar filtros extra si existen (ej: not nulls)
+            if (additionalFilters) {
+                query = additionalFilters(query);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error(`Error fetching ${table} page ${page}:`, error);
+                throw error;
+            }
+
+            if (data) {
+                allRows = [...allRows, ...data];
+                // Si descargamos menos del límite, significa que ya no hay más datos
+                if (data.length < PAGE_SIZE) {
+                    hasMore = false;
+                }
+            } else {
+                hasMore = false;
+            }
+            page++;
+            
+            // Freno de seguridad para evitar bucles infinitos en casos extremos
+            if (page > 50) hasMore = false; 
+        }
+        return allRows;
+    }, [supabase]);
 
     const fetchStats = useCallback(async () => {
         setIsLoading(true);
@@ -91,69 +136,52 @@ export function useAdminStats() {
                 };
             });
 
-            // 2. Ejecutar consultas en paralelo
+            // 2. Ejecutar consultas en paralelo usando el Helper de Paginación
             const [
-                leadsRes,
-                showroomRes,
-                appointmentsRes,
-                requestsRes,
-                proformasRes
+                leadsData,
+                showroomData,
+                appointmentsData,
+                requestsData,
+                proformasData
             ] = await Promise.all([
-                // A. Leads
-                supabase.from('leads')
-                    .select('assigned_to')
-                    .gte('updated_at', startISO)
-                    .lte('updated_at', endISO)
-                    .not('assigned_to', 'is', null)
-                    .not('resume', 'is', null)
-                    .neq('resume', ''),
-
+                // A. Leads (Respondidos)
+                fetchAllData('leads', 'assigned_to', 'updated_at', startISO, endISO, (q) => 
+                    q.not('assigned_to', 'is', null).not('resume', 'is', null).neq('resume', '')
+                ),
                 // B. Showrooms
-                supabase.from('showroom_visits')
-                    .select('salesperson_id')
-                    .gte('created_at', startISO)
-                    .lte('created_at', endISO)
-                    .not('salesperson_id', 'is', null),
-
+                fetchAllData('showroom_visits', 'salesperson_id', 'created_at', startISO, endISO, (q) => 
+                    q.not('salesperson_id', 'is', null)
+                ),
                 // C. Citas
-                supabase.from('appointments')
-                    .select('responsible_id')
-                    .gte('created_at', startISO)
-                    .lte('created_at', endISO),
-
+                fetchAllData('appointments', 'responsible_id', 'created_at', startISO, endISO),
                 // D. Pedidos
-                supabase.from('vehicle_requests')
-                    .select('requested_by')
-                    .gte('created_at', startISO)
-                    .lte('created_at', endISO)
-                    .not('requested_by', 'is', null),
-
+                fetchAllData('vehicle_requests', 'requested_by', 'created_at', startISO, endISO, (q) => 
+                    q.not('requested_by', 'is', null)
+                ),
                 // E. Proformas
-                supabase.from('credit_proformas')
-                    .select('created_by')
-                    .gte('created_at', startISO)
-                    .lte('created_at', endISO)
-                    .not('created_by', 'is', null)
+                fetchAllData('credit_proformas', 'created_by', 'created_at', startISO, endISO, (q) => 
+                    q.not('created_by', 'is', null)
+                )
             ]);
 
             // 3. Mapear resultados (Solo si el ID existe en nuestro mapa de vendedores)
-            leadsRes.data?.forEach(l => {
+            leadsData.forEach((l: any) => {
                 if (l.assigned_to && statsMap[l.assigned_to]) statsMap[l.assigned_to].leads_responded++;
             });
 
-            showroomRes.data?.forEach(s => {
+            showroomData.forEach((s: any) => {
                 if (s.salesperson_id && statsMap[s.salesperson_id]) statsMap[s.salesperson_id].showroom_created++;
             });
 
-            appointmentsRes.data?.forEach(a => {
+            appointmentsData.forEach((a: any) => {
                 if (a.responsible_id && statsMap[a.responsible_id]) statsMap[a.responsible_id].appointments_created++;
             });
 
-            requestsRes.data?.forEach(r => {
+            requestsData.forEach((r: any) => {
                 if (r.requested_by && statsMap[r.requested_by]) statsMap[r.requested_by].requests_created++;
             });
 
-            proformasRes.data?.forEach(p => {
+            proformasData.forEach((p: any) => {
                 if (p.created_by && statsMap[p.created_by]) statsMap[p.created_by].proformas_created++;
             });
 
@@ -169,7 +197,7 @@ export function useAdminStats() {
         } finally {
             setIsLoading(false);
         }
-    }, [supabase, getDateRangeISO]);
+    }, [supabase, getDateRangeISO, fetchAllData]);
 
     useEffect(() => {
         fetchStats();

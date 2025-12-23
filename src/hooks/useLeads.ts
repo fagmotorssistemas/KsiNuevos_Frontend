@@ -58,38 +58,73 @@ export function useLeads() {
         assignedTo: 'all'
     });
 
-    // 1. CARGA DE DATOS OPTIMIZADA
+    // 1. CARGA DE DATOS OPTIMIZADA (PAGINACIÓN AUTOMÁTICA)
     const fetchLeads = useCallback(async (showLoading = false) => {
         if (!user) return;
         
         if (showLoading) setIsLoading(true);
         else setIsRefetching(true);
 
-        const { data, error } = await supabase
-            .from('leads')
-            .select('*, interested_cars(*), profiles:assigned_to(full_name)')
-            .order('updated_at', { ascending: false }) 
-            .limit(10000);
+        try {
+            let allLeads: any[] = [];
+            let hasNextPage = true;
+            let pageIndex = 0;
+            const PAGE_SIZE = 1000;
 
-        if (error) {
-            console.error("Error cargando leads:", error);
-        } else {
+            // Bucle para descargar TODO superando el límite de 1000 filas
+            while (hasNextPage) {
+                const from = pageIndex * PAGE_SIZE;
+                const to = (pageIndex + 1) * PAGE_SIZE - 1;
+
+                const { data, error } = await supabase
+                    .from('leads')
+                    .select('*, interested_cars(*), profiles:assigned_to(full_name)')
+                    .order('updated_at', { ascending: false }) 
+                    .range(from, to); // Usamos range para paginar
+
+                if (error) {
+                    console.error(`Error cargando leads (página ${pageIndex}):`, error);
+                    hasNextPage = false; 
+                } else {
+                    if (data && data.length > 0) {
+                        allLeads = [...allLeads, ...data];
+                        // Si recibimos menos filas que el tamaño de página, llegamos al final
+                        if (data.length < PAGE_SIZE) {
+                            hasNextPage = false;
+                        }
+                    } else {
+                        hasNextPage = false;
+                    }
+                }
+                
+                pageIndex++;
+                
+                // Freno de seguridad (ej. máximo 30,000 leads para no colgar el navegador)
+                if (pageIndex > 30) {
+                    console.warn("⚠️ Se detuvo la carga masiva de leads por seguridad (Límite 30k).");
+                    hasNextPage = false;
+                }
+            }
+
             // @ts-ignore
-            setLeads(data || []);
+            setLeads(allLeads);
+
+        } catch (err) {
+            console.error("Error fatal en fetchLeads:", err);
         }
         
         if (showLoading) setIsLoading(false);
         else setIsRefetching(false);
     }, [supabase, user]);
 
-    // 2. CARGA DE VENDEDORES (MODIFICADO)
+    // 2. CARGA DE VENDEDORES
     const fetchSellers = useCallback(async () => {
         if (!user) return;
         const { data } = await supabase
             .from('profiles')
             .select('id, full_name')
             .eq('status', 'activo')
-            .eq('role', 'vendedor') // <--- AQUÍ ESTÁ EL CAMBIO: Filtramos solo vendedores
+            .eq('role', 'vendedor')
             .order('full_name');
             
         if (data) {
@@ -127,7 +162,7 @@ export function useLeads() {
 
     // --- PROCESAMIENTO ---
     const processedLeads = useMemo(() => {
-        // Mantenemos la exclusión del ID específico que pediste anteriormente
+        // Mantenemos la exclusión del ID específico
         let filtered = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
 
         if (filters.search.trim()) {
@@ -200,7 +235,6 @@ export function useLeads() {
 
     // --- CÁLCULO DE INTERACCIONES ---
     const interactionsCount = useMemo(() => {
-        // También aplicamos el filtro de exclusión aquí
         let interactions = leads.filter(l => l.assigned_to !== '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
         
         if (filters.assignedTo !== 'all') {
