@@ -19,12 +19,27 @@ export type VehicleStat = {
     response_rate: number;
 };
 
+// CORRECCIÓN 1: Agregamos 'year' al tipo OpportunityStat
 export type OpportunityStat = {
     key: string;
     brand: string;
     model: string;
+    year?: number | null; // <--- Propiedad faltante agregada
     request_count: number;
     last_requested_at: string;
+};
+
+// --- HELPER DE NORMALIZACIÓN ---
+const normalizeStr = (str: string) => {
+    return str
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quita tildes
+        .replace(/[^a-z0-9]/g, ""); // Quita espacios y símbolos
+};
+
+// --- HELPER DE EXTRACCIÓN NUMÉRICA ---
+const extractNumbers = (str: string): string[] => {
+    return str.match(/\d+/g) || [];
 };
 
 export function useVehicleStats(
@@ -67,8 +82,6 @@ export function useVehicleStats(
 
         // DEBUG: Inicio del diagnóstico
         console.groupCollapsed(`🔍 Diagnóstico Stats: ${dateFilter}`);
-        console.log(`📅 Rango de Fechas: ${startISO} -> ${endISO}`);
-        console.log(`🚗 Filtro Inventario: ${inventoryStatusFilter}`);
 
         try {
             // 1. CARGAR INVENTARIO
@@ -84,18 +97,15 @@ export function useVehicleStats(
             const { data: inventoryData, error: invError } = await inventoryQuery;
             if (invError) throw invError;
             
-            console.log(`✅ Inventario cargado: ${inventoryData?.length || 0} vehículos`);
-
-            const inventoryIndex = new Map<string, any>();
+            // Mapas para búsqueda rápida
             const invStatsMap = new Map<string, VehicleStat>();
+            
+            // LISTA INTELIGENTE PARA BÚSQUEDA DIFUSA
+            const fuzzyInventoryList: { normalizedName: string, numbers: string[], id: string, brand: string, model: string }[] = [];
 
             inventoryData?.forEach(car => {
                 if (car.brand && car.model) {
-                    const searchKey = `${car.brand.trim().toLowerCase()}-${car.model.trim().toLowerCase()}`;
-                    if (!inventoryIndex.has(searchKey)) {
-                        inventoryIndex.set(searchKey, car);
-                    }
-
+                    // Inicializamos stats
                     invStatsMap.set(car.id, {
                         vehicle_uid: car.id,
                         brand: car.brand,
@@ -110,25 +120,31 @@ export function useVehicleStats(
                         showroom_count: 0,
                         response_rate: 0
                     });
+
+                    const fullName = `${car.brand} ${car.model}`;
+                    
+                    // Preparamos datos para el "Match Inteligente"
+                    fuzzyInventoryList.push({
+                        normalizedName: normalizeStr(fullName), // "cherytiggo2pro"
+                        numbers: extractNumbers(fullName),      // ["2"]
+                        brand: car.brand,
+                        model: car.model,
+                        id: car.id
+                    });
                 }
             });
 
             // 2. CARGAR LEADS (PAGINACIÓN AUTOMÁTICA)
-            // Fix: Usamos un bucle para descargar TODOS los leads en bloques de 1000
-            // para superar el límite duro de Supabase.
             let allLeads: any[] = [];
             let hasNextPage = true;
             let page = 0;
             const PAGE_SIZE = 1000;
-            let totalCountInDB = 0;
-
-            console.time("⏳ Descarga de Leads");
 
             while (hasNextPage) {
                 const from = page * PAGE_SIZE;
                 const to = (page + 1) * PAGE_SIZE - 1;
 
-                const { data: leadsPage, error: leadsError, count } = await supabase
+                const { data: leadsPage, error: leadsError } = await supabase
                     .from('leads')
                     .select(`
                         id,
@@ -142,45 +158,21 @@ export function useVehicleStats(
                             year,
                             vehicle_uid
                         )
-                    `, { count: 'exact' })
+                    `)
                     .gte('created_at', startISO)
                     .lte('created_at', endISO)
                     .range(from, to);
 
                 if (leadsError) throw leadsError;
 
-                if (page === 0 && count !== null) {
-                    totalCountInDB = count;
-                }
-
                 if (leadsPage && leadsPage.length > 0) {
                     allLeads = [...allLeads, ...leadsPage];
-                    // Si la página trajo menos del límite, es la última
-                    if (leadsPage.length < PAGE_SIZE) {
-                        hasNextPage = false;
-                    }
+                    if (leadsPage.length < PAGE_SIZE) hasNextPage = false;
                 } else {
                     hasNextPage = false;
                 }
-
                 page++;
-                // Freno de emergencia (por si acaso hay millones de leads y congelamos el browser)
-                if (page > 20) { // Límite de 20,000 leads
-                    console.warn("⚠️ Se detuvo la carga en 20,000 leads por seguridad.");
-                    hasNextPage = false;
-                }
-            }
-            
-            console.timeEnd("⏳ Descarga de Leads");
-
-            // DIAGNÓSTICO DE LEADS
-            console.log(`📥 Leads descargados TOTALES: ${allLeads.length}`);
-            console.log(`🔢 Leads totales en DB (Count): ${totalCountInDB}`);
-
-            if (allLeads.length < totalCountInDB) {
-                 console.warn(`⚠️ ALERTA: Aún faltan leads. Descargados: ${allLeads.length}, Total Real: ${totalCountInDB}`);
-            } else {
-                console.log("✅ Descarga completa: El 100% de los datos está en memoria.");
+                if (page > 20) hasNextPage = false; 
             }
 
             // 3. CARGAR SHOWROOM VISITS
@@ -194,7 +186,7 @@ export function useVehicleStats(
 
             if (visitsError) throw visitsError;
 
-            // 4. PROCESAR LEADS (Usamos allLeads en lugar de leadsData)
+            // 4. PROCESAR LEADS CON LÓGICA DIFUSA ESTRICTA
             const oppStatsMap = new Map<string, OpportunityStat>();
 
             allLeads.forEach((lead: any) => {
@@ -203,24 +195,42 @@ export function useVehicleStats(
                 const cars = Array.isArray(lead.interested_cars) ? lead.interested_cars : [lead.interested_cars];
 
                 cars.forEach((c: any) => {
-                    if (!c || !c.brand || !c.model) return;
+                    if (!c || (!c.brand && !c.model)) return;
 
                     let matchedCarId: string | null = null;
                     
-                    // Match por ID
+                    // --- NIVEL 1: Match Exacto por ID ---
                     if (c.vehicle_uid && invStatsMap.has(c.vehicle_uid)) {
                         matchedCarId = c.vehicle_uid;
-                    } else {
-                        // Match por Texto
-                        const searchKey = `${c.brand.trim().toLowerCase()}-${c.model.trim().toLowerCase()}`;
-                        if (inventoryIndex.has(searchKey)) {
-                            const potentialCar = inventoryIndex.get(searchKey);
-                            if (invStatsMap.has(potentialCar.id)) {
-                                matchedCarId = potentialCar.id;
+                    } 
+                    
+                    // --- NIVEL 2: Match Inteligente Estricto ---
+                    if (!matchedCarId) {
+                        const rawFullName = `${c.brand || ''} ${c.model || ''}`;
+                        const leadRequestNormalized = normalizeStr(rawFullName);
+                        const leadNumbers = extractNumbers(rawFullName);
+                        
+                        if (leadRequestNormalized.length > 2) { 
+                            const found = fuzzyInventoryList.find(invCar => {
+                                // REGLA 1: VALIDACIÓN NUMÉRICA
+                                if (leadNumbers.length > 0) {
+                                    const allNumbersMatch = leadNumbers.every(num => invCar.numbers.includes(num));
+                                    if (!allNumbersMatch) return false;
+                                }
+                                // REGLA 2: COINCIDENCIA DE TEXTO
+                                if (invCar.normalizedName.includes(leadRequestNormalized)) return true;
+                                if (invCar.normalizedName.length > 4 && leadRequestNormalized.includes(invCar.normalizedName)) return true;
+                                
+                                return false;
+                            });
+
+                            if (found) {
+                                matchedCarId = found.id;
                             }
                         }
                     }
 
+                    // --- RESULTADO ---
                     if (matchedCarId) {
                         const stat = invStatsMap.get(matchedCarId)!;
                         stat.total_leads += 1;
@@ -232,12 +242,22 @@ export function useVehicleStats(
                             stat.pending_leads += 1;
                         }
                     } else {
-                        const oppKey = `${c.brand.trim().toLowerCase()}-${c.model.trim().toLowerCase()}`;
+                        // NO ENCONTRADO -> OPORTUNIDAD
+                        const rawBrand = c.brand || 'Genérico';
+                        const rawModel = c.model || 'Desconocido';
+                        const rawYear = c.year || null; // CORRECCIÓN 2: Capturamos el año
+
+                        // CORRECCIÓN 3: Agregamos el año a la clave única para diferenciarlos
+                        // Ejemplo: "toyota-fortuner-2022" es diferente de "toyota-fortuner-2024"
+                        const yearKey = rawYear ? rawYear.toString() : 'any';
+                        const oppKey = `${rawBrand.trim().toLowerCase()}-${rawModel.trim().toLowerCase()}-${yearKey}`;
+                        
                         if (!oppStatsMap.has(oppKey)) {
                             oppStatsMap.set(oppKey, {
                                 key: oppKey,
-                                brand: c.brand,
-                                model: c.model,
+                                brand: rawBrand,
+                                model: rawModel,
+                                year: rawYear, // CORRECCIÓN 4: Guardamos el año en el objeto
                                 request_count: 0,
                                 last_requested_at: lead.created_at
                             });
@@ -274,14 +294,6 @@ export function useVehicleStats(
             const finalOppStats = Array.from(oppStatsMap.values());
             finalOppStats.sort((a, b) => b.request_count - a.request_count);
             
-            // DEBUG RESULTADOS
-            const totalLeadsProcesados = finalInvStats.reduce((acc, curr) => acc + curr.total_leads, 0);
-            const totalOportunidades = finalOppStats.reduce((acc, curr) => acc + curr.request_count, 0);
-            
-            console.log(`📊 RESULTADO FINAL:`);
-            console.log(`   - Leads en Inventario ("${inventoryStatusFilter}"): ${totalLeadsProcesados}`);
-            console.log(`   - Leads en Oportunidades (No coinciden o vendidos): ${totalOportunidades}`);
-            console.log(`   - TOTAL SUMADO: ${totalLeadsProcesados + totalOportunidades}`);
             console.groupEnd();
 
             setInventoryStats(finalInvStats);

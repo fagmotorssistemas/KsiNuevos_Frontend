@@ -16,7 +16,6 @@ interface VehicleStatsViewProps {
     stats: VehicleStat[];      
     opportunities: OpportunityStat[];
     isLoading: boolean;
-    // Props para el filtro de estado
     statusFilter: string;
     onStatusFilterChange: (status: string) => void;
 }
@@ -225,7 +224,9 @@ export function VehicleStatsView({
                         {topOpportunity && (
                             <div className="text-right">
                                 <span className="block text-xs text-purple-700 uppercase font-bold">Más Pedido</span>
-                                <span className="font-bold text-purple-900 capitalize">{topOpportunity.brand} {topOpportunity.model}</span>
+                                <span className="font-bold text-purple-900 capitalize">
+                                    {topOpportunity.brand} {topOpportunity.model}
+                                </span>
                             </div>
                         )}
                     </div>
@@ -247,6 +248,12 @@ export function VehicleStatsView({
                                             <td className="py-3 px-4 text-center text-slate-400 font-mono">#{idx + 1}</td>
                                             <td className="py-3 px-4 font-bold text-slate-800 capitalize">
                                                 {opp.brand} {opp.model}
+                                                {/* AQUÍ MOSTRAMOS EL AÑO SI EXISTE */}
+                                                {opp.year && (
+                                                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                        {opp.year}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="py-3 px-4 text-center">
                                                 <span className="inline-flex items-center justify-center h-6 px-2 rounded-full bg-purple-100 text-purple-700 font-bold text-xs">
