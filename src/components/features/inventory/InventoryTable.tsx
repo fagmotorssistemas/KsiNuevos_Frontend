@@ -171,7 +171,7 @@ export function InventoryTable({
                                         <Table.Cell>
                                             <div className="flex justify-end">
                                                 <Button
-                                                    variant="secondary"
+                                                    variant="danger"
                                                     size="sm"
                                                     onClick={() => onEdit && onEdit(car)}
                                                 >
