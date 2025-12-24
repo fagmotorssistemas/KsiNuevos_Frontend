@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
     Check, 
     X, 
@@ -5,13 +6,15 @@ import {
     Clock, 
     Car,
     MapPin,
-    Hash
+    Hash,
+    ImageIcon
 } from "lucide-react";
 
 import { PaginationPageMinimalCenter } from "@/components/ui/pagination"; 
 import { Table, TableCard } from "@/components/ui/table";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
+import { ImageViewerModal } from "@/components/features/inventory/ImageViewerModal";
 
 import type { InventoryCar } from "@/hooks/useInventory";
 
@@ -23,7 +26,7 @@ interface InventoryTableProps {
     totalCount: number;
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
-    // NUEVA PROP: Rol del usuario
+    // Rol del usuario
     currentUserRole?: string | null;
 }
 
@@ -37,9 +40,11 @@ export function InventoryTable({
     currentUserRole 
 }: InventoryTableProps) {
 
+    // --- ESTADO LOCAL ---
+    // Guardamos el vehículo que se está visualizando en el carrusel (null si está cerrado)
+    const [viewingCar, setViewingCar] = useState<InventoryCar | null>(null);
+
     // --- LÓGICA DE PERMISOS ---
-    // Verificamos si el usuario tiene permiso para ver las acciones
-    // Normalizamos a minúsculas para evitar errores (ej: "Admin" vs "admin")
     const role = currentUserRole?.toLowerCase() || '';
     const canEdit = role === 'admin' || role === 'marketing';
 
@@ -84,104 +89,119 @@ export function InventoryTable({
     }
 
     return (
-        <TableCard.Root>
-            <Table aria-label="Tabla de Inventario">
-                <Table.Header>
-                    <Table.Head id="plate" label="Placa" />
-                    <Table.Head id="vehicle" label="Vehículo" />
-                    <Table.Head id="year" label="Año" />
-                    <Table.Head id="price" label="Precio" />
-                    <Table.Head id="km" label="Kilometraje" className="hidden md:table-cell" />
-                    <Table.Head id="status" label="Estado" />
-                    <Table.Head id="location" label="Ubicación" className="hidden lg:table-cell" />
-                    
-                    {/* COLUMNA CONDICIONAL: Solo visible si canEdit es true */}
-                    {canEdit && <Table.Head id="actions" label="" />}
-                </Table.Header>
+        <>
+            <TableCard.Root>
+                <Table aria-label="Tabla de Inventario">
+                    <Table.Header>
+                        <Table.Head id="plate" label="Placa" />
+                        <Table.Head id="vehicle" label="Vehículo (Ver Fotos)" />
+                        <Table.Head id="year" label="Año" />
+                        <Table.Head id="price" label="Precio" />
+                        <Table.Head id="km" label="Kilometraje" className="hidden md:table-cell" />
+                        <Table.Head id="status" label="Estado" />
+                        <Table.Head id="location" label="Ubicación" className="hidden lg:table-cell" />
+                        {canEdit && <Table.Head id="actions" label="" />}
+                    </Table.Header>
 
-                <Table.Body items={cars}>
-                    {(car: InventoryCar) => {
-                        const statusInfo = getStatusConfig(car.status);
+                    <Table.Body items={cars}>
+                        {(car: InventoryCar) => {
+                            const statusInfo = getStatusConfig(car.status);
+                            const hasImages = !!car.img_main_url || (car.img_gallery_urls && car.img_gallery_urls.length > 0);
 
-                        return (
-                            <Table.Row id={car.id}>
-                                <Table.Cell>
-                                    <div className="flex items-center gap-2 font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit">
-                                        <Hash className="h-3 w-3 text-slate-400" />
-                                        {car.plate || car.plate_short || 'S/P'}
-                                    </div>
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-slate-800 capitalize">
-                                            {car.brand} {car.model}
-                                        </span>
-                                        <span className="text-xs text-slate-500 capitalize">
-                                            {car.type_body || 'Vehículo'} • {car.color}
-                                        </span>
-                                    </div>
-                                </Table.Cell>
-
-                                <Table.Cell className="text-slate-600 font-medium">
-                                    {car.year}
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
-                                        {formatPrice(car.price)}
-                                    </span>
-                                </Table.Cell>
-
-                                <Table.Cell className="hidden md:table-cell text-slate-500 text-sm">
-                                    {formatKm(car.mileage)}
-                                </Table.Cell>
-
-                                <Table.Cell>
-                                    <BadgeWithIcon
-                                        color={statusInfo.color}
-                                        iconLeading={statusInfo.icon}
-                                        className="capitalize"
-                                    >
-                                        {statusInfo.label}
-                                    </BadgeWithIcon>
-                                </Table.Cell>
-
-                                <Table.Cell className="hidden lg:table-cell">
-                                    <div className="flex items-center gap-1 text-slate-500 text-xs capitalize">
-                                        <MapPin className="h-3 w-3" />
-                                        {car.location || 'Patio'}
-                                    </div>
-                                </Table.Cell>
-
-                                {/* CELDA CONDICIONAL: Solo renderizamos el botón si canEdit es true */}
-                                {canEdit && (
+                            return (
+                                <Table.Row id={car.id}>
                                     <Table.Cell>
-                                        <div className="flex justify-end">
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => onEdit && onEdit(car)}
-                                            >
-                                                Gestionar
-                                            </Button>
+                                        <div className="flex items-center gap-2 font-mono text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit">
+                                            <Hash className="h-3 w-3 text-slate-400" />
+                                            {car.plate || car.plate_short || 'S/P'}
                                         </div>
                                     </Table.Cell>
-                                )}
-                            </Table.Row>
-                        );
-                    }}
-                </Table.Body>
-            </Table>
-            
-            {/* Paginación Conectada */}
-            <PaginationPageMinimalCenter 
-                page={page} 
-                total={totalCount} 
-                limit={rowsPerPage}
-                className="px-6 py-4" 
-                onChange={onPageChange} 
-            />
-        </TableCard.Root>
+
+                                    <Table.Cell>
+                                        {/* NOMBRE CLICABLE PARA ABRIR CARRUSEL */}
+                                        <div 
+                                            onClick={() => setViewingCar(car)}
+                                            className="group flex flex-col cursor-pointer transition-all"
+                                            title="Click para ver fotos"
+                                        >
+                                            <span className="font-bold text-slate-800 capitalize group-hover:text-brand-600 flex items-center gap-2">
+                                                {car.brand} {car.model}
+                                                {hasImages && (
+                                                    <ImageIcon className="w-3 h-3 text-slate-400 group-hover:text-brand-500" />
+                                                )}
+                                            </span>
+                                            <span className="text-xs text-slate-500 capitalize group-hover:text-brand-400/80">
+                                                {car.type_body || 'Vehículo'} • {car.color}
+                                            </span>
+                                        </div>
+                                    </Table.Cell>
+
+                                    <Table.Cell className="text-slate-600 font-medium">
+                                        {car.year}
+                                    </Table.Cell>
+
+                                    <Table.Cell>
+                                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                            {formatPrice(car.price)}
+                                        </span>
+                                    </Table.Cell>
+
+                                    <Table.Cell className="hidden md:table-cell text-slate-500 text-sm">
+                                        {formatKm(car.mileage)}
+                                    </Table.Cell>
+
+                                    <Table.Cell>
+                                        <BadgeWithIcon
+                                            color={statusInfo.color}
+                                            iconLeading={statusInfo.icon}
+                                            className="capitalize"
+                                        >
+                                            {statusInfo.label}
+                                        </BadgeWithIcon>
+                                    </Table.Cell>
+
+                                    <Table.Cell className="hidden lg:table-cell">
+                                        <div className="flex items-center gap-1 text-slate-500 text-xs capitalize">
+                                            <MapPin className="h-3 w-3" />
+                                            {car.location || 'Patio'}
+                                        </div>
+                                    </Table.Cell>
+
+                                    {canEdit && (
+                                        <Table.Cell>
+                                            <div className="flex justify-end">
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() => onEdit && onEdit(car)}
+                                                >
+                                                    Gestionar
+                                                </Button>
+                                            </div>
+                                        </Table.Cell>
+                                    )}
+                                </Table.Row>
+                            );
+                        }}
+                    </Table.Body>
+                </Table>
+                
+                <PaginationPageMinimalCenter 
+                    page={page} 
+                    total={totalCount} 
+                    limit={rowsPerPage}
+                    className="px-6 py-4" 
+                    onChange={onPageChange} 
+                />
+            </TableCard.Root>
+
+            {/* CARRUSEL MODAL (Renderizado condicional) */}
+            {viewingCar && (
+                <ImageViewerModal 
+                    car={viewingCar} 
+                    onClose={() => setViewingCar(null)} 
+                />
+            )}
+        </>
     );
 }

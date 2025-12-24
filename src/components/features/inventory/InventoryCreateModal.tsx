@@ -1,20 +1,21 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
-    X, Save, Car, DollarSign, Gauge,
+    X, Save, DollarSign, Gauge,
     Calendar, Hash, FileText, Loader2,
-    MapPin, Tag, Image as ImageIcon
+    MapPin, Tag, Image as ImageIcon, Plus, Trash2, UploadCloud
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 
-// Componentes UI Locales (Reutilizados para consistencia)
-const InputGroup = ({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
+// --- Componentes UI Locales ---
+const InputGroup = ({ label, required = false, children, subLabel }: { label: string; required?: boolean; children: React.ReactNode, subLabel?: string }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
             {label}
             {required && <span className="text-red-500">*</span>}
         </label>
         {children}
+        {subLabel && <p className="text-[10px] text-slate-400">{subLabel}</p>}
     </div>
 );
 
@@ -39,39 +40,81 @@ const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
 
 interface InventoryCreateModalProps {
     onClose: () => void;
-    onSuccess: () => void; // Para recargar la tabla al crear
+    onSuccess: () => void;
 }
 
 export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModalProps) {
     const { supabase } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState(""); // Para mostrar qué está pasando
 
-    // Estado del Formulario
+    // Estados para imágenes (Archivos y Previsualizaciones)
+    const [mainImageFile, setMainImageFile] = useState<File | null>(null);
+    const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
+    
+    const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+    const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+
+    // Refs para los inputs de archivo ocultos
+    const mainInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+
+    // Estado del Formulario (Datos de texto)
     const [formData, setFormData] = useState({
-        // Datos Obligatorios
-        brand: '',
-        model: '',
-        year: new Date().getFullYear(),
-        price: '',
-
-        // Datos Identificación
-        plate: '',        // Placa Real
-        plate_short: '',  // Placa Corta / Código Interno
-
-        // Datos Opcionales Comunes
-        mileage: '',
-        color: '',
-        type_body: '',    // SUV, Sedan...
-        status: 'disponible',
-        location: 'patio',
-        description: '',
-        img_main_url: ''
+        brand: '', model: '', year: new Date().getFullYear(), price: '',
+        plate: '', plate_short: '', mileage: '', color: '', type_body: '',
+        status: 'disponible', location: 'patio', description: ''
     });
 
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    // --- MANEJO DE IMÁGENES ---
+
+    // 1. Seleccionar Imagen Principal
+    const handleMainImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setMainImageFile(file);
+            setMainImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    // 2. Seleccionar Galería (Múltiples)
+    const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            setGalleryFiles(prev => [...prev, ...newFiles]);
+            
+            const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+            setGalleryPreviews(prev => [...prev, ...newPreviews]);
+        }
+    };
+
+    // 3. Remover imagen de galería
+    const removeGalleryImage = (index: number) => {
+        setGalleryFiles(prev => prev.filter((_, i) => i !== index));
+        setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // 4. Función Auxiliar para Subir a Supabase
+    const uploadFileToSupabase = async (file: File): Promise<string> => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${fileName}`; // Guardamos en la raíz del bucket 'inventory' o usa una carpeta ej: `cars/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+            .from('inventory')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('inventory').getPublicUrl(filePath);
+        return data.publicUrl;
+    };
+
+    // --- GUARDAR TODO ---
     const handleCreate = async () => {
         // Validación básica
         if (!formData.brand || !formData.model || !formData.price) {
@@ -80,27 +123,48 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
         }
 
         setIsSaving(true);
+        setUploadStatus("Iniciando carga...");
+
         try {
+            let mainImageUrl = null;
+            let galleryUrls: string[] = [];
+
+            // 1. Subir Imagen Principal (si existe)
+            if (mainImageFile) {
+                setUploadStatus("Subiendo imagen principal...");
+                mainImageUrl = await uploadFileToSupabase(mainImageFile);
+            }
+
+            // 2. Subir Galería (si existen)
+            if (galleryFiles.length > 0) {
+                setUploadStatus(`Subiendo galería (${galleryFiles.length} fotos)...`);
+                // Subimos todas en paralelo
+                galleryUrls = await Promise.all(galleryFiles.map(file => uploadFileToSupabase(file)));
+            }
+
+            setUploadStatus("Guardando datos del vehículo...");
+
+            // 3. Guardar en Base de Datos
             const { error } = await supabase
                 .from('inventory')
                 .insert({
-                    brand: formData.brand.toLowerCase(), // Normalizamos a minúsculas
+                    brand: formData.brand.toLowerCase(),
                     model: formData.model.toLowerCase(),
                     year: Number(formData.year),
                     price: Number(formData.price),
-
-                    plate: formData.plate.toUpperCase() || null, // Placa en mayúsculas o NULL si está vacía
-                    plate_short: formData.plate_short.toUpperCase() || null,
-
+                    plate: formData.plate ? formData.plate.toUpperCase() : null,
+                    plate_short: formData.plate_short ? formData.plate_short.toUpperCase() : null,
                     mileage: Number(formData.mileage) || 0,
                     color: formData.color.toLowerCase(),
                     type_body: formData.type_body.toLowerCase(),
                     status: formData.status as any,
                     location: formData.location as any,
                     description: formData.description,
-                    img_main_url: formData.img_main_url,
+                    
+                    // AQUÍ PONEMOS LAS URLs GENERADAS
+                    img_main_url: mainImageUrl,
+                    img_gallery_urls: galleryUrls.length > 0 ? galleryUrls : null,
 
-                    // Valores por defecto
                     marketing_in_patio: false,
                     stock: 1
                 });
@@ -111,238 +175,259 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
             onClose();
         } catch (error: any) {
             console.error("Error al crear vehículo:", error);
-            // Manejo de error de placa duplicada
             if (error.code === '23505') {
                 alert("Ya existe un vehículo registrado con esa placa.");
             } else {
-                alert("Error al guardar. Verifica los datos.");
+                alert("Error al guardar: " + (error.message || "Verifica los datos."));
             }
         } finally {
             setIsSaving(false);
+            setUploadStatus("");
         }
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
 
                 {/* HEADER */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
                     <div>
                         <h2 className="text-lg font-bold text-slate-900">Nuevo Vehículo</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">Ingresa los datos para registrar en el inventario.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Ingresa los datos y sube las fotografías.</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
 
-                {/* BODY (Formulario) */}
-                <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6">
+                {/* BODY (Grid de 2 columnas: Fotos a la izquierda, Datos a la derecha) */}
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                    
+                    {/* COLUMNA IZQUIERDA: IMÁGENES */}
+                    <div className="w-full md:w-1/3 bg-slate-50 p-6 border-r border-slate-100 overflow-y-auto space-y-6">
+                        
+                        {/* 1. Imagen Principal */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                Foto Principal
+                            </label>
+                            <div 
+                                onClick={() => mainInputRef.current?.click()}
+                                className={`
+                                    relative aspect-video rounded-lg border-2 border-dashed cursor-pointer transition-all group overflow-hidden
+                                    ${mainImagePreview ? 'border-brand-500 bg-white' : 'border-slate-300 hover:border-brand-400 hover:bg-brand-50'}
+                                `}
+                            >
+                                <input 
+                                    type="file" 
+                                    ref={mainInputRef} 
+                                    className="hidden" 
+                                    accept="image/*" 
+                                    onChange={handleMainImageSelect}
+                                />
+                                
+                                {mainImagePreview ? (
+                                    <>
+                                        <img src={mainImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <p className="text-white text-xs font-medium flex items-center gap-1">
+                                                <UploadCloud className="w-4 h-4" /> Cambiar
+                                            </p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                        <ImageIcon className="w-8 h-8 mb-2" />
+                                        <span className="text-xs">Click para subir portada</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                    {/* SECCIÓN 1: DATOS PRINCIPALES */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Marca" required>
-                            <Input
-                                placeholder="Ej: Toyota"
-                                value={formData.brand}
-                                onChange={(e) => handleChange('brand', e.target.value)}
-                                autoFocus
-                            />
-                        </InputGroup>
-                        <InputGroup label="Modelo" required>
-                            <Input
-                                placeholder="Ej: Fortuner"
-                                value={formData.model}
-                                onChange={(e) => handleChange('model', e.target.value)}
-                            />
-                        </InputGroup>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Precio ($)" required>
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <DollarSign className="h-4 w-4" />
-                                </div>
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    placeholder="0.00"
-                                    value={formData.price}
-                                    onChange={(e) => handleChange('price', e.target.value)}
+                        {/* 2. Galería */}
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    Galería ({galleryFiles.length})
+                                </label>
+                                <button 
+                                    onClick={() => galleryInputRef.current?.click()}
+                                    className="text-[10px] text-brand-600 font-bold hover:underline flex items-center gap-1"
+                                >
+                                    <Plus className="w-3 h-3" /> Agregar
+                                </button>
+                                <input 
+                                    type="file" 
+                                    ref={galleryInputRef} 
+                                    className="hidden" 
+                                    accept="image/*" 
+                                    multiple 
+                                    onChange={handleGallerySelect}
                                 />
                             </div>
-                        </InputGroup>
-                        <InputGroup label="Año" required>
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <Calendar className="h-4 w-4" />
+
+                            {galleryPreviews.length > 0 ? (
+                                <div className="grid grid-cols-3 gap-2">
+                                    {galleryPreviews.map((preview, idx) => (
+                                        <div key={idx} className="relative aspect-square rounded-md overflow-hidden group border border-slate-200">
+                                            <img src={preview} alt={`Galeria ${idx}`} className="w-full h-full object-cover" />
+                                            <button 
+                                                onClick={() => removeGalleryImage(idx)}
+                                                className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <div 
+                                        onClick={() => galleryInputRef.current?.click()}
+                                        className="aspect-square rounded-md border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-slate-100 text-slate-300 hover:text-brand-500 transition-colors"
+                                    >
+                                        <Plus className="w-6 h-6" />
+                                    </div>
                                 </div>
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    value={formData.year}
-                                    onChange={(e) => handleChange('year', e.target.value)}
-                                />
-                            </div>
-                        </InputGroup>
+                            ) : (
+                                <div 
+                                    onClick={() => galleryInputRef.current?.click()}
+                                    className="p-6 border-2 border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-100 transition-colors"
+                                >
+                                    <Plus className="w-6 h-6 mb-1" />
+                                    <span className="text-[10px]">Agregar fotos extra</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {/* SECCIÓN 2: IDENTIFICACIÓN (PLACAS) */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
-                        <h3 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
-                            <Hash className="h-4 w-4 text-brand-500" />
-                            Identificación
-                        </h3>
+                    {/* COLUMNA DERECHA: FORMULARIO */}
+                    <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6">
+
+                        {/* SECCIÓN 1: DATOS PRINCIPALES */}
                         <div className="grid grid-cols-2 gap-4">
-                            <InputGroup label="Placa Real">
-                                <Input
-                                    placeholder="Ej: ABC-1234"
-                                    value={formData.plate}
-                                    onChange={(e) => handleChange('plate', e.target.value)}
-                                    className="uppercase font-mono"
-                                />
-                                <p className="text-[10px] text-slate-400 mt-1">Si la tiene, es obligatoria para documentos.</p>
+                            <InputGroup label="Marca" required>
+                                <Input placeholder="Ej: Toyota" value={formData.brand} onChange={(e) => handleChange('brand', e.target.value)} autoFocus />
                             </InputGroup>
-                            <InputGroup label="Código Interno / Placa Corta">
-                                <Input
-                                    placeholder="Ej: A1, P5"
-                                    value={formData.plate_short}
-                                    onChange={(e) => handleChange('plate_short', e.target.value)}
-                                    className="uppercase font-mono"
-                                />
-                                <p className="text-[10px] text-slate-400 mt-1">Para identificación rápida en patio.</p>
+                            <InputGroup label="Modelo" required>
+                                <Input placeholder="Ej: Fortuner" value={formData.model} onChange={(e) => handleChange('model', e.target.value)} />
                             </InputGroup>
                         </div>
-                    </div>
 
-                    {/* SECCIÓN 3: DETALLES ADICIONALES */}
-                    <div className="grid grid-cols-3 gap-4">
-                        <InputGroup label="Kilometraje">
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <Gauge className="h-4 w-4" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputGroup label="Precio ($)" required>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <Input type="number" className="pl-9" placeholder="0.00" value={formData.price} onChange={(e) => handleChange('price', e.target.value)} />
                                 </div>
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    placeholder="0"
-                                    value={formData.mileage}
-                                    onChange={(e) => handleChange('mileage', e.target.value)}
+                            </InputGroup>
+                            <InputGroup label="Año" required>
+                                <div className="relative">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <Input type="number" className="pl-9" value={formData.year} onChange={(e) => handleChange('year', e.target.value)} />
+                                </div>
+                            </InputGroup>
+                        </div>
+
+                        {/* SECCIÓN 2: IDENTIFICACIÓN */}
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
+                                <Hash className="h-4 w-4 text-brand-500" /> Identificación
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Placa Real" subLabel="Obligatoria para documentos">
+                                    <Input placeholder="Ej: ABC-1234" value={formData.plate} onChange={(e) => handleChange('plate', e.target.value)} className="uppercase font-mono" />
+                                </InputGroup>
+                                <InputGroup label="Cód. Interno" subLabel="Identificación rápida">
+                                    <Input placeholder="Ej: A1, P5" value={formData.plate_short} onChange={(e) => handleChange('plate_short', e.target.value)} className="uppercase font-mono" />
+                                </InputGroup>
+                            </div>
+                        </div>
+
+                        {/* SECCIÓN 3: DETALLES */}
+                        <div className="grid grid-cols-3 gap-4">
+                            <InputGroup label="Km">
+                                <div className="relative">
+                                    <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <Input type="number" className="pl-9" placeholder="0" value={formData.mileage} onChange={(e) => handleChange('mileage', e.target.value)} />
+                                </div>
+                            </InputGroup>
+                            <InputGroup label="Color">
+                                <Input placeholder="Ej: Blanco" value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
+                            </InputGroup>
+                            <InputGroup label="Tipo">
+                                <Input placeholder="Ej: SUV" value={formData.type_body} onChange={(e) => handleChange('type_body', e.target.value)} />
+                            </InputGroup>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputGroup label="Estado">
+                                <div className="relative">
+                                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <Select className="pl-9" value={formData.status} onChange={(e) => handleChange('status', e.target.value)}>
+                                        <option value="disponible">🟢 Disponible</option>
+                                        <option value="reservado">🟡 Reservado</option>
+                                        <option value="mantenimiento">🔧 En Taller</option>
+                                        <option value="devuelto">🔙 Devuelto</option>
+                                        <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
+                                        <option value="consignacion">🚗 En consignacion</option>
+                                    </Select>
+                                </div>
+                            </InputGroup>
+                            <InputGroup label="Ubicación">
+                                <div className="relative">
+                                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <Select className="pl-9" value={formData.location} onChange={(e) => handleChange('location', e.target.value)}>
+                                        <option value="patio">🏠 Patio Principal</option>
+                                        <option value="taller">🔧 Taller</option>
+                                        <option value="showroom">✨ Showroom</option>
+                                    </Select>
+                                </div>
+                            </InputGroup>
+                        </div>
+
+                        <InputGroup label="Notas / Descripción">
+                            <div className="relative">
+                                <FileText className="absolute left-3 top-3 text-slate-400 h-4 w-4" />
+                                <textarea
+                                    className="w-full min-h-[80px] pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-none"
+                                    placeholder="Detalles importantes..."
+                                    value={formData.description}
+                                    onChange={(e) => handleChange('description', e.target.value)}
                                 />
                             </div>
                         </InputGroup>
-                        <InputGroup label="Color">
-                            <Input
-                                placeholder="Ej: Blanco"
-                                value={formData.color}
-                                onChange={(e) => handleChange('color', e.target.value)}
-                            />
-                        </InputGroup>
-                        <InputGroup label="Tipo">
-                            <Input
-                                placeholder="Ej: SUV"
-                                value={formData.type_body}
-                                onChange={(e) => handleChange('type_body', e.target.value)}
-                            />
-                        </InputGroup>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Estado Inicial">
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <Tag className="h-4 w-4" />
-                                </div>
-                                <Select
-                                    value={formData.status}
-                                    onChange={(e) => handleChange('status', e.target.value)}
-                                    className="pl-9"
-                                >
-                                    <option value="disponible">🟢 Disponible</option>
-                                    <option value="reservado">🟡 Reservado</option>
-                                    <option value="mantenimiento">🔧 En Taller</option>
-                                    <option value="devuelto">🔙 Devuelto</option>
-                                    <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
-                                    <option value="consignacion">🚗 En consignacion</option>
-
-                                </Select>
-                            </div>
-                        </InputGroup>
-                        <InputGroup label="Ubicación">
-                            <div className="relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <MapPin className="h-4 w-4" />
-                                </div>
-                                <Select
-                                    value={formData.location}
-                                    onChange={(e) => handleChange('location', e.target.value)}
-                                    className="pl-9"
-                                >
-                                    <option value="patio">🏠 Patio Principal</option>
-                                    <option value="taller">🔧 Taller</option>
-                                    <option value="showroom">✨ Showroom</option>
-                                </Select>
-                            </div>
-                        </InputGroup>
-                    </div>
-
-                    <InputGroup label="Foto Principal (URL)">
-                        <div className="relative">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                <ImageIcon className="h-4 w-4" />
-                            </div>
-                            <Input
-                                placeholder="https://ejemplo.com/foto.jpg"
-                                value={formData.img_main_url}
-                                onChange={(e) => handleChange('img_main_url', e.target.value)}
-                                className="pl-9"
-                            />
-                        </div>
-                    </InputGroup>
-
-                    <InputGroup label="Notas / Descripción">
-                        <div className="relative">
-                            <div className="absolute left-3 top-3 text-slate-400">
-                                <FileText className="h-4 w-4" />
-                            </div>
-                            <textarea
-                                className="w-full min-h-[80px] pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-none"
-                                placeholder="Detalles importantes..."
-                                value={formData.description}
-                                onChange={(e) => handleChange('description', e.target.value)}
-                            />
-                        </div>
-                    </InputGroup>
-
                 </div>
 
                 {/* FOOTER */}
-                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={handleCreate}
-                        disabled={isSaving}
-                        className="px-6 py-2 rounded-lg text-sm font-medium text-black bg-brand-600 hover:bg-brand-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Registrando...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="h-4 w-4" />
-                                Registrar Vehículo
-                            </>
-                        )}
-                    </button>
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <span className="text-xs text-slate-500 italic">
+                        {uploadStatus}
+                    </span>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleCreate}
+                            disabled={isSaving}
+                            className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    {uploadStatus || "Guardando..."}
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="h-4 w-4" />
+                                    Registrar Vehículo
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
             </div>

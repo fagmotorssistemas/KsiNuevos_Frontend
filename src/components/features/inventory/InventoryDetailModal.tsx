@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
     X, Save, Car, Share2, MapPin, Tag,
-    DollarSign, Gauge, Calendar, AlertCircle,
-    CheckCircle2, Loader2, Image as ImageIcon
+    DollarSign, Gauge, Calendar, Loader2, 
+    Image as ImageIcon, UploadCloud, Plus, Trash2
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "../../../hooks/useInventory";
 
-// Componentes UI Locales (Inputs Estilizados)
+// Componentes UI Locales
 const InputGroup = ({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
@@ -41,28 +41,44 @@ const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
 interface InventoryDetailModalProps {
     car: InventoryCar;
     onClose: () => void;
-    onUpdate: () => void; // Para recargar la tabla al guardar
+    onUpdate: () => void;
 }
 
 export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetailModalProps) {
     const { supabase } = useAuth();
-    const [activeTab, setActiveTab] = useState<'general' | 'marketing'>('general');
+    // Añadimos 'photos' a las pestañas
+    const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos'>('general');
     const [isSaving, setIsSaving] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState("");
 
-    // Estado del Formulario (Inicializado con los datos del auto)
+    // --- ESTADO DE IMÁGENES ---
+    // 1. Imagen Principal (Nueva)
+    const [mainImageFile, setMainImageFile] = useState<File | null>(null);
+    const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
+
+    // 2. Galería Existente (URLs que vienen de la BD)
+    const [existingGallery, setExistingGallery] = useState<string[]>(car.img_gallery_urls || []);
+
+    // 3. Galería Nueva (Archivos locales por subir)
+    const [newGalleryFiles, setNewGalleryFiles] = useState<File[]>([]);
+    const [newGalleryPreviews, setNewGalleryPreviews] = useState<string[]>([]);
+
+    // Refs
+    const mainInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+
+    // Estado del Formulario
     const [formData, setFormData] = useState({
         price: car.price || 0,
         mileage: car.mileage || 0,
         status: car.status || 'disponible',
         location: car.location || 'patio',
         description: car.description || '',
-        // Marketing
         marketing_in_patio: car.marketing_in_patio || false,
         marketing_posts_count: car.marketing_posts_count || 0,
         marketing_videos_count: car.marketing_videos_count || 0,
         marketing_stories_count: car.marketing_stories_count || 0,
-        img_main_url: car.img_main_url || '',
-        // Datos Técnicos (Editables)
+        img_main_url: car.img_main_url || '', // URL actual
         color: car.color || '',
         plate_short: car.plate_short || '',
         year: car.year || new Date().getFullYear()
@@ -72,9 +88,76 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    // --- MANEJO DE ARCHIVOS ---
+
+    const uploadFileToSupabase = async (file: File): Promise<string> => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${fileName}`; 
+        
+        const { error: uploadError } = await supabase.storage
+            .from('inventory')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('inventory').getPublicUrl(filePath);
+        return data.publicUrl;
+    };
+
+    const handleMainImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setMainImageFile(file);
+            setMainImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            setNewGalleryFiles(prev => [...prev, ...newFiles]);
+            
+            const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+            setNewGalleryPreviews(prev => [...prev, ...newPreviews]);
+        }
+    };
+
+    // Borrar de la galería existente (solo quitamos la URL de la lista visual por ahora)
+    const removeExistingGalleryImage = (index: number) => {
+        setExistingGallery(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Borrar de los nuevos archivos pendientes de subir
+    const removeNewGalleryImage = (index: number) => {
+        setNewGalleryFiles(prev => prev.filter((_, i) => i !== index));
+        setNewGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+
     const handleSave = async () => {
         setIsSaving(true);
+        setUploadStatus("Iniciando...");
+
         try {
+            let finalMainUrl = formData.img_main_url;
+            let finalGalleryUrls = [...existingGallery]; // Empezamos con las que el usuario NO borró
+
+            // 1. Subir nueva foto principal si existe
+            if (mainImageFile) {
+                setUploadStatus("Actualizando portada...");
+                finalMainUrl = await uploadFileToSupabase(mainImageFile);
+            }
+
+            // 2. Subir nuevas fotos de galería si existen
+            if (newGalleryFiles.length > 0) {
+                setUploadStatus(`Subiendo ${newGalleryFiles.length} fotos nuevas...`);
+                const uploadedUrls = await Promise.all(newGalleryFiles.map(file => uploadFileToSupabase(file)));
+                finalGalleryUrls = [...finalGalleryUrls, ...uploadedUrls];
+            }
+
+            setUploadStatus("Guardando cambios...");
+
             const { error } = await supabase
                 .from('inventory')
                 .update({
@@ -87,7 +170,11 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                     marketing_posts_count: Number(formData.marketing_posts_count),
                     marketing_videos_count: Number(formData.marketing_videos_count),
                     marketing_stories_count: Number(formData.marketing_stories_count),
-                    img_main_url: formData.img_main_url,
+                    
+                    // Actualizamos imágenes
+                    img_main_url: finalMainUrl,
+                    img_gallery_urls: finalGalleryUrls,
+
                     color: formData.color,
                     year: Number(formData.year)
                 })
@@ -95,13 +182,14 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
 
             if (error) throw error;
 
-            onUpdate(); // Recargar datos en la tabla
-            onClose();  // Cerrar modal
-        } catch (error) {
+            onUpdate();
+            onClose();
+        } catch (error: any) {
             console.error("Error al actualizar vehículo:", error);
-            alert("Hubo un error al guardar los cambios.");
+            alert("Error: " + (error.message || "No se pudo guardar."));
         } finally {
             setIsSaving(false);
+            setUploadStatus("");
         }
     };
 
@@ -131,22 +219,22 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                 </div>
 
                 {/* TABS */}
-                <div className="flex border-b border-slate-100 bg-slate-50/50 px-6">
+                <div className="flex border-b border-slate-100 bg-slate-50/50 px-6 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('general')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general'
-                                ? 'border-brand-600 text-brand-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'general' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Car className="h-4 w-4" /> Datos Generales
                     </button>
                     <button
+                        onClick={() => setActiveTab('photos')}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'photos' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <ImageIcon className="h-4 w-4" /> Fotos & Galería
+                    </button>
+                    <button
                         onClick={() => setActiveTab('marketing')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'marketing'
-                                ? 'border-brand-600 text-brand-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'marketing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Share2 className="h-4 w-4" /> Marketing
                     </button>
@@ -158,8 +246,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                     {/* --- PESTAÑA GENERAL --- */}
                     {activeTab === 'general' && (
                         <div className="space-y-6">
-
-                            {/* Estado y Ubicación (Fila 1) */}
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Estado del Vehículo" required>
                                     <Select
@@ -193,13 +279,10 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                 </InputGroup>
                             </div>
 
-                            {/* Precio y Km (Fila 2) */}
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Precio de Venta" required>
                                     <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                            <DollarSign className="h-4 w-4" />
-                                        </div>
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
                                         <Input
                                             type="number"
                                             className="pl-9 font-mono font-medium"
@@ -211,9 +294,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
 
                                 <InputGroup label="Kilometraje">
                                     <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                            <Gauge className="h-4 w-4" />
-                                        </div>
+                                        <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
                                         <Input
                                             type="number"
                                             className="pl-9"
@@ -224,7 +305,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                 </InputGroup>
                             </div>
 
-                            {/* Detalles Adicionales */}
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Color">
                                     <Input
@@ -253,10 +333,116 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                         </div>
                     )}
 
+                    {/* --- PESTAÑA FOTOS --- */}
+                    {activeTab === 'photos' && (
+                        <div className="space-y-6">
+                            {/* FOTO PRINCIPAL */}
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Foto Principal</h3>
+                                <div 
+                                    onClick={() => mainInputRef.current?.click()}
+                                    className="relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden cursor-pointer hover:border-brand-400 group"
+                                >
+                                    {/* Mostramos la preview nueva O la URL existente */}
+                                    {mainImagePreview || formData.img_main_url ? (
+                                        <>
+                                            <img 
+                                                src={mainImagePreview || formData.img_main_url} 
+                                                alt="Principal" 
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <p className="text-white text-sm font-medium flex items-center gap-2">
+                                                    <UploadCloud className="w-5 h-5" /> Cambiar Portada
+                                                </p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                            <ImageIcon className="w-10 h-10 mb-2" />
+                                            <span>Click para subir portada</span>
+                                        </div>
+                                    )}
+                                    <input 
+                                        type="file" 
+                                        ref={mainInputRef} 
+                                        className="hidden" 
+                                        accept="image/*" 
+                                        onChange={handleMainImageSelect}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* GALERÍA */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                        Galería ({existingGallery.length + newGalleryFiles.length})
+                                    </h3>
+                                    <button 
+                                        onClick={() => galleryInputRef.current?.click()}
+                                        className="text-xs text-brand-600 font-bold hover:underline flex items-center gap-1"
+                                    >
+                                        <Plus className="w-4 h-4" /> Agregar Fotos
+                                    </button>
+                                </div>
+                                
+                                <input 
+                                    type="file" 
+                                    ref={galleryInputRef} 
+                                    className="hidden" 
+                                    accept="image/*" 
+                                    multiple
+                                    onChange={handleGallerySelect}
+                                />
+
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                    {/* 1. Fotos Existentes */}
+                                    {existingGallery.map((url, idx) => (
+                                        <div key={`exist-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                                            <img src={url} alt="Galeria" className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                            <button 
+                                                onClick={() => removeExistingGalleryImage(idx)}
+                                                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 transform hover:scale-110"
+                                                title="Eliminar foto"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                            <span className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded opacity-0 group-hover:opacity-100">Guardada</span>
+                                        </div>
+                                    ))}
+
+                                    {/* 2. Fotos Nuevas (Pendientes) */}
+                                    {newGalleryPreviews.map((preview, idx) => (
+                                        <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-brand-200 group">
+                                            <img src={preview} alt="Nueva" className="w-full h-full object-cover" />
+                                            <button 
+                                                onClick={() => removeNewGalleryImage(idx)}
+                                                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                            <span className="absolute bottom-1 left-1 bg-brand-500 text-white text-[10px] px-1.5 rounded font-medium">Nueva</span>
+                                        </div>
+                                    ))}
+
+                                    {/* Botón "Agregar más" en la grilla */}
+                                    <div 
+                                        onClick={() => galleryInputRef.current?.click()}
+                                        className="aspect-square rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-slate-50 text-slate-300 hover:text-brand-500 transition-colors"
+                                    >
+                                        <Plus className="w-6 h-6 mb-1" />
+                                        <span className="text-[10px] font-medium">Agregar</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* --- PESTAÑA MARKETING --- */}
                     {activeTab === 'marketing' && (
                         <div className="space-y-8">
-
                             {/* Toggle Principal */}
                             <div className="flex items-center justify-between bg-purple-50 p-4 rounded-xl border border-purple-100">
                                 <div>
@@ -307,52 +493,41 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                     />
                                 </div>
                             </div>
-
-                            {/* URL de Foto */}
-                            <InputGroup label="URL Foto Principal">
-                                <div className="relative">
-                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                        <ImageIcon className="h-4 w-4" />
-                                    </div>
-                                    <Input
-                                        placeholder="https://..."
-                                        className="pl-9"
-                                        value={formData.img_main_url}
-                                        onChange={(e) => handleChange('img_main_url', e.target.value)}
-                                    />
-                                </div>
-                                <p className="text-[10px] text-slate-400 mt-1">Pega aquí el link directo a la imagen del auto.</p>
-                            </InputGroup>
                         </div>
                     )}
 
                 </div>
 
                 {/* FOOTER (Acciones) */}
-                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Guardando...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="h-4 w-4" />
-                                Guardar Cambios
-                            </>
-                        )}
-                    </button>
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <span className="text-xs text-slate-500 italic animate-pulse">
+                        {uploadStatus}
+                    </span>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    {uploadStatus || "Guardando..."}
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="h-4 w-4" />
+                                    Guardar Cambios
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
             </div>
