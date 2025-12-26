@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import './global.css'
 import { AuthProvider } from '@/contexts/AuthContext'
-import { Navbar } from '@/components/layout/Navbar'
+import { NavbarWrapper } from '@/components/layout/NavbarWrapper' // <--- IMPORTAR NUEVO WRAPPER
 
 const satoshi = localFont({
   src: [
@@ -43,8 +43,9 @@ export default function RootLayout({
     <html lang="es" className={satoshi.variable}>
       <body className="font-sans bg-[#f2f2f2] text-[#000]">
         <AuthProvider>
-<div className="print:hidden">
-            <Navbar />
+          <div className="print:hidden">
+             {/* CAMBIO: Usamos el Wrapper condicional */}
+            <NavbarWrapper />
           </div>
           {children}
         </AuthProvider>
