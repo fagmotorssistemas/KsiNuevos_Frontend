@@ -2,42 +2,51 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth"; // Importamos el hook de autenticación
+import { useAuth } from "@/hooks/useAuth";
 
 export function MainNav({ className }: { className?: string }) {
-    const pathname = usePathname();
-    const { profile } = useAuth(); // Obtenemos el perfil del usuario actual
+  const pathname = usePathname();
+  const { profile } = useAuth();
 
-    // Definimos los items dentro del componente para acceder a 'profile'
-    const navItems = [
-        { href: "/leads", label: "Leads" },
-        { href: "/showroom", label: "Showroom" },
-        { href: "/agenda", label: "Agenda" },
-        { href: "/inventory", label: "Inventario" },
-        { href: "/requests", label: "Pedidos" },
-        { href: "/tareas", label: "Tareas" },
-        { href: "/finance", label: "Financiamiento" },
-        // Condicional: Solo agregamos este objeto al array si el rol es 'admin'
-        ...(profile?.role === 'admin' ? [{ href: "/report", label: "Admin" }] : []),
-    ];
+  const navItems = [
+    { href: "/leads", label: "Leads" },
+    { href: "/showroom", label: "Showroom" },
+    { href: "/agenda", label: "Agenda" },
+    { href: "/inventory", label: "Inventario" },
+    { href: "/requests", label: "Pedidos" },
+    { href: "/tareas", label: "Tareas" },
+    { href: "/finance", label: "Financiamiento" },
 
-    return (
-        <nav className={`flex items-center space-x-1 ${className}`}>
-            {navItems.map((item) => {
-                const isActive = pathname?.startsWith(item.href);
-                return (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${isActive
-                            ? "bg-slate-900 text-white shadow-sm"
-                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                            }`}
-                    >
-                        {item.label}
-                    </Link>
-                );
-            })}
-        </nav>
-    );
+    // Admin y Marketing pueden ver /report
+    ...(profile?.role === "admin" || profile?.role === "marketing"
+      ? [
+          {
+            href: "/report",
+            label: profile?.role === "marketing" ? "Marketing" : "Admin",
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <nav className={`flex items-center space-x-1 ${className}`}>
+      {navItems.map((item) => {
+        const isActive = pathname?.startsWith(item.href);
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
+              isActive
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }

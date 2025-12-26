@@ -34,13 +34,9 @@ function StatCard({ icon: Icon, label, value, color, bg }: { icon: any, label: s
 export default function AdminDashboardPage() {
     const { profile, isLoading: isAuthLoading } = useAuth();
     
-    // Tab Principal
     const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles'>('sellers');
-    
-    // Filtro de estado del inventario (disponible por defecto)
     const [inventoryStatus, setInventoryStatus] = useState<string>('disponible');
 
-    // Hook Vendedores
     const {
         stats: sellerStats,
         isLoading: isSellersLoading,
@@ -51,7 +47,6 @@ export default function AdminDashboardPage() {
         reload: reloadSellers
     } = useAdminStats();
 
-    // Hook Vehículos (Le pasamos el filtro de estado)
     const {
         inventoryStats,    
         opportunityStats,
@@ -72,7 +67,15 @@ export default function AdminDashboardPage() {
         proformas: acc.proformas + curr.proformas_created
     }), { leads: 0, showroom: 0, appointments: 0, requests: 0, proformas: 0 }), [sellerStats]);
 
-    if (!isAuthLoading && (!profile || (profile.role !== 'admin' && profile.role !== 'vendedor'))) {
+
+    // 🔥 ÚNICO CAMBIO: ahora marketing también entra
+    if (
+        !isAuthLoading &&
+        (!profile ||
+        (profile.role !== 'admin' &&
+         profile.role !== 'vendedor' &&
+         profile.role !== 'marketing'))
+    ) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-600">
                 <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
@@ -85,7 +88,6 @@ export default function AdminDashboardPage() {
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen font-sans">
             
-            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Panel de Resultados</h1>
@@ -96,7 +98,6 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* TOOLBAR */}
             <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
                 <AdminToolbar 
                     currentFilter={dateFilter}
@@ -108,7 +109,6 @@ export default function AdminDashboardPage() {
                 />
             </div>
 
-            {/* TABS PRINCIPALES */}
             <div className="flex items-center gap-1 bg-slate-200/50 p-1 rounded-lg w-fit">
                 <button
                     onClick={() => setActiveTab('sellers')}
@@ -134,11 +134,9 @@ export default function AdminDashboardPage() {
                 </button>
             </div>
 
-            {/* CONTENIDO */}
             <div className="min-h-[400px]">
                 
                 {activeTab === 'sellers' ? (
-                    // --- VISTA 1: ASESORES ---
                     <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <StatCard icon={MessageCircle} label="Leads Resp." value={grandTotals.leads} color="text-blue-600" bg="bg-blue-50" />
@@ -166,6 +164,7 @@ export default function AdminDashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
+                                        {/* resto igual */}
                                         {isSellersLoading ? (
                                             [...Array(5)].map((_, i) => (
                                                 <tr key={i} className="animate-pulse">
@@ -217,13 +216,12 @@ export default function AdminDashboardPage() {
                         </div>
                     </div>
                 ) : (
-                    // --- VISTA 2: VEHÍCULOS E INVENTARIO ---
                     <VehicleStatsView 
                         stats={inventoryStats} 
                         opportunities={opportunityStats}
                         isLoading={isVehicleLoading}
-                        statusFilter={inventoryStatus} // PASAMOS ESTADO
-                        onStatusFilterChange={setInventoryStatus} // PASAMOS SETTER
+                        statusFilter={inventoryStatus}
+                        onStatusFilterChange={setInventoryStatus}
                     />
                 )}
             </div>
