@@ -16,6 +16,7 @@ export function MainNav({ className }: { className?: string }) {
     { href: "/requests", label: "Pedidos" },
     { href: "/tareas", label: "Tareas" },
     { href: "/finance", label: "Financiamiento" },
+    // { href: "/wallet", label: "Cartera" },
 
     // Admin y Marketing pueden ver /report
     ...(profile?.role === "admin" || profile?.role === "marketing"
