@@ -1,15 +1,16 @@
-import { ClientePB } from '../../../hooks/contapb/types';
-import { User, Phone, FileText, MapPin, MoreHorizontal } from 'lucide-react';
+import { ClientePB } from '@/hooks/contapb/types';
+import { User, Phone, FileText, MapPin, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface ClienteCardProps {
     cliente: ClientePB;
     onEdit?: (cliente: ClientePB) => void;
+    onDelete?: (clienteId: string) => void;
 }
 
-export const ClienteCard = ({ cliente, onEdit }: ClienteCardProps) => {
+export const ClienteCard = ({ cliente, onEdit, onDelete }: ClienteCardProps) => {
 
-    // Color dinámico según la calificación (o el color personalizado si existe)
+    // Color dinámico según la calificación
     const getStatusColor = (calificacion: string | null) => {
         if (cliente.color_etiqueta) return { bg: `${cliente.color_etiqueta}10`, border: cliente.color_etiqueta, text: 'text-gray-700' };
 
@@ -24,29 +25,36 @@ export const ClienteCard = ({ cliente, onEdit }: ClienteCardProps) => {
     const styles = getStatusColor(cliente.calificacion_cliente);
 
     return (
-        <div className={`group rounded-2xl border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full bg-white`}
+        <div className={`group relative rounded-2xl border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full bg-white`}
             style={{ borderColor: styles.border }}>
+
+            {/* BOTÓN ELIMINAR FLOTANTE - SIEMPRE VISIBLE Y NEGRO */}
+            {onDelete && (
+                <button 
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDelete(cliente.id);
+                    }}
+                    className="absolute top-2 right-2 z-50 p-2 bg-white text-black hover:text-red-600 hover:bg-red-50 rounded-full shadow-md border border-gray-200 transition-colors flex items-center justify-center"
+                    title="Eliminar Cliente"
+                    style={{ minWidth: '32px', minHeight: '32px' }}
+                >
+                    <Trash2 size={18} strokeWidth={2.5} />
+                </button>
+            )}
 
             {/* 1. HEADER (Color + Icono) */}
             <div className={`relative h-24 ${styles.bg} flex items-center justify-center border-b border-gray-100`}>
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-500">
                     <User size={24} />
                 </div>
-
-                {/* Badge de Calificación Flotante
-                {cliente.calificacion_cliente && (
-                    <div className="absolute top-3 right-3">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border shadow-sm bg-white ${styles.text}`}>
-                            {cliente.calificacion_cliente}
-                        </span>
-                    </div>
-                )} */}
             </div>
 
             {/* 2. INFO (Body) */}
             <div className="p-4 flex flex-col flex-1">
                 <div className="mb-3 text-center">
-                    <h3 className="font-bold text-slate-800 text-lg leading-tight truncate">
+                    <h3 className="font-bold text-slate-800 text-lg leading-tight truncate" title={cliente.nombre_completo}>
                         {cliente.nombre_completo}
                     </h3>
                     <p className="text-xs text-slate-400 font-mono mt-1">
@@ -65,7 +73,7 @@ export const ClienteCard = ({ cliente, onEdit }: ClienteCardProps) => {
                     {cliente.direccion && (
                         <div className="flex items-center gap-2 truncate">
                             <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            <span className="truncate">{cliente.direccion}</span>
+                            <span className="truncate" title={cliente.direccion}>{cliente.direccion}</span>
                         </div>
                     )}
                     {cliente.observaciones_legales && (
@@ -84,13 +92,6 @@ export const ClienteCard = ({ cliente, onEdit }: ClienteCardProps) => {
                     >
                         Ver Cartera
                     </Link>
-
-                    {/* <button
-                        onClick={() => onEdit && onEdit(cliente)}
-                        className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-transparent hover:border-blue-100 transition-all"
-                    >
-                        <MoreHorizontal className="h-4 w-4" />
-                    </button> */}
                 </div>
             </div>
         </div>

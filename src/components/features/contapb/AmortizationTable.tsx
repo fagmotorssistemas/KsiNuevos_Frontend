@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Download, RefreshCw, Printer, Wand2 } from 'lucide-react';
+import { Plus, Download, RefreshCw, Printer, Wand2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { CuotaPB, ContratoCompleto, ClientePB } from '@/hooks/contapb/types';
 import { AmortizationRow } from './AmortizationRow';
@@ -15,6 +15,8 @@ interface AmortizationTableProps {
   onRefresh: () => void;
 }
 
+const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
 export function AmortizationTable({ contrato, cliente, onRefresh }: AmortizationTableProps) {
   const { supabase } = useAuth();
   const [cuotas, setCuotas] = useState<CuotaPB[]>([]);
@@ -29,38 +31,36 @@ export function AmortizationTable({ contrato, cliente, onRefresh }: Amortization
     }
   }, [contrato]);
 
-  // Actualizar Fila
   const handleUpdateRow = async (id: string, updates: Partial<CuotaPB>) => {
-     // 1. Update Optimista en UI (Aquí sí dejamos los campos calculados para que no parpadee)
      setCuotas(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
      setIsSyncing(true);
-
      try {
-         // 2. LIMPIEZA DE DATOS: Eliminamos campos que no existen en la BD
-         // Usamos 'as any' para poder desestructurar propiedades que Typescript no conoce en CuotaPB
-         const { 
-             saldo_calculado_momento, 
-             saldo_calculado_reporte,
-             ...cleanUpdates 
-         } = updates as any;
-
-         // 3. Enviamos solo los datos limpios a Supabase
+         const { saldo_calculado_momento, ...cleanUpdates } = updates as any;
          const { error } = await supabase.from('cuotaspb').update(cleanUpdates).eq('id', id);
-         
          if (error) throw error;
      } catch(e) { 
          console.error(e); 
          toast.error("Error al guardar cambios");
-         // Opcional: Revertir cambios aquí si falla
      } 
      finally { setIsSyncing(false); }
   };
 
-  // Resto de handlers (Delete, Add) igual que antes...
   const handleDeleteRow = async (id: string) => {
       if(!confirm("¿Borrar esta fila?")) return;
       setCuotas(prev => prev.filter(c => c.id !== id));
       await supabase.from('cuotaspb').delete().eq('id', id);
+  };
+
+  const handleDeleteAll = async () => {
+      if(!confirm("⚠️ ¿ELIMINAR TODA LA TABLA?")) return;
+      setIsSyncing(true);
+      try {
+          await supabase.from('cuotaspb').delete().eq('contrato_id', contrato.id);
+          setCuotas([]);
+          toast.success("Tabla eliminada");
+          onRefresh();
+      } catch(e) { toast.error("Error"); } 
+      finally { setIsSyncing(false); }
   };
 
   const handleAddRow = async (afterOrder?: number) => {
@@ -83,50 +83,119 @@ export function AmortizationTable({ contrato, cliente, onRefresh }: Amortization
           fecha_vencimiento: new Date().toISOString(),
           valor_capital: 0,
           valor_interes: 0,
+          valor_cuota_total: 0,
           estado_pago: 'PENDIENTE'
       };
 
       const { data } = await supabase.from('cuotaspb').insert([nueva]).select().single();
       if(data) {
           setCuotas(prev => [...prev, data as CuotaPB].sort((a, b) => a.indice_ordenamiento - b.indice_ordenamiento));
-          toast.success("Fila insertada");
       }
       setIsSyncing(false);
   };
 
-  const handleGenerateSchedule = async (params: { monto: number; plazo: number; fechaInicio: string; interes: number }) => {
+  // --- LÓGICA DE GENERACIÓN ---
+  const handleGenerateSchedule = async (params: { monto: number; plazo: number; fechaInicio: string; tasa: number; tipo: 'LINEAR' | 'FRANCES' | 'ALEMAN' }) => {
       setIsSyncing(true);
-      toast.info("Generando tabla y actualizando saldo...");
-
+      
       try {
-          // Actualizar Saldo Inicial del Contrato
-          await supabase.from('contratospb').update({ saldo_inicial_total: params.monto }).eq('id', contrato.id);
+          let montoTotalGenerar = params.monto;
+
+          // CÁLCULO DE CRÉDITO DIRECTO (LINEAR)
+          // Sumamos el interés total al capital inicial antes de generar la tabla.
+          if (params.tipo === 'LINEAR') {
+               const interesTotal = params.monto * (params.tasa / 100) * params.plazo;
+               montoTotalGenerar = params.monto + interesTotal;
+               
+               toast.info(`Generando tabla: Capital $${params.monto} + Interés $${interesTotal.toFixed(2)}`);
+          } else {
+               toast.info(`Generando tabla ${params.tipo}...`);
+          }
+
+          // Actualizamos el saldo inicial del contrato con el valor TOTAL (con intereses si es Linear)
+          await supabase.from('contratospb').update({ saldo_inicial_total: montoTotalGenerar }).eq('id', contrato.id);
           
           const cuotasGeneradas = [];
-          const capitalMensual = params.monto / params.plazo;
-          const interesMensual = params.interes / params.plazo;
           const startDate = new Date(params.fechaInicio);
           let startIndex = cuotas.length > 0 ? Math.max(...cuotas.map(c => c.indice_ordenamiento)) : 0;
+          
+          // Variables iniciales
+          let saldoRestante = montoTotalGenerar;
+          const i_mensual = params.tasa / 100;
+          
+          // Pre-cálculos
+          let capitalFijoLinear = 0;
+          let capitalFijoAleman = 0;
+          let cuotaFijaFrances = 0;
 
-          for (let i = 0; i < params.plazo; i++) {
-              const fechaCuota = addMonths(startDate, i);
-              const orden = startIndex + 1 + i;
+          if (params.tipo === 'LINEAR') {
+              // DIVISIÓN EXACTA DEL TOTAL (Ya incluye interés)
+              capitalFijoLinear = round2(montoTotalGenerar / params.plazo);
+          } else if (params.tipo === 'ALEMAN') {
+              capitalFijoAleman = round2(params.monto / params.plazo);
+          } else if (params.tipo === 'FRANCES') {
+              if (i_mensual > 0) {
+                cuotaFijaFrances = round2(params.monto * ( (i_mensual * Math.pow(1+i_mensual, params.plazo)) / (Math.pow(1+i_mensual, params.plazo) - 1) ));
+              } else {
+                cuotaFijaFrances = round2(params.monto / params.plazo);
+              }
+          }
+
+          for (let k = 0; k < params.plazo; k++) {
+              const fechaCuota = addMonths(startDate, k);
+              const orden = startIndex + 1 + k;
+              
+              let interesMes = 0;
+              let capitalMes = 0; // En modo linear, esto es la cuota completa
+              
+              if (params.tipo === 'LINEAR') {
+                  // --- CRÉDITO DIRECTO ---
+                  // En la tabla, NO se muestra interés mensual porque ya está cargado al saldo total.
+                  interesMes = 0; 
+                  capitalMes = capitalFijoLinear;
+                  
+                  // Ajuste último mes
+                  if (k === params.plazo - 1) {
+                      const acumulado = round2(capitalFijoLinear * (params.plazo - 1));
+                      capitalMes = round2(montoTotalGenerar - acumulado);
+                  }
+              } 
+              else {
+                  // --- MÉTODOS BANCARIOS (Alemán/Francés) ---
+                  interesMes = round2(saldoRestante * i_mensual);
+                  
+                  if (params.tipo === 'ALEMAN') {
+                      capitalMes = capitalFijoAleman;
+                  } else { // FRANCES
+                      capitalMes = round2(cuotaFijaFrances - interesMes);
+                  }
+
+                  if (k === params.plazo - 1 || capitalMes > saldoRestante) {
+                      capitalMes = saldoRestante;
+                  }
+                  
+                  saldoRestante = round2(saldoRestante - capitalMes);
+              }
+
+              const cuotaTotal = round2(capitalMes + interesMes);
+
               cuotasGeneradas.push({
                   contrato_id: contrato.id,
                   indice_ordenamiento: orden,
                   numero_cuota_texto: `${Math.floor(orden)}`,
-                  concepto: `Cuota Mensual ${i + 1}/${params.plazo}`,
+                  concepto: `Cuota Mensual ${k + 1}/${params.plazo}`,
                   fecha_vencimiento: fechaCuota.toISOString(),
-                  valor_capital: capitalMensual,
-                  valor_interes: interesMensual,
-                  valor_cuota_total: capitalMensual + interesMensual,
+                  valor_capital: capitalMes,
+                  valor_interes: interesMes,
+                  valor_cuota_total: cuotaTotal,
                   estado_pago: 'PENDIENTE',
-                  saldo_pendiente: capitalMensual + interesMensual,
+                  saldo_pendiente: cuotaTotal,
                   es_adicional: false
               });
           }
+
           await supabase.from('cuotaspb').insert(cuotasGeneradas);
-          toast.success(`${params.plazo} cuotas generadas`);
+          toast.success("Tabla generada exitosamente");
           onRefresh();
       } catch(e) { 
           console.error(e); 
@@ -135,19 +204,28 @@ export function AmortizationTable({ contrato, cliente, onRefresh }: Amortization
       finally { setIsSyncing(false); }
   };
 
-  // CÁLCULO DE SALDOS PARA DISPLAY Y EXPORTACIÓN
-  let saldoAcumulado = contrato.saldo_inicial_total || 0;
+  // --- CÁLCULO DE SALDOS ---
+  let saldoCapitalAcumulado = contrato.saldo_inicial_total || 0;
   
   const cuotasConSaldo = cuotas.map(cuota => {
-      const interes = cuota.valor_interes || 0;
-      const mora = cuota.valor_mora_cobrado || 0;
-      const pagado = cuota.valor_pagado || 0;
-      saldoAcumulado = saldoAcumulado + interes + mora - pagado;
-      return { ...cuota, saldo_calculado_momento: saldoAcumulado };
+      const pagadoTotal = cuota.valor_pagado || 0;
+      const costoInteres = cuota.valor_interes || 0;
+      const costoMora = cuota.valor_mora_cobrado || 0;
+      
+      const sobranteParaCapital = pagadoTotal - costoMora - costoInteres;
+      const abonoCapitalReal = Math.max(0, sobranteParaCapital);
+      
+      saldoCapitalAcumulado = round2(saldoCapitalAcumulado - abonoCapitalReal);
+      
+      return { ...cuota, saldo_calculado_momento: saldoCapitalAcumulado };
   });
 
-  const totalMora = cuotas.reduce((sum, c) => sum + (c.valor_mora_cobrado || 0), 0);
-  const totalPagado = cuotas.reduce((sum, c) => sum + (c.valor_pagado || 0), 0);
+  const totalMora = round2(cuotas.reduce((sum, c) => sum + (c.valor_mora_cobrado || 0), 0));
+  const totalPagado = round2(cuotas.reduce((sum, c) => sum + (c.valor_pagado || 0), 0));
+  const totalCapital = round2(cuotas.reduce((sum, c) => sum + (c.valor_capital || 0), 0));
+  const totalInteres = round2(cuotas.reduce((sum, c) => sum + (c.valor_interes || 0), 0));
+  const totalCuotaEsperada = round2(cuotas.reduce((sum, c) => sum + (c.valor_cuota_total || 0), 0));
+  const saldoFinal = round2(saldoCapitalAcumulado);
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,40 +240,46 @@ export function AmortizationTable({ contrato, cliente, onRefresh }: Amortization
                     <Plus size={16} className="mr-1" /> Fila Final
                 </Button>
             </div>
-
             <div className="flex gap-2 items-center">
                 {isSyncing && <span className="text-xs text-gray-400 animate-pulse flex items-center gap-1 mr-2"><RefreshCw size={12} className="animate-spin"/> Guardando...</span>}
+                <Button size="sm" variant="ghost" onClick={handleDeleteAll} className="text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={16} /></Button>
                 <Button size="sm" variant="ghost" onClick={() => exportToPDF(cliente, contrato, cuotasConSaldo)}><Printer size={16} /></Button>
-                {/* Pasamos cuotasConSaldo a Excel para que lleve los cálculos nuevos */}
-                <Button size="sm" variant="ghost" onClick={() => exportToExcel(cliente, contrato, cuotasConSaldo)}><Download size={16} /></Button>
             </div>
         </div>
 
-        <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm bg-white pb-10">
-            <table className="w-full min-w-[1300px] border-collapse">
-                <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider sticky top-0 z-10 shadow-sm">
+        <div className="overflow-auto border border-gray-200 rounded-lg shadow-sm bg-white max-h-[70vh] relative">
+            <table className="w-full min-w-[1300px] border-collapse relative">
+                <thead className="bg-gray-100 text-gray-600 text-xs uppercase font-bold tracking-wider sticky top-0 z-20 shadow-sm">
                     <tr>
-                        <th className="p-2 border-b text-center w-8">#</th>
-                        <th className="p-2 border-b text-left min-w-[120px]">Concepto</th>
-                        <th className="p-2 border-b text-left w-[100px]">F. Vence</th>
-                        <th className="p-2 border-b text-right w-24 text-blue-800 bg-blue-50/30">Capital</th>
-                        <th className="p-2 border-b text-right w-16">Int.</th>
-                        <th className="p-2 border-b text-center w-10">Días</th>
-                        <th className="p-2 border-b text-right w-20 text-red-600">Mora</th>
+                        <th className="p-2 border-b text-center w-8 bg-gray-100">#</th>
+                        <th className="p-2 border-b text-left min-w-[120px] bg-gray-100">Concepto</th>
+                        <th className="p-2 border-b text-left w-[100px] bg-gray-100">F. Vence</th>
+                        <th className="p-2 border-b text-right w-24 bg-gray-100 text-gray-500">Capital</th>
+                        <th className="p-2 border-b text-right w-20 bg-gray-100 text-gray-500">Int.</th>
+                        
+                        {/* COLUMNA CUOTA TOTAL */}
+                        <th className="p-2 border-b text-right w-24 bg-blue-50 text-blue-800 border-l border-blue-100">Cuota</th>
+                        
+                        <th className="p-2 border-b text-center w-10 bg-gray-100">Días</th>
+                        <th className="p-2 border-b text-right w-20 text-red-600 bg-gray-100">Mora</th>
                         <th className="p-2 border-b text-right bg-green-50 text-green-800 w-24">Pagado</th>
-                        <th className="p-2 border-b text-right w-20 text-gray-500">Saldo C.</th>
-                        <th className="p-2 border-b text-left w-[100px]">F. Pago</th>
-                        <th className="p-2 border-b text-left min-w-[150px]">Observación</th>
-                        <th className="p-2 border-b text-center w-24">Acción</th>
+                        <th className="p-2 border-b text-right w-24 text-gray-500 bg-gray-100">Saldo C.</th>
+                        <th className="p-2 border-b text-left w-[100px] bg-gray-100">F. Pago</th>
+                        <th className="p-2 border-b text-left min-w-[150px] bg-gray-100">Observación</th>
+                        <th className="p-2 border-b text-center w-24 bg-gray-100">Acción</th>
                     </tr>
                 </thead>
                 <tbody className="text-sm">
                     <tr className="bg-blue-50/20 text-xs">
                         <td colSpan={3} className="p-2 text-right font-bold text-gray-500">SALDO INICIAL:</td>
+                        <td className="p-2 text-right font-bold text-gray-500">-</td>
+                        <td className="p-2 text-right">-</td>
+                        <td className="p-2 text-right">-</td>
+                        <td colSpan={3}></td>
                         <td className="p-2 text-right font-bold text-blue-800">
                             ${(contrato.saldo_inicial_total || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}
                         </td>
-                        <td colSpan={8}></td>
+                        <td colSpan={3}></td>
                     </tr>
 
                     {cuotasConSaldo.map((cuota) => (
@@ -209,15 +293,21 @@ export function AmortizationTable({ contrato, cliente, onRefresh }: Amortization
                             onInsertAfter={handleAddRow}
                         />
                     ))}
-                    
-                    <tr className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
-                        <td colSpan={6} className="p-3 text-right text-gray-500 uppercase">Totales Generales:</td>
-                        <td className="p-3 text-right text-red-600">${totalMora.toFixed(2)}</td>
-                        <td className="p-3 text-right text-green-700">${totalPagado.toFixed(2)}</td>
-                        <td className="p-3 text-right text-blue-800">${saldoAcumulado.toFixed(2)}</td>
-                        <td colSpan={4}></td>
-                    </tr>
                 </tbody>
+                
+                <tfoot className="sticky bottom-0 z-20 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] border-t-2 border-blue-100">
+                    <tr className="font-bold text-xs">
+                        <td colSpan={3} className="p-3 text-right text-gray-500 uppercase bg-gray-50">Totales:</td>
+                        <td className="p-3 text-right text-gray-500 bg-gray-50">${totalCapital.toFixed(2)}</td>
+                        <td className="p-3 text-right text-gray-500 bg-gray-50">${totalInteres.toFixed(2)}</td>
+                        <td className="p-3 text-right text-blue-800 bg-blue-50">${totalCuotaEsperada.toFixed(2)}</td>
+                        <td className="p-3 bg-gray-50"></td>
+                        <td className="p-3 text-right text-red-600 bg-gray-50">${totalMora.toFixed(2)}</td>
+                        <td className="p-3 text-right text-green-700 bg-green-50">${totalPagado.toFixed(2)}</td>
+                        <td className="p-3 text-right text-blue-800 bg-blue-50">${saldoFinal.toFixed(2)}</td>
+                        <td colSpan={3} className="bg-gray-50"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 

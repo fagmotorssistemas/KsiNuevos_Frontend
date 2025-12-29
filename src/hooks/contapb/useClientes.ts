@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { ClientePB } from "./types";
+import { toast } from "sonner";
 
 // --- TIPOS DE FILTROS ---
 export type SortOption = 'newest' | 'oldest' | 'name_asc' | 'name_desc';
@@ -11,7 +12,6 @@ export type ClientesFilters = {
 };
 
 export function useClientes() {
-    // CAMBIO: Ya no sacamos 'user' ni 'isAuthLoading' porque no los validaremos
     const { supabase } = useAuth();
 
     // Estado de Datos
@@ -28,7 +28,7 @@ export function useClientes() {
         calificacion: 'all',
     });
 
-    // 1. CARGA DE DATOS (Sin restricción de usuario)
+    // 1. CARGA DE DATOS
     const fetchClientes = useCallback(async () => {
         setIsLoading(true);
 
@@ -39,18 +39,71 @@ export function useClientes() {
 
         if (error) {
             console.error("Error cargando clientes:", error);
+            toast.error("Error al cargar la lista de clientes");
         } else {
             setClientes(data || []);
         }
         setIsLoading(false);
     }, [supabase]);
 
-    // Cargar al iniciar (Siempre)
     useEffect(() => {
         fetchClientes();
     }, [fetchClientes]);
 
-    // 2. LÓGICA DE FILTRADO Y ORDENAMIENTO (Memoizada)
+    // 2. FUNCIÓN DE ELIMINACIÓN EN CASCADA
+    const deleteCliente = async (clienteId: string) => {
+        if (!confirm("⚠️ ¿ESTÁ SEGURO?\n\nSe eliminará el cliente y TODOS sus contratos, historial y cobros.\n\nEsta acción es IRREVERSIBLE.")) return;
+
+        setIsLoading(true);
+        try {
+            // PASO A: Obtener contratos del cliente para borrar sus dependencias
+            const { data: contratos } = await supabase
+                .from('contratospb')
+                .select('id')
+                .eq('cliente_id', clienteId);
+
+            if (contratos && contratos.length > 0) {
+                const contratoIds = contratos.map(c => c.id);
+                
+                // PASO B: Borrar todas las cuotas asociadas a esos contratos
+                const { error: errorCuotas } = await supabase
+                    .from('cuotaspb')
+                    .delete()
+                    .in('contrato_id', contratoIds);
+                
+                if (errorCuotas) throw errorCuotas;
+
+                // PASO C: Borrar los contratos
+                const { error: errorContratos } = await supabase
+                    .from('contratospb')
+                    .delete()
+                    .in('id', contratoIds);
+
+                if (errorContratos) throw errorContratos;
+            }
+            
+            // PASO D: Finalmente borrar el cliente
+            const { error: errorCliente } = await supabase
+                .from('clientespb')
+                .delete()
+                .eq('id', clienteId);
+            
+            if (errorCliente) throw errorCliente;
+            
+            toast.success("Cliente y datos relacionados eliminados correctamente");
+            
+            // Actualizar lista localmente para no recargar todo
+            setClientes(prev => prev.filter(c => c.id !== clienteId));
+
+        } catch (error: any) {
+            console.error("Error al eliminar:", error);
+            toast.error("No se pudo eliminar: " + (error.message || "Error desconocido"));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // 3. LÓGICA DE FILTRADO Y ORDENAMIENTO
     const processedClientes = useMemo(() => {
         let result = [...clientes];
 
@@ -81,7 +134,7 @@ export function useClientes() {
         return result;
     }, [clientes, filters, sortBy]);
 
-    // 3. PAGINACIÓN
+    // 4. PAGINACIÓN
     const paginatedClientes = useMemo(() => {
         const startIndex = (page - 1) * rowsPerPage;
         const endIndex = startIndex + rowsPerPage;
@@ -104,6 +157,7 @@ export function useClientes() {
         rowsPerPage,
         isLoading,
         reload: fetchClientes,
+        deleteCliente, // <--- Exportamos la función
         sortBy,
         setSortBy,
         filters,
