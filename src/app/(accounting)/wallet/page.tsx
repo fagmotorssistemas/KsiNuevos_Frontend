@@ -1,19 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import {
-    KpiDashboard
-} from "@/components/features/accounting/wallet/KpiDashboard";
-import {
-    TopDebtorsTable
-} from "@/components/features/accounting/wallet/TopDebtorsTable";
-import {
-    ClientSearch
-} from "@/components/features/accounting/wallet/ClientSearch";
-import {
-    ClientDetail
-} from "@/components/features/accounting/wallet/ClientDetail";
+import { RefreshCw } from "lucide-react"; // Importamos icono de refresh
+
+import { KpiDashboard } from "@/components/features/accounting/wallet/KpiDashboard";
+import { TopDebtorsTable } from "@/components/features/accounting/wallet/TopDebtorsTable";
+import { ClientSearch } from "@/components/features/accounting/wallet/ClientSearch";
+import { ClientDetail } from "@/components/features/accounting/wallet/ClientDetail";
 import { useWalletData } from "@/hooks/accounting/useWalletData";
+import { Button } from "@/components/ui/Button"; // Asumimos que tienes un botón base UI
 
 export default function WalletPage() {
     // Estado para controlar qué pantalla vemos: 'dashboard' o 'detail'
@@ -33,27 +28,42 @@ export default function WalletPage() {
     const handleBack = () => {
         setView('dashboard');
         setSelectedClientId(null);
-        // Opcional: refrescar datos al volver por si algo cambió
-        // refresh(); 
+        // Opcional: refrescar datos al volver para ver si el KPI cambió tras una gestión
+        refresh(); 
     };
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Título y Buscador Global */}
+            {/* Título y Cabecera Global */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                        Gestión de Cartera
-                    </h1>
-                    <p className="text-slate-500 text-sm mt-1">
-                        Monitoreo de cobranzas y cuentas por cobrar
-                    </p>
+                <div className="flex items-start justify-between w-full md:w-auto">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            Gestión de Cartera
+                            {loading && <RefreshCw className="h-4 w-4 text-slate-400 animate-spin" />}
+                        </h1>
+                        <p className="text-slate-500 text-sm mt-1">
+                            Centro de comando de cobranzas y recuperación
+                        </p>
+                    </div>
                 </div>
 
-                {/* El buscador solo se muestra en el dashboard para no saturar el detalle */}
+                {/* Controles de Cabecera */}
                 {view === 'dashboard' && (
-                    <div className="w-full md:w-auto">
-                        <ClientSearch onSelectClient={handleSelectClient} />
+                    <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                        <div className="w-full md:w-96">
+                            <ClientSearch onSelectClient={handleSelectClient} />
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={refresh}
+                            disabled={loading}
+                            title="Actualizar datos"
+                            className="hidden md:flex shrink-0"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                        </Button>
                     </div>
                 )}
             </div>
