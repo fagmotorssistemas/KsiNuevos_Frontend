@@ -5,7 +5,7 @@ import {
     ClienteBusqueda
 } from '@/types/wallet.types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.117:3005/api';
 
 export const walletService = {
     // 1. Obtener KPIs
