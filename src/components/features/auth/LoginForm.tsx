@@ -28,20 +28,40 @@ export const LoginForm = () => {
     setIsLoading(true)
     setError(null)
 
-    // (5) Llamada a Supabase Auth (ahora usa la instancia 'supabase' del hook)
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    // (5) Llamada a Supabase Auth
+    // Capturamos 'data' para obtener el ID del usuario si el login es exitoso
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
     })
 
-    setIsLoading(false)
-
-    // (6) Manejo de la respuesta (sin cambios)
+    // (6) Manejo de la respuesta
     if (authError) {
+      setIsLoading(false)
       setError(authError.message)
     } else {
-      // ¡Éxito!
-      router.push('/leads')
+      // Login exitoso: Verificamos el rol antes de redirigir
+      if (data?.user) {
+        // Consultamos el perfil para obtener el rol
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single()
+
+        setIsLoading(false) // Detenemos la carga justo antes del redirect
+
+        // Lógica de redirección basada en el rol
+        if (profile?.role === 'finanzas') {
+          router.push('/wallet')
+        } else {
+          router.push('/leads')
+        }
+      } else {
+        // Fallback por seguridad
+        setIsLoading(false)
+        router.push('/leads')
+      }
     }
   }
 
