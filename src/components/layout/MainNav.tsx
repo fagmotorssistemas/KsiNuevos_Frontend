@@ -4,30 +4,47 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
+interface NavItem {
+  href: string;
+  label: string;
+}
+
 export function MainNav({ className }: { className?: string }) {
   const pathname = usePathname();
   const { profile } = useAuth();
+  
+  let navItems: NavItem[] = [];
 
-  const navItems = [
-    { href: "/leads", label: "Leads" },
-    { href: "/showroom", label: "Showroom" },
-    { href: "/agenda", label: "Agenda" },
-    { href: "/inventory", label: "Inventario" },
-    { href: "/requests", label: "Pedidos" },
-    { href: "/tareas", label: "Tareas" },
-    { href: "/finance", label: "Financiamiento" },
-    { href: "/wallet", label: "Cartera" },
+  // Lógica exclusiva para Finanzas: Solo ve Cartera
+  if (profile?.role === "finanzas") {
+    navItems = [
+      { href: "/wallet", label: "Cartera" }
+    ];
+  } else {
+    // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
+    navItems = [
+      { href: "/leads", label: "Leads" },
+      { href: "/showroom", label: "Showroom" },
+      { href: "/agenda", label: "Agenda" },
+      { href: "/inventory", label: "Inventario" },
+      { href: "/requests", label: "Pedidos" },
+      { href: "/tareas", label: "Tareas" },
+      { href: "/finance", label: "Financiamiento" },
+    ];
 
-    // Admin y Marketing pueden ver /report
-    ...(profile?.role === "admin" || profile?.role === "marketing"
-      ? [
-          {
-            href: "/report",
-            label: profile?.role === "marketing" ? "Marketing" : "Admin",
-          },
-        ]
-      : []),
-  ];
+    // Admin también necesita ver Cartera (opcional, asumiendo que Admin ve todo)
+    if (profile?.role === "admin") {
+      navItems.push({ href: "/wallet", label: "Cartera" });
+    }
+
+    // Admin y Marketing ven la sección de reportes
+    if (profile?.role === "admin" || profile?.role === "marketing") {
+      navItems.push({
+        href: "/report",
+        label: profile?.role === "marketing" ? "Marketing" : "Admin",
+      });
+    }
+  }
 
   return (
     <nav className={`flex items-center space-x-1 ${className}`}>
