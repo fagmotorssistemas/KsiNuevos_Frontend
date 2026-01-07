@@ -91,7 +91,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const docsVencidos = data.documentos.filter(d => d.diasMora > 0).length;
     
     // ✅ EXTRACCIÓN CORRECTA DEL NOMBRE Y DATOS DEL CLIENTE
-    // Primero intenta desde la raíz de la respuesta, luego desde el primer documento
     const nombreCliente = 
         (data as any).nombre || 
         (data as any).nombreCliente || 
@@ -136,10 +135,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                                    {/* <span className="flex items-center gap-1.5">
-                                        <User className="h-4 w-4 text-slate-400" /> 
-                                        {firstDoc?.cobrador ? `Cobrador: ${firstDoc.cobrador}` : 'Sin asignación'}
-                                    </span> */}
                                     <span className="hidden md:inline text-slate-300">|</span>
                                     <span className="flex items-center gap-1.5">
                                         <Hash className="h-4 w-4 text-slate-400" />
@@ -249,16 +244,34 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                             <Table.Head id="obs" label="Obs." className="hidden lg:table-cell" />
                         </Table.Header>
                         <Table.Body items={data.documentos}>
-                            {(doc: DetalleDocumento) => (
+                            {(doc: DetalleDocumento) => {
+                                // DETECCIÓN DE CUOTA ADICIONAL
+                                const esCuotaAdicional = doc.numeroDocumento && doc.numeroDocumento.includes("LET FV");
+                                
+                                return (
                                 <Table.Row id={doc.numeroDocumento}>
                                     <Table.Cell>
-                                        <div className="flex flex-col">
+                                        <div className="flex flex-col items-start">
                                             <span className="font-bold text-slate-800 text-sm">
                                                 {doc.tipoDocumento}
                                             </span>
-                                            <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-1 rounded w-fit">
-                                                Int: {doc.numeroDocumento}
-                                            </span>
+                                            
+                                            {/* RENDERIZADO CONDICIONAL DE ETIQUETA */}
+                                            {esCuotaAdicional ? (
+                                                <div className="mt-1 flex flex-col gap-1">
+                                                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded border border-purple-200 w-fit uppercase">
+                                                        Cuota Adicional
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-mono">
+                                                        {doc.numeroDocumento}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-1 rounded w-fit">
+                                                    Int: {doc.numeroDocumento}
+                                                </span>
+                                            )}
+
                                             {doc.numeroFisico && doc.numeroFisico !== doc.numeroDocumento && (
                                                 <span className="text-[11px] text-blue-600 font-mono mt-0.5">
                                                     Físico: {doc.numeroFisico}
@@ -329,7 +342,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                         )}
                                     </Table.Cell>
                                 </Table.Row>
-                            )}
+                            )}}
                         </Table.Body>
                     </Table>
                 </TableCard.Root>

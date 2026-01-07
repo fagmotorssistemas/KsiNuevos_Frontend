@@ -16,7 +16,8 @@ export const useWalletData = () => {
 
             // Ejecutamos ambas peticiones en paralelo para que cargue más rápido
             const [kpiData, debtorsData] = await Promise.all([
-                walletService.getKpis(),
+                // CORRECCIÓN AQUÍ: cambiamos .getKpis() por .getKpiResumen()
+                walletService.getKpiResumen(),
                 walletService.getTopDebtors(10) // Traemos el Top 10
             ]);
 
