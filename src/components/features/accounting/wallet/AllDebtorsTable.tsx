@@ -1,22 +1,24 @@
 import { 
-    User, 
-    FileWarning, 
+    Users, 
     ArrowRight,
     Building2,
     MapPin,
     MessageCircle,
+    Search,
+    Eye, // Recomendado: Importa 'Eye' si prefieres un icono de "Ver" en lugar de flecha
     Phone
 } from "lucide-react";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { ClienteDeudaSummary } from "@/types/wallet.types";
 import { ClientContactInfo } from "./ClientContactInfo";
 
-interface TopDebtorsTableProps {
+interface AllDebtorsTableProps {
     debtors: ClienteDeudaSummary[];
     onViewDetail: (clienteId: number) => void;
+    loading?: boolean;
 }
 
-export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps) {
+export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTableProps) {
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -27,13 +29,8 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
 
     const handleWhatsApp = (telefonos: { celular: string | null, principal: string | null }) => {
         const rawPhone = telefonos.celular || telefonos.principal;
-        
         if (!rawPhone) return;
-
-        // Limpieza básica: dejar solo números
         let cleanPhone = rawPhone.replace(/\D/g, '');
-
-        // Lógica para Ecuador (USD): Agregar 593
         if (cleanPhone.startsWith('09')) {
             cleanPhone = '593' + cleanPhone.substring(1);
         } else if (cleanPhone.startsWith('0') && cleanPhone.length === 9) {
@@ -41,15 +38,14 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         } else if (cleanPhone.length === 7) {
             cleanPhone = '5937' + cleanPhone;
         }
-
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
-    if (debtors.length === 0) {
+    if (!loading && debtors.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                <User className="h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-500 font-medium">No hay deudores para mostrar.</p>
+                <Search className="h-10 w-10 text-slate-300 mb-3" />
+                <p className="text-slate-500 font-medium">No se encontraron clientes.</p>
             </div>
         );
     }
@@ -58,22 +54,22 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
                 <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                    <FileWarning className="h-5 w-5 text-red-600" />
-                    Top Morosidad Crítica
+                    <Users className="h-5 w-5 text-blue-600" />
+                    Directorio de Clientes (A-Z)
                 </h3>
-                <span className="text-xs text-slate-500 font-medium bg-red-50 text-red-700 px-3 py-1 rounded-full border border-red-100">
-                    Requieren Acción Inmediata
+                <span className="text-xs text-slate-500 font-medium bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100">
+                    Listado General
                 </span>
             </div>
 
             <TableCard.Root>
-                <Table aria-label="Tabla de Top Deudores">
+                <Table aria-label="Directorio de Clientes">
                     <Table.Header>
                         <Table.Head id="client" label="Cliente / ID" />
-                        <Table.Head id="category" label="Categoría / Zona" className="hidden lg:table-cell" />
-                        <Table.Head id="debt" label="Deuda Total" />
-                        <Table.Head id="status" label="Situación" className="hidden md:table-cell" />
-                        <Table.Head id="contact" label="Contacto Directo" className="hidden sm:table-cell" />
+                        <Table.Head id="category" label="Ubicación" className="hidden lg:table-cell" />
+                        <Table.Head id="debt" label="Saldo Actual" />
+                        <Table.Head id="status" label="Estado" className="hidden md:table-cell" />
+                        <Table.Head id="contact" label="Contacto" className="hidden sm:table-cell" />
                         <Table.Head id="actions" label="Acciones" className="text-right pr-4" />
                     </Table.Header>
 
@@ -91,59 +87,48 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                                 {debtor.nombre}
                                             </span>
                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 font-mono">
+                                                <span className="text-[10px] bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-mono">
                                                     #{debtor.clienteId}
                                                 </span>
-                                                {debtor.identificacion !== 'S/N' && (
-                                                    <span className="text-[10px] bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-mono hidden xl:inline-block">
-                                                        {debtor.identificacion}
-                                                    </span>
-                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </Table.Cell>
 
-                                {/* Categoría */}
+                                {/* Categoría/Ubicación */}
                                 <Table.Cell className="hidden lg:table-cell">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                                            {debtor.categoria}
+                                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                                            {debtor.zonaCobranza}
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                            <MapPin className="h-3.5 w-3.5 text-slate-300" />
-                                            {debtor.zonaCobranza}
+                                            <Building2 className="h-3.5 w-3.5 text-slate-300" />
+                                            {debtor.categoria}
                                         </div>
                                     </div>
                                 </Table.Cell>
 
                                 {/* Deuda */}
                                 <Table.Cell>
-                                    <span className="font-bold text-slate-900 text-sm tracking-tight">
+                                    <span className="font-bold text-slate-800 text-sm tracking-tight">
                                         {formatMoney(debtor.totalDeuda)}
                                     </span>
                                 </Table.Cell>
 
-                                {/* Situación (Semaforización) */}
+                                {/* Estado */}
                                 <Table.Cell className="hidden md:table-cell">
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className={`h-2 w-2 rounded-full ${debtor.documentosVencidos > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`} />
-                                            <span className="text-xs font-medium text-slate-700">
-                                                {debtor.documentosVencidos} docs. vencidos
-                                            </span>
-                                        </div>
-                                        {debtor.diasMoraMaximo > 0 && (
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit ${
-                                                debtor.diasMoraMaximo > 90 ? 'bg-red-100 text-red-700 border border-red-200' :
-                                                debtor.diasMoraMaximo > 30 ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                                                'bg-slate-100 text-slate-600 border border-slate-200'
-                                            }`}>
-                                                {debtor.diasMoraMaximo} días mora
-                                            </span>
-                                        )}
-                                    </div>
+                                    {debtor.documentosVencidos > 0 ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                            Vencido
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                            Al día
+                                        </span>
+                                    )}
                                 </Table.Cell>
 
                                 {/* Contacto */}
@@ -164,17 +149,17 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                                 <MessageCircle className="h-4.5 w-4.5" />
                                             </button>
                                         ) : (
-                                            /* Placeholder deshabilitado */
+                                            /* Placeholder deshabilitado visualmente si no hay teléfono */
                                             <div className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed">
                                                 <Phone className="h-4 w-4" />
                                             </div>
                                         )}
 
-                                        {/* Botón Ver Detalle - Azul/Gris y Sólido en hover */}
+                                        {/* Botón Ver Detalle - Azul y Sólido */}
                                         <button
                                             onClick={() => onViewDetail(debtor.clienteId)}
                                             className="flex items-center gap-2 px-3 h-9 rounded-full bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white hover:border-blue-700 transition-all duration-200 shadow-sm font-medium text-xs group"
-                                            title="Ver Expediente"
+                                            title="Ver expediente del cliente"
                                         >
                                             <span className="hidden xl:inline">Ver detalle</span>
                                             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
