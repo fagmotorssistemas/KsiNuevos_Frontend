@@ -1,3 +1,5 @@
+// --- INTERFACES PRINCIPALES DE CARTERA ---
+
 export interface KpiCartera {
     totalCartera: number;
     carteraVencida: number;
@@ -37,8 +39,10 @@ export interface DetalleDocumento {
     observacionDoc: string;
     categoriaCliente: string;
     cobrador: string;
-    // Campos opcionales que pueden venir en el documento
+    
+    // Campos opcionales que pueden venir en el documento para facilitar visualización
     nombreCliente?: string;
+    identificacion?: string;
     telefono1?: string;
     telefono2?: string;
     telefono3?: string;
@@ -78,23 +82,41 @@ export interface ClienteBusqueda {
     telefono: string | null;
 }
 
-// ✅ INTERFAZ ACTUALIZADA CON DATOS DEL CLIENTE
+// ✅ INTERFAZ ACTUALIZADA (FUSIONADA)
 export interface ClienteDetalleResponse {
-    // Datos principales del cliente (deben venir en la raíz de la respuesta)
-    nombre?: string;              // Nombre completo del cliente
-    nombreCliente?: string;       // Alternativa (por si el backend usa este campo)
+    // Datos principales del cliente (en la raíz)
+    nombre?: string;              // Nombre completo
+    nombreCliente?: string;       // Alias por compatibilidad
     identificacion?: string;      // Cédula/RUC
-    categoria?: string;           // Categoría del cliente
-    zonaCobranza?: string;        // Zona de cobranza
+    categoria?: string;           // Categoría
+    zonaCobranza?: string;        // Zona
     
-    // Teléfonos del cliente
-    telefono1?: string;           // Teléfono principal
-    telefono2?: string;           // Teléfono secundario  
+    // Teléfonos
+    telefono1?: string;           // Principal
+    telefono2?: string;           // Secundario  
     telefono3?: string;           // Celular
     
-    // Listas de información del cliente
+    // Listas de información
     documentos: DetalleDocumento[];
     notas: NotaGestion[];
-    ventas?: HistorialVenta[];    // Opcional porque puede no tener ventas
-    pagos?: HistorialPago[];      // Opcional porque puede no tener pagos
+    ventas?: HistorialVenta[];    // Opcional (?) para evitar errores si viene null
+    pagos?: HistorialPago[];      // Opcional (?) para evitar errores si viene null
+}
+
+// --- NUEVAS INTERFACES PARA AMORTIZACIÓN (AGREGADAS HOY) ---
+
+export interface CreditoResumen {
+    idCredito: string; // El ID largo (ej: "100...592")
+    numeroOperacion: number;
+    montoOriginal: number;
+    fechaInicio?: string;
+}
+
+export interface CuotaAmortizacion {
+    numeroCuota: number;
+    fechaVencimiento: string;
+    capital: number;
+    interes: number;
+    valorCuota: number;
+    saldoPendiente: number;
 }

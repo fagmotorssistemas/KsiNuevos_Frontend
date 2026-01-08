@@ -10,7 +10,8 @@ import {
     StickyNote,
     Car,
     CreditCard,
-    Phone
+    Phone,
+    Calculator // Importamos icono para la nueva tab
 } from "lucide-react";
 import { walletService } from "@/services/wallet.service";
 import { DetalleDocumento, ClienteDetalleResponse, HistorialVenta, HistorialPago } from "@/types/wallet.types";
@@ -18,6 +19,8 @@ import { Button } from "@/components/ui/buttontable";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { ClientContactInfo } from "./ClientContactInfo";
+// Importamos el nuevo componente
+import { AmortizationTab } from "./AmortizationTab"; 
 
 interface ClientDetailProps {
     clientId: number;
@@ -27,19 +30,14 @@ interface ClientDetailProps {
 export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const [data, setData] = useState<ClienteDetalleResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes'>('docs');
+    // Agregamos 'amortization' a los tipos de tab
+    const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes' | 'amortization'>('docs');
 
     useEffect(() => {
         const loadDetail = async () => {
             setLoading(true);
             try {
                 const result = await walletService.getClientDetail(clientId);
-                
-                // 🔍 DEBUG TEMPORAL - Eliminar después de verificar
-                console.log('🎯 Respuesta completa del backend:', result);
-                console.log('👤 Nombre del cliente:', (result as any).nombre || (result as any).nombreCliente);
-                console.log('📄 Primer documento:', result.documentos[0]);
-                
                 setData(result);
             } catch (error) {
                 console.error('❌ Error cargando detalle:', error);
@@ -90,7 +88,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const totalDeuda = data.documentos.reduce((acc, doc) => acc + doc.saldoPendiente, 0);
     const docsVencidos = data.documentos.filter(d => d.diasMora > 0).length;
     
-    // ✅ EXTRACCIÓN CORRECTA DEL NOMBRE Y DATOS DEL CLIENTE
     const nombreCliente = 
         (data as any).nombre || 
         (data as any).nombreCliente || 
@@ -106,12 +103,10 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
-            {/* ENCABEZADO */}
+            {/* ENCABEZADO (Igual que antes) */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                     <div className="flex flex-col md:flex-row justify-between gap-6">
-                        
-                        {/* Info Principal */}
                         <div className="flex gap-4">
                             <Button 
                                 variant="link-gray" 
@@ -144,7 +139,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                             </div>
                         </div>
 
-                        {/* Totales Financieros */}
                         <div className="flex items-center gap-8 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                             <div>
                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">
@@ -174,7 +168,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                     </div>
                 </div>
 
-                {/* SECCIÓN DE CONTACTO */}
                 <div className="px-6 py-4 bg-white border-b border-slate-100">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
                         Información de Contacto
@@ -183,7 +176,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 </div>
             </div>
 
-            {/* TABS */}
+            {/* BARRA DE PESTAÑAS MEJORADA */}
             <div className="flex items-center gap-6 border-b border-slate-200 px-2 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('docs')}
@@ -196,6 +189,20 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                     <FileText className="h-4 w-4" />
                     Kardex de Deuda ({data.documentos.length})
                 </button>
+                
+                {/* NUEVA PESTAÑA DE AMORTIZACIÓN */}
+                <button
+                    onClick={() => setActiveTab('amortization')}
+                    className={`pb-3 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap relative ${
+                        activeTab === 'amortization' 
+                            ? 'text-red-600 border-b-2 border-red-600' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    <Calculator className="h-4 w-4" />
+                    Tablas de Amortización
+                </button>
+
                 <button
                     onClick={() => setActiveTab('sales')}
                     className={`pb-3 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap relative ${
@@ -205,7 +212,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                     }`}
                 >
                     <Car className="h-4 w-4" />
-                    Compras ({data.ventas?.length || 0})
+                    Toma Vehicular ({data.ventas?.length || 0})
                 </button>
                 <button
                     onClick={() => setActiveTab('payments')}
@@ -231,6 +238,8 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 </button>
             </div>
 
+            {/* CONTENIDO DE TABS */}
+
             {/* TAB: KARDEX DE DEUDA */}
             {activeTab === 'docs' && (
                 <TableCard.Root>
@@ -245,9 +254,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                         </Table.Header>
                         <Table.Body items={data.documentos}>
                             {(doc: DetalleDocumento) => {
-                                // DETECCIÓN DE CUOTA ADICIONAL
                                 const esCuotaAdicional = doc.numeroDocumento && doc.numeroDocumento.includes("LET FV");
-                                
                                 return (
                                 <Table.Row id={doc.numeroDocumento}>
                                     <Table.Cell>
@@ -255,8 +262,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                             <span className="font-bold text-slate-800 text-sm">
                                                 {doc.tipoDocumento}
                                             </span>
-                                            
-                                            {/* RENDERIZADO CONDICIONAL DE ETIQUETA */}
                                             {esCuotaAdicional ? (
                                                 <div className="mt-1 flex flex-col gap-1">
                                                     <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded border border-purple-200 w-fit uppercase">
@@ -271,7 +276,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                                     Int: {doc.numeroDocumento}
                                                 </span>
                                             )}
-
                                             {doc.numeroFisico && doc.numeroFisico !== doc.numeroDocumento && (
                                                 <span className="text-[11px] text-blue-600 font-mono mt-0.5">
                                                     Físico: {doc.numeroFisico}
@@ -348,15 +352,17 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 </TableCard.Root>
             )}
 
+            {/* TAB: AMORTIZACIÓN (NUEVO) */}
+            {activeTab === 'amortization' && (
+                <AmortizationTab clientId={clientId} />
+            )}
+
             {/* TAB: HISTORIAL DE VENTAS */}
             {activeTab === 'sales' && (
                 <div className="space-y-4">
                     {data.ventas && data.ventas.length > 0 ? (
                         data.ventas.map((venta, idx) => (
-                            <div 
-                                key={idx} 
-                                className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row"
-                            >
+                            <div key={idx} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row">
                                 <div className="p-4 bg-slate-50 border-r border-slate-100 flex flex-col justify-center items-center w-full md:w-32 shrink-0">
                                     <Car className="h-8 w-8 text-slate-400 mb-2" />
                                     <span className="text-xs font-mono text-slate-500">
@@ -374,23 +380,15 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 text-sm mt-3">
                                         <div>
-                                            <p className="text-xs text-slate-400 uppercase font-bold">
-                                                Referencia / Placa
-                                            </p>
-                                            <p className="text-slate-700 font-mono">
-                                                {venta.referencia}
-                                            </p>
+                                            <p className="text-xs text-slate-400 uppercase font-bold">Referencia / Placa</p>
+                                            <p className="text-slate-700 font-mono">{venta.referencia}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-400 uppercase font-bold">
-                                                Vendedor
-                                            </p>
+                                            <p className="text-xs text-slate-400 uppercase font-bold">Vendedor</p>
                                             <p className="text-slate-700">{venta.vendedor}</p>
                                         </div>
                                         <div className="col-span-2">
-                                            <p className="text-xs text-slate-400 uppercase font-bold">
-                                                Detalles / Chasis
-                                            </p>
+                                            <p className="text-xs text-slate-400 uppercase font-bold">Detalles / Chasis</p>
                                             <p className="text-slate-600 font-mono text-xs">
                                                 {venta.observaciones || 'Sin detalles adicionales'}
                                             </p>
@@ -429,18 +427,12 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                     </Table.Cell>
                                     <Table.Cell>
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-slate-900 text-sm">
-                                                #{pago.numeroRecibo}
-                                            </span>
-                                            <span className="text-xs text-slate-500 font-mono">
-                                                Ref: {pago.referenciaPago}
-                                            </span>
+                                            <span className="font-bold text-slate-900 text-sm">#{pago.numeroRecibo}</span>
+                                            <span className="text-xs text-slate-500 font-mono">Ref: {pago.referenciaPago}</span>
                                         </div>
                                     </Table.Cell>
                                     <Table.Cell>
-                                        <span className="text-sm text-slate-600">
-                                            {pago.concepto}
-                                        </span>
+                                        <span className="text-sm text-slate-600">{pago.concepto}</span>
                                     </Table.Cell>
                                     <Table.Cell>
                                         <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
@@ -452,9 +444,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                             <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
                                                 {pago.usuario.charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="text-xs text-slate-500">
-                                                {pago.usuario}
-                                            </span>
+                                            <span className="text-xs text-slate-500">{pago.usuario}</span>
                                         </div>
                                     </Table.Cell>
                                 </Table.Row>
@@ -469,10 +459,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 <div className="space-y-4">
                     {data.notas.length > 0 ? (
                         data.notas.map((nota, idx) => (
-                            <div 
-                                key={idx} 
-                                className="bg-white p-4 rounded-lg border-l-4 border-l-blue-500 border-y border-r border-slate-200 shadow-sm flex gap-4"
-                            >
+                            <div key={idx} className="bg-white p-4 rounded-lg border-l-4 border-l-blue-500 border-y border-r border-slate-200 shadow-sm flex gap-4">
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start mb-2">
                                         <span className="font-bold text-slate-900 text-sm flex items-center gap-2">
