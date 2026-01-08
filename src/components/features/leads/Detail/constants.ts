@@ -23,5 +23,6 @@ export const RESULT_OPTIONS: Record<string, string[]> = {
     whatsapp: ['enviado', 'leído', 'respondido', 'bloqueado'],
     visita: ['asistió', 'no_asistió', 'reprogramó', 'venta_cerrada'],
     email: ['enviado', 'rebotado', 'respondido'],
-    nota_interna: ['informativo', 'urgente']
+    nota_interna: ['informativo', 'urgente'],
+    kommo: ['contactado']
 };

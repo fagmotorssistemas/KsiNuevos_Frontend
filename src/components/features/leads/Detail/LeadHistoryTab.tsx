@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
-import { Clock, Phone, MessageCircle, User, FileText, Loader2, Send } from "lucide-react";
+import { Clock, Phone, MessageCircle, User, FileText, Loader2, Send, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Input, Button } from "./ui-components";
 import { RESULT_OPTIONS } from "./constants";
@@ -12,6 +12,7 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
     const { supabase, user } = useAuth();
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [newInteractionNote, setNewInteractionNote] = useState("");
+    // Iniciar con llamada o kommo según prefieras
     const [interactionType, setInteractionType] = useState<string>("llamada");
     const [interactionResult, setInteractionResult] = useState<string | null>(null);
     const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
@@ -30,6 +31,7 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
 
     const handleSubmitInteraction = async (e: FormEvent) => {
         e.preventDefault();
+        // Validación: Requiere nota O resultado
         if ((!newInteractionNote.trim() && !interactionResult) || !user) return;
 
         setIsSubmittingInteraction(true);
@@ -38,7 +40,7 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
             .from('interactions')
             .insert({
                 lead_id: lead.id,
-                type: interactionType as any,
+                type: interactionType as any, // 'kommo' se pasará aquí
                 content: newInteractionNote,
                 result: interactionResult || 'completado',
                 responsible_id: user.id
@@ -50,6 +52,9 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
             setInteractions([data, ...interactions]);
             setNewInteractionNote("");
             setInteractionResult(null);
+        } else {
+            console.error("Error guardando interacción:", error);
+            // Tip: Si falla aquí, suele ser porque falta agregar 'kommo' al ENUM en la base de datos
         }
         setIsSubmittingInteraction(false);
     };
@@ -59,6 +64,8 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
             case 'llamada': return <Phone className="h-4 w-4 text-blue-500" />;
             case 'whatsapp': return <MessageCircle className="h-4 w-4 text-green-500" />;
             case 'visita': return <User className="h-4 w-4 text-purple-500" />;
+            case 'kommo': return <LayoutGrid className="h-4 w-4 text-sky-600" />; // Ícono para Kommo
+            case 'email': return <FileText className="h-4 w-4 text-orange-500" />; 
             default: return <FileText className="h-4 w-4 text-gray-500" />;
         }
     };
@@ -102,19 +109,21 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
             {/* Input Area */}
             <div className="p-4 bg-white border-t border-slate-200 shadow-up z-20">
                 <form onSubmit={handleSubmitInteraction} className="flex flex-col gap-3">
+                    {/* Botones de Tipo */}
                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                         {Object.keys(RESULT_OPTIONS).map(type => (
                             <button
                                 key={type}
                                 type="button"
                                 onClick={() => { setInteractionType(type); setInteractionResult(null); }}
-                                className={`text-xs px-3 py-1.5 rounded-full border font-medium capitalize transition-all ${interactionType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
+                                className={`text-xs px-3 py-1.5 rounded-full border font-medium capitalize transition-all whitespace-nowrap ${interactionType === type ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}
                             >
                                 {type.replace('_', ' ')}
                             </button>
                         ))}
                     </div>
 
+                    {/* Opciones de Resultado */}
                     <div className="flex flex-wrap gap-2">
                         {RESULT_OPTIONS[interactionType]?.map(option => (
                             <button
@@ -131,9 +140,10 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
                         ))}
                     </div>
 
+                    {/* Input de Texto */}
                     <div className="relative flex items-center gap-2">
                         <Input
-                            placeholder={`Resultado de la ${interactionType}...`}
+                            placeholder={`Resultado de ${interactionType}...`}
                             value={newInteractionNote}
                             onChange={(e) => setNewInteractionNote(e.target.value)}
                             className="w-full rounded-full border border-slate-300 bg-slate-50 pl-5 pr-14 py-3 text-sm focus:border-brand-500 focus:bg-white shadow-inner"
@@ -142,7 +152,7 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
                             <Button
                                 type="submit"
                                 disabled={isSubmittingInteraction}
-                                className="h-9 w-9 rounded-full bg-black hover:bg-gray-800 text-white shadow-sm"
+                                className="h-9 w-9 rounded-full bg-black hover:bg-gray-800 text-white shadow-sm flex items-center justify-center p-0"
                             >
                                 {isSubmittingInteraction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                             </Button>
