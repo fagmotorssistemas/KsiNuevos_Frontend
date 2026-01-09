@@ -1,67 +1,64 @@
 import React from "react";
-import type { InventoryFilters } from "@/hooks/Homeksi/UseInventoryHook";
+// 1. Importamos el tipo del NUEVO hook maestro
+import { InventoryFiltersState } from "@/hooks/Homeksi/useInventoryMaster";
+
+// 2. Importamos los sub-componentes que creaste en la carpeta 'filters'
+import { FilterSearch } from "./filters/FilterSearch";
+import { FilterPrice } from "./filters/FilterPrice";
+import { FilterCategory } from "./filters/FilterCategory";
+import { FilterLocation } from "./filters/FilterLocation";
+import { FilterSpecs } from "./filters/FilterSpecs";
 
 interface SidebarFiltersProps {
-  filters: InventoryFilters;
-  updateFilter: (key: keyof InventoryFilters, value: any) => void;
+  filters: InventoryFiltersState;
+  // Usamos string para la key porque el adaptador en page.tsx maneja la traducción
+  updateFilter: (key: string, value: any) => void;
   onClear: () => void;
 }
 
 export const SidebarFilters = ({ filters, updateFilter, onClear }: SidebarFiltersProps) => {
   return (
-    <div className="hidden lg:block w-64 flex-shrink-0 pr-6 border-r border-gray-200 h-fit sticky top-24">
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-gray-900 text-lg">Filtros</h3>
-          <button className="text-xs text-blue-600 font-semibold hover:underline">
-            Limpiar
-          </button>
-        </div>
-
-        <div className="mb-6 border-b border-gray-100 pb-6">
-          <h4 className="font-semibold text-sm mb-3 text-gray-800">Buscar</h4>
-          <input
-            type="text"
-            placeholder="Marca, modelo..."
-            value={filters.search}
-            onChange={(e) => updateFilter("search", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="mb-6 border-b border-gray-100 pb-6">
-          <h4 className="font-semibold text-sm mb-3 text-gray-800">Año Mínimo</h4>
-          <select 
-            value={filters.minYear}
-            onChange={(e) => updateFilter("minYear", e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-white"
-          >
-            <option value="">Cualquier año</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
-            <option value="2022">2022</option>
-            <option value="2021">2021</option>
-            <option value="2020">2020</option>
-            <option value="2018">2018+</option>
-          </select>
-        </div>
-
-        <div className="mb-6">
-            <h4 className="font-semibold text-sm mb-3 text-gray-800">Ubicación</h4>
-            <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                    <input 
-                        type="radio" 
-                        name="location" 
-                        checked={filters.location === 'all'}
-                        onChange={() => updateFilter('location', 'all')}
-                        className="text-blue-600 focus:ring-blue-500" 
-                    />
-                    Todas
-                </label>
-            </div>
-        </div>
+    // Mantenemos tus estilos de contenedor originales (sticky, width, etc.)
+    <aside className="hidden lg:block w-64 flex-shrink-0 pr-6 border-r border-gray-200 h-fit sticky top-24">
+      
+      {/* Encabezado */}
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="font-bold text-gray-900 text-lg">Filtros</h3>
+        <button 
+          onClick={onClear}
+          className="text-xs text-blue-600 font-semibold hover:underline"
+        >
+          Limpiar
+        </button>
       </div>
-    </div>
+
+      {/* --- SECCIÓN 1: BÚSQUEDA --- */}
+      {/* Reemplaza tu input manual de búsqueda */}
+      <FilterSearch 
+        value={filters.searchQuery} 
+        onChange={(val) => updateFilter('search', val)} 
+      />
+
+      {/* --- SECCIÓN 2: PRECIO --- */}
+      <FilterPrice 
+        minVal={filters.minPrice} 
+        maxVal={filters.maxPrice} 
+        onChange={(min, max) => updateFilter('priceRange', [min, max])} 
+      />
+
+      {/* --- SECCIÓN 3: ESPECIFICACIONES (AÑO Y TRANSMISIÓN) --- */}
+      {/* Reemplaza tu select de años antiguo por este más completo */}
+      <FilterSpecs 
+        specs={filters.specs} 
+        onChange={(key, val) => updateFilter(key as string, val)} 
+      />
+
+      {/* --- SECCIÓN 4: CATEGORÍA --- */}
+      <FilterCategory 
+        selected={filters.categories} 
+        onChange={(cats) => updateFilter('categories', cats)} 
+      />
+
+    </aside>
   );
 };
