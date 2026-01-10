@@ -19,7 +19,7 @@ export function useTodos() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     
-    // CAMBIO: El filtro por defecto ahora es 'pending' (Pendientes)
+    // Filtro por defecto: 'pending'
     const [filter, setFilter] = useState<TodoFilter>('pending');
 
     // 1. Cargar Tareas
@@ -59,11 +59,11 @@ export function useTodos() {
         return () => { supabase.removeChannel(channel) };
     }, [supabase, user, fetchTasks]);
 
-    // 2. Crear Tarea
-    const addTask = async (title: string, priority: Task['priority'] = 'media') => {
+    // 2. Crear Tarea (Actualizado con dueDate)
+    const addTask = async (title: string, priority: Task['priority'] = 'media', dueDate: string | null = null) => {
         if (!user || !title.trim()) return;
 
-        // Al crear, forzamos la vista a 'pending' para que el usuario vea su nueva tarea
+        // Forzamos la vista a 'pending' para ver la nueva tarea
         setFilter('pending');
 
         const optimisticTask: Task = {
@@ -72,7 +72,7 @@ export function useTodos() {
             title,
             priority,
             is_completed: false,
-            due_date: null,
+            due_date: dueDate,
             created_at: new Date().toISOString()
         };
         
@@ -84,14 +84,15 @@ export function useTodos() {
                 user_id: user.id,
                 title,
                 priority,
-                is_completed: false
+                is_completed: false,
+                due_date: dueDate // Guardamos la fecha en la DB
             });
 
         if (error) {
             console.error("Error creando tarea:", error);
-            fetchTasks();
+            fetchTasks(); // Revertir si hay error
         } else {
-            fetchTasks();
+            fetchTasks(); // Sincronizar ID real
         }
     };
 
