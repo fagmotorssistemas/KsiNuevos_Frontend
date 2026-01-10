@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { useNotifications } from "@/hooks/useNotifications"; // Importamos el nuevo hook
+import { useNotifications } from "@/hooks/useNotifications"; 
 import { Avatar } from "@/components/ui/avatar";
 import { 
     LogOut, 
@@ -12,13 +12,15 @@ import {
     Clock, 
     Check, 
     Calendar,
-    MapPin
+    MapPin,
+    Bot,
+    Sparkles
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function UserNav() {
     const { user, profile, supabase } = useAuth();
-    const { notifications, markAsRead, hasNotifications } = useNotifications(); // Usamos las notificaciones
+    const { notifications, markAsRead, hasNotifications } = useNotifications();
     
     const [isOpen, setIsOpen] = useState(false);
     const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -34,17 +36,10 @@ export function UserNav() {
         router.push('/login');
     };
 
-    // Cerrar al hacer click fuera (Maneja ambos menús)
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            // User Menu
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-            // Notification Menu
-            if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-                setIsNotifOpen(false);
-            }
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false);
+            if (notifRef.current && !notifRef.current.contains(event.target as Node)) setIsNotifOpen(false);
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -57,9 +52,9 @@ export function UserNav() {
         : "U";
 
     return (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
             
-            {/* --- SECCIÓN NOTIFICACIONES --- */}
+            {/* --- CAMPANA DE NOTIFICACIONES --- */}
             <div className="relative" ref={notifRef}>
                 <button
                     onClick={() => setIsNotifOpen(!isNotifOpen)}
@@ -67,7 +62,6 @@ export function UserNav() {
                 >
                     <Bell className={`h-5 w-5 ${hasNotifications ? 'text-indigo-600 animate-pulse' : ''}`} />
                     
-                    {/* Badge Rojo */}
                     {hasNotifications && (
                         <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -76,65 +70,80 @@ export function UserNav() {
                     )}
                 </button>
 
-                {/* Dropdown Notificaciones */}
                 {isNotifOpen && (
                     <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 origin-top-right">
                         <div className="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
-                            <h3 className="font-bold text-slate-800 text-sm">Próximas Reuniones</h3>
+                            <h3 className="font-bold text-slate-800 text-sm">Actividad Próxima</h3>
                             <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-100">
-                                {notifications.length} pendiente{notifications.length !== 1 && 's'}
+                                {notifications.length}
                             </span>
                         </div>
 
-                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2 space-y-2">
+                        <div className="max-h-[350px] overflow-y-auto custom-scrollbar p-2 space-y-2">
                             {notifications.length === 0 ? (
                                 <div className="py-8 text-center text-slate-400">
                                     <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                                    <p className="text-xs">No tienes citas próximas (20 min)</p>
+                                    <p className="text-xs">Sin actividad para los próximos 20 min</p>
                                 </div>
                             ) : (
-                                notifications.map((apt) => {
-                                    const timeDate = new Date(apt.start_time);
+                                notifications.map((notif) => {
+                                    const timeDate = new Date(notif.start_time);
                                     const timeStr = timeDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
-                                    // Calcular minutos restantes aprox
-                                    const diffMins = Math.round((timeDate.getTime() - new Date().getTime()) / 60000);
+                                    const diffMins = Math.max(0, Math.round((timeDate.getTime() - new Date().getTime()) / 60000));
+                                    
+                                    const isSuggestion = notif.type === 'suggestion';
 
                                     return (
-                                        <div key={apt.id} className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 hover:bg-white hover:shadow-md transition-all group relative">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <h4 className="font-bold text-sm text-slate-800 truncate pr-6">
-                                                    {apt.title}
-                                                </h4>
-                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${diffMins <= 5 ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                        <div key={notif.id} className={`border rounded-xl p-3 transition-all group relative ${isSuggestion ? 'bg-indigo-50/40 border-indigo-100 hover:bg-indigo-50' : 'bg-white border-slate-100 hover:shadow-md'}`}>
+                                            
+                                            {/* Header Card */}
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    {isSuggestion ? (
+                                                        <div className="p-1 bg-indigo-100 text-indigo-600 rounded-md shrink-0">
+                                                            <Bot className="h-3.5 w-3.5" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-1 bg-emerald-100 text-emerald-600 rounded-md shrink-0">
+                                                            <Calendar className="h-3.5 w-3.5" />
+                                                        </div>
+                                                    )}
+                                                    <h4 className={`font-bold text-sm truncate pr-2 ${isSuggestion ? 'text-indigo-900' : 'text-slate-800'}`}>
+                                                        {notif.title}
+                                                    </h4>
+                                                </div>
+                                                
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${diffMins <= 5 ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
                                                     en {diffMins} min
                                                 </span>
                                             </div>
 
-                                            <div className="space-y-1 mb-3">
+                                            {/* Body Card */}
+                                            <div className="space-y-1 mb-3 pl-1">
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                                                     <Clock className="h-3 w-3 text-slate-400" />
-                                                    <span>{timeStr}</span>
+                                                    <span className="font-medium">{timeStr}</span>
                                                 </div>
-                                                {apt.location && (
-                                                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                        <MapPin className="h-3 w-3 text-slate-400" />
-                                                        <span className="truncate max-w-[200px]">{apt.location}</span>
-                                                    </div>
-                                                )}
-                                                {(apt.lead?.name || apt.external_client_name) && (
+                                                
+                                                {notif.subtitle && (
                                                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                                         <User className="h-3 w-3 text-slate-400" />
-                                                        <span className="truncate max-w-[200px]">
-                                                            {apt.lead?.name || apt.external_client_name}
-                                                        </span>
+                                                        <span className="truncate max-w-[200px]">{notif.subtitle}</span>
+                                                    </div>
+                                                )}
+
+                                                {isSuggestion && (
+                                                    <div className="flex items-center gap-1 text-[10px] text-indigo-500 mt-1">
+                                                        <Sparkles className="h-3 w-3" />
+                                                        <span>IA detectó posible disponibilidad</span>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Botón Entendido */}
+                                            {/* Footer Button */}
                                             <button
-                                                onClick={() => markAsRead(apt.id)}
-                                                className="w-full flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-600 text-xs font-semibold py-1.5 rounded-lg transition-colors"
+                                                onClick={() => markAsRead(notif.id)}
+                                                className="w-full flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-600 text-xs font-semibold py-1.5 rounded-lg transition-colors shadow-sm"
                                             >
                                                 <Check className="h-3.5 w-3.5" />
                                                 Entendido
@@ -148,7 +157,7 @@ export function UserNav() {
                 )}
             </div>
 
-            {/* --- SECCIÓN PERFIL DE USUARIO --- */}
+            {/* --- MENÚ DE USUARIO --- */}
             <div className="relative" ref={menuRef}>
                 <button 
                     onClick={() => setIsOpen(!isOpen)}
@@ -161,14 +170,12 @@ export function UserNav() {
                     </div>
                 </button>
 
-                {/* Dropdown Menu Usuario */}
                 {isOpen && (
                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="px-4 py-3 border-b border-slate-50">
                             <p className="text-sm font-medium text-slate-900">{profile?.full_name}</p>
                             <p className="text-xs text-slate-500 truncate">{user.email}</p>
                         </div>
-                        
                         <div className="py-1">
                             <Link 
                                 href="/profile" 
@@ -179,7 +186,6 @@ export function UserNav() {
                                 Mi Perfil
                             </Link>
                         </div>
-
                         <div className="border-t border-slate-50 py-1">
                             <button 
                                 onClick={handleSignOut}
