@@ -8,7 +8,10 @@ type LeadRow = Database['public']['Tables']['leads']['Row'];
 type CarRow = Database['public']['Tables']['interested_cars']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
-// ACTUALIZACIÓN: Lead ahora puede ser null | undefined
+export type BotSuggestionLead = LeadRow & {
+    interested_cars: CarRow[];
+};
+
 export type AppointmentWithDetails = AppointmentRow & {
     lead: (LeadRow & {
         interested_cars: CarRow[];
@@ -16,9 +19,8 @@ export type AppointmentWithDetails = AppointmentRow & {
     responsible?: ProfileRow;
 };
 
-export type AgendaTab = 'pending' | 'history';
+export type AgendaTab = 'pending' | 'history' | 'suggestions';
 
-// Tipos para los filtros
 export type DateFilterOption = 'all' | 'today' | 'tomorrow' | 'week' | 'fortnight' | 'month';
 export interface AgendaFilters {
     responsibleId: string | 'all';
@@ -30,6 +32,7 @@ export function useAgenda() {
 
     // Estados de Datos
     const [allAppointments, setAllAppointments] = useState<AppointmentWithDetails[]>([]);
+    const [rawSuggestions, setRawSuggestions] = useState<BotSuggestionLead[]>([]); // Sugerencias crudas desde BD
     const [agents, setAgents] = useState<ProfileRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -44,17 +47,15 @@ export function useAgenda() {
 
     const isAdmin = profile?.role === 'admin';
 
-    // 1. CARGAR USUARIOS (FILTRADO POR ROL VENDEDOR)
+    // 1. CARGAR USUARIOS
     const fetchAgents = useCallback(async () => {
         if (!isAdmin) return;
-        
         const { data } = await supabase
             .from('profiles')
             .select('*')
-            .eq('status', 'activo') // Solo usuarios activos
-            .eq('role', 'vendedor') // <--- CAMBIO: Solo Vendedores
+            .eq('status', 'activo')
+            .eq('role', 'vendedor')
             .order('full_name', { ascending: true });
-            
         if (data) setAgents(data);
     }, [supabase, isAdmin]);
 
@@ -63,8 +64,6 @@ export function useAgenda() {
         if (!user) return;
         setIsLoading(true);
 
-        // NOTA: Supabase manejará el LEFT JOIN automáticamente. 
-        // Si lead_id es null, el objeto 'lead' vendrá como null.
         let query = supabase
             .from('appointments')
             .select(`
@@ -92,22 +91,63 @@ export function useAgenda() {
         setIsLoading(false);
     }, [supabase, user, isAdmin]);
 
+    // 3. CARGAR SUGERENCIAS DEL BOT
+    const fetchBotSuggestions = useCallback(async () => {
+        if (!user) return;
+
+        let query = supabase
+            .from('leads')
+            .select(`
+                *,
+                interested_cars (*)
+            `)
+            // Traemos leads que tengan AL MENOS un campo detectado
+            .or('time_reference.not.is.null,day_detected.not.is.null,hour_detected.not.is.null');
+
+        if (!isAdmin) {
+            query = query.eq('assigned_to', user.id);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error cargando sugerencias:", error);
+        } else {
+            // @ts-ignore
+            setRawSuggestions((data || []) as BotSuggestionLead[]);
+        }
+    }, [supabase, user, isAdmin]);
+
     useEffect(() => {
         fetchAppointments();
         fetchAgents();
-    }, [fetchAppointments, fetchAgents]);
+        fetchBotSuggestions();
+    }, [fetchAppointments, fetchAgents, fetchBotSuggestions]);
 
 
-    // 3. LOGICA DE FILTRADO
-    const filteredList = useMemo(() => {
+    // 4. LOGICA DE FILTRADO Y PROCESAMIENTO
+
+    // A. Filtramos sugerencias que YA tienen cita agendada
+    const botSuggestions = useMemo(() => {
+        // Obtenemos los IDs de leads que tienen citas activas (no canceladas)
+        const activeLeadIds = new Set(
+            allAppointments
+                .filter(a => a.lead_id && a.status !== 'cancelada' && a.status !== 'no_asistio')
+                .map(a => a.lead_id)
+        );
+
+        return rawSuggestions.filter(lead => !activeLeadIds.has(lead.id));
+    }, [rawSuggestions, allAppointments]);
+
+
+    // B. Filtrado de Citas (Admin y Fechas)
+    const filteredAppointments = useMemo(() => {
         let result = allAppointments;
 
-        // A. Filtro por Responsable
         if (isAdmin && filters.responsibleId !== 'all') {
             result = result.filter(a => a.responsible_id === filters.responsibleId);
         }
 
-        // B. Filtro por Fechas
         if (filters.dateRange !== 'all') {
             const now = new Date();
             const todayStart = new Date(now.setHours(0,0,0,0));
@@ -115,52 +155,42 @@ export function useAgenda() {
             
             result = result.filter(a => {
                 const apptDate = new Date(a.start_time);
-                
                 switch (filters.dateRange) {
-                    case 'today':
-                        return apptDate >= todayStart && apptDate <= todayEnd;
-                    
+                    case 'today': return apptDate >= todayStart && apptDate <= todayEnd;
                     case 'tomorrow':
                         const tmrStart = new Date(todayStart); tmrStart.setDate(tmrStart.getDate() + 1);
                         const tmrEnd = new Date(todayEnd); tmrEnd.setDate(tmrEnd.getDate() + 1);
                         return apptDate >= tmrStart && apptDate <= tmrEnd;
-
                     case 'week':
                         const weekEnd = new Date(todayEnd); weekEnd.setDate(weekEnd.getDate() + 7);
                         return apptDate >= todayStart && apptDate <= weekEnd;
-
                     case 'fortnight':
                         const fortnightEnd = new Date(todayEnd); fortnightEnd.setDate(fortnightEnd.getDate() + 15);
                         return apptDate >= todayStart && apptDate <= fortnightEnd;
-                        
                     case 'month':
                         const monthEnd = new Date(todayEnd); monthEnd.setDate(monthEnd.getDate() + 30);
                         return apptDate >= todayStart && apptDate <= monthEnd;
-                        
-                    default:
-                        return true;
+                    default: return true;
                 }
             });
         }
-
         return result;
     }, [allAppointments, filters, isAdmin]);
 
-
-    // 4. PROCESAMIENTO
+    // C. Separación Pendientes vs Historial
     const { pendingAppointments, historyAppointments } = useMemo(() => {
         const activeStatuses = ['pendiente', 'confirmada', 'reprogramada'];
         
-        const pending = filteredList
+        const pending = filteredAppointments
             .filter(a => activeStatuses.includes(a.status || 'pendiente'))
             .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
-        const history = filteredList
+        const history = filteredAppointments
             .filter(a => !activeStatuses.includes(a.status || 'pendiente'))
             .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
         return { pendingAppointments: pending, historyAppointments: history };
-    }, [filteredList]);
+    }, [filteredAppointments]);
 
 
     // 5. ACCIONES
@@ -176,10 +206,37 @@ export function useAgenda() {
         if (error) fetchAppointments();
     };
 
+    const updateAppointment = async (id: number, updates: Partial<AppointmentRow>) => {
+        // @ts-ignore
+        setAllAppointments(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+        const { error } = await supabase.from('appointments').update(updates).eq('id', id);
+        if (error) fetchAppointments();
+    };
+
+    // NUEVA ACCIÓN: DESCARTAR SUGERENCIA
+    const discardSuggestion = async (leadId: number) => {
+        // 1. Optimistic UI update: Remover de la lista local inmediatamente
+        setRawSuggestions(prev => prev.filter(l => l.id !== leadId));
+
+        // 2. Actualizar BD: Limpiamos los campos que disparan la sugerencia
+        const { error } = await supabase
+            .from('leads')
+            .update({
+                time_reference: null,
+                day_detected: null,
+                hour_detected: null
+            })
+            .eq('id', leadId);
+
+        if (error) {
+            console.error("Error descartando sugerencia:", error);
+            fetchBotSuggestions(); // Revertir si falla
+        }
+    };
+
     // 6. AGRUPAMIENTO VISUAL
     const groupAppointmentsByDate = (list: AppointmentWithDetails[]) => {
         const groups: Record<string, AppointmentWithDetails[]> = {};
-
         list.forEach(appt => {
             const date = new Date(appt.start_time);
             const today = new Date();
@@ -187,7 +244,6 @@ export function useAgenda() {
             tomorrow.setDate(tomorrow.getDate() + 1);
 
             let key = date.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
-
             if (isSameDay(date, today)) key = "Hoy";
             else if (isSameDay(date, tomorrow)) key = "Mañana";
 
@@ -206,7 +262,9 @@ export function useAgenda() {
     return {
         groupedPending: groupAppointmentsByDate(pendingAppointments),
         groupedHistory: groupAppointmentsByDate(historyAppointments),
+        botSuggestions, 
         pendingCount: pendingAppointments.length,
+        suggestionsCount: botSuggestions.length,
         isLoading,
         isAdmin,
         agents,
@@ -214,7 +272,7 @@ export function useAgenda() {
         setFilters,
         activeTab,
         setActiveTab,
-        refresh: fetchAppointments,
-        actions: { markAsCompleted, cancelAppointment }
+        refresh: () => { fetchAppointments(); fetchBotSuggestions(); },
+        actions: { markAsCompleted, cancelAppointment, updateAppointment, discardSuggestion }
     };
 }

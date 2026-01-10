@@ -12,12 +12,17 @@ import {
     Link as LinkIcon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import type { AppointmentWithDetails } from "@/hooks/useAgenda";
 
 interface AppointmentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    
+    // Props opcionales para diferentes modos
     initialLeadId?: number | null;
+    appointmentToEdit?: AppointmentWithDetails | null; // MODO EDICIÓN
+    initialData?: Partial<AppointmentFormData> | null; // MODO PRE-LLENADO (Desde Bot)
 }
 
 interface AppointmentFormData {
@@ -31,7 +36,14 @@ interface AppointmentFormData {
 
 type AppointmentStatus = "pendiente" | "confirmada" | "completada" | "cancelada" | "reprogramada" | "no_asistio";
 
-export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = null }: AppointmentModalProps) {
+export function AppointmentModal({ 
+    isOpen, 
+    onClose, 
+    onSuccess, 
+    initialLeadId = null,
+    appointmentToEdit = null,
+    initialData = null
+}: AppointmentModalProps) {
     const { supabase, user } = useAuth();
     
     // Estados
@@ -47,6 +59,9 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
         notes: ""
     });
 
+    const isEditing = !!appointmentToEdit;
+    const modalTitle = isEditing ? "Editar Cita" : "Agendar Cita";
+
     // Validar si todos los campos tienen datos
     const isFormValid = 
         formData.title.trim().length > 0 &&
@@ -58,25 +73,63 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
     // Efectos
     useEffect(() => {
         if (isOpen) {
-            setFormData(prev => ({
-                ...prev,
-                lead_id: initialLeadId || null
-            }));
-            // Pre-llenar fecha con la hora actual redondeada a la siguiente hora si está vacío
-            if (!formData.start_time) {
-                const now = new Date();
-                now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Ajuste local simple
-                setFormData(prev => ({...prev, start_time: now.toISOString().slice(0, 16)}));
-            }
             setError(null);
+
+            if (appointmentToEdit) {
+                // MODO EDICIÓN: Cargar datos existentes
+                const date = new Date(appointmentToEdit.start_time);
+                // Ajuste para input datetime-local que requiere formato YYYY-MM-DDTHH:MM
+                // Importante: toISOString() da UTC, necesitamos hora local para el input
+                const localIsoString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+
+                setFormData({
+                    title: appointmentToEdit.title,
+                    lead_id: appointmentToEdit.lead_id,
+                    external_client_name: appointmentToEdit.external_client_name || "",
+                    start_time: localIsoString,
+                    location: appointmentToEdit.location || "",
+                    notes: appointmentToEdit.notes || ""
+                });
+            } else if (initialData) {
+                // MODO PRE-LLENADO (BOT)
+                setFormData(prev => ({
+                    ...prev,
+                    title: initialData.title || "",
+                    lead_id: initialLeadId || initialData.lead_id || null,
+                    external_client_name: initialData.external_client_name || "",
+                    start_time: initialData.start_time || "",
+                    location: initialData.location || "",
+                    notes: initialData.notes || ""
+                }));
+
+                // Si no hay fecha en initialData, poner default
+                if (!initialData.start_time) setDefaultTime();
+
+            } else {
+                // MODO CREACIÓN LIMPIA
+                setFormData({
+                    title: "",
+                    lead_id: initialLeadId || null,
+                    external_client_name: "",
+                    start_time: "",
+                    location: "",
+                    notes: ""
+                });
+                setDefaultTime();
+            }
         }
-    }, [isOpen, initialLeadId]);
+    }, [isOpen, appointmentToEdit, initialLeadId, initialData]);
+
+    const setDefaultTime = () => {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        setFormData(prev => ({...prev, start_time: now.toISOString().slice(0, 16)}));
+    };
 
     // Estilos reutilizables
     const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm text-slate-700";
     const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
     
-    // Modificado: Ahora siempre muestra que es obligatorio
     const InputLabel = ({ label }: { label: string }) => (
         <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
             {label}
@@ -84,9 +137,7 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
         </label>
     );
 
-    // Modificado: Ahora marca error en cualquier campo vacío
     const getErrorClass = (fieldName: keyof AppointmentFormData) => {
-        // Si hay error general y el campo específico está vacío
         return error && !formData[fieldName]
             ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/10' 
             : '';
@@ -97,7 +148,6 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
         if (!user) return;
         setError(null);
 
-        // Validación Estricta de todos los campos
         if (!isFormValid) {
             setError("Todos los campos son obligatorios para guardar la cita.");
             return;
@@ -111,20 +161,38 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                 throw new Error("La fecha de inicio no es válida.");
             }
 
-            const payload = {
+            // Datos comunes para ambos casos (Insert y Update)
+            const commonData = {
                 title: formData.title,
                 lead_id: formData.lead_id ?? null,
-                responsible_id: user.id,
                 start_time: startTime.toISOString(),
-                location: formData.location, // Ya no es opcional
-                notes: formData.notes,       // Ya no es opcional
-                external_client_name: formData.external_client_name, // Ya no es opcional
-                status: "pendiente" as AppointmentStatus
+                location: formData.location,
+                notes: formData.notes,
+                external_client_name: formData.external_client_name
             };
 
-            const { error: dbError } = await supabase
-                .from('appointments')
-                .insert([payload]);
+            let dbError;
+
+            if (isEditing && appointmentToEdit) {
+                // UPDATE: No necesitamos enviar responsible_id ni status default
+                const { error } = await supabase
+                    .from('appointments')
+                    .update(commonData)
+                    .eq('id', appointmentToEdit.id);
+                dbError = error;
+            } else {
+                // INSERT: Aquí responsible_id es OBLIGATORIO, lo construimos explícitamente
+                const insertPayload = {
+                    ...commonData,
+                    responsible_id: user.id, // TypeScript ahora ve que esto es obligatorio
+                    status: "pendiente" as AppointmentStatus
+                };
+
+                const { error } = await supabase
+                    .from('appointments')
+                    .insert([insertPayload]);
+                dbError = error;
+            }
 
             if (dbError) {
                 throw new Error(dbError.message || "Error al guardar en base de datos");
@@ -134,7 +202,7 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
             handleClose();
             
         } catch (err: any) {
-            console.error("Error creando cita:", err);
+            console.error("Error gestionando cita:", err);
             setError(err.message || "Ocurrió un error al guardar la cita.");
         } finally {
             setLoading(false);
@@ -142,16 +210,19 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
     };
 
     const handleClose = () => {
-        setFormData({
-            title: "",
-            lead_id: null,
-            external_client_name: "",
-            start_time: "",
-            location: "",
-            notes: ""
-        });
-        setError(null);
         onClose();
+        setTimeout(() => {
+            // Limpiar form después de cerrar animación
+            setFormData({
+                title: "",
+                lead_id: null,
+                external_client_name: "",
+                start_time: "",
+                location: "",
+                notes: ""
+            });
+            setError(null);
+        }, 300);
     };
 
     if (!isOpen) return null;
@@ -164,13 +235,13 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                 <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-slate-900 text-white text-xs font-bold px-2 py-0.5 rounded">
-                                NUEVA
+                            <span className={`text-white text-xs font-bold px-2 py-0.5 rounded ${isEditing ? 'bg-amber-500' : 'bg-slate-900'}`}>
+                                {isEditing ? 'EDITAR' : 'NUEVA'}
                             </span>
-                            <h2 className="font-bold text-xl text-slate-900">Agendar Cita</h2>
+                            <h2 className="font-bold text-xl text-slate-900">{modalTitle}</h2>
                         </div>
                         <p className="text-sm text-slate-500">
-                            Completa todos los campos para programar el evento.
+                            {isEditing ? 'Modifica los detalles del evento.' : 'Completa los campos para programar.'}
                         </p>
                     </div>
                     <button 
@@ -227,11 +298,11 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                                 </div>
                             </div>
 
-                            {/* Lead ID Indicator (Si existe) */}
-                            {initialLeadId && (
+                            {/* Lead ID Indicator */}
+                            {(initialLeadId || formData.lead_id) && (
                                 <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
                                     <LinkIcon className="h-3 w-3" />
-                                    <span>Se vinculará automáticamente al Lead #{initialLeadId}</span>
+                                    <span>Vinculado al Lead #{initialLeadId || formData.lead_id}</span>
                                 </div>
                             )}
                         </div>
@@ -293,7 +364,6 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                 {/* Footer Actions */}
                 <div className="p-8 pt-4 bg-white border-t border-slate-50 sticky bottom-0 z-10 flex flex-col gap-4">
                     
-                    {/* Mensaje de Error */}
                     {error && (
                         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-bottom-2 duration-300">
                             <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
@@ -308,7 +378,7 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                         <button
                             type="submit"
                             form="appointment-form"
-                            disabled={loading || !isFormValid} // Deshabilitado si carga O si el form no es válido
+                            disabled={loading || !isFormValid}
                             className={`
                                 flex-[2] text-white font-bold text-sm uppercase tracking-wide py-4 rounded-xl shadow-xl shadow-slate-900/10 
                                 transition-all flex justify-center items-center gap-2 
@@ -320,7 +390,7 @@ export function AppointmentModal({ isOpen, onClose, onSuccess, initialLeadId = n
                             ) : (
                                 <>
                                     <Save className="h-5 w-5" />
-                                    Confirmar Cita
+                                    {isEditing ? "Guardar Cambios" : "Confirmar Cita"}
                                 </>
                             )}
                         </button>

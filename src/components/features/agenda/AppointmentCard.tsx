@@ -6,7 +6,8 @@ import {
     AlertTriangle,
     User,
     Briefcase,
-    CalendarClock // Nuevo icono para eventos generales
+    CalendarClock,
+    Edit2 // Nuevo icono de editar
 } from "lucide-react";
 import type { AppointmentWithDetails } from "@/hooks/useAgenda";
 
@@ -14,10 +15,11 @@ interface AppointmentCardProps {
     appointment: AppointmentWithDetails;
     onComplete: (id: number) => void;
     onCancel: (id: number) => void;
+    onEdit?: (appointment: AppointmentWithDetails) => void; // Nuevo prop opcional
     isAdminView?: boolean;
 }
 
-export function AppointmentCard({ appointment, onComplete, onCancel, isAdminView = false }: AppointmentCardProps) {
+export function AppointmentCard({ appointment, onComplete, onCancel, onEdit, isAdminView = false }: AppointmentCardProps) {
     // lead ahora puede ser null
     const { title, start_time, location, lead, status, responsible, external_client_name} = appointment;
     
@@ -129,12 +131,21 @@ export function AppointmentCard({ appointment, onComplete, onCancel, isAdminView
                         <MapPin className="h-3.5 w-3.5" />
                         <span className="truncate">{location || 'Ubicación no especificada'}</span>
                     </div>
+
+                    {/* Mostrar external_client_name si existe */}
+                    {external_client_name && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <User className="h-3 w-3 text-slate-400" />
+                            <span className="truncate">{external_client_name}</span>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Columna Acciones */}
             {isPending && (
                 <div className="flex flex-col gap-2 border-l border-slate-100 pl-4">
+                    {/* Botón Completar */}
                     <button 
                         onClick={() => onComplete(appointment.id)}
                         className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-full transition-colors group shadow-sm"
@@ -142,6 +153,19 @@ export function AppointmentCard({ appointment, onComplete, onCancel, isAdminView
                     >
                         <CheckCircle2 className="h-5 w-5 group-hover:scale-110 transition-transform" />
                     </button>
+                    
+                    {/* Botón Editar (NUEVO) */}
+                    {onEdit && (
+                        <button 
+                            onClick={() => onEdit(appointment)}
+                            className="p-2 text-amber-500 bg-amber-50 hover:bg-amber-100 rounded-full transition-colors group shadow-sm"
+                            title="Editar Cita"
+                        >
+                            <Edit2 className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                        </button>
+                    )}
+
+                    {/* Botón Cancelar */}
                     <button 
                         onClick={() => onCancel(appointment.id)}
                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors group"
@@ -152,13 +176,6 @@ export function AppointmentCard({ appointment, onComplete, onCancel, isAdminView
                 </div>
             )}
 
-                                        {/* Mostrar external_client_name si existe */}
-                            {external_client_name && (
-                                <div className="flex items-center gap-2 text-xs text-slate-500">
-                                    <User className="h-3 w-3 text-slate-400" />
-                                    <span className="truncate">{external_client_name}</span>
-                                </div>
-                            )}
 
             {/* Badge de Estado para Historial */}
             {!isPending && (

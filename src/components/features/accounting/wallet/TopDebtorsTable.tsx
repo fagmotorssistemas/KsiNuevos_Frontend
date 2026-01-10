@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
     User, 
     FileWarning, 
@@ -5,7 +6,10 @@ import {
     Building2,
     MapPin,
     MessageCircle,
-    Phone
+    Phone,
+    Filter,
+    XCircle,
+    CheckCircle2
 } from "lucide-react";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { ClienteDeudaSummary } from "@/types/wallet.types";
@@ -17,6 +21,8 @@ interface TopDebtorsTableProps {
 }
 
 export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps) {
+    // Estado para el filtro
+    const [showOnlyMorosos, setShowOnlyMorosos] = useState(false);
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -45,6 +51,11 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
+    // Lógica de filtrado
+    const filteredDebtors = showOnlyMorosos 
+        ? debtors.filter(d => d.documentosVencidos > 0)
+        : debtors;
+
     if (debtors.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
@@ -56,14 +67,46 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-                <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                    <FileWarning className="h-5 w-5 text-red-600" />
-                    Top Morosidad Crítica
-                </h3>
-                <span className="text-xs text-slate-500 font-medium bg-red-50 text-red-700 px-3 py-1 rounded-full border border-red-100">
-                    Requieren Acción Inmediata
-                </span>
+            {/* Cabecera con Título y Filtros */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                <div className="flex flex-col">
+                    <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                        <FileWarning className="h-5 w-5 text-red-600" />
+                        Top Deudores
+                    </h3>
+                    <span className="text-xs text-slate-500 mt-1">
+                        Clientes con mayor riesgo o deuda acumulada
+                    </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {/* BOTÓN DE FILTRO */}
+                    <button
+                        onClick={() => setShowOnlyMorosos(!showOnlyMorosos)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                            showOnlyMorosos
+                                ? "bg-red-50 text-red-700 border-red-200 shadow-sm ring-2 ring-red-500/10"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                        title={showOnlyMorosos ? "Ver todos" : "Ver solo clientes con deuda vencida"}
+                    >
+                        {showOnlyMorosos ? (
+                            <>
+                                <XCircle className="h-3.5 w-3.5" />
+                                Solo Vencidos
+                            </>
+                        ) : (
+                            <>
+                                <Filter className="h-3.5 w-3.5" />
+                                Filtrar Vencidos
+                            </>
+                        )}
+                    </button>
+                    
+                    <span className="hidden sm:inline-block text-xs text-slate-500 font-medium bg-red-50 text-red-700 px-3 py-1 rounded-full border border-red-100">
+                        Total: {filteredDebtors.length}
+                    </span>
+                </div>
             </div>
 
             <TableCard.Root>
@@ -77,7 +120,7 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                         <Table.Head id="actions" label="Acciones" className="text-right pr-4" />
                     </Table.Header>
 
-                    <Table.Body items={debtors}>
+                    <Table.Body items={filteredDebtors}>
                         {(debtor: ClienteDeudaSummary) => (
                             <Table.Row id={debtor.clienteId}>
                                 {/* Cliente */}
@@ -130,8 +173,10 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center gap-1.5">
                                             <span className={`h-2 w-2 rounded-full ${debtor.documentosVencidos > 0 ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`} />
-                                            <span className="text-xs font-medium text-slate-700">
-                                                {debtor.documentosVencidos} docs. vencidos
+                                            <span className={`text-xs font-medium ${debtor.documentosVencidos > 0 ? 'text-slate-700' : 'text-emerald-700'}`}>
+                                                {debtor.documentosVencidos > 0 
+                                                    ? `${debtor.documentosVencidos} docs. vencidos`
+                                                    : 'Al día'}
                                             </span>
                                         </div>
                                         {debtor.diasMoraMaximo > 0 && (
@@ -186,6 +231,21 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                     </Table.Body>
                 </Table>
             </TableCard.Root>
+            
+            {/* Mensaje cuando el filtro está activo pero no hay resultados */}
+            {showOnlyMorosos && filteredDebtors.length === 0 && debtors.length > 0 && (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                    <h3 className="text-slate-900 font-medium">¡Todo en orden!</h3>
+                    <p className="text-slate-500 text-sm">No hay clientes con deuda vencida en esta lista de prioridad.</p>
+                    <button 
+                        onClick={() => setShowOnlyMorosos(false)}
+                        className="mt-3 text-blue-600 text-xs font-medium hover:underline"
+                    >
+                        Ver todos
+                    </button>
+                </div>
+            )}
         </div>
     );
-}
+}   

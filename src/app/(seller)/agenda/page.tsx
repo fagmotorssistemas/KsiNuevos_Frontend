@@ -7,23 +7,25 @@ import {
     CalendarX, 
     Filter,
     Users,
-    Plus
+    Plus,
+    Sparkles 
 } from "lucide-react";
 
-// Features
-import { useAgenda, type AppointmentWithDetails, type DateFilterOption } from "@/hooks/useAgenda";
+import { useAgenda, type AppointmentWithDetails, type DateFilterOption, type BotSuggestionLead } from "@/hooks/useAgenda";
 import { AppointmentCard } from "@/components/features/agenda/AppointmentCard";
 import { AppointmentModal } from "@/components/features/agenda/AppointmentModal";
+import { BotSuggestionCard } from "@/components/features/agenda/BotSuggestionCard";
 
-// UI
-import { Button } from "@/components/ui/buttontable"; // Asegúrate de que la ruta sea correcta
+import { Button } from "@/components/ui/buttontable"; 
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AgendaPage() {
     const { profile } = useAuth();
     
-    // Estado para controlar el Modal
-    const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+    // Control del Modal y Edición
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingAppointment, setEditingAppointment] = useState<AppointmentWithDetails | null>(null);
+    const [suggestionData, setSuggestionData] = useState<any | null>(null); 
 
     const { 
         isLoading, 
@@ -31,14 +33,78 @@ export default function AgendaPage() {
         agents,
         groupedPending, 
         groupedHistory,
+        botSuggestions, 
         pendingCount,
+        suggestionsCount,
         activeTab,
         setActiveTab,
         filters,
         setFilters,
-        actions: { markAsCompleted, cancelAppointment },
+        actions: { markAsCompleted, cancelAppointment, discardSuggestion },
         refresh
     } = useAgenda();
+
+    // -- MANEJADORES --
+
+    const handleOpenNew = () => {
+        setEditingAppointment(null);
+        setSuggestionData(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (appointment: AppointmentWithDetails) => {
+        setEditingAppointment(appointment);
+        setSuggestionData(null);
+        setIsModalOpen(true);
+    };
+
+    const handleProcessSuggestion = (lead: BotSuggestionLead) => {
+        let finalDateObj = new Date(); // Fallback por defecto: ahora
+
+        // 1. Intentar usar time_reference (la más precisa)
+        if (lead.time_reference) {
+            finalDateObj = new Date(lead.time_reference);
+        } 
+        // 2. Intentar combinar Día y Hora
+        else if (lead.day_detected && lead.hour_detected) {
+            // lead.day_detected suele ser "YYYY-MM-DD"
+            // lead.hour_detected suele ser "HH:MM:SS"
+            const dateTimeString = `${lead.day_detected}T${lead.hour_detected}`;
+            const parsed = new Date(dateTimeString);
+            if (!isNaN(parsed.getTime())) {
+                finalDateObj = parsed;
+            }
+        } 
+        // 3. Si solo hay Hora, asumir mañana a esa hora
+        else if (lead.hour_detected) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            // Construir fecha con la hora detectada
+            const [hours, minutes] = lead.hour_detected.toString().split(':');
+            tomorrow.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            finalDateObj = tomorrow;
+        }
+
+        // --- CLAVE PARA EL INPUT DATETIME-LOCAL ---
+        // El input requiere formato "YYYY-MM-DDTHH:MM" en HORA LOCAL.
+        // .toISOString() da UTC (Z), lo cual descuadra la hora en el input.
+        // Hacemos un truco para obtener el string ISO ajustado a la zona horaria local.
+        const tzOffset = finalDateObj.getTimezoneOffset() * 60000; // offset en milisegundos
+        const localISOTime = new Date(finalDateObj.getTime() - tzOffset).toISOString().slice(0, 16);
+
+        setSuggestionData({
+            title: `Cita con ${lead.name}`,
+            lead_id: lead.id,
+            external_client_name: lead.name,
+            start_time: localISOTime, // ¡Ahora sí va lleno!
+            location: "Por definir",
+            notes: `Cita detectada automáticamente.\nVehículo de interés: ${lead.interested_cars?.[0]?.brand || ''} ${lead.interested_cars?.[0]?.model || ''}`
+        });
+        
+        setEditingAppointment(null);
+        setIsModalOpen(true);
+    };
 
     const renderDaySection = (dateLabel: string, appointments: AppointmentWithDetails[]) => (
         <div key={dateLabel} className="animate-in fade-in slide-in-from-bottom-2 duration-500 mb-8">
@@ -54,6 +120,7 @@ export default function AgendaPage() {
                         isAdminView={isAdmin} 
                         onComplete={markAsCompleted}
                         onCancel={cancelAppointment}
+                        onEdit={handleEdit}
                     />
                 ))}
             </div>
@@ -77,12 +144,11 @@ export default function AgendaPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Botón para abrir el Modal */}
                     <Button 
                         variant="primary" 
                         size="sm"
                         className="bg-black hover:bg-gray-700 text-white"
-                        onClick={() => setIsNewAppointmentOpen(true)}
+                        onClick={handleOpenNew}
                     >
                         <Plus className="h-4 w-4 mr-2" />
                         Nueva Cita
@@ -90,7 +156,7 @@ export default function AgendaPage() {
                 </div>
             </div>
 
-            {/* --- SECCIÓN ADMIN: FILTROS --- */}
+            {/* FILTROS ADMIN (Ocultos para vendedor) */}
             {isAdmin && (
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mr-2">
@@ -98,7 +164,6 @@ export default function AgendaPage() {
                         Filtros Admin:
                     </div>
 
-                    {/* Filtro de Responsable */}
                     <div className="flex-1 w-full md:w-auto">
                         <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
                         <div className="relative">
@@ -119,7 +184,6 @@ export default function AgendaPage() {
                         </div>
                     </div>
 
-                    {/* Filtro de Tiempo */}
                     <div className="flex-1 w-full md:w-auto">
                         <label className="text-xs text-slate-400 font-semibold block mb-1">Período de Tiempo</label>
                         <select
@@ -149,10 +213,10 @@ export default function AgendaPage() {
             )}
 
             {/* 2. PESTAÑAS (TABS) */}
-            <div className="flex border-b border-slate-200">
+            <div className="flex border-b border-slate-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('pending')}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all ${
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                         activeTab === 'pending'
                         ? 'border-slate-900 text-slate-900'
                         : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -166,9 +230,28 @@ export default function AgendaPage() {
                         </span>
                     )}
                 </button>
+                
+                {/* PESTAÑA: SUGERENCIAS IA */}
+                <button
+                    onClick={() => setActiveTab('suggestions')}
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                        activeTab === 'suggestions'
+                        ? 'border-indigo-600 text-indigo-700'
+                        : 'border-transparent text-slate-500 hover:text-indigo-600 hover:border-indigo-200'
+                    }`}
+                >
+                    <Sparkles className="h-4 w-4" />
+                    Sugerencias IA
+                    {suggestionsCount > 0 && (
+                        <span className="ml-1 bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                            {suggestionsCount}
+                        </span>
+                    )}
+                </button>
+
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all ${
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                         activeTab === 'history'
                         ? 'border-slate-900 text-slate-900'
                         : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -205,6 +288,37 @@ export default function AgendaPage() {
                             </p>
                         </div>
                     )
+                ) : activeTab === 'suggestions' ? (
+                    /* RENDERIZADO DE SUGERENCIAS DE IA */
+                    botSuggestions.length > 0 ? (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500 py-6">
+                            <div className="flex items-center justify-between mb-2 px-1">
+                                <h3 className="text-sm font-bold text-indigo-500 uppercase tracking-wider">
+                                    Detectadas Automáticamente ({suggestionsCount})
+                                </h3>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                {botSuggestions.map((suggestion) => (
+                                    <BotSuggestionCard 
+                                        key={suggestion.id} 
+                                        suggestion={suggestion} 
+                                        onSchedule={handleProcessSuggestion}
+                                        onDiscard={discardSuggestion}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
+                            <div className="bg-indigo-50 p-4 rounded-full mb-4">
+                                <Sparkles className="h-10 w-10 text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-slate-900">Sin sugerencias</h3>
+                            <p className="text-slate-500 max-w-sm mt-2">
+                                El robot no ha detectado nuevas intenciones de cita recientemente o ya has gestionado todas.
+                            </p>
+                        </div>
+                    )
                 ) : (
                     Object.keys(groupedHistory).length > 0 ? (
                         Object.entries(groupedHistory).map(([date, list]) => 
@@ -224,12 +338,13 @@ export default function AgendaPage() {
                 )}
             </div>
 
-            {/* 4. MODAL DE NUEVA CITA */}
+            {/* 4. MODAL DE CITA (CREAR O EDITAR) */}
             <AppointmentModal 
-                isOpen={isNewAppointmentOpen}
-                onClose={() => setIsNewAppointmentOpen(false)}
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
                 onSuccess={refresh}
-                // Si tienes un lead preseleccionado, puedes pasarlo aquí: leadId={null}
+                appointmentToEdit={editingAppointment}
+                initialData={suggestionData} 
             />
 
         </div>

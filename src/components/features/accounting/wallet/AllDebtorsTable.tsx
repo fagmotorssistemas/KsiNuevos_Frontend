@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
     Users, 
     ArrowRight,
@@ -5,8 +6,11 @@ import {
     MapPin,
     MessageCircle,
     Search,
-    Eye, // Recomendado: Importa 'Eye' si prefieres un icono de "Ver" en lugar de flecha
-    Phone
+    Eye,
+    Phone,
+    Filter,
+    XCircle,
+    CheckCircle2
 } from "lucide-react";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { ClienteDeudaSummary } from "@/types/wallet.types";
@@ -19,6 +23,8 @@ interface AllDebtorsTableProps {
 }
 
 export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTableProps) {
+    // Estado para controlar si el filtro de "Solo Morosos" está activo
+    const [showOnlyMorosos, setShowOnlyMorosos] = useState(false);
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -41,6 +47,13 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
+    // Lógica de filtrado:
+    // Si showOnlyMorosos es true, filtramos los que tengan > 0 documentos vencidos.
+    // Si es false, mostramos todos (debtors).
+    const filteredDebtors = showOnlyMorosos 
+        ? debtors.filter(d => d.documentosVencidos > 0)
+        : debtors;
+
     if (!loading && debtors.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
@@ -52,14 +65,41 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
+            {/* Cabecera con Título y Filtros */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
                 <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                     <Users className="h-5 w-5 text-blue-600" />
-                    Directorio de Clientes (A-Z)
+                    Directorio de Clientes
                 </h3>
-                <span className="text-xs text-slate-500 font-medium bg-blue-50 text-blue-700 px-3 py-1 rounded-full border border-blue-100">
-                    Listado General
-                </span>
+
+                <div className="flex items-center gap-3">
+                    {/* BOTÓN DE FILTRO NUEVO */}
+                    <button
+                        onClick={() => setShowOnlyMorosos(!showOnlyMorosos)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                            showOnlyMorosos
+                                ? "bg-red-50 text-red-700 border-red-200 shadow-sm ring-2 ring-red-500/10"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                        title={showOnlyMorosos ? "Ver todos los clientes" : "Ver solo clientes con deuda vencida"}
+                    >
+                        {showOnlyMorosos ? (
+                            <>
+                                <XCircle className="h-3.5 w-3.5" />
+                                Filtrando: Solo Morosos
+                            </>
+                        ) : (
+                            <>
+                                <Filter className="h-3.5 w-3.5" />
+                                Filtrar Morosos
+                            </>
+                        )}
+                    </button>
+                    
+                    <span className="hidden sm:inline-block text-xs text-slate-500 font-medium bg-slate-100 text-slate-600 px-3 py-1 rounded-full border border-slate-200">
+                        Total: {filteredDebtors.length}
+                    </span>
+                </div>
             </div>
 
             <TableCard.Root>
@@ -73,7 +113,7 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                         <Table.Head id="actions" label="Acciones" className="text-right pr-4" />
                     </Table.Header>
 
-                    <Table.Body items={debtors}>
+                    <Table.Body items={filteredDebtors}>
                         {(debtor: ClienteDeudaSummary) => (
                             <Table.Row id={debtor.clienteId}>
                                 {/* Cliente */}
@@ -121,11 +161,11 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                                     {debtor.documentosVencidos > 0 ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">
                                             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                            Vencido
+                                            Vencido ({debtor.documentosVencidos})
                                         </span>
                                     ) : (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                            <CheckCircle2 className="h-3 w-3" />
                                             Al día
                                         </span>
                                     )}
@@ -171,6 +211,21 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                     </Table.Body>
                 </Table>
             </TableCard.Root>
+
+            {/* Mensaje cuando el filtro está activo pero no hay resultados */}
+            {showOnlyMorosos && filteredDebtors.length === 0 && debtors.length > 0 && (
+                <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
+                    <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                    <h3 className="text-slate-900 font-medium">¡Excelente!</h3>
+                    <p className="text-slate-500 text-sm">No hay clientes con deuda vencida en esta lista.</p>
+                    <button 
+                        onClick={() => setShowOnlyMorosos(false)}
+                        className="mt-3 text-blue-600 text-xs font-medium hover:underline"
+                    >
+                        Ver todos los clientes
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
