@@ -64,6 +64,7 @@ export function useAgenda() {
         if (!user) return;
         setIsLoading(true);
 
+        // Usamos !responsible_id para resolver la ambigüedad de la FK
         let query = supabase
             .from('appointments')
             .select(`
@@ -72,7 +73,7 @@ export function useAgenda() {
                     *,
                     interested_cars (*)
                 ),
-                responsible:profiles (*) 
+                responsible:profiles!responsible_id (*) 
             `);
 
         if (!isAdmin) {
@@ -82,7 +83,7 @@ export function useAgenda() {
         const { data, error } = await query.order('start_time', { ascending: true });
 
         if (error) {
-            console.error("Error cargando agenda:", error);
+            console.error("Error cargando agenda:", error.message || JSON.stringify(error));
         } else {
             // @ts-ignore
             setAllAppointments((data || []) as AppointmentWithDetails[]);
@@ -111,7 +112,7 @@ export function useAgenda() {
         const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) {
-            console.error("Error cargando sugerencias:", error);
+            console.error("Error cargando sugerencias:", error.message || error);
         } else {
             // @ts-ignore
             setRawSuggestions((data || []) as BotSuggestionLead[]);
