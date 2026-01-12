@@ -13,25 +13,24 @@ export const Hero = () => {
   const [selectedCar, setSelectedCar] = useState<InventoryCarRow | null>(null);
 
   return (
-    <section className="relative h-[85vh] flex items-center justify-center bg-slate-900 overflow-hidden">
+    // CAMBIO: bg-black en lugar de slate-900
+    <section className="relative h-[85vh] flex items-center justify-center bg-black overflow-hidden">
       <div className="absolute inset-0 opacity-50">
         <img 
           src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=1920" 
           alt="Hero car" 
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover grayscale-[30%]" // Un poco de desaturación para elegancia
         />
       </div>
       
       <div className="relative z-20 text-center px-4 max-w-5xl">
-        <KsBadge variant="red">Estás en K-si Nuevos</KsBadge>
-        
-        {/* --- CAMBIO AQUÍ: 'tracking-tighter' por 'tracking-widest' --- */}
+        <KsBadge variant="solid">Oferta</KsBadge>        
         <h1 className="text-5xl md:text-7xl uppercase text-white mt-6 mb-6 font-nike">
           Tu próximo auto, <br />
           <span className="text-red-600">K-si como nuevo.</span>
         </h1>
         
-        {/* BUSCADOR CON CLASE DE SOBRESCRITURA */}
+        {/* BUSCADOR CON CLASE DE SOBRESCRITURA NEUTRA */}
         <div className="max-w-2xl mx-auto mb-8 text-left ksi-search-override">
           <InventorySearch 
             inventory={inventory}
@@ -68,17 +67,25 @@ export const Hero = () => {
             display: none !important;
           }
 
+          /* Input Blanco Puro con borde gris neutro */
           .ksi-search-override input {
             font-weight: 700 !important;
             border-radius: 0.75rem !important;
             background-color: white !important;
-            border: 2px solid #f1f5f9 !important; 
+            border: 1px solid #e5e5e5 !important; /* neutral-200 */
+            color: #000 !important;
           }
 
           .ksi-search-override input:focus {
-            border-color: #E11D48 !important; 
+            border-color: #DC2626 !important; /* red-600 */
+            box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1) !important;
           }
 
+          .ksi-search-override input::placeholder {
+            color: #a3a3a3 !important; /* neutral-400 */
+          }
+
+          /* Ocultar elementos verdes o azules heredados */
           .ksi-search-override .bg-green-50, 
           .ksi-search-override div[class*="text-green-700"],
           .ksi-search-override span[class*="text-slate-600"],
@@ -88,14 +95,15 @@ export const Hero = () => {
 
           .ksi-search-override li {
             text-transform: uppercase !important;
+            color: #171717 !important; /* neutral-900 */
           }
 
           .ksi-search-override li:hover {
-            background-color: #FFF1F2 !important;
+            background-color: #FEF2F2 !important; /* red-50 */
           }
           
           .ksi-search-override li:hover .text-slate-800 {
-            color: #E11D48 !important;
+            color: #DC2626 !important;
           }
         `}</style>
       </div>

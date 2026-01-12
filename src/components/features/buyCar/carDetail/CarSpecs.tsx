@@ -7,7 +7,6 @@ interface CarSpecsProps {
 
 export const CarSpecs = ({ car }: CarSpecsProps) => {
   
-  // Mapeo exhaustivo de tu base de datos
   const allSpecs = [
     // --- IDENTIDAD ---
     { label: "Marca", value: car.brand },
@@ -15,7 +14,7 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
     { label: "Versión", value: car.version },
     { label: "Año", value: car.year },
     { label: "VIN", value: car.vin },
-    { label: "ID / Slug", value: car.slug }, 
+    { label: "ID Referencia", value: car.id }, // Cambié slug por ID que suele ser más corto visualmente
 
     // --- MOTOR ---
     { label: "Motor", value: car.engine_displacement },
@@ -24,7 +23,6 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
     { label: "Transmisión", value: car.transmission },
     { label: "Velocidades", value: car.transmission_speeds },
     { label: "Tracción", value: car.drive_type },
-    { label: "Detalle Tracción", value: car.drive_type_detail },
 
     // --- CARROCERÍA ---
     { label: "Carrocería", value: car.type_body },
@@ -39,27 +37,37 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
 
     // --- HISTORIAL ---
     { label: "Kilometraje", value: car.mileage },
-    { label: "Placa (Corto)", value: car.plate_short },
-    { label: "Ciudad Registro", value: car.city_registration },
-    { label: "Dueños Anteriores", value: car.previous_owners },
+    { label: "Placa", value: car.plate_short },
+    { label: "Ciudad", value: car.city_registration },
+    { label: "Dueños", value: car.previous_owners },
     { label: "Mantenimientos", value: car.has_maintenance_record ? "Sí" : "No" },
     { label: "Certificado", value: car.is_certified ? "Sí" : "No" },
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
-      <h3 className="text-lg font-bold text-gray-900 mb-6 border-b border-gray-100 pb-2">
-        Especificaciones Completas (Debug Mode)
-      </h3>
+    <div className="bg-white rounded-2xl border border-neutral-200 p-8 mb-8 shadow-sm">
+      <div className="flex items-center gap-3 mb-8 border-b border-neutral-100 pb-4">
+        <div className="w-1 h-6 bg-red-600 rounded-full"></div>
+        <h3 className="text-xl font-black text-black uppercase tracking-tight">
+          Ficha Técnica
+        </h3>
+      </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-y-6 gap-x-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-y-8 gap-x-8">
         {allSpecs.map((spec, index) => (
-          <div key={index} className="flex flex-col group border-l-2 border-transparent hover:border-blue-100 pl-2 transition-all">
-            <span className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
+          <div 
+            key={index} 
+            // Hover: Borde Rojo
+            className="flex flex-col group border-l-2 border-neutral-100 hover:border-red-600 pl-4 transition-all duration-300"
+          >
+            <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-widest mb-1 group-hover:text-red-600 transition-colors">
               {spec.label}
             </span>
-            <span className={`text-sm font-semibold break-words ${!spec.value ? 'text-red-300 italic' : 'text-gray-800'}`}>
-              {/* AQUÍ ESTÁ EL CAMBIO: Si no hay valor, mostramos "---" en rojo en lugar de ocultarlo */}
+            <span className={`text-sm font-bold break-words ${
+              !spec.value 
+                ? 'text-neutral-300' // Valor vacío en gris suave
+                : 'text-black'       // Valor presente en negro
+            }`}>
               {spec.value !== null && spec.value !== undefined && spec.value !== "" 
                 ? spec.value 
                 : "---"}

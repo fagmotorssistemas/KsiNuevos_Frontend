@@ -1,4 +1,4 @@
-export default function takeCareOfYourCar() {
+export default function creditCar() {
     return (
         <div
             style={{
@@ -12,7 +12,7 @@ export default function takeCareOfYourCar() {
             }}
         >
             <h1 style={{ fontSize: "3rem", fontWeight: "bold", marginBottom: "1rem" }}>
-                Página de cuidados en desarrollo 🚧
+                Página de creditos en desarrollo 🚧
             </h1>
             <p style={{ fontSize: "1.25rem", opacity: 0.85 }}>
                 Estamos trabajando para traerte esta sección muy pronto.

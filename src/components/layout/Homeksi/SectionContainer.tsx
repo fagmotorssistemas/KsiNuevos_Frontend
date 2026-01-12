@@ -9,13 +9,13 @@ interface SectionContainerProps {
 export const SectionContainer = ({ 
   children, 
   className = '', 
-  bgVariant = 'none' 
+  bgVariant = 'white' // Por defecto blanco como pediste
 }: SectionContainerProps) => {
   
   const bgStyles = {
-    white: "bg-white",
-    gray: "bg-slate-50",
-    dark: "bg-slate-900 text-white",
+    white: "bg-white text-black", // Fondo blanco, texto base negro
+    gray: "bg-neutral-50 text-black", 
+    dark: "bg-black text-white",
     none: ""
   };
 

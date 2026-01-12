@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { KsButton } from '../../ui/Homeksi/KsButton';
+import { KsButton } from '../../ui/Homeksi/KsButton'; // Asegúrate que la ruta sea correcta
 
 export const MainNavbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -11,13 +11,14 @@ export const MainNavbar = () => {
   const navLinks = [
     { name: 'Comprar', href: '/buyCar' },
     { name: 'Vender', href: '/sellCar' },
-    { name: 'Créditos', href: '/takeCareOfYourCar' },
+    { name: 'Créditos', href: '/creditCar' },
     { name: 'Nosotros', href: '/aboutUs' },
   ];
 
   return (
-<nav className="fixed top-0 w-full z-50 bg-white backdrop-blur-md border-b border-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between relative z-50 bg-white">
+    // Borde neutral y sombra sutil
+    <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-neutral-100 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between relative">
         
         {/* --- IZQUIERDA: LOGO --- */}
         <div className="flex-shrink-0">
@@ -25,8 +26,8 @@ export const MainNavbar = () => {
             <Image
               src="/logo.png"
               alt="Logo de K-si New"
-              width={100}
-              height={35}
+              width={110}
+              height={40}
               priority
               className="object-contain"
             />
@@ -34,15 +35,17 @@ export const MainNavbar = () => {
         </div>
 
         {/* --- CENTRO: NAVEGACIÓN (Desktop) --- */}
-        <div className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
+        <div className="hidden md:flex items-center gap-14 absolute left-1/2 -translate-x-1/2">
           {navLinks.map((link) => (
             <Link 
               key={link.name} 
               href={link.href}
-              className="text-sm font-bold text-slate-600 hover:text-red-600 transition-colors relative group tracking-wider"
+              // Texto gris oscuro neutro, hover a negro o rojo
+              className="text-sm font-bold text-neutral-600 hover:text-black transition-colors relative group tracking-wider"
             >
               {link.name}
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-red-600 transition-all group-hover:w-full"></span>
+              {/* Línea roja animada al hover */}
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-red-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
           ))}
         </div>
@@ -58,7 +61,7 @@ export const MainNavbar = () => {
 
         {/* --- MOBILE TOGGLE --- */}
         <button 
-          className="md:hidden text-slate-900 font-bold p-2 focus:outline-none z-50"
+          className="md:hidden text-black font-bold p-2 focus:outline-none z-50"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
           {isMobileMenuOpen ? (
@@ -73,10 +76,10 @@ export const MainNavbar = () => {
         </button>
       </div>
 
-      {/* --- MENÚ DESPLEGABLE MOBILE (ANIMADO) --- */}
+      {/* --- MENÚ DESPLEGABLE MOBILE --- */}
       <div 
         className={`
-          md:hidden absolute top-20 left-0 w-full bg-white border-b border-slate-100 shadow-xl overflow-hidden
+          md:hidden absolute top-20 left-0 w-full bg-white border-b border-neutral-200 shadow-xl overflow-hidden
           transition-all duration-500 ease-in-out
           ${isMobileMenuOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}
         `}
@@ -87,11 +90,10 @@ export const MainNavbar = () => {
               key={link.name} 
               href={link.href}
               className={`
-                text-lg font-bold text-slate-700 hover:text-red-600 transition-all border-b border-slate-50 pb-2
+                text-lg font-bold text-neutral-800 hover:text-red-600 transition-all border-b border-neutral-100 pb-2
                 transform duration-500
                 ${isMobileMenuOpen ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}
               `}
-              // Añadimos un pequeño retraso a cada item para un efecto cascada
               style={{ transitionDelay: `${index * 50}ms` }}
               onClick={() => setIsMobileMenuOpen(false)}
             >

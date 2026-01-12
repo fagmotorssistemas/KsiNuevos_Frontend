@@ -10,13 +10,12 @@ import { useInventoryMaster } from "@/hooks/Homeksi/useInventoryMaster";
 import { HeroSection } from "@/components/features/buyCar/HeroSection";
 import { SidebarFilters } from "@/components/features/buyCar/SidebarFilters";
 import { CatalogToolbar } from "@/components/features/buyCar/CatalogToolbar";
-import { CarCard } from "@/components/features/buyCar/CarCard";
+import { CarCard } from "@/components/features/buyCar/CarCard"; // Asegúrate que este sea el que actualizamos antes
 import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
 import { MainFooter } from '@/components/layout/Homeksi/MainFooter';
 
 // --- COMPONENTE INTERNO: Maneja la lógica y los datos ---
 function BuyCarContent() {
-  // 3. USO DEL HOOK (Aquí es donde se leen los params, por eso aislamos esto)
   const {
     cars,
     totalCount,
@@ -34,23 +33,13 @@ function BuyCarContent() {
   // 4. ADAPTADOR: Conecta el Sidebar (UI) con el Hook (Lógica)
   const handleUpdateFilter = (key: string, value: any) => {
     switch (key) {
-      // Filtros Directos
-      case 'search':
-        setFilterValue('searchQuery', value);
-        break;
+      case 'search': setFilterValue('searchQuery', value); break;
       case 'priceRange':
-        // El slider envía un array [min, max]
         setFilterValue('minPrice', value[0]);
         setFilterValue('maxPrice', value[1]);
         break;
-      case 'categories':
-        setFilterValue('categories', value);
-        break;
-      case 'locations':
-        setFilterValue('locations', value);
-        break;
-        
-      // Filtros de Especificaciones (Specs)
+      case 'categories': setFilterValue('categories', value); break;
+      case 'locations': setFilterValue('locations', value); break;
       case 'minYear':
       case 'maxYear':
       case 'transmission':
@@ -60,9 +49,7 @@ function BuyCarContent() {
       case 'maxMileage':
         setSpecFilter(key as any, value);
         break;
-        
-      default:
-        console.warn(`Filtro desconocido: ${key}`);
+      default: console.warn(`Filtro desconocido: ${key}`);
     }
   };
 
@@ -70,7 +57,7 @@ function BuyCarContent() {
     <>
       <HeroSection />
 
-      <div className="max-w-7xl mx-auto px-4 py-8 flex items-start gap-8">
+      <div className="max-w-7xl mx-auto px-4 py-12 flex items-start gap-10">
           
           {/* Sidebar con el adaptador conectado */}
           <SidebarFilters 
@@ -87,16 +74,16 @@ function BuyCarContent() {
               />
 
               {isLoading ? (
-                  // Skeleton Loading
+                  // Skeleton Loading Neutro
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                       {[1, 2, 3, 4, 5, 6].map((i) => (
-                          <div key={i} className="h-[400px] bg-gray-200 rounded-xl animate-pulse"></div>
+                          <div key={i} className="h-[420px] bg-neutral-100 rounded-2xl animate-pulse"></div>
                       ))}
                   </div>
               ) : (
                   <>
                       {/* Grid de Autos */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
                           {cars.map((car) => (
                               <CarCard key={car.id} car={car} />
                           ))}
@@ -104,11 +91,12 @@ function BuyCarContent() {
 
                       {/* Mensaje de "No hay resultados" */}
                       {cars.length === 0 && (
-                          <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300 mt-6">
-                              <p className="text-gray-500 text-lg">No encontramos autos con esos filtros.</p>
+                          <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-neutral-300 mt-6">
+                              <p className="text-neutral-500 text-lg font-medium mb-2">No encontramos autos con esos filtros.</p>
                               <button 
                                   onClick={clearFilters}
-                                  className="mt-2 text-blue-600 font-semibold hover:underline"
+                                  // CAMBIO: Blue -> Red
+                                  className="text-red-600 font-bold hover:underline hover:text-red-700"
                               >
                                   Limpiar todos los filtros
                               </button>
@@ -117,12 +105,13 @@ function BuyCarContent() {
 
                       {/* Paginación "Cargar Más" */}
                       {cars.length < totalCount && (
-                           <div className="mt-12 flex flex-col items-center">
+                           <div className="mt-16 flex flex-col items-center">
                               <button 
                                   onClick={() => setPage(page + 1)}
-                                  className="px-8 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-full hover:bg-gray-50 transition shadow-sm hover:shadow-md"
+                                  // Botón neutro
+                                  className="px-8 py-3 bg-white border border-neutral-300 text-black font-bold rounded-xl hover:bg-neutral-50 hover:border-red-600 transition-all shadow-sm hover:shadow-md"
                               >
-                                  Cargar más
+                                  Cargar más vehículos
                               </button>
                           </div>
                       )}
@@ -134,21 +123,22 @@ function BuyCarContent() {
   );
 }
 
-// --- COMPONENTE PRINCIPAL: Wrapper con Suspense para corregir el error ---
+// --- COMPONENTE PRINCIPAL ---
 export default function BuyCarPage() {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    // Fondo neutro muy suave para toda la página
+    <div className="min-h-screen bg-neutral-50 flex flex-col font-sans">
       <Head>
-        <title>Comprar Auto | Catálogo</title>
+        <title>Comprar Auto | Catálogo K-si Nuevos</title>
       </Head>
 
       <MainNavbar />
 
       <main className="flex-grow pt-0">
-        {/* Suspense atrapa la lectura de URL params durante el build */}
         <Suspense fallback={
           <div className="w-full h-96 flex items-center justify-center">
-             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+             {/* Spinner Rojo */}
+             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-600"></div>
           </div>
         }>
           <BuyCarContent />
