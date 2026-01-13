@@ -60,6 +60,7 @@ export const LoginForm = () => {
             break
           case 'vendedor':
           case 'admin':
+          case "marketing":
             router.push('/leads') // Al CRM
             break
           case 'finanzas':
