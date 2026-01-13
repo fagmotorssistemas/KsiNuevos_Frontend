@@ -12,7 +12,7 @@ import { CreditoResumen, CuotaAmortizacion } from "@/types/wallet.types";
 import { Table, TableCard } from "@/components/ui/table"; 
 
 interface AmortizationTabProps {
-    clientId: number;
+    clientId: number; // Este ID (ej: 75) viene desde el componente padre
 }
 
 export function AmortizationTab({ clientId }: AmortizationTabProps) {
@@ -32,12 +32,13 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
     
     const formatDate = (dateString?: string) => {
         if (!dateString) return '-';
+        // Aseguramos compatibilidad con fechas ISO que vienen del backend
         return new Date(dateString).toLocaleDateString('es-ES', { 
             day: '2-digit', month: 'short', year: 'numeric' 
         });
     };
 
-    // 1. Cargar lista de créditos al montar
+    // 1. Cargar lista de créditos (Usa solo clientId)
     useEffect(() => {
         const loadCredits = async () => {
             setLoadingCredits(true);
@@ -50,18 +51,24 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                 setLoadingCredits(false);
             }
         };
-        loadCredits();
+        if (clientId) loadCredits();
     }, [clientId]);
 
-    // 2. Cargar tabla cuando se selecciona un crédito
+    // 2. Cargar tabla detallada
     useEffect(() => {
         const loadTable = async () => {
             if (!selectedCredit) return;
             
             setLoadingTable(true);
             try {
-                const data = await walletService.getAmortizationTable(selectedCredit.idCredito);
+                // Enviamos las DOS llaves
+                const data = await walletService.getAmortizationTable(clientId, selectedCredit.idCredito);
+                
+                // OPTIMIZACIÓN: Eliminamos el .sort() manual del cliente.
+                // La nueva consulta SQL ya devuelve las filas ordenadas por NCUOTA
+                // usando 'ORDER BY NCUOTA' directamente en la base de datos.
                 setAmortizationTable(data);
+                
             } catch (error) {
                 console.error("Error cargando tabla:", error);
             } finally {
@@ -69,7 +76,7 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
             }
         };
         loadTable();
-    }, [selectedCredit]);
+    }, [selectedCredit, clientId]); 
 
     // --- VISTAS ---
 
@@ -84,11 +91,14 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50">
                 <CreditCard className="h-10 w-10 text-slate-300 mb-3" />
                 <p className="text-slate-500 font-medium">Este cliente no tiene tablas de amortización activas.</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                    Es posible que su deuda provenga de facturas directas o venta de repuestos, no de crédito vehicular diferido.
+                </p>
             </div>
         );
     }
 
-    // Vista: Detalle de Tabla (Cuando seleccionas uno)
+    // Vista: Detalle de Tabla
     if (selectedCredit) {
         return (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -98,6 +108,7 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                         <button 
                             onClick={() => setSelectedCredit(null)}
                             className="p-2 bg-white border border-slate-200 rounded-full hover:bg-slate-100 transition-colors shadow-sm"
+                            title="Volver a lista de créditos"
                         >
                             <ArrowLeft className="h-4 w-4 text-slate-600" />
                         </button>
@@ -107,6 +118,7 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                                 <Calendar className="h-3 w-3" />
                                 Inicio: {formatDate(selectedCredit.fechaInicio)}
                             </p>
+                            <p className="text-[10px] text-slate-400 font-mono mt-1">ID: {selectedCredit.idCredito}</p>
                         </div>
                     </div>
                     <div className="text-right hidden sm:block">
@@ -124,14 +136,14 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                             <Table.Header>
                                 <Table.Head id="ncuota" label="#" className="w-16" />
                                 <Table.Head id="fecha" label="Vencimiento" />
-                                <Table.Head id="capital" label="Capital" />
-                                <Table.Head id="interes" label="Interés" />
-                                <Table.Head id="cuota" label="Valor Cuota" />
-                                <Table.Head id="saldo" label="Saldo Pendiente" />
+                                <Table.Head id="capital" label="Capital" className="text-right" />
+                                <Table.Head id="interes" label="Interés" className="text-right" />
+                                <Table.Head id="cuota" label="Valor Cuota" className="text-right" />
+                                <Table.Head id="saldo" label="Saldo Pendiente" className="text-right" />
                             </Table.Header>
                             <Table.Body items={amortizationTable}>
                                 {(cuota: CuotaAmortizacion) => (
-                                    <Table.Row id={cuota.numeroCuota}>
+                                    <Table.Row id={cuota.numeroCuota.toString()}>
                                         <Table.Cell>
                                             <span className="font-mono text-slate-500 text-xs bg-slate-100 px-2 py-1 rounded">
                                                 {cuota.numeroCuota}
@@ -142,17 +154,22 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                                                 {formatDate(cuota.fechaVencimiento)}
                                             </span>
                                         </Table.Cell>
-                                        <Table.Cell>
+                                        <Table.Cell className="text-right">
                                             <span className="text-slate-600 text-sm">{formatMoney(cuota.capital)}</span>
                                         </Table.Cell>
-                                        <Table.Cell>
+                                        <Table.Cell className="text-right">
                                             <span className="text-slate-600 text-sm">{formatMoney(cuota.interes)}</span>
                                         </Table.Cell>
-                                        <Table.Cell>
-                                            <span className="font-bold text-slate-900 text-sm">{formatMoney(cuota.valorCuota)}</span>
+                                        <Table.Cell className="text-right">
+                                            <span className="font-bold text-slate-900 text-sm bg-slate-50 px-2 py-1 rounded">
+                                                {formatMoney(cuota.valorCuota)}
+                                            </span>
                                         </Table.Cell>
-                                        <Table.Cell>
-                                            <span className="font-mono text-emerald-700 text-sm font-medium">
+                                        <Table.Cell className="text-right">
+                                            {/* Si el saldo es 0, lo ponemos en verde claro para indicar 'pagado' */}
+                                            <span className={`font-mono text-sm font-medium ${
+                                                cuota.saldoPendiente <= 0 ? 'text-green-400' : 'text-emerald-700'
+                                            }`}>
                                                 {formatMoney(cuota.saldoPendiente)}
                                             </span>
                                         </Table.Cell>

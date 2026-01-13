@@ -7,7 +7,7 @@ import {
     CuotaAmortizacion 
 } from "@/types/wallet.types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.117:3005/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 export const walletService = {
 
@@ -46,9 +46,9 @@ export const walletService = {
         return data.data;
     },
 
-    // --- NUEVOS MÉTODOS PARA AMORTIZACIÓN ---
+    // --- MÉTODOS PARA AMORTIZACIÓN (CORREGIDOS) ---
 
-    // 6. Obtener lista de créditos de un cliente
+    // 1. Obtener lista de créditos (Tarjetas)
     async getClientCredits(clienteId: number): Promise<CreditoResumen[]> {
         const res = await fetch(`${API_URL}/cartera/creditos/${clienteId}`);
         if (!res.ok) throw new Error('Error fetching credits');
@@ -56,10 +56,10 @@ export const walletService = {
         return data.data;
     },
 
-    // 7. Obtener la tabla detallada de un crédito específico
-    async getAmortizationTable(creditId: string): Promise<CuotaAmortizacion[]> {
-        // Importante: creditId es un string largo, se pasa directo en la URL
-        const res = await fetch(`${API_URL}/cartera/amortizacion/${creditId}`);
+    // 2. Obtener la tabla detallada (AHORA CON DOBLE LLAVE)
+    // El backend necesita clientId Y creditId para ser preciso
+    async getAmortizationTable(clientId: number, creditId: string): Promise<CuotaAmortizacion[]> {
+        const res = await fetch(`${API_URL}/cartera/amortizacion/${clientId}/${creditId}`);
         if (!res.ok) throw new Error('Error fetching amortization table');
         const data = await res.json();
         return data.data;
