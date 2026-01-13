@@ -134,38 +134,40 @@ export function AmortizationTab({ clientId }: AmortizationTabProps) {
                     <TableCard.Root>
                         <Table aria-label="Tabla de Amortización">
                             <Table.Header>
-                                <Table.Head id="ncuota" label="#" className="w-16" />
-                                <Table.Head id="fecha" label="Vencimiento" />
-                                <Table.Head id="capital" label="Capital" className="text-right" />
-                                <Table.Head id="interes" label="Interés" className="text-right" />
-                                <Table.Head id="cuota" label="Valor Cuota" className="text-right" />
-                                <Table.Head id="saldo" label="Saldo Pendiente" className="text-right" />
+                                {/* CAMBIO: Agregado text-center a todas las cabeceras */}
+                                <Table.Head id="ncuota" label="#" className="w-16 text-center" />
+                                <Table.Head id="fecha" label="Vencimiento" className="text-center" />
+                                <Table.Head id="capital" label="Capital" className="text-center" />
+                                <Table.Head id="interes" label="Interés" className="text-center" />
+                                <Table.Head id="cuota" label="Valor Cuota" className="text-center" />
+                                <Table.Head id="saldo" label="Saldo Pendiente" className="text-center" />
                             </Table.Header>
                             <Table.Body items={amortizationTable}>
                                 {(cuota: CuotaAmortizacion) => (
                                     <Table.Row id={cuota.numeroCuota.toString()}>
-                                        <Table.Cell>
+                                        {/* CAMBIO: Agregado text-center a todas las celdas */}
+                                        <Table.Cell className="text-left">
                                             <span className="font-mono text-slate-500 text-xs bg-slate-100 px-2 py-1 rounded">
                                                 {cuota.numeroCuota}
                                             </span>
                                         </Table.Cell>
-                                        <Table.Cell>
+                                        <Table.Cell className="text-left">
                                             <span className="font-mono text-sm text-slate-700">
                                                 {formatDate(cuota.fechaVencimiento)}
                                             </span>
                                         </Table.Cell>
-                                        <Table.Cell className="text-right">
+                                        <Table.Cell className="text-left">
                                             <span className="text-slate-600 text-sm">{formatMoney(cuota.capital)}</span>
                                         </Table.Cell>
-                                        <Table.Cell className="text-right">
+                                        <Table.Cell className="text-left">
                                             <span className="text-slate-600 text-sm">{formatMoney(cuota.interes)}</span>
                                         </Table.Cell>
-                                        <Table.Cell className="text-right">
+                                        <Table.Cell className="text-left">
                                             <span className="font-bold text-slate-900 text-sm bg-slate-50 px-2 py-1 rounded">
                                                 {formatMoney(cuota.valorCuota)}
                                             </span>
                                         </Table.Cell>
-                                        <Table.Cell className="text-right">
+                                        <Table.Cell className="text-left">
                                             {/* Si el saldo es 0, lo ponemos en verde claro para indicar 'pagado' */}
                                             <span className={`font-mono text-sm font-medium ${
                                                 cuota.saldoPendiente <= 0 ? 'text-green-400' : 'text-emerald-700'
