@@ -1,15 +1,16 @@
+// src/components/features/auth/LoginForm.tsx
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth'
+import { useAuth } from '@/hooks/useAuth' // Usamos tu hook
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
 
 export const LoginForm = () => {
   const router = useRouter()
-  const { supabase } = useAuth()
+  const { supabase } = useAuth() // Instancia desde el contexto
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,113 +22,91 @@ export const LoginForm = () => {
     setIsLoading(true)
     setError(null)
 
-    // 1. Intentamos iniciar sesión con Supabase Auth
+    // 1. Login con Supabase
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email,
+      password,
     })
 
     if (authError) {
       setIsLoading(false)
-      setError(authError.message)
+      setError('Credenciales inválidas.')
       return
     }
 
-    // 2. Si las credenciales son correctas, verificamos el perfil en la base de datos
-    if (data?.user) {
+    if (data.user) {
       try {
-        // Obtenemos 'role' Y 'status'
+        // 2. Verificar Rol en Base de Datos
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role, status')
           .eq('id', data.user.id)
           .single()
 
-        if (profileError) {
-          throw new Error('No se pudo verificar el perfil del usuario.')
-        }
+        if (profileError || !profile) throw new Error('Error al cargar perfil.')
 
-        // 3. VERIFICACIÓN DE ESTATUS
-        // Si el usuario NO está activo
-        if (profile?.status !== 'activo') {
-          // Cerramos la sesión inmediatamente para que no pueda entrar
+        // 3. Verificar si está activo
+        if (profile.status !== 'activo') {
           await supabase.auth.signOut()
-          
-          setError('Tu cuenta está inactiva. Contacta al administrador.')
-          setIsLoading(false)
-          return // Detenemos la ejecución aquí
+          throw new Error('Tu cuenta está desactivada.')
         }
 
-        // 4. Si está activo, procedemos con la redirección según el rol
-        setIsLoading(false) 
+        // 4. LÓGICA DE REDIRECCIONAMIENTO
+        router.refresh() // Actualiza el Header para mostrar el avatar
 
-        if (profile?.role === 'finanzas') {
-          router.push('/wallet')
-        } else {
-          router.push('/leads')
+        switch (profile.role) {
+          case 'cliente':
+            router.push('/') // Al Home Público
+            break
+          case 'vendedor':
+          case 'admin':
+            router.push('/leads') // Al CRM
+            break
+          case 'finanzas':
+            router.push('/wallet') // A Finanzas
+            break
+          default:
+            router.push('/') // Por seguridad, al home
         }
 
-      } catch (err) {
-        // Error al consultar el perfil
+      } catch (err: any) {
         console.error(err)
-        setError('Error al verificar permisos de usuario.')
-        await supabase.auth.signOut() // Por seguridad, cerramos sesión
+        setError(err.message || 'Error interno.')
+        await supabase.auth.signOut()
         setIsLoading(false)
       }
-    } else {
-      // Caso raro donde no hay error pero no hay user data
-      setIsLoading(false)
-      router.push('/leads')
+      // Nota: No ponemos setIsLoading(false) si redirigimos para evitar parpadeos
     }
   }
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
-      {/* --- Campo de Email --- */}
+      {/* ... Tus inputs de Email y Password ... */}
       <div>
-        <label
-          htmlFor="email"
-          className="mb-1 block text-sm font-medium text-gray-700"
-        >
-          Email
-        </label>
-        <Input
-          type="email"
-          id="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="tu@correo.com"
-          required
+        <label className="mb-1 block text-sm font-medium">Email</label>
+        <Input 
+          type="email" 
+          value={email} 
+          onChange={(e) => setEmail(e.target.value)} 
+          required 
+          disabled={isLoading}
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium">Contraseña</label>
+        <Input 
+          type="password" 
+          value={password} 
+          onChange={(e) => setPassword(e.target.value)} 
+          required 
           disabled={isLoading}
         />
       </div>
 
-      {/* --- Campo de Contraseña --- */}
-      <div>
-        <label
-          htmlFor="password"
-          className="mb-1 block text-sm font-medium text-gray-700"
-        >
-          Contraseña
-        </label>
-        <Input
-          type="password"
-          id="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          required
-          disabled={isLoading}
-        />
-      </div>
-
-      {/* --- Botón de Envío --- */}
       <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? <Spinner size="sm" className="mr-2" /> : null}
-        {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+        {isLoading ? <Spinner size="sm" className="mr-2" /> : 'Iniciar Sesión'}
       </Button>
-
-      {/* --- Mensaje de Error --- */}
+      
       {error && <p className="text-center text-sm text-red-500">{error}</p>}
     </form>
   )

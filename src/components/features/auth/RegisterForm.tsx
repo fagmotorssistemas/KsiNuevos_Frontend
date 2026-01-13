@@ -38,7 +38,7 @@ export const RegisterForm = () => {
         data: {
           full_name: fullName,
           phone: phone,
-          role: 'customer',
+          role: 'cliente',
         },
       },
     })

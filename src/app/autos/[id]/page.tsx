@@ -3,7 +3,7 @@
 import React from "react";
 import { useParams } from "next/navigation"; 
 import { useCarDetail } from "@/hooks/Homeksi/useCarDetail";
-import Link from "next/link"; // Usamos Link de next para navegación interna optimizada
+import Link from "next/link"; 
 
 // Layout
 import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
@@ -15,18 +15,20 @@ import { CarHeader } from "@/components/features/buyCar/carDetail/CarHeader";
 import { CarSpecs } from "@/components/features/buyCar/carDetail/CarSpecs";
 import { CarFeatures } from "@/components/features/buyCar/carDetail/CarFeatures";
 
+// NUEVO: Importamos el botón inteligente
+import BookingButton from "@/components/features/buyCar/carDetail/BookingButton";
+
 export default function CarDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const { car, isLoading, error } = useCarDetail(id);
 
-  // --- ESTADO DE CARGA (Branded) ---
+  // --- ESTADO DE CARGA ---
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex flex-col">
         <MainNavbar />
         <div className="flex-grow flex items-center justify-center h-[60vh]">
-          {/* Spinner Rojo K-si Nuevos */}
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-600 border-l-transparent border-r-transparent"></div>
         </div>
         <MainFooter />
@@ -64,7 +66,7 @@ export default function CarDetailPage() {
       <main className="flex-grow pt-6 pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
-            {/* Breadcrumb Minimalista */}
+            {/* Breadcrumb */}
             <nav className="flex items-center text-sm text-gray-400 mb-8">
                 <Link href="/buyCar" className="hover:text-red-600 transition-colors">
                   Autos
@@ -77,10 +79,8 @@ export default function CarDetailPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
                 
-                {/* --- COLUMNA IZQUIERDA (Contenido Visual y Técnico) --- */}
+                {/* --- COLUMNA IZQUIERDA --- */}
                 <div className="lg:col-span-7 space-y-12">
-                    
-                    {/* 1. Galería */}
                     <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
                       <CarGallery 
                           mainImage={car.img_main_url} 
@@ -88,7 +88,6 @@ export default function CarDetailPage() {
                       />
                     </div>
 
-                    {/* 2. Descripción */}
                     {car.description && (
                         <div className="border-t border-gray-100 pt-8">
                             <h3 className="text-xl font-bold text-gray-900 mb-4">Sobre este auto</h3>
@@ -98,26 +97,21 @@ export default function CarDetailPage() {
                         </div>
                     )}
 
-                    {/* 3. Ficha Técnica */}
                     <div className="border-t border-gray-100 pt-8">
                        <CarSpecs car={car} />
                     </div>
 
-                    {/* 4. Equipamiento */}
                     <div className="border-t border-gray-100 pt-8">
                       <h3 className="text-xl font-bold text-gray-900 mb-6">Equipamiento destacado</h3>
                       <CarFeatures features={Array.isArray(car.features) ? car.features as string[] : []} />
                     </div>
                 </div>
 
-                {/* --- COLUMNA DERECHA (Sticky Sidebar - Conversión) --- */}
+                {/* --- COLUMNA DERECHA (Conversión) --- */}
                 <div className="lg:col-span-5 relative">
-                    {/* El div sticky se "pega" al hacer scroll */}
                     <div className="sticky top-28 space-y-6">
                         
-                        {/* Tarjeta Principal de Información */}
                         <div className="bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                           {/* Pasamos estilos limpios al Header */}
                             <CarHeader 
                                 brand={car.brand}
                                 model={car.model}
@@ -129,9 +123,11 @@ export default function CarDetailPage() {
                             />
                             
                             <div className="mt-8 space-y-3">
-                                <button className="w-full bg-red-600 text-white text-lg font-bold py-4 rounded-xl hover:bg-red-700 transition-all shadow-md hover:shadow-red-200 transform hover:-translate-y-0.5">
-                                    ¡Lo quiero! Contactar
-                                </button>
+                                {/* AQUÍ ESTÁ EL CAMBIO: Usamos el botón inteligente */}
+                                <BookingButton 
+                                      carId={car.id} 
+                                      carTitle={`${car.brand} ${car.model} ${car.year}`}
+                                    />
                                 
                                 <button className="w-full bg-white text-gray-900 font-bold py-4 rounded-xl border border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all">
                                     Simular Crédito
@@ -143,7 +139,7 @@ export default function CarDetailPage() {
                             </p>
                         </div>
 
-                        {/* Tarjeta de Garantía/Confianza (Opcional, mejora UX) */}
+                        {/* Tarjeta de Garantía */}
                         <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 flex items-start gap-3">
                             <div className="text-red-600 mt-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
