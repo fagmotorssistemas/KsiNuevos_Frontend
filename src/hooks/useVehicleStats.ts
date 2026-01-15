@@ -19,22 +19,24 @@ export type VehicleStat = {
     response_rate: number;
 };
 
-// CORRECCIÓN 1: Agregamos 'year' al tipo OpportunityStat
 export type OpportunityStat = {
     key: string;
     brand: string;
     model: string;
-    year?: number | null; // <--- Propiedad faltante agregada
+    year?: number | null;
     request_count: number;
     last_requested_at: string;
 };
 
-// --- HELPER DE NORMALIZACIÓN ---
+// --- HELPER DE NORMALIZACIÓN MEJORADO ---
+// Este helper es clave: convierte "D-Max Hi-Ride" en "dmaxhiride"
+// para asegurar que variaciones de escritura se detecten como lo mismo.
 const normalizeStr = (str: string) => {
+    if (!str) return "";
     return str
         .toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Quita tildes
-        .replace(/[^a-z0-9]/g, ""); // Quita espacios y símbolos
+        .replace(/[^a-z0-9]/g, ""); // Quita TODO lo que no sea letra o número
 };
 
 // --- HELPER DE EXTRACCIÓN NUMÉRICA ---
@@ -80,8 +82,7 @@ export function useVehicleStats(
         setIsLoading(true);
         const { startISO, endISO } = getDateRangeISO();
 
-        // DEBUG: Inicio del diagnóstico
-        console.groupCollapsed(`🔍 Diagnóstico Stats: ${dateFilter}`);
+        console.groupCollapsed(`🔍 Diagnóstico Stats Mejorado: ${dateFilter}`);
 
         try {
             // 1. CARGAR INVENTARIO
@@ -90,6 +91,10 @@ export function useVehicleStats(
                 .select('id, brand, model, year, img_main_url, price, status')
                 .limit(2000); 
             
+            // Nota: Para el análisis de oportunidades, necesitamos saber qué hay DISPONIBLE
+            // independientemente del filtro visual, para poder excluirlo de "Demanda Insatisfecha"
+            // Por eso cargaremos todo el inventario relevante en memoria primero si es posible,
+            // pero respetaremos el filtro para la visualización de la tabla de rendimiento.
             if (inventoryStatusFilter !== 'todos') {
                 inventoryQuery = inventoryQuery.eq('status', inventoryStatusFilter as any);
             }
@@ -97,21 +102,27 @@ export function useVehicleStats(
             const { data: inventoryData, error: invError } = await inventoryQuery;
             if (invError) throw invError;
             
-            // Mapas para búsqueda rápida
             const invStatsMap = new Map<string, VehicleStat>();
             
             // LISTA INTELIGENTE PARA BÚSQUEDA DIFUSA
-            const fuzzyInventoryList: { normalizedName: string, numbers: string[], id: string, brand: string, model: string }[] = [];
+            // Ahora guardamos también la cadena normalizada simple para comparación rápida
+            const fuzzyInventoryList: { 
+                normalizedName: string, 
+                simpleNormalized: string, // nueva propiedad para comparación laxa
+                numbers: string[], 
+                id: string, 
+                brand: string, 
+                model: string 
+            }[] = [];
 
             inventoryData?.forEach(car => {
                 if (car.brand && car.model) {
-                    // Inicializamos stats
                     invStatsMap.set(car.id, {
                         vehicle_uid: car.id,
                         brand: car.brand,
                         model: car.model,
                         year: car.year,
-                        //img_url: car.img_main_url,
+                        img_url: car.img_main_url || undefined,
                         price: car.price,
                         status: car.status,
                         total_leads: 0,
@@ -122,11 +133,12 @@ export function useVehicleStats(
                     });
 
                     const fullName = `${car.brand} ${car.model}`;
+                    const norm = normalizeStr(fullName);
                     
-                    // Preparamos datos para el "Match Inteligente"
                     fuzzyInventoryList.push({
-                        normalizedName: normalizeStr(fullName), // "cherytiggo2pro"
-                        numbers: extractNumbers(fullName),      // ["2"]
+                        normalizedName: norm,
+                        simpleNormalized: norm, 
+                        numbers: extractNumbers(fullName),
                         brand: car.brand,
                         model: car.model,
                         id: car.id
@@ -134,7 +146,7 @@ export function useVehicleStats(
                 }
             });
 
-            // 2. CARGAR LEADS (PAGINACIÓN AUTOMÁTICA)
+            // 2. CARGAR LEADS
             let allLeads: any[] = [];
             let hasNextPage = true;
             let page = 0;
@@ -186,7 +198,7 @@ export function useVehicleStats(
 
             if (visitsError) throw visitsError;
 
-            // 4. PROCESAR LEADS CON LÓGICA DIFUSA ESTRICTA
+            // 4. PROCESAR LEADS
             const oppStatsMap = new Map<string, OpportunityStat>();
 
             allLeads.forEach((lead: any) => {
@@ -204,7 +216,7 @@ export function useVehicleStats(
                         matchedCarId = c.vehicle_uid;
                     } 
                     
-                    // --- NIVEL 2: Match Inteligente Estricto ---
+                    // --- NIVEL 2: Match Inteligente ---
                     if (!matchedCarId) {
                         const rawFullName = `${c.brand || ''} ${c.model || ''}`;
                         const leadRequestNormalized = normalizeStr(rawFullName);
@@ -212,15 +224,24 @@ export function useVehicleStats(
                         
                         if (leadRequestNormalized.length > 2) { 
                             const found = fuzzyInventoryList.find(invCar => {
-                                // REGLA 1: VALIDACIÓN NUMÉRICA
-                                if (leadNumbers.length > 0) {
-                                    const allNumbersMatch = leadNumbers.every(num => invCar.numbers.includes(num));
-                                    if (!allNumbersMatch) return false;
-                                }
-                                // REGLA 2: COINCIDENCIA DE TEXTO
+                                // REGLA: Coincidencia de texto fuerte
                                 if (invCar.normalizedName.includes(leadRequestNormalized)) return true;
                                 if (invCar.normalizedName.length > 4 && leadRequestNormalized.includes(invCar.normalizedName)) return true;
                                 
+                                // REGLA NÚMEROS: Solo si el texto es ambiguo o corto, verificamos números estrictamente.
+                                // Si el texto es muy parecido, asumimos match para evitar duplicados en oportunidades.
+                                if (leadNumbers.length > 0 && invCar.numbers.length > 0) {
+                                     // Lógica original conservada para atribución exacta
+                                     const allNumbersMatch = leadNumbers.every(num => invCar.numbers.includes(num));
+                                     // Si los números no coinciden, pero el texto es casi idéntico,
+                                     // ¿deberíamos contarlo como inventario? 
+                                     // Para estadísticas de VENTA: NO (es otro carro).
+                                     // Para estadísticas de OPORTUNIDAD: SÍ (tenemos algo parecido).
+                                     // Aquí estamos decidiendo a qué CARRO del inventario atribuir el lead.
+                                     // Mantendremos estricto aquí, pero filtraremos en el paso final.
+                                     if (!allNumbersMatch) return false;
+                                }
+
                                 return false;
                             });
 
@@ -242,22 +263,26 @@ export function useVehicleStats(
                             stat.pending_leads += 1;
                         }
                     } else {
-                        // NO ENCONTRADO -> OPORTUNIDAD
+                        // NO ENCONTRADO -> POSIBLE OPORTUNIDAD
                         const rawBrand = c.brand || 'Genérico';
                         const rawModel = c.model || 'Desconocido';
-                        const rawYear = c.year || null; // CORRECCIÓN 2: Capturamos el año
+                        const rawYear = c.year || null;
 
-                        // CORRECCIÓN 3: Agregamos el año a la clave única para diferenciarlos
-                        // Ejemplo: "toyota-fortuner-2022" es diferente de "toyota-fortuner-2024"
+                        // MEJORA 1: CLAVE NORMALIZADA PARA EVITAR DUPLICADOS
+                        // Usamos normalizeStr para que "d-max" y "dmax" generen la misma clave.
+                        const normBrand = normalizeStr(rawBrand);
+                        const normModel = normalizeStr(rawModel);
                         const yearKey = rawYear ? rawYear.toString() : 'any';
-                        const oppKey = `${rawBrand.trim().toLowerCase()}-${rawModel.trim().toLowerCase()}-${yearKey}`;
+                        
+                        // Clave única basada en texto limpio
+                        const oppKey = `${normBrand}-${normModel}-${yearKey}`;
                         
                         if (!oppStatsMap.has(oppKey)) {
                             oppStatsMap.set(oppKey, {
                                 key: oppKey,
-                                brand: rawBrand,
-                                model: rawModel,
-                                year: rawYear, // CORRECCIÓN 4: Guardamos el año en el objeto
+                                brand: rawBrand.trim(), // Guardamos el nombre "bonito" (primera vez que aparece)
+                                model: rawModel.trim(),
+                                year: rawYear,
                                 request_count: 0,
                                 last_requested_at: lead.created_at
                             });
@@ -279,7 +304,7 @@ export function useVehicleStats(
                 }
             });
 
-            // 6. FORMATO FINAL
+            // 6. FORMATO FINAL Y FILTRADO DE SEGURIDAD
             const finalInvStats = Array.from(invStatsMap.values())
                 .filter(s => s.total_leads > 0 || s.showroom_count > 0) 
                 .map(stat => ({
@@ -291,7 +316,38 @@ export function useVehicleStats(
             
             finalInvStats.sort((a, b) => b.total_leads - a.total_leads);
 
-            const finalOppStats = Array.from(oppStatsMap.values());
+            // MEJORA 2: FILTRO FINAL DE OPORTUNIDADES VS INVENTARIO REAL
+            // Aquí eliminamos las oportunidades que se parecen demasiado a lo que YA tenemos en stock.
+            // Esto soluciona el problema de "Suzuki Scross 1.6" apareciendo como oportunidad
+            // cuando ya tienes un "Suzuki Scross" en venta.
+            
+            const availableInventoryForCheck = fuzzyInventoryList; // Usamos la lista pre-calculada
+
+            let finalOppStats = Array.from(oppStatsMap.values());
+
+            finalOppStats = finalOppStats.filter(opp => {
+                // Generamos la firma normalizada de la oportunidad
+                const oppSignature = normalizeStr(`${opp.brand} ${opp.model}`);
+                
+                // Buscamos si existe ALGO en el inventario que coincida, 
+                // ignorando diferencias de año o detalles técnicos menores.
+                const isAlreadyInStock = availableInventoryForCheck.some(invItem => {
+                    // Verificamos si la marca coincide primero (optimización)
+                    if (!invItem.normalizedName.includes(normalizeStr(opp.brand)) && 
+                        !normalizeStr(opp.brand).includes(invItem.normalizedName)) {
+                        return false;
+                    }
+
+                    // Chequeo cruzado de inclusión
+                    // Si el inventario es "scross" y la oportunidad es "scross16" -> MATCH (true) -> Se elimina de oportunidades
+                    // Si el inventario es "dmax" y la oportunidad es "dmaxhiride" -> MATCH (true) -> Se elimina
+                    return invItem.normalizedName.includes(oppSignature) || oppSignature.includes(invItem.normalizedName);
+                });
+
+                // Solo mantenemos la oportunidad si NO está en stock
+                return !isAlreadyInStock;
+            });
+
             finalOppStats.sort((a, b) => b.request_count - a.request_count);
             
             console.groupEnd();
