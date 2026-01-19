@@ -20,7 +20,7 @@ export const ProcessSteps = () => {
                     </div>
                     <h3 className="text-xl font-bold mb-3">Cotiza en línea</h3>
                     <p className="text-neutral-500 text-sm leading-relaxed px-4">
-                        Ingresa los datos de tu auto en nuestro formulario y recibe una oferta preliminar al instante.
+                        Ingresa los datos de tu auto en nuestro formulario y recibe una oferta preliminar.
                     </p>
                 </div>
 
@@ -31,7 +31,7 @@ export const ProcessSteps = () => {
                     </div>
                     <h3 className="text-xl font-bold mb-3">Inspección gratis</h3>
                     <p className="text-neutral-500 text-sm leading-relaxed px-4">
-                        Agenda una cita en nuestros puntos de inspección o vamos a tu domicilio. Revisamos tu auto en 30 min.
+                        Agenda una cita en nuestros puntos de inspección . Revisamos tu auto en 30 min.
                     </p>
                 </div>
 

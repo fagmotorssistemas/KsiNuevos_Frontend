@@ -1149,14 +1149,18 @@ export type Database = {
           color: string | null
           created_at: string | null
           description: string | null
+          has_crashes: boolean | null
           id: number
           mileage: number
           model: string
-          photos_exterior: string[] | null
-          photos_interior: string[] | null
+          papers_ok: boolean | null
+          photos_urls: string[] | null
+          plate_first_letter: string | null
           plate_last_digit: string | null
+          state_rating: number | null
           status: string | null
           transmission: string | null
+          unique_owner: boolean | null
           updated_at: string | null
           user_id: string
           year: number
@@ -1167,14 +1171,18 @@ export type Database = {
           color?: string | null
           created_at?: string | null
           description?: string | null
+          has_crashes?: boolean | null
           id?: never
           mileage: number
           model: string
-          photos_exterior?: string[] | null
-          photos_interior?: string[] | null
+          papers_ok?: boolean | null
+          photos_urls?: string[] | null
+          plate_first_letter?: string | null
           plate_last_digit?: string | null
+          state_rating?: number | null
           status?: string | null
           transmission?: string | null
+          unique_owner?: boolean | null
           updated_at?: string | null
           user_id: string
           year: number
@@ -1185,14 +1193,18 @@ export type Database = {
           color?: string | null
           created_at?: string | null
           description?: string | null
+          has_crashes?: boolean | null
           id?: never
           mileage?: number
           model?: string
-          photos_exterior?: string[] | null
-          photos_interior?: string[] | null
+          papers_ok?: boolean | null
+          photos_urls?: string[] | null
+          plate_first_letter?: string | null
           plate_last_digit?: string | null
+          state_rating?: number | null
           status?: string | null
           transmission?: string | null
+          unique_owner?: boolean | null
           updated_at?: string | null
           user_id?: string
           year?: number

@@ -33,7 +33,7 @@ export function UserNav() {
         await supabase.auth.signOut();
         setIsOpen(false);
         router.refresh();
-        router.push('/login');
+        router.push('/home');
     };
 
     useEffect(() => {
@@ -178,7 +178,7 @@ export function UserNav() {
                         </div>
                         <div className="py-1">
                             <Link 
-                                href="/profile" 
+                                href="/home" 
                                 className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                                 onClick={() => setIsOpen(false)}
                             >

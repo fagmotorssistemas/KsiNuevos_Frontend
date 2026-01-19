@@ -46,24 +46,6 @@ export default function SellCarPage() {
         {/* Preguntas Frecuentes */}
         <FaqAccordion />
 
-        {/* CTA Final */}
-        <section className="py-20 bg-red-600 text-white text-center">
-            <div className="max-w-4xl mx-auto px-4">
-                <h2 className="text-3xl md:text-5xl font-extrabold mb-6">¿Listo para vender tu auto?</h2>
-                <p className="text-red-100 text-lg mb-10 max-w-2xl mx-auto">
-                    No pierdas más tiempo publicando en redes sociales. Cotiza, vende y recibe tu dinero hoy mismo.
-                </p>
-                <div className="flex flex-col sm:flex-row justify-center gap-4">
-                    <button className="bg-white text-red-600 font-bold py-4 px-10 rounded-xl hover:bg-neutral-100 transition-colors shadow-lg">
-                        Cotizar mi auto
-                    </button>
-                    <button className="bg-transparent border-2 border-white text-white font-bold py-4 px-10 rounded-xl hover:bg-white/10 transition-colors">
-                        Agendar inspección
-                    </button>
-                </div>
-            </div>
-        </section>
-
       </main>
 
       <MainFooter />

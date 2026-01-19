@@ -1,20 +1,23 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 1. Configuración de Imágenes (Nueva)
+  // 1. Configuración de Imágenes
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
         // Tu dominio de Supabase
-        hostname: 'enfqumrstqefbxtwsslq.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/**',
+        protocol: 'https',
+        hostname: '**.supabase.co',
+      },
+      {
+        // Temporal para desarrollo (eliminar en producción)
+        protocol: 'https',
+        hostname: 'placehold.co',
       },
     ],
   },
-
-  // 2. Tus redirecciones existentes (Las mantenemos igual)
+  
+  // 2. Redirecciones existentes
   async redirects() {
     return [
       {

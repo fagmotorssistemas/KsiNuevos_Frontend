@@ -8,10 +8,17 @@ import {
     Filter,
     Users,
     Plus,
-    Sparkles 
+    Sparkles,
+    Globe
 } from "lucide-react";
 
 import { useAgenda, type AppointmentWithDetails, type DateFilterOption, type BotSuggestionLead } from "@/hooks/useAgenda";
+import { useWebAppointments } from "@/hooks/useWebAppointments";
+import { WebAppointmentCard } from "@/components/features/agenda/WebAppointmentCard";
+// IMPORTAMOS EL NUEVO MODAL
+import { WebAppointmentDetailModal } from "@/components/features/agenda/WebAppointmentDetailModal";
+import { WebAppointmentWithDetails as WebApptType } from "@/types/web-appointments";
+
 import { AppointmentCard } from "@/components/features/agenda/AppointmentCard";
 import { AppointmentModal } from "@/components/features/agenda/AppointmentModal";
 import { BotSuggestionCard } from "@/components/features/agenda/BotSuggestionCard";
@@ -22,11 +29,16 @@ import { useAuth } from "@/hooks/useAuth";
 export default function AgendaPage() {
     const { profile } = useAuth();
     
-    // Control del Modal y Edición
+    // -- ESTADOS PARA MODALES --
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAppointment, setEditingAppointment] = useState<AppointmentWithDetails | null>(null);
     const [suggestionData, setSuggestionData] = useState<any | null>(null); 
 
+    // Estado Nuevo para Modal Web
+    const [isWebModalOpen, setIsWebModalOpen] = useState(false);
+    const [selectedWebAppointment, setSelectedWebAppointment] = useState<WebApptType | null>(null);
+
+    // Hooks de Lógica
     const { 
         isLoading, 
         isAdmin,
@@ -44,6 +56,14 @@ export default function AgendaPage() {
         refresh
     } = useAgenda();
 
+    const {
+        appointments: webAppointments,
+        loading: loadingWeb,
+        actions: webActions
+    } = useWebAppointments();
+
+    const webPendingCount = webAppointments.filter(a => a.status === 'pendiente').length;
+
     // -- MANEJADORES --
 
     const handleOpenNew = () => {
@@ -58,50 +78,38 @@ export default function AgendaPage() {
         setIsModalOpen(true);
     };
 
-    const handleProcessSuggestion = (lead: BotSuggestionLead) => {
-        let finalDateObj = new Date(); // Fallback por defecto: ahora
+    // Nuevo: Abrir modal web
+    const handleOpenWebDetail = (appt: WebApptType) => {
+        setSelectedWebAppointment(appt);
+        setIsWebModalOpen(true);
+    };
 
-        // 1. Intentar usar time_reference (la más precisa)
+    const handleProcessSuggestion = (lead: BotSuggestionLead) => {
+        let finalDateObj = new Date(); 
         if (lead.time_reference) {
             finalDateObj = new Date(lead.time_reference);
-        } 
-        // 2. Intentar combinar Día y Hora
-        else if (lead.day_detected && lead.hour_detected) {
-            // lead.day_detected suele ser "YYYY-MM-DD"
-            // lead.hour_detected suele ser "HH:MM:SS"
+        } else if (lead.day_detected && lead.hour_detected) {
             const dateTimeString = `${lead.day_detected}T${lead.hour_detected}`;
             const parsed = new Date(dateTimeString);
-            if (!isNaN(parsed.getTime())) {
-                finalDateObj = parsed;
-            }
-        } 
-        // 3. Si solo hay Hora, asumir mañana a esa hora
-        else if (lead.hour_detected) {
+            if (!isNaN(parsed.getTime())) finalDateObj = parsed;
+        } else if (lead.hour_detected) {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            
-            // Construir fecha con la hora detectada
             const [hours, minutes] = lead.hour_detected.toString().split(':');
             tomorrow.setHours(parseInt(hours), parseInt(minutes), 0, 0);
             finalDateObj = tomorrow;
         }
-
-        // --- CLAVE PARA EL INPUT DATETIME-LOCAL ---
-        // El input requiere formato "YYYY-MM-DDTHH:MM" en HORA LOCAL.
-        // .toISOString() da UTC (Z), lo cual descuadra la hora en el input.
-        // Hacemos un truco para obtener el string ISO ajustado a la zona horaria local.
-        const tzOffset = finalDateObj.getTimezoneOffset() * 60000; // offset en milisegundos
+        const tzOffset = finalDateObj.getTimezoneOffset() * 60000; 
         const localISOTime = new Date(finalDateObj.getTime() - tzOffset).toISOString().slice(0, 16);
 
         setSuggestionData({
             title: `Cita con ${lead.name}`,
             lead_id: lead.id,
             external_client_name: lead.name,
-            start_time: localISOTime, // ¡Ahora sí va lleno!
+            start_time: localISOTime, 
             location: "Por definir",
             notes: `Cita detectada automáticamente.\nVehículo de interés: ${lead.interested_cars?.[0]?.brand || ''} ${lead.interested_cars?.[0]?.model || ''}`
         });
-        
         setEditingAppointment(null);
         setIsModalOpen(true);
     };
@@ -130,7 +138,7 @@ export default function AgendaPage() {
     return (
         <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
             
-            {/* 1. HEADER */}
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-semibold text-slate-900">
@@ -156,14 +164,13 @@ export default function AgendaPage() {
                 </div>
             </div>
 
-            {/* FILTROS ADMIN (Ocultos para vendedor) */}
+            {/* FILTROS ADMIN */}
             {isAdmin && (
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mr-2">
                         <Filter className="h-4 w-4" />
                         Filtros Admin:
                     </div>
-
                     <div className="flex-1 w-full md:w-auto">
                         <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
                         <div className="relative">
@@ -183,7 +190,6 @@ export default function AgendaPage() {
                             </select>
                         </div>
                     </div>
-
                     <div className="flex-1 w-full md:w-auto">
                         <label className="text-xs text-slate-400 font-semibold block mb-1">Período de Tiempo</label>
                         <select
@@ -200,7 +206,6 @@ export default function AgendaPage() {
                             <option value="month">Próximos 30 días</option>
                         </select>
                     </div>
-
                     {(filters.responsibleId !== 'all' || filters.dateRange !== 'all') && (
                         <button 
                             onClick={() => setFilters({ responsibleId: 'all', dateRange: 'all' })}
@@ -212,7 +217,7 @@ export default function AgendaPage() {
                 </div>
             )}
 
-            {/* 2. PESTAÑAS (TABS) */}
+            {/* PESTAÑAS */}
             <div className="flex border-b border-slate-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('pending')}
@@ -230,8 +235,24 @@ export default function AgendaPage() {
                         </span>
                     )}
                 </button>
+
+                <button
+                    onClick={() => setActiveTab('web_requests')}
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                        activeTab === 'web_requests'
+                        ? 'border-blue-600 text-blue-700'
+                        : 'border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-200'
+                    }`}
+                >
+                    <Globe className="h-4 w-4" />
+                    Solicitudes Web
+                    {webPendingCount > 0 && (
+                        <span className="ml-1 bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                            {webPendingCount}
+                        </span>
+                    )}
+                </button>
                 
-                {/* PESTAÑA: SUGERENCIAS IA */}
                 <button
                     onClick={() => setActiveTab('suggestions')}
                     className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
@@ -262,7 +283,7 @@ export default function AgendaPage() {
                 </button>
             </div>
 
-            {/* 3. CONTENIDO PRINCIPAL */}
+            {/* CONTENIDO PRINCIPAL */}
             <div className="min-h-[400px]">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-64 text-slate-400 animate-pulse">
@@ -275,21 +296,50 @@ export default function AgendaPage() {
                         )
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
-                            <div className="bg-green-50 p-4 rounded-full mb-4">
+                             <div className="bg-green-50 p-4 rounded-full mb-4">
                                 <CalendarCheck className="h-10 w-10 text-green-500" />
                             </div>
-                            <h3 className="text-lg font-medium text-slate-900">
-                                {filters.responsibleId !== 'all' || filters.dateRange !== 'all' ? 'Sin resultados' : '¡Estás al día!'}
+                            <h3 className="text-lg font-medium text-slate-900">¡Estás al día!</h3>
+                            <p className="text-slate-500 max-w-sm mt-2">No hay eventos pendientes.</p>
+                        </div>
+                    )
+
+                ) : activeTab === 'web_requests' ? (
+                    // --- SECCIÓN CITAS WEB ---
+                    loadingWeb ? (
+                        <div className="flex items-center justify-center h-40">Cargando solicitudes web...</div>
+                    ) : webAppointments.length > 0 ? (
+                        <div className="py-6 space-y-6 animate-in fade-in">
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-blue-500 uppercase tracking-wider px-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                Agendadas desde el Sitio Web
                             </h3>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                {webAppointments.map((appt) => (
+                                    <WebAppointmentCard 
+                                        key={appt.id}
+                                        appointment={appt}
+                                        currentUserId={profile?.id}
+                                        onViewDetails={handleOpenWebDetail} // Pasamos el manejador del modal
+                                        onStatusChange={webActions.updateStatus}
+                                        // CORREGIDO: Se eliminó onAssign
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
+                            <div className="bg-blue-50 p-4 rounded-full mb-4">
+                                <Globe className="h-10 w-10 text-blue-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-slate-900">Sin Solicitudes Web</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                {filters.responsibleId !== 'all' || filters.dateRange !== 'all' 
-                                    ? 'No hay citas que coincidan con los filtros seleccionados.' 
-                                    : 'No tienes citas ni eventos pendientes.'}
+                                No hay clientes que hayan agendado citas desde la página web recientemente.
                             </p>
                         </div>
                     )
+
                 ) : activeTab === 'suggestions' ? (
-                    /* RENDERIZADO DE SUGERENCIAS DE IA */
                     botSuggestions.length > 0 ? (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500 py-6">
                             <div className="flex items-center justify-between mb-2 px-1">
@@ -315,7 +365,7 @@ export default function AgendaPage() {
                             </div>
                             <h3 className="text-lg font-medium text-slate-900">Sin sugerencias</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                El robot no ha detectado nuevas intenciones de cita recientemente o ya has gestionado todas.
+                                El robot no ha detectado nuevas intenciones.
                             </p>
                         </div>
                     )
@@ -338,13 +388,25 @@ export default function AgendaPage() {
                 )}
             </div>
 
-            {/* 4. MODAL DE CITA (CREAR O EDITAR) */}
+            {/* MODALES */}
+            
+            {/* 1. Modal Citas Normales */}
             <AppointmentModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={refresh}
                 appointmentToEdit={editingAppointment}
                 initialData={suggestionData} 
+            />
+
+            {/* 2. NUEVO: Modal Citas Web */}
+            <WebAppointmentDetailModal 
+                isOpen={isWebModalOpen}
+                onClose={() => setIsWebModalOpen(false)}
+                appointment={selectedWebAppointment}
+                currentUserId={profile?.id}
+                onAssign={webActions.assignToMe}
+                onCancel={(id) => webActions.updateStatus(id, 'cancelada')}
             />
 
         </div>

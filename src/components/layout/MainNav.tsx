@@ -30,6 +30,8 @@ export function MainNav({ className }: { className?: string }) {
       { href: "/requests", label: "Pedidos" },
       { href: "/tareas", label: "Tareas" },
       { href: "/finance", label: "Financiamiento" },
+      // Agregamos la nueva sección de Contratos aquí
+      { href: "/contracts", label: "Contratos" },
     ];
 
     // Admin también necesita ver Cartera (opcional, asumiendo que Admin ve todo)

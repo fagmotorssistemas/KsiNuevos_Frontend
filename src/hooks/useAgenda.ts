@@ -19,7 +19,8 @@ export type AppointmentWithDetails = AppointmentRow & {
     responsible?: ProfileRow;
 };
 
-export type AgendaTab = 'pending' | 'history' | 'suggestions';
+// CORRECCIÓN AQUÍ: Agregamos 'web_requests' para que coincida con la UI
+export type AgendaTab = 'pending' | 'history' | 'suggestions' | 'web_requests';
 
 export type DateFilterOption = 'all' | 'today' | 'tomorrow' | 'week' | 'fortnight' | 'month';
 export interface AgendaFilters {

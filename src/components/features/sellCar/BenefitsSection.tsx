@@ -65,11 +65,6 @@ export const BenefitsSection = () => {
                         </div>
                     </div>
 
-                    <div className="mt-10">
-                        <button className="bg-black text-white font-bold py-3 px-8 rounded-full hover:bg-neutral-800 transition-colors">
-                            Conocer más beneficios
-                        </button>
-                    </div>
                 </div>
 
             </div>

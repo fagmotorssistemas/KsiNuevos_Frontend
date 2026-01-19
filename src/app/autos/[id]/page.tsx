@@ -4,6 +4,7 @@ import React from "react";
 import { useParams } from "next/navigation"; 
 import { useCarDetail } from "@/hooks/Homeksi/useCarDetail";
 import Link from "next/link"; 
+import { useCreditCalculator } from "@/hooks/Homeksi/useCreditCalculator"; 
 
 // Layout
 import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
@@ -14,8 +15,6 @@ import { CarGallery } from "@/components/features/buyCar/carDetail/CarGallery";
 import { CarHeader } from "@/components/features/buyCar/carDetail/CarHeader";
 import { CarSpecs } from "@/components/features/buyCar/carDetail/CarSpecs";
 import { CarFeatures } from "@/components/features/buyCar/carDetail/CarFeatures";
-
-// NUEVO: Importamos el botón inteligente
 import BookingButton from "@/components/features/buyCar/carDetail/BookingButton";
 
 export default function CarDetailPage() {
@@ -23,7 +22,8 @@ export default function CarDetailPage() {
   const id = params?.id as string;
   const { car, isLoading, error } = useCarDetail(id);
 
-  // --- ESTADO DE CARGA ---
+  const credit = useCreditCalculator(car?.price || 0);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex flex-col">
@@ -36,20 +36,13 @@ export default function CarDetailPage() {
     );
   }
 
-  // --- ESTADO DE ERROR ---
   if (error || !car) {
     return (
       <div className="min-h-screen bg-white flex flex-col">
          <MainNavbar />
          <div className="flex-grow flex flex-col items-center justify-center text-center px-4">
             <h2 className="text-3xl font-bold text-gray-900 mb-3">Vehículo no disponible</h2>
-            <p className="text-gray-500 mb-6 max-w-md">
-              Es posible que este auto haya sido vendido o el enlace no sea correcto.
-            </p>
-            <Link 
-              href="/buyCar" 
-              className="px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors shadow-lg"
-            >
+            <Link href="/buyCar" className="px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors shadow-lg">
               Ver inventario disponible
             </Link>
          </div>
@@ -58,86 +51,110 @@ export default function CarDetailPage() {
     );
   }
 
-  // --- RENDERIZADO DEL AUTO ---
+  // --- COMPONENTE DE ACCIÓN (Precio + Botones) ---
+  // Lo definimos aquí para reutilizarlo en Mobile (arriba) y Desktop (derecha)
+  const ActionBlock = () => (
+    <div className="bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
+        <CarHeader 
+            brand={car.brand}
+            model={car.model}
+            version={car.version}
+            year={car.year}
+            price={car.price || 0}
+            mileage={car.mileage}
+            city={car.city_registration} 
+        />
+        
+        <div className="mt-8 space-y-3">
+            <BookingButton 
+               carId={car.id} 
+               carTitle={`${car.brand} ${car.model} ${car.year}`}
+            />
+            
+            {/* Caja de Crédito */}
+            <div className="bg-neutral-50 rounded-xl p-5 flex justify-between items-center border border-neutral-100 hover:border-red-100 transition-colors cursor-default group">
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mb-1 group-hover:text-red-600 transition-colors">
+                        Financiamiento
+                    </span>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-black">
+                            ${Math.round(credit.monthlyPayment).toLocaleString()}
+                        </span>
+                        <span className="text-xs font-bold text-neutral-400">/mes</span>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 mt-1 font-medium">
+                        *Estimado a 48 meses
+                    </p>
+                </div>
+
+                <div className="text-right pl-6 border-l border-neutral-200 group-hover:border-red-200 transition-colors">
+                   <span className="text-[10px] text-neutral-400 block mb-1 font-bold uppercase">
+                       Entrada ({Math.round((credit.downPaymentAmount / (car.price || 1)) * 100)}%)
+                   </span>
+                   <span className="text-base font-bold text-black">
+                       ${Math.round(credit.downPaymentAmount).toLocaleString()}
+                   </span>
+                </div>
+            </div>
+        </div>
+
+        <p className="text-xs text-center text-gray-400 mt-4">
+            * Precio final sujeto a cambios. Consulta términos y condiciones.
+        </p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900">
       <MainNavbar />
 
-      <main className="flex-grow pt-6 pb-20">
+      <main className="flex-grow pt-4 lg:pt-6 pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             
             {/* Breadcrumb */}
-            <nav className="flex items-center text-sm text-gray-400 mb-8">
-                <Link href="/buyCar" className="hover:text-red-600 transition-colors">
-                  Autos
-                </Link> 
+            <nav className="flex items-center text-sm text-gray-400 mb-6 lg:mb-8">
+                <Link href="/buyCar" className="hover:text-red-600 transition-colors">Autos</Link> 
                 <span className="mx-3 text-gray-300">/</span>
-                <span className="text-gray-900 font-semibold truncate">
-                  {car.brand} {car.model}
-                </span>
+                <span className="text-gray-900 font-semibold truncate">{car.brand} {car.model}</span>
             </nav>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14">
                 
-                {/* --- COLUMNA IZQUIERDA --- */}
-                <div className="lg:col-span-7 space-y-12">
-                    <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-                      <CarGallery 
-                          mainImage={car.img_main_url} 
-                          galleryImages={null} 
-                      />
+                {/* --- COLUMNA PRINCIPAL (Izquierda en Desktop, Arriba en Mobile) --- */}
+                <div className="lg:col-span-7 space-y-8 lg:space-y-12">
+                    
+                    {/* 1. AUTO (Galería) */}
+                    <div className="bg-white rounded-3xl overflow-hidden">
+                      <CarGallery mainImage={car.img_main_url} galleryImages={car.img_gallery_urls} />
                     </div>
 
+                    {/* --- MOBILE ONLY: Bloque de Precio y Botones --- */}
+                    {/* Esto solo se ve en celular (lg:hidden) para que el precio esté arriba */}
+                    <div className="block lg:hidden">
+                        <ActionBlock />
+                    </div>
+
+                    {/* 2. SOBRE ESTE AUTO (Descripción) */}
                     {car.description && (
                         <div className="border-t border-gray-100 pt-8">
                             <h3 className="text-xl font-bold text-gray-900 mb-4">Sobre este auto</h3>
-                            <p className="text-gray-600 leading-relaxed whitespace-pre-line text-base">
-                                {car.description}
-                            </p>
+                            <p className="text-gray-600 leading-relaxed whitespace-pre-line text-base">{car.description}</p>
                         </div>
                     )}
 
+                    {/* 4. FICHA TÉCNICA (Specs) - REORDENADO: Ahora va al final */}
                     <div className="border-t border-gray-100 pt-8">
                        <CarSpecs car={car} />
                     </div>
-
-                    <div className="border-t border-gray-100 pt-8">
-                      <h3 className="text-xl font-bold text-gray-900 mb-6">Equipamiento destacado</h3>
-                      <CarFeatures features={Array.isArray(car.features) ? car.features as string[] : []} />
-                    </div>
                 </div>
 
-                {/* --- COLUMNA DERECHA (Conversión) --- */}
-                <div className="lg:col-span-5 relative">
+                {/* --- COLUMNA LATERAL (Derecha en Desktop, Oculta bloque principal en Mobile) --- */}
+                <div className="lg:col-span-5 relative hidden lg:block">
                     <div className="sticky top-28 space-y-6">
                         
-                        <div className="bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-                            <CarHeader 
-                                brand={car.brand}
-                                model={car.model}
-                                version={car.version}
-                                year={car.year}
-                                price={car.price || 0}
-                                mileage={car.mileage}
-                                city={car.city_registration} 
-                            />
-                            
-                            <div className="mt-8 space-y-3">
-                                {/* AQUÍ ESTÁ EL CAMBIO: Usamos el botón inteligente */}
-                                <BookingButton 
-                                      carId={car.id} 
-                                      carTitle={`${car.brand} ${car.model} ${car.year}`}
-                                    />
-                                
-                                <button className="w-full bg-white text-gray-900 font-bold py-4 rounded-xl border border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-all">
-                                    Simular Crédito
-                                </button>
-                            </div>
-
-                            <p className="text-xs text-center text-gray-400 mt-4">
-                                * Precio final sujeto a cambios. Consulta términos y condiciones.
-                            </p>
-                        </div>
+                        {/* Renderizamos el bloque de acción en el sidebar para Desktop */}
+                        <ActionBlock />
 
                         {/* Tarjeta de Garantía */}
                         <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 flex items-start gap-3">
@@ -148,7 +165,7 @@ export default function CarDetailPage() {
                             </div>
                             <div>
                                 <h4 className="font-bold text-sm text-gray-900">Compra 100% Segura</h4>
-                                <p className="text-xs text-gray-500 mt-1">Todos nuestros autos pasan por una inspección mecánica de 150 puntos.</p>
+                                <p className="text-xs text-gray-500 mt-1">Todos nuestros autos garantizados.</p>
                             </div>
                         </div>
 

@@ -1,10 +1,8 @@
 import React from "react";
 import Link from "next/link";
 import type { InventoryCar } from "@/hooks/Homeksi/useInventoryData";
-// Asegúrate de usar KsBadge en lugar de Badge antiguo si ya hiciste el cambio, 
-// o actualiza Badge para que no tenga azules por defecto.
 import { KsBadge } from "@/components/ui/Homeksi/KsBadge"; 
-import { useCreditCalculator } from "@/hooks/Homeksi/useCreditCalculator"; 
+// NOTA: Eliminamos useCreditCalculator de aquí
 
 interface CarCardProps {
   car: InventoryCar;
@@ -12,7 +10,7 @@ interface CarCardProps {
 
 export const CarCard = ({ car }: CarCardProps) => {
   
-  const credit = useCreditCalculator(car.price || 0);
+  // NOTA: Eliminamos la lógica de cálculo (const credit = ...)
 
   return (
     <Link 
@@ -28,7 +26,6 @@ export const CarCard = ({ car }: CarCardProps) => {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
         />
         <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {/* Badges Neutros/Negros */}
             <KsBadge variant="glass">Disponible</KsBadge>
             {car.condition && <KsBadge variant="dark">{car.condition}</KsBadge>}
         </div>
@@ -50,31 +47,14 @@ export const CarCard = ({ car }: CarCardProps) => {
         <div>
             <hr className="border-neutral-100 mb-4" />
             
-            <div className="flex flex-col mb-4">
+            <div className="flex flex-col mb-1">
                 <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-1">Precio de contado</span>
-
+                <span className="text-xl font-black text-black">
+                    ${car.price?.toLocaleString()}
+                </span>
             </div>
             
-            {/* Sección de Crédito (Rediseñada sin azules) */}
-            <div className="bg-neutral-50 rounded-xl p-4 flex justify-between items-center group-hover:bg-red-50 transition-colors border border-neutral-100 group-hover:border-red-100">
-                
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest mb-0.5 group-hover:text-red-600 transition-colors">
-                        Cuota estimada
-                    </span>
-                    <span className="text-lg font-black text-black">
-                        ${Math.round(credit.monthlyPayment).toLocaleString()}
-                        <span className="text-xs font-bold text-neutral-400 ml-1">/mes</span>
-                    </span>
-                </div>
-
-                <div className="text-right pl-4 border-l border-neutral-200 group-hover:border-red-200 transition-colors">
-                   <span className="text-[10px] text-neutral-400 block mb-0.5 font-bold uppercase">Entrada</span>
-                   <span className="text-sm font-bold text-black">
-                       ${Math.round(credit.downPaymentAmount).toLocaleString()}
-                   </span>
-                </div>
-            </div>
+            {/* AQUÍ ELIMINAMOS EL RECUADRO DE CRÉDITO QUE HABÍA ANTES */}
 
         </div>
       </div>
