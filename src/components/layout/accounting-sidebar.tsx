@@ -24,7 +24,7 @@ const menuItems = [
     { name: 'Personal', href: '/employee', icon: Users },
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
-    { name: 'Facturación', href: '/billing', icon: FileText },
+    { name: 'Movimientos', href: '/financing', icon: FileText },
 ];
 
 export function AccountingSidebar() {
