@@ -25,7 +25,9 @@ const menuItems = [
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Movimientos', href: '/financing', icon: FileText },
-    { name: 'Cobros', href: '/cobros', icon: Wallet }
+    { name: 'Cobros', href: '/cobros', icon: Wallet },
+    { name: 'Contratos', href: '/contratosp', icon: Wallet }
+
 ];
 
 export function AccountingSidebar() {
