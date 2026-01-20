@@ -1,6 +1,6 @@
 import { Clock, Car, CreditCard, Pencil } from "lucide-react";
 
-// --- Definiciones Integradas (antes estaban en constants) ---
+// --- Definiciones Integradas ---
 
 export interface ShowroomVisit {
     id: number;
@@ -19,7 +19,7 @@ export interface ShowroomVisit {
     profiles?: {
         full_name: string;
     };
-    [key: string]: any; // Para otras props que puedan venir de la BD
+    [key: string]: any; 
 }
 
 export const getSourceLabel = (source: string) => {
@@ -62,15 +62,19 @@ export default function ShowroomCard({ visit, onEdit }: ShowroomCardProps) {
     const creditInfo = getCreditLabel(visit.credit_status);
 
     // 1. Convertimos las fechas string a objetos Date
+    // Al venir en formato ISO Z (ej: ...22:10Z), 'new Date' entiende que es UTC.
     const startDate = new Date(visit.visit_start);
     const endDate = visit.visit_end ? new Date(visit.visit_end) : null;
 
-    // 2. Configuración para mostrar la hora (Forzamos UTC para evitar cambios de zona horaria raros)
+    // 2. Configuración para mostrar la hora
+    // IMPORTANTE: Quitamos 'timeZone: UTC'.
+    // Al quitarlo, Intl usa la zona horaria de TU navegador (Ecuador).
+    // Automáticamente convierte las 22:10 UTC (BD) -> 17:10 Local (Pantalla).
     const timeOptions: Intl.DateTimeFormatOptions = {
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true,
-        timeZone: 'UTC' 
+        hour12: true
+        // timeZone: 'UTC' <--- ELIMINADO PARA QUE HAGA LA CONVERSIÓN AUTOMÁTICA
     };
 
     const startTimeStr = new Intl.DateTimeFormat('es-ES', timeOptions).format(startDate);

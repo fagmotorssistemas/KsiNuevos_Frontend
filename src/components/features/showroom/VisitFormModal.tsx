@@ -92,10 +92,19 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
             if (visitToEdit) {
                 // MODO EDICIÓN
-                const startTime = visitToEdit.visit_start.split('T')[1].slice(0, 5);
-                const endTime = visitToEdit.visit_end
-                    ? visitToEdit.visit_end.split('T')[1].slice(0, 5)
-                    : '';
+                // Extraemos la hora de la cadena UTC para mostrarla en el input time
+                // OJO: Esto asume que el input type="time" espera HH:MM local.
+                const startDateObj = new Date(visitToEdit.visit_start);
+                const endDateObj = visitToEdit.visit_end ? new Date(visitToEdit.visit_end) : null;
+                
+                // Formateamos a HH:MM local para los inputs
+                const formatTimeForInput = (date: Date) => {
+                    return date.getHours().toString().padStart(2, '0') + ':' + 
+                           date.getMinutes().toString().padStart(2, '0');
+                };
+
+                const startTime = formatTimeForInput(startDateObj);
+                const endTime = endDateObj ? formatTimeForInput(endDateObj) : '';
 
                 // Determinar si es vehículo manual o de inventario
                 // @ts-ignore - Asumiendo que ya agregaste la columna manual_vehicle_description
@@ -222,13 +231,42 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         if (!user) return;
         setIsSubmitting(true);
 
-        let dateBaseStr = new Date().toISOString().split('T')[0];
+        // --- CORRECCIÓN DE ZONA HORARIA (FIX) ---
+        // Obtenemos los componentes de la fecha LOCAL (tu laptop)
+        const now = new Date();
+        const localYear = now.getFullYear();
+        const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const localDay = String(now.getDate()).padStart(2, '0');
+        
+        // Construimos YYYY-MM-DD basado en TU día local
+        let dateBaseStr = `${localYear}-${localMonth}-${localDay}`;
+
         if (isEditing && visitToEdit) {
-            dateBaseStr = visitToEdit.visit_start.split('T')[0];
+            // Si editamos, tratamos de mantener la fecha original del registro
+            // para no moverlo de día accidentalmente.
+            const originalDate = new Date(visitToEdit.visit_start);
+             // Usamos los componentes locales de esa fecha guardada para reconstruir el string
+            const editYear = originalDate.getFullYear();
+            const editMonth = String(originalDate.getMonth() + 1).padStart(2, '0');
+            const editDay = String(originalDate.getDate()).padStart(2, '0');
+            dateBaseStr = `${editYear}-${editMonth}-${editDay}`;
         }
 
-        const startFull = `${dateBaseStr}T${formData.visit_start_time}:00Z`;
-        const endFull = `${dateBaseStr}T${formData.visit_end_time}:00Z`;
+        // Creamos objetos Date combinando fecha LOCAL + Hora del Input
+        // Al crear el objeto Date así: new Date("2026-01-20T17:00:00"), JS asume hora local
+        const startDateTime = new Date(`${dateBaseStr}T${formData.visit_start_time}:00`);
+        
+        // Para la hora fin
+        let endDateTime = null;
+        if(formData.visit_end_time) {
+            endDateTime = new Date(`${dateBaseStr}T${formData.visit_end_time}:00`);
+        }
+
+        // Convertimos a ISO para enviar a Supabase (Aquí JS hace la conversión correcta a UTC)
+        // Ejemplo: Si es 17:00 local (Ecuador), toISOString lo manda como 22:00 UTC del MISMO día (o sig si cruza media noche UTC)
+        // pero con la referencia correcta de tiempo absoluto.
+        const startFull = startDateTime.toISOString();
+        const endFull = endDateTime ? endDateTime.toISOString() : null;
 
         const payload = {
             salesperson_id: user.id,

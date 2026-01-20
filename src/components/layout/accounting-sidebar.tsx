@@ -26,7 +26,7 @@ const menuItems = [
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Movimientos', href: '/financing', icon: FileText },
     { name: 'Cobros', href: '/cobros', icon: Wallet },
-    { name: 'Contratos', href: '/contratosp', icon: Wallet }
+    { name: 'Contratos (PRUEBA)', href: '/contratosp', icon: Wallet }
 
 ];
 

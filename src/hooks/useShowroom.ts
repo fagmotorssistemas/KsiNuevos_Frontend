@@ -89,20 +89,49 @@ export function useShowroom() {
                 query = query.ilike('client_name', `%${filters.search}%`);
             }
 
-            // B. Fechas
-            const now = new Date();
+            // B. Fechas - CORRECCIÓN DE ZONA HORARIA
+            const now = new Date(); // Fecha local del navegador
+
+            // Helper para obtener YYYY-MM-DD local
+            const getLocalDateISO = (d: Date) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            };
+
             if (filters.date === 'today') {
-                const today = now.toISOString().split('T')[0];
-                query = query.gte('visit_start', `${today}T00:00:00`);
+                // Rango: Hoy 00:00 local hasta Hoy 23:59 local
+                const todayStr = getLocalDateISO(now);
+                const startOfDay = new Date(`${todayStr}T00:00:00`).toISOString();
+                const endOfDay = new Date(`${todayStr}T23:59:59.999`).toISOString();
+                
+                query = query.gte('visit_start', startOfDay)
+                             .lte('visit_start', endOfDay);
+
             } else if (filters.date === 'yesterday') {
-                const yesterday = new Date(now.setDate(now.getDate() - 1)).toISOString().split('T')[0];
-                query = query.gte('visit_start', `${yesterday}T00:00:00`).lt('visit_start', `${yesterday}T23:59:59`);
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = getLocalDateISO(yesterday);
+                
+                const startOfDay = new Date(`${yesterdayStr}T00:00:00`).toISOString();
+                const endOfDay = new Date(`${yesterdayStr}T23:59:59.999`).toISOString();
+
+                query = query.gte('visit_start', startOfDay)
+                             .lte('visit_start', endOfDay);
+
             } else if (filters.date === 'week') {
-                const weekAgo = new Date(now.setDate(now.getDate() - 7)).toISOString();
-                query = query.gte('visit_start', weekAgo);
+                // Últimos 7 días
+                const weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                // Usamos la fecha calculada para asegurar consistencia
+                query = query.gte('visit_start', weekAgo.toISOString());
+
             } else if (filters.date === 'month') {
-                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-                query = query.gte('visit_start', firstDay);
+                // Este mes (desde el día 1 del mes local)
+                const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                const firstDayDate = new Date(`${firstDayStr}T00:00:00`).toISOString();
+                query = query.gte('visit_start', firstDayDate);
             }
 
             // C. Responsable (Seguridad RLS simulada en cliente)

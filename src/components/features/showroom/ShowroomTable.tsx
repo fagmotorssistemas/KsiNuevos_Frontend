@@ -23,11 +23,15 @@ export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
     // Helper para formatear horas en la tabla
     const formatTime = (dateStr: string) => {
         if (!dateStr) return '';
+        
+        // CORRECCIÓN: Eliminamos timeZone: 'UTC'.
+        // Ahora el navegador tomará la hora UTC de la base de datos (ej: 22:00)
+        // y la convertirá automáticamente a tu hora local (17:00).
         return new Intl.DateTimeFormat('es-ES', { 
             hour: 'numeric', 
             minute: '2-digit', 
-            hour12: true,
-            timeZone: 'UTC' // Mantenemos consistencia con tu Card
+            hour12: true
+            // timeZone: 'UTC' <--- ELIMINADO
         }).format(new Date(dateStr));
     };
 
