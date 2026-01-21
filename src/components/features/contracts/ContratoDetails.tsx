@@ -1,13 +1,51 @@
+import { useState, useEffect } from "react";
+import { contratosService } from "@/services/contratos.service";
 import { ContratoDetalle } from "@/types/contratos.types";
 import { AmortizacionTable } from "./AmortizacionTable";
-import { X, Car, FileText, User, CreditCard } from "lucide-react";
+import { X, Car, FileText, User, CreditCard, Loader2 } from "lucide-react";
 
 interface ContratoDetailsProps {
-    contrato: ContratoDetalle;
+    contratoId: string; // Solo recibimos el ID
+    initialData?: { nota: string, cliente: string }; // Opcional: datos para mostrar en el header mientras carga
     onClose: () => void;
 }
 
-export function ContratoDetails({ contrato, onClose }: ContratoDetailsProps) {
+export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDetailsProps) {
+    const [contrato, setContrato] = useState<ContratoDetalle | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadDetalle = async () => {
+            try {
+                setLoading(true);
+                const data = await contratosService.getDetalleContrato(contratoId);
+                setContrato(data);
+            } catch (error) {
+                console.error("Error cargando detalle", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (contratoId) {
+            loadDetalle();
+        }
+    }, [contratoId]);
+
+    if (loading) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-3 shadow-xl">
+                    <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                    <p className="text-sm text-slate-600 font-medium">Cargando ficha del contrato...</p>
+                    {initialData && <p className="text-xs text-slate-400">{initialData.nota} - {initialData.cliente}</p>}
+                </div>
+            </div>
+        );
+    }
+
+    if (!contrato) return null;
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -29,46 +67,58 @@ export function ContratoDetails({ contrato, onClose }: ContratoDetailsProps) {
                 {/* Body Scrollable */}
                 <div className="p-6 overflow-y-auto flex-1 space-y-6">
                     
-                    {/* Sección 1: Cliente y Facturación */}
+                    {/* Fila 1: Cliente y Datos Financieros */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Cliente */}
                         <div className="space-y-3">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                <User className="h-3 w-3" /> Datos del Cliente
+                                <User className="h-3 w-3" /> Cliente Facturación
                             </h3>
                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm space-y-2">
-                                <p><span className="font-semibold text-slate-700">Nombre:</span> {contrato.cliente}</p>
-                                <p><span className="font-semibold text-slate-700">RUC/CI:</span> {contrato.facturaRuc}</p>
-                                <p><span className="font-semibold text-slate-700">Dirección:</span> {contrato.facturaDireccion}</p>
-                                <p><span className="font-semibold text-slate-700">Teléfono:</span> {contrato.facturaTelefono}</p>
+                                <div className="flex justify-between border-b border-slate-200 pb-1 mb-1">
+                                    <span className="text-slate-500">Razon Social:</span>
+                                    <span className="font-semibold text-slate-700">{contrato.facturaNombre}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">RUC/CI:</span>
+                                    <span className="font-mono text-slate-700">{contrato.facturaRuc}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Teléfono:</span>
+                                    <span className="text-slate-700">{contrato.facturaTelefono}</span>
+                                </div>
+                                <div className="mt-2 text-xs text-slate-500 italic">
+                                    {contrato.facturaDireccion}
+                                </div>
                             </div>
                         </div>
 
+                        {/* Totales */}
                         <div className="space-y-3">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                                <CreditCard className="h-3 w-3" /> Datos Financieros
+                                <CreditCard className="h-3 w-3" /> Resumen Económico
                             </h3>
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm space-y-2">
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-sm space-y-1">
                                 <div className="flex justify-between">
-                                    <span className="text-slate-600">Precio Vehículo:</span>
-                                    <span className="font-semibold">${contrato.precioVehiculo.toLocaleString()}</span>
+                                    <span className="text-slate-500">Precio Vehículo:</span>
+                                    <span className="font-semibold">${contrato.precioVehiculo?.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-600">Gastos Adm:</span>
+                                    <span className="text-slate-500">Gastos Adm:</span>
                                     <span className="font-semibold">{contrato.gastosAdministrativos}</span>
                                 </div>
-                                <div className="flex justify-between pt-2 border-t border-slate-200">
-                                    <span className="font-bold text-slate-800">Total Final:</span>
+                                <div className="flex justify-between pt-2 mt-2 border-t border-slate-200">
+                                    <span className="font-bold text-slate-800">TOTAL FINAL:</span>
                                     <span className="font-bold text-blue-600 text-lg">{contrato.totalFinal}</span>
                                 </div>
-                                <p className="text-[10px] text-slate-400 italic mt-1">{contrato.totalLetras}</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Sección 2: Vehículo (Data Dura) */}
+                    {/* Fila 2: Vehículo (Grid ordenado) */}
                     <div className="space-y-3">
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                            <Car className="h-3 w-3" /> Información del Vehículo
+                            <Car className="h-3 w-3" /> Ficha Técnica
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {[
@@ -89,16 +139,19 @@ export function ContratoDetails({ contrato, onClose }: ContratoDetailsProps) {
                         </div>
                     </div>
 
-                    {/* Sección 3: Observaciones y Textos Legales */}
-                    {(contrato.observaciones || contrato.formaPago || contrato.vehiculoUsado) && (
+                    {/* Fila 3: Observaciones */}
+                    {(contrato.observaciones || contrato.formaPago) && (
                         <div className="bg-amber-50 border border-amber-100 p-4 rounded-lg text-xs space-y-2 text-amber-900">
-                            {contrato.observaciones && <p><strong>Observaciones:</strong> {contrato.observaciones}</p>}
-                            {contrato.formaPago && <p><strong>Forma de Pago:</strong> {contrato.formaPago}</p>}
-                            {contrato.vehiculoUsado && <p><strong>Retoma:</strong> {contrato.vehiculoUsado}</p>}
+                            {contrato.observaciones && (
+                                <p><span className="font-bold">Observaciones:</span> {contrato.observaciones}</p>
+                            )}
+                            {contrato.formaPago && (
+                                <p><span className="font-bold">Forma de Pago:</span> {contrato.formaPago}</p>
+                            )}
                         </div>
                     )}
 
-                    {/* Sección 4: Tabla de Amortización Dinámica */}
+                    {/* Fila 4: Amortización (Ya existente) */}
                     <div className="pt-2">
                         <AmortizacionTable contratoId={contrato.ccoCodigo} />
                     </div>

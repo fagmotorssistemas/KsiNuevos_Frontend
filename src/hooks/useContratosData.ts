@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { contratosService } from '@/services/contratos.service';
-import { ContratoDetalle } from '@/types/contratos.types';
+import { ContratoResumen } from '@/types/contratos.types';
 
 export const useContratosData = () => {
-    const [contratos, setContratos] = useState<ContratoDetalle[]>([]);
+    // Ahora almacenamos el resumen, no el detalle completo
+    const [contratos, setContratos] = useState<ContratoResumen[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -11,13 +12,11 @@ export const useContratosData = () => {
         try {
             setLoading(true);
             setError(null);
-            // Llamamos al endpoint masivo
-            const result = await contratosService.getAllData();
-            // Nos interesa principalmente el array de detalles que es el más completo
-            setContratos(result.detallesContratos);
+            const data = await contratosService.getListaContratos();
+            setContratos(data);
         } catch (err) {
             console.error(err);
-            setError('No se pudo cargar el histórico de contratos.');
+            setError('No se pudo cargar la lista de contratos.');
         } finally {
             setLoading(false);
         }

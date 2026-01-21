@@ -1,4 +1,14 @@
-// Estructura detallada del contrato (Consulta 1)
+// Para la tabla principal (Carga rápida)
+export interface ContratoResumen {
+    notaVenta: string;
+    fechaVenta: string;
+    clienteId: string;
+    clienteNombre: string;
+    ccoCodigo: string;
+    ccoEmpresa: number;
+}
+
+// Para el modal de detalle (Carga completa)
 export interface ContratoDetalle {
     notaVenta: string;
     fechaVenta: string;
@@ -27,10 +37,9 @@ export interface ContratoDetalle {
     vendedor: string;
     precioVehiculo: number;
     gastosAdministrativos: string;
-    ccoCodigo: string; // El ID Gigante en string
+    ccoCodigo: string;
 }
 
-// Estructura de la tabla de amortización (Consulta 3)
 export interface CuotaAmortizacion {
     nroCuota: number;
     fechaVencimiento: string;
@@ -38,9 +47,4 @@ export interface CuotaAmortizacion {
     interes: string;
     valorCuota: string;
     saldoCapital: number;
-}
-
-export interface DataLoadResponse {
-    resumenContratos: any[]; // No lo usaremos mucho si el detalle ya tiene todo
-    detallesContratos: ContratoDetalle[];
 }
