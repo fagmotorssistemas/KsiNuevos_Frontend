@@ -1,122 +1,102 @@
-'use client';
+// src/app/(seller)/contracts/page.tsx
+"use client";
 
-// 1. IMPORTANTE: Agregamos 'useEffect' a los imports
-import { useState, useMemo, useEffect } from 'react';
-import { ContractType, ContractData } from '@/types/contracts';
-import ContractTypeSelector from '@/components/features/contracts/ContractTypeSelector';
-import ContractForm from '@/components/features/contracts/ContractForm';
-import ContractPreview from '@/components/features/contracts/ContractPreview';
-import { useContractFinancing } from '@/hooks/Homeksi/useContractFinancing';
+import { useState } from "react";
+import { RefreshCw, FileText, Search } from "lucide-react";
+import { useContratosData } from "@/hooks/useContratosData";
+import { ContractViewer } from "@/components/features/contracts/print/ContractViewer";
+import { ContratoResumen } from "@/types/contratos.types";
 
-const defaultData: ContractData = {
-  clientName: '',
-  clientId: '',
-  clientAddress: '',
-  clientCity: 'Cuenca',
-  clientPhone: '',
-  carMake: 'CHEVROLET',
-  carModel: 'SAIL',
-  carYear: '2020',
-  carPlate: 'ABC-1234',
-  carEngine: '',
-  carChassis: '',
-  carCylinder: '',
-  carTonnage: '',
-  carCapacity: '5',
-  carOrigin: 'ECUADOR',
-  carType: 'SEDAN',
-  carColor: 'BLANCO',
-  carPrice: 15000,
-  downPayment: 9000, 
-  creditAmount: 0,
-  months: 36,
-  monthlyInstallment: 0,
-  // NO ponemos fecha aquí para evitar error de servidor, la ponemos en el useEffect
-};
+export default function ContratosPage() {
+    const { contratos, loading, refresh } = useContratosData();
+    const [selectedContratoId, setSelectedContratoId] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
 
-export default function ContractsPage() {
-  const [type, setType] = useState<ContractType>('cash');
-  const [data, setData] = useState<ContractData>(defaultData);
+    // Filtrado seguro
+    const filteredContratos = contratos.filter(c => 
+        (c.clienteNombre?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (c.clienteId?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+    );
 
-  // 2. CORRECCIÓN: "Efecto" para poner la fecha automática al cargar
-  useEffect(() => {
-    // Solo si no hay fecha seteada, ponemos la actual
-    if (!data.date) {
-        setData(prev => ({
-            ...prev,
-            date: new Date().toISOString() // Guarda fecha Y hora
-        }));
-    }
-  }, []); // El array vacío [] asegura que solo corra una vez al entrar
+    return (
+        <div className="max-w-5xl mx-auto px-4 py-8">
+            
+            {/* Cabecera simplificada */}
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        Generación de Contratos
+                        {loading && <RefreshCw className="h-4 w-4 text-slate-400 animate-spin" />}
+                    </h1>
+                    <p className="text-slate-500 text-sm mt-1">
+                        Seleccione un cliente para generar e imprimir su contrato.
+                    </p>
+                </div>
+                
+                <div className="flex gap-3">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input 
+                            type="text"
+                            placeholder="Buscar por nombre o cédula..."
+                            className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 shadow-sm"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                </div>
+            </div>
 
-  // Hook Financiero
-  const { 
-    monthlyPayment, 
-    totalDebt, 
-    amortizationSchedule, 
-    downPaymentAmount,
-    termMonths,
-    totalReceivable 
-  } = useContractFinancing(data.carPrice || 0, data.downPayment, data.months);
+            {/* Listado Simplificado */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                        <tr>
+                            <th className="px-6 py-4">Cliente / Razón Social</th>
+                            <th className="px-6 py-4 w-48">Identificación</th>
+                            <th className="px-6 py-4 w-40 text-right">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {loading ? (
+                            [...Array(3)].map((_, i) => (
+                                <tr key={i}><td colSpan={3} className="px-6 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse w-full"></div></td></tr>
+                            ))
+                        ) : filteredContratos.length === 0 ? (
+                            <tr><td colSpan={3} className="px-6 py-8 text-center text-slate-400">No se encontraron resultados</td></tr>
+                        ) : (
+                            filteredContratos.map((c) => (
+                                <tr key={c.ccoCodigo} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4 font-medium text-slate-900">
+                                        {c.clienteNombre}
+                                        <div className="text-xs text-slate-400 font-normal mt-0.5">Nota: {c.notaVenta}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-600 font-mono">
+                                        {c.clienteId}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button 
+                                            onClick={() => setSelectedContratoId(c.ccoCodigo)}
+                                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-all shadow-sm active:scale-95"
+                                        >
+                                            <FileText className="h-3.5 w-3.5" />
+                                            CONTRATO
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-  // Datos para vista previa
-  const previewData: ContractData = useMemo(() => {
-    if (type === 'cash') return data;
-
-    return {
-      ...data,
-      downPayment: downPaymentAmount,
-      monthlyInstallment: monthlyPayment,
-      totalReceivable: totalReceivable || totalDebt,
-      amortizationSchedule: amortizationSchedule,
-      installments: termMonths,
-      months: termMonths,
-      administrativeFee: 386,
-      deviceCost: 686
-    };
-  }, [data, type, monthlyPayment, totalDebt, amortizationSchedule, downPaymentAmount, termMonths, totalReceivable]);
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 pb-10">
-      <div className="sticky top-0 z-30 bg-white border-b px-6 py-4 shadow-sm flex flex-col gap-4 md:flex-row md:items-center md:justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contratos</h1>
-          <p className="text-sm text-gray-500">Generación de documentos de Compra-Venta</p>
+            {/* Modal Visor de Contrato */}
+            {selectedContratoId && (
+                <ContractViewer 
+                    contratoId={selectedContratoId}
+                    onClose={() => setSelectedContratoId(null)} 
+                />
+            )}
         </div>
-        
-        <div className="flex items-center gap-3">
-             <ContractTypeSelector current={type} onChange={setType} />
-             <button 
-                onClick={handlePrint}
-                className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-             >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                Imprimir
-             </button>
-        </div>
-      </div>
-
-      <div className="p-6 max-w-[1600px] mx-auto grid gap-8 lg:grid-cols-12">
-        <div className="lg:col-span-4 xl:col-span-3 space-y-6 print:hidden h-fit overflow-y-auto max-h-[calc(100vh-100px)] custom-scrollbar">
-          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-            <ContractForm 
-              type={type} 
-              data={{ ...data, monthlyInstallment: monthlyPayment }} 
-              onChange={setData} 
-            />
-          </div>
-        </div>
-
-        <div className="lg:col-span-8 xl:col-span-9 flex justify-center bg-gray-200/50 p-8 rounded-xl min-h-[800px] print:p-0 print:bg-white print:m-0 print:block print:w-full">
-           <div className="scale-[0.8] md:scale-[0.9] lg:scale-100 origin-top">
-              <ContractPreview type={type} data={previewData} />
-           </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
