@@ -1,22 +1,26 @@
-export default function creditCar() {
-    return (
-        <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "#fff",
-                color: "#000",
-            }}
-        >
-            <h1 style={{ fontSize: "3rem", fontWeight: "bold", marginBottom: "1rem" }}>
-                Página de creditos en desarrollo 🚧
-            </h1>
-            <p style={{ fontSize: "1.25rem", opacity: 0.85 }}>
-                Estamos trabajando para traerte esta sección muy pronto.
-            </p>
-        </div>
-    );
+"use client";
+
+// 1. Importar layouts
+import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
+import { MainFooter } from '@/components/layout/Homeksi/MainFooter';
+
+// 2. Importar nuestra Feature específica
+import { CreditHero } from '@/components/features/creditCar/CreditHero';
+
+export default function CreditCarPage() {
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Barra de navegación */}
+      <MainNavbar />
+
+      <main>
+        {/* Aquí va toda la sección principal con el auto y los botones */}
+        <CreditHero />
+      
+      </main>
+
+      {/* Pie de página */}
+      <MainFooter />
+    </div>
+  );
 }
