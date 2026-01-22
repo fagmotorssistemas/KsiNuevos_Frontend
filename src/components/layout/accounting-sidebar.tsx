@@ -14,7 +14,8 @@ import {
     PieChart,
     LogOut,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    BanknoteArrowDown,
 } from 'lucide-react';
 
 // Definición de los items del menú
@@ -26,7 +27,9 @@ const menuItems = [
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Movimientos', href: '/financing', icon: FileText },
     { name: 'Cobros', href: '/cobros', icon: Wallet },
+    { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Contratos (PRUEBA)', href: '/contratosp', icon: Wallet }
+
 
 ];
 
