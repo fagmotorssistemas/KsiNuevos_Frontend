@@ -1,21 +1,23 @@
 "use client"; 
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation'; // 👈 Importamos esto para leer la URL
+
+import React, { useState, useEffect, Suspense } from 'react'; // 1. Importamos Suspense
+import { useSearchParams } from 'next/navigation';
 import { DetailedSimulator } from '@/components/features/creditCar/DetailedSimulator'; 
 import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
 import { MainFooter } from '@/components/layout/Homeksi/MainFooter';
 import type { CreditMode } from '@/types/simulator.types';
 
-export default function SimuladorPage() {
+// ------------------------------------------------------------------
+// 1. COMPONENTE INTERNO (Maneja la lógica de URL y Estado)
+// ------------------------------------------------------------------
+function SimuladorContent() {
   const searchParams = useSearchParams();
   
-  // 1. Leemos el modo desde la URL (si existe)
+  // Leemos el modo desde la URL
   const initialMode = searchParams.get('mode') === 'bank' ? 'bank' : 'direct';
-
-  // 2. Iniciamos el estado con lo que vino de la URL
   const [currentMode, setCurrentMode] = useState<CreditMode>(initialMode);
 
-  // (Opcional) Si cambia la URL dinámicamente, actualizamos el estado
+  // Actualizamos si cambia la URL
   useEffect(() => {
     const modeParam = searchParams.get('mode');
     if (modeParam === 'bank' || modeParam === 'direct') {
@@ -24,10 +26,7 @@ export default function SimuladorPage() {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <MainNavbar />
-
-      <main className="flex-grow">
+    <main className="flex-grow">
         {/* ENCABEZADO: Muestra qué modo está activo visualmente */}
         <div className="bg-[#c22e2e] pt-16 pb-24 px-4 text-center text-white">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">
@@ -37,7 +36,7 @@ export default function SimuladorPage() {
             Calcula tus cuotas al instante con nuestra herramienta financiera.
           </p>
 
-          {/* SELECTOR DE PESTAÑAS (Útil para cambiar de opinión sin volver atrás) */}
+          {/* SELECTOR DE PESTAÑAS */}
           <div className="inline-flex bg-white/10 p-1 rounded-xl backdrop-blur-sm border border-white/20">
             <button
               onClick={() => setCurrentMode("direct")}
@@ -67,6 +66,28 @@ export default function SimuladorPage() {
           <DetailedSimulator mode={currentMode} />
         </div>
       </main>
+  );
+}
+
+// ------------------------------------------------------------------
+// 2. COMPONENTE PRINCIPAL (Page)
+// ------------------------------------------------------------------
+export default function SimuladorPage() {
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <MainNavbar />
+
+      {/* Aquí está la MAGIA para arreglar el error:
+         Envolvemos el componente que usa searchParams dentro de Suspense.
+         Esto le dice a Next.js: "Espera a que cargue el cliente para renderizar esta parte"
+      */}
+      <Suspense fallback={
+        <div className="flex-grow flex items-center justify-center min-h-[400px] bg-[#c22e2e]">
+           <span className="text-white font-semibold animate-pulse">Cargando simulador...</span>
+        </div>
+      }>
+        <SimuladorContent />
+      </Suspense>
 
       <MainFooter />
     </div>
