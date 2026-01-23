@@ -1,4 +1,5 @@
-// Para la tabla principal (Carga rápida)
+// src/types/contratos.types.ts
+
 export interface ContratoResumen {
     notaVenta: string;
     fechaVenta: string;
@@ -8,36 +9,64 @@ export interface ContratoResumen {
     ccoEmpresa: number;
 }
 
-// Para el modal de detalle (Carga completa)
 export interface ContratoDetalle {
+    // --- Identificación ---
     notaVenta: string;
     fechaVenta: string;
-    cliente: string;
-    sistemaNombre: string;
+    nroContrato: string;
+    ccoCodigo: string;
+    
+    // --- Fechas y Lugares ---
     textoFecha: string;
-    totalFinal: string;
-    totalLetras: string;
+    textoFechaDado: string;
+    textoFechaCr: string;
+    ciudadContrato: string; 
+    ciudadCliente: string;
+    
+    // --- Cliente ---
+    cliente: string;
     facturaNombre: string;
     facturaRuc: string;
     facturaDireccion: string;
     facturaTelefono: string;
-    ubicacion: string;
-    nroContrato: string;
-    formaPago: string;
-    vehiculoUsado: string;
+    
+    // --- Vehículo ---
+    sistemaNombre: string;
+    vehiculo: string;
     marca: string;
-    tipoVehiculo: string;
-    anio: string;
     modelo: string;
+    tipoVehiculo: string;
+    anio: string;            
+    anioFabricacion: string; 
+    color: string;
     placa: string;
     motor: string;
     chasis: string;
-    color: string;
-    observaciones: string;
-    vendedor: string;
+    
+    // --- Valores Económicos ---
     precioVehiculo: number;
-    gastosAdministrativos: string;
-    ccoCodigo: string;
+    precioVehiculoLetras: string;
+    gastosAdministrativos: number;
+    precioGastos: number;
+    
+    // --- Totales ---
+    totalFinal: string;
+    totalLetras: string;
+    totalPagareLetras: string;
+    
+    // --- Forma de Pago ---
+    formaPago: string;
+    observaciones: string;
+    
+    // --- Extras ---
+    seguroRastreo: string;
+    totalSeguro: string;
+    totalRastreador: string;
+    vendedor: string;
+    
+    // --- Internos (ESTOS FALTABAN Y CAUSABAN EL ERROR) ---
+    dfacProducto: number;
+    apoderado?: string | null;
 }
 
 export interface CuotaAmortizacion {

@@ -1,16 +1,19 @@
 import { useState, FormEvent } from 'react';
 
-export const useContactForm = () => {
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
+export const useContractForm = () => {
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent, action: () => Promise<void>) => {
     e.preventDefault();
     setStatus('submitting');
     
-    // Simulación de llamada a API o Supabase
-    setTimeout(() => {
+    try {
+      await action();
       setStatus('success');
-    }, 1500);
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+    }
   };
 
   const resetForm = () => {

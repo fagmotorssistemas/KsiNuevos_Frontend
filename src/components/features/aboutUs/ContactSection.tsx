@@ -2,10 +2,18 @@
 
 import React from 'react';
 import { Mail, Phone, ShieldCheck, MessageSquare } from 'lucide-react';
-import { useContactForm } from '../../../hooks/useContractForm';
+// Importación corregida (con 'r' en Contract)
+import { useContractForm } from '../../../hooks/useContractForm';
 
 export const ContactSection = () => {
-  const { status, handleSubmit, resetForm } = useContactForm();
+  const { status, handleSubmit, resetForm } = useContractForm();
+
+  // 1. Definimos la acción de envío (aquí iría tu llamada a la API real)
+  const handleSendAction = async () => {
+    // Simulamos una espera de 2 segundos como si enviara un correo
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log("Mensaje enviado con éxito");
+  };
 
   return (
     <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto" id="contacto">
@@ -61,7 +69,8 @@ export const ContactSection = () => {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
+              // 2. CORRECCIÓN AQUÍ: Pasamos el evento 'e' Y la función 'handleSendAction'
+              <form onSubmit={(e) => handleSubmit(e, handleSendAction)} className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Tu Mensaje</label>
                   <textarea 

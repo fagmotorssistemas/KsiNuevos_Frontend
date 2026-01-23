@@ -17,17 +17,16 @@ export function ContractDocument({ data, amortizacion }: ContractDocumentProps) 
     // Determinamos si es crédito basado en si existen cuotas
     // O podrías usar: const esCredito = data.formaPago.includes("CREDITO");
     const hasAmortization = amortizacion && amortizacion.length > 0;
-
+    const totalCuotas = amortizacion ? amortizacion.length : 0;
     return (
         <div className="print:w-full">
             <Page1 data={data} />
-            <Page2 data={data} />
+            <Page2 data={data} totalCuotas={totalCuotas} />
             <Page3 data={data} />
             <Page4 data={data} />
             <Page5 data={data} />
-            <Page6 data={data} />
-            {/* La página 7 se renderiza condicionalmente dentro del componente o aquí */}
-            <Page7 data={data} hasAmortization={hasAmortization} />
+            <Page6 data={data}  hasAmortization={hasAmortization} />
+            <Page7 data={data}/>
         </div>
     );
 }
