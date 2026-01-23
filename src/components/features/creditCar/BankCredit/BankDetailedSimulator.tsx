@@ -1,6 +1,4 @@
-"use client";
 import React, { useEffect, useState } from "react";
-// Importa tu hook de BANCO (asegúrate que la ruta sea correcta)
 import { useCreditSimulator } from "@/hooks/credit/useBankCredit"; 
 import { SimulatorControls } from "../SimulatorControls";
 import { SimulatorResults } from "../SimulatorResults";
@@ -15,14 +13,12 @@ export const BankDetailedSimulator = () => {
   // Resetear simulación si cambia el vehículo
   useEffect(() => { setIsSimulated(false); }, [values?.selectedVehicle?.id]);
 
-  // 🔥 LÓGICA DINÁMICA DE ETIQUETAS (NUEVO)
   // 1. Obtenemos los valores del primer mes de forma segura
   const firstMonth = results.schedule?.[0] || {};
   const monthlyGps = firstMonth.gps || 0;
   
   // 2. Definimos la etiqueta según si existe cobro de GPS o no
   const dynamicFeesLabel = monthlyGps > 0 ? "Total Seguros y GPS" : "Total Seguros";
-
 
   // 🔥 EL ADAPTADOR: De Banco -> Unificado
   const unifiedData: UnifiedSimulatorState = {
@@ -39,10 +35,11 @@ export const BankDetailedSimulator = () => {
     // Config Banco
     mode: "bank",
     selectedBankId: values.selectedBank,
-    
-    // UI Config
+
     showAmortizationSelect: true, 
-    //amortizationMethod: values.amortizationMethod,
+    
+    amortizationMethod: (values.amortizationMethod === 'aleman') ? 'german' : 'french',
+
     isSimulated: isSimulated, 
 
     // Mapeo de Resultados Financieros
@@ -52,10 +49,9 @@ export const BankDetailedSimulator = () => {
     totalInterest: results.totalInterest,
     
     // Mapeo de Rubros 
-    // ✅ AQUI USAMOS LA VARIABLE DINÁMICA CREADA ARRIBA
     feesLabel: dynamicFeesLabel, 
 
-    // Suma de rubros mensuales (si gps es 0, no suma nada, así que matemático está bien)
+    // Suma de rubros mensuales
     feesMonthlyDescription: (firstMonth.insurance || 0) + (firstMonth.desgravamen || 0) + (firstMonth.gps || 0), 
     
     // Totales acumulados
@@ -93,7 +89,6 @@ export const BankDetailedSimulator = () => {
         />
         
         {/* Resultados (Derecha) */}
-        {/* SimulatorResults ya tiene la leyenda legal y usa data.feesLabel */}
         <SimulatorResults isSimulated={isSimulated} data={unifiedData} />
       </div>
     </div>
