@@ -23,14 +23,7 @@ export function MainNav({ className }: { className?: string }) {
   } else {
     // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
     navItems = [
-      { href: "/leads", label: "Leads" },
-      { href: "/showroom", label: "Showroom" },
-      { href: "/agenda", label: "Agenda" },
-      { href: "/inventory", label: "Inventario" },
-      { href: "/requests", label: "Pedidos" },
-      { href: "/tareas", label: "Tareas" },
-      { href: "/finance", label: "Financiamiento" },
-      // Agregamos la nueva sección de Contratos aquí
+      { href: "/leads", label: "Ventas" },
       { href: "/contracts", label: "Contratos" },
     ];
 
@@ -43,7 +36,7 @@ export function MainNav({ className }: { className?: string }) {
     if (profile?.role === "admin" || profile?.role === "marketing") {
       navItems.push({
         href: "/report",
-        label: profile?.role === "marketing" ? "Marketing" : "Admin",
+        label: profile?.role === "marketing" ? "Monitoreo" : "Monitoreo",
       });
     }
   }

@@ -1,0 +1,57 @@
+export interface VehiculoInventario {
+    // IDs (Ocultos en UI generalmente)
+    codEmpresa: number;
+    empresa: string;
+    proCodigo: number;
+    proId: string;
+
+    // Datos Principales
+    marca: string;
+    modelo: string;
+    anioModelo: string;
+    descripcion: string;
+    placa: string;
+    tipo: string;
+    color: string;
+    
+    // Ficha Técnica
+    motor: string;
+    chasis: string;
+    cilindraje: string;
+    combustible: string;
+    tonelaje: string;
+    capacidad: string;
+    nroLlantas: string;
+    nroEjes: string;
+    paisOrigen: string;
+    subclase: string;
+    ram: string;
+    version: string;
+    
+    // Matriculación
+    anioMatricula: string;
+    nombreMatricula: string;
+    lugarMatricula: string;
+    placaCaracteristica: string;
+    marcaCaracteristica: string;
+
+    // Compra
+    proveedor: string;
+    fechaCompra: string;
+    formaPago: string;
+
+    // Estado
+    stock: number;
+}
+
+export interface ResumenInventario {
+    totalVehiculosRegistrados: number;
+    totalActivos: number;
+    totalBaja: number;
+    fechaActualizacion: string;
+}
+
+export interface DashboardInventarioResponse {
+    resumen: ResumenInventario;
+    listado: VehiculoInventario[];
+}
