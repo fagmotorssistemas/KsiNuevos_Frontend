@@ -1,6 +1,7 @@
 // src/components/features/contracts/ContractViewer.tsx
-import { useState, useEffect } from "react";
-import { X, Printer, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Printer, Loader2 } from "lucide-react";
+import { useReactToPrint } from "react-to-print";
 import { contratosService } from "@/services/contratos.service";
 import { ContratoDetalle, CuotaAmortizacion } from "@/types/contratos.types";
 import { ContractDocument } from "./ContractDocument";
@@ -15,11 +16,12 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
     const [amortizacion, setAmortizacion] = useState<CuotaAmortizacion[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const contentRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         const loadData = async () => {
             try {
                 setLoading(true);
-                // Cargamos ambos datos en paralelo: detalle del contrato y amortización
                 const [detalleData, amortizacionData] = await Promise.all([
                     contratosService.getDetalleContrato(contratoId),
                     contratosService.getAmortizacion(contratoId)
@@ -41,9 +43,28 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
         }
     }, [contratoId, onClose]);
 
-    const handlePrint = () => {
-        window.print();
-    };
+    // Configuración de react-to-print
+    const handlePrint = useReactToPrint({
+        contentRef: contentRef,
+        documentTitle: `Contrato_${contrato?.nroContrato || 'Documento'}`,
+        // AJUSTE: Definición explícita de A4 Portrait para asegurar márgenes cero
+        pageStyle: `
+            @page {
+                size: A4 portrait;
+                margin: 0mm;
+            }
+            @media print {
+                body {
+                    -webkit-print-color-adjust: exact;
+                }
+                html, body {
+                    height: 100%;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+            }
+        `
+    });
 
     if (loading) {
         return (
@@ -61,8 +82,8 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
     return (
         <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-in fade-in duration-200 overflow-hidden">
             
-            {/* Barra Superior - NO SE IMPRIME (print:hidden) */}
-            <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm print:hidden shrink-0">
+            {/* Barra Superior */}
+            <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm shrink-0">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800">Vista Previa del Contrato</h2>
                     <p className="text-sm text-slate-500">{contrato.nroContrato} • {contrato.facturaNombre}</p>
@@ -75,7 +96,7 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
                         Cancelar
                     </button>
                     <button 
-                        onClick={handlePrint}
+                        onClick={() => handlePrint()}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
                     >
                         <Printer className="h-4 w-4" />
@@ -84,9 +105,12 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
                 </div>
             </div>
 
-            {/* Área de Visualización del Documento */}
-            <div className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible">
-                <div className="mx-auto print:w-full print:mx-0">
+            {/* Área de Visualización */}
+            <div className="flex-1 overflow-y-auto p-8 bg-slate-100">
+                {/* Contenedor principal centrado. 
+                   Nota: Usamos 'min-w-fit' para asegurar que no se corte en pantallas pequeñas antes de imprimir.
+                */}
+                <div ref={contentRef} className="mx-auto w-fit bg-white shadow-lg print:shadow-none">
                     <ContractDocument data={contrato} amortizacion={amortizacion} />
                 </div>
             </div>

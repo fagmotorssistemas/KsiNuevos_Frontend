@@ -11,7 +11,6 @@ interface PageProps {
 export function Page6({ data, hasAmortization }: PageProps) {
     if (!hasAmortization) return null;
 
-    // Helpers para formatear moneda en la vista de impresión
     const formatMoney = (val: number | undefined) => 
         val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
 
@@ -19,16 +18,16 @@ export function Page6({ data, hasAmortization }: PageProps) {
 
     return (
         <ContractPageLayout pageNumber={6}>
-            <div className="font-sans text-black text-[10px] leading-tight">
+            <div className="font-sans text-black text-[10px] leading-tight h-full">
                 
-                {/* --- HEADER (Título) --- */}
+                {/* --- HEADER --- */}
                 <div className="text-center mb-4">
                     <h2 className="font-bold text-lg italic">K-SI NUEVOS</h2>
                     <h3 className="text-sm font-semibold">Tabla de Amortización Venta</h3>
                     <p className="text-[9px] mt-1">...</p>
                 </div>
 
-                {/* --- SECCIÓN DATOS GENERALES (Caja Superior) --- */}
+                {/* --- DATOS GENERALES --- */}
                 <div className="border border-black p-1 mb-1 flex justify-between items-start">
                     <div className="w-2/3">
                         <div className="grid grid-cols-[60px_1fr] gap-1">
@@ -38,7 +37,7 @@ export function Page6({ data, hasAmortization }: PageProps) {
                             <span>{data.marca} {data.modelo} {data.anio} {data.color}</span>
                             
                             <span className="font-bold">Mod:</span>
-                            <span>{data.modelo}</span> {/* Asumiendo modelo o versión específica */}
+                            <span>{data.modelo}</span>
                             
                             <span className="font-bold">Comprador:</span>
                             <span className="uppercase">{data.facturaNombre}</span>
@@ -48,7 +47,6 @@ export function Page6({ data, hasAmortization }: PageProps) {
                         </div>
                     </div>
                     
-                    {/* Caja derecha (Doc.Int / CCV) */}
                     <div className="border-l border-black pl-2 flex flex-col justify-center items-center">
                         <div className="text-center">
                             <span className="block font-bold">Doc.Int.</span>
@@ -57,32 +55,26 @@ export function Page6({ data, hasAmortization }: PageProps) {
                                 <span>{data.nroContrato}</span>
                             </div>
                         </div>
-                        <div className="mt-1 text-[9px]">
-                        </div>
                     </div>
                 </div>
 
-                {/* --- TABLA RESUMEN DE VALORES (Idéntica a la foto) --- */}
+                {/* --- RESUMEN VALORES --- */}
                 <div className="border border-black mb-4">
-                    {/* Fila 1: Vehículo */}
                     <div className="flex justify-between border-b border-gray-400 px-1 py-0.5">
                         <span>Vehículo para la Venta</span>
                         <span className="uppercase text-[9px]">{data.marca} {data.modelo} {data.anio}</span>
                         <span className="font-mono">{formatMoney(data.precioVehiculo)}</span>
                     </div>
-                    {/* Fila 2: Gastos Admin */}
                     <div className="flex justify-between border-b border-gray-400 px-1 py-0.5 bg-gray-50/50">
                         <span>Gastos Administrativos Gestion Credito</span>
                         <span className="uppercase text-[9px]">{data.marca} {data.modelo} {data.anio}</span>
                         <span className="font-mono">{formatMoney(data.gastosAdministrativos)}</span>
                     </div>
-                    {/* Fila 3: Dispositivos (Rastreo) */}
                     <div className="flex justify-between border-b border-gray-400 px-1 py-0.5">
                         <span>Dispositivos de Seguimiento - Tracking</span>
                         <span className="uppercase text-[9px]">{data.marca} {data.modelo} {data.anio}</span>
                         <span className="font-mono">{data.totalRastreador || '$0.00'}</span>
                     </div>
-                    {/* Fila 4: Seguro */}
                     <div className="flex justify-between px-1 py-0.5 bg-gray-50/50">
                         <span>Seguro Vehicular Clientes</span>
                         <span className="uppercase text-[9px]">{data.marca} {data.modelo} {data.anio}</span>
@@ -91,8 +83,9 @@ export function Page6({ data, hasAmortization }: PageProps) {
                 </div>
 
                 {/* --- TABLA DE AMORTIZACIÓN --- */}
-                {/* Aquí pasamos una prop especial 'printMode' para cambiar el estilo de la tabla */}
-                <div className="mb-8">
+                {/* IMPORTANTE: Quitamos el margin-bottom en impresión para ganar espacio 
+                    y evitar que empuje contenido fuera de la página */}
+                <div className="mb-8 print:mb-0">
                     <AmortizacionTable contratoId={data.ccoCodigo} printMode={true} totalCuotas={36} />
                 </div>
                 
