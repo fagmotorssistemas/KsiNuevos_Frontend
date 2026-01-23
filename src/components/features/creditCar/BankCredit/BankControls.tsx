@@ -1,8 +1,8 @@
 import React from "react";
 import { Car, Calendar, ChevronDown, DollarSign, Building2 } from "lucide-react";
-import { formatMoney } from "../simulator.utils"; // Ajusta esta ruta si es necesario
+import { formatMoney } from "../simulator.utils"; 
 import type { UnifiedSimulatorState } from "../../../../types/simulator.types";
-import { BANK_OPTIONS } from "./constants"; // 🔥 IMPORTANTE: Importamos las opciones aquí
+import { BANK_OPTIONS } from "./constants"; 
 
 interface Props {
   setIsSimulated: (v: boolean) => void;
@@ -15,26 +15,24 @@ export const BankControls = ({ setIsSimulated, data }: Props) => {
   const { 
     inventory, selectedVehicle, vehiclePrice, downPaymentAmount, 
     downPaymentPercentage, termMonths, amortizationMethod, 
-    selectedBankId, // 🔥 Necesitamos recibir esto del estado unificado
+    selectedBankId, 
     updateField, updateDownPaymentByAmount 
   } = data;
 
   const inputBaseClasses = "w-full pl-11 pr-10 py-3 bg-white border border-gray-300 rounded-lg outline-none focus:border-[#c22e2e] focus:ring-1 focus:ring-[#c22e2e] transition-all text-gray-700 text-sm font-medium shadow-sm cursor-pointer appearance-none";
-
-  // Convertimos el objeto de bancos en array para mapearlo
   const banksList = Object.values(BANK_OPTIONS);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 0. SELECCIÓN DE BANCO (NUEVO) */}
+      {/* 0. SELECCIÓN DE BANCO */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-2">Entidad Financiera</label>
         <div className="grid grid-cols-2 gap-2">
           {banksList.map((bank) => (
             <button
               key={bank.id}
-              onClick={() => updateField("selectedBank", bank.id)} // "selectedBank" debe coincidir con tu hook
+              onClick={() => updateField("selectedBank", bank.id)}
               className={`p-3 rounded-lg border text-left transition-all relative overflow-hidden group ${
                 selectedBankId === bank.id
                   ? "border-[#c22e2e] bg-red-50 text-[#c22e2e] ring-1 ring-[#c22e2e]"
@@ -140,20 +138,34 @@ export const BankControls = ({ setIsSimulated, data }: Props) => {
         </div>
       </div>
 
-      {/* 4. AMORTIZACIÓN */}
+      {/* 4. AMORTIZACIÓN - CORREGIDO AQUÍ */}
       <div className={!selectedVehicle ? "opacity-50 pointer-events-none" : ""}>
         <label className="block text-sm font-semibold text-gray-700 mb-2">Sistema de Amortización</label>
         <div className="grid grid-cols-2 gap-3">
+          
+          {/* BOTÓN FRANCÉS */}
           <button
-            onClick={() => updateField("amortizationMethod", "frances")}
-            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${amortizationMethod === "frances" ? "border-[#c22e2e] bg-red-50 text-[#c22e2e] ring-1 ring-[#c22e2e]" : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"}`}
+            // 🔥 CAMBIO: Usamos "french" (inglés) para coincidir con la lógica
+            onClick={() => updateField("amortizationMethod", "french")}
+            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${
+                amortizationMethod === "french" // 🔥 CAMBIO
+                ? "border-[#c22e2e] bg-red-50 text-[#c22e2e] ring-1 ring-[#c22e2e]" 
+                : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+            }`}
           >
             <span>Francesa</span>
             <span className="text-[10px] opacity-70 font-normal">Cuota Fija</span>
           </button>
+
+          {/* BOTÓN ALEMÁN */}
           <button
-            onClick={() => updateField("amortizationMethod", "aleman")}
-            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${amortizationMethod === "aleman" ? "border-[#c22e2e] bg-red-50 text-[#c22e2e] ring-1 ring-[#c22e2e]" : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"}`}
+            // 🔥 CAMBIO: Usamos "german" (inglés) para coincidir con la lógica
+            onClick={() => updateField("amortizationMethod", "german")}
+            className={`px-4 py-3 rounded-lg border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 ${
+                amortizationMethod === "german" // 🔥 CAMBIO
+                ? "border-[#c22e2e] bg-red-50 text-[#c22e2e] ring-1 ring-[#c22e2e]" 
+                : "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+            }`}
           >
             <span>Alemana</span>
             <span className="text-[10px] opacity-70 font-normal">Cuota Variable</span>

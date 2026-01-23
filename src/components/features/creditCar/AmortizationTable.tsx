@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { formatMoney } from "./simulator.utils";
-import type { UnifiedSimulatorState } from "../../../types/simulator.types";
+import type { UnifiedSimulatorState } from "../../../types/simulator.types"; // Asegura que este archivo tenga el cambio de arriba
+import { calculateDirectSchedule } from "./DirectCredit/direct.logic";
+import { calculateBankSchedule } from "./BankCredit/bank.logic";
 
 interface Props {
   data: UnifiedSimulatorState;
@@ -9,77 +11,79 @@ interface Props {
 
 export const AmortizationModal = ({ data, onClose }: Props) => {
 
-  // --- Lógica de Fechas ---
-  const getEstimatedDate = (monthIndex: number) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + monthIndex);
-    return new Intl.DateTimeFormat('es-EC', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    }).format(d);
-  };
+  // ==========================================
+  // 🕹️ CONTROL DE ESTADO
+  // ==========================================
+  // Inicializamos el estado local con lo que viene del estado global (data)
+  // Si data.amortizationMethod es undefined, usamos 'french' por defecto
+  const [currentSystem, setCurrentSystem] = useState<'french' | 'german'>(
+    (data.amortizationMethod === 'german') ? 'german' : 'french'
+  );
 
-  // --- Generador Genérico ---
-  const generateGenericSchedule = () => {
-    const schedule = [];
-    let balance = data.financedCapital;
-    const safeRate = data.rate || 15.60; 
-    const monthlyRate = safeRate / 100 / 12;
-    const insuranceAndOthers = data.feesMonthlyDescription || 0;
-    const paymentWithoutFees = (data.monthlyPayment - insuranceAndOthers);
-
-    for (let i = 1; i <= data.termMonths; i++) {
-      const interest = balance * monthlyRate;
-      let capital = paymentWithoutFees - interest;
-      
-      if (balance - capital < 0 || i === data.termMonths) {
-          capital = balance;
-      }
-
-      const finalPayment = capital + interest + insuranceAndOthers;
-      balance -= capital;
-
-      schedule.push({
-        period: i,
-        date: getEstimatedDate(i),
-        capital: capital,
-        interest: interest,
-        insurance: insuranceAndOthers,
-        payment: finalPayment,
-        balance: balance < 0 ? 0 : balance,
-      });
+  // Efecto opcional: Si la data externa cambia mientras el modal está abierto, actualizamos
+  useEffect(() => {
+    if (data.mode === 'bank' && data.amortizationMethod) {
+       setCurrentSystem(data.amortizationMethod);
     }
-    return schedule;
-  };
+  }, [data.amortizationMethod, data.mode]);
 
-  const rows = data.schedule && data.schedule.length > 0 
-    ? data.schedule.map((row) => ({
-        period: row.cuotaNumber,
-        date: row.date || getEstimatedDate(row.cuotaNumber),
-        capital: row.capital,
-        interest: row.interest,
-        insurance: (row.insurance || 0) + (row.desgravamen || 0) + (row.gps || 0),
-        payment: row.amount || (row.capital + row.interest + ((row.insurance || 0) + (row.desgravamen || 0) + (row.gps || 0))),
-        balance: row.balance
-      }))
-    : generateGenericSchedule();
+  // ==========================================
+  // 🧠 CEREBRO
+  // ==========================================
+  const rows = useMemo(() => {
+    if (data.mode === 'bank') {
+      // Ahora currentSystem es 'french' | 'german', que coincide con la lógica
+      return calculateBankSchedule(data, currentSystem);
+    } else {
+      return calculateDirectSchedule(data);
+    }
+  }, [data, currentSystem]); 
 
+  // ==========================================
+  // 🎨 UI
+  // ==========================================
   return (
-    // 🔥 CAMBIO 1: 'items-start' en vez de 'center' y 'pt-24' para bajarlo
     <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-20 md:pt-20 bg-black/60 backdrop-blur-sm animate-fade-in overflow-hidden">
       
-      {/* 🔥 CAMBIO 2: 'max-h-[85vh]' para que quepa bien aunque lo bajemos */}
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ring-1 ring-gray-200">
         
-        {/* Cabecera */}
+        {/* HEADER */}
         <div className="bg-white px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0 z-20 relative">
           <div>
-            <h3 className="text-xl font-bold text-gray-800">Tabla de Amortización</h3>
-            <p className="text-sm text-gray-500">
-              {data.mode === 'bank' ? `Proyección ${data.bankDetails?.bankName || 'Bancaria'}` : 'Crédito Directo'}
-            </p>
+            <h3 className="text-xl font-bold text-gray-800">
+              {data.mode === 'bank' ? 'Tabla de Amortización' : 'Plan de Pagos'}
+            </h3>
+            
+            {/* TABS SELECTOR (Solo Banco) */}
+            {data.mode === 'bank' ? (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => setCurrentSystem('french')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
+                    currentSystem === 'french'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Sistema Francés
+                </button>
+                <button
+                  onClick={() => setCurrentSystem('german')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all border ${
+                    currentSystem === 'german'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Sistema Alemán
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mt-1">Cuotas Fijas - Interés Comercial</p>
+            )}
+
           </div>
+
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors p-2 rounded-full cursor-pointer"
@@ -90,33 +94,39 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
           </button>
         </div>
 
-        {/* Resumen */}
+        {/* SUMMARY */}
         <div className="hidden md:grid grid-cols-4 gap-4 p-5 bg-gray-50 text-sm border-b border-gray-200 shrink-0">
           <div>
-            <p className="text-gray-400 text-xs uppercase font-bold">Fecha Inicio</p>
-            <p className="font-semibold text-gray-800">{new Date().toLocaleDateString('es-EC')}</p>
+            <p className="text-gray-400 text-xs uppercase font-bold">Monto Financiado</p>
+            <p className="font-semibold text-gray-800">{formatMoney(data.financedCapital)}</p>
           </div>
           <div>
-             <p className="text-gray-400 text-xs uppercase font-bold">Tasa Aplicada</p>
-             <p className="font-semibold text-gray-800">{data.rateLabel}</p>
+              <p className="text-gray-400 text-xs uppercase font-bold">Tasa / Interés</p>
+              <p className="font-semibold text-gray-800">
+                {data.mode === 'bank' ? `${data.rateLabel}` : 'Fija Comercial'}
+              </p>
           </div>
           <div>
-             <p className="text-gray-400 text-xs uppercase font-bold">Seguros/Otros</p>
-             <p className="font-semibold text-gray-800">{formatMoney(data.feesMonthlyDescription)} /mes</p>
+              <p className="text-gray-400 text-xs uppercase font-bold">Gastos Admin.</p>
+              <p className="font-semibold text-gray-800">{formatMoney(data.feesMonthlyDescription)} /mes</p>
           </div>
           <div className="text-right">
-             <p className="text-gray-400 text-xs uppercase font-bold">Cuota Final</p>
-             <p className="font-bold text-blue-600 text-lg">{formatMoney(data.monthlyPayment)}</p>
+              <p className="text-gray-400 text-xs uppercase font-bold">
+                 {data.mode === 'bank' && currentSystem === 'german' ? 'Primera Cuota' : 'Cuota Mensual'}
+              </p>
+              <p className="font-bold text-blue-600 text-lg">
+                {formatMoney(rows[0]?.amount || 0)}
+              </p>
           </div>
         </div>
 
-        {/* Tabla Scrollable */}
+        {/* TABLE */}
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 relative p-4">
           <table className="w-full text-sm text-left border-collapse bg-white rounded-lg shadow-sm">
             <thead className="text-xs text-gray-500 uppercase sticky top-0 z-10 shadow-md">
               <tr className="bg-gray-100 text-gray-600">
                 <th className="px-4 py-4 font-bold text-center border-b w-12 bg-gray-100">#</th>
-                <th className="px-4 py-4 font-bold border-b text-blue-800 bg-gray-100">Fecha Pago</th>
+                <th className="px-4 py-4 font-bold border-b text-blue-800 bg-gray-100">Fecha</th>
                 <th className="px-4 py-4 font-bold border-b bg-gray-100">Capital</th>
                 <th className="px-4 py-4 font-bold border-b bg-gray-100">Interés</th>
                 <th className="px-4 py-4 font-bold border-b hidden sm:table-cell bg-gray-100">Seguros</th>
@@ -127,9 +137,9 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
             
             <tbody className="divide-y divide-gray-100">
               {rows.map((row) => (
-                <tr key={row.period} className="hover:bg-blue-50 transition-colors group">
+                <tr key={row.cuotaNumber} className="hover:bg-blue-50 transition-colors group">
                   <td className="px-4 py-3 text-center text-gray-400 font-mono group-hover:text-blue-500">
-                    {row.period}
+                    {row.cuotaNumber}
                   </td>
                   <td className="px-4 py-3 font-medium text-blue-700 text-xs sm:text-sm whitespace-nowrap">
                     {row.date}
@@ -141,10 +151,10 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
                     {formatMoney(row.interest)}
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
-                    {formatMoney(row.insurance)}
+                    {formatMoney((row.insurance || 0) + (row.desgravamen || 0) + (row.gps || 0))}
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900 bg-gray-50/50 group-hover:bg-blue-100/30">
-                    {formatMoney(row.payment)}
+                    {formatMoney(row.amount)}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-400 font-mono">
                     {formatMoney(row.balance)}
@@ -155,12 +165,9 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
           </table>
         </div>
 
-        {/* Footer */}
+        {/* FOOTER */}
         <div className="p-4 bg-white border-t border-gray-200 text-right shrink-0 z-20">
-          <button 
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-800 text-white text-sm font-semibold rounded-lg hover:bg-black transition-all shadow-md cursor-pointer"
-          >
+          <button onClick={onClose} className="px-6 py-2 bg-gray-800 text-white text-sm font-semibold rounded-lg hover:bg-black transition-all shadow-md cursor-pointer">
             Cerrar
           </button>
         </div>

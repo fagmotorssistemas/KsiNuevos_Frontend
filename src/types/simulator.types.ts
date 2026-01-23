@@ -1,13 +1,73 @@
 import type { Database } from "@/types/supabase";
 
-// ✅ 1. Definimos InventoryCarRow
+// ==========================================
+// 1. TIPOS COMPARTIDOS (Base)
+// ==========================================
+
+// Extraemos el tipo de fila de Supabase
 export type InventoryCarRow = Database["public"]["Tables"]["inventory"]["Row"];
 
-export type CreditMode = "direct" | "bank";
-
+// Identificadores de Bancos
 export type BankID = "austro" | "guayaquil" | "jep" | "caja" | "pastaza" | "merced";
 
-// ✅ 2. La Interfaz Unificada Actualizada
+// Modos de Crédito
+export type CreditMode = "direct" | "bank";
+
+// Métodos de Amortización
+export type AmortizationMethod = "french" | "german";
+
+// ==========================================
+// 2. TIPOS PARA LÓGICA BANCARIA (Cálculos internos)
+// ==========================================
+
+export interface BankProfile {
+  id: BankID;
+  name: string;
+  rate: number;           // Tasa anual (TEA)
+  legalFee: number;       // Gastos legales fijos
+  insuranceRate: number;  // % Seguro anual
+  desgravamenRate: number;// % Desgravamen anual
+  gpsPrice: number;       // Costo mensual GPS
+}
+
+export interface SimulatorResults {
+  bankName: string;
+  interestRate: number;
+  downPaymentAmount: number;
+  vehicleBalance: number;
+  legalFees: number;
+  amountToFinance: number; // El capital base + gastos legales (si aplica)
+  
+  // Totales acumulados
+  totalInterest: number;
+  totalGps: number;
+  totalInsurance: number;
+  totalDesgravamen: number;
+  totalDebt: number;       // Suma de todo lo que pagará el cliente
+  firstMonthlyPayment: number;
+  
+  // La tabla calculada
+  schedule: AmortizationRow[];
+}
+
+// ==========================================
+// 3. ESTRUCTURA DE LA TABLA (Filas)
+// ==========================================
+export interface AmortizationRow {
+  cuotaNumber: number;
+  date: string;
+  amount: number;       // Cuota total
+  capital: number;      // Abono a capital
+  interest: number;     // Interés
+  balance: number;      // Saldo restante
+  insurance?: number;   // Seguro Auto
+  desgravamen?: number; // Seguro Desgravamen
+  gps?: number;         // GPS
+}
+
+// ==========================================
+// 4. ESTADO UNIFICADO (Lo que usa la UI y el Modal)
+// ==========================================
 export interface UnifiedSimulatorState {
   // --- DATOS BÁSICOS ---
   inventory: InventoryCarRow[];
@@ -24,25 +84,28 @@ export interface UnifiedSimulatorState {
   
   // --- CONFIGURACIÓN UI ---
   showAmortizationSelect: boolean;
-  amortizationMethod?: 'frances' | 'aleman';
+  amortizationMethod?: AmortizationMethod;
   isSimulated: boolean; 
   
-  // --- RESULTADOS ---
-  monthlyPayment: number;
-  totalDebt: number;
-  financedCapital: number;
+  // --- RESULTADOS FINANCIEROS ---
+  monthlyPayment: number;    // La cuota mensual a mostrar
+  
+  // IMPORTANTE: Para que la tabla cuadre con el arreglo matemático anterior,
+  // 'financedCapital' debe ser el SALDO INICIAL TOTAL (Vehículo + Gastos Capitalizados)
+  financedCapital: number;   
+  
+  totalDebt: number;         // Total a pagar al final del plazo
   totalInterest: number;
   
-  // --- TASA (¡AQUÍ ESTABA EL ERROR!) ---
-  rate: number;       // <--- AGREGA ESTA LÍNEA (ej: 15.60)
-  rateLabel: string;  // (ej: "15.60% Anual")
-
-  // --- RUBROS ---
-  feesLabel: string; 
-  feesMonthlyDescription: number; 
-  feesTotal: number; 
+  // --- TASA Y RUBROS ---
+  rate: number;              // Ej: 15.60
+  rateLabel: string;         // Ej: "15.60% Anual"
   
-  // --- DETALLES DE BANCO ---
+  feesLabel: string;         // Ej: "Gastos Admin, GPS y Seguros"
+  feesMonthlyDescription: number; // Valor mensual visual (si aplica)
+  feesTotal: number;         // Valor total capitalizado
+  
+  // --- DETALLES ESPECÍFICOS DE BANCO (Opcional) ---
   bankDetails?: {
     legalFees: number;
     monthlyInsurance: number;
@@ -52,19 +115,10 @@ export interface UnifiedSimulatorState {
   };
 
   // --- TABLA DE AMORTIZACIÓN ---
-  schedule?: Array<{
-    cuotaNumber: number;
-    date: string;
-    amount: number;
-    capital: number;
-    interest: number;
-    balance: number;
-    insurance?: number;
-    desgravamen?: number;
-    gps?: number;
-  }>;
+  // Reutilizamos el tipo AmortizationRow para consistencia
+  schedule?: AmortizationRow[];
 
-  // --- ACCIONES ---
+  // --- ACCIONES (Métodos) ---
   updateField: (field: any, value: any) => void;
   updateDownPaymentByAmount: (amount: number) => void;
 }
