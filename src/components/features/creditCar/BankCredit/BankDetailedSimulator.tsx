@@ -42,7 +42,7 @@ export const BankDetailedSimulator = () => {
     
     // UI Config
     showAmortizationSelect: true, 
-    amortizationMethod: values.amortizationMethod,
+    //amortizationMethod: values.amortizationMethod,
     isSimulated: isSimulated, 
 
     // Mapeo de Resultados Financieros
