@@ -2,7 +2,7 @@ import type { Database } from "@/types/supabase";
 
 export type InventoryCarRow = Database["public"]["Tables"]["inventory"]["Row"];
 export type BankID = "austro" | "guayaquil" | "jep" | "caja" | "pastaza" | "merced";
-export type AmortizationMethod = "frances" | "aleman";
+export type AmortizationMethod = "french" | "german"
 
 export interface BankProfile {
   id: BankID;
