@@ -23,9 +23,6 @@ export function ExecutiveSignature() {
 
                 {/* Lado Izquierdo: Información del Asesor */}
                 <div className="flex items-center gap-3">
-
-
-
                     <div>
                         <h3 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
                             Asesor Responsable

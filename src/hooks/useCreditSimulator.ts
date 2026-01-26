@@ -132,7 +132,7 @@ export function useCreditSimulator() {
         init();
     }, [fetchInventory, searchParams]);
 
-    // --- 3. Lógica de Negocio (SOLUCIÓN AQUÍ) ---
+    // --- 3. Lógica de Negocio ---
     const results = useMemo<SimulatorResults>(() => {
         
         // LÓGICA CRÍTICA: Determinar la entrada exacta
@@ -174,8 +174,6 @@ export function useCreditSimulator() {
             if (field === 'selectedVehicle' && value) {
                 const car = value as InventoryCarRow;
                 updates.vehiclePrice = car.price || 0; 
-                // Opcional: Al cambiar carro, ¿reseteamos a porcentaje?
-                // updates.downPaymentMode = 'percentage'; 
             }
 
             // Si el usuario edita el PORCENTAJE manualmente, cambiamos a modo porcentaje
@@ -187,7 +185,6 @@ export function useCreditSimulator() {
         });
     };
 
-    // ESTA ES LA FUNCIÓN QUE CAUSABA EL BUG - AHORA CORREGIDA
     const updateDownPaymentByAmount = (amount: number) => {
         setValues(prev => {
             const price = prev.vehiclePrice > 0 ? prev.vehiclePrice : 1;
@@ -204,8 +201,9 @@ export function useCreditSimulator() {
 
     const resetDefaults = () => setValues(defaultValues);
 
-    // --- 5. GUARDAR ---
-    const saveProforma = async () => {
+    // --- 5. GUARDAR (MODIFICADO PARA PDF) ---
+    // Aceptamos un objeto opcional 'extraData' donde vendrá la URL del PDF
+    const saveProforma = async (extraData: { pdf_url?: string } = {}) => {
         if (!user) {
             toast.error("Inicia sesión para guardar.");
             return false;
@@ -216,7 +214,8 @@ export function useCreditSimulator() {
         }
 
         setIsSaving(true);
-        const { error } = await supabase.from('credit_proformas').insert({
+        
+        const dataToSave = {
             created_by: user.id,
             client_name: values.clientName,
             client_id: values.clientId,
@@ -228,14 +227,18 @@ export function useCreditSimulator() {
                 : 'Vehículo Personalizado / No listado',
             vehicle_price: values.vehiclePrice,
             
-            // Guardamos el monto final calculado (que ahora será exacto)
+            // Guardamos el monto final calculado
             down_payment_amount: results.downPaymentAmount,
             
             term_months: values.termMonths,
             interest_rate: values.interestRateMonthly,
             monthly_payment: results.monthlyPayment,
-            status: 'generada'
-        });
+            status: 'generada',
+            pdf_url: extraData.pdf_url || null // GUARDAMOS LA URL DEL PDF
+        };
+
+        const { error } = await supabase.from('credit_proformas').insert(dataToSave);
+        
         setIsSaving(false);
 
         if (error) {
