@@ -15,9 +15,14 @@ export function CreditProforma({ values, results, includeTableInPdf }: CreditPro
 
     return (
         <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0">
-            {/* Logo y Cabecera */}
-            <div className="flex items-center gap-8 mb-6">
+            {/* Logo y Cabecera con Firma a la derecha */}
+            <div className="flex justify-between items-center gap-8 mb-6">
                 <img src="/logol.png" alt="Logo Ksi" className="object-contain w-[180px] h-[35px]" />
+                
+                {/* ExecutiveSignature movido aquí */}
+                <div className="transform scale-90 origin-right"> 
+                    <ExecutiveSignature />
+                </div>
             </div>
 
             <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
@@ -187,7 +192,7 @@ export function CreditProforma({ values, results, includeTableInPdf }: CreditPro
                     </table>
                 </div>
             </div>
-            <ExecutiveSignature />
+            {/* ExecutiveSignature eliminado de aquí */}
             <div className="mt-12 pt-6 border-t border-slate-200 text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
                 <p>Esta cotización es referencial y aproximada. Precios y tasas sujetos a aprobación crediticia final.</p>
                 <p>Generado automáticamente por Sistema de Gestión Concesionaria.</p>
