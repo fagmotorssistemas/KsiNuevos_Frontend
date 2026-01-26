@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronUp, ChevronDown, FileText } from "lucide-react";
 import { formatCurrency, SimulatorValues, SimulatorResults } from "./FinancingUtils";
+import { ExecutiveSignature } from "./ExecutiveSignature";
 
 interface CreditProformaProps {
     values: SimulatorValues;
@@ -186,7 +187,7 @@ export function CreditProforma({ values, results, includeTableInPdf }: CreditPro
                     </table>
                 </div>
             </div>
-
+            <ExecutiveSignature />
             <div className="mt-12 pt-6 border-t border-slate-200 text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
                 <p>Esta cotización es referencial y aproximada. Precios y tasas sujetos a aprobación crediticia final.</p>
                 <p>Generado automáticamente por Sistema de Gestión Concesionaria.</p>
