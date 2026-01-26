@@ -17,9 +17,11 @@ export interface ContratoDetalle {
     ccoCodigo: string;
     
     // --- Fechas y Lugares ---
-    textoFecha: string;
-    textoFechaDado: string;
-    textoFechaCr: string;
+    textoFecha: string;       // cco_fecha
+    textoFechaDado: string;   // cco_fecha_dado
+    textoFechaCr: string;     // cco_fechacr
+    fechaCiudad: string;      // NUEVO: cco_fecha_ci
+    fechaCorta: string;       // NUEVO: cco_fecha1
     ciudadContrato: string; 
     ciudadCliente: string;
     
@@ -32,7 +34,8 @@ export interface ContratoDetalle {
     
     // --- Vehículo ---
     sistemaNombre: string;
-    vehiculo: string;
+    vehiculo: string;         // El vehículo que se vende
+    vehiculoUsadoTexto: string; // NUEVO: Texto del vehículo que se recibe (vehiculo_usado)
     marca: string;
     modelo: string;
     tipoVehiculo: string;
@@ -42,12 +45,15 @@ export interface ContratoDetalle {
     placa: string;
     motor: string;
     chasis: string;
+    datosVehiculo: string;    // NUEVO: Bloque de texto con datos (datos_vehiculo)
     
     // --- Valores Económicos ---
     precioVehiculo: number;
-    precioVehiculoLetras: string;
+    precioVehiculoLetras: string;     // dfac_precio_letras
+    precioVehiculoMasLetras: string;  // NUEVO: dfac_precio_mas_letras
     gastosAdministrativos: number;
     precioGastos: number;
+    precioGastosLetras: string;       // NUEVO: precio_gastos_letras
     
     // --- Totales ---
     totalFinal: string;
@@ -64,10 +70,11 @@ export interface ContratoDetalle {
     totalRastreador: string;
     vendedor: string;
     
-    // --- Internos (ESTOS FALTABAN Y CAUSABAN EL ERROR) ---
+    // --- Internos ---
     dfacProducto: number;
     apoderado?: string | null;
 }
+// ... (El resto de interfaces se mantiene igual)
 
 export interface CuotaAmortizacion {
     nroCuota: number;
@@ -76,4 +83,4 @@ export interface CuotaAmortizacion {
     interes: string;
     valorCuota: string;
     saldoCapital: number;
-}
+} 

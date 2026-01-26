@@ -42,7 +42,7 @@ export function Page4({ data }: PageProps) {
                         <div className="space-y-1 pl-1">
                             <div className="flex">
                                 <span className="w-32">Lugar y fecha:</span>
-                                <span>{data.ciudadContrato || "CUENCA"}, a los {new Date().getDate()} dias del mes de {new Date().toLocaleString('es-ES', { month: 'long' })} de {new Date().getFullYear()}</span>
+                                <span>{data.textoFecha}</span>
                             </div>
                             <div className="flex">
                                 <span className="w-32">Nombre del Cliente:</span>
@@ -94,7 +94,6 @@ export function Page4({ data }: PageProps) {
                         <div className="pl-32 space-y-1">
                             <div className="flex items-center gap-2">
                                 <span>Compra de Vehículo</span>
-                                <span className="font-bold">X</span>
                             </div>
                             <div>Factura de Talleres</div>
                             <div>Factura de Repuestos</div>
@@ -104,7 +103,7 @@ export function Page4({ data }: PageProps) {
                     {/* --- SECCIÓN 4: VALOR --- */}
                     <div>
                         <div className="font-bold mb-2">
-                            VALOR USD$: {data.totalFinal}
+                            VALOR USD$: {data.precioGastos}
                         </div>
                         <div className="flex items-end">
                             <span className="mr-2">Estos fondos provienen de:</span>

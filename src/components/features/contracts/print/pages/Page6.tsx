@@ -32,7 +32,7 @@ export function Page6({ data, hasAmortization }: PageProps) {
                     <div className="w-2/3">
                         <div className="grid grid-cols-[60px_1fr] gap-1">
                             <span className="font-bold">F.Emision</span>
-                            <p className="text-[8px] text-gray-500 mb-0.5">{currentDateTime}</p>
+                            <p className="text-[8px] text-gray-500 mb-0.5">{data.fechaVenta}</p>
                             <span className="font-bold">Vehículo:</span>
                             <span>{data.marca} {data.modelo} {data.anio} {data.color}</span>
                             

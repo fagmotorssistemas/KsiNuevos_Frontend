@@ -55,7 +55,7 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                             
                             {/* Fila 1: F.Emision */}
                             <span className="font-serif italic text-gray-800 font-bold">F.Emision</span>
-                            <span>{formatDateClean(data.fechaVenta)} {new Date().toLocaleTimeString('es-EC', {hour: '2-digit', minute:'2-digit', hour12: false})}</span>
+                            <span>{data.fechaVenta}</span>
 
                             {/* Fila 2: Vehiculo */}
                             <span className="font-serif italic text-gray-800 font-bold">Vehiculo:</span>

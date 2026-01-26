@@ -86,7 +86,7 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
             <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm shrink-0">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800">Vista Previa del Contrato</h2>
-                    <p className="text-sm text-slate-500">{contrato.nroContrato} • {contrato.facturaNombre}</p>
+                    <p className="text-sm text-slate-500">{contrato.facturaNombre}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button 

@@ -1,118 +1,143 @@
+import React from "react";
 import { ContratoDetalle } from "@/types/contratos.types";
 import { ContractPageLayout } from "./ContractPageLayout";
+import { useFinanciamiento } from "@/hooks/useFinanciamiento"; // Usamos el mismo cerebro que en la hoja 1
 
 interface PageProps {
     data: ContratoDetalle;
-    totalCuotas: number; // <--- 1. Agregamos esta propiedad nueva
 }
 
-export function Page2({ data, totalCuotas }: PageProps) {
-    // Helpers para formateo
+export function Page2({ data }: PageProps) {
+    
+    // 1. OBTENER DATOS REALES DE FINANCIAMIENTO
+    // Esto asegura que si son 36, 48 o 12 cuotas, el pagaré se adapte solo.
+    const { numeroCuotas, loading } = useFinanciamiento(data.ccoCodigo);
+
+    // 2. HELPERS DE FORMATO
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
-        if (typeof val === 'string') return val.includes('$') ? val : `$ ${val}`;
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+        if (typeof val === 'string' && val.includes('$')) return val;
+        const numberVal = Number(val);
+        return isNaN(numberVal) ? "$ 0.00" : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(numberVal);
     };
 
-    const formatDateSimple = (date: Date) => {
-        return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+    // Formateador de fechas estilo: "12-enero-2026"
+    const formatDateEs = (dateString: string | Date) => {
+        if (!dateString) return ".............";
+        const date = new Date(dateString);
+        // Ajuste de zona horaria simple para evitar que reste un día
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+        
+        const day = adjustedDate.getDate();
+        const year = adjustedDate.getFullYear();
+        const month = adjustedDate.toLocaleString('es-ES', { month: 'long' });
+        
+        return `${day}-${month}-${year}`;
     };
 
-    // --- LÓGICA DE FECHAS Y PLAZOS ---
-    
-    // 1. Determinar el número real de cuotas (Prioridad: Propiedad > Regex > Default)
-    // Si totalCuotas viene en 0 (ej. Contado), intentamos leer "36 meses" del texto, o asumimos 1 mes de trámite.
-    const mesesPlazo = totalCuotas > 0 
-        ? totalCuotas 
-        : parseInt(data.formaPago?.match(/\d+/)?.[0] || "1", 10);
+    // 3. CÁLCULO DE FECHAS (LÓGICA AUTOMÁTICA)
+    const calcularFechasPagare = () => {
+        // Fecha base: Fecha de venta o fecha actual
+        const fechaBase = data.fechaVenta ? new Date(data.fechaVenta) : new Date();
+        
+        // Inicio de pagos: Generalmente 1 mes después de la venta
+        // OJO: Si tu JSON trae una fecha específica de primer pago, úsala aquí. 
+        // Por defecto sumamos 1 mes.
+        const fechaInicio = new Date(fechaBase);
+        fechaInicio.setMonth(fechaInicio.getMonth());
 
-    // 2. Fecha de Venta base
-    const fechaVentaDate = new Date(data.fechaVenta || new Date());
-    
-    // 3. Inicio de pagos: Mes siguiente a la venta
-    const fechaInicioPago = new Date(fechaVentaDate);
-    fechaInicioPago.setMonth(fechaInicioPago.getMonth() + 1); // +1 mes para la primera cuota
-    
-    // 4. Fin de pagos: Inicio + (plazo - 1) porque la primera ya cuenta
-    // Ejemplo: 36 cuotas. Inicio Enero. Fin = Enero + 35 meses.
-    const fechaFinPago = new Date(fechaInicioPago);
-    fechaFinPago.setMonth(fechaFinPago.getMonth() + (mesesPlazo - 1));
+        // Fin de pagos: Fecha Inicio + Numero de Cuotas
+        const fechaFin = new Date(fechaInicio);
+        // Si no hay cuotas cargadas (contado), asumimos 1 mes por defecto para que no rompa
+        const mesesASumar = numeroCuotas > 0 ? numeroCuotas : 1; 
+        fechaFin.setMonth(fechaFin.getMonth() + mesesASumar);
+
+        return {
+            inicio: formatDateEs(fechaInicio),
+            fin: formatDateEs(fechaFin)
+        };
+    };
+
+    const fechas = calcularFechasPagare();
+    const ACERREDOR_NOMBRE = "AGUIRRE MARQUEZ FABIAN LEONARDO";
 
     return (
         <ContractPageLayout pageNumber={2}>
-            <div className="font-sans text-[11px] leading-tight text-black max-w-full mx-auto">
+            <div className="font-sans text-black max-w-full mx-auto leading-tight" style={{ fontSize: '11px' }}>
 
                 {/* --- ENCABEZADO --- */}
                 <div className="text-center mb-2">
-                    <h2 className="font-bold text-lg uppercase mb-1">K-SI NUEVOS</h2>
+                    <h2 className="font-bold text-base uppercase mb-1">K-SI NUEVOS</h2>
                 </div>
 
-                {/* --- CAJA TITULO PAGARÉ --- */}
-                <div className="border border-black mb-1">
-                    <div className="text-center border-b border-black py-1">
-                         <h1 className="font-bold text-base uppercase">PAGARÉ</h1>
+                {/* --- CAJA TÍTULO PAGARÉ (Estilo idéntico a la foto) --- */}
+                <div className="border border-black mb-4">
+                    <div className="text-center border-b border-black py-1 bg-gray-50">
+                         <h1 className="font-bold text-sm uppercase tracking-wider">PAGARÉ</h1>
                     </div>
-                    <div className="flex justify-between px-2 py-1 text-xs font-bold">
+                    <div className="flex justify-between px-2 py-1 text-[10px] font-bold uppercase">
                         <span>{data.nroContrato}</span>
-                        <span>FECHA: {data.textoFecha || formatDateSimple(new Date())}</span>
+                        <span>FECHA: {data.fechaCorta || formatDateEs(data.fechaVenta)}</span>
                     </div>
                 </div>
 
                 {/* --- MONTO --- */}
-                <div className="mb-4 mt-4">
-                    <p>
-                        <strong>POR: {data.totalFinal || "$ 0.00"} ( {data.totalLetras || data.totalLetras} ).</strong>
+                <div className="mb-4 mt-2 px-1">
+                    <p className="uppercase">
+                        <strong>POR: {data.totalPagareLetras}.</strong>
                     </p>
                 </div>
 
-                {/* --- CUERPO PAGARÉ (DEUDOR/ACREEDOR) --- */}
-                <div className="text-justify mb-4 space-y-3 leading-relaxed">
+                {/* --- CUERPO PAGARÉ --- */}
+                <div className="text-justify mb-4 space-y-3 px-1 leading-relaxed">
                     <p>
                         <strong>{data.facturaNombre}</strong>, con C.I. <strong>{data.facturaRuc}</strong>, 
                         debo (emos) y pagaré (mos) solidaria e incondicionalmente a la orden de 
-                        <strong> {"AGUIRRE MARQUEZ FABIAN LEONARDO"}</strong> en la ciudad de 
+                        <strong> {ACERREDOR_NOMBRE}</strong> en la ciudad de 
                         <strong> {data.ciudadContrato || "CUENCA"}</strong>, o en el lugar donde se me (nos) reconvenga, la cantidad de 
-                        <strong> {data.totalFinal} ( {data.totalPagareLetras || data.totalLetras} )</strong> obligándome (nos) irrevocablemente a pagar en 
-                        {/* AQUI SE INSERTA EL NUMERO DINÁMICO DE CUOTAS */}
-                        <strong> {mesesPlazo} cuotas mensuales</strong>, que corresponden al pago de capital e interés, de acuerdo al siguiente detalle:
+                        <strong> {data.totalPagareLetras}</strong> obligándome (nos) irrevocablemente a pagar en 
+                        
+                        {/* INSERCIÓN DINÁMICA DE CUOTAS */}
+                        <strong> {loading ? "..." : numeroCuotas} cuotas mensuales</strong>, 
+                        
+                        que corresponden al pago de capital e interés, de acuerdo al siguiente detalle:
                     </p>
 
-                    {/* DETALLE */}
-                    <div className="uppercase my-4 border-t border-b border-gray-300 py-2 text-xs">
-                        {data.observaciones ? data.observaciones : (
-                             <>
-                                SE VENDE EN {formatCurrency(data.precioVehiculo)}; 
-                                {data.seguroRastreo ? `INCLUYE ${data.seguroRastreo}` : ""} CREDITO DIRECTO AUT GERENCIA
-                            </>
-                        )}
+                    {/* --- OBSERVACIONES (SE VENDE EN...) --- */}
+                    <div className="uppercase my-2 border-t border-b border-gray-300 py-2 text-[10px] bg-gray-50 font-medium">
+                        {data.observaciones}
                     </div>
 
+                    {/* --- FECHAS DE PAGO --- */}
                     <p>
-                        Dichas cuotas serán pagadas irrevocablemente, a partir del <strong>{formatDateSimple(fechaInicioPago)}</strong>, hasta el <strong>{formatDateSimple(fechaFinPago)}</strong>.
+                        Dichas cuotas serán pagadas irrevocablemente, a partir del <strong>{fechas.inicio}</strong>, hasta el <strong>{fechas.fin}</strong>.
                     </p>
 
-                    {/* --- CLÁUSULAS LEGALES --- */}
-                    <p>
-                        Declaro (amos) que la falta de pago oportuno de una cualesquiera de las cuotas mensuales, antes detallada o de parte de alguna de ellas, permitirá al Acreedor anticipar y declarar de plazo vencido las cuotas posteriores y exigir al (los) Deudores y/o Avales el pago total de la obligación contenida en este pagaré, mas los gastos y costos a que hubiera lugar.
-                    </p>
+                    {/* --- CLÁUSULAS LEGALES (Texto denso) --- */}
+                    <div className="space-y-3">
+                        <p>
+                            Declaro (amos) que la falta de pago oportuno de una cualesquiera de las cuotas mensuales, antes detallada o de parte de alguna de ellas, permitirá al Acreedor anticipar y declarar de plazo vencido las cuotas posteriores y exigir al (los) Deudores y/o Avales el pago total de la obligación contenida en este pagaré, mas los gastos y costos a que hubiera lugar.
+                        </p>
 
-                    <p>
-                        En caso de mora, pagaré (mos) desde su vencimiento hasta su total cancelación, sobre los valores no pagados, la tasa máxima de interes de mora que para el efecto haya dispuesto la Autoridad Monetaria correspondiente, vigente a la respectiva fecha de vencimiento. Además, pagaré(mos) las comisiones y todos los gastos extrajudiciales, costos judiciales, y honorarios profesionales que ocasiones el cobro, bastando para determinar el monto de tales gastos, la sola aseveración del acreedor.
-                    </p>
+                        <p>
+                            En caso de mora, pagaré (mos) desde su vencimiento hasta su total cancelación, sobre los valores no pagados, la tasa máxima de interes de mora que para el efecto haya dispuesto la Autoridad Monetaria correspondiente, vigente a la respectiva fecha de vencimiento. Además, pagaré(mos) las comisiones y todos los gastos extrajudiciales, costos judiciales, y honorarios profesionales que ocasiones el cobro, bastando para determinar el monto de tales gastos, la sola aseveración del acreedor.
+                        </p>
 
-                    <p>
-                        Renuncio(amos) fuero y domicilio y quedo(amos) expresamente sometido (s) a los jueces competentes de la ciudad de <strong>{data.ciudadContrato || "CUENCA"}</strong> o del lugar en que se me (nos) reconvenga, y al trámite ejecutivo a elección del demandante; obligándome (nos) irrevocablemente al fiel cumplimiento de lo aqui estipulado con todos mis (nuestros) bienes presentes y futuros. El pago no podrá hacerse por partes ni aún por mis (nuestros) herederos.
-                    </p>
+                        <p>
+                            Renuncio(amos) fuero y domicilio y quedo(amos) expresamente sometido (s) a los jueces competentes de la ciudad de <strong>{data.ciudadContrato || "CUENCA"}</strong> o del lugar en que se me (nos) reconvenga, y al trámite ejecutivo a elección del demandante; obligándome (nos) irrevocablemente al fiel cumplimiento de lo aqui estipulado con todos mis (nuestros) bienes presentes y futuros. El pago no podrá hacerse por partes ni aún por mis (nuestros) herederos.
+                        </p>
 
-                    <p>
-                        Sin protesto. Eximase al acreedor de este pagaré a Orden de su presentación para el pago al (los) suscriptor (es) del mismo, asi como realizar los avisos por falta de pago.
-                    </p>
+                        <p>
+                            Sin protesto. Eximase al acreedor de este pagaré a Orden de su presentación para el pago al (los) suscriptor (es) del mismo, asi como realizar los avisos por falta de pago.
+                        </p>
+                    </div>
                 </div>
 
-                {/* --- PIE DE PÁGINA (FECHA) --- */}
-                <div className="mb-12 mt-6">
+                {/* --- PIE DE PÁGINA (FECHA CIUDAD) --- */}
+                <div className="mb-10 mt-6 px-1">
                      <p>
-                        {data.textoFechaDado || `En Cuenca a los ${new Date().getDate()} dias del mes de ${new Date().toLocaleString('es-ES', { month: 'long' })} de ${new Date().getFullYear()}`}
+                        {data.textoFecha || `En ${data.ciudadContrato}, a los ...`}
                     </p>
                 </div>
 

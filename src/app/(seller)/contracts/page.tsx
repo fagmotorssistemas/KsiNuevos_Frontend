@@ -5,7 +5,6 @@ import { useState } from "react";
 import { RefreshCw, FileText, Search } from "lucide-react";
 import { useContratosData } from "@/hooks/useContratosData";
 import { ContractViewer } from "@/components/features/contracts/print/ContractViewer";
-import { ContratoResumen } from "@/types/contratos.types";
 
 export default function ContratosPage() {
     const { contratos, loading, refresh } = useContratosData();
@@ -69,7 +68,6 @@ export default function ContratosPage() {
                                 <tr key={c.ccoCodigo} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4 font-medium text-slate-900">
                                         {c.clienteNombre}
-                                        <div className="text-xs text-slate-400 font-normal mt-0.5">Nota: {c.notaVenta}</div>
                                     </td>
                                     <td className="px-6 py-4 text-slate-600 font-mono">
                                         {c.clienteId}

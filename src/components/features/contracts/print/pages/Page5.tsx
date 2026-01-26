@@ -86,7 +86,7 @@ export function Page5({ data }: PageProps) {
                 <div className="text-justify mb-4 space-y-4 leading-relaxed">
                     <p>
                         Al Señor (a) <strong>{data.facturaNombre}</strong> quien en su calidad de comprador(a) paga la cantidad de 
-                        <strong> {data.totalFinal} ( {data.totalLetras} )</strong>.
+                        <strong> {data.precioGastosLetras}</strong>.
                     </p>
 
                     <p>
@@ -97,7 +97,7 @@ export function Page5({ data }: PageProps) {
                 {/* --- FECHA Y HORA --- */}
                 <div className="mb-12 mt-8">
                      <p>
-                        {data.ciudadContrato || "Cuenca"} {formatDateSimple(fechaDoc)} {new Date().toLocaleTimeString('es-EC', {hour12: false})}
+                        {data.fechaVenta}
                     </p>
                     <p className="mt-4">
                         Atentamente,

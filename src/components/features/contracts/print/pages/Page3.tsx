@@ -40,7 +40,7 @@ export function Page3({ data }: PageProps) {
                 {/* --- INTRODUCCIÓN --- */}
                 <div className="text-justify mb-4 space-y-2">
                     <p>
-                        {data.textoFechaDado || `En ${data.ciudadContrato}, a los ${new Date().getDate()} dias del mes de ${new Date().toLocaleString('es-ES', { month: 'long' })} de ${new Date().getFullYear()}`}, 
+                        {data.textoFecha}, 
                         comparecen libre y voluntariamente y sin ningún tipo de coacción física o moral, por una parte el (la) Sr (a) (ta) 
                         <strong> {data.facturaNombre}</strong> con número de cédula de identidad 
                         <strong> {data.facturaRuc}</strong>, y por otra parte el señor 
@@ -51,7 +51,7 @@ export function Page3({ data }: PageProps) {
                 {/* --- CLÁUSULA PRIMERA: ANTECEDENTES --- */}
                 <div className="mb-4">
                     <p className="text-justify mb-2">
-                        <strong>PRIMERA: ANTECEDENTES.-</strong> Con fecha {data.textoFecha || "XX de XX del 20XX"}, el primer interviniente adquiere mediante venta con reserva de dominio a K-SI NUEVOS, un vehiculo de las siguientes características:
+                        <strong>PRIMERA: ANTECEDENTES.-</strong> {data.textoFechaCr || "XX de XX del 20XX"}, el primer interviniente adquiere mediante venta con reserva de dominio a K-SI NUEVOS, un vehiculo de las siguientes características:
                     </p>
 
                     {/* TABLA DE CARACTERÍSTICAS */}

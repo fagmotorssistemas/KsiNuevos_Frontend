@@ -27,19 +27,10 @@ export const ContactSection = () => {
             </div>
             <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900">Hablemos sobre tu auto</h2>
             <p className="text-gray-500 text-lg mb-10 leading-relaxed">
-              ¿Tienes alguna pregunta específica? Nuestro equipo de soporte está listo para resolver tus dudas de inmediato.
+              ¿Tienes alguna pregunta específica?.
             </p>
 
             <div className="space-y-8">
-              <div className="flex items-start">
-                <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0 mr-4 text-gray-900">
-                  <Mail size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Escríbenos</p>
-                  <p className="text-lg font-medium text-gray-900">hola@k-sinuevos.com</p>
-                </div>
-              </div>
               <div className="flex items-start">
                 <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center shrink-0 mr-4 text-gray-900">
                   <Phone size={20} />
@@ -82,7 +73,6 @@ export const ContactSection = () => {
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-400">Te responderemos a tu correo asociado.</p>
                   <button 
                     disabled={status === 'submitting'}
                     type="submit" 
