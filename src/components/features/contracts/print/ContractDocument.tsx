@@ -21,7 +21,7 @@ export function ContractDocument({ data, amortizacion }: ContractDocumentProps) 
     return (
         <div className="print:w-full">
             <Page1 data={data} />
-            <Page2 data={data} totalCuotas={totalCuotas} />
+            <Page2 data={data} />
             <Page3 data={data} />
             <Page4 data={data} />
             <Page5 data={data} />
