@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, Input, TextArea } from "./ui-components";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 // Definimos los tipos literales que espera tu base de datos según el error de consola
 type CreditStatus = "aplica" | "no_aplica" | "pendiente" | "no_interesa";

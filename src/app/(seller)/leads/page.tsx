@@ -3,7 +3,8 @@
 import { useState } from "react";
 
 // Features
-import { useLeads, type LeadWithDetails } from "@/hooks/useLeads";
+import { useLeads } from "@/hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 import { LeadsList } from "@/components/features/leads/LeadsList";
 import { LeadDetailModal } from "@/components/features/leads/Detail/LeadDetailModal";
 import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";

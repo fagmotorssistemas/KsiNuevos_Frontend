@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, Input } from "./ui-components"; // Asumo que Input existe en tus ui-components
 import { STATUS_OPTIONS, TEMPERATURE_OPTIONS } from "./constants";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 interface LeadDetailHeaderProps {
     lead: LeadWithDetails;

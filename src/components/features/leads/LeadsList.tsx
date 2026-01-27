@@ -15,8 +15,7 @@ import { Table, TableCard } from "@/components/ui/table";
 import { Avatar } from "@/components/ui/avatar";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
-
-import type { LeadWithDetails, SortDescriptor } from "@/hooks/useLeads";
+import type { LeadWithDetails, SortDescriptor } from "@/types/leads.types";
 
 interface LeadsListProps {
     leads: LeadWithDetails[];

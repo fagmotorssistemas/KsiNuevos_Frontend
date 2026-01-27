@@ -10,7 +10,8 @@ import {
     ClipboardList // Icono para interacciones/gestión
 } from "lucide-react";
 
-import type { LeadsFilters } from "@/hooks/useLeads";
+import type { LeadsFilters } from "@/types/leads.types";
+
 
 interface LeadsToolbarProps {
     filters: LeadsFilters;

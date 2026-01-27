@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MessageCircle, Calendar, MapPin, ShoppingBag } from "lucide-react";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 // Importación de componentes divididos
 import { LeadDetailHeader } from "./LeadDetailHeader";

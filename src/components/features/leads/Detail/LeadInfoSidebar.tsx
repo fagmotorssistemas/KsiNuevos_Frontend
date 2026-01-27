@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Edit3, Loader2, CheckCircle2, Car, DollarSign, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea, Input } from "./ui-components";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 // Hemos eliminado la extensión manual de test_drive_done
 type LeadWithExtension = LeadWithDetails;

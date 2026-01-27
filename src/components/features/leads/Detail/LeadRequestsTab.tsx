@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Car, DollarSign, Loader2, CheckCircle2, AlertCircle, Calendar, Palette, FileText, BarChart3, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, TextArea } from "./ui-components";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
     const { supabase, user } = useAuth();

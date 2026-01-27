@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Input, Button } from "./ui-components";
 import { RESULT_OPTIONS } from "./constants";
 import type { Database } from "@/types/supabase";
-import type { LeadWithDetails } from "../../../../hooks/useLeads";
+import type { LeadWithDetails } from "@/types/leads.types";
 
 type Interaction = Database['public']['Tables']['interactions']['Row'];
 
