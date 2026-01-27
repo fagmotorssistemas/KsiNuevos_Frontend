@@ -37,15 +37,15 @@ const videoTips: VideoTip[] = [
     videoUrl: "/Videos_fotos_vendedores/Video-Mafer.mp4",
     instagramLink: "https://www.instagram.com/reel/DSn6ZMxEr16/",
   },
-  {
+{
     id: 3,
-    category: "OFF-ROAD PURO",
-    title: "Jeep Wrangler ",
-    highlight: "Unlimited Sahara",
-    description: "Carácter puro y firmeza. Modelo 2012, 4x4 de 4 puertas. Un vehículo sólido, sin juegos raros, listo para la aventura.",
-    image: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=500",
-    videoUrl: "/Videos_fotos_vendedores/Video-pedro1.mp4",
-    instagramLink: "https://www.instagram.com/reel/DTMD73lihVk/",
+    category: "COMODIDAD URBANA",
+    title: "Chery Tiggo 2 Pro ",
+    highlight: "2023 Manual",
+    description: "Altura, comodidad y practicidad para el día a día. Motor 1.5L, tracción 4x2 y un consumo razonable ideal para la ciudad. El equilibrio perfecto entre estilo y ahorro.",
+    image: "https://images.unsplash.com/photo-1619767886558-efdc259c6e09?auto=format&fit=crop&q=80&w=500", // Imagen referencial de SUV plateado
+    videoUrl: "/Videos_fotos_vendedores/Video-vane1.mp4",
+    instagramLink: "https://www.instagram.com/reel/C2i_XyOuR6y/", // URL de ejemplo basada en el contenido
   },
   {
     id: 4,
@@ -54,7 +54,7 @@ const videoTips: VideoTip[] = [
     highlight: "Countryman 2017",
     description: "Diseño europeo inconfundible. Motor 2.0 Twin Power Turbo, caja automática y 5 puertas. Potencia y estilo en cada detalle.",
     image: "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&q=80&w=500",
-    videoUrl: "/Videos_fotos_vendedores/Video-pedro2.mp4",
+    videoUrl: "/Videos_fotos_vendedores/Video-pedro1.mp4",
     instagramLink: "https://www.instagram.com/reel/DTOlw8Ngeem/",
   },
 ];

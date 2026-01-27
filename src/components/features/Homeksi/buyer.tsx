@@ -28,7 +28,7 @@ const successStories: BuyerStory[] = [
     clientName: "Nuevo Propietario",
     carModel: "Todo Terreno",
     year: 2018,
-    imageUrl: "/Videos_fotos_vendedores/Venta2.png",
+    imageUrl: "/Videos_fotos_vendedores/Venta2.jpg",
   },
   {
     id: 4,
@@ -59,4 +59,4 @@ className="group relative w-full aspect-[4/5] md:aspect-auto md:h-[400px] rounde
       ))}
     </div>
   );
-};
+}; 

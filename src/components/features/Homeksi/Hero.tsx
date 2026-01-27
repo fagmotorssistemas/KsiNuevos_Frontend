@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Hook para navegación programática
 import { KsButton } from '../../ui/Homeksi/KsButton';
 import { KsBadge } from '../../ui/Homeksi/KsBadge';
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
@@ -9,17 +10,29 @@ import { InventorySearch } from '../financing/InventorySearch';
 import { InventoryCarRow } from '../financing/FinancingUtils';
 
 export const Hero = () => {
+  const router = useRouter(); // Inicialización para poder usar router.push
   const { inventory, isLoadingInventory } = useCreditSimulator();
   const [selectedCar, setSelectedCar] = useState<InventoryCarRow | null>(null);
 
+  /**
+   * Manejador de selección:
+   * Replíca la lógica del href={`/autos/${car.id}`} que usas en VehicleCard
+   */
+  const handleCarSelection = (car: InventoryCarRow) => {
+    setSelectedCar(car);
+    if (car?.id) {
+      // Navegación imperativa hacia la misma ruta que el Link de la Card
+      router.push(`/autos/${car.id}`);
+    }
+  };
+
   return (
-    // CAMBIO: bg-black en lugar de slate-900
     <section className="relative h-[85vh] flex items-center justify-center bg-black overflow-hidden">
       <div className="absolute inset-0 opacity-50">
         <img 
           src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=1920" 
           alt="Hero car" 
-          className="w-full h-full object-cover grayscale-[30%]" // Un poco de desaturación para elegancia
+          className="w-full h-full object-cover grayscale-[30%]" 
         />
       </div>
       
@@ -30,12 +43,11 @@ export const Hero = () => {
           <span className="text-red-600">K-si como nuevo.</span>
         </h1>
         
-        {/* BUSCADOR CON CLASE DE SOBRESCRITURA NEUTRA */}
         <div className="max-w-2xl mx-auto mb-8 text-left ksi-search-override">
           <InventorySearch 
             inventory={inventory}
             selectedVehicle={selectedCar}
-            onSelect={(car) => setSelectedCar(car)}
+            onSelect={handleCarSelection} // Implementación de la navegación
             onClear={() => setSelectedCar(null)}
             isLoading={isLoadingInventory}
           />
@@ -58,53 +70,32 @@ export const Hero = () => {
             font-style: normal;
             font-display: swap;
           }
-
-          .font-nike {
-            font-family: 'NikeFuturaND', sans-serif !important;
-          }
-
-          .ksi-search-override label {
-            display: none !important;
-          }
-
-          /* Input Blanco Puro con borde gris neutro */
+          .font-nike { font-family: 'NikeFuturaND', sans-serif !important; }
+          .ksi-search-override label { display: none !important; }
           .ksi-search-override input {
             font-weight: 700 !important;
             border-radius: 0.75rem !important;
             background-color: white !important;
-            border: 1px solid #e5e5e5 !important; /* neutral-200 */
+            border: 1px solid #e5e5e5 !important;
             color: #000 !important;
           }
-
           .ksi-search-override input:focus {
-            border-color: #DC2626 !important; /* red-600 */
+            border-color: #DC2626 !important;
             box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1) !important;
           }
-
-          .ksi-search-override input::placeholder {
-            color: #a3a3a3 !important; /* neutral-400 */
-          }
-
-          /* Ocultar elementos verdes o azules heredados */
+          .ksi-search-override input::placeholder { color: #a3a3a3 !important; }
           .ksi-search-override .bg-green-50, 
           .ksi-search-override div[class*="text-green-700"],
           .ksi-search-override span[class*="text-slate-600"],
           .ksi-search-override span[class*="text-slate-400"] {
             display: none !important;
           }
-
           .ksi-search-override li {
             text-transform: uppercase !important;
-            color: #171717 !important; /* neutral-900 */
+            color: #171717 !important;
           }
-
-          .ksi-search-override li:hover {
-            background-color: #FEF2F2 !important; /* red-50 */
-          }
-          
-          .ksi-search-override li:hover .text-slate-800 {
-            color: #DC2626 !important;
-          }
+          .ksi-search-override li:hover { background-color: #FEF2F2 !important; }
+          .ksi-search-override li:hover .text-slate-800 { color: #DC2626 !important; }
         `}</style>
       </div>
     </section>

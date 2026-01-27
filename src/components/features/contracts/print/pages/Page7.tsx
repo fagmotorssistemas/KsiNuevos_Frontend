@@ -139,7 +139,6 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                 {/* --- PAGARÉ --- */}
                 <div className="pl-4 pr-4 mb-6">
                     <div className="flex flex-wrap items-baseline gap-1 text-[11px] leading-loose">
-                         <span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-2 align-middle print:bg-gray-300"></span>
                         <span>Debo y pagaré en forma incondicional este PAGARÉ a la orden de</span>
                         <span className="border-b border-black w-48 inline-block h-4"></span>
                         <span>la cantidad de</span>
