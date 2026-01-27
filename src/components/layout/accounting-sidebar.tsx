@@ -28,7 +28,7 @@ const menuItems = [
     { name: 'Movimientos', href: '/financing', icon: FileText },
     { name: 'Cobros', href: '/cobros', icon: Wallet },
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
-    { name: 'Contratos (PRUEBA)', href: '/contratosp', icon: Wallet }
+    { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet }
 
 
 ];

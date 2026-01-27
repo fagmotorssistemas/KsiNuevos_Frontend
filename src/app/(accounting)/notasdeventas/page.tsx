@@ -29,8 +29,8 @@ export default function ContratosPage() {
                         {loading && <RefreshCw className="h-4 w-4 text-slate-400 animate-spin" />}
                     </h1>
                     <p className="text-slate-500 text-sm mt-1 flex items-center gap-1.5">
-                        <ScrollText className="h-3.5 w-3.5 text-blue-500" />
-                        Base de datos maestra de vehículos y ventas (Vista KSI_NOTAS_CONTRATO_V)
+                        <ScrollText className="h-3.5 w-3.5 text-red-500" />
+                        Base de datos de notas de ventas (Vista KSI_NOTAS_CONTRATO_V)
                     </p>
                 </div>
                 
@@ -39,7 +39,7 @@ export default function ContratosPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input 
                             type="text"
-                            placeholder="Buscar cliente o nota..."
+                            placeholder="Buscar cliente"
                             className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -61,8 +61,8 @@ export default function ContratosPage() {
                         <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                             <tr>
                                 <th className="px-6 py-4 w-32">Nota Venta</th>
-                                <th className="px-6 py-4 w-32">Fecha</th>
-                                <th className="px-6 py-4">Cliente</th>
+                                <th className="px-6 py-4 w-16">Fecha</th>
+                                <th className="px-6 py-4 w-32">Cliente</th>
                                 <th className="px-6 py-4 text-center w-24">Acciones</th>
                             </tr>
                         </thead>
@@ -99,7 +99,7 @@ export default function ContratosPage() {
                                         <td className="px-6 py-4 text-center">
                                             <button 
                                                 onClick={() => setSelectedContrato(c)}
-                                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-black hover:bg-gray-600 rounded-lg transition-colors"
                                             >
                                                 <Eye className="h-3.5 w-3.5" />
                                                 Ver Ficha

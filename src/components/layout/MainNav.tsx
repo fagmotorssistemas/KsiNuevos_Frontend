@@ -24,7 +24,6 @@ export function MainNav({ className }: { className?: string }) {
     // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
     navItems = [
       { href: "/leads", label: "Ventas" },
-      { href: "/contracts", label: "Contratos" },
     ];
 
     // Admin también necesita ver Cartera (opcional, asumiendo que Admin ve todo)
