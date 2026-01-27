@@ -16,6 +16,7 @@ import {
     ChevronLeft,
     ChevronRight,
     BanknoteArrowDown,
+    Box,
 } from 'lucide-react';
 
 // Definición de los items del menú
@@ -28,9 +29,8 @@ const menuItems = [
     { name: 'Movimientos', href: '/financing', icon: FileText },
     { name: 'Cobros', href: '/cobros', icon: Wallet },
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
-    { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet }
-
-
+    { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
+    { name: 'Inventario', href: '/inventario', icon: Box }
 ];
 
 export function AccountingSidebar() {
