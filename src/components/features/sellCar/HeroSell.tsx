@@ -47,7 +47,7 @@ export const HeroSell = () => {
                   </span>
                 </h1>
                 <p className="text-lg text-neutral-600 max-w-lg leading-relaxed">
-                  Recibe una oferta al instante. Sin citas con extraños, sin trámites burocráticos y con pago inmediato 100% seguro.
+                 Sin citas con extraños, sin trámites burocráticos y con pago 100% seguro.
                 </p>
                 
                 <div className="space-y-4 pt-4">
@@ -61,13 +61,13 @@ export const HeroSell = () => {
                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
                             <CheckIcon />
                         </div>
-                        <span className="text-neutral-700 font-medium">Pago inmediato vía transferencia</span>
+                        <span className="text-neutral-700 font-medium">Pago vía transferencia</span>
                     </div>
                     <div className="flex items-center gap-3">
                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
                             <CheckIcon />
                         </div>
-                        <span className="text-neutral-700 font-medium">Trámite notarial incluido</span>
+                        <span className="text-neutral-700 font-medium">Trámite notarial</span>
                     </div>
                 </div>
             </div>

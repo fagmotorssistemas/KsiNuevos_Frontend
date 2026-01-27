@@ -18,7 +18,7 @@ export const ProcessSteps = () => {
                     <div className="w-24 h-24 bg-white border-2 border-neutral-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:border-red-600 transition-colors shadow-sm">
                         <span className="text-4xl font-bold text-neutral-200 group-hover:text-red-600 transition-colors">1</span>
                     </div>
-                    <h3 className="text-xl font-bold mb-3">Cotiza en línea</h3>
+                    <h3 className="text-xl font-bold mb-3">Cotiza</h3>
                     <p className="text-neutral-500 text-sm leading-relaxed px-4">
                         Ingresa los datos de tu auto en nuestro formulario y recibe una oferta preliminar.
                     </p>
@@ -42,7 +42,7 @@ export const ProcessSteps = () => {
                     </div>
                     <h3 className="text-xl font-bold mb-3">Recibe tu pago</h3>
                     <p className="text-neutral-500 text-sm leading-relaxed px-4">
-                        Si todo está en orden, te transferimos el dinero a tu cuenta bancaria de inmediato.
+                        Si todo está en orden, te transferimos el dinero a tu cuenta bancaria.
                     </p>
                 </div>
             </div>

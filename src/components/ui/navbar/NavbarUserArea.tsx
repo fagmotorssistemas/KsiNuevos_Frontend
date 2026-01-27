@@ -42,9 +42,6 @@ const UserDropdown = ({ user, profile, supabase }: any) => {
           <span className="text-sm font-bold text-neutral-800 leading-none mb-0.5">
             {firstName}
           </span>
-          <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider">
-            {userRole}
-          </span>
         </div>
         <div className="h-9 w-9 rounded-full bg-neutral-900 text-white flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-105 transition-transform">
           {userInitial}

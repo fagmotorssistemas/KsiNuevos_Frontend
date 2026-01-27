@@ -50,7 +50,7 @@ export const BenefitsSection = () => {
                             </div>
                             <div>
                                 <h4 className="text-lg font-bold mb-1">Mejor Oferta del Mercado</h4>
-                                <p className="text-neutral-500 text-sm">Nuestro algoritmo analiza miles de datos para darte el precio más justo y competitivo por tu auto.</p>
+                                <p className="text-neutral-500 text-sm">Analizamos datos para darte el precio más justo y competitivo por tu auto.</p>
                             </div>
                         </div>
 
@@ -60,7 +60,7 @@ export const BenefitsSection = () => {
                             </div>
                             <div>
                                 <h4 className="text-lg font-bold mb-1">Aceptamos tu auto a cuenta</h4>
-                                <p className="text-neutral-500 text-sm">¿Quieres cambiar de auto? Deja el tuyo como parte de pago y llévate un K-si Nuevo certificado.</p>
+                                <p className="text-neutral-500 text-sm">¿Quieres cambiar de auto? Deja el tuyo como parte de pago y llévate un K-si Nuevo.</p>
                             </div>
                         </div>
                     </div>
