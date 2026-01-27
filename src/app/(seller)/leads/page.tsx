@@ -47,7 +47,8 @@ export default function LeadsPage() {
     };
 
     return (
-        <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+        // ESTRUCTURA SHOWROOM: max-w-7xl mx-auto centra y controla el ancho
+        <div className="p-4 max-w-6xl mx-auto space-y-6 bg-gray-50 min-h-screen">
             
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                 <div>
@@ -75,7 +76,7 @@ export default function LeadsPage() {
                 onReset={resetFilters}
                 totalResults={totalCount}
                 respondedCount={respondedCount}
-                interactionsCount={interactionsCount} // Pasamos la nueva métrica
+                interactionsCount={interactionsCount}
                 currentUserRole={profile?.role} 
                 sellers={sellers}               
             />

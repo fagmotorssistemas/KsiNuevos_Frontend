@@ -23,12 +23,10 @@ interface LeadsListProps {
     onSortChange: (descriptor: SortDescriptor) => void;
     onLeadSelect: (lead: LeadWithDetails) => void;
     isLoading?: boolean;
-    // Props de Paginación
     page: number;
     totalCount: number;
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
-    // NUEVA PROP: Rol del usuario actual
     currentUserRole: string | null | undefined;
 }
 
@@ -45,7 +43,6 @@ export function LeadsList({
     currentUserRole
 }: LeadsListProps) {
 
-    // Helper: Solo mostrar columna si es admin
     const isAdmin = currentUserRole === 'admin';
 
     // --- Helpers Visuales ---
@@ -73,28 +70,20 @@ export function LeadsList({
         }
     };
 
-    // --- NUEVOS HELPERS PARA FUENTE (SOURCE) ---
-
-    // 1. Formatear texto (Igual que en LeadDetailHeader)
     const getFormattedSource = (source: string | null) => {
         if (!source) return 'Desconocido';
         const lowerSource = String(source).toLowerCase();
-
         if (lowerSource === 'waba') return 'WhatsApp';
         if (lowerSource === 'tiktok_kommo') return 'TikTok';
         if (lowerSource === 'instagram_business') return 'Instagram';
-
         return source;
     };
 
-    // 2. Obtener icono correcto (waba ahora usa MessageCircle)
     const getSourceIcon = (source: string | null) => {
         const lowerSource = String(source || '').toLowerCase();
-        // Si es whatsapp o waba, mostramos icono de mensaje
         if (lowerSource === 'whatsapp' || lowerSource === 'waba') {
             return <MessageCircle className="h-3 w-3" />;
         }
-        // Default icono usuario
         return <User className="h-3 w-3" />;
     };
 
@@ -114,24 +103,34 @@ export function LeadsList({
 
     return (
         <TableCard.Root>
+            {/* ESTRUCTURA SHOWROOM: w-full asegura que ocupe todo el ancho disponible */}
             <Table
                 aria-label="Tabla de Leads"
                 sortDescriptor={sortDescriptor}
                 onSortChange={(desc: SortDescriptor) => onSortChange(desc as SortDescriptor)}
+                className="w-full"
             >
                 <Table.Header>
-                    <Table.Head id="lead_id_kommo" label="ID" allowsSorting />
+                    {/* COLUMNA ID ELIMINADA */}
+                    
+                    {/* Cliente: No le ponemos ancho fijo para que absorba el espacio disponible */}
                     <Table.Head id="name" label="Cliente" allowsSorting />
 
-                    {/* COLUMNA CONDICIONAL: Solo visible para admins */}
                     {isAdmin && (
                         <Table.Head id="assigned_to" label="Responsable" />
                     )}
 
                     <Table.Head id="status" label="Estado" allowsSorting />
-                    <Table.Head id="vehicle" label="Interés" />
-                    <Table.Head id="resume" label="Resumen" className="hidden md:table-cell" />
-                    <Table.Head id="temperature" label="Temperatura" allowsSorting />
+                    
+                    {/* Ocultamos Interés en pantallas medianas (md) para ajustar espacio */}
+                    <Table.Head id="vehicle" label="Interés" className="hidden md:table-cell" />
+                    
+                    {/* Resumen oculto en pantallas lg para dar prioridad a columnas vitales */}
+                    <Table.Head id="resume" label="Resumen" className="hidden lg:table-cell" />
+                    
+                    <Table.Head id="temperature" label="Temp" allowsSorting />
+                    
+                    {/* Columna de acciones */}
                     <Table.Head id="actions" label="" />
                 </Table.Header>
 
@@ -139,47 +138,44 @@ export function LeadsList({
                     {(item: LeadWithDetails) => {
                         const statusConfig = getStatusConfig(item.status);
                         const primaryCar = item.interested_cars?.[0];
-                        // Obtenemos el nombre del responsable desde la relación
                         const responsableName = item.profiles?.full_name;
-
-                        // Determinar si desactivamos capitalize (para TikTok, WhatsApp, etc)
                         const lowerSource = String(item.source || '').toLowerCase();
                         const isSpecialSource = ['waba', 'tiktok_kommo', 'instagram_business'].includes(lowerSource);
 
                         return (
                             <Table.Row id={item.id}>
-                                <Table.Cell className="font-medium text-slate-500 text-xs">
-                                    {item.lead_id_kommo || `#${item.id}`}
-                                </Table.Cell>
+                                {/* CELDA ID ELIMINADA */}
 
                                 <Table.Cell>
                                     <div className="flex items-center gap-3">
                                         <Avatar initials={getInitials(item.name)} alt={item.name || 'Lead'} size="md" />
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-slate-900">{item.name}</span>
+                                        <div className="flex flex-col "> {/* min-w-0 ayuda a que el truncate funcione dentro de flex */}
+                                            {/* El nombre tomará el espacio disponible */}
+                                            <span className="font-medium text-slate-900 line-clamp-1 break-all" title={item.name || ''}>
+                                                {item.name}
+                                            </span>
                                             <div className="flex items-center gap-1 text-slate-500 text-xs">
-                                                {/* Usamos el nuevo helper de Icono */}
                                                 {getSourceIcon(item.source)}
-
-                                                {/* Usamos el nuevo helper de Texto + lógica de clase CSS */}
                                                 <span className={isSpecialSource ? '' : 'capitalize'}>
                                                     {getFormattedSource(item.source)}
                                                 </span>
+                                                {/* Opcional: Mostrar ID pequeño aquí si se necesita referencia, descomentar si se desea:
+                                                <span className="text-slate-300 mx-1">|</span>
+                                                <span className="text-slate-400">#{item.lead_id_kommo || item.id}</span> 
+                                                */}
                                             </div>
                                         </div>
                                     </div>
                                 </Table.Cell>
 
-                                {/* CELDA CONDICIONAL: Responsable */}
                                 {isAdmin && (
                                     <Table.Cell>
                                         {responsableName ? (
                                             <div className="flex items-center gap-2">
-                                                {/* Mini Avatar Generado */}
-                                                <div className="h-6 w-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 text-[10px] font-bold">
+                                                <div className="h-6 w-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 text-[10px] font-bold shrink-0">
                                                     {getInitials(responsableName)}
                                                 </div>
-                                                <span className="text-sm text-slate-700 capitalize">
+                                                <span className="text-sm text-slate-700 capitalize truncate max-w-[80px]">
                                                     {responsableName}
                                                 </span>
                                             </div>
@@ -196,16 +192,16 @@ export function LeadsList({
                                     <BadgeWithIcon
                                         color={statusConfig.color}
                                         iconLeading={statusConfig.icon}
-                                        className="capitalize"
+                                        className="capitalize whitespace-nowrap"
                                     >
                                         {item.status || 'Nuevo'}
                                     </BadgeWithIcon>
                                 </Table.Cell>
 
-                                <Table.Cell>
+                                <Table.Cell className="hidden md:table-cell max-w-[180px]">
                                     {primaryCar ? (
                                         <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-slate-800">
+                                            <span className="text-sm font-medium text-slate-800 truncate" title={`${primaryCar.brand} ${primaryCar.model}`}>
                                                 {primaryCar.brand} {primaryCar.model}
                                             </span>
                                             <span className="text-xs text-slate-500">{primaryCar.year}</span>
@@ -215,7 +211,7 @@ export function LeadsList({
                                     )}
                                 </Table.Cell>
 
-                                <Table.Cell className="hidden md:table-cell max-w-xs">
+                                <Table.Cell className="hidden lg:table-cell max-w-[80px]">
                                     <p className="truncate text-sm text-slate-600" title={item.resume || ''}>
                                         {item.resume || <span className="text-slate-400 italic">Sin resumen ...</span>}
                                     </p>
@@ -248,7 +244,6 @@ export function LeadsList({
                 </Table.Body>
             </Table>
 
-            {/* Paginación Conectada Dinámicamente */}
             <PaginationPageMinimalCenter
                 page={page}
                 total={totalCount}
