@@ -84,7 +84,7 @@ export default function CarDetailPage() {
                         <span className="text-xs font-bold text-neutral-400">/mes</span>
                     </div>
                     <p className="text-[10px] text-neutral-400 mt-1 font-medium">
-                        *Estimado a 48 meses
+                        *Estimado a 36 meses
                     </p>
                 </div>
 

@@ -8,7 +8,7 @@ export const ProfileLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <MainNavbar />
       {/* Padding ajustado para fixed header */}
-      <main className="flex-grow pt-24 pb-24 px-4 sm:px-6 lg:px-8">
+      <main className="flex-grow px-4 sm:px-6 lg:px-8">
         {children}
       </main>
       <MainFooter />
