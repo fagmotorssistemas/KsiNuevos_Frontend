@@ -10,7 +10,7 @@ const LOCATION_DATA = {
   phone: '+593 983335555',
   hours: 'Lun-Vie: 8:30 - 18:30 | Sab: 9:30 - 13:30',
   image: '/showroom.jpeg',
-  mapUrl: 'https://goo.gl/maps/tu-link-aqui' // Asegúrate de poner el link real
+  mapUrl: 'https://maps.app.goo.gl/sS2J8rB1NiwZGbVj9?g_st=iw' // Asegúrate de poner el link real
 };
 
 export const LocationSection = () => {
