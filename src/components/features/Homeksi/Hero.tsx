@@ -37,7 +37,6 @@ export const Hero = () => {
       </div>
       
       <div className="relative z-20 text-center px-4 max-w-5xl">
-        <KsBadge variant="solid">Oferta</KsBadge>        
         <h1 className="text-5xl md:text-7xl uppercase text-white mt-6 mb-6 font-nike">
           Tu próximo auto, <br />
           <span className="text-red-600">K-si como nuevo.</span>

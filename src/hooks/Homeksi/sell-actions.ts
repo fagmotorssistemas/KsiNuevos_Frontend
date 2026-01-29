@@ -89,6 +89,5 @@ export async function createSellRequest(data: SellRequestData) {
       if (apptError) console.error("Error cita:", apptError.message)
   }
 
-  revalidatePath('/perfil')
   return { success: true, requestId: newRequest.id }
 }

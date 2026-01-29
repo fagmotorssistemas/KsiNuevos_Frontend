@@ -109,6 +109,5 @@ export async function createBuyingAppointment(formData: FormData) {
     return { error: "Hubo un error al guardar tu cita." };
   }
 
-  revalidatePath('/home');
   return { success: true };
 }
