@@ -9,13 +9,14 @@ import {
     Users,
     Plus,
     Sparkles,
-    Globe
+    Globe,
+    LayoutGrid,
+    ListFilter
 } from "lucide-react";
 
 import { useAgenda, type AppointmentWithDetails, type DateFilterOption, type BotSuggestionLead } from "@/hooks/useAgenda";
-import { useWebAppointments } from "@/hooks/useWebAppointments";
+import { useAppointments } from "@/hooks/useAppointments"; 
 import { WebAppointmentCard } from "@/components/features/agenda/WebAppointmentCard";
-// IMPORTAMOS EL NUEVO MODAL
 import { WebAppointmentDetailModal } from "@/components/features/agenda/WebAppointmentDetailModal";
 import { WebAppointmentWithDetails as WebApptType } from "@/types/web-appointments";
 
@@ -34,11 +35,13 @@ export default function AgendaPage() {
     const [editingAppointment, setEditingAppointment] = useState<AppointmentWithDetails | null>(null);
     const [suggestionData, setSuggestionData] = useState<any | null>(null); 
 
-    // Estado Nuevo para Modal Web
     const [isWebModalOpen, setIsWebModalOpen] = useState(false);
     const [selectedWebAppointment, setSelectedWebAppointment] = useState<WebApptType | null>(null);
 
-    // Hooks de Lógica
+    // -- ESTADO PARA SUB-PESTAÑAS DE HISTORIAL --
+    const [historySubTab, setHistorySubTab] = useState<'leads' | 'web'>('leads');
+
+    // Hooks de Lógica Principal
     const { 
         isLoading, 
         isAdmin,
@@ -58,14 +61,26 @@ export default function AgendaPage() {
 
     const {
         appointments: webAppointments,
-        loading: loadingWeb,
-        actions: webActions
-    } = useWebAppointments();
+        isLoading: loadingWeb,
+        updateStatus: updateWebStatus,
+        autoAssign: autoAssignWeb
+    } = useAppointments();
 
-    const webPendingCount = webAppointments.filter(a => a.status === 'pendiente').length;
+    // --- LÓGICA DE FILTRADO PARA CITAS WEB ---
+    const filteredWebAppointments = webAppointments.filter((appt: WebApptType) => {
+        if (isAdmin) return true;
+        return appt.responsible_id === profile?.id;
+    });
+
+    const webPendingCount = filteredWebAppointments.filter((a: WebApptType) => 
+        a.status === 'pendiente' || a.status === 'aceptado' || a.status === 'reprogramado'
+    ).length;
+
+    const webHistoryRequests = filteredWebAppointments.filter((a: WebApptType) => 
+        a.status === 'atendido' || a.status === 'cancelado'
+    );
 
     // -- MANEJADORES --
-
     const handleOpenNew = () => {
         setEditingAppointment(null);
         setSuggestionData(null);
@@ -78,7 +93,6 @@ export default function AgendaPage() {
         setIsModalOpen(true);
     };
 
-    // Nuevo: Abrir modal web
     const handleOpenWebDetail = (appt: WebApptType) => {
         setSelectedWebAppointment(appt);
         setIsWebModalOpen(true);
@@ -217,7 +231,7 @@ export default function AgendaPage() {
                 </div>
             )}
 
-            {/* PESTAÑAS */}
+            {/* PESTAÑAS PRINCIPALES */}
             <div className="flex border-b border-slate-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('pending')}
@@ -305,24 +319,24 @@ export default function AgendaPage() {
                     )
 
                 ) : activeTab === 'web_requests' ? (
-                    // --- SECCIÓN CITAS WEB ---
                     loadingWeb ? (
                         <div className="flex items-center justify-center h-40">Cargando solicitudes web...</div>
-                    ) : webAppointments.length > 0 ? (
+                    ) : filteredWebAppointments.filter(a => a.status !== 'atendido' && a.status !== 'cancelado').length > 0 ? (
                         <div className="py-6 space-y-6 animate-in fade-in">
                             <h3 className="flex items-center gap-2 text-sm font-bold text-blue-500 uppercase tracking-wider px-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
                                 Agendadas desde el Sitio Web
                             </h3>
                             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                {webAppointments.map((appt) => (
+                                {filteredWebAppointments
+                                    .filter(a => a.status !== 'atendido' && a.status !== 'cancelado')
+                                    .map((appt: WebApptType) => (
                                     <WebAppointmentCard 
                                         key={appt.id}
                                         appointment={appt}
                                         currentUserId={profile?.id}
-                                        onViewDetails={handleOpenWebDetail} // Pasamos el manejador del modal
-                                        onStatusChange={webActions.updateStatus}
-                                        // CORREGIDO: Se eliminó onAssign
+                                        onViewDetails={handleOpenWebDetail}
+                                        onStatusChange={updateWebStatus}
                                     />
                                 ))}
                             </div>
@@ -334,7 +348,7 @@ export default function AgendaPage() {
                             </div>
                             <h3 className="text-lg font-medium text-slate-900">Sin Solicitudes Web</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                No hay clientes que hayan agendado citas desde la página web recientemente.
+                                No tienes solicitudes web activas asignadas.
                             </p>
                         </div>
                     )
@@ -370,27 +384,76 @@ export default function AgendaPage() {
                         </div>
                     )
                 ) : (
-                    Object.keys(groupedHistory).length > 0 ? (
-                        Object.entries(groupedHistory).map(([date, list]) => 
-                            renderDaySection(date, list)
-                        )
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
-                            <div className="bg-slate-50 p-4 rounded-full mb-4">
-                                <CalendarX className="h-10 w-10 text-slate-300" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900">Sin historial</h3>
-                            <p className="text-slate-500 max-w-sm mt-2">
-                                No se encontraron citas completadas o canceladas.
-                            </p>
+                    /* APARTADO DE HISTORIAL CON SUB-NAVEGACIÓN */
+                    <div className="space-y-6 animate-in fade-in duration-500 py-4">
+                        
+                        {/* BOTONES DE SUB-NAVEGACIÓN */}
+                        <div className="flex items-center gap-2 p-1 bg-slate-200/50 w-fit rounded-xl border border-slate-200">
+                            <button
+                                onClick={() => setHistorySubTab('leads')}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    historySubTab === 'leads'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <LayoutGrid className="h-3.5 w-3.5" />
+                                HISTORIAL LEADS
+                            </button>
+                            <button
+                                onClick={() => setHistorySubTab('web')}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    historySubTab === 'web'
+                                    ? 'bg-white text-blue-700 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Globe className="h-3.5 w-3.5" />
+                                HISTORIAL WEB
+                            </button>
                         </div>
-                    )
+
+                        {/* CONTENIDO SEGÚN SUB-PESTAÑA */}
+                        <div className="mt-6">
+                            {historySubTab === 'leads' ? (
+                                Object.keys(groupedHistory).length > 0 ? (
+                                    Object.entries(groupedHistory).map(([date, list]) => 
+                                        renderDaySection(date, list)
+                                    )
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
+                                        <History className="h-8 w-8 text-slate-300 mb-3" />
+                                        <h3 className="text-md font-medium text-slate-900">Sin historial de leads</h3>
+                                        <p className="text-slate-500 text-sm max-w-xs mt-1">No hay citas de agenda finalizadas.</p>
+                                    </div>
+                                )
+                            ) : (
+                                webHistoryRequests.length > 0 ? (
+                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        {webHistoryRequests.map((appt: WebApptType) => (
+                                            <WebAppointmentCard 
+                                                key={appt.id}
+                                                appointment={appt}
+                                                currentUserId={profile?.id}
+                                                onViewDetails={handleOpenWebDetail}
+                                                onStatusChange={updateWebStatus}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
+                                        <Globe className="h-8 w-8 text-blue-200 mb-3" />
+                                        <h3 className="text-md font-medium text-slate-900">Sin historial web</h3>
+                                        <p className="text-slate-500 text-sm max-w-xs mt-1">No hay solicitudes web atendidas o canceladas.</p>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
 
             {/* MODALES */}
-            
-            {/* 1. Modal Citas Normales */}
             <AppointmentModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -399,14 +462,21 @@ export default function AgendaPage() {
                 initialData={suggestionData} 
             />
 
-            {/* 2. NUEVO: Modal Citas Web */}
             <WebAppointmentDetailModal 
                 isOpen={isWebModalOpen}
                 onClose={() => setIsWebModalOpen(false)}
                 appointment={selectedWebAppointment}
                 currentUserId={profile?.id}
-                onAssign={webActions.assignToMe}
-                onCancel={(id) => webActions.updateStatus(id, 'cancelada')}
+                onAssign={async (id: number) => {
+                    if (selectedWebAppointment) {
+                        return await autoAssignWeb(id, selectedWebAppointment.client_user_id);
+                    }
+                    return Promise.resolve(null);
+                }}
+                onCancel={async (id: number) => await updateWebStatus(id, 'cancelado')}
+                onStatusChange={async (id: number, status: WebApptType['status']) => 
+                    await updateWebStatus(id, status as any)
+                }
             />
 
         </div>

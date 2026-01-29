@@ -95,7 +95,7 @@ export const AppointmentCard = ({ appointment, onEdit, onCancel }: AppointmentCa
             onClick={() => onEdit(id)}
             className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-1.5 rounded-full text-[11px] font-bold transition-colors"
           >
-            Reprgrmar
+            Reprogramar
           </button>
         )}
         
