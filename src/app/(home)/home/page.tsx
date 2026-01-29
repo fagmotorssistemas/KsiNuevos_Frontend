@@ -22,7 +22,7 @@ import { LifestyleSection } from '@/components/features/Homeksi/LifestyleSection
 import { TeamSection } from '@/components/features/Homeksi/TeamSection';
 import { SocialMediaSection } from '@/components/features/Homeksi/SocialMediaCard';
 import { BuyerSection } from '@/components/features/Homeksi/buyer'; 
-
+import { CreditBanner } from '@/components/features/Homeksi/CreditBanner';
 // Componente auxiliar optimizado para el Top 4
 const PopularInventory = () => {
   // Obtenemos los autos ya ordenados por leads del mes desde el hook
@@ -68,18 +68,12 @@ export default function HomePage() {
         {/* Accesos Directos a Servicios */}
         <SectionContainer>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Link href={"/creditCar"}>
               <ServiceCard type="credit" title="Créditos" description="Planes a tu medida con aprobación inmediata y tasas preferenciales." />
-            </Link>
-            <Link href={"/creditCar"}>
               <ServiceCard type="loan" title="Préstamos" description="Empeña tu auto y sigue manejándolo mientras obtienes liquidez hoy." />
-            </Link>
-            <Link href={"/creditCar"}>
               <ServiceCard type="offer" title="Ofertas" description="Descuentos exclusivos en inventario seleccionado cada semana." />
-            </Link>
           </div>
         </SectionContainer>
-
+        <CreditBanner />
         {/* Sección de Inventario Popular (Ordenado por Leads del Mes) */}
         <SectionContainer bgVariant="gray">
           <div className="flex justify-between items-end mb-8">

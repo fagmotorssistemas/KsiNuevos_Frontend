@@ -29,11 +29,6 @@ export const ServiceCard = ({ title, description, type }: ServiceCardProps) => {
       <h3 className="text-xl font-black text-black mb-3 uppercase tracking-tight">{title}</h3>
       <p className="text-neutral-500 text-sm leading-relaxed mb-6 italic">{description}</p>
 
-      <div className="flex items-center text-red-600 font-bold text-xs uppercase tracking-widest group-hover:gap-2 transition-all">
-        Saber más 
-        <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all" />
-      </div>
-
       <div className="absolute bottom-0 left-0 h-1 bg-red-600 w-0 group-hover:w-full transition-all duration-500" />
     </div>
   );

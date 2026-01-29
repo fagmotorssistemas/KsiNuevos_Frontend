@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Database } from '@/types/supabase';
-import { WebAppointmentWithDetails, WebAppointmentFilter } from '@/types/web-appointments';
+import { 
+    WebAppointmentWithDetails, 
+    WebAppointmentFilter, 
+    WebAppointmentStatus 
+} from '@/types/web-appointments';
 import { useAuth } from '@/hooks/useAuth';
 
 export function useWebAppointments() {
@@ -15,8 +19,7 @@ export function useWebAppointments() {
         
         setLoading(true);
         try {
-            // CORRECCIÓN CLAVE:
-            // Usamos '!web_appointments_sell_request_id_fkey' para forzar el JOIN correcto.
+            // Consulta con joins forzando la relación correcta para ventas
             const { data, error } = await supabase
                 .from('web_appointments')
                 .select(`
@@ -30,6 +33,7 @@ export function useWebAppointments() {
 
             if (error) throw error;
             
+            // Cast de datos al tipo enriquecido definido en web-appointments.ts
             setAppointments(data as unknown as WebAppointmentWithDetails[]);
         } catch (error) {
             console.error('Error fetching web appointments:', error);
@@ -43,9 +47,14 @@ export function useWebAppointments() {
         
         if (!supabase) return;
 
+        // Suscripción en tiempo real a cambios en la tabla
         const channel = supabase
             .channel('web_appointments_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'web_appointments' }, () => {
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'web_appointments' 
+            }, () => {
                 fetchAppointments();
             })
             .subscribe();
@@ -58,10 +67,15 @@ export function useWebAppointments() {
     const assignToMe = async (appointmentId: number) => {
         if (!profile?.id || !supabase) return;
         try {
+            // Se actualiza el estado a 'aceptado' para coincidir con el tipo WebAppointmentStatus
             const { error } = await supabase
                 .from('web_appointments')
-                .update({ responsible_id: profile.id, status: 'confirmada' })
+                .update({ 
+                    responsible_id: profile.id, 
+                    status: 'aceptado' 
+                })
                 .eq('id', appointmentId);
+            
             if (error) throw error;
             await fetchAppointments();
         } catch (err) {
@@ -69,13 +83,14 @@ export function useWebAppointments() {
         }
     };
 
-    const updateStatus = async (appointmentId: number, newStatus: string) => {
+    const updateStatus = async (appointmentId: number, newStatus: WebAppointmentStatus) => {
         if (!supabase) return;
         try {
             const { error } = await supabase
                 .from('web_appointments')
                 .update({ status: newStatus })
                 .eq('id', appointmentId);
+            
             if (error) throw error;
             await fetchAppointments();
         } catch (err) {
@@ -83,12 +98,13 @@ export function useWebAppointments() {
         }
     };
 
+    // Lógica de filtrado simplificada y tipada
     const filteredAppointments = appointments.filter(appt => {
         if (filter === 'all') return true;
-        if (filter === 'pending') return appt.status === 'pendiente';
-        if (filter === 'confirmed') return appt.status === 'confirmada';
-        if (filter === 'completed') return appt.status === 'completada' || appt.status === 'vendido';
-        return true;
+        
+        // Dado que WebAppointmentFilter usa los mismos strings que appt.status,
+        // la comparación es directa y segura.
+        return appt.status === filter;
     });
 
     return {
@@ -96,6 +112,10 @@ export function useWebAppointments() {
         loading,
         setFilter,
         currentFilter: filter,
-        actions: { assignToMe, updateStatus, refresh: fetchAppointments }
+        actions: { 
+            assignToMe, 
+            updateStatus, 
+            refresh: fetchAppointments 
+        }
     };
 }
