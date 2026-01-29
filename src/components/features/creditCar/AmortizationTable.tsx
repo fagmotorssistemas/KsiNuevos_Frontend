@@ -121,7 +121,7 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
         </div>
 
         {/* TABLE */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 relative p-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 relative ">
           <table className="w-full text-sm text-left border-collapse bg-white rounded-lg shadow-sm">
             <thead className="text-xs text-gray-500 uppercase sticky top-0 z-10 shadow-md">
               <tr className="bg-gray-100 text-gray-600">
