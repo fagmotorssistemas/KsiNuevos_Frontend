@@ -9,7 +9,8 @@ import {
     Phone,
     Filter,
     XCircle,
-    CheckCircle2
+    CheckCircle2,
+    ListFilter
 } from "lucide-react";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { ClienteDeudaSummary } from "@/types/wallet.types";
@@ -21,8 +22,8 @@ interface TopDebtorsTableProps {
 }
 
 export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps) {
-    // Estado para el filtro
-    const [showOnlyMorosos, setShowOnlyMorosos] = useState(false);
+    // CAMBIO 1: Estado para el modo de filtro ('all' | 'vencidos' | 'aldia')
+    const [filterMode, setFilterMode] = useState<'all' | 'vencidos' | 'aldia'>('all');
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -36,10 +37,8 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         
         if (!rawPhone) return;
 
-        // Limpieza básica: dejar solo números
         let cleanPhone = rawPhone.replace(/\D/g, '');
 
-        // Lógica para Ecuador (USD): Agregar 593
         if (cleanPhone.startsWith('09')) {
             cleanPhone = '593' + cleanPhone.substring(1);
         } else if (cleanPhone.startsWith('0') && cleanPhone.length === 9) {
@@ -51,16 +50,18 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
-    // Lógica de filtrado
-    const filteredDebtors = showOnlyMorosos 
-        ? debtors.filter(d => d.documentosVencidos > 0)
-        : debtors;
+    // CAMBIO 2: Lógica de filtrado expandida
+    const filteredDebtors = debtors.filter(d => {
+        if (filterMode === 'vencidos') return d.documentosVencidos > 0;
+        if (filterMode === 'aldia') return d.documentosVencidos === 0;
+        return true; // 'all'
+    });
 
     if (debtors.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                 <User className="h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-500 font-medium">No hay deudores para mostrar.</p>
+                <p className="text-slate-500 font-medium">No hay clientes para mostrar.</p>
             </div>
         );
     }
@@ -68,43 +69,63 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
     return (
         <div className="space-y-4">
             {/* Cabecera con Título y Filtros */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-1">
                 <div className="flex flex-col">
                     <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                        <FileWarning className="h-5 w-5 text-red-600" />
-                        Top Deudores
+                        <FileWarning className="h-5 w-5 text-slate-600" />
+                        Listado de Clientes
                     </h3>
                     <span className="text-xs text-slate-500 mt-1">
-                        Clientes con mayor riesgo o deuda acumulada
+                        Gestión de riesgo y seguimiento de cartera
                     </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    {/* BOTÓN DE FILTRO */}
-                    <button
-                        onClick={() => setShowOnlyMorosos(!showOnlyMorosos)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                            showOnlyMorosos
-                                ? "bg-red-50 text-red-700 border-red-200 shadow-sm ring-2 ring-red-500/10"
-                                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                        }`}
-                        title={showOnlyMorosos ? "Ver todos" : "Ver solo clientes con deuda vencida"}
-                    >
-                        {showOnlyMorosos ? (
-                            <>
-                                <XCircle className="h-3.5 w-3.5" />
-                                Solo Vencidos
-                            </>
-                        ) : (
-                            <>
-                                <Filter className="h-3.5 w-3.5" />
-                                Filtrar Vencidos
-                            </>
-                        )}
-                    </button>
+                {/* CAMBIO 3: Grupo de Botones de Filtro */}
+                <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1 rounded-lg border border-slate-200 w-fit">
                     
-                    <span className="hidden sm:inline-block text-xs text-slate-500 font-medium bg-red-50 text-red-700 px-3 py-1 rounded-full border border-red-100">
-                        Total: {filteredDebtors.length}
+                    {/* Botón: TODOS */}
+                    <button
+                        onClick={() => setFilterMode('all')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            filterMode === 'all'
+                                ? "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                        }`}
+                    >
+                        <ListFilter className="h-3.5 w-3.5" />
+                        Todos
+                    </button>
+
+                    {/* Botón: SOLO VENCIDOS */}
+                    <button
+                        onClick={() => setFilterMode('vencidos')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            filterMode === 'vencidos'
+                                ? "bg-red-50 text-red-700 shadow-sm ring-1 ring-red-200"
+                                : "text-slate-500 hover:text-red-600 hover:bg-red-50/50"
+                        }`}
+                    >
+                        <XCircle className="h-3.5 w-3.5" />
+                        Vencidos
+                    </button>
+
+                    {/* Botón: AL DÍA (NUEVO) */}
+                    <button
+                        onClick={() => setFilterMode('aldia')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            filterMode === 'aldia'
+                                ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
+                                : "text-slate-500 hover:text-emerald-600 hover:bg-emerald-50/50"
+                        }`}
+                    >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Al día
+                    </button>
+
+                    <div className="w-px h-4 bg-slate-300 mx-1 hidden sm:block"></div>
+                    
+                    <span className="text-[10px] text-slate-400 font-mono px-2">
+                        {filteredDebtors.length} regs
                     </span>
                 </div>
             </div>
@@ -196,10 +217,9 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                     <ClientContactInfo telefonos={debtor.telefonos} compact={true} />
                                 </Table.Cell>
 
-                                {/* Acciones (DISEÑO MEJORADO) */}
+                                {/* Acciones */}
                                 <Table.Cell>
                                     <div className="flex items-center justify-end gap-2 pr-2">
-                                        {/* Botón WhatsApp - Verde y Prominente */}
                                         {(debtor.telefonos.celular || debtor.telefonos.principal) ? (
                                             <button
                                                 onClick={() => handleWhatsApp(debtor.telefonos)}
@@ -209,13 +229,11 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                                 <MessageCircle className="h-4.5 w-4.5" />
                                             </button>
                                         ) : (
-                                            /* Placeholder deshabilitado */
                                             <div className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed">
                                                 <Phone className="h-4 w-4" />
                                             </div>
                                         )}
 
-                                        {/* Botón Ver Detalle - Azul/Gris y Sólido en hover */}
                                         <button
                                             onClick={() => onViewDetail(debtor.clienteId)}
                                             className="flex items-center gap-2 px-3 h-9 rounded-full bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white hover:border-blue-700 transition-all duration-200 shadow-sm font-medium text-xs group"
@@ -232,20 +250,30 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                 </Table>
             </TableCard.Root>
             
-            {/* Mensaje cuando el filtro está activo pero no hay resultados */}
-            {showOnlyMorosos && filteredDebtors.length === 0 && debtors.length > 0 && (
+            {/* Mensajes de estado vacío según el filtro seleccionado */}
+            {filterMode !== 'all' && filteredDebtors.length === 0 && debtors.length > 0 && (
                 <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
-                    <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-                    <h3 className="text-slate-900 font-medium">¡Todo en orden!</h3>
-                    <p className="text-slate-500 text-sm">No hay clientes con deuda vencida en esta lista de prioridad.</p>
+                    {filterMode === 'vencidos' ? (
+                        <>
+                            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                            <h3 className="text-slate-900 font-medium">¡Excelente!</h3>
+                            <p className="text-slate-500 text-sm">No hay clientes con deuda vencida.</p>
+                        </>
+                    ) : (
+                        <>
+                            <FileWarning className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+                            <h3 className="text-slate-900 font-medium">Sin clientes al día</h3>
+                            <p className="text-slate-500 text-sm">Todos los clientes listados tienen alguna deuda pendiente.</p>
+                        </>
+                    )}
                     <button 
-                        onClick={() => setShowOnlyMorosos(false)}
+                        onClick={() => setFilterMode('all')}
                         className="mt-3 text-blue-600 text-xs font-medium hover:underline"
                     >
-                        Ver todos
+                        Ver listado completo
                     </button>
                 </div>
             )}
         </div>
     );
-}   
+}

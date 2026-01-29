@@ -18,14 +18,14 @@ export const walletService = {
         return data.data;
     },
 
-    async getTopDebtors(limit: number = 10): Promise<ClienteDeudaSummary[]> {
+    async getTopDebtors(limit: number = 1000): Promise<ClienteDeudaSummary[]> {
         const res = await fetch(`${API_URL}/cartera/top-deudores?limit=${limit}`);
         if (!res.ok) throw new Error('Error fetching top debtors');
         const data = await res.json();
         return data.data;
     },
 
-    async getAllDebtors(limit: number = 100): Promise<ClienteDeudaSummary[]> {
+    async getAllDebtors(limit: number = 1000): Promise<ClienteDeudaSummary[]> {
         const res = await fetch(`${API_URL}/cartera/todos-alfabetico?limit=${limit}`);
         if (!res.ok) throw new Error('Error fetching all debtors');
         const data = await res.json();
