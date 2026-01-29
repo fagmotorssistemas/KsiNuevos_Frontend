@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { 
     User, 
     FileWarning, 
@@ -7,7 +6,6 @@ import {
     MapPin,
     MessageCircle,
     Phone,
-    Filter,
     XCircle,
     CheckCircle2,
     ListFilter
@@ -19,12 +17,13 @@ import { ClientContactInfo } from "./ClientContactInfo";
 interface TopDebtorsTableProps {
     debtors: ClienteDeudaSummary[];
     onViewDetail: (clienteId: number) => void;
+    // Props para el filtro externo
+    filterMode: 'all' | 'vencidos' | 'aldia';
+    onFilterChange: (mode: 'all' | 'vencidos' | 'aldia') => void;
 }
 
-export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps) {
-    // CAMBIO 1: Estado para el modo de filtro ('all' | 'vencidos' | 'aldia')
-    const [filterMode, setFilterMode] = useState<'all' | 'vencidos' | 'aldia'>('all');
-
+export function TopDebtorsTable({ debtors, onViewDetail, filterMode, onFilterChange }: TopDebtorsTableProps) {
+    
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -34,11 +33,8 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
 
     const handleWhatsApp = (telefonos: { celular: string | null, principal: string | null }) => {
         const rawPhone = telefonos.celular || telefonos.principal;
-        
         if (!rawPhone) return;
-
         let cleanPhone = rawPhone.replace(/\D/g, '');
-
         if (cleanPhone.startsWith('09')) {
             cleanPhone = '593' + cleanPhone.substring(1);
         } else if (cleanPhone.startsWith('0') && cleanPhone.length === 9) {
@@ -46,11 +42,10 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         } else if (cleanPhone.length === 7) {
             cleanPhone = '5937' + cleanPhone;
         }
-
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
-    // CAMBIO 2: Lógica de filtrado expandida
+    // Lógica de filtrado usando el prop filterMode
     const filteredDebtors = debtors.filter(d => {
         if (filterMode === 'vencidos') return d.documentosVencidos > 0;
         if (filterMode === 'aldia') return d.documentosVencidos === 0;
@@ -61,7 +56,7 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                 <User className="h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-500 font-medium">No hay clientes para mostrar.</p>
+                <p className="text-slate-500 font-medium">No hay deudores para mostrar.</p>
             </div>
         );
     }
@@ -72,20 +67,18 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-1">
                 <div className="flex flex-col">
                     <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                        <FileWarning className="h-5 w-5 text-slate-600" />
-                        Listado de Clientes
+                        <FileWarning className="h-5 w-5 text-red-600" />
+                        Top Deudores
                     </h3>
                     <span className="text-xs text-slate-500 mt-1">
-                        Gestión de riesgo y seguimiento de cartera
+                        Clientes con mayor riesgo o deuda acumulada
                     </span>
                 </div>
 
-                {/* CAMBIO 3: Grupo de Botones de Filtro */}
+                {/* Grupo de Botones de Filtro (Usando props) */}
                 <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1 rounded-lg border border-slate-200 w-fit">
-                    
-                    {/* Botón: TODOS */}
                     <button
-                        onClick={() => setFilterMode('all')}
+                        onClick={() => onFilterChange('all')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'all'
                                 ? "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"
@@ -96,9 +89,8 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                         Todos
                     </button>
 
-                    {/* Botón: SOLO VENCIDOS */}
                     <button
-                        onClick={() => setFilterMode('vencidos')}
+                        onClick={() => onFilterChange('vencidos')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'vencidos'
                                 ? "bg-red-50 text-red-700 shadow-sm ring-1 ring-red-200"
@@ -109,9 +101,8 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                         Vencidos
                     </button>
 
-                    {/* Botón: AL DÍA (NUEVO) */}
                     <button
-                        onClick={() => setFilterMode('aldia')}
+                        onClick={() => onFilterChange('aldia')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'aldia'
                                 ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
@@ -123,7 +114,6 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                     </button>
 
                     <div className="w-px h-4 bg-slate-300 mx-1 hidden sm:block"></div>
-                    
                     <span className="text-[10px] text-slate-400 font-mono px-2">
                         {filteredDebtors.length} regs
                     </span>
@@ -144,7 +134,6 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                     <Table.Body items={filteredDebtors}>
                         {(debtor: ClienteDeudaSummary) => (
                             <Table.Row id={debtor.clienteId}>
-                                {/* Cliente */}
                                 <Table.Cell>
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border-2 border-slate-100">
@@ -168,7 +157,6 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                     </div>
                                 </Table.Cell>
 
-                                {/* Categoría */}
                                 <Table.Cell className="hidden lg:table-cell">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -182,14 +170,12 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                     </div>
                                 </Table.Cell>
 
-                                {/* Deuda */}
                                 <Table.Cell>
                                     <span className="font-bold text-slate-900 text-sm tracking-tight">
                                         {formatMoney(debtor.totalDeuda)}
                                     </span>
                                 </Table.Cell>
 
-                                {/* Situación (Semaforización) */}
                                 <Table.Cell className="hidden md:table-cell">
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center gap-1.5">
@@ -212,12 +198,10 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                                     </div>
                                 </Table.Cell>
 
-                                {/* Contacto */}
                                 <Table.Cell className="hidden sm:table-cell">
                                     <ClientContactInfo telefonos={debtor.telefonos} compact={true} />
                                 </Table.Cell>
 
-                                {/* Acciones */}
                                 <Table.Cell>
                                     <div className="flex items-center justify-end gap-2 pr-2">
                                         {(debtor.telefonos.celular || debtor.telefonos.principal) ? (
@@ -250,7 +234,6 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                 </Table>
             </TableCard.Root>
             
-            {/* Mensajes de estado vacío según el filtro seleccionado */}
             {filterMode !== 'all' && filteredDebtors.length === 0 && debtors.length > 0 && (
                 <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
                     {filterMode === 'vencidos' ? (
@@ -263,11 +246,11 @@ export function TopDebtorsTable({ debtors, onViewDetail }: TopDebtorsTableProps)
                         <>
                             <FileWarning className="h-10 w-10 text-amber-500 mx-auto mb-3" />
                             <h3 className="text-slate-900 font-medium">Sin clientes al día</h3>
-                            <p className="text-slate-500 text-sm">Todos los clientes listados tienen alguna deuda pendiente.</p>
+                            <p className="text-slate-500 text-sm">Todos los clientes listados tienen deuda.</p>
                         </>
                     )}
                     <button 
-                        onClick={() => setFilterMode('all')}
+                        onClick={() => onFilterChange('all')}
                         className="mt-3 text-blue-600 text-xs font-medium hover:underline"
                     >
                         Ver listado completo

@@ -24,9 +24,9 @@ export const HeroSell = () => {
 
   const handleOpenWizard = (e: React.FormEvent) => {
       e.preventDefault();
-      // Validación simple antes de abrir
-      if(!heroData.year || !heroData.brand) {
-          alert("Por favor selecciona año y marca para comenzar.");
+      // Validación simple antes de abrir: ahora verificamos los 3 campos
+      if(!heroData.year || !heroData.brand || !heroData.model) {
+          alert("Por favor ingresa marca, modelo y año para comenzar.");
           return;
       }
       setIsWizardOpen(true);
@@ -80,60 +80,40 @@ export const HeroSell = () => {
                     <h3 className="text-xl font-bold mb-6 text-center">¡Cotiza tu auto ahora!</h3>
                     
                     <form className="space-y-4" onSubmit={handleOpenWizard}>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider">Año</label>
-                            <div className="relative">
-                                <select 
-                                    className="w-full appearance-none bg-neutral-50 border border-neutral-200 text-black py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all font-medium"
-                                    onChange={(e) => setHeroData({...heroData, year: e.target.value})}
-                                    value={heroData.year}
-                                >
-                                    <option value="">Selecciona el año</option>
-                                    <option value="2024">2024</option>
-                                    <option value="2023">2023</option>
-                                    <option value="2022">2022</option>
-                                    <option value="2021">2021</option>
-                                    <option value="2020">2020</option>
-                                    <option value="2019">2019</option>
-                                    <option value="2018">2018</option>
-                                    <option value="2017">2017</option>
-                                    <option value="2016">2016</option>
-                                    <option value="2015">2015</option>
-                                </select>
-                                <div className="absolute right-4 top-4 pointer-events-none"><ChevronDown /></div>
-                            </div>
-                        </div>
-
+                        {/* CAMBIO: Marca de select a input */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider">Marca</label>
-                            <div className="relative">
-                                <select 
-                                    className="w-full appearance-none bg-neutral-50 border border-neutral-200 text-black py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all font-medium"
-                                    onChange={(e) => setHeroData({...heroData, brand: e.target.value})}
-                                    value={heroData.brand}
-                                >
-                                    <option value="">Selecciona la marca</option>
-                                    <option value="Toyota">Toyota</option>
-                                    <option value="Chevrolet">Chevrolet</option>
-                                    <option value="Kia">Kia</option>
-                                    <option value="Hyundai">Hyundai</option>
-                                    <option value="Mazda">Mazda</option>
-                                    <option value="Nissan">Nissan</option>
-                                    <option value="Ford">Ford</option>
-                                    <option value="Volkswagen">Volkswagen</option>
-                                </select>
-                                <div className="absolute right-4 top-4 pointer-events-none"><ChevronDown /></div>
-                            </div>
+                            <input 
+                                type="text"
+                                placeholder="Ej: Toyota, Kia, Chevrolet..."
+                                className="w-full bg-neutral-50 border border-neutral-200 text-black py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all font-medium placeholder:text-gray-400"
+                                onChange={(e) => setHeroData({...heroData, brand: e.target.value})}
+                                value={heroData.brand}
+                            />
                         </div>
 
+                        {/* Modelo se mantiene como input */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider">Modelo</label>
                             <input 
                                 type="text"
-                                placeholder="Ej: Yaris, Sail, Spark..."
+                                placeholder="Ej: Yaris, Sail, Sportage..."
                                 className="w-full bg-neutral-50 border border-neutral-200 text-black py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all font-medium placeholder:text-gray-400"
                                 onChange={(e) => setHeroData({...heroData, model: e.target.value})}
                                 value={heroData.model}
+                            />
+                        </div>
+
+                        {/* CAMBIO: Año de select a input */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider">Año</label>
+                            <input 
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Ej: 2022"
+                                className="w-full bg-neutral-50 border border-neutral-200 text-black py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-all font-medium placeholder:text-gray-400"
+                                onChange={(e) => setHeroData({...heroData, year: e.target.value})}
+                                value={heroData.year}
                             />
                         </div>
 
@@ -150,13 +130,13 @@ export const HeroSell = () => {
         </div>
       </div>
 
-      {/* CORRECCIÓN: Renderizado Condicional */}
+      {/* Renderizado Condicional */}
       {isWizardOpen && (
           <SellWizardContainer 
             isOpen={isWizardOpen} 
             onClose={() => setIsWizardOpen(false)}
             initialData={{
-                year: parseInt(heroData.year) || 2024,
+                year: parseInt(heroData.year) || 2026,
                 brand: heroData.brand,
                 model: heroData.model
             }}
