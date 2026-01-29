@@ -38,7 +38,8 @@ export const BankDetailedSimulator = () => {
 
     showAmortizationSelect: true, 
     
-    amortizationMethod: (values.amortizationMethod === 'aleman') ? 'german' : 'french',
+    // Ahora `values.amortizationMethod` usa los valores canónicos 'french'|'german'
+    amortizationMethod: values.amortizationMethod || 'french',
 
     isSimulated: isSimulated, 
 

@@ -71,7 +71,7 @@ export const DEFAULT_SIMULATOR_VALUES: SimulatorValues = {
   downPaymentPercentage: 25,
   customDownPaymentAmount: 5000,
   termMonths: 48,
-  amortizationMethod: "frances",
+  amortizationMethod: "french",
   startDate: new Date().toISOString().split("T")[0],
   // gpsFee eliminado de aquí
 };

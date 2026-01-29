@@ -45,7 +45,7 @@ export function calculateCredit(values: SimulatorValues): SimulatorResults {
       let capitalPart = 0;
       let fullQuota = 0;
 
-      if (values.amortizationMethod === "frances") {
+      if (values.amortizationMethod === "french") {
         capitalPart = pureQuotaFrances - interestPart;
         // 🔥 Usamos monthlyGps aquí
         fullQuota = pureQuotaFrances + monthlyCarInsurance + monthlyDesgravamen + monthlyGps;

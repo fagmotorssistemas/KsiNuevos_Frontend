@@ -22,7 +22,7 @@ export interface SimulatorValues {
   downPaymentPercentage: number;
   customDownPaymentAmount: number;
   termMonths: number;
-  amortizationMethod: "frances" | "aleman";
+  amortizationMethod: AmortizationMethod;
   // gpsFee: number;  <-- ELIMINAMOS ESTO DE AQUÍ (ahora va en el banco)
   startDate: string;
 }

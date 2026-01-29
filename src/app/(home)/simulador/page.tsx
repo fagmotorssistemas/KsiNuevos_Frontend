@@ -62,7 +62,7 @@ function SimuladorContent() {
         </div>
 
         {/* EL SIMULADOR INTELIGENTE */}
-        <div className="-mt-16 pb-16 relative z-10">
+        <div className="-mt-1 pb-16 relative z-10">
           <DetailedSimulator mode={currentMode} />
         </div>
       </main>
