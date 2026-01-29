@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { 
     Users, 
     ArrowRight,
@@ -6,7 +5,6 @@ import {
     MapPin,
     MessageCircle,
     Search,
-    Eye,
     Phone,
     Filter,
     XCircle,
@@ -21,11 +19,12 @@ interface AllDebtorsTableProps {
     debtors: ClienteDeudaSummary[];
     onViewDetail: (clienteId: number) => void;
     loading?: boolean;
+    // Props para filtro externo
+    filterMode: 'all' | 'vencidos' | 'aldia';
+    onFilterChange: (mode: 'all' | 'vencidos' | 'aldia') => void;
 }
 
-export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTableProps) {
-    // CAMBIO 1: Estado para el modo de filtro ('all' | 'vencidos' | 'aldia')
-    const [filterMode, setFilterMode] = useState<'all' | 'vencidos' | 'aldia'>('all');
+export function AllDebtorsTable({ debtors, onViewDetail, loading, filterMode, onFilterChange }: AllDebtorsTableProps) {
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -48,7 +47,7 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
     };
 
-    // CAMBIO 2: Lógica de filtrado expandida
+    // Lógica de filtrado
     const filteredDebtors = debtors.filter(d => {
         if (filterMode === 'vencidos') return d.documentosVencidos > 0;
         if (filterMode === 'aldia') return d.documentosVencidos === 0;
@@ -73,12 +72,11 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                     Directorio de Clientes
                 </h3>
 
-                {/* CAMBIO 3: Grupo de Botones de Filtro */}
+                {/* Grupo de Botones de Filtro (Externo) */}
                 <div className="flex flex-wrap items-center gap-2 bg-slate-100/50 p-1 rounded-lg border border-slate-200 w-fit">
                     
-                    {/* Botón: TODOS */}
                     <button
-                        onClick={() => setFilterMode('all')}
+                        onClick={() => onFilterChange('all')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'all'
                                 ? "bg-white text-slate-700 shadow-sm ring-1 ring-slate-200"
@@ -89,9 +87,8 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                         Todos
                     </button>
 
-                    {/* Botón: SOLO VENCIDOS */}
                     <button
-                        onClick={() => setFilterMode('vencidos')}
+                        onClick={() => onFilterChange('vencidos')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'vencidos'
                                 ? "bg-red-50 text-red-700 shadow-sm ring-1 ring-red-200"
@@ -102,9 +99,8 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                         Vencidos
                     </button>
 
-                    {/* Botón: AL DÍA */}
                     <button
-                        onClick={() => setFilterMode('aldia')}
+                        onClick={() => onFilterChange('aldia')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                             filterMode === 'aldia'
                                 ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
@@ -116,7 +112,6 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                     </button>
 
                     <div className="w-px h-4 bg-slate-300 mx-1 hidden sm:block"></div>
-                    
                     <span className="text-[10px] text-slate-400 font-mono px-2">
                         {filteredDebtors.length}
                     </span>
@@ -137,7 +132,6 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                     <Table.Body items={filteredDebtors}>
                         {(debtor: ClienteDeudaSummary) => (
                             <Table.Row id={debtor.clienteId}>
-                                {/* Cliente */}
                                 <Table.Cell>
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border-2 border-slate-100">
@@ -156,7 +150,6 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                                     </div>
                                 </Table.Cell>
 
-                                {/* Categoría/Ubicación */}
                                 <Table.Cell className="hidden lg:table-cell">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -170,14 +163,12 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                                     </div>
                                 </Table.Cell>
 
-                                {/* Deuda */}
                                 <Table.Cell>
                                     <span className="font-bold text-slate-800 text-sm tracking-tight">
                                         {formatMoney(debtor.totalDeuda)}
                                     </span>
                                 </Table.Cell>
 
-                                {/* Estado */}
                                 <Table.Cell className="hidden md:table-cell">
                                     {debtor.documentosVencidos > 0 ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-100">
@@ -192,15 +183,12 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                                     )}
                                 </Table.Cell>
 
-                                {/* Contacto */}
                                 <Table.Cell className="hidden sm:table-cell">
                                     <ClientContactInfo telefonos={debtor.telefonos} compact={true} />
                                 </Table.Cell>
 
-                                {/* Acciones */}
                                 <Table.Cell>
                                     <div className="flex items-center justify-end gap-2 pr-2">
-                                        {/* Botón WhatsApp */}
                                         {(debtor.telefonos.celular || debtor.telefonos.principal) ? (
                                             <button
                                                 onClick={() => handleWhatsApp(debtor.telefonos)}
@@ -215,7 +203,6 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                                             </div>
                                         )}
 
-                                        {/* Botón Ver Detalle */}
                                         <button
                                             onClick={() => onViewDetail(debtor.clienteId)}
                                             className="flex items-center gap-2 px-3 h-9 rounded-full bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white hover:border-blue-700 transition-all duration-200 shadow-sm font-medium text-xs group"
@@ -232,7 +219,6 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                 </Table>
             </TableCard.Root>
 
-            {/* Mensajes de estado vacío según el filtro seleccionado */}
             {filterMode !== 'all' && filteredDebtors.length === 0 && debtors.length > 0 && (
                 <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
                     {filterMode === 'vencidos' ? (
@@ -249,7 +235,7 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading }: AllDebtorsTa
                         </>
                     )}
                     <button 
-                        onClick={() => setFilterMode('all')}
+                        onClick={() => onFilterChange('all')}
                         className="mt-3 text-blue-600 text-xs font-medium hover:underline"
                     >
                         Ver todos los clientes
