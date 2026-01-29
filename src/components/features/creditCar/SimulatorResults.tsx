@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { formatMoney } from "./simulator.utils";
 import type { UnifiedSimulatorState } from "../../../types/simulator.types";
-// Importamos el modal que acabamos de crear
 import { AmortizationModal } from "./AmortizationTable";
 
 interface Props {
@@ -10,15 +9,27 @@ interface Props {
 }
 
 export const SimulatorResults = ({ isSimulated, data }: Props) => {
-  // Estado para controlar si el modal está abierto o cerrado
   const [showModal, setShowModal] = useState(false);
 
+  // Función para ocultar valores si no se ha simulado
   const show = (val: number) => (isSimulated ? val : 0);
 
-  // Cálculos visuales para las burbujas
-  const baseCuota = data.monthlyPayment - data.feesMonthlyDescription;
-  const capitalEstimado = baseCuota > 0 ? baseCuota * 0.7 : 0; 
-  const interesEstimado = baseCuota > 0 ? baseCuota * 0.3 : 0; 
+  let capitalDisplay = 0;
+  let interestDisplay = 0;
+
+  // 1. Lógica de visualización (Directo vs Banco)
+  if (data.monthlyCapital !== undefined && data.monthlyInterest !== undefined) {
+      capitalDisplay = data.monthlyCapital;
+      interestDisplay = data.monthlyInterest;
+  } else {
+      const baseCuota = data.monthlyPayment - (data.feesMonthlyDescription || 0);
+      capitalDisplay = baseCuota > 0 ? baseCuota * 0.7 : 0; 
+      interestDisplay = baseCuota > 0 ? baseCuota * 0.3 : 0; 
+  }
+
+  // ✅ CORRECCIÓN DEL 0 FEO: 
+  // Convertimos a booleano puro (true/false) para que React no imprima un "0".
+  const hasMonthlyFees = (data.feesMonthlyDescription || 0) > 0;
 
   return (
     <>
@@ -28,29 +39,43 @@ export const SimulatorResults = ({ isSimulated, data }: Props) => {
             Tus pagos mensuales serán
           </h4>
 
-          {/* DESGLOSE VISUAL (Burbujas) */}
+          {/* === ZONA DE BURBUJAS === */}
           <div className="flex justify-center text-center gap-8 mb-4">
+            
+            {/* 1. CAPITAL */}
             <div>
               <p className="font-bold text-gray-700 text-lg">
-                {formatMoney(show(capitalEstimado))}
+                {formatMoney(show(capitalDisplay))}
               </p>
               <p className="text-[10px] text-gray-400 uppercase">Capital</p>
             </div>
+            
             <div className="text-gray-300 mt-1">+</div>
+            
+            {/* 2. INTERÉS */}
             <div>
               <p className="font-bold text-gray-700 text-lg">
-                {formatMoney(show(interesEstimado))}
+                {formatMoney(show(interestDisplay))}
               </p>
               <p className="text-[10px] text-gray-400 uppercase">Interés</p>
             </div>
-            <div className="text-gray-300 mt-1">+</div>
-            <div>
-              <p className="font-bold text-gray-700 text-lg">
-                {formatMoney(show(data.feesMonthlyDescription))}
-              </p>
-              <p className="text-[10px] text-gray-400 uppercase">Seguros</p>
-            </div>
+            
+            {/* 3. SEGUROS (SOLO SI APLICA) */}
+            {/* Usamos el operador ternario para asegurar que si es falso, sea null (invisible) */}
+            {hasMonthlyFees ? (
+              <>
+                <div className="text-gray-300 mt-1">+</div>
+                <div>
+                  <p className="font-bold text-gray-700 text-lg">
+                    {formatMoney(show(data.feesMonthlyDescription || 0))}
+                  </p>
+                  <p className="text-[10px] text-gray-400 uppercase">Seguros</p>
+                </div>
+              </>
+            ) : null}
+
           </div>
+          {/* ======================== */}
 
           {/* CUOTA PRINCIPAL */}
           <div className="text-center py-6 border-b border-gray-100 mb-8">
@@ -92,7 +117,6 @@ export const SimulatorResults = ({ isSimulated, data }: Props) => {
               <span>{formatMoney(show(data.totalDebt))}</span>
             </div>
             
-            {/* 🔥 AQUÍ ESTÁ EL BOTÓN MÁGICO "Ver tabla de amortización" */}
             {isSimulated && (
               <div className="text-center mt-2">
                 <button 
@@ -107,7 +131,6 @@ export const SimulatorResults = ({ isSimulated, data }: Props) => {
           </div>
         </div>
 
-        {/* LEYENDA LEGAL */}
         <div className="mt-8 pt-4 border-t border-gray-50">
           <p className="text-[13px] text-gray-400 text-center leading-relaxed italic px-4">
             * Valores referenciales, no son considerados como una oferta formal. 
@@ -116,7 +139,6 @@ export const SimulatorResults = ({ isSimulated, data }: Props) => {
         </div>
       </div>
 
-      {/* RENDERIZADO DEL MODAL (Solo si showModal es true) */}
       {showModal && (
         <AmortizationModal 
           data={data} 

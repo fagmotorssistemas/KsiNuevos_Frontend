@@ -89,6 +89,9 @@ export interface UnifiedSimulatorState {
   
   // --- RESULTADOS FINANCIEROS ---
   monthlyPayment: number;    // La cuota mensual a mostrar
+
+  monthlyInterest?: number;  // Para mostrar desglose fijo en cabecera (Directo)
+  monthlyCapital?: number;   // Para mostrar desglose fijo en cabecera (Directo)
   
   // IMPORTANTE: Para que la tabla cuadre con el arreglo matemático anterior,
   // 'financedCapital' debe ser el SALDO INICIAL TOTAL (Vehículo + Gastos Capitalizados)

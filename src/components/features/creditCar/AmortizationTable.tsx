@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { formatMoney } from "./simulator.utils";
-import type { UnifiedSimulatorState } from "../../../types/simulator.types"; // Asegura que este archivo tenga el cambio de arriba
+import type { UnifiedSimulatorState } from "../../../types/simulator.types";
 import { calculateDirectSchedule } from "./DirectCredit/direct.logic";
 import { calculateBankSchedule } from "./BankCredit/bank.logic";
 
@@ -14,13 +14,10 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
   // ==========================================
   // 🕹️ CONTROL DE ESTADO
   // ==========================================
-  // Inicializamos el estado local con lo que viene del estado global (data)
-  // Si data.amortizationMethod es undefined, usamos 'french' por defecto
   const [currentSystem, setCurrentSystem] = useState<'french' | 'german'>(
     (data.amortizationMethod === 'german') ? 'german' : 'french'
   );
 
-  // Efecto opcional: Si la data externa cambia mientras el modal está abierto, actualizamos
   useEffect(() => {
     if (data.mode === 'bank' && data.amortizationMethod) {
        setCurrentSystem(data.amortizationMethod);
@@ -32,12 +29,15 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
   // ==========================================
   const rows = useMemo(() => {
     if (data.mode === 'bank') {
-      // Ahora currentSystem es 'french' | 'german', que coincide con la lógica
       return calculateBankSchedule(data, currentSystem);
     } else {
       return calculateDirectSchedule(data);
     }
   }, [data, currentSystem]); 
+
+  // ✅ DETECTAMOS SI HAY SEGUROS MENSUALES (> 0)
+  // Esto sirve para ocultar la columna si es Crédito Directo o si el banco no cobra mensual.
+  const hasMonthlyFees = (data.feesMonthlyDescription || 0) > 0;
 
   // ==========================================
   // 🎨 UI
@@ -94,8 +94,8 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
           </button>
         </div>
 
-        {/* SUMMARY */}
-        <div className="hidden md:grid grid-cols-4 gap-4 p-5 bg-gray-50 text-sm border-b border-gray-200 shrink-0">
+        {/* SUMMARY: Ajustamos el grid dinámicamente (3 o 4 columnas) */}
+        <div className={`hidden md:grid gap-4 p-5 bg-gray-50 text-sm border-b border-gray-200 shrink-0 ${hasMonthlyFees ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <div>
             <p className="text-gray-400 text-xs uppercase font-bold">Monto Financiado</p>
             <p className="font-semibold text-gray-800">{formatMoney(data.financedCapital)}</p>
@@ -106,10 +106,15 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
                 {data.mode === 'bank' ? `${data.rateLabel}` : 'Fija Comercial'}
               </p>
           </div>
-          <div>
-              <p className="text-gray-400 text-xs uppercase font-bold">Gastos Admin.</p>
-              <p className="font-semibold text-gray-800">{formatMoney(data.feesMonthlyDescription)} /mes</p>
-          </div>
+          
+          {/* ✅ SOLO SE MUESTRA SI HAY VALOR */}
+          {hasMonthlyFees && (
+            <div>
+                <p className="text-gray-400 text-xs uppercase font-bold">Gastos Admin.</p>
+                <p className="font-semibold text-gray-800">{formatMoney(data.feesMonthlyDescription)} /mes</p>
+            </div>
+          )}
+
           <div className="text-right">
               <p className="text-gray-400 text-xs uppercase font-bold">
                  {data.mode === 'bank' && currentSystem === 'german' ? 'Primera Cuota' : 'Cuota Mensual'}
@@ -129,7 +134,12 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
                 <th className="px-4 py-4 font-bold border-b text-blue-800 bg-gray-100">Fecha</th>
                 <th className="px-4 py-4 font-bold border-b bg-gray-100">Capital</th>
                 <th className="px-4 py-4 font-bold border-b bg-gray-100">Interés</th>
-                <th className="px-4 py-4 font-bold border-b hidden sm:table-cell bg-gray-100">Seguros</th>
+                
+                {/* ✅ CABECERA DE SEGUROS CONDICIONAL */}
+                {hasMonthlyFees && (
+                  <th className="px-4 py-4 font-bold border-b hidden sm:table-cell bg-gray-100">Seguros</th>
+                )}
+
                 <th className="px-4 py-4 font-bold text-right border-b text-gray-900 bg-gray-100">Cuota</th>
                 <th className="px-4 py-4 font-bold text-right border-b bg-gray-100">Saldo</th>
               </tr>
@@ -150,9 +160,14 @@ export const AmortizationModal = ({ data, onClose }: Props) => {
                   <td className="px-4 py-3 text-red-500 font-medium">
                     {formatMoney(row.interest)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
-                    {formatMoney((row.insurance || 0) + (row.desgravamen || 0) + (row.gps || 0))}
-                  </td>
+                  
+                  {/* ✅ CELDA DE SEGUROS CONDICIONAL */}
+                  {hasMonthlyFees && (
+                    <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
+                      {formatMoney((row.insurance || 0) + (row.desgravamen || 0) + (row.gps || 0))}
+                    </td>
+                  )}
+
                   <td className="px-4 py-3 text-right font-bold text-gray-900 bg-gray-50/50 group-hover:bg-blue-100/30">
                     {formatMoney(row.amount)}
                   </td>
