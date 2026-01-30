@@ -14,9 +14,9 @@ export const FaqAccordion = () => {
   };
 
   const faqs = [
-    { q: "¿Qué documentos necesito para vender mi auto?", a: "Necesitas la matrícula original, cédula de identidad y estar al día con las multas y revisión técnica." },
+    { q: "¿Qué documentos necesito para vender mi auto?", a: "Necesitas la matrícula original, cédula de identidad, estar al día con las multas y revisión técnica." },
     { q: "¿Compran autos chocados o con averías?", a: "Por el momento solo compramos autos en buenas condiciones mecánicas y estéticas para garantizar la calidad a nuestros futuros compradores." },
-    { q: "¿Cuánto tarda el proceso de pago?", a: "Una vez firmados los documentos en notaría, la transferencia se realiza en menos de 2 horas hábiles." },
+    { q: "¿Cuánto tarda el proceso de pago?", a: "Una vez terminado el proceso de verificación de documentos, el pago se hace en un plazo máximo de 2 días." },
     { q: "¿El avalúo tiene algún costo?", a: "No, el avalúo es 100% gratuito y no te compromete a vender el auto con nosotros." }
   ];
 

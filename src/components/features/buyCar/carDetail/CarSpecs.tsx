@@ -7,42 +7,61 @@ interface CarSpecsProps {
 
 export const CarSpecs = ({ car }: CarSpecsProps) => {
   
+  /**
+   * Función para transformar valores a Camel Case visual (Capitalizado)
+   * Convierte: "gasolina" -> "Gasolina", "tracción trasera" -> "Tracción Trasera"
+   */
+  const formatValue = (val: string | number | boolean | null | undefined) => {
+    if (val === null || val === undefined || val === "") return null;
+    
+    // Si es un número, lo devolvemos con formato de miles si es necesario
+    if (typeof val === "number") return val.toLocaleString();
+    
+    // Si es un string, aplicamos la capitalización de cada palabra
+    if (typeof val === "string") {
+      return val
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+
+    return val.toString();
+  };
+
   const allSpecs = [
     // --- IDENTIDAD ---
-    { label: "Marca", value: car.brand },
-    { label: "Modelo", value: car.model },
-    { label: "Versión", value: car.version },
+    { label: "Marca", value: formatValue(car.brand) },
+    { label: "Modelo", value: formatValue(car.model) },
+    { label: "Versión", value: formatValue(car.version) },
     { label: "Año", value: car.year },
-    { label: "VIN", value: car.vin },
+    { label: "VIN", value: car.vin?.toUpperCase() }, // El VIN suele ir en mayúsculas siempre
 
     // --- MOTOR ---
-    { label: "Motor", value: car.engine_displacement },
-    { label: "Combustible", value: car.fuel_type },
+    { label: "Motor", value: formatValue(car.engine_displacement) },
+    { label: "Combustible", value: formatValue(car.fuel_type) },
     { label: "Cilindros", value: car.cylinders },
-    { label: "Transmisión", value: car.transmission },
+    { label: "Transmisión", value: formatValue(car.transmission) },
     { label: "Velocidades", value: car.transmission_speeds },
-    { label: "Tracción", value: car.drive_type },
+    { label: "Tracción", value: formatValue(car.drive_type) },
 
     // --- CARROCERÍA ---
-    { label: "Carrocería", value: car.type_body },
-    { label: "Color Exterior", value: car.color },
-    { label: "Condición", value: car.condition },
+    { label: "Carrocería", value: formatValue(car.type_body) },
+    { label: "Color Exterior", value: formatValue(car.color) },
+    { label: "Condición", value: formatValue(car.condition) },
     { label: "Puertas", value: car.doors },
 
     // --- INTERIOR ---
-    { label: "Color Interior", value: car.interior_color },
-    { label: "Tapicería", value: car.upholstery_type },
+    { label: "Color Interior", value: formatValue(car.interior_color) },
+    { label: "Tapicería", value: formatValue(car.upholstery_type) },
     { label: "Pasajeros", value: car.passenger_capacity },
 
     // --- HISTORIAL ---
-    { label: "Kilometraje", value: car.mileage },
-    { label: "Placa", value: car.plate_short },
-    { label: "Ciudad", value: car.city_registration },
+    { label: "Kilometraje", value: car.mileage ? `${car.mileage.toLocaleString()} km` : null },
+    { label: "Placa", value: car.plate_short?.toUpperCase() },
+    { label: "Ciudad", value: formatValue(car.city_registration) },
     { label: "Dueños", value: car.previous_owners },
     
-    // Para booleanos: Verificamos si es null/undefined primero.
-    // Si es null, pasamos null para que el filtro lo oculte. 
-    // Si es true/false, mostramos Sí/No.
     { 
         label: "Mantenimientos", 
         value: car.has_maintenance_record != null 
@@ -58,13 +77,10 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
   ];
 
   // FILTRO MÁGICO:
-  // Solo mostramos items donde value NO sea null, undefined o comillas vacías.
-  // (Nota: El 0 sí pasa el filtro porque es un dato válido para kilometraje o dueños)
   const visibleSpecs = allSpecs.filter(
     (spec) => spec.value !== null && spec.value !== undefined && spec.value !== ""
   );
 
-  // Si después de filtrar no queda nada, no renderizamos el componente
   if (visibleSpecs.length === 0) return null;
 
   return (
@@ -86,7 +102,6 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
               {spec.label}
             </span>
             <span className="text-sm font-bold text-black break-words">
-              {/* Aquí ya es seguro renderizar directamente porque filtramos los vacíos */}
               {spec.value}
             </span>
           </div>

@@ -17,16 +17,13 @@ export const BenefitsSection = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                 
-                {/* Image Placeholder */}
+                {/* Image Placeholder Actualizado */}
                 <div className="relative h-[500px] rounded-3xl overflow-hidden bg-neutral-200 shadow-xl">
                     <img 
-                        src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=800"
-                        alt="Happy Customer"
+                        src="/home.jpeg"
+                        alt="K-si Nuevos Local"
                         className="w-full h-full object-cover"
                     />
-                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-8">
-                        <p className="text-white font-medium">"Vendí mi auto en 24 horas y el dinero estuvo en mi cuenta antes de salir de la oficina."</p>
-                     </div>
                 </div>
 
                 {/* Content */}
@@ -64,9 +61,7 @@ export const BenefitsSection = () => {
                             </div>
                         </div>
                     </div>
-
                 </div>
-
             </div>
         </div>
     </section>

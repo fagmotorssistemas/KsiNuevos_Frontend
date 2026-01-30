@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react' // Se agrega useEffect
 import { useRouter } from 'next/navigation'
 import { createBuyingAppointment } from '@/hooks/Homeksi/appointment-actions'
 import { KsButton } from '@/components/ui/Homeksi/KsButton'
@@ -21,6 +21,18 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
   
   const router = useRouter()
   const slots = useAppointmentSlots()
+
+  // BLOQUEO DE SCROLL: Evita que la galería o la página se muevan al fondo
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -46,7 +58,6 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
       if (result?.error) {
         setErrorMessage(result.error)
       } else {
-        // ÉXITO: Limpiamos y mostramos la vista de confirmación
         slots.resetSelection()
         setIsSuccess(true)
       }
@@ -65,13 +76,18 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
   if (!isOpen) return null
 
   return (
+    /* CAMBIO CLAVE: z-[100] y backdrop-blur para asegurar que nada de la galería 
+       se superponga visualmente al modal.
+    */
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 flex flex-col max-h-[85vh]">
+      
+      {/* Overlay que permite cerrar al hacer click fuera */}
+      <div className="absolute inset-0 z-0" onClick={onClose} />
+
+      <div className="relative z-[110] bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 flex flex-col max-h-[85vh]">
         
-        {/* Contenido Dinámico */}
         {!isSuccess ? (
           <>
-            {/* Header del Formulario */}
             <div className="bg-white px-6 py-5 border-b border-gray-100 flex justify-between items-center z-30 relative shadow-sm">
               <h3 className="font-bold text-xl text-gray-900">Agendar Cita</h3>
               <button 
@@ -115,7 +131,6 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
             </form>
           </>
         ) : (
-          /* VISTA DE ÉXITO: Recuadro personalizado */
           <div className="p-8 sm:p-10 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
               <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

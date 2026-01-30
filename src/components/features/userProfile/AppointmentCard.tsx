@@ -1,6 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Car } from 'lucide-react'; // Importamos el icono para mantener la consistencia
 
 // Mantenemos tus interfaces y utilidades intactas
 interface CarItem {
@@ -52,7 +53,7 @@ export const AppointmentCard = ({ appointment, onEdit, onCancel }: AppointmentCa
     <div className="bg-white p-4 rounded-[24px] border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center gap-4">
       
       {/* --- IMAGEN MINIATURA (Lado Izquierdo) --- */}
-      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 shrink-0 border border-gray-50">
+      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 shrink-0 border border-gray-50 flex items-center justify-center">
         {displayItem?.image ? (
           <Image 
             src={displayItem.image} 
@@ -61,8 +62,9 @@ export const AppointmentCard = ({ appointment, onEdit, onCancel }: AppointmentCa
             className="object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-xl bg-gray-100">
-            🚗
+          /* Reemplazamos el emoji por el icono de Lucide */
+          <div className="text-gray-300">
+            <Car size={32} strokeWidth={1.5} />
           </div>
         )}
       </div>
@@ -99,17 +101,15 @@ export const AppointmentCard = ({ appointment, onEdit, onCancel }: AppointmentCa
           </button>
         )}
         
-        {/* Lógica original de cancelación */}
         {isEditable && status !== 'confirmada' && (
           <button 
             onClick={() => onCancel(id)}
             className="bg-gray-50 hover:bg-gray-100 text-gray-400 px-4 py-1.5 rounded-full text-[11px] font-bold transition-colors"
           >
-            Canaclar
+            Cancelar
           </button>
         )}
 
-        {/* Mantenemos tu link de detalles para inventario */}
         {inventory && (
           <Link 
             href={`/autos/${inventory.id}`} 
