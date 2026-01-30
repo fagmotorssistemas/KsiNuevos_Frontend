@@ -49,6 +49,9 @@ export const CreditHero = () => {
             <p className="text-sm text-gray-500 group-hover:text-blue-100">
               Aprobación inmediata con nosotros. Sin bancos ni trámites largos.
             </p>
+            <div className="mt-5 inline-block bg-[#ec2b2b] group-hover:bg-white text-white group-hover:text-[#ec2b2b] px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+              Click aquí para simular
+            </div>
           </button>
 
           {/* BOTÓN BANCOS */}
@@ -67,6 +70,9 @@ export const CreditHero = () => {
             <p className="text-sm text-gray-500 group-hover:text-gray-300">
               Gestionamos tu crédito con entidades externas. Tasas preferenciales.
             </p>
+              <div className="mt-5 inline-block bg-[#1a1a1a] group-hover:bg-white text-white group-hover:text-[#1a1a1a] px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 shadow-sm">
+              Click aquí para simular
+            </div>
           </button>
 
         </div>
