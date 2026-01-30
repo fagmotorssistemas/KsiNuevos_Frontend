@@ -83,7 +83,7 @@ export const MainFooter = () => {
           <h4 className="font-black mb-6 text-white uppercase text-xs tracking-[0.2em]">Síguenos</h4>
           <div className="flex flex-row gap-3">
             <Link 
-              href="https://facebook.com" 
+              href="https://www.facebook.com/ksinuevosfagmotors" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 flex items-center justify-center border border-neutral-800 rounded-md text-neutral-400 hover:text-white hover:border-neutral-600 transition-all hover:bg-neutral-900"
@@ -91,7 +91,7 @@ export const MainFooter = () => {
               <Facebook size={18} />
             </Link>
             <Link 
-              href="https://instagram.com" 
+              href="https://www.instagram.com/ksinuevosfag/" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 flex items-center justify-center border border-neutral-800 rounded-md text-neutral-400 hover:text-white hover:border-neutral-600 transition-all hover:bg-neutral-900"
@@ -99,7 +99,7 @@ export const MainFooter = () => {
               <Instagram size={18} />
             </Link>
             <Link 
-              href="https://tiktok.com" 
+              href="https://www.tiktok.com/@fagmotors" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 flex items-center justify-center border border-neutral-800 rounded-md text-neutral-400 hover:text-white hover:border-neutral-600 transition-all hover:bg-neutral-900"
@@ -107,7 +107,7 @@ export const MainFooter = () => {
               <TikTokIcon />
             </Link>
             <Link 
-              href="https://linkedin.com" 
+              href="https://www.linkedin.com/in/fabian-aguirre-5536632ab/recent-activity/all/"
               target="_blank" 
               rel="noopener noreferrer" 
               className="w-10 h-10 flex items-center justify-center border border-neutral-800 rounded-md text-neutral-400 hover:text-white hover:border-neutral-600 transition-all hover:bg-neutral-900"
