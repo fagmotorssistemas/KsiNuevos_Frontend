@@ -26,9 +26,9 @@ export const ValuesSection = () => {
           <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-red-600 group-hover:shadow-lg group-hover:shadow-red-500/30 transition-all duration-500 ease-out">
             <ShieldCheck size={36} className="text-red-600 group-hover:text-white transition-colors duration-500" />
           </div>
-          <h3 className="text-xl font-bold mb-3 text-gray-900">Garantía Extendida</h3>
+          <h3 className="text-xl font-bold mb-3 text-gray-900">Respaldo Documental</h3>
           <p className="text-gray-500 leading-relaxed px-4">
-            Disfruta de 3 meses de garantía mecánica y <span className="font-semibold text-gray-900">7 días de prueba</span>. Si no te enamora, lo devuelves.
+            Compra con papeles en regla <span className="font-semibold text-gray-900">y acompañamiento en el trámite.</span>
           </p>
         </div>
 

@@ -69,8 +69,8 @@ export default function HomePage() {
         <SectionContainer>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <ServiceCard type="credit" title="Créditos" description="Planes a tu medida con aprobación inmediata y tasas preferenciales." />
-              <ServiceCard type="loan" title="Préstamos" description="Empeña tu auto y sigue manejándolo mientras obtienes liquidez hoy." />
-              <ServiceCard type="offer" title="Ofertas" description="Descuentos exclusivos en inventario seleccionado cada semana." />
+              <ServiceCard type="loan" title="Recomendados" description="Recomendaciones por ciudad, familia, trabajo o aventura." />
+              <ServiceCard type="offer" title="Asesoría" description="Te orientamos para elegir el plan que mejor se ajuste a tu bolsillo." />
           </div>
         </SectionContainer>
         <CreditBanner />
