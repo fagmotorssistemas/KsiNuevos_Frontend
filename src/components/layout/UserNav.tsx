@@ -30,11 +30,22 @@ export function UserNav() {
     const router = useRouter();
 
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        setIsOpen(false);
-        router.refresh();
-        router.push('/home');
-    };
+        try {
+            // 1. Cerramos la sesión en Supabase
+            await supabase.auth.signOut();
+            
+            // 2. Cerramos el menú desplegable
+            setIsOpen(false);
+            
+            // 3. Limpiamos el cache de las rutas para asegurar que el estado de auth cambie
+            router.refresh();
+            
+            // 4. Redirigimos a la página de inicio (src/app/(home)/home/page.tsx)
+            router.push('/home');
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {

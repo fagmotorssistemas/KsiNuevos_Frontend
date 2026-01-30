@@ -22,11 +22,23 @@ const UserDropdown = ({ user, profile, supabase }: any) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
-    setIsOpen(false);
-  };
+  const handleSignOut = async () => {
+        try {
+            // 1. Cerramos la sesión en Supabase
+            await supabase.auth.signOut();
+            
+            // 2. Cerramos el menú desplegable
+            setIsOpen(false);
+            
+            // 3. Limpiamos el cache de las rutas para asegurar que el estado de auth cambie
+            router.refresh();
+            
+            // 4. Redirigimos a la página de inicio (src/app/(home)/home/page.tsx)
+            router.push('/home');
+        } catch (error) {
+            console.error("Error al cerrar sesión:", error);
+        }
+    };
 
   const userInitial = profile?.full_name ? profile.full_name[0].toUpperCase() : user.email[0].toUpperCase();
   const userRole = profile?.role === 'cliente' ? 'Cliente' : 'Staff';
@@ -63,7 +75,7 @@ const UserDropdown = ({ user, profile, supabase }: any) => {
                 Mis Citas
               </Link>
             )}
-            <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors">
+            <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors">
               Cerrar Sesión
             </button>
           </div>

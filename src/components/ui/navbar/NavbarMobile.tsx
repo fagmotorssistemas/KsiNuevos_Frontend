@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { KsButton } from '@/components/ui/Homeksi/KsButton';
+import { useRouter } from 'next/navigation'; // 1. Importamos el router
 
 interface NavbarMobileProps {
   isOpen: boolean;
@@ -13,6 +14,20 @@ interface NavbarMobileProps {
 }
 
 export const NavbarMobile = ({ isOpen, setIsOpen, links, user, profile, isLoading, supabase }: NavbarMobileProps) => {
+  const router = useRouter(); // 2. Inicializamos el router
+
+  // 3. Creamos la función de cierre de sesión
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setIsOpen(false); // Cerramos el menú móvil
+      router.refresh(); // Refrescamos las rutas para limpiar el estado de auth
+      router.push('/home'); // Redirigimos al home
+    } catch (error) {
+      console.error("Error cerrando sesión:", error);
+    }
+  };
+
   return (
     <div 
       className={`
@@ -50,12 +65,10 @@ export const NavbarMobile = ({ isOpen, setIsOpen, links, user, profile, isLoadin
                   </Link>
               )}
 
+              {/* 4. Usamos la nueva función handleLogout */}
               <button 
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  window.location.reload();
-                }}
-                className="w-full text-center text-red-600 font-medium py-2 text-sm"
+                onClick={handleLogout}
+                className="w-full text-center text-red-600 font-medium py-2 text-sm hover:bg-red-50 rounded-md transition-colors"
               >
                 Cerrar Sesión
               </button>
