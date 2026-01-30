@@ -6,17 +6,19 @@ interface CarGalleryProps {
 }
 
 export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
-  // 1. Estado inicial
   const [activeImage, setActiveImage] = useState(mainImage || "/placeholder.png");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 2. Sincronizar estado cuando cambia el prop
+  // Sincronizar props
   useEffect(() => {
-    if (mainImage) {
-      setActiveImage(mainImage);
-    }
+    if (mainImage) setActiveImage(mainImage);
   }, [mainImage]);
 
-  // 3. Crear lista de imágenes única
+  // Al cambiar imagen, activamos modo carga
+  useEffect(() => {
+    setIsLoading(true);
+  }, [activeImage]);
+
   const allImages = useMemo(() => {
     const rawList = [mainImage, ...(galleryImages || [])];
     const cleanList = rawList.filter(Boolean) as string[];
@@ -25,35 +27,52 @@ export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* IMAGEN GRANDE PRINCIPAL */}
+      
+      {/* --- IMAGEN PRINCIPAL --- */}
       <div className="w-full bg-neutral-100 rounded-3xl overflow-hidden border border-neutral-200 relative shadow-sm group">
+        
+        {/* 1. EL SKELETON (Solo el cuadrito gris) 
+            - Se muestra si isLoading es true.
+            - aspect-video: Le da forma rectangular automáticamente sin necesitar contenido.
+            - bg-gray-200 animate-pulse: El color gris y el efecto de latido.
+        */}
+        {isLoading && (
+          <div className="w-full aspect-video bg-gray-200 animate-pulse rounded-3xl" />
+        )}
+
+        {/* 2. LA IMAGEN REAL 
+            - hidden: Si está cargando, la ocultamos TOTALMENTE (así no sale el texto "Vista 1").
+            - block: Cuando carga, la mostramos.
+        */}
         <img 
           src={activeImage} 
-          alt="Vista principal del auto" 
-          className="w-full h-auto block group-hover:scale-105 transition-transform duration-700 ease-out"
+          alt="Auto" 
+          onLoad={() => setIsLoading(false)}
+          className={`
+            w-full h-auto object-contain transition-transform duration-700 ease-out group-hover:scale-105
+            ${isLoading ? 'hidden' : 'block'} 
+          `}
         />
       </div>
 
-      {/* CARRUSEL DE MINIATURAS */}
+      {/* --- MINIATURAS --- */}
       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide pt-2 px-1">
         {allImages.map((img, idx) => (
           <button
             key={`${img}-${idx}`}
             onClick={() => setActiveImage(img)}
-            /* CAMBIO REALIZADO: 
-               Se cambió 'z-10' por 'z-0' en la miniatura activa. 
-               Esto evita que la miniatura seleccionada traspase el fondo oscuro (backdrop) 
-               de los modales de agendamiento.
-            */
-            className={`flex-shrink-0 w-24 h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 relative ${
-              activeImage === img 
-                ? "border-red-600 ring-2 ring-red-100 scale-105 opacity-100 z-0 shadow-md" 
+            // bg-gray-200 aquí asegura que si la miniatura tarda, se vea un cuadrito gris de fondo
+            className={`
+              flex-shrink-0 w-24 h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 relative bg-gray-200
+              ${activeImage === img 
+                ? "border-red-600 ring-2 ring-red-100 scale-105 opacity-100 z-10 shadow-md" 
                 : "border-transparent opacity-60 hover:opacity-100 hover:border-neutral-300"
-            }`}
+              }
+            `}
           >
             <img 
               src={img} 
-              alt={`Vista ${idx + 1}`} 
+              alt="" // Alt vacío para que no salga texto en las miniaturas si fallan
               className="w-full h-full object-cover"
             />
           </button>
