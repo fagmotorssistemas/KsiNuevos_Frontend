@@ -23,7 +23,7 @@ export const Step2Condition = ({ data, update }: StepProps) => {
         <ToggleItem 
             title="¿Papeles al día?" 
             subtitle="Matrícula vigente, sin multas."
-            checked={data.papers_ok !== false}
+            checked={data.papers_ok || false}
             onChange={(val) => update({ papers_ok: val })} 
         />
 
