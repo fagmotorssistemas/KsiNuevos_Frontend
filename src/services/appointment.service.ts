@@ -34,5 +34,21 @@ export const appointmentService = {
       .eq('id', id);
     
     if (error) throw error;
+  },
+
+  // --- NUEVA IMPLEMENTACIÓN ---
+  async updateAppointmentNotes(id: number, notes: string) {
+    const { error } = await supabase
+      .from('web_appointments')
+      .update({ 
+        notes, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id);
+    
+    if (error) {
+        console.error('Error al actualizar notas:', error);
+        throw error;
+    }
   }
 };

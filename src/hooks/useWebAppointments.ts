@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Database } from '@/types/supabase';
 import { 
     WebAppointmentWithDetails, 
     WebAppointmentFilter, 
-    WebAppointmentStatus 
+    WebAppointmentStatus,
+    SortOrder 
 } from '@/types/web-appointments';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -13,13 +13,14 @@ export function useWebAppointments() {
     const [appointments, setAppointments] = useState<WebAppointmentWithDetails[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<WebAppointmentFilter>('all');
+    
+    const [sortOrder, setSortOrder] = useState<SortOrder>('oldest');
 
     const fetchAppointments = useCallback(async () => {
         if (!supabase) return;
         
         setLoading(true);
         try {
-            // Consulta con joins forzando la relación correcta para ventas
             const { data, error } = await supabase
                 .from('web_appointments')
                 .select(`
@@ -33,7 +34,6 @@ export function useWebAppointments() {
 
             if (error) throw error;
             
-            // Cast de datos al tipo enriquecido definido en web-appointments.ts
             setAppointments(data as unknown as WebAppointmentWithDetails[]);
         } catch (error) {
             console.error('Error fetching web appointments:', error);
@@ -47,7 +47,6 @@ export function useWebAppointments() {
         
         if (!supabase) return;
 
-        // Suscripción en tiempo real a cambios en la tabla
         const channel = supabase
             .channel('web_appointments_changes')
             .on('postgres_changes', { 
@@ -67,7 +66,6 @@ export function useWebAppointments() {
     const assignToMe = async (appointmentId: number) => {
         if (!profile?.id || !supabase) return;
         try {
-            // Se actualiza el estado a 'aceptado' para coincidir con el tipo WebAppointmentStatus
             const { error } = await supabase
                 .from('web_appointments')
                 .update({ 
@@ -98,23 +96,55 @@ export function useWebAppointments() {
         }
     };
 
-    // Lógica de filtrado simplificada y tipada
-    const filteredAppointments = appointments.filter(appt => {
-        if (filter === 'all') return true;
-        
-        // Dado que WebAppointmentFilter usa los mismos strings que appt.status,
-        // la comparación es directa y segura.
-        return appt.status === filter;
-    });
+    // --- NUEVA IMPLEMENTACIÓN PARA NOTAS ---
+    const updateNotes = async (appointmentId: number, notes: string) => {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase
+                .from('web_appointments')
+                .update({ 
+                    notes,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', appointmentId);
+            
+            if (error) throw error;
+            
+            // Actualizamos la lista local para reflejar el cambio inmediatamente
+            await fetchAppointments();
+        } catch (err) {
+            console.error("Error updating notes:", err);
+            throw err; // Re-lanzamos para que el componente maneje el error (ej. mostrar alerta)
+        }
+    };
+
+    const filteredAppointments = appointments
+        .filter(appt => {
+            if (filter === 'all') return true;
+            return appt.status === filter;
+        })
+        .sort((a, b) => {
+            const dateA = new Date(a.appointment_date).getTime();
+            const dateB = new Date(b.appointment_date).getTime();
+            
+            if (sortOrder === 'newest') {
+                return dateB - dateA;
+            } else {
+                return dateA - dateB;
+            }
+        });
 
     return {
         appointments: filteredAppointments,
         loading,
         setFilter,
         currentFilter: filter,
+        sortOrder,
+        setSortOrder,
         actions: { 
             assignToMe, 
             updateStatus, 
+            updateNotes, // Acción expuesta para el Modal
             refresh: fetchAppointments 
         }
     };

@@ -11,11 +11,11 @@ import {
     CheckCircle2, 
     Image as ImageIcon,
     Loader2,
-    AlertCircle // Agregado para mostrar icono en estado cancelado
+    AlertCircle,
+    Save // Icono para el botón de guardar
 } from 'lucide-react';
 import { Button } from "@/components/ui/buttontable";
-import { WebAppointmentWithDetails } from "@/types/web-appointments";
-import { WebAppointmentStatus } from '@/hooks/useAppointments';
+import { WebAppointmentWithDetails, WebAppointmentStatus } from "@/types/web-appointments";
 
 interface WebAppointmentDetailModalProps {
     isOpen: boolean;
@@ -24,6 +24,7 @@ interface WebAppointmentDetailModalProps {
     onAssign: (id: number) => Promise<any>;
     onCancel: (id: number) => Promise<any>;
     onStatusChange: (id: number, status: WebAppointmentStatus) => Promise<any>;
+    onUpdateNotes: (id: number, notes: string) => Promise<any>; // Nueva prop para actualizar notas
     currentUserId?: string;
 }
 
@@ -33,9 +34,18 @@ export function WebAppointmentDetailModal({
     appointment, 
     onAssign, 
     onStatusChange,
+    onUpdateNotes, // Nueva prop inyectada
     currentUserId
 }: WebAppointmentDetailModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [notes, setNotes] = useState(appointment?.notes || ""); // Estado local para el texto
+
+    // Sincronizar el estado local cuando cambia la cita seleccionada
+    useEffect(() => {
+        if (appointment) {
+            setNotes(appointment.notes || "");
+        }
+    }, [appointment]);
 
     // Bloquear scroll del body cuando está abierto
     useEffect(() => {
@@ -51,10 +61,7 @@ export function WebAppointmentDetailModal({
 
     if (!isOpen || !appointment) return null;
 
-    // --- LÓGICA DE ESTADO ---
-    // Determinamos si la cita ya es historial (no se debe editar)
     const isFinalized = appointment.status === 'atendido' || appointment.status === 'cancelado';
-
     const isBuying = appointment.type === 'compra';
     const dateObj = new Date(appointment.appointment_date);
     
@@ -69,16 +76,24 @@ export function WebAppointmentDetailModal({
         ? (buyInventory?.img_gallery_urls || [])
         : (sellRequest?.photos_urls || []);
 
-    // Manejador para Aceptar la cita (Asigna y luego cambia estado)
+    // Manejador para guardar las notas
+    const handleSaveNotes = async () => {
+        if (!appointment) return;
+        setIsSubmitting(true);
+        try {
+            await onUpdateNotes(appointment.id, notes);
+        } catch (error) {
+            console.error("Error al guardar notas:", error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleAccept = async () => {
         setIsSubmitting(true);
         try {
-            // 1. Primero aseguramos la asignación del responsable
             await onAssign(appointment.id); 
-            
-            // 2. Luego cambiamos el estado a 'aceptado'
             await onStatusChange(appointment.id, 'aceptado'); 
-            
             onClose();
         } catch (error) {
             console.error("Error al aceptar la cita:", error);
@@ -87,10 +102,8 @@ export function WebAppointmentDetailModal({
         }
     };
 
-    // Manejador para Cancelar la cita
     const handleCancel = async () => {
         if (!confirm('¿Estás seguro de que deseas cancelar esta cita?')) return;
-        
         setIsSubmitting(true);
         try {
             await onStatusChange(appointment.id, 'cancelado');
@@ -104,23 +117,17 @@ export function WebAppointmentDetailModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-20">
-            {/* Backdrop */}
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
-            {/* Panel */}
             <div className="relative w-full max-w-3xl transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all flex flex-col max-h-[90vh]">
                 
-                {/* HEADER */}
                 <div className="flex justify-between items-start p-6 border-b border-slate-100 bg-white z-10">
                     <div>
                         <h3 className="text-xl font-bold text-slate-900 leading-6">
                             {isBuying ? 'Solicitud de Compra / Visita' : 'Solicitud de Venta (Trade-In)'}
                         </h3>
                         <p className="text-sm text-slate-500 mt-1">
-                            {isFinalized 
-                                ? 'Detalles históricos de la solicitud.'
-                                : 'Revisa los detalles antes de contactar al cliente.'
-                            }
+                            {isFinalized ? 'Detalles históricos de la solicitud.' : 'Revisa los detalles antes de contactar al cliente.'}
                         </p>
                     </div>
                     <button onClick={onClose} className="rounded-full p-1 hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
@@ -128,11 +135,8 @@ export function WebAppointmentDetailModal({
                     </button>
                 </div>
 
-                {/* BODY */}
                 <div className="p-6 overflow-y-auto">
                     <div className="grid gap-6 md:grid-cols-2">
-                        
-                        {/* COLUMNA IZQUIERDA: CLIENTE Y CITA */}
                         <div className="space-y-6">
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
                                 <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -167,14 +171,38 @@ export function WebAppointmentDetailModal({
                                     </div>
                                 </div>
                             </div>
+
+                            {/* SECCIÓN DE NOTAS */}
+                            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">
+                                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 text-blue-500" /> Notas de Seguimiento
+                                </h4>
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Escribe comentarios sobre la gestión..."
+                                    className="w-full h-32 p-3 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white transition-all"
+                                />
+                                <Button 
+                                    size="sm" 
+                                    className="w-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                                    onClick={handleSaveNotes}
+                                    disabled={isSubmitting || notes === appointment.notes}
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    ) : (
+                                        <Save className="w-3.5 h-3.5 mr-2" />
+                                    )}
+                                    Guardar Comentarios
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* COLUMNA DERECHA: DATOS DEL VEHÍCULO */}
                         <div className="space-y-6">
                             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b pb-2">
                                 <Car className="w-4 h-4 text-indigo-500" /> Vehículo
                             </h4>
-
                             <div className="space-y-4">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900">{carTitle}</h2>
@@ -185,7 +213,6 @@ export function WebAppointmentDetailModal({
                                             : `Pide: $${sellRequest?.client_asking_price?.toLocaleString() || 'N/A'}`}
                                     </span>
                                 </div>
-
                                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 grid grid-cols-2 gap-4 text-sm">
                                     {isBuying ? (
                                         <>
@@ -199,7 +226,6 @@ export function WebAppointmentDetailModal({
                                         </>
                                     )}
                                 </div>
-
                                 <div>
                                     <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
                                         <ImageIcon className="w-3 h-3" /> Galería ({photos.length})
@@ -215,9 +241,7 @@ export function WebAppointmentDetailModal({
                     </div>
                 </div>
 
-                {/* FOOTER: ACCIONES */}
                 {!isFinalized ? (
-                    // CASO 1: Cita Activa -> Muestra Botones de acción
                     <div className="bg-slate-50 px-6 py-4 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3 border-t border-slate-200 z-10">
                         <button
                             disabled={isSubmitting}
@@ -226,7 +250,6 @@ export function WebAppointmentDetailModal({
                         >
                             Cancelar Cita
                         </button>
-
                         <div className="flex gap-3">
                             <Button 
                                 variant="secondary" 
@@ -236,7 +259,6 @@ export function WebAppointmentDetailModal({
                                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                 Aceptar
                             </Button>
-                            
                             {!appointment.responsible_id && (
                                 <Button 
                                     variant="primary" 
@@ -256,7 +278,6 @@ export function WebAppointmentDetailModal({
                         </div>
                     </div>
                 ) : (
-                    // CASO 2: Cita Finalizada (Historial) -> Muestra mensaje informativo
                     <div className="bg-slate-50 px-6 py-4 flex justify-between items-center border-t border-slate-200 z-10">
                         <div className="flex items-center gap-2 text-sm font-medium">
                             {appointment.status === 'atendido' ? (
@@ -273,7 +294,6 @@ export function WebAppointmentDetailModal({
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
     );

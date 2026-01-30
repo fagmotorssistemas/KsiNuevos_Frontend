@@ -11,11 +11,13 @@ import {
     Sparkles,
     Globe,
     LayoutGrid,
-    ListFilter
+    ListFilter,
+    SortAsc,
+    SortDesc
 } from "lucide-react";
 
 import { useAgenda, type AppointmentWithDetails, type DateFilterOption, type BotSuggestionLead } from "@/hooks/useAgenda";
-import { useAppointments } from "@/hooks/useAppointments"; 
+import { useWebAppointments } from "@/hooks/useWebAppointments"; 
 import { WebAppointmentCard } from "@/components/features/agenda/WebAppointmentCard";
 import { WebAppointmentDetailModal } from "@/components/features/agenda/WebAppointmentDetailModal";
 import { WebAppointmentWithDetails as WebApptType } from "@/types/web-appointments";
@@ -59,14 +61,22 @@ export default function AgendaPage() {
         refresh
     } = useAgenda();
 
+    // Hook de Citas Web actualizado con acciones de notas y asignación
     const {
         appointments: webAppointments,
-        isLoading: loadingWeb,
-        updateStatus: updateWebStatus,
-        autoAssign: autoAssignWeb
-    } = useAppointments();
+        loading: loadingWeb,
+        currentFilter,
+        setFilter,
+        sortOrder,
+        setSortOrder,
+        actions: { 
+            updateStatus: updateWebStatus, 
+            assignToMe: autoAssignWeb,
+            updateNotes: updateWebNotes // Nueva acción integrada
+        }
+    } = useWebAppointments();
 
-    // --- LÓGICA DE FILTRADO PARA CITAS WEB ---
+    // --- LÓGICA DE FILTRADO PARA CITAS WEB (ADMIN/USER) ---
     const filteredWebAppointments = webAppointments.filter((appt: WebApptType) => {
         if (isAdmin) return true;
         return appt.responsible_id === profile?.id;
@@ -179,7 +189,7 @@ export default function AgendaPage() {
             </div>
 
             {/* FILTROS ADMIN */}
-            {isAdmin && (
+            {isAdmin && activeTab !== 'web_requests' && (
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mr-2">
                         <Filter className="h-4 w-4" />
@@ -321,35 +331,65 @@ export default function AgendaPage() {
                 ) : activeTab === 'web_requests' ? (
                     loadingWeb ? (
                         <div className="flex items-center justify-center h-40">Cargando solicitudes web...</div>
-                    ) : filteredWebAppointments.filter(a => a.status !== 'atendido' && a.status !== 'cancelado').length > 0 ? (
+                    ) : (
                         <div className="py-6 space-y-6 animate-in fade-in">
+                            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <ListFilter className="h-4 w-4 text-slate-400" />
+                                        <select
+                                            value={currentFilter}
+                                            onChange={(e) => setFilter(e.target.value as any)}
+                                            className="text-sm font-medium bg-transparent outline-none cursor-pointer text-slate-600 focus:text-blue-600"
+                                        >
+                                            <option value="all">Todos los estados</option>
+                                            <option value="pendiente">Pendientes</option>
+                                            <option value="aceptado">Solo Aceptados</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 border-l pl-4">
+                                    {sortOrder === 'oldest' ? <SortAsc className="h-4 w-4 text-slate-400" /> : <SortDesc className="h-4 w-4 text-slate-400" />}
+                                    <select
+                                        value={sortOrder}
+                                        onChange={(e) => setSortOrder(e.target.value as any)}
+                                        className="text-sm font-medium bg-transparent outline-none cursor-pointer text-slate-600"
+                                    >
+                                        <option value="oldest">Más antiguos primero</option>
+                                        <option value="newest">Más recientes primero</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <h3 className="flex items-center gap-2 text-sm font-bold text-blue-500 uppercase tracking-wider px-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                                Agendadas desde el Sitio Web
+                                Solicitudes desde el Sitio Web ({filteredWebAppointments.filter(a => a.status !== 'atendido' && a.status !== 'cancelado').length})
                             </h3>
-                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                {filteredWebAppointments
-                                    .filter(a => a.status !== 'atendido' && a.status !== 'cancelado')
-                                    .map((appt: WebApptType) => (
-                                    <WebAppointmentCard 
-                                        key={appt.id}
-                                        appointment={appt}
-                                        currentUserId={profile?.id}
-                                        onViewDetails={handleOpenWebDetail}
-                                        onStatusChange={updateWebStatus}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
-                            <div className="bg-blue-50 p-4 rounded-full mb-4">
-                                <Globe className="h-10 w-10 text-blue-400" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900">Sin Solicitudes Web</h3>
-                            <p className="text-slate-500 max-w-sm mt-2">
-                                No tienes solicitudes web activas asignadas.
-                            </p>
+
+                            {filteredWebAppointments.filter(a => a.status !== 'atendido' && a.status !== 'cancelado').length > 0 ? (
+                                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {filteredWebAppointments
+                                        .filter(a => a.status !== 'atendido' && a.status !== 'cancelado')
+                                        .map((appt: WebApptType) => (
+                                        <WebAppointmentCard 
+                                            key={appt.id}
+                                            appointment={appt}
+                                            currentUserId={profile?.id}
+                                            onViewDetails={handleOpenWebDetail}
+                                            onStatusChange={updateWebStatus}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
+                                    <div className="bg-blue-50 p-4 rounded-full mb-4">
+                                        <Globe className="h-10 w-10 text-blue-400" />
+                                    </div>
+                                    <h3 className="text-lg font-medium text-slate-900">Sin Solicitudes</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">No se encontraron solicitudes web.</p>
+                                </div>
+                            )}
                         </div>
                     )
 
@@ -378,23 +418,17 @@ export default function AgendaPage() {
                                 <Sparkles className="h-10 w-10 text-indigo-400" />
                             </div>
                             <h3 className="text-lg font-medium text-slate-900">Sin sugerencias</h3>
-                            <p className="text-slate-500 max-w-sm mt-2">
-                                El robot no ha detectado nuevas intenciones.
-                            </p>
+                            <p className="text-slate-500 max-w-sm mt-2">El robot no ha detectado nuevas intenciones.</p>
                         </div>
                     )
                 ) : (
-                    /* APARTADO DE HISTORIAL CON SUB-NAVEGACIÓN */
+                    /* APARTADO DE HISTORIAL */
                     <div className="space-y-6 animate-in fade-in duration-500 py-4">
-                        
-                        {/* BOTONES DE SUB-NAVEGACIÓN */}
                         <div className="flex items-center gap-2 p-1 bg-slate-200/50 w-fit rounded-xl border border-slate-200">
                             <button
                                 onClick={() => setHistorySubTab('leads')}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                                    historySubTab === 'leads'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700'
+                                    historySubTab === 'leads' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                 }`}
                             >
                                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -403,9 +437,7 @@ export default function AgendaPage() {
                             <button
                                 onClick={() => setHistorySubTab('web')}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                                    historySubTab === 'web'
-                                    ? 'bg-white text-blue-700 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700'
+                                    historySubTab === 'web' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                 }`}
                             >
                                 <Globe className="h-3.5 w-3.5" />
@@ -413,18 +445,14 @@ export default function AgendaPage() {
                             </button>
                         </div>
 
-                        {/* CONTENIDO SEGÚN SUB-PESTAÑA */}
                         <div className="mt-6">
                             {historySubTab === 'leads' ? (
                                 Object.keys(groupedHistory).length > 0 ? (
-                                    Object.entries(groupedHistory).map(([date, list]) => 
-                                        renderDaySection(date, list)
-                                    )
+                                    Object.entries(groupedHistory).map(([date, list]) => renderDaySection(date, list))
                                 ) : (
                                     <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                                         <History className="h-8 w-8 text-slate-300 mb-3" />
                                         <h3 className="text-md font-medium text-slate-900">Sin historial de leads</h3>
-                                        <p className="text-slate-500 text-sm max-w-xs mt-1">No hay citas de agenda finalizadas.</p>
                                     </div>
                                 )
                             ) : (
@@ -444,7 +472,6 @@ export default function AgendaPage() {
                                     <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                                         <Globe className="h-8 w-8 text-blue-200 mb-3" />
                                         <h3 className="text-md font-medium text-slate-900">Sin historial web</h3>
-                                        <p className="text-slate-500 text-sm max-w-xs mt-1">No hay solicitudes web atendidas o canceladas.</p>
                                     </div>
                                 )
                             )}
@@ -468,17 +495,18 @@ export default function AgendaPage() {
                 appointment={selectedWebAppointment}
                 currentUserId={profile?.id}
                 onAssign={async (id: number) => {
-                    if (selectedWebAppointment) {
-                        return await autoAssignWeb(id, selectedWebAppointment.client_user_id);
-                    }
+                    if (selectedWebAppointment) return await autoAssignWeb(id);
                     return Promise.resolve(null);
                 }}
                 onCancel={async (id: number) => await updateWebStatus(id, 'cancelado')}
                 onStatusChange={async (id: number, status: WebApptType['status']) => 
                     await updateWebStatus(id, status as any)
                 }
+                // CONEXIÓN DE LA NUEVA FUNCIONALIDAD DE NOTAS
+                onUpdateNotes={async (id: number, notes: string) => 
+                    await updateWebNotes(id, notes)
+                }
             />
-
         </div>
     );
 }
