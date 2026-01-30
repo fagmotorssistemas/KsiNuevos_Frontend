@@ -23,8 +23,8 @@ export function PagosKpiStats({ data, loading }: PagosKpiStatsProps) {
 
     if (loading || !data) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                {[1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {[1, 2, 3].map((i) => (
                     <div key={i} className="h-32 rounded-xl bg-slate-100 animate-pulse" />
                 ))}
             </div>
@@ -32,7 +32,7 @@ export function PagosKpiStats({ data, loading }: PagosKpiStatsProps) {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             
             {/* 1. Total Pagado */}
             <div className="p-5 rounded-xl border border-blue-100 bg-blue-50/50 shadow-sm relative overflow-hidden">
@@ -88,7 +88,8 @@ export function PagosKpiStats({ data, loading }: PagosKpiStatsProps) {
             </div>
 
             {/* 4. Cantidad Transacciones */}
-            <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-center relative overflow-hidden">
+
+            {/* <div className="p-5 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col justify-center relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5">
                     <Receipt className="h-20 w-20 text-slate-600" />
                 </div>
@@ -102,7 +103,7 @@ export function PagosKpiStats({ data, loading }: PagosKpiStatsProps) {
                     <h3 className="text-3xl font-bold text-slate-900">{data.cantidadTransacciones}</h3>
                     <p className="text-xs text-slate-500 font-medium mt-1">Documentos procesados</p>
                 </div>
-            </div>
+            </div> */}
 
         </div>
     );

@@ -52,7 +52,7 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
                     <input
                         type="text"
                         placeholder="Buscar por concepto, beneficiario o documento..."
-                        className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                        className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                         value={filters.searchTerm}
                         onChange={(e) => onChange({ ...filters, searchTerm: e.target.value })}
                     />
@@ -105,7 +105,7 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
                         onClick={() => handlePresetChange(preset.id)}
                         className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
                             filters.datePreset === preset.id
-                                ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium'
+                                ? 'bg-red-50 border-red-200 text-red-700 font-medium'
                                 : 'bg-transparent border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                     >
