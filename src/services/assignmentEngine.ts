@@ -1,13 +1,11 @@
-import { createClient } from '@/lib/supabase/client';
-
-const supabase = createClient();
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export const assignmentEngine = {
   /**
    * REGLA 3: Afinidad de Cliente.
-   * Si el cliente ya existe en el historial, se le asigna a su vendedor original.
+   * Busca en el historial si el cliente ya tiene un vendedor asignado, recibiendo el cliente de Supabase como parámetro.
    */
-  async findPreviousSeller(clientId: string): Promise<string | null> {
+  async findPreviousSeller(supabase: SupabaseClient, clientId: string): Promise<string | null> {
     const { data, error } = await supabase
       .from('web_appointments')
       .select('responsible_id')
@@ -22,10 +20,10 @@ export const assignmentEngine = {
 
   /**
    * REGLA 2: Round-Robin Puro.
-   * Reparte uno a uno siguiendo el orden de la lista de vendedores.
+   * Determina el turno basándose en la última asignación global registrada en la base de datos.
    */
-  async getNextSellerInCircle(): Promise<string | null> {
-    // 1. Obtener vendedores activos ordenados por ID
+  async getNextSellerInCircle(supabase: SupabaseClient): Promise<string | null> {
+    // 1. Obtener lista de vendedores aptos
     const { data: sellers } = await supabase
       .from('profiles')
       .select('id')
@@ -35,7 +33,7 @@ export const assignmentEngine = {
 
     if (!sellers || sellers.length === 0) return null;
 
-    // 2. Buscar quién recibió la última cita (sin importar el cliente)
+    // 2. Identificar quién atendió la última cita registrada
     const { data: lastAssignment } = await supabase
       .from('web_appointments')
       .select('responsible_id')
@@ -45,13 +43,11 @@ export const assignmentEngine = {
 
     const lastSellerId = lastAssignment?.[0]?.responsible_id;
 
-    // Si nadie ha recibido citas, empezamos por el primero
     if (!lastSellerId) return sellers[0].id;
 
-    // 3. Lógica del círculo: encontrar el siguiente índice
+    // 3. Calcular el siguiente en el círculo
     const lastIndex = sellers.findIndex(s => s.id === lastSellerId);
     
-    // Si el último vendedor ya no está activo, empezamos de nuevo o tomamos el primero
     if (lastIndex === -1) return sellers[0].id;
 
     const nextIndex = (lastIndex + 1) % sellers.length;
@@ -59,24 +55,33 @@ export const assignmentEngine = {
   },
 
   /**
-   * Proceso de asignación automática al cargar la agenda.
+   * Método principal para determinar el responsable inyectando el cliente de base de datos.
    */
-  async assignAutomatically(appointmentId: number, clientId: string) {
-    try {
-      // 1. ¿Es cliente recurrente? (Afinidad)
-      let sellerId = await this.findPreviousSeller(clientId);
+  async determineResponsible(supabase: SupabaseClient, clientId: string): Promise<string | null> {
+    // Prioridad 1: Afinidad
+    let sellerId = await this.findPreviousSeller(supabase, clientId);
+    
+    // Prioridad 2: Turno (Round-Robin)
+    if (!sellerId) {
+      sellerId = await this.getNextSellerInCircle(supabase);
+    }
+    
+    return sellerId;
+  },
 
-      // 2. Si es nuevo, aplicar turno riguroso (Round-Robin)
-      if (!sellerId) {
-        sellerId = await this.getNextSellerInCircle();
-      }
+  /**
+   * Proceso de actualización para citas ya creadas (Agenda administrativa).
+   */
+  async assignAutomatically(supabase: SupabaseClient, appointmentId: number, clientId: string) {
+    try {
+      const sellerId = await this.determineResponsible(supabase, clientId);
 
       if (sellerId) {
         const { error } = await supabase
           .from('web_appointments')
           .update({ 
             responsible_id: sellerId,
-            status: 'pendiente', // Se mantiene pendiente para acción del vendedor
+            status: 'pendiente',
             updated_at: new Date().toISOString() 
           })
           .eq('id', appointmentId);

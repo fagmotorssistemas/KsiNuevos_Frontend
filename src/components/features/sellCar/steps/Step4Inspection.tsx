@@ -13,22 +13,23 @@ interface StepProps {
 export const Step4Inspection = ({ data, update }: StepProps) => {
   const slots = useAppointmentSlots()
 
-  useEffect(() => {
-    // 1. Calculamos el valor nuevo basado en la selección actual
-    let newDate: string | undefined = undefined
+useEffect(() => {
+  let newDate: string | undefined = undefined
 
-    if (slots.selectedDate && slots.selectedHour && slots.selectedMinute) {
-        newDate = `${slots.selectedDate}T${slots.selectedHour}:${slots.selectedMinute}:00`
-    }
+  if (slots.selectedDate && slots.selectedHour && slots.selectedMinute) {
+      // 1. Creamos un objeto Date local con los valores seleccionados
+      // Esto asegura que el navegador entienda la hora en tu zona horaria
+      const localDate = new Date(`${slots.selectedDate}T${slots.selectedHour}:${slots.selectedMinute}:00`);
+      
+      // 2. Convertimos a ISOString (UTC) antes de guardar, igual que en el flujo de compra
+      newDate = localDate.toISOString();
+  }
 
-    // --- CORRECCIÓN DEL BUCLE INFINITO ---
-    // Comparamos: ¿El dato que ya tenemos guardado es igual al nuevo?
-    // Si son iguales, NO hacemos nada. Así evitamos renderizados infinitos.
-    if (data.appointmentDate !== newDate) {
-        update({ appointmentDate: newDate })
-    }
-    
-  }, [slots.selectedDate, slots.selectedHour, slots.selectedMinute, data.appointmentDate, update])
+  if (data.appointmentDate !== newDate) {
+      update({ appointmentDate: newDate })
+  }
+  
+}, [slots.selectedDate, slots.selectedHour, slots.selectedMinute, data.appointmentDate, update])
 
   return (
     <div className="flex flex-col h-full bg-white">

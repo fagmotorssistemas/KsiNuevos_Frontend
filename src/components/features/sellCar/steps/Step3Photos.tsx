@@ -14,6 +14,9 @@ export const Step3Photos = ({ data, update }: StepProps) => {
   const [uploadProgress, setUploadProgress] = useState(0)
   const supabase = createClient()
 
+  // Validación visual para determinar si el requisito de "mínimo una foto" se cumple
+  const hasPhotos = data.photos_urls && data.photos_urls.length > 0;
+
   // Validar que el archivo sea una imagen válida
   const validateFile = (file: File): boolean => {
     const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp']
@@ -35,25 +38,21 @@ export const Step3Photos = ({ data, update }: StepProps) => {
   // Función para subir un solo archivo
   const uploadFileToSupabase = async (file: File, userId: string): Promise<string> => {
     try {
-      // Validar archivo
       if (!validateFile(file)) {
         throw new Error('Archivo inválido')
       }
 
-      // Sanear el nombre del archivo
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
       const cleanFileName = file.name
-        .replace(/\.[^/.]+$/, '') // Remover extensión
-        .replace(/[^a-zA-Z0-9]/g, '_') // Reemplazar caracteres especiales
-        .substring(0, 20) // Limitar longitud
+        .replace(/\.[^/.]+$/, '') 
+        .replace(/[^a-zA-Z0-9]/g, '_') 
+        .substring(0, 20) 
       
-      // Crear nombre único
       const fileName = `${Date.now()}_${cleanFileName}.${fileExt}`
       const filePath = `${userId}/${fileName}`
 
       console.log('📤 Subiendo archivo:', filePath)
 
-      // Subir al bucket
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('sell-car-uploads')
         .upload(filePath, file, {
@@ -68,14 +67,12 @@ export const Step3Photos = ({ data, update }: StepProps) => {
 
       console.log('✅ Archivo subido:', uploadData)
 
-      // Obtener URL pública
       const { data: publicUrlData } = supabase.storage
         .from('sell-car-uploads')
         .getPublicUrl(filePath)
 
       const publicUrl = publicUrlData.publicUrl
       
-      // Verificar que la URL sea válida
       if (!publicUrl || !publicUrl.includes('supabase.co')) {
         throw new Error('URL inválida generada')
       }
@@ -97,7 +94,6 @@ export const Step3Photos = ({ data, update }: StepProps) => {
     const files = Array.from(e.target.files)
     
     try {
-      // Obtener usuario
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
       if (userError || !user) {
@@ -108,7 +104,6 @@ export const Step3Photos = ({ data, update }: StepProps) => {
       console.log('👤 Usuario:', user.id)
       console.log(`📁 Subiendo ${files.length} archivo(s)...`)
 
-      // Subir archivos uno por uno para mejor control
       const newUrls: string[] = []
       
       for (let i = 0; i < files.length; i++) {
@@ -118,7 +113,6 @@ export const Step3Photos = ({ data, update }: StepProps) => {
           setUploadProgress(((i + 1) / files.length) * 100)
         } catch (error) {
           console.error(`Error subiendo ${files[i].name}:`, error)
-          // Continuar con los demás archivos
         }
       }
 
@@ -127,18 +121,12 @@ export const Step3Photos = ({ data, update }: StepProps) => {
         return
       }
 
-      // 🔍 DEBUGGING: Verificar URLs antes de guardar
-      console.log('🔍 URLs generadas:', newUrls)
-      console.log('🔍 ¿Alguna contiene placehold?', newUrls.some((url: string) => url.includes('placehold')))
-      
-      // 🚨 VALIDACIÓN: Bloquear URLs inválidas
       if (newUrls.some((url: string) => url.includes('placehold'))) {
         console.error('🚨 ALERTA: Se detectó URL de placehold.co!')
         alert('ERROR: URL inválida detectada. No se guardará.')
         return
       }
 
-      // Guardar URLs en el estado
       const currentPhotos = data.photos_urls || []
       const allPhotos = [...currentPhotos, ...newUrls]
       
@@ -170,14 +158,21 @@ export const Step3Photos = ({ data, update }: StepProps) => {
       <div className="text-center mb-6">
         <h4 className="text-xl font-bold text-gray-900">Fotos del Vehículo</h4>
         <p className="text-sm text-gray-500">
-          Sube todas las fotos que tengas (Exterior e Interior)
+          Sube al menos una foto para continuar (Exterior e Interior)
         </p>
       </div>
 
+      {/* Aviso de requisito obligatorio para avanzar */}
+      {!hasPhotos && !uploading && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700 text-xs font-bold animate-pulse">
+            <span>⚠️ Requerido: Debes subir al menos una foto para poder continuar.</span>
+        </div>
+      )}
+
       {/* Área de Carga */}
-      <div className={`relative border-2 border-dashed border-gray-300 bg-gray-50 rounded-2xl p-8 text-center transition-colors group ${
+      <div className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-colors group ${
         uploading ? 'opacity-50 cursor-wait' : 'hover:bg-gray-100 cursor-pointer'
-      }`}>
+      } ${hasPhotos ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-gray-50'}`}>
         <input 
           type="file" 
           multiple 
@@ -188,13 +183,13 @@ export const Step3Photos = ({ data, update }: StepProps) => {
         />
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-2xl group-hover:scale-110 transition-transform">
-            {uploading ? '⏳' : '📸'}
+            {uploading ? '⏳' : hasPhotos ? '✅' : '📸'}
           </div>
           <div>
             <p className="font-bold text-gray-700">
               {uploading 
                 ? `Subiendo... ${Math.round(uploadProgress)}%` 
-                : 'Toca para subir fotos'}
+                : hasPhotos ? '¡Foto subida! Puedes agregar más' : 'Toca para subir fotos'}
             </p>
             <p className="text-xs text-gray-400">JPG, PNG, WEBP (Máx 5MB c/u)</p>
           </div>
@@ -203,11 +198,10 @@ export const Step3Photos = ({ data, update }: StepProps) => {
 
       {/* Grid de Previsualización */}
       <div className="mt-6 flex-grow overflow-y-auto">
-        {data.photos_urls && data.photos_urls.length > 0 ? (
+        {hasPhotos ? (
           <div className="grid grid-cols-3 gap-3">
-            {data.photos_urls.map((photoUrl, idx) => (
+            {data.photos_urls?.map((photoUrl, idx) => (
               <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-100 group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
                   src={photoUrl} 
                   alt={`Foto ${idx + 1}`}
@@ -219,7 +213,7 @@ export const Step3Photos = ({ data, update }: StepProps) => {
                 />
                 <button 
                   onClick={() => removePhoto(idx)}
-                  className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-red-600 transition-colors opacity-100"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />

@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation' 
 import { createSellRequest, type SellRequestData } from '@/hooks/Homeksi/sell-actions'
-import { KsButton } from '@/components/ui/Homeksi/KsButton' // Asegúrate de que la ruta sea correcta
+import { KsButton } from '@/components/ui/Homeksi/KsButton'
 
 // Imports de los 4 Pasos
 import { Step1VehicleInfo } from './steps/Step1VehicleInfo'
@@ -22,7 +22,7 @@ export const SellWizardContainer = ({ initialData, isOpen, onClose }: SellWizard
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState<Partial<SellRequestData>>(initialData)
   const [isLoading, setIsLoading] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false) // <-- Nuevo estado de éxito
+  const [isSuccess, setIsSuccess] = useState(false)
 
   if (!isOpen) return null
 
@@ -38,7 +38,7 @@ export const SellWizardContainer = ({ initialData, isOpen, onClose }: SellWizard
     setIsLoading(false)
 
     if (result.success) {
-      setIsSuccess(true) // <-- Activamos la vista de éxito en lugar de redirigir
+      setIsSuccess(true)
     } else {
       alert(result.error)
     }
@@ -49,14 +49,18 @@ export const SellWizardContainer = ({ initialData, isOpen, onClose }: SellWizard
     router.push('/perfil')
   }
 
+  // --- IMPLEMENTACIÓN DE VALIDACIÓN OBLIGATORIA ---
   const canGoNext = () => {
       switch(step) {
           case 1: 
+            // Permite cualquier valor numérico capturado por el Step1 corregido
             return !!(formData.brand && formData.model && formData.year && formData.mileage && formData.color && formData.transmission && formData.plate_last_digit);
           case 2: 
+            // Permite montos de millones (siempre que sea mayor a 0)
             return !!(formData.client_asking_price && formData.client_asking_price > 0);
           case 3: 
-            return true; 
+            // BLOQUEO: Solo permite continuar si hay al menos una foto cargada
+            return !!(formData.photos_urls && formData.photos_urls.length > 0); 
           case 4: 
             return !!formData.appointmentDate;
           default: return false;
@@ -66,7 +70,7 @@ export const SellWizardContainer = ({ initialData, isOpen, onClose }: SellWizard
   const getStepTitle = () => {
       if (step === 1) return "Datos del Vehículo";
       if (step === 2) return "Estado y Precio";
-      if (step === 3) return "Fotos (Opcional)";
+      if (step === 3) return "Fotos del Vehículo"; // Eliminado el "(Opcional)"
       if (step === 4) return "Agendar Inspección";
   }
 
@@ -125,7 +129,7 @@ export const SellWizardContainer = ({ initialData, isOpen, onClose }: SellWizard
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
                         }`}
                      >
-                        Siguiente
+                        {step === 3 && !canGoNext() ? 'Sube una foto para continuar' : 'Siguiente'}
                      </button>
                 ) : (
                     <button 

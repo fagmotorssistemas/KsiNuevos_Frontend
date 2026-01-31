@@ -9,6 +9,18 @@ interface StepProps {
 }
 
 export const Step2Condition = ({ data, update }: StepProps) => {
+
+  /**
+   * SOLUCIÓN PARA MONTOS GRANDES:
+   * Usamos type="text" con inputMode="numeric" para que el navegador no imponga 
+   * límites de validación de UI sobre números grandes (millones). 
+   * Limpiamos cualquier caracter no numérico antes de guardar como Number.
+   */
+  const handlePriceChange = (value: string) => {
+    const cleanValue = value.replace(/\D/g, ''); 
+    update({ client_asking_price: cleanValue ? Number(cleanValue) : 0 });
+  };
+
   return (
     <div className="p-6 space-y-6">
        <div className="text-center mb-4">
@@ -70,19 +82,21 @@ export const Step2Condition = ({ data, update }: StepProps) => {
           </div>
       </div>
 
-      {/* Precio Esperado */}
+      {/* Precio Esperado: Configurado para aceptar millones sin restricciones de UI */}
       <div className="space-y-2">
           <label className="text-xs font-bold uppercase text-gray-500 tracking-wider">¿Cuánto esperas recibir? (USD)</label>
           <div className="relative">
             <span className="absolute left-4 top-3.5 text-gray-400 font-bold">$</span>
             <input
-                type="number"
-                placeholder="0.00"
+                type="text"
+                inputMode="numeric"
+                placeholder="Ej: 1500000"
                 className="w-full pl-8 bg-white border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-green-500 outline-none font-bold text-lg text-gray-900"
                 value={data.client_asking_price || ''}
-                onChange={(e) => update({ client_asking_price: parseInt(e.target.value) || 0 })}
+                onChange={(e) => handlePriceChange(e.target.value)}
             />
           </div>
+          <p className="text-[10px] text-gray-400 ml-1">Ingresa el valor total sin puntos ni comas.</p>
       </div>
 
       {/* Descripción */}
@@ -91,7 +105,7 @@ export const Step2Condition = ({ data, update }: StepProps) => {
           <textarea
             rows={2}
             placeholder="Ej: Llantas nuevas, batería cambiada hace un mes..."
-            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-black outline-none resize-none text-sm"
+            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-black outline-none resize-none text-sm font-medium"
             value={data.description || ''}
             onChange={(e) => update({ description: e.target.value })}
           />
@@ -101,12 +115,10 @@ export const Step2Condition = ({ data, update }: StepProps) => {
   )
 }
 
-// --- SOLUCIÓN: Definimos la interfaz para las Props ---
 interface ToggleItemProps {
     title: string;
     subtitle: string;
     checked: boolean;
-    // Aquí le decimos explícitamente que 'onChange' recibe un valor booleano
     onChange: (value: boolean) => void; 
     color?: 'green' | 'red';
 }
@@ -114,17 +126,17 @@ interface ToggleItemProps {
 const ToggleItem = ({ title, subtitle, checked, onChange, color = 'green' }: ToggleItemProps) => (
     <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
         <div>
-        <p className="font-bold text-gray-900 text-sm">{title}</p>
-        <p className="text-[10px] text-gray-500">{subtitle}</p>
+            <p className="font-bold text-gray-900 text-sm">{title}</p>
+            <p className="text-[10px] text-gray-500 font-medium">{subtitle}</p>
         </div>
         <label className="relative inline-flex items-center cursor-pointer">
-        <input 
-            type="checkbox" 
-            className="sr-only peer"
-            checked={checked}
-            onChange={(e) => onChange(e.target.checked)}
-        />
-        <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${color === 'red' ? 'peer-checked:bg-red-600' : 'peer-checked:bg-green-500'}`}></div>
+            <input 
+                type="checkbox" 
+                className="sr-only peer"
+                checked={checked}
+                onChange={(e) => onChange(e.target.checked)}
+            />
+            <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all ${color === 'red' ? 'peer-checked:bg-red-600' : 'peer-checked:bg-green-500'}`}></div>
         </label>
     </div>
 )

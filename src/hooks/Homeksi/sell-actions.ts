@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from "next/cache"
 import type { Database } from "@/types/supabase"
+import { assignmentEngine } from "@/services/assignmentEngine"; // Importamos el motor corregido
 
 export type SellRequestData = {
   brand: string;
@@ -20,16 +21,14 @@ export type SellRequestData = {
   unique_owner: boolean;
   state_rating: number;
   client_asking_price: number;
-  
-  // En el Formulario (Frontend) usamos este nombre:
   photos_urls?: string[]; 
-  
   appointmentDate: string; 
 }
 
 export async function createSellRequest(data: SellRequestData) {
   const cookieStore = await cookies()
   
+  // Cliente de servidor compatible con Server Actions
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -39,6 +38,7 @@ export async function createSellRequest(data: SellRequestData) {
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) return { error: "Debes iniciar sesión." }
 
+  // 1. Insertar la solicitud de venta
   const { data: newRequest, error: sellError } = await supabase
     .from('web_sell_requests')
     .insert({
@@ -57,12 +57,7 @@ export async function createSellRequest(data: SellRequestData) {
       unique_owner: data.unique_owner,
       state_rating: data.state_rating,
       client_asking_price: data.client_asking_price,
-      
-      // --- CORRECCIÓN AQUÍ ---
-      // Antes decía: photos_exterior: ...
-      // Ahora debe decir: photos_urls (que es el nombre real en tu base de datos)
       photos_urls: data.photos_urls || [], 
-      
       status: 'pendiente'
     })
     .select()
@@ -70,11 +65,14 @@ export async function createSellRequest(data: SellRequestData) {
 
   if (sellError) {
     console.error("Error solicitud:", sellError.message)
-    // Mostramos el error técnico en consola para debug, pero al usuario le damos un mensaje amigable
     return { error: `Error al guardar: ${sellError.message}` }
   }
 
+  // 2. Si hay fecha, crear la cita usando el motor de asignación
   if (data.appointmentDate) {
+      // INYECCIÓN DE DEPENDENCIA: Pasamos el cliente 'supabase' al motor
+      const sellerId = await assignmentEngine.determineResponsible(supabase, user.id);
+
       const { error: apptError } = await supabase
         .from('web_appointments')
         .insert({
@@ -83,11 +81,13 @@ export async function createSellRequest(data: SellRequestData) {
             status: 'pendiente',
             appointment_date: data.appointmentDate,
             sell_request_id: newRequest.id,
+            responsible_id: sellerId, // Asignación consistente
             notes: `Inspección: ${data.brand} ${data.model} (Placa ${data.plate_first_letter}-${data.plate_last_digit})`
         })
       
       if (apptError) console.error("Error cita:", apptError.message)
   }
 
+  revalidatePath('/perfil');
   return { success: true, requestId: newRequest.id }
 }
