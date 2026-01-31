@@ -153,4 +153,4 @@ function StatCard({ icon: Icon, label, value, color, bg }: { icon: any, label: s
             <span className="text-xs text-slate-500 font-medium">{label}</span>
         </div>
     );
-}
+} 

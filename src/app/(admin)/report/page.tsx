@@ -7,7 +7,7 @@ import { useVehicleStats } from "@/hooks/useVehicleStats";
 import { AdminToolbar } from "@/components/features/admin/AdminToolbar";
 import { VehicleStatsView } from "@/components/features/admin/VehicleStatsView"; 
 import { createClient } from '@/lib/supabase/client';
-
+import { TestimonialsView } from "@/components/features/admin/TestimonialsView";
 import { 
     MessageCircle, 
     MapPin, 
@@ -24,7 +24,8 @@ import {
     User,
     Calendar,
     Phone,
-    LucideIcon
+    LucideIcon,
+    Star
 } from "lucide-react";
 
 // --- INTERFACES ---
@@ -37,7 +38,6 @@ interface ProformaWithProfile {
     vehicle_description: string | null;
     pdf_url: string | null;
     created_by: string | null;
-    // Ahora profiles es un objeto simple o null
     profiles: {
         full_name: string | null;
         phone: string | null;
@@ -72,9 +72,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
 
     const fetchProformas = async () => {
         setIsLoading(true);
-        
-        // AHORA SI FUNCIONARÁ EL JOIN:
-        // Solicitamos los campos de la tabla profiles relacionada
         const { data, error } = await supabase
             .from('credit_proformas')
             .select(`
@@ -92,8 +89,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
             console.error("Error cargando proformas:", error);
             setProformas([]);
         } else {
-            // TypeScript a veces devuelve 'profiles' como array si la relación no es única,
-            // pero con FK debería ser objeto. Hacemos un cast seguro.
             setProformas((data as unknown as ProformaWithProfile[]) || []);
         }
         setIsLoading(false);
@@ -101,15 +96,9 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
 
     const handleWhatsApp = (phoneRaw: string | null) => {
         if (!phoneRaw) return;
-        
         let phone = phoneRaw.replace(/\D/g, '');
-        
-        if (phone.startsWith('0')) {
-            phone = '593' + phone.substring(1);
-        } else if (!phone.startsWith('593')) {
-            phone = '593' + phone;
-        }
-
+        if (phone.startsWith('0')) phone = '593' + phone.substring(1);
+        else if (!phone.startsWith('593')) phone = '593' + phone;
         const url = `https://wa.me/${phone}`;
         window.open(url, '_blank');
     };
@@ -129,7 +118,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
-                {/* Header del Modal */}
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <div>
                         <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -143,7 +131,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                     </button>
                 </div>
 
-                {/* Buscador */}
                 <div className="p-4 border-b border-slate-100 bg-white">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -157,7 +144,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                     </div>
                 </div>
 
-                {/* Lista */}
                 <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center h-40 gap-3">
@@ -171,38 +157,28 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                     ) : (
                         <div className="space-y-3">
                             {filteredProformas.map((item) => {
-                                // Aquí obtenemos el nombre desde profiles
                                 const sellerName = item.profiles?.full_name || 'Desconocido';
-                                const sellerPhone = item.profiles?.phone;
-
                                 return (
                                     <div key={item.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                                        
-                                        {/* Info Cliente y Vehículo */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h3 className="font-bold text-slate-900 truncate">{item.client_name}</h3>
                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-full tracking-wide">Generada</span>
                                             </div>
-                                            
                                             <div className="space-y-1">
                                                 <p className="text-sm text-slate-600 flex items-center gap-2">
                                                     <Car className="h-3.5 w-3.5 text-slate-400" />
                                                     <span className="truncate">{item.vehicle_description || 'Vehículo no especificado'}</span>
                                                 </p>
-                                                
                                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                                                     <span className="flex items-center gap-1">
                                                         <Calendar className="h-3 w-3" />
                                                         {new Date(item.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
                                                     </span>
-                                                    
-                                                    {/* Nombre del Vendedor */}
-                                                    <span className="flex items-center gap-1 font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded" title={`Creado por ${sellerName}`}>
+                                                    <span className="flex items-center gap-1 font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
                                                         <User className="h-3 w-3" />
                                                         {sellerName}
                                                     </span>
-
                                                     <span className="flex items-center gap-1">
                                                         <Phone className="h-3 w-3" />
                                                         {item.client_phone || 'Sin teléfono'}
@@ -210,24 +186,14 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                                                 </div>
                                             </div>
                                         </div>
-
-                                        {/* Botones de Acción */}
                                         <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                                             {item.client_phone && (
-                                                <button 
-                                                    onClick={() => handleWhatsApp(item.client_phone)}
-                                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-sm font-medium transition-colors border border-green-200"
-                                                    title="Contactar Cliente por WhatsApp"
-                                                >
+                                                <button onClick={() => handleWhatsApp(item.client_phone)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-sm font-medium transition-colors border border-green-200">
                                                     <MessageCircle className="h-4 w-4" />
                                                     <span className="sm:hidden">Cliente</span>
                                                 </button>
                                             )}
-                                            
-                                            <button 
-                                                onClick={() => handleOpenPdf(item.pdf_url)}
-                                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors shadow-sm shadow-blue-600/20"
-                                            >
+                                            <button onClick={() => handleOpenPdf(item.pdf_url)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors shadow-sm shadow-blue-600/20">
                                                 <ExternalLink className="h-4 w-4" />
                                                 <span>Ver PDF</span>
                                             </button>
@@ -238,7 +204,6 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                         </div>
                     )}
                 </div>
-                
                 <div className="p-3 border-t border-slate-100 bg-slate-50 text-center text-xs text-slate-400">
                     Mostrando los últimos 50 registros
                 </div>
@@ -262,11 +227,8 @@ function StatCard({ icon: Icon, label, value, color, bg }: StatCardProps) {
 
 export default function AdminDashboardPage() {
     const { profile, isLoading: isAuthLoading } = useAuth();
-    
-    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles'>('sellers');
+    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles' | 'testimonials'>('sellers');
     const [inventoryStatus, setInventoryStatus] = useState<string>('disponible');
-    
-    // Estado para abrir/cerrar el modal de historial
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
     const {
@@ -299,14 +261,7 @@ export default function AdminDashboardPage() {
         proformas: acc.proformas + curr.proformas_created
     }), { leads: 0, showroom: 0, appointments: 0, requests: 0, proformas: 0 }), [sellerStats]);
 
-
-    if (
-        !isAuthLoading &&
-        (!profile ||
-        (profile.role !== 'admin' &&
-         profile.role !== 'vendedor' &&
-         profile.role !== 'marketing'))
-    ) {
+    if (!isAuthLoading && (!profile || (profile.role !== 'admin' && profile.role !== 'vendedor' && profile.role !== 'marketing'))) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-600">
                 <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
@@ -318,12 +273,7 @@ export default function AdminDashboardPage() {
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen font-sans">
-            
-            {/* Modal de Historial */}
-            <ProformasHistoryModal 
-                isOpen={isHistoryOpen} 
-                onClose={() => setIsHistoryOpen(false)} 
-            />
+            <ProformasHistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -335,57 +285,46 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
-                <AdminToolbar 
-                    currentFilter={dateFilter}
-                    onFilterChange={setDateFilter}
-                    customDate={customDate}
-                    onCustomDateChange={setCustomDate}
-                    onRefresh={handleReload}
-                    isLoading={isSellersLoading || isVehicleLoading}
-                />
-            </div>
+            {/* Toolbar solo visible si NO estamos en testimonios */}
+            {activeTab !== 'testimonials' && (
+                <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
+                    <AdminToolbar 
+                        currentFilter={dateFilter}
+                        onFilterChange={setDateFilter}
+                        customDate={customDate}
+                        onCustomDateChange={setCustomDate}
+                        onRefresh={handleReload}
+                        isLoading={isSellersLoading || isVehicleLoading}
+                    />
+                </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-200/50 p-1 rounded-lg">
                 <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => setActiveTab('sellers')}
-                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                            activeTab === 'sellers' 
-                            ? 'bg-white text-slate-900 shadow-sm' 
-                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                        }`}
-                    >
+                    <button onClick={() => setActiveTab('sellers')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'sellers' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                         <Users className="h-4 w-4" />
                         Rendimiento Asesores
                     </button>
-                    <button
-                        onClick={() => setActiveTab('vehicles')}
-                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                            activeTab === 'vehicles' 
-                            ? 'bg-white text-slate-900 shadow-sm' 
-                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                        }`}
-                    >
+                    <button onClick={() => setActiveTab('vehicles')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'vehicles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                         <LayoutGrid className="h-4 w-4" />
                         Inventario & Demanda
                     </button>
+                    <button onClick={() => setActiveTab('testimonials')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'testimonials' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
+                        <MessageCircle className="h-4 w-4" />
+                        Testimonios
+                    </button>
+                    {/* Botón de historial modal siempre accesible */}
+                    <button onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 rounded-md transition-colors shadow-sm">
+                        <FileText className="h-4 w-4" />
+                        Historial Proformas (PDF)
+                    </button>
                 </div>
-
-                {/* BOTÓN NUEVO: Historial PDFs */}
-                <button
-                    onClick={() => setIsHistoryOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 rounded-md transition-colors shadow-sm"
-                >
-                    <FileText className="h-4 w-4" />
-                    Historial Proformas (PDF)
-                </button>
             </div>
 
             <div className="min-h-[400px]">
-                
                 {activeTab === 'sellers' ? (
                     <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
+                        {/* StatCards movidos aquí dentro */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <StatCard icon={MessageCircle} label="Leads Resp." value={grandTotals.leads} color="text-blue-600" bg="bg-blue-50" />
                             <StatCard icon={MapPin} label="Showroom" value={grandTotals.showroom} color="text-purple-600" bg="bg-purple-50" />
@@ -412,57 +351,37 @@ export default function AdminDashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {isSellersLoading ? (
-                                            [...Array(5)].map((_, i) => (
-                                                <tr key={i} className="animate-pulse">
-                                                    <td className="py-4 px-6"><div className="h-4 w-32 bg-slate-100 rounded"></div></td>
-                                                    <td colSpan={6} className="py-4 px-6"></td>
-                                                </tr>
-                                            ))
-                                        ) : sellerStats.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="py-12 text-center text-slate-500">
-                                                    No hay actividad registrada en este rango de fechas.
-                                                </td>
+                                        {isSellersLoading ? [...Array(5)].map((_, i) => (
+                                            <tr key={i} className="animate-pulse">
+                                                <td className="py-4 px-6"><div className="h-4 w-32 bg-slate-100 rounded"></div></td>
+                                                <td colSpan={6} className="py-4 px-6"></td>
                                             </tr>
-                                        ) : (
-                                            sellerStats.map((seller) => (
-                                                <tr key={seller.profile_id} className="hover:bg-slate-50/50 transition-colors group">
-                                                    <td className="py-4 px-6">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold border border-slate-200 shadow-sm">
-                                                                {seller.full_name.substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                            <span className="font-medium text-slate-900">{seller.full_name}</span>
+                                        )) : sellerStats.length === 0 ? (
+                                            <tr><td colSpan={7} className="py-12 text-center text-slate-500">No hay actividad registrada.</td></tr>
+                                        ) : sellerStats.map((seller) => (
+                                            <tr key={seller.profile_id} className="hover:bg-slate-50/50 transition-colors group">
+                                                <td className="py-4 px-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold border border-slate-200 shadow-sm">
+                                                            {seller.full_name.substring(0, 2).toUpperCase()}
                                                         </div>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.leads_responded > 0 ? 'bg-blue-100 text-blue-700' : 'text-slate-300'}`}>{seller.leads_responded}</span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.showroom_created > 0 ? 'bg-purple-100 text-purple-700' : 'text-slate-300'}`}>{seller.showroom_created}</span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.appointments_created > 0 ? 'bg-green-100 text-green-700' : 'text-slate-300'}`}>{seller.appointments_created}</span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.requests_created > 0 ? 'bg-orange-100 text-orange-700' : 'text-slate-300'}`}>{seller.requests_created}</span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center">
-                                                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.proformas_created > 0 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-300'}`}>{seller.proformas_created}</span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-center bg-slate-50/30 font-bold text-slate-900 border-l border-slate-100 group-hover:bg-slate-100/50">
-                                                        {seller.total_activity}
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
+                                                        <span className="font-medium text-slate-900">{seller.full_name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6 text-center"><span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.leads_responded > 0 ? 'bg-blue-100 text-blue-700' : 'text-slate-300'}`}>{seller.leads_responded}</span></td>
+                                                <td className="py-4 px-6 text-center"><span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.showroom_created > 0 ? 'bg-purple-100 text-purple-700' : 'text-slate-300'}`}>{seller.showroom_created}</span></td>
+                                                <td className="py-4 px-6 text-center"><span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.appointments_created > 0 ? 'bg-green-100 text-green-700' : 'text-slate-300'}`}>{seller.appointments_created}</span></td>
+                                                <td className="py-4 px-6 text-center"><span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.requests_created > 0 ? 'bg-orange-100 text-orange-700' : 'text-slate-300'}`}>{seller.requests_created}</span></td>
+                                                <td className="py-4 px-6 text-center"><span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] ${seller.proformas_created > 0 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-300'}`}>{seller.proformas_created}</span></td>
+                                                <td className="py-4 px-6 text-center bg-slate-50/30 font-bold text-slate-900 border-l border-slate-100 group-hover:bg-slate-100/50">{seller.total_activity}</td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
-                ) : (
+                ) : activeTab === 'vehicles' ? (
                     <VehicleStatsView 
                         stats={inventoryStats} 
                         opportunities={opportunityStats}
@@ -470,6 +389,9 @@ export default function AdminDashboardPage() {
                         statusFilter={inventoryStatus}
                         onStatusFilterChange={setInventoryStatus}
                     />
+                ) : (
+                    /* Vista de testimonios completamente aislada */
+                    <TestimonialsView />
                 )}
             </div>
         </div>
