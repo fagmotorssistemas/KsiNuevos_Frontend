@@ -144,7 +144,7 @@ export default function AgendaPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                 {dateLabel}
             </h3>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                 {appointments.map((appt) => (
                     <AppointmentCard 
                         key={appt.id} 
