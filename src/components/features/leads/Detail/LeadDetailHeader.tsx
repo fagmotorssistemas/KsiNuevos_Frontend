@@ -102,32 +102,60 @@ export function LeadDetailHeader({ lead, onClose }: LeadDetailHeaderProps) {
             {/* IZQUIERDA: DATOS DEL LEAD (EDITABLES) */}
             <div className="min-w-0 flex-1 w-full">
                 {isEditing ? (
-                    <div className="flex flex-col gap-2 max-w-md animate-in fade-in">
-                        <input 
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="text-lg font-bold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-brand-500 outline-none"
-                            placeholder="Nombre del cliente"
-                        />
-                        <input 
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="text-sm text-slate-600 bg-white border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-brand-500 outline-none"
-                            placeholder="Teléfono"
-                        />
-                        <div className="flex gap-2 mt-1">
+                    <div className="flex flex-col gap-4 max-w-md animate-in fade-in zoom-in-95 duration-200">
+                        <div className="space-y-3">
+                            {/* Input de Nombre */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-1">
+                                    Nombre Completo
+                                </label>
+                                <input 
+                                    autoFocus
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="w-full text-base font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-3 py-2.5 shadow-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                                    placeholder="Nombre del cliente"
+                                />
+                            </div>
+
+                            {/* Input de Teléfono */}
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] uppercase tracking-widest font-black text-slate-500 ml-1">
+                                    Teléfono
+                                </label>
+                                <input 
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    className="w-full text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                                    placeholder="Número de contacto"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            {/* Botón Guardar - Estilo Negro Sólido como 'Cotizar' */}
                             <Button 
                                 onClick={handleSaveData} 
                                 disabled={isSavingData}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                className="bg-slate-950 hover:bg-slate-800 text-white rounded-full px-6 py-2 text-xs font-bold flex items-center justify-center transition-all shadow-lg active:scale-95 disabled:opacity-70"
                             >
-                                {isSavingData ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
-                                Guardar
+                                {isSavingData ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    <>
+                                        <Save className="h-3.5 w-3.5 mr-2" /> 
+                                        Guardar Cambios
+                                    </>
+                                )}
                             </Button>
+                            
+                            {/* Botón Cancelar - Estilo Neutro */}
                             <Button  
                                 onClick={() => { setIsEditing(false); setName(lead.name); setPhone(lead.phone); }}
+                                className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-full px-4 py-2 text-xs font-bold flex items-center justify-center transition-all"
                             >
-                                <Undo className="h-3 w-3 mr-1" /> Cancelar
+                                <Undo className="h-3.5 w-3.5 mr-2" /> 
+                                Cancelar
                             </Button>
                         </div>
                     </div>
@@ -137,7 +165,7 @@ export function LeadDetailHeader({ lead, onClose }: LeadDetailHeaderProps) {
                             <h2 className="text-xl font-bold text-slate-800 truncate">{name}</h2>
                             <button 
                                 onClick={() => setIsEditing(true)}
-                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-brand-600 transition-opacity p-1"
+                                className="text-slate-400 hover:text-brand-600 transition-opacity p-1"
                                 title="Editar nombre y teléfono"
                             >
                                 <Pencil className="h-3.5 w-3.5" />
