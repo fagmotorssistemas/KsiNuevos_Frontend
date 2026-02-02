@@ -156,11 +156,11 @@ export default function PagosPage() {
     if (wizardStep !== 'RESULTS') {
         return (
             <div className="min-h-screen bg-slate-50/50">
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                     <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <div className="max-w-7xl mx-auto px-4 py-2">
+                     <div className="flex justify-center mt-8">
+                        <h1 className="text-xl font-bold text-slate-900 flex gap-2">
                             <WalletCards className="h-6 w-6 text-red-500" />
-                            Cuentas por Pagar
+                            Pagos
                         </h1>
                      </div>
                      

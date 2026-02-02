@@ -49,7 +49,7 @@ export function PagosWizardSelection({ step, onSelectCategory, onSelectDate, onB
 
     if (step === 'CATEGORY') {
         return (
-            <div className="max-w-4xl mx-auto py-12 animate-in fade-in zoom-in-95 duration-500">
+            <div className="max-w-4xl mx-auto py-6 animate-in fade-in zoom-in-95 duration-500">
                 <div className="text-center mb-10">
                     <h2 className="text-3xl font-bold text-slate-900 mb-3">¿Qué tipo de pagos deseas revisar?</h2>
                     <p className="text-slate-500 text-lg">Selecciona una categoría para comenzar a filtrar.</p>
