@@ -2,13 +2,16 @@
 
 import { useTodos } from "@/hooks/useTodos";
 import { TodoInput, TodoItem, TodoFilters } from "@/components/features/todo/TodoComponents";
-import { CheckCircle2, Layout } from "lucide-react";
+import { CheckCircle2, Layout, ShieldCheck } from "lucide-react";
 
 export default function TasksPage() {
     const { 
         tasks, 
+        vendedores, 
+        isAdmin,    
         isLoading, 
         addTask, 
+        updateTask,  // <--- Importamos la nueva función de edición
         toggleTask, 
         deleteTask, 
         filter, 
@@ -26,6 +29,12 @@ export default function TasksPage() {
                         <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                             <Layout className="text-blue-600" />
                             Mis Tareas
+                            {isAdmin && (
+                                <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] uppercase px-2 py-1 rounded-md font-black tracking-wider shadow-sm">
+                                    <ShieldCheck size={12} />
+                                    Admin
+                                </span>
+                            )}
                         </h1>
                         <p className="text-slate-500 mt-2">
                             Gestiona tus pendientes diarios y seguimiento de ventas.
@@ -50,7 +59,11 @@ export default function TasksPage() {
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
                     
                     {/* Input para nueva tarea */}
-                    <TodoInput onAdd={addTask} />
+                    <TodoInput 
+                        onAdd={addTask} 
+                        vendedores={vendedores} 
+                        isAdmin={isAdmin} 
+                    />
 
                     {/* Filtros */}
                     <TodoFilters 
@@ -62,7 +75,7 @@ export default function TasksPage() {
                     {/* Lista de Tareas */}
                     <div className="space-y-3">
                         {isLoading ? (
-                            // Skeleton Loading simple
+                            // Skeleton Loading
                             [1, 2, 3].map((i) => (
                                 <div key={i} className="h-16 bg-white rounded-xl border border-slate-100 animate-pulse" />
                             ))
@@ -73,6 +86,7 @@ export default function TasksPage() {
                                     task={task}
                                     onToggle={toggleTask}
                                     onDelete={deleteTask}
+                                    onUpdate={updateTask} // <--- Pasamos la prop de actualización al Item
                                 />
                             ))
                         ) : (

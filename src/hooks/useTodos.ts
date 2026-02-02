@@ -8,7 +8,14 @@ export interface Task {
     is_completed: boolean;
     priority: 'baja' | 'media' | 'alta';
     due_date: string | null;
+    created_by: string;
     created_at: string;
+}
+
+export interface Vendedor {
+    id: string;
+    full_name: string;
+    role: string;
 }
 
 export type TodoFilter = 'all' | 'pending' | 'completed';
@@ -17,12 +24,13 @@ export function useTodos() {
     const { supabase, user, isLoading: isAuthLoading } = useAuth();
     
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [vendedores, setVendedores] = useState<Vendedor[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
     
-    // Filtro por defecto: 'pending'
     const [filter, setFilter] = useState<TodoFilter>('pending');
 
-    // 1. Cargar Tareas
+    // 1. Cargar Tareas del usuario actual
     const fetchTasks = useCallback(async () => {
         if (!user) return;
         
@@ -41,62 +49,118 @@ export function useTodos() {
         setIsLoading(false);
     }, [supabase, user]);
 
+    // 2. Cargar lista de vendedores y verificar si el usuario es Admin
+    const fetchUserRoleAndVendedores = useCallback(async () => {
+        if (!user) return;
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+        const userIsAdmin = profile?.role === 'admin';
+        setIsAdmin(userIsAdmin);
+
+        if (userIsAdmin) {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('id, full_name, role')
+                .eq('role', 'vendedor')
+                .order('full_name', { ascending: true });
+            
+            if (!error) setVendedores(data as Vendedor[]);
+        }
+    }, [supabase, user]);
+
+    // Efecto para carga inicial
     useEffect(() => {
         if (!isAuthLoading && user) {
             fetchTasks();
+            fetchUserRoleAndVendedores();
         }
-    }, [isAuthLoading, user, fetchTasks]);
+    }, [isAuthLoading, user, fetchTasks, fetchUserRoleAndVendedores]);
 
+    // Suscripción a cambios en tiempo real
     useEffect(() => {
         if (!user) return;
         const channel = supabase
             .channel('realtime tasks')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${user.id}` }, 
-                () => fetchTasks()
-            )
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'tasks', 
+                filter: `user_id=eq.${user.id}` 
+            }, () => fetchTasks())
             .subscribe();
 
         return () => { supabase.removeChannel(channel) };
     }, [supabase, user, fetchTasks]);
 
-    // 2. Crear Tarea (Actualizado con dueDate)
-    const addTask = async (title: string, priority: Task['priority'] = 'media', dueDate: string | null = null) => {
+    // 3. Crear Tarea (Implementación con created_by para asignaciones)
+    const addTask = async (
+        title: string, 
+        priority: Task['priority'] = 'media', 
+        dueDate: string | null = null,
+        assignedUserId: string | null = null
+    ) => {
         if (!user || !title.trim()) return;
 
-        // Forzamos la vista a 'pending' para ver la nueva tarea
+        const targetUserId = assignedUserId || user.id;
         setFilter('pending');
 
-        const optimisticTask: Task = {
-            id: Date.now(),
-            user_id: user.id,
-            title,
-            priority,
-            is_completed: false,
-            due_date: dueDate,
-            created_at: new Date().toISOString()
-        };
-        
-        setTasks(prev => [optimisticTask, ...prev]);
-
-        const { error } = await supabase
-            .from('tasks')
-            .insert({
+        // Actualización optimista local si el usuario se asigna la tarea a sí mismo
+        if (targetUserId === user.id) {
+            const optimisticTask: Task = {
+                id: Date.now(),
                 user_id: user.id,
+                created_by: user.id,
                 title,
                 priority,
                 is_completed: false,
-                due_date: dueDate // Guardamos la fecha en la DB
+                due_date: dueDate,
+                created_at: new Date().toISOString()
+            };
+            setTasks(prev => [optimisticTask, ...prev]);
+        }
+
+        // Inserción en Supabase guardando quién crea la tarea (created_by)
+        const { error } = await supabase
+            .from('tasks')
+            .insert({
+                user_id: targetUserId,
+                title,
+                priority,
+                is_completed: false,
+                due_date: dueDate,
+                created_by: user.id // <--- ID del administrador que asigna la tarea
             });
 
         if (error) {
             console.error("Error creando tarea:", error);
-            fetchTasks(); // Revertir si hay error
-        } else {
-            fetchTasks(); // Sincronizar ID real
+        }
+        fetchTasks();
+    };
+
+    // 4. Actualizar Tarea (Edición de título, prioridad o fecha)
+    const updateTask = async (
+        taskId: number, 
+        updates: { title?: string; priority?: Task['priority']; due_date?: string | null }
+    ) => {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+
+        const { error } = await supabase
+            .from('tasks')
+            .update(updates)
+            .eq('id', taskId);
+
+        if (error) {
+            console.error("Error al actualizar tarea:", error);
+            fetchTasks();
         }
     };
 
-    // 3. Toggle Completado
+    // 5. Alternar estado completado
     const toggleTask = async (taskId: number, currentStatus: boolean) => {
         setTasks(prev => prev.map(t => 
             t.id === taskId ? { ...t, is_completed: !currentStatus } : t
@@ -113,7 +177,7 @@ export function useTodos() {
         }
     };
 
-    // 4. Eliminar Tarea
+    // 6. Eliminar Tarea
     const deleteTask = async (taskId: number) => {
         setTasks(prev => prev.filter(t => t.id !== taskId));
 
@@ -128,6 +192,7 @@ export function useTodos() {
         }
     };
 
+    // Memoized filters and stats
     const filteredTasks = useMemo(() => {
         return tasks.filter(task => {
             if (filter === 'pending') return !task.is_completed;
@@ -144,8 +209,11 @@ export function useTodos() {
 
     return {
         tasks: filteredTasks,
+        vendedores,
+        isAdmin,
         isLoading,
         addTask,
+        updateTask,
         toggleTask,
         deleteTask,
         filter,

@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface NotificationItem {
-    id: number | string; // String para IDs compuestos si fuera necesario, o number negativo para sugerencias
-    type: 'appointment' | 'suggestion';
+    id: number | string;
+    type: 'appointment' | 'suggestion' | 'task';
     title: string;
     start_time: string;
     location: string | null;
     status: string;
-    subtitle: string | null; // Nombre cliente o lead
+    subtitle: string | null;
     lead_id?: number | null;
 }
 
@@ -17,89 +17,98 @@ export function useNotifications() {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Clave para localStorage (Persistencia de "Leídos")
     const STORAGE_KEY = 'dismissed_notifications_v2';
+
+    // Función para disparar notificaciones nativas del sistema
+    const triggerNativeNotification = useCallback((title: string, body: string) => {
+        if (typeof window !== "undefined" && Notification.permission === "granted") {
+            new Notification(title, {
+                body,
+                icon: "/favicon.ico", 
+            });
+        }
+    }, []);
+
+    // Solicitar permisos al cargar el hook
+    useEffect(() => {
+        if (typeof window !== "undefined" && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+    }, []);
 
     useEffect(() => {
         if (!user) return;
 
         const fetchData = async () => {
             try {
-                // 1. Obtener IDs descartados localmente
                 const storedDismissed = localStorage.getItem(STORAGE_KEY);
                 const dismissedIds: (number | string)[] = storedDismissed ? JSON.parse(storedDismissed) : [];
 
-                // 2. Definir ventana de tiempo (Ahora -> +20 min)
                 const now = new Date();
-                const timeWindow = new Date(now.getTime() + 20 * 60000); 
-
-                // --- QUERY A: CITAS (Appointments) ---
-                const { data: appointmentsData } = await supabase
-                    .from('appointments')
-                    .select(`
-                        id,
-                        title,
-                        start_time,
-                        location,
-                        status,
-                        external_client_name,
-                        lead_id,
-                        leads ( name )
-                    `)
-                    .eq('responsible_id', user.id)
-                    .in('status', ['pendiente', 'confirmada', 'reprogramada'])
-                    .gte('start_time', now.toISOString())
-                    .lte('start_time', timeWindow.toISOString());
-
-                // --- QUERY B: SUGERENCIAS IA (Leads) ---
-                const { data: leadsData } = await supabase
-                    .from('leads')
-                    .select(`
-                        id,
-                        name,
-                        time_reference,
-                        interested_cars ( brand, model )
-                    `)
-                    .eq('assigned_to', user.id)
-                    // Solo leads con fecha detectada en el rango
-                    .gte('time_reference', now.toISOString())
-                    .lte('time_reference', timeWindow.toISOString());
-
-                // 3. PROCESAMIENTO Y UNIFICACIÓN
                 
-                // A. Formatear Citas
-                const formattedAppointments: NotificationItem[] = (appointmentsData || []).map((apt: any) => ({
-                    id: apt.id, // ID positivo para citas
-                    type: 'appointment',
-                    title: apt.title,
-                    start_time: apt.start_time,
-                    location: apt.location,
-                    status: apt.status,
-                    subtitle: apt.leads?.name || apt.external_client_name || 'Cliente Externo',
-                    lead_id: apt.lead_id
-                }));
+                // --- LÓGICA DE 10 MINUTOS ---
+                // Definimos que queremos alertar si la tarea vence en los próximos 10 minutos
+                const ALERT_THRESHOLD_MINS = 10; 
+                const alertWindow = new Date(now.getTime() + ALERT_THRESHOLD_MINS * 60000); 
+                const pastLimit = new Date(now.getTime() - 24 * 60 * 60000); 
 
-                // B. Formatear Sugerencias
-                // IMPORTANTE: Filtramos sugerencias si el lead YA tiene una cita en el grupo de arriba
-                const activeLeadIds = new Set(formattedAppointments.map(a => a.lead_id));
+                // Consultamos tareas que no estén completadas
+                const { data: tasksData } = await supabase
+                    .from('tasks')
+                    .select(`id, title, priority, due_date, created_at`)
+                    .eq('user_id', user.id)
+                    .eq('is_completed', false)
+                    .gte('created_at', pastLimit.toISOString());
 
-                const formattedSuggestions: NotificationItem[] = (leadsData || [])
-                    .filter((lead: any) => !activeLeadIds.has(lead.id)) // Evitar duplicados si ya agendó
-                    .map((lead: any) => ({
-                        id: `sug-${lead.id}`, // ID único prefijado para evitar colisión
-                        type: 'suggestion',
-                        title: `Oportunidad: ${lead.name}`,
-                        start_time: lead.time_reference, // Usamos la fecha detectada
-                        location: 'Detectado por IA',
-                        status: 'sugerencia',
-                        subtitle: lead.interested_cars?.[0] 
-                            ? `${lead.interested_cars[0].brand} ${lead.interested_cars[0].model}` 
-                            : 'Interesado en vehículo',
-                        lead_id: lead.id
-                    }));
+                // Procesamiento de Tareas
+                const formattedTasks: NotificationItem[] = (tasksData || []).map((task: any) => {
+                    const dueDate = task.due_date ? new Date(task.due_date) : null;
+                    
+                    // 1. Calculamos la diferencia exacta en minutos
+                    const diffMs = dueDate ? dueDate.getTime() - now.getTime() : null;
+                    const diffMins = diffMs !== null ? Math.round(diffMs / 60000) : null;
 
-                // 4. COMBINAR Y FILTRAR DESCARTADOS
-                const allItems = [...formattedAppointments, ...formattedSuggestions]
+                    // 2. ¿Está dentro del rango de los 10 minutos?
+                    // Verificamos que diffMins sea mayor a 0 (no ha pasado) y menor o igual a 10
+                    const isUpcoming = diffMins !== null && diffMins > 0 && diffMins <= ALERT_THRESHOLD_MINS;
+                    
+                    const itemId = isUpcoming ? `alert-${task.id}` : `task-${task.id}`;
+                    
+                    // 3. Si es inminente y no se ha descartado, disparamos la notificación
+                    if (isUpcoming && !dismissedIds.includes(itemId)) {
+                        setNotifications(prev => {
+                            const alreadyNotified = prev.some(n => n.id === itemId);
+                            if (!alreadyNotified) {
+                                triggerNativeNotification(
+                                    "Tarea Próxima",
+                                    `La tarea "${task.title}" vence en ${diffMins} minutos.`
+                                );
+                            }
+                            return prev;
+                        });
+                    }
+
+                    // 4. Creamos el texto del subtítulo dinámicamente
+                    let timeStatus = 'Sin fecha';
+                    if (diffMins !== null) {
+                        if (diffMins < 0) timeStatus = `Venció hace ${Math.abs(diffMins)} min`;
+                        else if (diffMins === 0) timeStatus = `¡Vence ahora!`;
+                        else timeStatus = `En ${diffMins} min`;
+                    }
+
+                    return {
+                        id: itemId,
+                        type: 'task',
+                        title: isUpcoming ? `⚠️ ¡Vence pronto!` : `Tarea: ${task.title}`,
+                        start_time: task.due_date || task.created_at,
+                        location: `Prioridad: ${task.priority.toUpperCase()}`,
+                        status: isUpcoming ? 'urgente' : 'pendiente',
+                        subtitle: isUpcoming ? `Faltan ${diffMins} min: ${task.title}` : timeStatus,
+                    };
+                });
+
+                // Unificamos y filtramos las que el usuario ya cerró
+                const allItems = [...formattedTasks]
                     .filter(item => !dismissedIds.includes(item.id))
                     .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
@@ -113,29 +122,20 @@ export function useNotifications() {
         };
 
         fetchData();
-        
-        // Polling cada 60 segundos
-        const interval = setInterval(fetchData, 60 * 1000);
+        // Polling cada 60 segundos para revisar si alguna tarea entró en el rango de 10 min
+        const interval = setInterval(fetchData, 60000); 
         return () => clearInterval(interval);
 
-    }, [user, supabase]);
+    }, [user, supabase, triggerNativeNotification]);
 
     const markAsRead = (id: number | string) => {
         setNotifications(prev => prev.filter(n => n.id !== id));
-        
         const storedDismissed = localStorage.getItem(STORAGE_KEY);
         const dismissedIds: (number | string)[] = storedDismissed ? JSON.parse(storedDismissed) : [];
-        
         if (!dismissedIds.includes(id)) {
-            const newDismissed = [...dismissedIds, id];
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(newDismissed));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([...dismissedIds, id]));
         }
     };
 
-    return { 
-        notifications, 
-        markAsRead, 
-        loading,
-        hasNotifications: notifications.length > 0 
-    };
+    return { notifications, markAsRead, loading, hasNotifications: notifications.length > 0 };
 }
