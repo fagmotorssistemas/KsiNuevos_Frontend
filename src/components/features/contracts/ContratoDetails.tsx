@@ -254,7 +254,7 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                         </h3>
                         <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <p className="text-xs text-blue-800 font-semibold mb-1">Seguro / Rastreo</p>
+                                <p className="text-xs text-blue-800 font-semibold mb-1">Seguro / Rastreo / Gast. Adm</p>
                                 <p className="text-xs text-slate-600">{contrato.seguroRastreo || 'No especificado'}</p>
                             </div>
                             <div>
