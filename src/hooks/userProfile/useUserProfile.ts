@@ -3,13 +3,11 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 // --- HELPER ACTUALIZADO: Procesar Imágenes ---
-// Como en tu DB la columna es 'text[]', Supabase devuelve un array de strings real.
-// Ya no hace falta parsear JSON ni cortar comas.
 const getFirstImage = (urls: string[] | null) => {
   if (Array.isArray(urls) && urls.length > 0) {
-    return urls[0]; // Retorna la primera URL válida
+    return urls[0]; 
   }
-  return '/placeholder-car.png'; // Imagen por defecto si está vacío
+  return '/placeholder-car.png'; 
 };
 
 // --- INTERFACES ---
@@ -34,7 +32,6 @@ export interface AppointmentData {
   status: string;
   date: string;
   notes: string | null;
-  // Datos si es COMPRA (Tu inventario)
   inventory: {
     id: string;
     brand: string;
@@ -42,7 +39,6 @@ export interface AppointmentData {
     year: number;
     image: string;
   } | null;
-  // Datos si es VENTA (Auto del cliente)
   sell_request: {
     id: number;
     brand: string;
@@ -76,14 +72,13 @@ export const useUserProfile = () => {
         // A. Perfil
         supabase.from('profiles').select('*').eq('id', authUser.id).single(),
         
-        // B. Citas (Con doble JOIN corregido)
+        // B. Citas
         supabase.from('web_appointments')
           .select(`
             id, type, status, appointment_date, notes,
             inventory:inventory_id ( id, brand, model, year, img_main_url ),
             sell_request:sell_request_id ( id, brand, model, year, photos_urls )
           `) 
-          // CORRECCIÓN IMPORTANTE: Usamos 'photos_urls' que es el nombre real en tu DB
           .eq('client_user_id', authUser.id)
           .order('appointment_date', { ascending: false }),
           
@@ -91,7 +86,6 @@ export const useUserProfile = () => {
         supabase.from('web_favorites').select('id', { count: 'exact' }).eq('user_id', authUser.id)
       ]);
 
-      // Procesar Perfil
       const profileData = profileRes.data;
       if (profileData) {
         setUser({
@@ -104,7 +98,6 @@ export const useUserProfile = () => {
         });
       }
 
-      // Procesar Citas
       const rawApps = appsRes.data || [];
       const formattedApps: AppointmentData[] = rawApps.map((app: any) => ({
         id: app.id,
@@ -113,7 +106,6 @@ export const useUserProfile = () => {
         date: app.appointment_date,
         notes: app.notes,
         
-        // Mapeo Inventario (Compra)
         inventory: app.inventory ? {
           id: app.inventory.id,
           brand: app.inventory.brand,
@@ -122,13 +114,11 @@ export const useUserProfile = () => {
           image: app.inventory.img_main_url || '/placeholder.png'
         } : null,
 
-        // Mapeo Solicitud (Venta)
         sell_request: app.sell_request ? {
           id: app.sell_request.id,
           brand: app.sell_request.brand,
           model: app.sell_request.model,
           year: app.sell_request.year,
-          // Pasamos el array directamente al helper simplificado
           image: getFirstImage(app.sell_request.photos_urls) 
         } : null
       }));
@@ -174,21 +164,21 @@ export const useUserProfile = () => {
     } : null);
   };
 
-  // --- 3. CANCELAR CITA ---
+  // --- 3. CANCELAR CITA (CORREGIDO) ---
   const cancelAppointment = async (appointmentId: number) => {
     const { error } = await supabase
       .from('web_appointments')
-      .update({ status: 'cancelada', updated_at: new Date().toISOString() })
+      // CORRECCIÓN: Se cambió 'cancelada' por 'cancelado' para coincidir con el esquema de la DB
+      .update({ status: 'cancelado', updated_at: new Date().toISOString() })
       .eq('id', appointmentId);
 
     if (error) throw error;
 
-    // Actualizar estado local
+    // Actualizar estado local con el valor correcto
     setAppointments(prev => prev.map(app => 
-      app.id === appointmentId ? { ...app, status: 'cancelada' } : app
+      app.id === appointmentId ? { ...app, status: 'cancelado' } : app
     ));
     
-    // Recalcular stats localmente
     setStats(prev => ({
       ...prev,
       activeAppointments: Math.max(0, prev.activeAppointments - 1)
@@ -209,7 +199,6 @@ export const useUserProfile = () => {
 
     if (error) throw error;
 
-    // Actualizar estado local
     setAppointments(prev => prev.map(app => 
       app.id === appointmentId 
         ? { ...app, date: newData.date, notes: newData.notes, status: 'pendiente' } 

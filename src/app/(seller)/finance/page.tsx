@@ -250,4 +250,4 @@ export default function CreditSimulatorPage() {
             <CreditSimulatorContent />
         </Suspense>
     );
-}
+} 

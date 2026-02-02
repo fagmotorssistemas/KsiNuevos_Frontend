@@ -199,4 +199,4 @@ export function CreditProforma({ values, results, includeTableInPdf }: CreditPro
             </div>
         </div>
     );
-}
+} 

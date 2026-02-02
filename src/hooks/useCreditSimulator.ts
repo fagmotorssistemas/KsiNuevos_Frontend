@@ -262,4 +262,4 @@ export function useCreditSimulator() {
         updateDownPaymentByAmount,
         resetDefaults
     };
-}
+} 

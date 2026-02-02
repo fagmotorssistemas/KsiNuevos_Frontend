@@ -1,13 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { WebAppointmentWithDetails } from '@/types/web-appointments';
 import { appointmentService } from '@/services/appointment.service';
 import { assignmentEngine } from '@/services/assignmentEngine';
+import { createClient } from '@/lib/supabase/client'; // Importación necesaria para inyectar el cliente
 
 export type WebAppointmentStatus = 'pendiente' | 'aceptado' | 'cancelado' | 'reprogramado' | 'atendido';
 
 export function useAppointments() {
     const [appointments, setAppointments] = useState<WebAppointmentWithDetails[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Memorizamos el cliente para que no cambie en cada renderizado y evitar loops en useCallback
+    const supabase = useMemo(() => createClient(), []);
 
     const loadAppointments = useCallback(async () => {
         setIsLoading(true);
@@ -19,12 +23,13 @@ export function useAppointments() {
             const unassigned = data.filter(app => !app.responsible_id && app.status === 'pendiente');
             
             if (unassigned.length > 0) {
-                // 3. Procesar asignación automática (Round-Robin o Afinidad)
+                // 3. Procesar asignación automática
                 for (const app of unassigned) {
-                    await assignmentEngine.assignAutomatically(app.id, app.client_user_id);
+                    // CORRECCIÓN: Se inyecta 'supabase' como primer argumento según requiere la firma de la función
+                    await assignmentEngine.assignAutomatically(supabase, app.id, app.client_user_id);
                 }
                 
-                // 4. Refrescar datos para que cada uno vea lo que le corresponde
+                // 4. Refrescar datos para obtener los IDs de responsables actualizados
                 const updatedData = await appointmentService.getWebAppointments();
                 setAppointments(updatedData);
             } else {
@@ -35,11 +40,10 @@ export function useAppointments() {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [supabase]); // Añadimos supabase a las dependencias del callback
 
     /**
      * Actualiza el estado de una cita.
-     * Ahora retorna una Promesa para permitir el uso de await en los componentes.
      */
     const updateStatus = async (id: number, status: WebAppointmentStatus) => {
         const result = await appointmentService.updateAppointmentStatus(id, status);
@@ -49,13 +53,13 @@ export function useAppointments() {
 
     /**
      * Ejecuta el motor de asignación manualmente.
-     * Retorna el ID del vendedor asignado como Promesa.
      */
     const autoAssign = useCallback(async (id: number, clientId: string) => {
-        const sellerId = await assignmentEngine.assignAutomatically(id, clientId);
+        // CORRECCIÓN: Se inyecta 'supabase' como primer argumento
+        const sellerId = await assignmentEngine.assignAutomatically(supabase, id, clientId);
         await loadAppointments();
         return sellerId;
-    }, [loadAppointments]);
+    }, [loadAppointments, supabase]); // Añadimos supabase a las dependencias
 
     useEffect(() => {
         loadAppointments();
