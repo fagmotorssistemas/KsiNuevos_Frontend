@@ -43,9 +43,9 @@ const videoTips: VideoTip[] = [
     title: "Chery Tiggo 2 Pro ",
     highlight: "2023 Manual",
     description: "Altura, comodidad y practicidad para el día a día. Motor 1.5L, tracción 4x2 y un consumo razonable ideal para la ciudad. El equilibrio perfecto entre estilo y ahorro.",
-    image: "https://images.unsplash.com/photo-1619767886558-efdc259c6e09?auto=format&fit=crop&q=80&w=500", // Imagen referencial de SUV plateado
-    videoUrl: "/Videos_fotos_vendedores/Video-vane1.mp4",
-    instagramLink: "https://www.instagram.com/reel/C2i_XyOuR6y/", // URL de ejemplo basada en el contenido
+    image: "https://images.unsplash.com/photo-1619767886558-efdc259c6e09?auto=format&fit=crop&q=80&w=500",
+    videoUrl: "/Videos_fotos_vendedores/Video-Vane.mp4",
+    instagramLink: "https://www.instagram.com/reel/C2i_XyOuR6y/",
   },
   {
     id: 4,
