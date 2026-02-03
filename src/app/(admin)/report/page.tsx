@@ -3,16 +3,16 @@
 import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminStats } from "@/hooks/useAdminStats";
-import { useVehicleStats } from "@/hooks/useVehicleStats"; 
+import { useVehicleStats } from "@/hooks/useVehicleStats";
 import { AdminToolbar } from "@/components/features/admin/AdminToolbar";
-import { VehicleStatsView } from "@/components/features/admin/VehicleStatsView"; 
+import { VehicleStatsView } from "@/components/features/admin/VehicleStatsView";
 import { createClient } from '@/lib/supabase/client';
 import { TestimonialsView } from "@/components/features/admin/TestimonialsView";
-import { 
-    MessageCircle, 
-    MapPin, 
-    CalendarCheck, 
-    Car, 
+import {
+    MessageCircle,
+    MapPin,
+    CalendarCheck,
+    Car,
     FileText,
     TrendingUp,
     ShieldAlert,
@@ -25,8 +25,10 @@ import {
     Calendar,
     Phone,
     LucideIcon,
-    Star
+    Handshake,
 } from "lucide-react";
+import { OpportunitiesView } from "@/components/features/admin/OpportunitiesView";
+import { useScraperData } from "@/hooks/useScraperData";
 
 // --- INTERFACES ---
 
@@ -83,7 +85,7 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
             `)
             .not('pdf_url', 'is', null)
             .order('created_at', { ascending: false })
-            .limit(50); 
+            .limit(50);
 
         if (error) {
             console.error("Error cargando proformas:", error);
@@ -107,7 +109,7 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
         if (url) window.open(url, '_blank');
     };
 
-    const filteredProformas = proformas.filter(p => 
+    const filteredProformas = proformas.filter(p =>
         (p.client_name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
         (p.vehicle_description?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
         (p.profiles?.full_name?.toLowerCase() || "").includes(searchTerm.toLowerCase())
@@ -134,9 +136,9 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                 <div className="p-4 border-b border-slate-100 bg-white">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Buscar por cliente, vehículo o asesor..." 
+                        <input
+                            type="text"
+                            placeholder="Buscar por cliente, vehículo o asesor..."
                             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -173,7 +175,7 @@ function ProformasHistoryModal({ isOpen, onClose }: ProformasHistoryModalProps) 
                                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                                                     <span className="flex items-center gap-1">
                                                         <Calendar className="h-3 w-3" />
-                                                        {new Date(item.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                                                        {new Date(item.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                     <span className="flex items-center gap-1 font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
                                                         <User className="h-3 w-3" />
@@ -227,7 +229,7 @@ function StatCard({ icon: Icon, label, value, color, bg }: StatCardProps) {
 
 export default function AdminDashboardPage() {
     const { profile, isLoading: isAuthLoading } = useAuth();
-    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles' | 'testimonials'>('sellers');
+    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles' | 'testimonials' | 'opportunities'>('sellers');
     const [inventoryStatus, setInventoryStatus] = useState<string>('disponible');
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
@@ -242,15 +244,18 @@ export default function AdminDashboardPage() {
     } = useAdminStats();
 
     const {
-        inventoryStats,    
+        inventoryStats,
         opportunityStats,
         isVehicleLoading,
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
+    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities } = useScraperData()
+
     const handleReload = () => {
         reloadSellers();
         reloadVehicles();
+        refreshAll();
     };
 
     const grandTotals = useMemo(() => sellerStats.reduce((acc, curr) => ({
@@ -288,7 +293,7 @@ export default function AdminDashboardPage() {
             {/* Toolbar solo visible si NO estamos en testimonios */}
             {activeTab !== 'testimonials' && (
                 <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
-                    <AdminToolbar 
+                    <AdminToolbar
                         currentFilter={dateFilter}
                         onFilterChange={setDateFilter}
                         customDate={customDate}
@@ -299,7 +304,7 @@ export default function AdminDashboardPage() {
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-200/50 p-1 rounded-lg">
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-200/50 p-1 rounded-lg overflow-x-auto">
                 <div className="flex items-center gap-1">
                     <button onClick={() => setActiveTab('sellers')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'sellers' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                         <Users className="h-4 w-4" />
@@ -312,6 +317,10 @@ export default function AdminDashboardPage() {
                     <button onClick={() => setActiveTab('testimonials')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'testimonials' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                         <MessageCircle className="h-4 w-4" />
                         Testimonios
+                    </button>
+                    <button onClick={() => setActiveTab('opportunities')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'opportunities' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
+                        <Handshake className="h-4 w-4" />
+                        Oportunidades
                     </button>
                     {/* Botón de historial modal siempre accesible */}
                     <button onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 rounded-md transition-colors shadow-sm">
@@ -382,16 +391,20 @@ export default function AdminDashboardPage() {
                         </div>
                     </div>
                 ) : activeTab === 'vehicles' ? (
-                    <VehicleStatsView 
-                        stats={inventoryStats} 
+                    <VehicleStatsView
+                        stats={inventoryStats}
                         opportunities={opportunityStats}
                         isLoading={isVehicleLoading}
                         statusFilter={inventoryStatus}
                         onStatusFilterChange={setInventoryStatus}
                     />
-                ) : (
+                ) : activeTab === 'testimonials' ? (
                     /* Vista de testimonios completamente aislada */
                     <TestimonialsView />
+                ) : (
+                    <>
+                        <OpportunitiesView vehicles={vehicles} sellers={sellers} isLoading={isScraperLoading} stats={stats} locationFilter={filters.location} statusFilter={filters.status} topOpportunities={topOpportunities}/>
+                    </>
                 )}
             </div>
         </div>

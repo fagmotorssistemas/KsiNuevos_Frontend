@@ -724,10 +724,12 @@ export type Database = {
           created_at: string | null
           day_detected: string | null
           email: string | null
+          fecha_ultimo_contacto: string | null
           financing: boolean | null
           hour_detected: string | null
           id: number
           lead_id_kommo: number
+          mensajes_enviados: string[]
           name: string
           phone: string
           resume: string | null
@@ -745,10 +747,12 @@ export type Database = {
           created_at?: string | null
           day_detected?: string | null
           email?: string | null
+          fecha_ultimo_contacto?: string | null
           financing?: boolean | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo: number
+          mensajes_enviados?: string[]
           name: string
           phone?: string
           resume?: string | null
@@ -766,10 +770,12 @@ export type Database = {
           created_at?: string | null
           day_detected?: string | null
           email?: string | null
+          fecha_ultimo_contacto?: string | null
           financing?: boolean | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo?: number
+          mensajes_enviados?: string[]
           name?: string
           phone?: string
           resume?: string | null
@@ -818,6 +824,95 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      scraper_sellers: {
+        Row: {
+          badges: string | null
+          first_seen_at: string | null
+          id: string
+          is_dealer: boolean | null
+          last_updated: string | null
+          location: string | null
+          seller_name: string | null
+          total_listings: number | null
+        }
+        Insert: {
+          badges?: string | null
+          first_seen_at?: string | null
+          id?: string
+          is_dealer?: boolean | null
+          last_updated?: string | null
+          location?: string | null
+          seller_name?: string | null
+          total_listings?: number | null
+        }
+        Update: {
+          badges?: string | null
+          first_seen_at?: string | null
+          id?: string
+          is_dealer?: boolean | null
+          last_updated?: string | null
+          location?: string | null
+          seller_name?: string | null
+          total_listings?: number | null
+        }
+        Relationships: []
+      }
+      scraper_vehicles: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          location: Database["public"]["Enums"]["scraper_car_location"] | null
+          mileage: number | null
+          price: number | null
+          seller_id: string
+          status: Database["public"]["Enums"]["scraper_car_status"] | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          location?: Database["public"]["Enums"]["scraper_car_location"] | null
+          mileage?: number | null
+          price?: number | null
+          seller_id: string
+          status?: Database["public"]["Enums"]["scraper_car_status"] | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          location?: Database["public"]["Enums"]["scraper_car_location"] | null
+          mileage?: number | null
+          price?: number | null
+          seller_id?: string
+          status?: Database["public"]["Enums"]["scraper_car_status"] | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_scraper_vehicles_seller"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "scraper_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sellers: {
         Row: {
@@ -915,6 +1010,7 @@ export type Database = {
       tasks: {
         Row: {
           created_at: string | null
+          created_by: string | null
           due_date: string | null
           id: number
           is_completed: boolean | null
@@ -925,6 +1021,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          created_by?: string | null
           due_date?: string | null
           id?: number
           is_completed?: boolean | null
@@ -935,6 +1032,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          created_by?: string | null
           due_date?: string | null
           id?: number
           is_completed?: boolean | null
@@ -944,6 +1042,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_user_id_fkey"
             columns: ["user_id"]
@@ -1440,6 +1545,20 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_leads_reactivar_hoy: {
+        Args: { desplazamiento?: number; limite?: number }
+        Returns: {
+          created_at: string
+          dias_transcurridos: number
+          lead_id: number
+          lead_id_kommo: number
+          mensajes_previos: string[]
+          name: string
+          phone: string
+          status: string
+          tipo_mensaje: string
+        }[]
+      }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
       match_inventory: {
@@ -1503,12 +1622,20 @@ export type Database = {
       lead_temperature: "frio" | "tibio" | "caliente"
       request_priority: "baja" | "media" | "alta"
       request_status: "pendiente" | "aprobado" | "comprado" | "rechazado"
+      scraper_car_location: "patio" | "taller" | "cliente"
+      scraper_car_status: "NUEVO" | "DESCARTADO" | "VENDIDO" | "MANTENIMIENTO"
+      scraper_vehicles_status_enum:
+        | "nuevo"
+        | "descartado"
+        | "contactado"
+        | "vendido"
       user_role_enum:
         | "admin"
         | "vendedor"
         | "cliente"
         | "marketing"
         | "finanzas"
+      vehicle_status: "NEW" | "DISCARDED" | "CONTACTED" | "BOUGHT"
       visit_source: "showroom" | "redes_sociales" | "referido" | "cita" | "otro"
       web_appointment_status:
         | "pendiente"
@@ -1696,7 +1823,16 @@ export const Constants = {
       lead_temperature: ["frio", "tibio", "caliente"],
       request_priority: ["baja", "media", "alta"],
       request_status: ["pendiente", "aprobado", "comprado", "rechazado"],
+      scraper_car_location: ["patio", "taller", "cliente"],
+      scraper_car_status: ["NUEVO", "DESCARTADO", "VENDIDO", "MANTENIMIENTO"],
+      scraper_vehicles_status_enum: [
+        "nuevo",
+        "descartado",
+        "contactado",
+        "vendido",
+      ],
       user_role_enum: ["admin", "vendedor", "cliente", "marketing", "finanzas"],
+      vehicle_status: ["NEW", "DISCARDED", "CONTACTED", "BOUGHT"],
       visit_source: ["showroom", "redes_sociales", "referido", "cita", "otro"],
       web_appointment_status: [
         "pendiente",
