@@ -1,12 +1,8 @@
 import { 
     Search, 
-    Calendar, 
     Filter, 
     Layers
 } from "lucide-react";
-
-// 1. Agregamos LAST_MONTH al tipo
-export type DateRangePreset = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'LAST_MONTH' | 'YEAR';
 
 export type GastoCategory = 
     | 'ALL' 
@@ -21,32 +17,18 @@ export type GastoCategory =
 
 export interface PagosFilterState {
     searchTerm: string;
-    datePreset: DateRangePreset;
+    // datePreset se maneja externamente ahora
     category: GastoCategory;
 }
 
 interface PagosFiltersProps {
     filters: PagosFilterState;
     onChange: (newFilters: PagosFilterState) => void;
-    isVisible: boolean; // Prop para controlar colapso
+    isVisible: boolean; 
     onToggle: () => void;
 }
 
 export function PagosFilters({ filters, onChange, isVisible, onToggle }: PagosFiltersProps) {
-
-    const handlePresetChange = (preset: DateRangePreset) => {
-        onChange({ ...filters, datePreset: preset });
-    };
-
-    // 2. Agregamos el botón de Mes Pasado a la UI
-    const presets: { id: DateRangePreset; label: string }[] = [
-        { id: 'TODAY', label: 'Hoy' },
-        { id: 'WEEK', label: 'Esta Semana' },
-        { id: 'MONTH', label: 'Este Mes' },
-        { id: 'LAST_MONTH', label: 'Mes Pasado' }, // Nuevo
-        { id: 'YEAR', label: 'Este Año' },
-        { id: 'ALL', label: 'Todo Histórico' },
-    ];
 
     const categories: { id: GastoCategory; label: string }[] = [
         { id: 'ALL', label: 'Todos los Registros' },
@@ -67,11 +49,11 @@ export function PagosFilters({ filters, onChange, isVisible, onToggle }: PagosFi
                 className="flex items-center gap-2 text-sm font-medium text-red-600 mb-3 hover:text-red-700 transition-colors"
             >
                 <Filter className="h-4 w-4" />
-                {isVisible ? 'Ocultar Filtros Manuales' : 'Modificar Filtros Manualmente'}
+                {isVisible ? 'Ocultar Filtros Avanzados' : 'Búsqueda y Filtros Avanzados'}
             </button>
 
             {isVisible && (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 animate-in slide-in-from-top-2 duration-200">
                     
                     <div className="flex flex-col md:flex-row gap-4 justify-between">
                         
@@ -109,27 +91,6 @@ export function PagosFilters({ filters, onChange, isVisible, onToggle }: PagosFi
                                 <Filter className="h-3 w-3 text-slate-400" />
                             </div>
                         </div>
-                    </div>
-
-                    {/* 3. Accesos Rápidos de Fecha */}
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-                        <span className="text-xs font-medium text-slate-500 flex items-center gap-1 mr-2">
-                            <Calendar className="h-3.5 w-3.5" />
-                            Periodo:
-                        </span>
-                        {presets.map((preset) => (
-                            <button
-                                key={preset.id}
-                                onClick={() => handlePresetChange(preset.id)}
-                                className={`px-3 py-1.5 text-xs rounded-full border transition-all ${
-                                    filters.datePreset === preset.id
-                                        ? 'bg-red-50 border-red-200 text-red-700 font-medium shadow-sm'
-                                        : 'bg-transparent border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
-                                }`}
-                            >
-                                {preset.label}
-                            </button>
-                        ))}
                     </div>
                 </div>
             )}

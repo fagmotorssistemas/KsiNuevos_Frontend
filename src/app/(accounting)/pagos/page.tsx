@@ -5,40 +5,38 @@ import { RefreshCw, WalletCards, ArrowLeft } from "lucide-react";
 import { usePagosData } from "@/hooks/accounting/usePagosData";
 import { PagosKpiStats } from "@/components/features/accounting/pagos/PagosKpiStats";
 import { PagosTable } from "@/components/features/accounting/pagos/PagosTable";
-import { PagosFilters, PagosFilterState, GastoCategory, DateRangePreset } from "@/components/features/accounting/pagos/PagosFilters";
+import { PagosFilters, PagosFilterState, GastoCategory } from "@/components/features/accounting/pagos/PagosFilters";
 import { PagosWizardSelection } from "@/components/features/accounting/pagos/PagosWizardSelection";
+import { PagosDateTabs, DateRangePreset } from "@/components/features/accounting/pagos/PagosDateTabs";
 import { ResumenPagos } from "@/types/pagos.types";
 
 export default function PagosPage() {
     const { data, loading, refresh } = usePagosData();
 
-    // Estado del "Mago" (Wizard Flow)
-    const [wizardStep, setWizardStep] = useState<'CATEGORY' | 'DATE' | 'RESULTS'>('CATEGORY');
-    
-    // Control de visibilidad de filtros manuales en la vista de resultados
+    // Estado del Wizard (Simplificado: Selección -> Resultados)
+    const [isSelectionMode, setIsSelectionMode] = useState(true);
     const [showManualFilters, setShowManualFilters] = useState(false);
 
     // Estado de Filtros
     const [filters, setFilters] = useState<PagosFilterState>({
         searchTerm: '',
-        datePreset: 'MONTH', // Default, pero será sobreescrito por el wizard
         category: 'ALL'
     });
 
-    // --- MANEJADORES DEL WIZARD ---
+    // Estado de Fecha separado (para la barra superior)
+    const [datePreset, setDatePreset] = useState<DateRangePreset>('MONTH');
+
+    // --- MANEJADORES ---
     const handleCategorySelect = (category: GastoCategory) => {
         setFilters(prev => ({ ...prev, category }));
-        setWizardStep('DATE');
+        setDatePreset('ALL'); // Default al entrar
+        setIsSelectionMode(false);
     };
 
-    const handleDateSelect = (datePreset: DateRangePreset) => {
-        setFilters(prev => ({ ...prev, datePreset }));
-        setWizardStep('RESULTS');
-    };
-
-    const handleResetWizard = () => {
-        setFilters({ searchTerm: '', datePreset: 'MONTH', category: 'ALL' });
-        setWizardStep('CATEGORY');
+    const handleReset = () => {
+        setFilters({ searchTerm: '', category: 'ALL' });
+        setDatePreset('ALL');
+        setIsSelectionMode(true);
         setShowManualFilters(false);
     };
 
@@ -51,7 +49,7 @@ export default function PagosPage() {
         // 1. Filtro de Texto Universal
         if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
-            pagosFiltrados = pagosFiltrados.filter(p => 
+            pagosFiltrados = pagosFiltrados.filter(p =>
                 p.proveedor.toLowerCase().includes(term) ||
                 (p.concepto && p.concepto.toLowerCase().includes(term)) ||
                 (p.comprobante && p.comprobante.toLowerCase().includes(term)) ||
@@ -63,7 +61,7 @@ export default function PagosPage() {
         if (filters.category !== 'ALL') {
             pagosFiltrados = pagosFiltrados.filter(p => {
                 const concepto = (p.concepto || '').toUpperCase();
-                
+
                 const keywordsVehiculo = ['ENTREGA-RECEPCION', 'SE COMPRA', 'COMPRA DE VEHICULO', 'PARTE DE PAGO'];
                 const keywordsMantenimiento = ['LATONERIA', 'MECANICA', 'ARREGLO', 'BATERIA', 'LAVAD', 'REPARACION', 'REPUESTOS'];
                 const keywordsLegal = ['NOTARIA', 'LEGARIZACION', 'MATRICULA', 'LEGAL'];
@@ -84,39 +82,58 @@ export default function PagosPage() {
                     case 'SALDOS_INICIALES': return matches(keywordsSaldos);
                     case 'OTROS':
                         return !matches(keywordsVehiculo) && !matches(keywordsMantenimiento) &&
-                               !matches(keywordsLegal) && !matches(keywordsServicios) &&
-                               !matches(keywordsFinanciero) && !matches(keywordsCuv) && !matches(keywordsSaldos);
+                            !matches(keywordsLegal) && !matches(keywordsServicios) &&
+                            !matches(keywordsFinanciero) && !matches(keywordsCuv) && !matches(keywordsSaldos);
                     default: return true;
                 }
             });
         }
 
-        // 3. Filtro de Fechas (INCLUYE LÓGICA MES PASADO)
+        // 3. Filtro de Fechas (INCLUYE LAST_WEEK Y LAST_MONTH)
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         pagosFiltrados = pagosFiltrados.filter(p => {
             const pagoDate = new Date(p.fecha);
-            
-            switch (filters.datePreset) {
+
+            switch (datePreset) {
                 case 'TODAY':
                     return pagoDate >= startOfDay;
-                case 'WEEK':
+                case 'WEEK': {
+                    // Lunes de esta semana
+                    const day = now.getDay() || 7;
                     const startOfWeek = new Date(now);
-                    startOfWeek.setDate(now.getDate() - now.getDay());
+                    startOfWeek.setDate(now.getDate() - day + 1);
                     startOfWeek.setHours(0, 0, 0, 0);
                     return pagoDate >= startOfWeek;
-                case 'MONTH':
+                }
+                case 'LAST_WEEK': {
+                    // Lunes de la semana pasada al Domingo de la semana pasada
+                    const day = now.getDay() || 7;
+                    const endOfLastWeek = new Date(now);
+                    endOfLastWeek.setDate(now.getDate() - day); // Domingo pasado
+                    endOfLastWeek.setHours(23, 59, 59, 999);
+
+                    const startOfLastWeek = new Date(endOfLastWeek);
+                    startOfLastWeek.setDate(endOfLastWeek.getDate() - 6); // Lunes pasado
+                    startOfLastWeek.setHours(0, 0, 0, 0);
+
+                    return pagoDate >= startOfLastWeek && pagoDate <= endOfLastWeek;
+                }
+                case 'MONTH': {
                     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                     return pagoDate >= startOfMonth;
-                case 'LAST_MONTH': // Lógica Mes Pasado
+                }
+                case 'LAST_MONTH': {
                     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0); // Día 0 del mes actual es el último del anterior
+                    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
                     endOfLastMonth.setHours(23, 59, 59, 999);
                     return pagoDate >= startOfLastMonth && pagoDate <= endOfLastMonth;
-                case 'YEAR':
+                }
+                case 'YEAR': {
                     const startOfYear = new Date(now.getFullYear(), 0, 1);
                     return pagoDate >= startOfYear;
+                }
                 case 'ALL':
                 default:
                     return true;
@@ -126,7 +143,7 @@ export default function PagosPage() {
         // 4. Recalcular KPIs
         let nuevoProveedorTop = data.resumen.proveedorMasFrecuente;
         let totalPorVencerCalculado = 0;
-        
+
         if (pagosFiltrados.length > 0) {
             const conteoProveedores: Record<string, number> = {};
             pagosFiltrados.forEach(p => {
@@ -150,58 +167,50 @@ export default function PagosPage() {
 
         return { listado: pagosFiltrados, resumen: resumenCalculado };
 
-    }, [data, filters]);
+    }, [data, filters, datePreset]);
 
-    // --- VISTA DEL WIZARD (Pasos 1 y 2) ---
-    if (wizardStep !== 'RESULTS') {
+    // --- VISTA DEL WIZARD (Paso 1: Selección) ---
+    if (isSelectionMode) {
         return (
             <div className="min-h-screen bg-slate-50/50">
-                <div className="max-w-7xl mx-auto px-4 py-2">
-                     <div className="flex justify-center mt-8">
-                        <h1 className="text-xl font-bold text-slate-900 flex gap-2">
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    <div className="flex justify-center items-center">
+                        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                             <WalletCards className="h-6 w-6 text-red-500" />
                             Pagos
                         </h1>
-                     </div>
-                     
-                     <PagosWizardSelection 
-                        step={wizardStep}
+                    </div>
+
+                    <PagosWizardSelection
                         onSelectCategory={handleCategorySelect}
-                        onSelectDate={handleDateSelect}
-                        onBack={() => setWizardStep('CATEGORY')}
-                     />
+                    />
                 </div>
             </div>
         );
     }
 
-    // --- VISTA DE RESULTADOS (Dashboard) ---
+    // --- VISTA DE RESULTADOS (Paso 2: Dashboard) ---
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            
+
             {/* Cabecera de Resultados */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                    <button 
-                        onClick={handleResetWizard}
-                        className="group flex items-center gap-1 text-sm text-slate-500 hover:text-red-600 mb-1 transition-colors"
+                    <button
+                        onClick={handleReset}
+                        className="group flex items-center gap-1 text-sm text-slate-500 hover:text-red-600 mb-2 transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-                        Reiniciar Asistente
+                        Volver a Categorías
                     </button>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        Resultados de Búsqueda
+                        {filters.category === 'ALL' ? 'Tablero General de Pagos' : `Gestión de ${filters.category.replace('_', ' ')}`}
                         {loading && <RefreshCw className="h-4 w-4 text-slate-400 animate-spin" />}
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1">
-                        Mostrando: <span className="font-semibold text-slate-700">{filters.category === 'ALL' ? 'Todas las categorías' : filters.category}</span>
-                        {' • '}
-                        Periodo: <span className="font-semibold text-slate-700">{filters.datePreset}</span>
-                    </p>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                    <button 
+                    <button
                         onClick={refresh}
                         className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                     >
@@ -212,40 +221,43 @@ export default function PagosPage() {
 
             {/* Contenido Principal */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                
-                {/* Botón para desplegar filtros manuales si el usuario quiere cambiar algo */}
-                <PagosFilters 
-                    filters={filters} 
+
+                {/* BARRA DE FECHAS (NUEVA UBICACIÓN) */}
+                <PagosDateTabs current={datePreset} onChange={setDatePreset} />
+
+                {/* FILTROS MANUALES (OCULTOS POR DEFECTO) */}
+                <PagosFilters
+                    filters={filters}
                     onChange={setFilters}
                     isVisible={showManualFilters}
                     onToggle={() => setShowManualFilters(!showManualFilters)}
                 />
 
                 {/* 1. Dashboard de Métricas */}
-                <PagosKpiStats 
-                    data={loading ? null : filteredData.resumen} 
-                    loading={loading} 
+                <PagosKpiStats
+                    data={loading ? null : filteredData.resumen}
+                    loading={loading}
                 />
 
                 {/* 2. Listado Detallado */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                     {loading ? (
-                         <div className="space-y-3">
+                        <div className="space-y-3">
                             <div className="h-8 bg-slate-100 rounded w-1/4 animate-pulse mb-6"></div>
                             {[1, 2, 3, 4, 5].map(i => (
                                 <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse border border-slate-100"></div>
                             ))}
-                         </div>
+                        </div>
                     ) : (
                         <PagosTable pagos={filteredData.listado} />
                     )}
                 </div>
             </div>
-            
+
             <div className="mt-8 text-center">
-                 <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400">
                     Fuente: Módulo de Proveedores. Categorización automática.
-                 </p>
+                </p>
             </div>
         </div>
     );
