@@ -1,13 +1,12 @@
 import { 
     Search, 
     Calendar, 
-    Filter, 
-    X,
     ArrowUpCircle,
     ArrowDownCircle
 } from "lucide-react";
 
-export type DateRangePreset = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'YEAR';
+// Agregamos 'NEXT_MONTH' y 'CUSTOM' a los tipos
+export type DateRangePreset = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'NEXT_MONTH' | 'YEAR';
 export type MovementType = 'ALL' | 'INGRESO' | 'EGRESO';
 
 export interface FilterState {
@@ -35,8 +34,9 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
         { id: 'TODAY', label: 'Hoy' },
         { id: 'WEEK', label: 'Esta Semana' },
         { id: 'MONTH', label: 'Este Mes' },
+        { id: 'NEXT_MONTH', label: 'Próximo Mes' }, // Nuevo
         { id: 'YEAR', label: 'Este Año' },
-        { id: 'ALL', label: 'Todo' },
+        { id: 'ALL', label: 'Todo Histórico' },
     ];
 
     return (
@@ -52,7 +52,7 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
                     <input
                         type="text"
                         placeholder="Buscar por concepto, beneficiario o documento..."
-                        className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
+                        className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                         value={filters.searchTerm}
                         onChange={(e) => onChange({ ...filters, searchTerm: e.target.value })}
                     />
@@ -97,7 +97,7 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                 <span className="text-xs font-medium text-slate-500 flex items-center gap-1 mr-2">
                     <Calendar className="h-3.5 w-3.5" />
-                    Periodo:
+                    Vista Rápida:
                 </span>
                 {presets.map((preset) => (
                     <button
@@ -105,7 +105,7 @@ export function FinanzasFilters({ filters, onChange }: FinanzasFiltersProps) {
                         onClick={() => handlePresetChange(preset.id)}
                         className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
                             filters.datePreset === preset.id
-                                ? 'bg-red-50 border-red-200 text-red-700 font-medium'
+                                ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium'
                                 : 'bg-transparent border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                     >

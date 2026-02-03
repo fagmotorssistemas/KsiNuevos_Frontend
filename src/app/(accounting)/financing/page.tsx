@@ -1,21 +1,23 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, PieChart } from "lucide-react";
+import { RefreshCw, PieChart, Download } from "lucide-react";
 import { useFinanzasData } from "@/hooks/accounting/useFinanzasData";
 import { FinanzasKpiStats } from "@/components/features/accounting/financing/FinanzasKpiStats";
 import { FinanzasTable } from "@/components/features/accounting/financing/FinanzasTable";
 import { FinanzasFilters, FilterState } from "@/components/features/accounting/financing/FinanzasFilters";
+import { FinanzasExportModal } from "@/components/features/accounting/financing/FinanzasExportModal";
 import { ResumenFinanciero } from "@/types/finanzas.types";
 
 export default function FinanzasPage() {
     const { data, loading, refresh } = useFinanzasData();
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     // Estado de Filtros
     const [filters, setFilters] = useState<FilterState>({
         searchTerm: '',
         type: 'ALL',
-        datePreset: 'MONTH' // Por defecto mostramos el mes actual
+        datePreset: 'MONTH'
     });
 
     // Lógica de Filtrado y Recálculo de Datos
@@ -57,6 +59,12 @@ export default function FinanzasPage() {
                 case 'MONTH':
                     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                     return movDate >= startOfMonth;
+                case 'NEXT_MONTH':
+                    // Lógica para Próximo Mes
+                    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                    const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+                    endOfNextMonth.setHours(23, 59, 59, 999);
+                    return movDate >= startOfNextMonth && movDate <= endOfNextMonth;
                 case 'YEAR':
                     const startOfYear = new Date(now.getFullYear(), 0, 1);
                     return movDate >= startOfYear;
@@ -82,7 +90,7 @@ export default function FinanzasPage() {
             totalEgresos: 0,
             balanceNeto: 0,
             cantidadMovimientos: 0,
-            fechaActualizacion: new Date().toISOString() // Corrección: Propiedad agregada
+            fechaActualizacion: new Date().toISOString()
         } as ResumenFinanciero);
 
         return {
@@ -108,11 +116,20 @@ export default function FinanzasPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
+                    {/* Botón de Exportar (Nuevo) */}
+                    <button 
+                        onClick={() => setIsExportModalOpen(true)}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+                    >
+                        <Download className="h-4 w-4" />
+                        Exportar Reporte
+                    </button>
+
                     <button 
                         onClick={refresh}
                         className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                     >
-                        Actualizar Balance
+                        Actualizar
                     </button>
                 </div>
             </div>
@@ -120,19 +137,16 @@ export default function FinanzasPage() {
             {/* Contenido Principal */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 
-                {/* Componente de Filtros Nuevo */}
                 <FinanzasFilters 
                     filters={filters} 
                     onChange={setFilters} 
                 />
 
-                {/* 1. KPIs Financieros (Recalculados dinámicamente) */}
                 <FinanzasKpiStats 
                     data={loading ? null : filteredData.resumen} 
                     loading={loading} 
                 />
 
-                {/* 2. Listado de Movimientos (Filtrado) */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                     {loading ? (
                          <div className="space-y-3">
@@ -155,6 +169,13 @@ export default function FinanzasPage() {
                     Cálculos basados en contabilidad oficial. (DATA_USR.CCOMPROBA)
                  </p>
             </div>
+
+            {/* Modal de Exportación */}
+            <FinanzasExportModal 
+                isOpen={isExportModalOpen}
+                onClose={() => setIsExportModalOpen(false)}
+                allData={data?.ultimosMovimientos || []}
+            />
         </div>
     );
 }
