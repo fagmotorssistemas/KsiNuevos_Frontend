@@ -4,15 +4,20 @@ import {
     Info, 
     Tag, 
     Calendar, 
-    Hash, 
     Fuel, 
     Cog, 
     MapPin, 
     User,
     Search,
-    X
+    X,
+    History,
+    FileText,
+    ArrowUpRight,
+    ArrowDownLeft,
+    Loader2
 } from "lucide-react";
-import { VehiculoInventario } from "@/types/inventario.types";
+import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
+import { inventarioService } from "@/services/inventario.service";
 
 interface InventarioTableProps {
     vehiculos: VehiculoInventario[];
@@ -21,8 +26,38 @@ interface InventarioTableProps {
 export function InventarioTable({ vehiculos }: InventarioTableProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedVehiculo, setSelectedVehiculo] = useState<VehiculoInventario | null>(null);
+    
+    // Estados para el Modal y el Historial
+    const [activeTab, setActiveTab] = useState<'ficha' | 'historial'>('ficha');
+    const [historial, setHistorial] = useState<MovimientoKardex[]>([]);
+    const [loadingHistorial, setLoadingHistorial] = useState(false);
+
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+
+    // --- LÓGICA DE CARGA DE HISTORIAL ---
+    const handleOpenModal = (vehiculo: VehiculoInventario) => {
+        setSelectedVehiculo(vehiculo);
+        setActiveTab('ficha'); // Siempre abrir en ficha primero
+        setHistorial([]); // Limpiar historial anterior
+    };
+
+    const handleTabChange = async (tab: 'ficha' | 'historial') => {
+        setActiveTab(tab);
+        
+        // Cargar historial solo si se selecciona la pestaña y no hay datos cargados
+        if (tab === 'historial' && selectedVehiculo && historial.length === 0) {
+            try {
+                setLoadingHistorial(true);
+                const data = await inventarioService.getDetalleVehiculo(selectedVehiculo.placa);
+                setHistorial(data.historialMovimientos || []);
+            } catch (error) {
+                console.error("Error cargando historial", error);
+            } finally {
+                setLoadingHistorial(false);
+            }
+        }
+    };
 
     // Filtrado
     const filteredVehiculos = vehiculos.filter(v => 
@@ -37,218 +72,312 @@ export function InventarioTable({ vehiculos }: InventarioTableProps) {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const currentVehiculos = filteredVehiculos.slice(startIndex, startIndex + itemsPerPage);
 
-    // Helper para mostrar datos faltantes de forma visual
-    const renderValue = (val: string | null | undefined) => {
-        if (!val || val.trim() === "") {
-            return <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] italic font-medium">No especificado</span>;
-        }
-        return <span className="text-slate-700 font-medium">{val}</span>;
-    };
-
     return (
-        <div className="space-y-4">
-            {/* Buscador */}
-            <div className="flex items-center gap-3 bg-white p-2 rounded-lg border border-slate-200 w-full md:w-1/3">
-                <Search className="h-4 w-4 text-slate-400 ml-2" />
+        <div>
+            {/* Barra de Búsqueda */}
+            <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <Search className="h-5 w-5 text-slate-400" />
                 <input 
                     type="text"
-                    placeholder="Buscar por marca, modelo, placa o chasis..."
-                    className="flex-1 text-sm outline-none text-slate-700 placeholder:text-slate-400"
+                    placeholder="Buscar por placa, marca, modelo o chasis..."
+                    className="bg-transparent border-none outline-none text-sm w-full text-slate-700 placeholder:text-slate-400"
                     value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                    onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
+                    }}
                 />
             </div>
 
             {/* Tabla Principal */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                            <tr>
-                                <th className="px-4 py-3">Vehículo</th>
-                                <th className="px-4 py-3">Identificación</th>
-                                <th className="px-4 py-3 text-center">Estado Stock</th>
-                                <th className="px-4 py-3">Color / Tipo</th>
-                                <th className="px-4 py-3 text-center">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {currentVehiculos.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                                        No se encontraron vehículos.
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-slate-500 uppercase bg-slate-50/50 border-b border-slate-100">
+                        <tr>
+                            <th className="px-4 py-3 font-semibold">Vehículo</th>
+                            <th className="px-4 py-3 font-semibold">Placa / ID</th>
+                            <th className="px-4 py-3 font-semibold">Año / Color</th>
+                            {/* <th className="px-4 py-3 font-semibold">Características</th> */}
+                            <th className="px-4 py-3 font-semibold text-center">Estado</th>
+                            <th className="px-4 py-3 font-semibold text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {currentVehiculos.length > 0 ? (
+                            currentVehiculos.map((v) => (
+                                <tr key={v.proId} className="hover:bg-slate-50/80 transition-colors group">
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                                <Car className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-slate-900">{v.marca} {v.modelo}</div>
+                                                <div className="text-xs text-slate-500">{v.tipo}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded w-fit">
+                                            {v.placa}
+                                        </div>
+                                        {/* <div className="text-[10px] text-slate-400 mt-1">{v.proId}</div> */}
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-600">
+                                        <div>{v.anioModelo || '-'}</div>
+                                        <div className="text-xs text-slate-400 capitalize">{v.color?.toLowerCase()}</div>
+                                    </td>
+                                    {/* <td className="px-4 py-3">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
+                                                <Fuel className="h-3 w-3" /> {v.combustible || 'N/A'}
+                                            </span>
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
+                                                <Cog className="h-3 w-3" /> {v.motor ? 'Reg.' : 'N/A'}
+                                            </span>
+                                        </div>
+                                    </td> */}
+                                    <td className="px-4 py-3 text-center">
+                                        {v.stock > 0 ? (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                En Stock
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                                Baja/Vendido
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <button 
+                                            onClick={() => handleOpenModal(v)}
+                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition-all"
+                                            title="Ver Detalle"
+                                        >
+                                            <Info className="h-4 w-4" />
+                                        </button>
                                     </td>
                                 </tr>
-                            ) : (
-                                currentVehiculos.map((v, idx) => (
-                                    <tr key={`${v.proCodigo}-${idx}`} className="hover:bg-slate-50">
-                                        {/* Vehículo */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100">
-                                                    <Car className="h-5 w-5" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-800">{v.marca} {v.modelo}</span>
-                                                    <span className="text-xs text-slate-500">Año: {renderValue(v.anioModelo)}</span>
-                                                </div>
-                                            </div>
-                                        </td>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                                    No se encontraron vehículos con esos criterios.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-                                        {/* Identificación */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-col gap-1 text-xs">
-                                                <span className="flex items-center gap-1">
-                                                    <Hash className="h-3 w-3 text-slate-400" /> 
-                                                    Placa: <span className="font-mono bg-slate-100 px-1 rounded">{v.placa || 'S/P'}</span>
-                                                </span>
-                                                <span className="flex items-center gap-1 text-slate-500" title={v.chasis}>
-                                                    <Cog className="h-3 w-3" /> 
-                                                    Chasis: {v.chasis ? v.chasis.substring(0, 10) + '...' : 'N/A'}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        {/* Estado Stock */}
-                                        <td className="px-4 py-3 text-center">
-                                            {v.stock > 0 ? (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                                    Disponible ({v.stock})
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                                    Dado de Baja
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        {/* Detalle */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-col text-xs text-slate-600">
-                                                <span>{v.color || 'Sin color'}</span>
-                                                <span className="text-slate-400">{v.tipo}</span>
-                                            </div>
-                                        </td>
-
-                                        {/* Botón Ver */}
-                                        <td className="px-4 py-3 text-center">
-                                            <button 
-                                                onClick={() => setSelectedVehiculo(v)}
-                                                className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors text-xs font-medium flex items-center justify-center gap-1 mx-auto"
-                                            >
-                                                <Info className="h-4 w-4" />
-                                                Ficha
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                
-                {/* Paginador */}
-                <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-                    <span>Página {currentPage} de {totalPages}</span>
+            {/* Paginación */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 border-t border-slate-100 pt-4">
+                    <span className="text-xs text-slate-500">
+                        Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredVehiculos.length)} de {filteredVehiculos.length}
+                    </span>
                     <div className="flex gap-2">
                         <button 
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
-                            className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 disabled:opacity-50"
+                            onClick={() => setCurrentPage(p => p - 1)}
+                            className="px-3 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-50"
                         >
                             Anterior
                         </button>
                         <button 
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
-                            className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 disabled:opacity-50"
+                            onClick={() => setCurrentPage(p => p + 1)}
+                            className="px-3 py-1 text-xs border rounded hover:bg-slate-50 disabled:opacity-50"
                         >
                             Siguiente
                         </button>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* MODAL DE FICHA TÉCNICA COMPLETA */}
+            {/* MODAL DETALLE */}
             {selectedVehiculo && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                         
-                        {/* Header Modal */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                            <div>
-                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                    <Car className="h-5 w-5 text-blue-600" />
-                                    Ficha Técnica de Inventario
-                                </h2>
-                                <p className="text-xs text-slate-500">
-                                    {selectedVehiculo.marca} {selectedVehiculo.modelo} ({selectedVehiculo.anioModelo})
-                                </p>
+                        {/* 1. Header del Modal */}
+                        <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-blue-200 shadow-lg">
+                                    <Car className="h-6 w-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-slate-900">
+                                        {selectedVehiculo.marca} {selectedVehiculo.modelo}
+                                    </h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="bg-slate-800 text-white text-xs font-mono px-2 py-0.5 rounded">
+                                            {selectedVehiculo.placa}
+                                        </span>
+                                        <span className="text-slate-500 text-sm border-l border-slate-300 pl-2">
+                                            {selectedVehiculo.anioModelo}
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                            <button onClick={() => setSelectedVehiculo(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                                <X className="h-5 w-5 text-slate-500" />
+                            <button 
+                                onClick={() => setSelectedVehiculo(null)}
+                                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+                            >
+                                <X className="h-5 w-5" />
                             </button>
                         </div>
 
-                        {/* Body Scrollable */}
-                        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                        {/* 2. Tabs de Navegación */}
+                        <div className="flex border-b border-slate-200 px-6">
+                            <button
+                                onClick={() => handleTabChange('ficha')}
+                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                                    activeTab === 'ficha' 
+                                        ? 'border-blue-600 text-blue-600' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <FileText className="h-4 w-4" />
+                                Ficha Técnica
+                            </button>
+                            <button
+                                onClick={() => handleTabChange('historial')}
+                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                                    activeTab === 'historial' 
+                                        ? 'border-blue-600 text-blue-600' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <History className="h-4 w-4" />
+                                Historial de Movimientos
+                            </button>
+                        </div>
+
+                        {/* 3. Contenido del Modal (Scrollable) */}
+                        <div className="p-6 overflow-y-auto bg-white flex-1">
                             
-                            {/* Sección 1: Datos Técnicos del Vehículo */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider flex items-center gap-2 border-b border-blue-100 pb-2">
-                                    <Cog className="h-4 w-4" /> Especificaciones Técnicas
-                                </h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <ItemDetail label="Motor" value={selectedVehiculo.motor} />
-                                    <ItemDetail label="Chasis" value={selectedVehiculo.chasis} />
-                                    <ItemDetail label="Cilindraje" value={selectedVehiculo.cilindraje} />
-                                    <ItemDetail label="Combustible" value={selectedVehiculo.combustible} />
-                                    <ItemDetail label="Tonelaje" value={selectedVehiculo.tonelaje} />
-                                    <ItemDetail label="Capacidad" value={selectedVehiculo.capacidad} />
-                                    <ItemDetail label="Nro. Llantas" value={selectedVehiculo.nroLlantas} />
-                                    <ItemDetail label="Nro. Ejes" value={selectedVehiculo.nroEjes} />
-                                    <ItemDetail label="RAM" value={selectedVehiculo.ram} />
-                                    <ItemDetail label="Versión" value={selectedVehiculo.version} />
-                                    <ItemDetail label="Subclase" value={selectedVehiculo.subclase} />
-                                    <ItemDetail label="País Origen" value={selectedVehiculo.paisOrigen} />
-                                </div>
-                            </div>
+                            {/* --- TAB FICHA TÉCNICA --- */}
+                            {activeTab === 'ficha' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-left-4 duration-300">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
+                                            <Tag className="h-4 w-4" /> Detalles Generales
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <ItemDetail label="Marca" value={selectedVehiculo.marca} />
+                                            <ItemDetail label="Modelo" value={selectedVehiculo.modelo} />
+                                            <ItemDetail label="Año" value={selectedVehiculo.anioModelo} />
+                                            <ItemDetail label="Color" value={selectedVehiculo.color} />
+                                            <ItemDetail label="Tipo" value={selectedVehiculo.tipo} />
+                                            <ItemDetail label="Versión" value={selectedVehiculo.version} />
+                                        </div>
+                                    </div>
 
-                            {/* Sección 2: Identificación y Matriculación */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-bold text-purple-600 uppercase tracking-wider flex items-center gap-2 border-b border-purple-100 pb-2">
-                                    <Tag className="h-4 w-4" /> Identificación y Matrícula
-                                </h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    <ItemDetail label="Placa" value={selectedVehiculo.placa} highlight />
-                                    <ItemDetail label="Placa Característica" value={selectedVehiculo.placaCaracteristica} />
-                                    <ItemDetail label="Marca Característica" value={selectedVehiculo.marcaCaracteristica} />
-                                    <ItemDetail label="Año Matrícula" value={selectedVehiculo.anioMatricula} />
-                                    <ItemDetail label="Nombre Matrícula" value={selectedVehiculo.nombreMatricula} />
-                                    <ItemDetail label="Lugar Matrícula" value={selectedVehiculo.lugarMatricula} />
-                                </div>
-                            </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
+                                            <Cog className="h-4 w-4" /> Mecánica
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <ItemDetail label="Motor" value={selectedVehiculo.motor} highlight />
+                                            <ItemDetail label="Chasis" value={selectedVehiculo.chasis} highlight />
+                                            <ItemDetail label="Cilindraje" value={selectedVehiculo.cilindraje} />
+                                            <ItemDetail label="Combustible" value={selectedVehiculo.combustible} />
+                                            <ItemDetail label="Ejes" value={selectedVehiculo.nroEjes} />
+                                            <ItemDetail label="Llantas" value={selectedVehiculo.nroLlantas} />
+                                        </div>
+                                    </div>
 
-                            {/* Sección 3: Adquisición */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-2 border-b border-emerald-100 pb-2">
-                                    <User className="h-4 w-4" /> Datos de Adquisición
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-emerald-50/50 p-4 rounded-lg border border-emerald-100">
-                                    <ItemDetail label="Proveedor" value={selectedVehiculo.proveedor} />
-                                    <ItemDetail label="Fecha Compra" value={selectedVehiculo.fechaCompra} />
-                                    <ItemDetail label="Forma de Pago" value={selectedVehiculo.formaPago} />
-                                </div>
-                            </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
+                                            <MapPin className="h-4 w-4" /> Legal
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <ItemDetail label="País Origen" value={selectedVehiculo.paisOrigen} />
+                                            <ItemDetail label="Año Matrícula" value={selectedVehiculo.anioMatricula} />
+                                            <ItemDetail label="Lugar Matrícula" value={selectedVehiculo.lugarMatricula} />
+                                            <ItemDetail label="Proveedor" value={selectedVehiculo.proveedor} />
+                                        </div>
+                                    </div>
 
-                            {/* Descripción Adicional */}
-                            {selectedVehiculo.descripcion && (
-                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                                    <span className="font-bold text-slate-700">Descripción Sistema: </span>
-                                    <span className="text-slate-600">{selectedVehiculo.descripcion}</span>
+                                    <div className="md:col-span-3 mt-2">
+                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                            <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción Sistema</span>
+                                            <p className="text-sm text-slate-700">{selectedVehiculo.descripcion || "Sin descripción"}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
+                            {/* --- TAB HISTORIAL --- */}
+                            {activeTab === 'historial' && (
+                                <div className="animate-in slide-in-from-right-4 duration-300 h-full">
+                                    {loadingHistorial ? (
+                                        <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                                            <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-500" />
+                                            <p className="text-sm">Cargando movimientos contables...</p>
+                                        </div>
+                                    ) : historial.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                                            <History className="h-8 w-8 mb-2 opacity-50" />
+                                            <p>No hay registros de movimientos para este vehículo.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="relative">
+                                            {/* Línea de tiempo vertical */}
+                                            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+
+                                            <div className="space-y-6">
+                                                {historial.map((mov, idx) => (
+                                                    <div key={idx} className="relative pl-10 group">
+                                                        {/* Punto Indicador */}
+                                                        <div className={`absolute left-[10px] top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 z-10 
+                                                            ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') ? 'bg-orange-500 ring-orange-200' : 
+                                                              mov.esIngreso ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-200'}`} 
+                                                        />
+
+                                                        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded border 
+                                                                            ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') 
+                                                                                ? 'bg-orange-50 text-orange-700 border-orange-100' 
+                                                                                : mov.esIngreso 
+                                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                                                    : 'bg-blue-50 text-blue-700 border-blue-100'
+                                                                            }`}>
+                                                                            {mov.tipoTransaccion}
+                                                                        </span>
+                                                                        <span className="text-xs text-slate-400 font-mono">{mov.fecha}</span>
+                                                                    </div>
+                                                                    <h4 className="font-medium text-slate-800 mt-1">{mov.concepto}</h4>
+                                                                    {mov.clienteProveedor && (
+                                                                         <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                                                                            <User className="h-3 w-3" />
+                                                                            {mov.clienteProveedor}
+                                                                         </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className={`text-sm font-bold flex items-center justify-end gap-1
+                                                                        ${mov.esIngreso ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                                        {mov.esIngreso ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
+                                                                        ${mov.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-400 mt-1 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
+                                                                        Doc: {mov.documento}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -257,7 +386,6 @@ export function InventarioTable({ vehiculos }: InventarioTableProps) {
     );
 }
 
-// Subcomponente para items del modal
 function ItemDetail({ label, value, highlight = false }: { label: string, value: string | null | undefined, highlight?: boolean }) {
     const isEmpty = !value || value.trim() === "";
     

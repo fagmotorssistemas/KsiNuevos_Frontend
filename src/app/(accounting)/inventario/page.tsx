@@ -1,12 +1,34 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { RefreshCw, ClipboardList } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
-import { InventarioKpiStats } from "@/components/features/inventario/InventarioKpiStats";
+import { InventarioKpiStats, FilterType } from "@/components/features/inventario/InventarioKpiStats";
 import { InventarioTable } from "@/components/features/inventario/InventarioTable";
 
 export default function InventarioPage() {
     const { data, loading, refresh } = useInventarioData();
+    
+    // Estado para el filtro (Por defecto 'all')
+    const [filter, setFilter] = useState<FilterType>('all');
+
+    // Lógica de filtrado dinámico
+    const filteredList = useMemo(() => {
+        if (!data?.listado) return [];
+
+        switch (filter) {
+            case 'active':
+                // Solo vehículos con stock > 0
+                return data.listado.filter(v => v.stock > 0);
+            case 'baja':
+                // Solo vehículos con stock == 0
+                return data.listado.filter(v => v.stock === 0);
+            case 'all':
+            default:
+                // Todos
+                return data.listado;
+        }
+    }, [data, filter]);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -26,21 +48,22 @@ export default function InventarioPage() {
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={refresh}
-                        className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex items-center gap-2"
+                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Actualizar datos"
                     >
-                        <RefreshCw className="h-3 w-3" />
-                        Actualizar Inventario
+                        <RefreshCw className="h-5 w-5" />
                     </button>
                 </div>
             </div>
 
-            {/* Contenido Principal */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                 
-                {/* 1. KPIs de Resumen */}
+                {/* 1. KPIs Interactivos (Funcionan como Filtros) */}
                 <InventarioKpiStats 
                     data={data ? data.resumen : null} 
-                    loading={loading} 
+                    loading={loading}
+                    activeFilter={filter}
+                    onFilterChange={setFilter}
                 />
 
                 {/* 2. Tabla Maestra de Inventario */}
@@ -53,7 +76,8 @@ export default function InventarioPage() {
                             ))}
                          </div>
                     ) : (
-                        <InventarioTable vehiculos={data?.listado || []} />
+                        // Pasamos la lista YA filtrada a la tabla
+                        <InventarioTable vehiculos={filteredList} />
                     )}
                 </div>
             </div>
