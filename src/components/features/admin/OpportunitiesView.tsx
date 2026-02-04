@@ -1,6 +1,6 @@
 import { Database } from "@/types/supabase";
-import { VehicleWithSeller } from "@/services/scraper.service";
-import { useMemo, useState } from "react";
+import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
+import { useEffect, useMemo, useState } from "react";
 import {
     Car,
     TrendingUp,
@@ -12,14 +12,17 @@ import {
     Eye,
     Filter,
     X,
-    ChevronRight
+    ChevronRight,
+    Search,
+    DatabaseZap
 } from "lucide-react";
+import { useScraperData } from "@/hooks/useScraperData";
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 
 interface OpportunitiesViewProps {
     vehicles: VehicleWithSeller[];
-    topOpportunities: VehicleWithSeller[]; // ✅ NUEVO
+    topOpportunities: VehicleWithSeller[];
     sellers: ScraperSeller[];
     isLoading: boolean;
     statusFilter?: string;
@@ -49,9 +52,14 @@ export function OpportunitiesView({
     // Estado para controlar el filtro de Guayaquil
     const [onlyCoast, setOnlyCoast] = useState(true);
     const [showTopDeals, setShowTopDeals] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isWebhookLoading, setIsWebhookLoading] = useState(false);
+
+    const { refreshTopOpportunities } = useScraperData()
+
 
     const sourceVehicles = showTopDeals ? topOpportunities : vehicles;
-    const regex = /\b(?:babahoyo|guayaquil|esmeraldas|portoviejo|santo\s+domingo|santa\s+elena|machala|manta)\b/i;
+    const regex = /\b(?:babahoyo|milagro|naranjal|daule|los lojas|eloy alfaro|la troncal|el triunfo|guayaquil|esmeraldas|portoviejo|santo\s+domingo|santa\s+elena|machala|manta)\b/i;
 
     const filteredVehicles = useMemo(() => {
         return sourceVehicles.filter(vehicle => {
@@ -89,6 +97,17 @@ export function OpportunitiesView({
         });
     }, [filteredVehicles]);
 
+    const handleSubmitScraper = async (searchValue: string) => {
+        setIsWebhookLoading(true);
+        const webhook = await scraperService.scrapMarketplace(searchValue);
+        setIsWebhookLoading(webhook?.status === 'done' ? false : true);
+    }
+
+useEffect(() => {
+    if (!isWebhookLoading) {
+        refreshTopOpportunities();
+    }
+}, [isWebhookLoading]);
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -102,44 +121,32 @@ export function OpportunitiesView({
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
 
             {/* Header con Switch de Filtro */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${onlyCoast ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-500'}`}>
-                        <Filter className="h-5 w-5" />
+            <div className="flex flex-col md:flex-row w-full justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-3 w-full justify-between">
+                    <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar vehículo"
+                            className="pl-9 pr-4 py-2 text-md h-full rounded-lg focus:outline-none w-full"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                    <div>
-                        <h2 className="text-sm font-bold text-slate-900 leading-none mb-1">Filtros</h2>
-                        <p className="text-xs text-slate-500">
-                            {onlyCoast ? "Excluyendo región de la costa" : "Mostrando todas las ubicaciones"}
-                        </p>
-                    </div>
-                </div>
-                <div className="flex gap-2">
+
                     <button
-                        onClick={() => setShowTopDeals(!showTopDeals)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm
-                        ${showTopDeals
-                                ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
-                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-                            }`}
-                    >
-                        <TrendingUp className="h-4 w-4" />
-                        {showTopDeals ? "Ver todos los vehículos" : "🔥 Mejores oportunidades"}
-                    </button>
-                    <button
-                        onClick={() => setOnlyCoast(!onlyCoast)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${onlyCoast
+                        disabled={isWebhookLoading}
+                        onClick={() => handleSubmitScraper(searchTerm)}
+                        className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 rounded-lg text-xs font-bold transition-all border w-fit whitespace-nowrap ${onlyCoast
                             ? 'bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700'
                             : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                             }`}
                     >
-                        {onlyCoast ? (
-                            <><X className="h-3.5 w-3.5" />Mostrar todas las ubicaciones</>
-                        ) : (
-                            <><Filter className="h-3.5 w-3.5" /> Excluir region de la cosa</>
-                        )}
+                        <DatabaseZap className="h-3.5 w-3.5" />
+                        <p>Scrapear Datos</p>
                     </button>
                 </div>
+
             </div>
 
             {/* Tarjetas Resumen */}
@@ -183,7 +190,9 @@ export function OpportunitiesView({
                                     <Calendar className="h-3 w-3" />
                                     {new Date(newestVehicle.created_at || '').toLocaleDateString('es-ES', {
                                         day: '2-digit',
-                                        month: 'short'
+                                        month: 'short',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
                                     })}
                                 </div>
                             </div>
@@ -202,22 +211,48 @@ export function OpportunitiesView({
                     <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-50 to-transparent opacity-50 pointer-events-none" />
                 </div>
             </div>
-
             {/* Sub-filtros de ubicación de inventario */}
-            <div className="flex items-center gap-2 text-sm flex-wrap px-1">
-                <MapPin className="h-4 w-4 text-slate-400" />
-                <span className="font-medium text-slate-600">Ubicaciones:</span>
-                <span className="text-slate-500">
-                    Patio: <strong className="text-slate-700">{displayStats.enPatio}</strong>
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="text-slate-500">
-                    Taller: <strong className="text-slate-700">{displayStats.enTaller}</strong>
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="text-slate-500">
-                    Cliente: <strong className="text-slate-700">{displayStats.enCliente}</strong>
-                </span>
+            <div className="flex items-center gap-2 text-sm flex-wrap justify-between px-1">
+                <div className="flex items-center gap-2">
+                    <span className="text-slate-500">
+                        Patio: <strong className="text-slate-700">{displayStats.enPatio}</strong>
+                    </span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-slate-500">
+                        Taller: <strong className="text-slate-700">{displayStats.enTaller}</strong>
+                    </span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-slate-500">
+                        Cliente: <strong className="text-slate-700">{displayStats.enCliente}</strong>
+                    </span>
+                </div>
+
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowTopDeals(!showTopDeals)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm
+                        ${showTopDeals
+                                ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
+                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                            }`}
+                    >
+                        <TrendingUp className="h-4 w-4" />
+                        {showTopDeals ? "Ver todos los vehículos" : "🔥 Mejores oportunidades"}
+                    </button>
+                    <button
+                        onClick={() => setOnlyCoast(!onlyCoast)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${onlyCoast
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                    >
+                        {onlyCoast ? (
+                            <><X className="h-3.5 w-3.5" />Mostrar todas las ubicaciones</>
+                        ) : (
+                            <><Filter className="h-3.5 w-3.5" /> Excluir region de la cosa</>
+                        )}
+                    </button>
+                </div>
             </div>
             {showTopDeals && (
                 <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
@@ -242,6 +277,7 @@ export function OpportunitiesView({
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
                                     <th className="py-3 px-4">Vehículo</th>
+                                    <th className="py-3 px-4">Precio</th>
                                     <th className="py-3 px-4">Descripción</th>
                                     <th className="py-3 px-4 text-center">Ubicación Vendedor</th>
                                     <th className="py-3 px-4 text-center">Kilometraje</th>
@@ -268,10 +304,12 @@ export function OpportunitiesView({
                                                     <div className="font-bold text-slate-900 truncate max-w-[180px]" title={vehicle.title || ''}>
                                                         {vehicle.title || 'Sin título'}
                                                     </div>
-                                                    <div className="text-xs font-semibold text-blue-600">
-                                                        {vehicle.price ? `$${vehicle.price.toLocaleString()}` : 'Precio N/A'}
-                                                    </div>
                                                 </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="text-xs font-semibold">
+                                                {vehicle.price ? `$${vehicle.price.toLocaleString()}` : 'Precio N/A'}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
@@ -290,7 +328,7 @@ export function OpportunitiesView({
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-3">
-                                                <button className="text-blue-600 hover:text-blue-800 transition-colors" title="Ver detalle">
+                                                <button className="text-blue-600 hover:text-slate-800 hover:cursor-pointer transition-colors" title="Ver detalle">
                                                     <Eye className="h-4 w-4" />
                                                 </button>
                                                 {vehicle.url && (
@@ -298,7 +336,7 @@ export function OpportunitiesView({
                                                         href={vehicle.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-blue-400 hover:text-blue-800 transition-colors"
+                                                        className="text-blue-600 hover:text-slate -800 transition-colors"
                                                         title="Ver fuente original"
                                                     >
                                                         <ExternalLink className="h-4 w-4" />

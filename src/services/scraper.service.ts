@@ -120,8 +120,8 @@ export const scraperService = {
         return top30 as VehicleWithSeller[]
     },
 
-  // ========== VEHICLES ==========
-  async getVehicles(): Promise<VehicleWithSeller[]> {
+    // ========== VEHICLES ==========
+    async getVehicles(): Promise<VehicleWithSeller[]> {
         const { data, error } = await supabase
             .from('scraper_vehicles')
             .select(`
@@ -292,8 +292,41 @@ export const scraperService = {
             console.error('Error al actualizar total de listings:', error);
             throw error;
         }
-    }
-};
+    },
 
-// Exportar el tipo para usar en otros lugares
+    async scrapMarketplace(searchTerm: string) {
+        try {
+            if (!searchTerm.trim()) return
+
+            const response = await fetch(
+                'http://138.197.35.10:5678/webhook-test/buscar-producto-marketplace',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        searchValue: searchTerm,
+                    }),
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error('Error al ejecutar el webhook')
+            }
+
+            const data = await response.json()
+            return data as WebhookResponse
+            console.log('Webhook ejecutado:', data)
+        } catch (error) {
+            console.error('Error al scrapear:', error)
+        }
+    }
+
+};
+interface WebhookResponse {
+  status: 'done' | 'not found' | 'error';
+  message: string;
+}
+
 export type { VehicleWithSeller };

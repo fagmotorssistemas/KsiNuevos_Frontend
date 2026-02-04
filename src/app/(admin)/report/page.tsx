@@ -250,12 +250,13 @@ export default function AdminDashboardPage() {
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
-    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities } = useScraperData()
+    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities, refreshTopOpportunities } = useScraperData()
 
     const handleReload = () => {
         reloadSellers();
         reloadVehicles();
         refreshAll();
+        refreshTopOpportunities();
     };
 
     const grandTotals = useMemo(() => sellerStats.reduce((acc, curr) => ({
@@ -399,7 +400,6 @@ export default function AdminDashboardPage() {
                         onStatusFilterChange={setInventoryStatus}
                     />
                 ) : activeTab === 'testimonials' ? (
-                    /* Vista de testimonios completamente aislada */
                     <TestimonialsView />
                 ) : (
                     <>
