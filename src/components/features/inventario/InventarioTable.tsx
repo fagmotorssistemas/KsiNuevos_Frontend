@@ -34,7 +34,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     
     // --- NUEVOS ESTADOS PARA EDICIÓN ---
     const [editingVehiculo, setEditingVehiculo] = useState<VehiculoInventario | null>(null);
-    const [editForm, setEditForm] = useState({ price: 0, mileage: 0 });
+    const [editForm, setEditForm] = useState({ price: '', mileage: '' });
     const [saving, setSaving] = useState(false);
 
     // Estados para el Modal de Detalle y el Historial
@@ -54,8 +54,8 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     const handleEditClick = (v: VehiculoInventario) => {
         setEditingVehiculo(v);
         setEditForm({
-            price: v.price || 0,
-            mileage: v.mileage || 0
+            price: v.price ? String(v.price) : '',
+            mileage: v.mileage ? String(v.mileage) : ''
         });
     };
 
@@ -63,17 +63,21 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
         if (!editingVehiculo) return;
         setSaving(true);
         try {
+            // Convertir strings a números (si están vacíos, usar 0)
+            const price = editForm.price ? Number(editForm.price) : 0;
+            const mileage = editForm.mileage ? Number(editForm.mileage) : 0;
+            
             // 1. Guardar en Supabase
             await inventarioService.updateDatosComerciales(
                 editingVehiculo.placa, 
-                editForm.price, 
-                editForm.mileage
+                price, 
+                mileage
             );
             
             // 2. Actualizar estado local visualmente
             const updatedList = vehiculos.map(v => 
                 v.placa === editingVehiculo.placa 
-                ? { ...v, price: editForm.price, mileage: editForm.mileage } 
+                ? { ...v, price: price, mileage: mileage } 
                 : v
             );
             setVehiculos(updatedList);
@@ -273,7 +277,8 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                                     type="number" 
                                     className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={editForm.price}
-                                    onChange={e => setEditForm({...editForm, price: Number(e.target.value)})}
+                                    onChange={e => setEditForm({...editForm, price: e.target.value})}
+                                    placeholder="Ingrese el precio"
                                 />
                             </div>
                             <div>
@@ -282,7 +287,8 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                                     type="number" 
                                     className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                                     value={editForm.mileage}
-                                    onChange={e => setEditForm({...editForm, mileage: Number(e.target.value)})}
+                                    onChange={e => setEditForm({...editForm, mileage: e.target.value})}
+                                    placeholder="Ingrese el kilometraje"
                                 />
                             </div>
                         </div>

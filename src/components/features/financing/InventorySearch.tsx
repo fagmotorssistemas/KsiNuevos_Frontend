@@ -88,8 +88,8 @@ export const InventorySearch = ({ inventory, selectedVehicle, onSelect, onClear,
                                             <span className=" text-slate-600">{car.plate || 'S/PLACA'}</span>
                                         </div>
                                     </div>
-                                    <div className="text-xs font-bold text-slate-900 bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100">
-                                        {formatCurrency(car.price)}
+                                    <div className="text-xs font-bold bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100">
+                                        {formatCurrency(car.price || 0)}
                                     </div>
                                 </li>
                             ))

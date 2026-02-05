@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import type { Database } from "@/types/supabase";
 
-export type InventoryCarRow = Database['public']['Tables']['inventory']['Row'];
+export type InventoryCarRow = Database['public']['Tables']['inventoryoracle']['Row'];
 
 export interface SimulatorValues {
     clientName: string;
@@ -78,7 +78,7 @@ export function useCreditSimulator() {
     const fetchInventory = useCallback(async () => {
         setIsLoadingInventory(true);
         const { data, error } = await supabase
-            .from('inventory')
+            .from('inventoryoracle')
             .select('*')
             .eq('status', 'disponible')
             .order('brand', { ascending: true });

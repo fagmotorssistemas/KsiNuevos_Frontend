@@ -106,11 +106,11 @@ export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
 
                                 {/* Columna Vehículo */}
                                 <Table.Cell className="hidden md:table-cell">
-                                    {visit.inventory ? (
+                                    {visit.inventoryoracle ? (
                                         <div className="flex items-center gap-2">
                                             <Car className="h-4 w-4 text-slate-400" />
                                             <span className="text-sm text-slate-700">
-                                                <span className="font-semibold">{visit.inventory.brand}</span> {visit.inventory.model} <span className="text-slate-400 text-xs">'{visit.inventory.year}</span>
+                                                <span className="font-semibold">{visit.inventoryoracle.brand}</span> {visit.inventoryoracle.model} <span className="text-slate-400 text-xs">'{visit.inventoryoracle.year}</span>
                                             </span>
                                         </div>
                                     ) : (

@@ -23,7 +23,7 @@ export function CreditForm({ values, results, inventory, isLoadingInventory, upd
 
     const handleVehicleSelect = (car: InventoryCarRow) => {
         updateField('selectedVehicle', car);
-        if (car.price > 0) {
+        if (car.price && car.price > 0) {
             updateField('insuranceFee', Math.round(car.price * 0.03));
         }
     };

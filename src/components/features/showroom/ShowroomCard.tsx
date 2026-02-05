@@ -144,9 +144,9 @@ export default function ShowroomCard({ visit, onEdit }: ShowroomCardProps) {
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 font-medium uppercase">Vehículo de Interés</p>
-                        {visit.inventory ? (
+                        {visit.inventoryoracle ? (
                             <p className="text-sm font-semibold text-slate-800">
-                                {visit.inventory.brand} {visit.inventory.model} <span className="text-slate-400 font-normal">'{visit.inventory.year}</span>
+                                {visit.inventoryoracle.brand} {visit.inventoryoracle.model} <span className="text-slate-400 font-normal">'{visit.inventoryoracle.year}</span>
                             </p>
                         ) : (
                             <p className="text-sm text-slate-400 italic">No especificado / General</p>

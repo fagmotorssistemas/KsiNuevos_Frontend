@@ -80,9 +80,9 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             const fetchInventory = async () => {
                 setIsLoadingInventory(true);
                 const { data } = await supabase
-                    .from('inventory')
+                    .from('inventoryoracle')
                     .select('id, brand, model, year, price, status')
-                    .in('status', ['disponible', 'vendido'])
+                    .in('status', ['disponible'])
                     .order('brand', { ascending: true });
 
                 if (data) setInventory(data as any);
@@ -129,8 +129,8 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     observation: visitToEdit.observation || ''
                 });
 
-                if (visitToEdit.inventory) {
-                    setSearchTerm(`${visitToEdit.inventory.brand} ${visitToEdit.inventory.model} (${visitToEdit.inventory.year})`);
+                if (visitToEdit.inventoryoracle) {
+                    setSearchTerm(`${visitToEdit.inventoryoracle.brand} ${visitToEdit.inventoryoracle.model} (${visitToEdit.inventoryoracle.year})`);
                 } else {
                     setSearchTerm("");
                 }

@@ -77,7 +77,7 @@ export function useShowroom() {
                 .from('showroom_visits')
                 .select(`
                     *,
-                    inventory (id, brand, model, year, price),
+                    inventoryoracle (id, brand, model, year, price),
                     profiles (full_name)
                 `)
                 .order('visit_start', { ascending: false });

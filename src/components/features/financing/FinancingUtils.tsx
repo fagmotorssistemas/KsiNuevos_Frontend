@@ -1,17 +1,8 @@
 import React from "react";
+import type { Database } from "@/types/supabase";
 
-// --- TIPOS (Adaptados para compatibilidad con Supabase) ---
-export interface InventoryCarRow {
-    id: string;
-    brand: string;
-    model: string;
-    year: number;
-    price: number;
-    color?: string | null; 
-    plate?: string | null;
-    plate_short?: string | null;
-    [key: string]: any;
-}
+// --- TIPOS (Usando el tipo de Supabase para consistencia) ---
+export type InventoryCarRow = Database['public']['Tables']['inventoryoracle']['Row'];
 
 export interface SimulatorValues {
     clientName: string;

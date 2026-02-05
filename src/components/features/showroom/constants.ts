@@ -25,7 +25,7 @@ export interface ShowroomVisit {
     created_at: string;
     
     // Relaciones (Joins)
-    inventory?: InventoryItem;
+    inventoryoracle?: InventoryItem; // Cambiado de inventory a inventoryoracle
     profiles?: { full_name: string, email: string };
 }
 
