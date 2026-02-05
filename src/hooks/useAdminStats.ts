@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase"; // <--- 1. Importamos los tipos de la BD
 
-export type AdminDateFilter = 'today' | '7days' | 'thisMonth' | 'custom';
+// AGREGADO: 'lastMonth' al tipo
+export type AdminDateFilter = 'today' | '7days' | 'thisMonth' | 'lastMonth' | 'custom';
 
 export type SellerStats = {
     profile_id: string;
@@ -32,7 +33,7 @@ export function useAdminStats() {
         let start = new Date();
         let end = new Date();
 
-        // Configuración por defecto para el final del rango (se sobrescribe en lógica custom)
+        // Configuración por defecto para el final del rango
         end.setHours(23, 59, 59, 999);
 
         if (dateFilter === 'today') {
@@ -43,6 +44,16 @@ export function useAdminStats() {
         } else if (dateFilter === 'thisMonth') {
             start.setDate(1);
             start.setHours(0, 0, 0, 0);
+        } else if (dateFilter === 'lastMonth') {
+            // LÓGICA AGREGADA: Mes Pasado
+            // 1. Establecer el inicio: Restamos 1 al mes actual y fijamos el día 1
+            start.setMonth(now.getMonth() - 1);
+            start.setDate(1);
+            start.setHours(0, 0, 0, 0);
+
+            // 2. Establecer el fin: El día 0 del mes actual es el último día del mes anterior
+            end = new Date(now.getFullYear(), now.getMonth(), 0);
+            end.setHours(23, 59, 59, 999);
         } else if (dateFilter === 'custom') {
             const [year, month, day] = customDate.split('-').map(Number);
             start = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -57,7 +68,7 @@ export function useAdminStats() {
 
     // --- FUNCIÓN HELPER PARA DESCARGA MASIVA (Evita el límite de 1000 filas) ---
     const fetchAllData = useCallback(async (
-        table: keyof Database['public']['Tables'], // <--- 2. CORRECCIÓN: Usamos el tipo exacto de tabla
+        table: keyof Database['public']['Tables'], 
         select: string, 
         dateCol: string, 
         startISO: string, 

@@ -59,6 +59,8 @@ export function useVehicleStats(
         const now = new Date();
         let start = new Date();
         let end = new Date();
+        
+        // Configuramos el final del día por defecto
         end.setHours(23, 59, 59, 999);
 
         if (dateFilter === 'today') {
@@ -69,6 +71,17 @@ export function useVehicleStats(
         } else if (dateFilter === 'thisMonth') {
             start.setDate(1);
             start.setHours(0, 0, 0, 0);
+        } else if (dateFilter === 'lastMonth') {
+            // --- AGREGADO: Lógica para Mes Pasado ---
+            // 1. Ir al primer día del mes anterior
+            start.setMonth(now.getMonth() - 1);
+            start.setDate(1);
+            start.setHours(0, 0, 0, 0);
+
+            // 2. Ir al último día del mes anterior
+            // (El día 0 del mes actual nos da el último día del mes previo automáticamente)
+            end = new Date(now.getFullYear(), now.getMonth(), 0);
+            end.setHours(23, 59, 59, 999);
         } else if (dateFilter === 'custom') {
             const [year, month, day] = customDate.split('-').map(Number);
             start = new Date(year, month - 1, day, 0, 0, 0, 0);

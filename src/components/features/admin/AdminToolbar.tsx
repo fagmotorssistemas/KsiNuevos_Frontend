@@ -42,6 +42,12 @@ export function AdminToolbar({
                     onClick={() => onFilterChange('thisMonth')}
                     label="Este Mes"
                 />
+                {/* NUEVO BOTÓN: MES PASADO */}
+                <FilterButton 
+                    active={currentFilter === 'lastMonth'} 
+                    onClick={() => onFilterChange('lastMonth')}
+                    label="Mes Pasado"
+                />
                 <FilterButton 
                     active={currentFilter === 'custom'} 
                     onClick={() => onFilterChange('custom')}
@@ -93,4 +99,4 @@ function FilterButton({ active, onClick, label }: { active: boolean; onClick: ()
             {label}
         </button>
     );
-} 
+}
