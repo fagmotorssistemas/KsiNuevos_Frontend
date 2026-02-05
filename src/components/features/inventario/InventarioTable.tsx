@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
     Car, 
     Info, 
@@ -44,6 +44,11 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+
+    useEffect(() => {
+        setVehiculos(initialVehiculos);
+        setCurrentPage(1); // Resetear a página 1 cuando cambian los datos
+    }, [initialVehiculos]);
 
     // --- LÓGICA DE EDICIÓN (SUPABASE) ---
     const handleEditClick = (v: VehiculoInventario) => {

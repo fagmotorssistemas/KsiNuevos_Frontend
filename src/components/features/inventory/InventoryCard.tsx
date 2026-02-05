@@ -35,7 +35,7 @@ export function InventoryCard({ car, onEdit }: InventoryCardProps) {
         <div className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full">
             
             {/* 1. IMAGEN (Header) */}
-            <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+            <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
                 {car.img_main_url ? (
                     <img 
                         src={car.img_main_url} 

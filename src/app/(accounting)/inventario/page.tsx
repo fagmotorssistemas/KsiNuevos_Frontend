@@ -12,22 +12,35 @@ export default function InventarioPage() {
     // Estado para el filtro (Por defecto 'all')
     const [filter, setFilter] = useState<FilterType>('all');
 
+    // Debug: ver cuando cambia el filtro
+    const handleFilterChange = (newFilter: FilterType) => {
+        setFilter(newFilter);
+    };
+
     // Lógica de filtrado dinámico
     const filteredList = useMemo(() => {
-        if (!data?.listado) return [];
+        if (!data?.listado) {
+            return [];
+        }
 
+
+        let result;
         switch (filter) {
             case 'active':
                 // Solo vehículos con stock > 0
-                return data.listado.filter(v => v.stock > 0);
+                result = data.listado.filter(v => v.stock > 0);
+                break;
             case 'baja':
                 // Solo vehículos con stock == 0
-                return data.listado.filter(v => v.stock === 0);
+                result = data.listado.filter(v => v.stock === 0);
+                break;
             case 'all':
             default:
                 // Todos
-                return data.listado;
+                result = data.listado;
+                break;
         }
+        return result;
     }, [data, filter]);
 
     return (
@@ -63,7 +76,7 @@ export default function InventarioPage() {
                     data={data ? data.resumen : null} 
                     loading={loading}
                     activeFilter={filter}
-                    onFilterChange={setFilter}
+                    onFilterChange={handleFilterChange}
                 />
 
                 {/* 2. Tabla Maestra de Inventario */}

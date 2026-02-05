@@ -34,12 +34,16 @@ export function InventarioKpiStats({
     // Clases comunes para las tarjetas interactivas
     const cardBaseClass = "p-6 rounded-xl border shadow-sm relative overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-md transform hover:-translate-y-1";
 
+    const handleFilterClick = (newFilter: FilterType) => {
+        onFilterChange(newFilter);
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             
             {/* 1. CARD TOTAL (Filtro 'all') */}
             <div 
-                onClick={() => onFilterChange('all')}
+                onClick={() => handleFilterClick('all')}
                 className={`${cardBaseClass} ${
                     activeFilter === 'all' 
                         ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500" 
@@ -69,7 +73,7 @@ export function InventarioKpiStats({
 
             {/* 2. CARD ACTIVOS (Filtro 'active') */}
             <div 
-                onClick={() => onFilterChange('active')}
+                onClick={() => handleFilterClick('active')}
                 className={`${cardBaseClass} ${
                     activeFilter === 'active' 
                         ? "bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500" 
@@ -99,7 +103,7 @@ export function InventarioKpiStats({
 
             {/* 3. CARD BAJAS (Filtro 'baja') */}
             <div 
-                onClick={() => onFilterChange('baja')}
+                onClick={() => handleFilterClick('baja')}
                 className={`${cardBaseClass} ${
                     activeFilter === 'baja' 
                         ? "bg-slate-100 border-slate-500 ring-1 ring-slate-500" 
