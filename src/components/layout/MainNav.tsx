@@ -29,6 +29,7 @@ export function MainNav({ className }: { className?: string }) {
     // Admin también necesita ver Cartera (opcional, asumiendo que Admin ve todo)
     if (profile?.role === "admin") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
+      navItems.push({ href: "/dashboardTaller", label: "Taller" });
     }
 
     // Admin y Marketing ven la sección de reportes
