@@ -9,10 +9,18 @@ export interface ContratoResumen {
     ccoEmpresa: number;
 }
 
+// Nueva interfaz para las cuotas extras
+export interface CuotaAdicional {
+    monto: number;
+    letras: string;
+    fecha?: string; 
+}
+
 export interface ContratoDetalle {
     // --- Identificación ---
     notaVenta: string;
     fechaVenta: string;
+    fechaVentaFull?: string;
     nroContrato: string;
     ccoCodigo: string;
     
@@ -20,8 +28,8 @@ export interface ContratoDetalle {
     textoFecha: string;       // cco_fecha
     textoFechaDado: string;   // cco_fecha_dado
     textoFechaCr: string;     // cco_fechacr
-    fechaCiudad: string;      // NUEVO: cco_fecha_ci
-    fechaCorta: string;       // NUEVO: cco_fecha1
+    fechaCiudad: string;      // cco_fecha_ci
+    fechaCorta: string;       // cco_fecha1
     ciudadContrato: string; 
     ciudadCliente: string;
     
@@ -35,7 +43,7 @@ export interface ContratoDetalle {
     // --- Vehículo ---
     sistemaNombre: string;
     vehiculo: string;         // El vehículo que se vende
-    vehiculoUsadoTexto: string; // NUEVO: Texto del vehículo que se recibe (vehiculo_usado)
+    vehiculoUsadoTexto: string; // Texto original del vehículo recibido (vehiculo_usado)
     marca: string;
     modelo: string;
     tipoVehiculo: string;
@@ -45,15 +53,15 @@ export interface ContratoDetalle {
     placa: string;
     motor: string;
     chasis: string;
-    datosVehiculo: string;    // NUEVO: Bloque de texto con datos (datos_vehiculo)
+    datosVehiculo: string;    // Bloque de texto con datos (datos_vehiculo)
     
     // --- Valores Económicos ---
     precioVehiculo: number;
     precioVehiculoLetras: string;     // dfac_precio_letras
-    precioVehiculoMasLetras: string;  // NUEVO: dfac_precio_mas_letras
+    precioVehiculoMasLetras: string;  // dfac_precio_mas_letras
     gastosAdministrativos: number;
     precioGastos: number;
-    precioGastosLetras: string;       // NUEVO: precio_gastos_letras
+    precioGastosLetras: string;       // precio_gastos_letras
     
     // --- Totales ---
     totalFinal: string;
@@ -73,8 +81,15 @@ export interface ContratoDetalle {
     // --- Internos ---
     dfacProducto: number;
     apoderado?: string | null;
+
+    // --- NUEVOS CAMPOS DE PAGOS Y RECEPCIONES ---
+    montoVehiculoUsado: number;
+    letrasVehiculoUsado: string;
+    montoCuotaAdicional: number; 
+    letrasCuotaAdicional: string;
+    // SE AGREGA LA LISTA QUE VIENE DEL BACKEND
+    listaCuotasAdicionales: CuotaAdicional[]; 
 }
-// ... (El resto de interfaces se mantiene igual)
 
 export interface CuotaAmortizacion {
     nroCuota: number;
@@ -83,4 +98,4 @@ export interface CuotaAmortizacion {
     interes: string;
     valorCuota: string;
     saldoCapital: number;
-} 
+}

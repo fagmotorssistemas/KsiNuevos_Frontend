@@ -76,7 +76,7 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                 {/* --- BODY SCROLLABLE --- */}
                 <div className="p-6 overflow-y-auto flex-1 space-y-8">
                     
-                    {/* SECCIÓN 1: DATOS LEGALES Y UBICACIÓN (NUEVO) */}
+                    {/* SECCIÓN 1: DATOS LEGALES Y UBICACIÓN */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="md:col-span-2 space-y-3">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -161,9 +161,9 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                                     { label: "Tipo", value: contrato.tipoVehiculo },
                                     { label: "Color", value: contrato.color },
                                     { label: "Año Modelo", value: contrato.anio },
-                                    { label: "Año Fab.", value: contrato.anioFabricacion }, // Nuevo
+                                    { label: "Año Fab.", value: contrato.anioFabricacion },
                                     { label: "Placa", value: contrato.placa },
-                                    { label: "Sistema", value: contrato.sistemaNombre }, // Nuevo
+                                    { label: "Sistema", value: contrato.sistemaNombre },
                                 ].map((item, idx) => (
                                     <div key={idx} className="bg-slate-50 border border-slate-100 p-2.5 rounded-lg">
                                         <p className="text-[10px] text-slate-400 uppercase font-medium">{item.label}</p>
@@ -247,7 +247,53 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                         </div>
                     </div>
 
-                    {/* SECCIÓN 4: EXTRAS Y SEGUROS (NUEVO) */}
+                    {/* SECCIÓN 3.5: PAGOS Y RECEPCIONES (NUEVO) */}
+                    {/* Solo se muestra si existen montos mayores a 0 */}
+                    {(contrato.montoVehiculoUsado > 0 || contrato.montoCuotaAdicional > 0) && (
+                        <div className="space-y-3">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <CreditCard className="h-3 w-3" /> Pagos y Recepciones
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                
+                                {/* Bloque: Vehículo Recibido (Verde) */}
+                                {contrato.montoVehiculoUsado > 0 && (
+                                    <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-lg">
+                                        <p className="text-xs text-emerald-800 font-bold uppercase mb-1">
+                                            Vehículo recibido como parte de pago
+                                        </p>
+                                        <div className="flex justify-between items-baseline mb-1">
+                                            <span className="text-sm font-bold text-emerald-900">
+                                                ${contrato.montoVehiculoUsado.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-emerald-700 leading-tight uppercase">
+                                            SON: {contrato.letrasVehiculoUsado}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Bloque: Cuota Adicional / Dispositivo (Azul) */}
+                                {contrato.montoCuotaAdicional > 0 && (
+                                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                                        <p className="text-xs text-blue-800 font-bold uppercase mb-1">
+                                            Cuota Adicional / Dispositivo
+                                        </p>
+                                        <div className="flex justify-between items-baseline mb-1">
+                                            <span className="text-sm font-bold text-blue-900">
+                                                ${contrato.montoCuotaAdicional.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-blue-700 leading-tight uppercase">
+                                            SON: {contrato.letrasCuotaAdicional}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SECCIÓN 4: EXTRAS Y SEGUROS */}
                     <div className="space-y-3">
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                             <Shield className="h-3 w-3" /> Servicios Adicionales

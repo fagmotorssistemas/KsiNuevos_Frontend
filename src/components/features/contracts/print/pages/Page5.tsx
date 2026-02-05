@@ -6,7 +6,7 @@ interface PageProps {
 }
 
 export function Page5({ data }: PageProps) {
-    // Helpers para formateo
+    // Helpers para formateo de moneda
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
         if (typeof val === 'string') return val.includes('$') ? val : `$ ${val}`;
@@ -17,7 +17,39 @@ export function Page5({ data }: PageProps) {
         return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
-    // Obtenemos la fecha actual o la de venta para el encabezado
+    // --- HELPER MAESTRO DE FECHA ---
+    const formatFechaFirma = (fechaFull: string | undefined, ciudad: string = "Cuenca") => {
+        // Fallback si no hay fecha
+        if (!fechaFull) return `Dado en ${ciudad}`; 
+        
+        // fechaFull viene como "2026-01-12 00:00:00"
+        const dateObj = new Date(fechaFull);
+        
+        if (isNaN(dateObj.getTime())) return `${ciudad} ${fechaFull}`; 
+
+        const dia = dateObj.getDate();
+        const mes = dateObj.getMonth() + 1;
+        const anio = dateObj.getFullYear();
+        
+        // Extraemos horas
+        const hora = dateObj.getHours();
+        const min = dateObj.getMinutes();
+        const seg = dateObj.getSeconds();
+
+        // LÓGICA INTELIGENTE:
+        // Si todo es 0 (medianoche), solo mostramos la fecha para que no se vea feo "00:00:00"
+        if (hora === 0 && min === 0 && seg === 0) {
+            return `${ciudad} ${dia}/${mes}/${anio}`;
+        }
+
+        // Si tiene hora real, la mostramos
+        const horaStr = hora.toString().padStart(2, '0');
+        const minStr = min.toString().padStart(2, '0');
+        const segStr = seg.toString().padStart(2, '0');
+
+        return `${ciudad} ${dia}/${mes}/${anio} ${horaStr}:${minStr}:${segStr}`;
+    };
+
     const fechaDoc = data.fechaVenta ? new Date(data.fechaVenta) : new Date();
 
     return (
@@ -29,17 +61,16 @@ export function Page5({ data }: PageProps) {
                     <h2 className="font-bold text-lg uppercase mb-1">CARTA DE INTERMEDIACION</h2>
                 </div>
 
-                {/* --- BARRA DE DATOS (CONTRATO / FECHA) --- */}
+                {/* --- BARRA DE DATOS --- */}
                 <div className="border border-black flex justify-between px-2 py-1 text-xs font-bold mb-6 bg-gray-100">
                     <span>CONTRATO NRO: {data.nroContrato}</span>
                     <span>FECHA: {data.textoFecha || formatDateSimple(fechaDoc)}</span>
                 </div>
 
-                {/* --- CUERPO 1: PROPIETARIO ANTERIOR --- */}
+                {/* --- CUERPO 1 --- */}
                 <div className="text-justify mb-4">
                     <p>
                         K-SI NUEVOS ha procedido a la comercialización de un vehículo de propiedad del señor 
-                        {/* Nota: Usamos sistemaNombre como propietario anterior, si no existe, un fallback */}
                         <strong> {data.apoderado || "PROPIETARIO ANTERIOR"}</strong> con las siguientes características:
                     </p>
                 </div>
@@ -82,7 +113,7 @@ export function Page5({ data }: PageProps) {
                     </div>
                 </div>
 
-                {/* --- CUERPO 2: COMPRADOR Y PAGO --- */}
+                {/* --- CUERPO 2 --- */}
                 <div className="text-justify mb-4 space-y-4 leading-relaxed">
                     <p>
                         Al Señor (a) <strong>{data.facturaNombre}</strong> quien en su calidad de comprador(a) paga la cantidad de 
@@ -94,10 +125,14 @@ export function Page5({ data }: PageProps) {
                     </p>
                 </div>
 
-                {/* --- FECHA Y HORA --- */}
-                <div className="mb-12 mt-8">
+                {/* --- FECHA Y HORA (AHORA INTELIGENTE) --- */}
+                <div className="mb-12 mt-8 text-sm">
                      <p>
-                        {data.fechaVenta}
+                        {/* Aquí usamos fechaVentaFull. 
+                           Si es 00:00:00 -> Muestra "Cuenca 12/1/2026"
+                           Si tiene hora -> Muestra "Cuenca 12/1/2026 13:13:14"
+                        */}
+                        {formatFechaFirma(data.fechaVentaFull, data.ciudadContrato || "Cuenca")}
                     </p>
                     <p className="mt-4">
                         Atentamente,
@@ -106,21 +141,16 @@ export function Page5({ data }: PageProps) {
 
                 {/* --- FIRMAS --- */}
                 <div className="grid grid-cols-2 gap-10 mt-16 text-center text-xs font-bold uppercase">
-                    {/* Firma Vendedor/Intermediario (Izquierda) */}
                     <div className="flex flex-col items-center">
-                        <div className="h-16 w-full relative"></div> {/* Espacio firma */}
+                        <div className="h-16 w-full relative"></div>
                         <div className="border-t border-black w-4/5 pt-1">
                             {"AGUIRRE MARQUEZ FABIAN LEONARDO"}<br/>
-                            {/* RUC Vendedor genérico o de la data */}
                             C.C. No. 0102109808
                         </div>
                     </div>
 
-                    {/* Firma Comprador (Derecha) */}
                     <div className="flex flex-col items-center">
-                        <div className="h-16 w-full relative">
-                             {/* SVG Firma simulada si se requiere */}
-                        </div>
+                        <div className="h-16 w-full relative"></div>
                         <div className="border-t border-black w-4/5 pt-1">
                             {data.facturaNombre}<br/>
                             C.C. No. {data.facturaRuc}

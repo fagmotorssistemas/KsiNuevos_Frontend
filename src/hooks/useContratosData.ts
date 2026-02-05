@@ -40,4 +40,4 @@ export const useContratosData = () => {
         error, 
         refresh: () => fetchData() 
     };
-};
+}; 

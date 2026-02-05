@@ -1,3 +1,4 @@
+// src/components/features/contracts/pages/Page7.tsx
 import { ContratoDetalle } from "@/types/contratos.types";
 import { ContractPageLayout } from "./ContractPageLayout";
 
@@ -9,17 +10,27 @@ interface PageProps {
 export function Page7({ data, hasAmortization = true }: PageProps) {
     if (!hasAmortization) return null;
 
+    // --- HELPERS ---
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
         if (typeof val === 'string') return val.includes('$') ? val : `$ ${val}`;
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
     };
 
-    const formatDateClean = (dateStr?: string) => {
-        if (!dateStr) return new Date().toLocaleDateString('es-EC');
-        const dateOnly = dateStr.split('T')[0];
-        const [y, m, d] = dateOnly.split('-');
-        return `${d}/${m}/${y}`;
+    const parseCurrencyString = (str: string | undefined): number => {
+        if (!str) return 0;
+        const cleanStr = str.replace(/[^0-9.]/g, '');
+        return parseFloat(cleanStr) || 0;
+    };
+
+    // CORRECCIÓN 1: Formato de fecha corto para el encabezado (12/1/2026)
+    const formatDateHeader = (dateStr?: string) => {
+        if (!dateStr) return "";
+        const date = new Date(dateStr);
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
     };
 
     const formatDateLong = (dateStr?: string) => {
@@ -28,12 +39,15 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
         return `${months[d.getMonth()]} ${d.getDate() + 1}, ${d.getFullYear()}`;
     };
 
-    // SOLUCIÓN AL ERROR DE TIPOS:
-    // Como 'plazoCredito' no existe, lo calculamos extrayéndolo del texto de 'formaPago'
     const getPlazoSeguro = () => {
         const match = data.formaPago?.match(/\d+/);
         return match ? match[0] : "36";
     };
+
+    // --- CÁLCULOS ---
+    const totalFinalNum = parseCurrencyString(data.totalFinal);
+    const abonoVehiculos = data.montoVehiculoUsado || 0; // Suma de todos los autos entregados
+    const saldoPagaré = totalFinalNum - abonoVehiculos;  // Lo que realmente debe
 
     return (
         <ContractPageLayout pageNumber={7}>
@@ -46,39 +60,34 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                     <p className="text-[9px] text-center mt-0.5">...</p>
                 </div>
 
-                {/* --- CAJA PRINCIPAL DE DATOS (CON TUS ESTILOS) --- */}
+                {/* --- CAJA PRINCIPAL DE DATOS --- */}
                 <div className="border border-black flex items-stretch mb-0.5">
                     
-                    {/* IZQUIERDA: Datos con etiquetas alineadas usando GRID */}
+                    {/* IZQUIERDA */}
                     <div className="flex-1">
                         <div className="grid grid-cols-[65px_1fr] gap-y-0.5 text-[10px]">
                             
-                            {/* Fila 1: F.Emision */}
+                            {/* CORRECCIÓN 1: Usamos formatDateHeader aquí */}
                             <span className="font-serif italic text-gray-800 font-bold">F.Emision</span>
-                            <span>{data.fechaVenta}</span>
+                            <span>{formatDateHeader(data.fechaVentaFull)}</span>
 
-                            {/* Fila 2: Vehiculo */}
                             <span className="font-serif italic text-gray-800 font-bold">Vehiculo:</span>
                             <div className="flex justify-between w-full">
                                 <span className="uppercase">{data.marca} {data.modelo} {data.anio} {data.color}</span>
                             </div>
 
-                            {/* Fila 3: Mod */}
                             <span className="font-serif italic text-gray-800 font-bold">Mod:</span>
                             <span className="uppercase text-[9px]">{data.modelo} {data.motor}</span>
                             
-                            {/* Fila 4: Placa (En su propia fila según tu diseño) */}
                             <span className="font-serif italic text-gray-800 font-bold">Placa: </span>
                             <span className="mr-4">{data.placa}</span>
 
-                            {/* Fila 5: Comprador */}
                             <span className="font-serif italic text-gray-800 font-bold">Comprador</span>
                             <span className="uppercase">{data.facturaNombre}</span>
-                            
                         </div>
                     </div>
 
-                    {/* DERECHA: CCV (Tu estilo ancho) */}
+                    {/* DERECHA */}
                     <div className="w-60 border-l border-black flex flex-col items-center justify-center text-center p-1 bg-gray-50/20">
                         <span className="text-[9px] font-serif mb-1">Doc.Int.</span>
                         <div className="flex items-center gap-2">
@@ -106,8 +115,8 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                         <span className="uppercase truncate pr-2">Seguro Vehicular Clientes</span>
                         <span className="font-mono text-right min-w-[80px]">{formatCurrency(data.totalSeguro)}</span>
                     </div>
-                    
-                    {/* CABECERA NEGRITA */}
+
+                    {/* CABECERA INTERNA */}
                     <div className="flex text-[9px] font-bold border-b border-black bg-gray-100/50 uppercase">
                         <div className="flex-1 px-1 py-0.5">Detalle Cuota</div>
                         <div className="w-20 text-center px-1 py-0.5">F.Vence</div>
@@ -115,34 +124,33 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                         <div className="w-20 text-right px-1 py-0.5">Saldo</div>
                     </div>
 
-                    {/* TOTALES */}
+                    {/* TOTALES (Saldo Real) */}
                     <div className="flex items-center font-bold text-[10px] py-1">
                         <div className="flex-1 px-1">Observaciones.</div>
                         <div className="w-20 text-center">Totales.</div>
-                        <div className="w-20 text-right font-mono">{data.totalFinal}</div>
-                        <div className="w-20 text-right font-mono pr-1">{data.totalFinal?.replace('$','')}</div>
+                        <div className="w-20 text-right font-mono">{formatCurrency(saldoPagaré)}</div>
+                        <div className="w-20 text-right font-mono pr-1">{formatCurrency(saldoPagaré).replace('$','')}</div>
                     </div>
                 </div>
 
-                {/* --- CAJA OBSERVACIONES (CORREGIDA SIN TIPOS INEXISTENTES) --- */}
+                {/* --- CAJA OBSERVACIONES --- */}
                 <div className="border border-black p-1 text-[9px] uppercase mb-1 leading-snug min-h-[40px] flex items-center">
                     {data.observaciones ? data.observaciones : (
                         <p>
                             SE VENDE EN {formatCurrency(data.precioVehiculo)}; 
-                            {/* Se eliminó referencia a vehiculoRetoma porque no existe en la interfaz */}
                             DISPOSITIVO {formatCurrency(data.totalRastreador)} DE CONTADO Y LA DIFERENCIA CON SEGURO PARA {getPlazoSeguro()} MESES CREDITO DIRECTO AUT GERENCIA
                         </p>
                     )}
                 </div>
                 <div className="text-right text-[9px] mb-6">Aprobado por.</div>
 
-                {/* --- PAGARÉ --- */}
+                {/* --- SECCIÓN DE PAGARÉ --- */}
                 <div className="pl-4 pr-4 mb-6">
                     <div className="flex flex-wrap items-baseline gap-1 text-[11px] leading-loose">
                         <span>Debo y pagaré en forma incondicional este PAGARÉ a la orden de</span>
                         <span className="border-b border-black w-48 inline-block h-4"></span>
                         <span>la cantidad de</span>
-                        <span className="font-bold">{data.totalFinal} dólares americanos.</span>
+                        <span className="font-bold">{formatCurrency(saldoPagaré)} dólares americanos.</span>
                     </div>
                 </div>
 

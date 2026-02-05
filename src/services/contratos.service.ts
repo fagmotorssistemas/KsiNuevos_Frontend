@@ -1,22 +1,12 @@
 // src/services/contratos.service.ts
-import { ContratoResumen, ContratoDetalle, CuotaAmortizacion } from "@/types/contratos.types";
+import { ContratoResumen, ContratoDetalle, CuotaAmortizacion, CuotaAdicional } from "@/types/contratos.types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.117:3005/api';
 
-// --- HELPER NUEVO: EXTRACCIÓN INTELIGENTE ---
-// Busca la línea que dice "Tipo" pero IGNORA "Tipo - Matricula"
+// --- HELPER DE EXTRACCIÓN ---
 const extraerTipoReal = (bloqueTexto: string, fallback: string): string => {
     if (!bloqueTexto) return fallback;
-    
-    // Explicación Regex:
-    // 1. (?:^|\r\n|\n) -> Busca al inicio o después de un salto de línea
-    // 2. Tipo -> La palabra clave
-    // 3. \s+ -> Espacios
-    // 4. (?!-|Matricula) -> NEGATIVO: Asegura que lo que sigue NO sea un guion ni la palabra Matricula
-    // 5. (.*) -> Captura todo lo demás de la línea
     const match = bloqueTexto.match(/(?:^|\r\n|\n)Tipo\s+(?!-|Matricula)(.*)/);
-    
-    // Si encontramos "Tipo CAMIONETA", devolvemos "CAMIONETA". Si no, devolvemos el valor original (fallback)
     return match ? match[1].trim() : fallback;
 };
 
@@ -32,16 +22,17 @@ const adaptarResumen = (data: any): ContratoResumen => {
 };
 
 const adaptarDetalle = (data: any): ContratoDetalle => {
-    // 1. Obtenemos el bloque de texto gigante
     const datosBloque = data.datosVehiculo || data.DATOS_VEHICULO || data.datos_vehiculo || '';
-    
-    // 2. Obtenemos el tipo "malo" (Blindado)
     const tipoOriginal = data.tipoVehiculo || data.TIPO || data.tipo || '';
 
     return {
         // --- Identificación ---
         notaVenta: data.notaVenta || data.NOTA_VENTA || data.nota_venta || '',
         fechaVenta: data.fechaVenta || data.FECHA_VENTA || data.fecha_venta || '',
+        
+        // --- Fecha Completa ---
+        fechaVentaFull: data.fechaVentaFull || data.FECHA_VENTA_FULL || data.fechaVenta,
+
         nroContrato: data.nroContrato || data.NRO_CONTRATO || data.nro_contrato || '',
         ccoCodigo: data.ccoCodigo || data.CCO_CODIGO || data.cco_codigo || '',
 
@@ -67,12 +58,8 @@ const adaptarDetalle = (data: any): ContratoDetalle => {
         vehiculoUsadoTexto: data.vehiculoUsadoTexto || data.vehiculoUsado || data.VEHICULO_USADO || data.vehiculo_usado || '',
         marca: data.marca || data.MARCA || data.marca || '',
         modelo: data.modelo || data.MODELO || data.modelo || '',
-        
-        // --- AQUÍ ESTÁ LA MAGIA ---
-        // Usamos la función para sacar "CAMIONETA" del bloque de texto
         tipoVehiculo: extraerTipoReal(datosBloque, tipoOriginal),
-        // -------------------------
-
+        
         anio: data.anio || data.ANIO || data.anio || '',
         anioFabricacion: data.anioFabricacion || data.anioDeFabricacion || data.ANIO_DE_FABRICACION || data.anio_de_fabricacion || '',
         color: data.color || data.COLOR || data.color || '',
@@ -105,7 +92,20 @@ const adaptarDetalle = (data: any): ContratoDetalle => {
         
         // --- Internos ---
         dfacProducto: Number(data.dfacProducto || data.DFAC_PRODUCTO || data.dfac_producto || 0),
-        apoderado: data.apoderado || 'N/A'
+        apoderado: data.apoderado || 'N/A',
+
+        // --- PAGOS Y CUOTAS ADICIONALES ---
+        montoVehiculoUsado: Number(data.montoVehiculoUsado || 0),
+        letrasVehiculoUsado: data.letrasVehiculoUsado || '',
+        montoCuotaAdicional: Number(data.montoCuotaAdicional || 0),
+        letrasCuotaAdicional: data.letrasCuotaAdicional || '',
+        
+        // MAPEAMOS LA LISTA DEL BACKEND AL FORMATO DEL FRONTEND
+        listaCuotasAdicionales: (data.listaCuotasAdicionales || []).map((ca: any): CuotaAdicional => ({
+            monto: Number(ca.monto || 0),
+            letras: ca.letras || '',
+            fecha: ca.fecha || '' // Se puede omitir si Page6 usa la fecha de venta
+        }))
     };
 };
 

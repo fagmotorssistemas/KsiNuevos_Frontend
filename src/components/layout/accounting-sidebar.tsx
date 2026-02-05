@@ -17,6 +17,7 @@ import {
     ChevronRight,
     BanknoteArrowDown,
     Box,
+    ShieldCheck,
 } from 'lucide-react';
 
 // Definición de los items del menú
@@ -30,6 +31,7 @@ const menuItems = [
     { name: 'Cobros', href: '/cobros', icon: Wallet },
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
+    { name: 'Seguros / Rastreador', href: '/seguros', icon: ShieldCheck },
     { name: 'Inventario', href: '/inventario', icon: Box }
 ];
 

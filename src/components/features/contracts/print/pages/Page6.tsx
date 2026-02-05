@@ -9,12 +9,52 @@ interface PageProps {
 }
 
 export function Page6({ data, hasAmortization }: PageProps) {
-    if (!hasAmortization) return null;
+    // --- LÓGICA DE VISIBILIDAD ---
+    // Verificamos si hay elementos en la lista de cuotas adicionales para decidir si mostrar la página
+    const tieneAdicionales = data.listaCuotasAdicionales && data.listaCuotasAdicionales.length > 0;
+    const debeMostrarPagina = hasAmortization || tieneAdicionales;
 
-    const formatMoney = (val: number | undefined) => 
-        val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
+    if (!debeMostrarPagina) return null;
 
-    const currentDateTime = new Date().toLocaleString('es-EC');
+    const formatMoney = (val: number | undefined | string) => {
+        if (typeof val === 'string') return val;
+        return val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
+    };
+
+    // --- HELPER DE FECHAS ---
+    const formatDateHeader = (fechaFull: string | undefined) => {
+        if (!fechaFull) return "";
+        
+        const dateObj = new Date(fechaFull);
+        if (isNaN(dateObj.getTime())) return fechaFull; 
+
+        const dia = dateObj.getDate();
+        const mes = dateObj.getMonth() + 1;
+        const anio = dateObj.getFullYear();
+        
+        const hora = dateObj.getHours();
+        const min = dateObj.getMinutes();
+        const seg = dateObj.getSeconds();
+
+        // Si es medianoche exacta, devolvemos solo fecha corta (DD/MM/YYYY)
+        if (hora === 0 && min === 0 && seg === 0) {
+            return `${dia}/${mes}/${anio}`;
+        }
+
+        const horaStr = hora.toString().padStart(2, '0');
+        const minStr = min.toString().padStart(2, '0');
+        const segStr = seg.toString().padStart(2, '0');
+
+        return `${dia}/${mes}/${anio} ${horaStr}:${minStr}:${segStr}`;
+    };
+
+    // --- PREPARACIÓN DE DATOS PARA LA TABLA ---
+    // Mapeamos la lista de cuotas adicionales del backend (8500, 10000, etc.)
+    // Como no tienen fecha propia, usamos la fecha de venta del contrato para todas
+    const cuotasParaTabla = data.listaCuotasAdicionales?.map(cuota => ({
+        monto: cuota.monto,
+        fecha: formatDateHeader(data.fechaVenta) 
+    })) || [];
 
     return (
         <ContractPageLayout pageNumber={6}>
@@ -24,7 +64,7 @@ export function Page6({ data, hasAmortization }: PageProps) {
                 <div className="text-center mb-4">
                     <h2 className="font-bold text-lg italic">K-SI NUEVOS</h2>
                     <h3 className="text-sm font-semibold">Tabla de Amortización Venta</h3>
-                    <p className="text-[9px] mt-1">...</p>
+                    <p className="text-[9px] mt-1">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
                 </div>
 
                 {/* --- DATOS GENERALES --- */}
@@ -32,7 +72,10 @@ export function Page6({ data, hasAmortization }: PageProps) {
                     <div className="w-2/3">
                         <div className="grid grid-cols-[60px_1fr] gap-1">
                             <span className="font-bold">F.Emision</span>
-                            <p className="text-[8px] text-gray-500 mb-0.5">{data.fechaVenta}</p>
+                            <p className="text-[10px] text-gray-800 font-medium mb-0.5">
+                                {formatDateHeader(data.fechaVentaFull)}
+                            </p>
+
                             <span className="font-bold">Vehículo:</span>
                             <span>{data.marca} {data.modelo} {data.anio} {data.color}</span>
                             
@@ -83,10 +126,14 @@ export function Page6({ data, hasAmortization }: PageProps) {
                 </div>
 
                 {/* --- TABLA DE AMORTIZACIÓN --- */}
-                {/* IMPORTANTE: Quitamos el margin-bottom en impresión para ganar espacio 
-                    y evitar que empuje contenido fuera de la página */}
                 <div className="mb-8 print:mb-0">
-                    <AmortizacionTable contratoId={data.ccoCodigo} printMode={true} totalCuotas={36} />
+                    <AmortizacionTable 
+                        contratoId={data.ccoCodigo} 
+                        printMode={true} 
+                        totalCuotas={36}
+                        // Pasamos el array de cuotas para que la tabla las dibuje una por una
+                        cuotasAdicionales={cuotasParaTabla} 
+                    />
                 </div>
                 
             </div>
