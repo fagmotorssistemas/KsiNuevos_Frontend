@@ -250,13 +250,16 @@ export default function AdminDashboardPage() {
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
-    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities, refreshTopOpportunities } = useScraperData()
+    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities } = useScraperData()
 
-    const handleReload = () => {
-        reloadSellers();
-        reloadVehicles();
-        refreshAll();
-        refreshTopOpportunities();
+    const handleReload = async () => {
+        await reloadSellers();
+        await reloadVehicles();
+        await refreshAll();
+    };
+
+    const handleScraperRefresh = async () => {
+        await refreshAll();
     };
 
     const grandTotals = useMemo(() => sellerStats.reduce((acc, curr) => ({
@@ -292,7 +295,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Toolbar solo visible si NO estamos en testimonios */}
-            {activeTab !== 'testimonials' && (
+            {activeTab !== 'testimonials' && activeTab !== 'opportunities' && (
                 <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
                     <AdminToolbar
                         currentFilter={dateFilter}
@@ -402,9 +405,16 @@ export default function AdminDashboardPage() {
                 ) : activeTab === 'testimonials' ? (
                     <TestimonialsView />
                 ) : (
-                    <>
-                        <OpportunitiesView vehicles={vehicles} sellers={sellers} isLoading={isScraperLoading} stats={stats} locationFilter={filters.location} statusFilter={filters.status} topOpportunities={topOpportunities}/>
-                    </>
+                    <OpportunitiesView
+                        vehicles={vehicles}
+                        sellers={sellers}
+                        isLoading={isScraperLoading}
+                        stats={stats}
+                        locationFilter={filters.location}
+                        statusFilter={filters.status}
+                        topOpportunities={topOpportunities}
+                        onScraperComplete={handleScraperRefresh} 
+                    />
                 )}
             </div>
         </div>

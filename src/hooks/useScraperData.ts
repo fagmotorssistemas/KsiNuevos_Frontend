@@ -224,10 +224,8 @@ const loadTopOpportunities = useCallback(async () => {
     // =============================
     const top30 = uniqueByTitle.slice(0, 30);
 
-    console.log("🔥 Top Opportunities:", top30);
-
     // Guardar en estado
-    setTopOpportunities(top30 as VehicleWithSeller[]);
+    setTopOpportunities(top30);
   } catch (err) {
     console.error("Error inesperado en oportunidades:", err);
     setTopOpportunities([]);
@@ -245,8 +243,8 @@ const loadTopOpportunities = useCallback(async () => {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadVehicles(), loadSellers()]);
-  }, [loadVehicles, loadSellers]);
+    await Promise.all([loadVehicles(), loadSellers(), loadTopOpportunities()]);
+  }, [loadVehicles, loadSellers, loadTopOpportunities]);
 
   const stats = useMemo(() => {
     return {

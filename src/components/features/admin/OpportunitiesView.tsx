@@ -14,9 +14,12 @@ import {
     X,
     ChevronRight,
     Search,
-    DatabaseZap
+    DatabaseZap,
+    RefreshCcw,
+    RefreshCw
 } from "lucide-react";
 import { useScraperData } from "@/hooks/useScraperData";
+import { Button } from "@/components/ui/Button";
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 
@@ -37,6 +40,7 @@ interface OpportunitiesViewProps {
         enTaller: number;
         enCliente: number;
     };
+    onScraperComplete?: () => Promise<void>;  // Nueva prop
 }
 
 export function OpportunitiesView({
@@ -46,17 +50,14 @@ export function OpportunitiesView({
     isLoading,
     statusFilter,
     locationFilter,
-    topOpportunities
+    topOpportunities,
+    onScraperComplete
 }: OpportunitiesViewProps) {
 
-    // Estado para controlar el filtro de Guayaquil
     const [onlyCoast, setOnlyCoast] = useState(true);
     const [showTopDeals, setShowTopDeals] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
-
-    const { refreshTopOpportunities } = useScraperData()
-
 
     const sourceVehicles = showTopDeals ? topOpportunities : vehicles;
     const regex = /\b(?:babahoyo|milagro|naranjal|daule|los lojas|eloy alfaro|la troncal|el triunfo|guayaquil|esmeraldas|portoviejo|santo\s+domingo|santa\s+elena|machala|manta)\b/i;
@@ -99,15 +100,24 @@ export function OpportunitiesView({
 
     const handleSubmitScraper = async (searchValue: string) => {
         setIsWebhookLoading(true);
-        const webhook = await scraperService.scrapMarketplace(searchValue);
-        setIsWebhookLoading(webhook?.status === 'done' ? false : true);
+        try {
+            await scraperService.scrapMarketplace(searchValue);
+
+            // Esperar a que se procesen los datos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Llamar a la función de refresh del padre
+            if (onScraperComplete) {
+                await onScraperComplete();
+            }
+
+        } catch (error) {
+            console.error('Error al scrapear:', error);
+        } finally {
+            setIsWebhookLoading(false);
+        }
     }
 
-useEffect(() => {
-    if (!isWebhookLoading) {
-        refreshTopOpportunities();
-    }
-}, [isWebhookLoading]);
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -133,20 +143,27 @@ useEffect(() => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-
                     <button
                         disabled={isWebhookLoading}
                         onClick={() => handleSubmitScraper(searchTerm)}
-                        className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 rounded-lg text-xs font-bold transition-all border w-fit whitespace-nowrap ${onlyCoast
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 rounded-lg text-xs font-bold transition-all border w-fit whitespace-nowrap bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700`}
                     >
-                        <DatabaseZap className="h-3.5 w-3.5" />
-                        <p>Scrapear Datos</p>
+                        <>
+                            {isWebhookLoading ?
+                                <>
+                                    <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
+                                    <p>Cargando</p>
+                                </>
+                                :
+                                <>
+                                    <DatabaseZap className="h-3.5 w-3.5" />
+                                    <p>Scrapear Datos</p>
+                                </>
+                            }
+
+                        </>
                     </button>
                 </div>
-
             </div>
 
             {/* Tarjetas Resumen */}
@@ -254,12 +271,14 @@ useEffect(() => {
                     </button>
                 </div>
             </div>
-            {showTopDeals && (
-                <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Mostrando Top 30 Mejores Oportunidades de Compra
-                </div>
-            )}
+            {
+                showTopDeals && (
+                    <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Mostrando Top 30 Mejores Oportunidades de Compra
+                    </div>
+                )
+            }
 
             {/* Tabla de Resultados */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -351,6 +370,6 @@ useEffect(() => {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }
