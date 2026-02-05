@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 // --- TIPOS ---
-export type InventoryCar = Database['public']['Tables']['inventory']['Row'];
+export type InventoryCar = Database['public']['Tables']['inventoryoracle']['Row'];
 
 export type SortOption = 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'newest';
 
@@ -39,7 +39,7 @@ export function useInventory() {
         setIsLoading(true);
 
         const { data, error } = await supabase
-            .from('inventory')
+            .from('inventoryoracle')
             .select('*')
             .order('created_at', { ascending: false });
 
@@ -67,8 +67,10 @@ export function useInventory() {
             result = result.filter(car => 
                 car.brand.toLowerCase().includes(query) || 
                 car.model.toLowerCase().includes(query) ||
-                (car.plate_short && car.plate_short.toLowerCase().includes(query)) ||
-                (car.plate && car.plate.toLowerCase().includes(query))
+                (car.plate && car.plate.toLowerCase().includes(query)) ||
+                (car.vin && car.vin.toLowerCase().includes(query)) ||
+                // @ts-ignore - plate_short debe agregarse a la tabla inventoryoracle
+                (car.plate_short && car.plate_short.toLowerCase().includes(query))
             );
         }
 
@@ -90,8 +92,8 @@ export function useInventory() {
         // --- ORDENAMIENTO ---
         result.sort((a, b) => {
             switch (sortBy) {
-                case 'price_asc': return a.price - b.price;
-                case 'price_desc': return b.price - a.price;
+                case 'price_asc': return (a.price || 0) - (b.price || 0);
+                case 'price_desc': return (b.price || 0) - (a.price || 0);
                 case 'year_desc': return b.year - a.year;
                 case 'year_asc': return a.year - b.year;
                 case 'newest': 

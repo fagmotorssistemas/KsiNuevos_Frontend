@@ -227,8 +227,8 @@ export function InventoryTable({
     const role = currentUserRole?.toLowerCase() || '';
     const canEdit = role === 'admin' || role === 'marketing';
 
-    const formatPrice = (price: number) => 
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price);
+    const formatPrice = (price: number | null) => 
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price ?? 0);
 
     const formatKm = (km: number | null) => 
         km ? `${km.toLocaleString()} km` : '0 km';

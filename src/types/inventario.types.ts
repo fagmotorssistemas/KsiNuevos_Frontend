@@ -13,6 +13,8 @@ export interface VehiculoInventario {
     placa: string;
     tipo: string;
     color: string;
+    price?: number; 
+    mileage?: number;
     
     // Ficha Técnica
     motor: string;

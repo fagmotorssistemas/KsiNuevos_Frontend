@@ -158,7 +158,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
 
             setUploadStatus("Guardando cambios...");
 
-            const { error } = await supabase
+            {/*// 1. Actualizar tabla 'inventory' (por ID)
+            const { error: error1 } = await supabase
                 .from('inventory')
                 .update({
                     price: Number(formData.price),
@@ -180,7 +181,28 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                 })
                 .eq('id', car.id);
 
-            if (error) throw error;
+            if (error1) throw error1;*/}
+
+            // 2. Actualizar tabla 'inventoryoracle' (por PLATE) - IMPORTANTE para sincronización
+            if (car.plate) {
+                const { error: error2 } = await supabase
+                    .from('inventoryoracle')
+                    .update({
+                        price: Number(formData.price),
+                        mileage: Number(formData.mileage),
+                        status: formData.status as any,
+                        location: formData.location as any,
+                        description: formData.description,
+                        color: formData.color,
+                        year: Number(formData.year),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('plate', car.plate.toUpperCase());
+
+                if (error2) {
+                    console.warn("⚠️ Advertencia al actualizar inventoryoracle:", error2);
+                }
+            }
 
             onUpdate();
             onClose();

@@ -15,8 +15,8 @@ interface InventoryCardProps {
 
 export function InventoryCard({ car, onEdit }: InventoryCardProps) {
     // Formateadores
-    const formatPrice = (price: number) => 
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price);
+    const formatPrice = (price: number | null) => 
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price ?? 0);
     
     const formatKm = (km: number | null) => 
         km ? `${km.toLocaleString()} km` : '0 km';
