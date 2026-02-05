@@ -11,47 +11,46 @@ export function ContractPageLayout({ children, pageNumber }: Props) {
         <div 
             className="
                 relative 
-                w-[210mm] min-h-[297mm] /* Tamaño base A4 en pantalla */
+                /* Tamaño exacto A4 en pantalla */
+                w-[210mm] min-h-[297mm] 
                 bg-white mx-auto shadow-2xl mb-8 
-                /* Padding: 25mm lados, 20mm arriba/abajo */
-                px-[25mm] py-[20mm]
-                text-justify font-serif text-[11pt] leading-[1.5] text-black 
                 
-                /* --- ESTILOS DE IMPRESIÓN --- */
+                /* Tipografía base forzada para evitar variaciones */
+                text-justify font-['Arial'] text-[11pt] leading-[1.3] text-black 
+                
+                /* Padding consistente */
+                px-[25mm] py-[20mm]
+
+                /* --- AJUSTES DE IMPRESIÓN --- */
                 print:shadow-none 
                 print:mb-0 
                 print:w-[210mm] 
                 
-                /* AJUSTE CLAVE 1: Altura fija ligeramente menor a A4 (297mm) 
-                   para evitar que 1px de desborde cree una hoja nueva */
+                /* AJUSTE CLAVE: Altura de impresión reducida 1mm */
+                /* Esto evita que el borde inferior toque el límite y cree una hoja extra */
                 print:h-[296mm] 
                 print:min-h-0
                 
                 print:mx-0 
-                print:p-[20mm] /* Mantener margen interno */
                 
-                /* AJUSTE CLAVE 2: Control de saltos de página */
-                print:break-after-page      /* Salto después de cada página */
-                print:break-inside-avoid    /* Evitar que se parta a la mitad */
+                /* Control estricto de saltos de página */
+                print:break-after-page      
+                print:break-inside-avoid    
                 
-                /* AJUSTE CLAVE 3: La última página del grupo NO debe tener salto */
-                last:print:break-after-auto
-                
-                print:overflow-hidden /* Cortar contenido que exceda el A4 */
+                /* Eliminar desbordes que confunden al motor de impresión */
+                print:overflow-hidden 
             "
-            // ELIMINADO: style={{ pageBreakAfter: 'always' }} 
-            // Esto causaba la página en blanco al final. Ahora lo controlamos con clases.
         >
-            {/* Contenido de la página */}
-            <div className="h-full flex flex-col relative z-10">
+            {/* Contenedor interno con altura controlada */}
+            <div className="h-full flex flex-col relative z-10 overflow-hidden">
                 <div className="flex-1">
-                 {children}
+                    {children}
                 </div>
             </div>
 
-            {/* Número de página */}
+            {/* Número de página con posición fija en puntos para precisión */}
             {pageNumber && (
-                <div className="absolute bottom-[10mm] right-[25mm] text-[10px] text-gray-500 print:text-black">
+                <div className="absolute bottom-[40pt] right-[70pt] text-[9pt] text-gray-500 print:text-black">
                     Pág. {pageNumber}
                 </div>
             )}

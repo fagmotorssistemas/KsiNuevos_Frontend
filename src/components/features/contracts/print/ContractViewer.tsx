@@ -43,24 +43,36 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
         }
     }, [contratoId, onClose]);
 
-    // Configuración de react-to-print
+    // Configuración de react-to-print optimizada para tipografía exacta
     const handlePrint = useReactToPrint({
         contentRef: contentRef,
         documentTitle: `Contrato_${contrato?.nroContrato || 'Documento'}`,
-        // AJUSTE: Definición explícita de A4 Portrait para asegurar márgenes cero
         pageStyle: `
             @page {
                 size: A4 portrait;
-                margin: 0mm;
+                margin: 0mm !important;
             }
             @media print {
-                body {
-                    -webkit-print-color-adjust: exact;
-                }
                 html, body {
-                    height: 100%;
+                    width: 210mm;
+                    height: 297mm;
                     margin: 0 !important;
                     padding: 0 !important;
+                    /* Forzar el renderizado de fuentes de alta precisión */
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    text-rendering: optimizeLegibility;
+                }
+                
+                body {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+
+                /* Evitar que el navegador re-escale el contenido */
+                * {
+                    -webkit-print-color-adjust: exact;
+                    box-sizing: border-box;
                 }
             }
         `
@@ -107,10 +119,17 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
 
             {/* Área de Visualización */}
             <div className="flex-1 overflow-y-auto p-8 bg-slate-100">
-                {/* Contenedor principal centrado. 
-                   Nota: Usamos 'min-w-fit' para asegurar que no se corte en pantallas pequeñas antes de imprimir.
+                {/* Contenedor con fuente forzada para la vista previa 
+                   esto asegura que lo que ves en pantalla use el mismo motor que el print 
                 */}
-                <div ref={contentRef} className="mx-auto w-fit bg-white shadow-lg print:shadow-none">
+                <div 
+                    ref={contentRef} 
+                    className="mx-auto w-fit bg-white shadow-lg print:shadow-none"
+                    style={{ 
+                        fontFamily: 'Arial, Helvetica, sans-serif',
+                        WebkitFontSmoothing: 'antialiased'
+                    }}
+                >
                     <ContractDocument data={contrato} amortizacion={amortizacion} />
                 </div>
             </div>
