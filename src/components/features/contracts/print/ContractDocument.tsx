@@ -11,46 +11,40 @@ import { Page7 } from "./pages/Page7";
 interface ContractDocumentProps {
     data: ContratoDetalle;
     amortizacion: CuotaAmortizacion[];
+    fechaImpresion?: string; // NUEVA PROP
 }
 
-/**
- * Componente principal que agrupa todas las páginas del contrato.
- * Se asegura de mantener la consistencia tipográfica en todo el documento.
- */
-export function ContractDocument({ data, amortizacion }: ContractDocumentProps) {
-    // Determinamos si hay datos de amortización para mostrar las páginas correspondientes
+export function ContractDocument({ data, amortizacion, fechaImpresion }: ContractDocumentProps) {
     const hasAmortization = amortizacion && amortizacion.length > 0;
 
     return (
         <div 
             className="print:w-[210mm] w-full flex flex-col items-center"
             style={{ 
-                // Refuerzo de tipografía para evitar cambios entre pantalla e impresora
                 fontFamily: 'Arial, Helvetica, sans-serif',
                 WebkitFontSmoothing: 'antialiased',
                 textRendering: 'optimizeLegibility'
             }}
         >
-            {/* Página 1: Contrato de Compra Venta */}
             <Page1 data={data} />
-            
-            {/* Página 2: Pagaré */}
             <Page2 data={data} />
-            
-            {/* Página 3: Carta de Resciliación */}
             <Page3 data={data} />
-            
-            {/* Página 4: Formulario Licitud de Recursos */}
             <Page4 data={data} />
             
-            {/* Página 5: Carta de Intermediación */}
-            <Page5 data={data} />
+            {/* PASAMOS LA FECHA A LAS PÁGINAS FINALES */}
+            <Page5 data={data} fechaImpresion={fechaImpresion} />
             
-            {/* Página 6: Tabla de Amortización (Detalle técnico) */}
-            <Page6 data={data} hasAmortization={hasAmortization} />
+            <Page6 
+                data={data} 
+                hasAmortization={hasAmortization} 
+                fechaImpresion={fechaImpresion} 
+            />
             
-            {/* Página 7: Resumen y Firmas de Amortización */}
-            <Page7 data={data} hasAmortization={hasAmortization} />
+            <Page7 
+                data={data} 
+                hasAmortization={hasAmortization} 
+                fechaImpresion={fechaImpresion} 
+            />
         </div>
     );
 }

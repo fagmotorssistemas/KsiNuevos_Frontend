@@ -174,9 +174,9 @@ export function Page1({ data }: PageProps) {
                     <div className="flex flex-col items-center">
                         <div className="mb-2">EL INTERMEDIARIO</div>
                         <div className="h-16 w-full"></div> {/* Espacio para firma */}
-                        <div className="border-t border-black w-4/5 pt-1">
-                            {"FABIAN LEONARDO AGUIRRE MARQUEZ"}<br/>
-                            {/* No hay RUC vendedor en esta interfaz, dejar vacío o usar genérico */}
+                        <div className="border-t border-black w-5/5 pt-1">
+                            {"AGUIRRE MARQUEZ FABIAN LEONARDO"}<br/>
+                            C.C. No. 0102109808 
                         </div>
                     </div>
 

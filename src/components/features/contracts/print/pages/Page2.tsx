@@ -147,7 +147,7 @@ export function Page2({ data }: PageProps) {
                     <div className="flex flex-col items-center">
                         <div className="mb-2">POR EL ACREEDOR</div>
                         <div className="h-16 w-full"></div> 
-                        <div className="border-t border-black w-4/5 pt-1">
+                        <div className="border-t border-black w-5/5 pt-1">
                             {"AGUIRRE MARQUEZ FABIAN LEONARDO"}<br/>
                             C.C. No. 0102109808 
                         </div>

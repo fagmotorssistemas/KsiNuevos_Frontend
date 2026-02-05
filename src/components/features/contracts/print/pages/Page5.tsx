@@ -1,11 +1,13 @@
+// src/components/features/contracts/pages/Page5.tsx
 import { ContratoDetalle } from "@/types/contratos.types";
 import { ContractPageLayout } from "./ContractPageLayout";
 
 interface PageProps {
     data: ContratoDetalle;
+    fechaImpresion?: string; // Prop añadida para recibir la estampa de tiempo
 }
 
-export function Page5({ data }: PageProps) {
+export function Page5({ data, fechaImpresion }: PageProps) {
     // Helpers para formateo de moneda
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
@@ -17,32 +19,33 @@ export function Page5({ data }: PageProps) {
         return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
-    // --- HELPER MAESTRO DE FECHA ---
+    /**
+     * HELPER MAESTRO DE FECHA
+     * Prioriza la fecha de impresión (con segundos) generada al hacer clic.
+     */
     const formatFechaFirma = (fechaFull: string | undefined, ciudad: string = "Cuenca") => {
-        // Fallback si no hay fecha
+        // 1. Si existe fecha de impresión manual, la usamos directamente
+        if (fechaImpresion) return `${ciudad}, ${fechaImpresion}`;
+
+        // Fallback si no hay fecha de ningún tipo
         if (!fechaFull) return `Dado en ${ciudad}`; 
         
-        // fechaFull viene como "2026-01-12 00:00:00"
         const dateObj = new Date(fechaFull);
-        
         if (isNaN(dateObj.getTime())) return `${ciudad} ${fechaFull}`; 
 
         const dia = dateObj.getDate();
         const mes = dateObj.getMonth() + 1;
         const anio = dateObj.getFullYear();
         
-        // Extraemos horas
         const hora = dateObj.getHours();
         const min = dateObj.getMinutes();
         const seg = dateObj.getSeconds();
 
-        // LÓGICA INTELIGENTE:
-        // Si todo es 0 (medianoche), solo mostramos la fecha para que no se vea feo "00:00:00"
+        // Si es medianoche exacta, devolvemos solo fecha corta
         if (hora === 0 && min === 0 && seg === 0) {
             return `${ciudad} ${dia}/${mes}/${anio}`;
         }
 
-        // Si tiene hora real, la mostramos
         const horaStr = hora.toString().padStart(2, '0');
         const minStr = min.toString().padStart(2, '0');
         const segStr = seg.toString().padStart(2, '0');
@@ -125,13 +128,9 @@ export function Page5({ data }: PageProps) {
                     </p>
                 </div>
 
-                {/* --- FECHA Y HORA (AHORA INTELIGENTE) --- */}
+                {/* --- FECHA Y HORA DE IMPRESIÓN --- */}
                 <div className="mb-12 mt-8 text-sm">
                      <p>
-                        {/* Aquí usamos fechaVentaFull. 
-                           Si es 00:00:00 -> Muestra "Cuenca 12/1/2026"
-                           Si tiene hora -> Muestra "Cuenca 12/1/2026 13:13:14"
-                        */}
                         {formatFechaFirma(data.fechaVentaFull, data.ciudadContrato || "Cuenca")}
                     </p>
                     <p className="mt-4">
@@ -143,7 +142,7 @@ export function Page5({ data }: PageProps) {
                 <div className="grid grid-cols-2 gap-10 mt-16 text-center text-xs font-bold uppercase">
                     <div className="flex flex-col items-center">
                         <div className="h-16 w-full relative"></div>
-                        <div className="border-t border-black w-4/5 pt-1">
+                        <div className="border-t border-black w-5/5 pt-1">
                             {"AGUIRRE MARQUEZ FABIAN LEONARDO"}<br/>
                             C.C. No. 0102109808
                         </div>

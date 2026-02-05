@@ -6,11 +6,11 @@ import { AmortizacionTable } from "../../AmortizacionTable";
 interface PageProps {
     data: ContratoDetalle;
     hasAmortization: boolean;
+    fechaImpresion?: string; // NUEVA PROP: Recibe el timestamp de impresión
 }
 
-export function Page6({ data, hasAmortization }: PageProps) {
+export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
     // --- LÓGICA DE VISIBILIDAD ---
-    // Verificamos si hay elementos en la lista de cuotas adicionales para decidir si mostrar la página
     const tieneAdicionales = data.listaCuotasAdicionales && data.listaCuotasAdicionales.length > 0;
     const debeMostrarPagina = hasAmortization || tieneAdicionales;
 
@@ -21,7 +21,7 @@ export function Page6({ data, hasAmortization }: PageProps) {
         return val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
     };
 
-    // --- HELPER DE FECHAS ---
+    // --- HELPER DE FECHAS (Fallback) ---
     const formatDateHeader = (fechaFull: string | undefined) => {
         if (!fechaFull) return "";
         
@@ -36,7 +36,6 @@ export function Page6({ data, hasAmortization }: PageProps) {
         const min = dateObj.getMinutes();
         const seg = dateObj.getSeconds();
 
-        // Si es medianoche exacta, devolvemos solo fecha corta (DD/MM/YYYY)
         if (hora === 0 && min === 0 && seg === 0) {
             return `${dia}/${mes}/${anio}`;
         }
@@ -49,8 +48,6 @@ export function Page6({ data, hasAmortization }: PageProps) {
     };
 
     // --- PREPARACIÓN DE DATOS PARA LA TABLA ---
-    // Mapeamos la lista de cuotas adicionales del backend (8500, 10000, etc.)
-    // Como no tienen fecha propia, usamos la fecha de venta del contrato para todas
     const cuotasParaTabla = data.listaCuotasAdicionales?.map(cuota => ({
         monto: cuota.monto,
         fecha: formatDateHeader(data.fechaVenta) 
@@ -73,7 +70,8 @@ export function Page6({ data, hasAmortization }: PageProps) {
                         <div className="grid grid-cols-[60px_1fr] gap-1">
                             <span className="font-bold">F.Emision</span>
                             <p className="text-[10px] text-gray-800 font-medium mb-0.5">
-                                {formatDateHeader(data.fechaVentaFull)}
+                                {/* PRIORIDAD: Usamos la fecha de impresión si está disponible */}
+                                {fechaImpresion || formatDateHeader(data.fechaVentaFull)}
                             </p>
 
                             <span className="font-bold">Vehículo:</span>
@@ -131,7 +129,6 @@ export function Page6({ data, hasAmortization }: PageProps) {
                         contratoId={data.ccoCodigo} 
                         printMode={true} 
                         totalCuotas={36}
-                        // Pasamos el array de cuotas para que la tabla las dibuje una por una
                         cuotasAdicionales={cuotasParaTabla} 
                     />
                 </div>

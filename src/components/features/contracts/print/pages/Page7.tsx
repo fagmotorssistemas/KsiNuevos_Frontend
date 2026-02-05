@@ -5,9 +5,10 @@ import { ContractPageLayout } from "./ContractPageLayout";
 interface PageProps {
     data: ContratoDetalle;
     hasAmortization?: boolean;
+    fechaImpresion?: string; // Prop añadida para la estampa de tiempo exacta
 }
 
-export function Page7({ data, hasAmortization = true }: PageProps) {
+export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProps) {
     if (!hasAmortization) return null;
 
     // --- HELPERS ---
@@ -23,8 +24,13 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
         return parseFloat(cleanStr) || 0;
     };
 
-    // CORRECCIÓN 1: Formato de fecha corto para el encabezado (12/1/2026)
+    /**
+     * Formato de fecha corto para el encabezado.
+     * Prioriza la fecha de impresión capturada al dar clic.
+     */
     const formatDateHeader = (dateStr?: string) => {
+        if (fechaImpresion) return fechaImpresion;
+        
         if (!dateStr) return "";
         const date = new Date(dateStr);
         const day = date.getDate();
@@ -36,7 +42,9 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
     const formatDateLong = (dateStr?: string) => {
         const d = dateStr ? new Date(dateStr) : new Date();
         const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-        return `${months[d.getMonth()]} ${d.getDate() + 1}, ${d.getFullYear()}`;
+        // Ajustamos para evitar el desfase de zona horaria al leer solo fecha
+        const dia = d.getUTCDate(); 
+        return `${dia} de ${months[d.getUTCMonth()]} de ${d.getUTCFullYear()}`;
     };
 
     const getPlazoSeguro = () => {
@@ -46,8 +54,8 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
 
     // --- CÁLCULOS ---
     const totalFinalNum = parseCurrencyString(data.totalFinal);
-    const abonoVehiculos = data.montoVehiculoUsado || 0; // Suma de todos los autos entregados
-    const saldoPagaré = totalFinalNum - abonoVehiculos;  // Lo que realmente debe
+    const abonoVehiculos = data.montoVehiculoUsado || 0; 
+    const saldoPagaré = totalFinalNum - abonoVehiculos;
 
     return (
         <ContractPageLayout pageNumber={7}>
@@ -57,19 +65,20 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                 <div className="text-center mb-3">
                     <h2 className="font-bold text-lg italic tracking-wide">K-SI NUEVOS</h2>
                     <h1 className="font-normal text-sm mt-1">Tabla de Amortización Venta</h1>
-                    <p className="text-[9px] text-center mt-0.5">...</p>
+                    <p className="text-[9px] text-center mt-0.5">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
                 </div>
 
                 {/* --- CAJA PRINCIPAL DE DATOS --- */}
                 <div className="border border-black flex items-stretch mb-0.5">
                     
                     {/* IZQUIERDA */}
-                    <div className="flex-1">
+                    <div className="flex-1 p-1">
                         <div className="grid grid-cols-[65px_1fr] gap-y-0.5 text-[10px]">
                             
-                            {/* CORRECCIÓN 1: Usamos formatDateHeader aquí */}
                             <span className="font-serif italic text-gray-800 font-bold">F.Emision</span>
-                            <span>{formatDateHeader(data.fechaVentaFull)}</span>
+                            <span className="font-medium text-blue-900 print:text-black">
+                                {formatDateHeader(data.fechaVentaFull)}
+                            </span>
 
                             <span className="font-serif italic text-gray-800 font-bold">Vehiculo:</span>
                             <div className="flex justify-between w-full">
@@ -124,7 +133,7 @@ export function Page7({ data, hasAmortization = true }: PageProps) {
                         <div className="w-20 text-right px-1 py-0.5">Saldo</div>
                     </div>
 
-                    {/* TOTALES (Saldo Real) */}
+                    {/* TOTALES */}
                     <div className="flex items-center font-bold text-[10px] py-1">
                         <div className="flex-1 px-1">Observaciones.</div>
                         <div className="w-20 text-center">Totales.</div>
