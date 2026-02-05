@@ -347,9 +347,9 @@ export function OpportunitiesView({
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-3">
-                                                <button className="text-blue-600 hover:text-slate-800 hover:cursor-pointer transition-colors" title="Ver detalle">
+                                                {/* <button className="text-blue-600 hover:text-slate-800 hover:cursor-pointer transition-colors" title="Ver detalle">
                                                     <Eye className="h-4 w-4" />
-                                                </button>
+                                                </button> */}
                                                 {vehicle.url && (
                                                     <a
                                                         href={vehicle.url}
