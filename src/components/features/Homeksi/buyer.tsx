@@ -20,12 +20,12 @@ const successStories: BuyerStory[] = [
   {
     id: 3,
     year: 2018,
-    imageUrl: "/Videos_fotos_vendedores/Venta2.jpg",
+    imageUrl: "/Videos_fotos_vendedores/Venta2.jpeg",
   },
   {
     id: 4,
     year: 2021,
-    imageUrl: "/Videos_fotos_vendedores/Venta3.png",
+    imageUrl: "/Videos_fotos_vendedores/Venta3.jpeg",
   }
 ];
 
