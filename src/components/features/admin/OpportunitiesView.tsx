@@ -238,10 +238,6 @@ export function OpportunitiesView({
                     <span className="text-slate-500">
                         Taller: <strong className="text-slate-700">{displayStats.enTaller}</strong>
                     </span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-slate-500">
-                        Cliente: <strong className="text-slate-700">{displayStats.enCliente}</strong>
-                    </span>
                 </div>
 
                 <div className="flex gap-2">
