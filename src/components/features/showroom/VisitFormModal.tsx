@@ -31,7 +31,7 @@ interface VisitFormModalProps {
 interface VisitFormData {
     client_name: string;
     phone: string;
-    inventory_id: string;
+    inventoryoracle_id: string;
     manual_vehicle: string; // Nuevo campo
     source: VisitSource;
     visit_start_time: string;
@@ -58,7 +58,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     const [formData, setFormData] = useState<VisitFormData>({
         client_name: '',
         phone: '',
-        inventory_id: '',
+        inventoryoracle_id: '',
         manual_vehicle: '', // Inicializar vacío
         source: 'showroom' as VisitSource,
         visit_start_time: '',
@@ -109,7 +109,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 // Determinar si es vehículo manual o de inventario
                 // @ts-ignore - Asumiendo que ya agregaste la columna manual_vehicle_description
                 const manualDesc = visitToEdit.manual_vehicle_description || '';
-                const hasInventoryId = !!visitToEdit.inventory_id;
+                const hasInventoryId = !!visitToEdit.inventoryoracle_id;
                 
                 // Si no tiene ID de inventario pero tiene descripción manual, activamos el modo manual
                 const isManualMode = !hasInventoryId && !!manualDesc;
@@ -119,7 +119,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     client_name: visitToEdit.client_name,
                     // @ts-ignore
                     phone: visitToEdit.phone || '',
-                    inventory_id: visitToEdit.inventory_id || '',
+                    inventoryoracle_id: visitToEdit.inventoryoracle_id || '',
                     manual_vehicle: manualDesc,
                     source: visitToEdit.source as VisitSource,
                     visit_start_time: startTime,
@@ -143,7 +143,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 setFormData({
                     client_name: '',
                     phone: '',
-                    inventory_id: '',
+                    inventoryoracle_id: '',
                     manual_vehicle: '',
                     source: 'showroom',
                     visit_start_time: currentTime,
@@ -176,13 +176,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     });
 
     const handleSelectCar = (car: InventoryItem) => {
-        setFormData({ ...formData, inventory_id: car.id, manual_vehicle: '' });
+        setFormData({ ...formData, inventoryoracle_id: car.id, manual_vehicle: '' });
         setSearchTerm(`${car.brand} ${car.model} (${car.year})`);
         setIsDropdownOpen(false);
     };
 
     const handleClearCarSelection = () => {
-        setFormData({ ...formData, inventory_id: '' });
+        setFormData({ ...formData, inventoryoracle_id: '' });
         setSearchTerm("");
         setIsDropdownOpen(true);
     };
@@ -213,8 +213,8 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 missingFields.push({ key: 'manual_vehicle', label: 'Descripción del Vehículo' });
             }
         } else {
-            if (!formData.inventory_id) {
-                missingFields.push({ key: 'inventory_id', label: 'Vehículo de Inventario' });
+            if (!formData.inventoryoracle_id) {
+                missingFields.push({ key: 'inventoryoracle_id', label: 'Vehículo de Inventario' });
             }
         }
 
@@ -273,7 +273,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             client_name: formData.client_name,
             phone: formData.phone,
             // Lógica condicional para guardar
-            inventory_id: isManualVehicle ? null : formData.inventory_id,
+            inventoryoracle_id: isManualVehicle ? null : formData.inventoryoracle_id,
             manual_vehicle_description: isManualVehicle ? formData.manual_vehicle : null,
             
             source: formData.source,
@@ -326,7 +326,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
 
     const getErrorClass = (fieldName: keyof VisitFormData) => {
         // Lógica especial para el campo de vehículo que depende del modo
-        if (fieldName === 'inventory_id' && isManualVehicle) return '';
+        if (fieldName === 'inventoryoracle_id' && isManualVehicle) return '';
         if (fieldName === 'manual_vehicle' && !isManualVehicle) return '';
 
         return error && (!formData[fieldName] || formData[fieldName].toString().trim() === '')
@@ -477,13 +477,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                             </div>
                                             <input
                                                 type="text"
-                                                className={`${inputClasses} pr-10 ${getErrorClass('inventory_id')}`}
+                                                className={`${inputClasses} pr-10 ${getErrorClass('inventoryoracle_id')}`}
                                                 placeholder="Buscar por marca, modelo o año..."
                                                 value={searchTerm}
                                                 onChange={(e) => {
                                                     setSearchTerm(e.target.value);
                                                     setIsDropdownOpen(true);
-                                                    if (e.target.value === '') setFormData(prev => ({ ...prev, inventory_id: '' }));
+                                                    if (e.target.value === '') setFormData(prev => ({ ...prev, inventoryoracle_id: '' }));
                                                 }}
                                                 onFocus={() => setIsDropdownOpen(true)}
                                             />

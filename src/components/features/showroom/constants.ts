@@ -14,7 +14,7 @@ export interface InventoryItem {
 export interface ShowroomVisit {
     id: number;
     salesperson_id: string;
-    inventory_id: string | null; // CORRECCIÓN: UUID es string
+    inventoryoracle_id: string | null; // CORRECCIÓN: UUID es string
     client_name: string;
     visit_start: string;
     visit_end: string | null;

@@ -11,7 +11,7 @@ export interface ShowroomVisit {
     test_drive: boolean;
     credit_status: string;
     observation?: string;
-    inventory?: {
+    inventoryoracle?: {
         brand: string;
         model: string;
         year: number;
