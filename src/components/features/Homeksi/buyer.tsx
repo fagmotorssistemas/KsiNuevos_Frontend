@@ -53,7 +53,7 @@ export const BuyerSection = () => {
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               priority={index === 0}
               className="object-cover transition-transform duration-700 group-hover:scale-110"
-              quality={80}
+              quality={75}
             />
 
           </div>

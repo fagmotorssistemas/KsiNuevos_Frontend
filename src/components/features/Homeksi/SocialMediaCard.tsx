@@ -12,9 +12,6 @@ interface VideoTip {
   instagramLink: string;
 }
 
-// ... (Mantén tu array videoTips igual) ...
-// Solo incluyo el componente visual actualizado
-
 const videoTips: VideoTip[] = [
     // ... tus datos ...
     {
