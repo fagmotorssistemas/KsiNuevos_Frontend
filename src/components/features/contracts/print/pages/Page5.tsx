@@ -57,11 +57,20 @@ export function Page5({ data, fechaImpresion }: PageProps) {
 
     return (
         <ContractPageLayout pageNumber={5}>
-            <div className="font-sans text-[11px] leading-tight text-black max-w-full mx-auto">
+            <div className="font-sans text-[11px] leading-tight text-black max-w-full mx-auto ">
                 
                 {/* --- ENCABEZADO --- */}
-                <div className="text-center mb-2">
-                    <h2 className="font-bold text-lg uppercase mb-1">CARTA DE INTERMEDIACION</h2>
+                <div className="grid grid-cols-2">
+                    <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                            <img 
+                                src="/logol.png" 
+                                alt="Logo K-SI NUEVOS" 
+                                className="h-full w-auto object-contain"
+                            />
+                    </div>
+                    <div className="text-center mb-2">
+                        <h2 className="font-bold text-lg uppercase mb-1">CARTA DE INTERMEDIACION</h2>
+                    </div>
                 </div>
 
                 {/* --- BARRA DE DATOS --- */}

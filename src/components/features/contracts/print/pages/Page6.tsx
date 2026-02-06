@@ -58,10 +58,18 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
             <div className="font-sans text-black text-[10px] leading-tight h-full">
                 
                 {/* --- HEADER --- */}
-                <div className="text-center mb-4">
-                    <h2 className="font-bold text-lg italic">K-SI NUEVOS</h2>
-                    <h3 className="text-sm font-semibold">Tabla de Amortización Venta</h3>
-                    <p className="text-[9px] mt-1">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
+                <div className="text-center mb-4 grid grid-cols-2">
+                    <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                            <img 
+                                src="/logol.png" 
+                                alt="Logo K-SI NUEVOS" 
+                                className="h-full w-auto object-contain"
+                            />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold">Tabla de Amortización Venta</h3>
+                        <p className="text-[9px] mt-1">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
+                    </div>
                 </div>
 
                 {/* --- DATOS GENERALES --- */}

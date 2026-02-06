@@ -19,8 +19,13 @@ export function Page4({ data }: PageProps) {
                 
                 {/* --- ENCABEZADO --- */}
                 <div className="text-center mb-6 relative">
-                    <h2 className="font-bold text-lg uppercase mb-4">K-SI NUEVOS</h2>
-                    
+                <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
+                </div>                    
                     {/* Contenedor del Título con el Nro de Contrato flotando arriba a la izquierda */}
                     <div className="relative mt-6">
                         <span className="absolute -top-4 left-0 font-bold text-xs">

@@ -67,8 +67,12 @@ export function Page2({ data }: PageProps) {
             <div className="font-sans text-black max-w-full mx-auto leading-tight" style={{ fontSize: '11px' }}>
 
                 {/* --- ENCABEZADO --- */}
-                <div className="text-center mb-2">
-                    <h2 className="font-bold text-base uppercase mb-1">K-SI NUEVOS</h2>
+                <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
                 </div>
 
                 {/* --- CAJA TÍTULO PAGARÉ (Estilo idéntico a la foto) --- */}

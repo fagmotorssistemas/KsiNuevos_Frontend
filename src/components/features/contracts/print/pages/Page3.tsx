@@ -23,8 +23,13 @@ export function Page3({ data }: PageProps) {
                 
                 {/* --- ENCABEZADO CORREGIDO --- */}
                 <div className="text-center mb-4">
-                    <h2 className="font-bold text-lg uppercase mb-1">K-SI NUEVOS</h2>
-                    {/* Usamos flex-col para asegurar que los elementos queden uno debajo del otro */}
+                <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
+                </div>                    {/* Usamos flex-col para asegurar que los elementos queden uno debajo del otro */}
                     <div className="border border-black p-2 flex flex-col">
                         {/* Fila 2: Título centrado */}
                         <h1 className="font-bold text-base uppercase text-center">

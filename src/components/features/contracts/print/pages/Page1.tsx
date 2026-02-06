@@ -31,7 +31,13 @@ export function Page1({ data }: PageProps) {
                 
                 {/* --- ENCABEZADO --- */}
                 <div className="text-center mb-2">
-                    <h2 className="font-bold text-base uppercase mb-1">K-SI NUEVOS</h2>
+                    <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
+                    </div>
                     <div className="border border-black py-1 px-4 inline-block w-[98%]">
                         <h1 className="font-bold text-sm uppercase">CONTRATO DE COMPRA VENTA DE VEHÍCULOS</h1>
                     </div>

@@ -9,7 +9,6 @@ interface PageProps {
 }
 
 export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProps) {
-    if (!hasAmortization) return null;
 
     // --- HELPERS ---
     const formatCurrency = (val: number | string | undefined) => {
@@ -62,10 +61,18 @@ export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProp
             <div className="font-sans text-[10px] leading-tight text-black max-w-full mx-auto">
 
                 {/* --- ENCABEZADO --- */}
-                <div className="text-center mb-3">
-                    <h2 className="font-bold text-lg italic tracking-wide">K-SI NUEVOS</h2>
-                    <h1 className="font-normal text-sm mt-1">Tabla de Amortización Venta</h1>
-                    <p className="text-[9px] text-center mt-0.5">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
+                <div className="text-center mb-3 grid grid-cols-2">
+                    <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
+                    </div>
+                    <div>
+                        <h1 className="font-normal text-sm mt-1">Tabla de Amortización Venta</h1>
+                        <p className="text-[9px] text-center mt-0.5">SISTEMA DE PAGOS Y CRÉDITO DIRECTO</p>
+                    </div>
                 </div>
 
                 {/* --- CAJA PRINCIPAL DE DATOS --- */}
