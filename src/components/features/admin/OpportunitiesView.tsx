@@ -1,5 +1,5 @@
-import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
-import { useMemo, useState } from "react";
+import { scraperService, VehicleWithSeller, WebhookResponse } from "@/services/scraper.service";
+import { useMemo, useState, useCallback } from "react";
 import {
     Car,
     TrendingUp,
@@ -15,9 +15,12 @@ import {
     RefreshCcw,
     RefreshCw,
     ChevronDown,
+    XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/buttontable";
 import { Database } from "@/types/supabase";
+import { toast } from "sonner";
+import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 
@@ -60,25 +63,41 @@ export function OpportunitiesView({
     const [selectedBrand, setSelectedBrand] = useState<string>("all");
     const [selectedYear, setSelectedYear] = useState<string>("all");
     const [selectedModel, setSelectedModel] = useState<string>("all");
+    const [showCarPicker, setShowCarPicker] = useState(false);
+    const [pickerBrand, setPickerBrand] = useState<string | null>(null);
 
-    const sourceVehicles = showTopDeals ? topOpportunities : vehicles;
+    const sourceVehicles = useMemo(() =>
+        showTopDeals ? topOpportunities : vehicles,
+        [showTopDeals, topOpportunities, vehicles]
+    );
+
     const regex = /\b(?:babahoyo|milagro|naranjal|daule|los lojas|eloy alfaro|la troncal|el triunfo|guayaquil|esmeraldas|portoviejo|santo\s+domingo|santa\s+elena|machala|manta)\b/i;
 
-    // Extraer todas las marcas únicas disponibles
+    // Filtrar vehículos primero por costa si está activo
+    const coastFilteredVehicles = useMemo(() => {
+        if (!onlyCoast) return sourceVehicles;
+
+        return sourceVehicles.filter(vehicle => {
+            const sellerLocation = vehicle.seller?.location?.toLowerCase() || '';
+            return !regex.test(sellerLocation);
+        });
+    }, [sourceVehicles, onlyCoast]);
+
+    // Extraer todas las marcas únicas disponibles (después del filtro de costa)
     const availableBrands = useMemo(() => {
         const brands = new Set<string>();
-        sourceVehicles.forEach(vehicle => {
+        coastFilteredVehicles.forEach(vehicle => {
             if (vehicle.category) {
                 brands.add(vehicle.category);
             }
         });
         return Array.from(brands).sort();
-    }, [sourceVehicles]);
+    }, [coastFilteredVehicles]);
 
     // Extraer todos los modelos únicos disponibles (filtrados por marca si hay una seleccionada)
     const availableModels = useMemo(() => {
         const models = new Set<string>();
-        sourceVehicles.forEach(vehicle => {
+        coastFilteredVehicles.forEach(vehicle => {
             // Si hay una marca seleccionada, solo mostrar modelos de esa marca
             if (selectedBrand !== "all" && vehicle.category !== selectedBrand) {
                 return;
@@ -88,29 +107,22 @@ export function OpportunitiesView({
             }
         });
         return Array.from(models).sort();
-    }, [sourceVehicles, selectedBrand]);
+    }, [coastFilteredVehicles, selectedBrand]);
 
-    // Extraer todos los años únicos disponibles
+    // Extraer todos los años únicos disponibles (después del filtro de costa)
     const availableYears = useMemo(() => {
         const years = new Set<string>();
-        sourceVehicles.forEach(vehicle => {
+        coastFilteredVehicles.forEach(vehicle => {
             if (vehicle.year) {
                 years.add(vehicle.year);
             }
         });
         return Array.from(years).sort((a, b) => Number(b) - Number(a));
-    }, [sourceVehicles]);
+    }, [coastFilteredVehicles]);
 
+    // Aplicar todos los filtros
     const filteredVehicles = useMemo(() => {
-        return sourceVehicles.filter(vehicle => {
-            // Filtro de costa
-            if (onlyCoast) {
-                const sellerLocation = vehicle.seller?.location?.toLowerCase() || '';
-                if (regex.test(sellerLocation)) {
-                    return false;
-                }
-            }
-
+        return coastFilteredVehicles.filter(vehicle => {
             // Filtro de búsqueda por texto
             if (searchTerm) {
                 const searchLower = searchTerm.toLowerCase();
@@ -141,7 +153,7 @@ export function OpportunitiesView({
 
             return true;
         });
-    }, [sourceVehicles, onlyCoast, searchTerm, selectedBrand, selectedModel, selectedYear]);
+    }, [coastFilteredVehicles, searchTerm, selectedBrand, selectedModel, selectedYear]);
 
     const displayStats = useMemo(() => {
         return {
@@ -157,7 +169,10 @@ export function OpportunitiesView({
         return sellers.filter(s => !regex.test(s.location?.toLowerCase() || ''));
     }, [sellers, onlyCoast]);
 
-    const dealersCount = displaySellers.filter(s => s.is_dealer).length;
+    const dealersCount = useMemo(() =>
+        displaySellers.filter(s => s.is_dealer).length,
+        [displaySellers]
+    );
 
     const newestVehicle = useMemo(() => {
         if (filteredVehicles.length === 0) return null;
@@ -168,35 +183,119 @@ export function OpportunitiesView({
         });
     }, [filteredVehicles]);
 
-    const handleSubmitScraper = async (searchValue: string) => {
-        setIsWebhookLoading(true);
-        try {
-            await scraperService.scrapMarketplace(searchValue);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            if (onScraperComplete) {
-                await onScraperComplete();
-            }
-
-        } catch (error) {
-            console.error('Error al scrapear:', error);
-        } finally {
-            setIsWebhookLoading(false);
+    // Función optimizada para manejar el webhook - SE EJECUTA UNA SOLA VEZ
+    const handleSubmitScraper = useCallback(async (searchValue: string) => {
+        if (!searchValue.trim()) {
+            toast.error("Por favor ingresa un término de búsqueda");
+            return;
         }
-    }
 
-    const handleBrandChange = (brand: string) => {
+        setIsWebhookLoading(true);
+
+        const scraperPromise = scraperService
+            .scrapMarketplace(searchValue)
+            .then((response) => {
+                if (!response) {
+                    throw new Error("Respuesta vacía del scraper");
+                }
+
+                if (response.status === "error") {
+                    throw new Error(response.message || "Error en el servidor");
+                }
+
+                if (response.status === "not found") {
+                    throw new Error("NOT_FOUND");
+                }
+
+                return response;
+            })
+            .finally(() => {
+                setIsWebhookLoading(false);
+                onScraperComplete?.(); // NO bloquear la promesa
+            });
+
+        toast.promise<WebhookResponse>(scraperPromise, {
+            loading: (
+                <div className="flex flex-col gap-2 ml-2">
+                    <div className="font-semibold text-blue-400 text-sm">
+                        Analizando Marketplace...
+                    </div>
+                    <div className="text-xs text-gray-300">
+                        Iniciando scraper y recopilando información
+                    </div>
+                </div>
+            ),
+
+            success: (data) => (
+                <div className="flex flex-col gap-2 ml-2">
+                    <div className="font-semibold text-green-400 text-sm">
+                        ¡Scraper completado con éxito!
+                    </div>
+
+                    <div className="text-xs text-gray-300 space-y-1">
+                        <div>Ingresados: <span className="font-semibold">{data.summary.vehicles.inserted}</span></div>
+                        <div>Descartados: <span className="font-semibold">{data.summary.vehicles.failed}</span></div>
+                        <div>Total: <span className="font-semibold">{data.summary.vehicles.total}</span></div>
+                    </div>
+                </div>
+            ),
+
+            error: (err: any) => (
+                <div className="flex flex-col gap-2 ml-2">
+                    <div className="font-semibold text-red-400 text-sm">
+                        Error en el proceso
+                    </div>
+                    <div className="text-xs text-gray-300">
+                        {err.message === "NOT_FOUND"
+                            ? "No se encontraron resultados"
+                            : err.message || "Error desconocido"}
+                    </div>
+                </div>
+            ),
+
+            action: {
+                label: <XIcon className="h-4 w-4 text-white" />,
+                onClick: () => toast.dismiss(),
+            },
+
+            actionButtonStyle: {
+                backgroundColor: "transparent",
+            },
+
+            duration: 8000,
+        });
+    }, [onScraperComplete]);
+
+    const handleBrandChange = useCallback((brand: string) => {
         setSelectedBrand(brand);
-        setSelectedModel("all"); // Resetear modelo al cambiar marca
-    }
+        setSelectedModel("all");
+    }, []);
 
-    const handleClearFilters = () => {
+    const handleClearFilters = useCallback(() => {
         setSelectedBrand("all");
         setSelectedYear("all");
         setSelectedModel("all");
-        setOnlyCoast(true)
-    }
+        setSearchTerm("");
+        setOnlyCoast(true);
+    }, []);
 
-    const hasActiveFilters = selectedBrand !== "all" || selectedModel !== "all" || selectedYear !== "all" || onlyCoast === false;
+    const handlePickAndScrap = useCallback((brand: string, model?: string) => {
+        const term = model ? `${brand} ${model}` : brand;
+
+        setScraperTerm(term);
+        setShowCarPicker(false);
+
+        handleSubmitScraper(term);
+    }, [handleSubmitScraper]);
+
+    const hasActiveFilters = useMemo(() =>
+        selectedBrand !== "all" ||
+        selectedModel !== "all" ||
+        selectedYear !== "all" ||
+        searchTerm !== "" ||
+        onlyCoast === false,
+        [selectedBrand, selectedModel, selectedYear, searchTerm, onlyCoast]
+    );
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -212,6 +311,11 @@ export function OpportunitiesView({
                             className="pl-9 pr-4 py-2 text-md h-full rounded-lg focus:outline-none w-full"
                             value={scraperTerm}
                             onChange={(e) => setScraperTerm(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !isWebhookLoading) {
+                                    handleSubmitScraper(scraperTerm);
+                                }
+                            }}
                         />
                     </div>
                     <div className="flex gap-2 justify-end items-center">
@@ -225,6 +329,16 @@ export function OpportunitiesView({
                             >
                                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                             </Button>
+                            {/* <button
+                                onClick={() => setShowCarPicker(!showCarPicker)}
+                                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showCarPicker
+                                    ? "bg-indigo-600 border-indigo-600 text-white"
+                                    : "bg-white border-slate-200 text-slate-700"
+                                    }`}
+                            >
+                                <Car className="h-4 w-4" />
+                                <span className="whitespace-nowrap">Elegir Marca / Modelo</span>
+                            </button> */}
                             <button
                                 disabled={isWebhookLoading}
                                 onClick={() => handleSubmitScraper(scraperTerm)}
@@ -242,6 +356,7 @@ export function OpportunitiesView({
                                     </>
                                 )}
                             </button>
+
                         </div>
                     </div>
                 </div>
@@ -286,12 +401,7 @@ export function OpportunitiesView({
                                 </div>
                                 <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    {new Date(newestVehicle.created_at || '').toLocaleDateString('es-ES', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}
+                                    {newestVehicle.publication_date ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(newestVehicle.publication_date)) : 'Fecha desconocida'}
                                 </div>
                             </div>
                         ) : <span className="text-slate-400 italic text-sm">Sin datos</span>}
@@ -325,6 +435,14 @@ export function OpportunitiesView({
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
 
                     {/* Contenedor de Selects: Grid de 2 columnas en móvil, auto en desktop */}
@@ -332,25 +450,28 @@ export function OpportunitiesView({
                         <div className="relative">
                             <select
                                 value={selectedBrand}
-                                onChange={(e) => setSelectedBrand(e.target.value)}
+                                onChange={(e) => handleBrandChange(e.target.value)}
                                 className="w-full appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 transition-colors"
                             >
-                                <option value="all">Marcas ({availableBrands.length})</option>
+                                <option value="all">Todas las marcas ({availableBrands.length})</option>
                                 {availableBrands.map(brand => (
                                     <option key={brand} value={brand}>{brand}</option>
                                 ))}
                             </select>
                             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                         </div>
+
                         <div className="relative">
                             <select
                                 value={selectedModel}
                                 onChange={(e) => setSelectedModel(e.target.value)}
-                                className="appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer hover:bg-slate-50 transition-colors"
+                                className="w-full appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed"
                                 disabled={selectedBrand === "all"}
                             >
-                                <option value="all">Todos los modelos ({availableModels.length})</option>
-                                {availableModels.map(model => (
+                                <option value="all">
+                                    {selectedBrand === "all" ? "Selecciona una marca" : `Todos los modelos (${availableModels.length})`}
+                                </option>
+                                {selectedBrand !== "all" && availableModels.map(model => (
                                     <option key={model} value={model}>
                                         {model}
                                     </option>
@@ -387,7 +508,11 @@ export function OpportunitiesView({
                             </span>
                             <span className="text-slate-300">|</span>
                             <span className="text-xs text-slate-600">
-                                Posible daño mecanico: <strong className="text-slate-900">{displayStats.enTaller}</strong>
+                                Posible daño mecánico: <strong className="text-slate-900">{displayStats.enTaller}</strong>
+                            </span>
+                            <span className="text-slate-300">|</span>
+                            <span className="text-xs text-slate-600">
+                                Vendedor: <strong className="text-slate-900">{displayStats.enCliente}</strong>
                             </span>
                             <span className="text-xs text-slate-400 ml-2 italic">
                                 ({filteredVehicles.length} de {sourceVehicles.length})
@@ -396,9 +521,21 @@ export function OpportunitiesView({
                     </div>
 
                     <div className="flex gap-2 w-full sm:w-auto">
+                        {hasActiveFilters && (
+                            <button
+                                onClick={handleClearFilters}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                            >
+                                <X className="h-4 w-4" />
+                                <span className="whitespace-nowrap">Limpiar filtros</span>
+                            </button>
+                        )}
+
                         <button
                             onClick={() => setShowTopDeals(!showTopDeals)}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showTopDeals ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700"
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showTopDeals
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "bg-white border-slate-200 text-slate-700"
                                 }`}
                         >
                             <TrendingUp className="h-4 w-4" />
@@ -407,7 +544,9 @@ export function OpportunitiesView({
 
                         <button
                             onClick={() => setOnlyCoast(!onlyCoast)}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${onlyCoast ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-slate-200 text-slate-600'
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${onlyCoast
+                                ? 'bg-blue-500 border-blue-500 text-white'
+                                : 'bg-white border-slate-200 text-slate-600'
                                 }`}
                         >
                             {onlyCoast ? <X className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
@@ -416,6 +555,64 @@ export function OpportunitiesView({
                     </div>
                 </div>
             </div>
+            {showCarPicker && (
+                <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-4 animate-in fade-in slide-in-from-top-2">
+
+                    {!pickerBrand ? (
+                        <>
+                            <div className="text-xs font-bold text-slate-500 uppercase mb-3">
+                                Selecciona una marca
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
+                                    <button
+                                        key={brand}
+                                        onClick={() => setPickerBrand(brand)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
+                                    >
+                                        {brand}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="text-xs font-bold text-slate-500 uppercase">
+                                    {pickerBrand} — Selecciona modelo
+                                </div>
+                                <button
+                                    onClick={() => setPickerBrand(null)}
+                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                                >
+                                    ← Cambiar marca
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                <button
+                                    onClick={() => handlePickAndScrap(pickerBrand)}
+                                    className="px-3 py-2 border border-indigo-500 bg-indigo-500 text-white rounded-lg text-xs font-bold hover:bg-indigo-600 transition-all"
+                                >
+                                    Todos los modelos
+                                </button>
+
+                                {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
+                                    <button
+                                        key={model}
+                                        onClick={() => handlePickAndScrap(pickerBrand, model)}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
+                                    >
+                                        {model}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
 
             {showTopDeals && (
                 <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
@@ -518,15 +715,12 @@ export function OpportunitiesView({
                                         </td>
                                         <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-3">
-                                                {/* <button className="text-blue-600 hover:text-slate-800 hover:cursor-pointer transition-colors" title="Ver detalle">
-                                                    <Eye className="h-4 w-4" />
-                                                </button> */}
                                                 {vehicle.url && (
                                                     <a
                                                         href={vehicle.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-slate -800 transition-colors"
+                                                        className="text-blue-600 hover:text-slate-800 transition-colors"
                                                         title="Ver fuente original"
                                                     >
                                                         <ExternalLink className="h-4 w-4" />

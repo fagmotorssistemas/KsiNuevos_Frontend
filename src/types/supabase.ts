@@ -887,6 +887,7 @@ export type Database = {
           mileage: number | null
           model: string | null
           price: number | null
+          publication_date: string
           seller_id: string
           status: string | null
           tags: string[] | null
@@ -905,6 +906,7 @@ export type Database = {
           mileage?: number | null
           model?: string | null
           price?: number | null
+          publication_date: string
           seller_id: string
           status?: string | null
           tags?: string[] | null
@@ -923,6 +925,7 @@ export type Database = {
           mileage?: number | null
           model?: string | null
           price?: number | null
+          publication_date?: string
           seller_id?: string
           status?: string | null
           tags?: string[] | null

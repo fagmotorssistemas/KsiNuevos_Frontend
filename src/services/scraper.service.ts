@@ -316,17 +316,29 @@ export const scraperService = {
             }
 
             const data = await response.json()
-            return data as WebhookResponse
             console.log('Webhook ejecutado:', data)
+            return data as WebhookResponse
         } catch (error) {
             console.error('Error al scrapear:', error)
         }
     }
 
 };
-interface WebhookResponse {
-  status: 'done' | 'not found' | 'error';
-  message: string;
+export interface WebhookResponse {
+    status: 'done' | 'not found' | 'error';
+    message: string;
+    summary: {
+        sellers: {
+            failed: number
+            inserted: number
+            total: number
+        }
+        vehicles: {
+            failed: number
+            inserted: number
+            total: number
+        }
+    }
 }
 
 export type { VehicleWithSeller };

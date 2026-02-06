@@ -3,6 +3,7 @@ import localFont from 'next/font/local'
 import './global.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { NavbarWrapper } from '@/components/layout/NavbarWrapper' // <--- IMPORTAR NUEVO WRAPPER
+import { Toaster } from 'sonner'
 
 const satoshi = localFont({
   src: [
@@ -42,9 +43,10 @@ export default function RootLayout({
   return (
     <html lang="es" className={satoshi.variable}>
       <body className="font-sans bg-[#f2f2f2] text-[#000]">
+        <Toaster theme='dark' position='top-right' />
         <AuthProvider>
           <div className="print:hidden">
-             {/* CAMBIO: Usamos el Wrapper condicional */}
+            {/* CAMBIO: Usamos el Wrapper condicional */}
             <NavbarWrapper />
           </div>
           {children}
