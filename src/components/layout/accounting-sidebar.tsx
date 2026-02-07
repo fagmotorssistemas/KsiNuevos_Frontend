@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth'; // Importamos el hook de autenticación
+// 1. Importamos el hook de autenticación (igual que en tu MainNav)
+import { useAuth } from '@/hooks/useAuth';
 import {
     Wallet,
     Users,
@@ -13,7 +14,6 @@ import {
     X,
     LayoutDashboard,
     PieChart,
-    LogOut,
     ChevronLeft,
     ChevronRight,
     BanknoteArrowDown,
@@ -21,7 +21,7 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 
-// Definición base de los items del menú
+// Definición de los items del menú (Lista completa original)
 const menuItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Cartera', href: '/wallet', icon: Wallet },
@@ -37,34 +37,29 @@ const menuItems = [
 ];
 
 export function AccountingSidebar() {
+    // 2. Obtenemos el perfil del usuario logueado
+    const { profile } = useAuth();
+
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-    
+
     const pathname = usePathname();
-    const { profile } = useAuth(); // Obtenemos el perfil del usuario
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
 
-    // --- LÓGICA DE FILTRADO POR ROL ---
-    const filteredMenuItems = menuItems.filter((item) => {
-        // Si el rol es marketing, solo permitimos ver "Inventario"
-        if (profile?.role === 'marketing') {
-            return item.name === 'Inventario';
-        }
-        
-        // Si el rol es finanzas (siguiendo tu ejemplo anterior), quizás solo ve Cartera y Pagos
-        if (profile?.role === 'finanzas') {
-            return ['Cartera', 'Pagos', 'Cobros'].includes(item.name);
-        }
+    // 3. Lógica de filtrado de menú según el rol
+    let displayedItems = menuItems;
 
-        // Por defecto (admin o roles no restringidos), mostrar todo
-        return true;
-    });
+    if (profile?.role === 'finanzas') {
+        // Si es finanzas, filtramos para dejar SOLO Inventario
+        displayedItems = menuItems.filter(item => item.href === '/inventario');
+    } 
+    // Si quisieras agregar lógica para otros roles, podrías hacerlo aquí con else if...
 
     return (
         <>
-            {/* --- BOTÓN MENÚ MÓVIL --- */}
+            {/* --- BOTÓN MENÚ MÓVIL (Solo visible en pantallas pequeñas) --- */}
             <div className="md:hidden fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 px-4 py-3 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold">
@@ -105,6 +100,7 @@ export function AccountingSidebar() {
                         <div className="min-w-[2.5rem] w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white shadow-red-200 shadow-lg">
                             <LayoutDashboard size={20} />
                         </div>
+
                         <div className={`ml-3 transition-opacity duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>
                             <h1 className="text-lg font-bold text-gray-900 leading-tight whitespace-nowrap">Módulo</h1>
                             <p className="text-xs text-red-600 font-semibold tracking-wide whitespace-nowrap">CONTABILIDAD</p>
@@ -121,7 +117,7 @@ export function AccountingSidebar() {
                     )}
                 </div>
 
-                {/* Botón expandir cuando está colapsado */}
+                {/* Botón expandir (cuando está colapsado) */}
                 {isCollapsed && (
                     <div className="hidden md:flex justify-center py-2 border-b border-gray-100">
                         <button
@@ -133,15 +129,16 @@ export function AccountingSidebar() {
                     </div>
                 )}
 
-                {/* Lista de Navegación Filtrada */}
+                {/* Lista de Navegación */}
                 <nav className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-3 space-y-1">
                     {!isCollapsed && (
                         <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 whitespace-nowrap transition-opacity">
-                            {profile?.role === 'marketing' ? 'Herramientas' : 'Gestión General'}
+                            Gestión General
                         </p>
                     )}
 
-                    {filteredMenuItems.map((item) => {
+                    {/* 4. Usamos 'displayedItems' en lugar de 'menuItems' para el mapeo */}
+                    {displayedItems.map((item) => {
                         const isActive = pathname.startsWith(item.href);
                         return (
                             <Link

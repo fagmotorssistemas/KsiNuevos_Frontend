@@ -18,7 +18,7 @@ export function MainNav({ className }: { className?: string }) {
   // Lógica exclusiva para Finanzas: Solo ve Cartera
   if (profile?.role === "finanzas") {
     navItems = [
-      { href: "/wallet", label: "Cartera" }
+      { href: "/inventario", label: "Acceso Inventario" }
     ];
   } else {
     // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
