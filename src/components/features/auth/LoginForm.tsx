@@ -64,7 +64,7 @@ export const LoginForm = () => {
             router.push('/leads') // Al CRM
             break
           case 'finanzas':
-            router.push('/wallet') // A Finanzas
+            router.push('/inventario') // A Finanzas
             break
           default:
             router.push('/') // Por seguridad, al home
