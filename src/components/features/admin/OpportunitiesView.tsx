@@ -4,9 +4,6 @@ import {
     Car,
     TrendingUp,
     MapPin,
-    DatabaseBackup,
-    Store,
-    Calendar,
     ExternalLink,
     Filter,
     X,
@@ -16,6 +13,10 @@ import {
     RefreshCw,
     ChevronDown,
     XIcon,
+    AlertCircle,
+    Gauge,
+    Calendar,
+    DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/buttontable";
 import { Database } from "@/types/supabase";
@@ -174,15 +175,6 @@ export function OpportunitiesView({
         [displaySellers]
     );
 
-    const newestVehicle = useMemo(() => {
-        if (filteredVehicles.length === 0) return null;
-        return filteredVehicles.reduce((prev, current) => {
-            const prevDate = new Date(prev.created_at || 0).getTime();
-            const currentDate = new Date(current.created_at || 0).getTime();
-            return currentDate > prevDate ? current : prev;
-        });
-    }, [filteredVehicles]);
-
     // Función optimizada para manejar el webhook - SE EJECUTA UNA SOLA VEZ
     const handleSubmitScraper = useCallback(async (searchValue: string) => {
         if (!searchValue.trim()) {
@@ -217,7 +209,7 @@ export function OpportunitiesView({
         toast.promise<WebhookResponse>(scraperPromise, {
             loading: (
                 <div className="flex flex-col gap-2 ml-2">
-                    <div className="font-semibold text-blue-400 text-sm">
+                    <div className="font-semibold text-red-400 text-sm">
                         Analizando Marketplace...
                     </div>
                     <div className="text-xs text-gray-300">
@@ -298,450 +290,354 @@ export function OpportunitiesView({
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <div className="space-y-8 animate-in fade-in duration-700 pb-12">
 
-            {/* Header con Switch de Filtro */}
-            <div className="flex flex-col md:flex-row w-full justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center gap-3 w-full justify-between">
-                    <div className="relative w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Ingresar vehículo para scrapear..."
-                            className="pl-9 pr-4 py-2 text-md h-full rounded-lg focus:outline-none w-full"
-                            value={scraperTerm}
-                            onChange={(e) => setScraperTerm(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !isWebhookLoading) {
-                                    handleSubmitScraper(scraperTerm);
-                                }
-                            }}
-                        />
-                    </div>
-                    <div className="flex gap-2 justify-end items-center">
-                        <div className="flex items-center gap-2 ml-auto">
+            {/* --- SECCIÓN 1: HEADER DE ACCIÓN (Scraping) --- */}
+            <div className="bg-white text-black rounded-2xl p-6 shadow-xl">
+
+                {/* Decoración de fondo */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-red-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"></div>
+
+                <div className="relative z-10">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 className="text-2xl font-bold flex items-center gap-2">
+                                <DatabaseZap className="h-6 w-6 text-red-400" />
+                                Centro de Oportunidades
+                            </h2>
+                            <p className="text-slate-400 text-sm mt-1">
+                                Escanea Marketplace en tiempo real o gestiona el inventario existente.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
                             <Button
                                 variant="link-gray"
                                 size="sm"
                                 onClick={onScraperComplete}
                                 disabled={isLoading}
-                                className="flex items-center gap-2"
+                                className="bg-black rounded-2xl shadow-xl text-white hover:bg-gray-500 hover:text-white relative"
                             >
-                                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                                Actualizar
                             </Button>
+                        </div>
+                    </div>
+
+                    {/* Barra de Búsqueda Principal (Scraper) */}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-4xl">
+                        <div className="relative flex-1 group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-red-400 transition-colors" />
+                            <input
+                                type="text"
+                                placeholder="Ej: Toyota Fortuner 2020..."
+                                className="w-full pl-12 pr-4 py-3 bg-white border border-black rounded-xl focus:ring-2 focus:ring-black-500 focus:border-transparent outline-none text-black placeholder-slate-500 transition-all shadow-inner"
+                                value={scraperTerm}
+                                onChange={(e) => setScraperTerm(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !isWebhookLoading) {
+                                        handleSubmitScraper(scraperTerm);
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => setShowCarPicker(!showCarPicker)}
-                                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showCarPicker
-                                    ? "bg-indigo-600 border-indigo-600 text-white"
-                                    : "bg-white border-slate-200 text-slate-700"
-                                    }`}
+                                className="px-4 py-3 rounded-xl bg-black hover:bg-slate-600 text-white font-medium transition-all border border-slate-600 flex items-center gap-2 whitespace-nowrap shadow-sm hover:shadow-md"
                             >
-                                <Car className="h-4 w-4" />
-                                <span className="whitespace-nowrap">Elegir Marca / Modelo</span>
+                                <Car className="h-5 w-5" />
+                                <span className="hidden sm:inline">Catálogo</span>
                             </button>
+
                             <button
                                 disabled={isWebhookLoading}
                                 onClick={() => handleSubmitScraper(scraperTerm)}
-                                className="flex items-center gap-2 px-4 py-2 disabled:opacity-50 rounded-lg text-xs font-bold transition-all border w-fit whitespace-nowrap bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700"
+                                className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold transition-all flex items-center gap-2 whitespace-nowrap shadow-lg shadow-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 {isWebhookLoading ? (
                                     <>
-                                        <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
-                                        <p>Cargando datos del scraper, esto puede demorar unos minutos...</p>
+                                        <RefreshCcw className="h-5 w-5 animate-spin" />
+                                        <span>Procesando...</span>
                                     </>
                                 ) : (
                                     <>
-                                        <DatabaseZap className="h-3.5 w-3.5" />
-                                        <p>Scrapear Datos</p>
+                                        <DatabaseZap className="h-5 w-5" />
+                                        <span>Escanear</span>
                                     </>
                                 )}
                             </button>
-
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Tarjetas Resumen
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <DatabaseBackup className="h-4 w-4" />
+            {/* --- SECCIÓN 2: BARRA DE HERRAMIENTAS Y FILTROS LOCALES --- */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col lg:flex-row justify-between gap-4 items-end lg:items-center">
+
+                    {/* Contadores / Estado */}
+                    <div className="flex flex-wrap gap-2 text-sm w-full lg:w-auto">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">
+                            <Gauge className="h-4 w-4 text-slate-400" />
+                            <span>Total: <strong className="text-slate-900">{displayStats.total}</strong></span>
                         </div>
-                        <span className="text-xs font-bold text-slate-400 uppercase">
-                            Total {onlyCoast ? '' : '(Global)'}
-                        </span>
-                    </div>
-                    <span className="text-2xl font-bold text-slate-900">{displayStats.total}</span>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-green-50 text-green-600 rounded-lg">
-                            <Store className="h-4 w-4" />
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-green-700">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            <span>Patio: <strong>{displayStats.enPatio}</strong></span>
                         </div>
-                        <span className="text-xs font-bold text-slate-400 uppercase">
-                            Vendedores {onlyCoast ? '' : '(Global)'}
-                        </span>
-                    </div>
-                    <div className="flex gap-2 items-end">
-                        <span className="text-2xl font-bold text-slate-900">{displaySellers.length}</span>
-                        <p className="text-xs text-slate-500 mt-1">Revendedores: {dealersCount}</p>
-                    </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
-                    <div className="relative z-10">
-                        <span className="text-xs font-bold text-slate-400 uppercase block mb-1">Más Reciente</span>
-                        {newestVehicle ? (
-                            <div>
-                                <div className="font-bold text-slate-900 text-sm truncate w-48" title={newestVehicle.title || ''}>
-                                    {newestVehicle.title || 'Sin título'}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {newestVehicle.publication_date ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(newestVehicle.publication_date)) : 'Fecha desconocida'}
-                                </div>
-                            </div>
-                        ) : <span className="text-slate-400 italic text-sm">Sin datos</span>}
-                    </div>
-                    {newestVehicle && (
-                        <div className="text-right relative z-10">
-                            <span className="block text-xl font-bold text-blue-600">
-                                {newestVehicle.price ? `$${(newestVehicle.price / 1000).toFixed(0)}k` : 'N/A'}
-                            </span>
-                            <span className="block text-[10px] text-blue-400 font-medium uppercase tracking-wide">
-                                {newestVehicle.status === 'PC_USED_LIKE_NEW' ? 'Usado - Como Nuevo' : newestVehicle.status === 'USED' ? 'Bueno' : newestVehicle.status === 'NEW_ITEM' ? 'Nuevo' : 'Desconocido'}
-                            </span>
-                        </div>
-                    )}
-                    <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-50 to-transparent opacity-50 pointer-events-none" />
-                </div>
-            </div> */}
-
-            {/* Sub-filtros de ubicación de inventario */}
-            <div className="flex flex-col gap-4 w-full py-2">
-                {/* Primera fila: Buscador y Filtros */}
-                <div className="grid grid-cols-1 md:flex md:flex-wrap items-center gap-3 w-full">
-
-                    {/* Input de búsqueda: Ancho completo en móvil, flexible en desktop */}
-                    {/* <div className="relative w-full md:flex-1 md:min-w-[250px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar vehículo..."
-                            className="w-full pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        {searchTerm && (
-                            <button
-                                onClick={() => setSearchTerm("")}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        )}
-                    </div> */}
-
-                    {/* Contenedor de Selects: Grid de 2 columnas en móvil, auto en desktop */}
-                    <div className="flex flex-col gap-1 w-full sm:w-auto">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Resumen de inventario</div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs text-slate-600">
-                                Patio: <strong className="text-slate-900">{displayStats.enPatio}</strong>
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">
-                                Posible daño mecánico: <strong className="text-slate-900">{displayStats.enTaller}</strong>
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">
-                                Vendedor: <strong className="text-slate-900">{displayStats.enCliente}</strong>
-                            </span>
-                            <span className="text-xs text-slate-400 ml-2 italic">
-                                ({filteredVehicles.length} de {sourceVehicles.length})
-                            </span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-700">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>Taller: <strong>{displayStats.enTaller}</strong></span>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 lg:flex gap-2 w-full md:w-auto justify-end flex-1">
-                        <div className="relative">
-                            <select
-                                value={selectedBrand}
-                                onChange={(e) => handleBrandChange(e.target.value)}
-                                className="w-full appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 transition-colors"
-                            >
-                                <option value="all">Todas las marcas ({availableBrands.length})</option>
-                                {availableBrands.map(brand => (
-                                    <option key={brand} value={brand}>{brand}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                        </div>
 
-                        <div className="relative">
-                            <select
-                                value={selectedModel}
-                                onChange={(e) => setSelectedModel(e.target.value)}
-                                className="w-full appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed"
-                                disabled={selectedBrand === "all"}
-                            >
-                                <option value="all">
-                                    {selectedBrand === "all" ? "Selecciona una marca" : `Todos los modelos (${availableModels.length})`}
-                                </option>
-                                {selectedBrand !== "all" && availableModels.map(model => (
-                                    <option key={model} value={model}>
-                                        {model}
-                                    </option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                        </div>
-
-                        <div className="relative">
-                            <select
-                                value={selectedYear}
-                                onChange={(e) => setSelectedYear(e.target.value)}
-                                className="w-full appearance-none pl-3 pr-8 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 transition-colors"
-                            >
-                                <option value="all">Años ({availableYears.length})</option>
-                                {availableYears.map(year => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Segunda fila: Estadísticas y Botones de Acción */}
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-100 pt-3">
-
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        {hasActiveFilters && (
-                            <button
-                                onClick={handleClearFilters}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-                            >
-                                <X className="h-4 w-4" />
-                                <span className="whitespace-nowrap">Limpiar filtros</span>
-                            </button>
-                        )}
-
+                    {/* Filtros Activos Toggle */}
+                    <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
                         <button
                             onClick={() => setShowTopDeals(!showTopDeals)}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showTopDeals
-                                ? "bg-blue-600 border-blue-600 text-white"
-                                : "bg-white border-slate-200 text-slate-700"
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${showTopDeals
+                                ? "bg-orange-50 border-orange-200 text-orange-700 shadow-sm"
+                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                                 }`}
                         >
                             <TrendingUp className="h-4 w-4" />
-                            <span className="whitespace-nowrap">{showTopDeals ? "Ver todos" : "Oportunidades"}</span>
+                            {showTopDeals ? "Viendo Top Oportunidades" : "Ver Oportunidades"}
                         </button>
 
                         <button
                             onClick={() => setOnlyCoast(!onlyCoast)}
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${onlyCoast
-                                ? 'bg-blue-500 border-blue-500 text-white'
-                                : 'bg-white border-slate-200 text-slate-600'
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${onlyCoast
+                                ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
+                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                                 }`}
                         >
-                            {onlyCoast ? <X className="h-3.5 w-3.5" /> : <Filter className="h-3.5 w-3.5" />}
-                            <span className="whitespace-nowrap">{onlyCoast ? "Ver todo" : "Sin Costa"}</span>
+                            {onlyCoast ? <Filter className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                            {onlyCoast ? "Sin Sierra/Oriente" : "Todo el País"}
                         </button>
                     </div>
                 </div>
-            </div>
-            {showCarPicker && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
-                    onClick={() => setShowCarPicker(false)}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-white w-[95%] max-w-4xl rounded-xl shadow-xl border border-slate-200 p-5 animate-in zoom-in-95 slide-in-from-bottom-3"
-                    >
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold uppercase text-slate-500">
-                                Seleccionar Marca / Modelo
-                            </h3>
 
-                            <button
-                                onClick={() => setShowCarPicker(false)}
-                                className="p-1 rounded-md hover:bg-slate-100 transition"
-                            >
-                                <X className="h-4 w-4 text-slate-600" />
-                            </button>
-                        </div>
+                <div className="h-px bg-slate-100 w-full" />
 
-                        {!pickerBrand ? (
-                            <>
-                                <div className="text-xs font-bold text-slate-500 uppercase mb-3">
-                                    Selecciona una marca
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[55vh] overflow-y-auto pr-1">
-                                    {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
-                                        <button
-                                            key={brand}
-                                            onClick={() => setPickerBrand(brand)}
-                                            className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
-                                        >
-                                            {brand}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="text-xs font-bold text-slate-500 uppercase">
-                                        {pickerBrand} — Selecciona modelo
-                                    </div>
-
-                                    <button
-                                        onClick={() => setPickerBrand(null)}
-                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-                                    >
-                                        ← Cambiar marca
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[55vh] overflow-y-auto pr-1">
-                                    <button
-                                        onClick={() => handlePickAndScrap(pickerBrand)}
-                                        className="px-3 py-2 border border-indigo-500 bg-indigo-500 text-white rounded-lg text-xs font-bold hover:bg-indigo-600 transition-all"
-                                    >
-                                        Todos los modelos
-                                    </button>
-
-                                    {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
-                                        <button
-                                            key={model}
-                                            onClick={() => handlePickAndScrap(pickerBrand, model)}
-                                            className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
-                                        >
-                                            {model}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
+                {/* Filtros Dropdowns y Buscador Local */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+                    {/* Buscador Local */}
+                    <div className="lg:col-span-3 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Filtrar resultados..."
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50/50"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                </div>
-            )}
-            {showTopDeals && (
-                <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Mostrando Top 30 Mejores Oportunidades de Compra
-                </div>
-            )}
 
-            {isLoading && (
-                <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-                    <p className="text-slate-400 font-medium animate-pulse">Analizando vehículos del scraper...</p>
-                </div>
-            )}
+                    {/* Selects */}
+                    <div className="lg:col-span-2 relative">
+                        <select
+                            value={selectedBrand}
+                            onChange={(e) => handleBrandChange(e.target.value)}
+                            className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
+                        >
+                            <option value="all">Marca: Todas</option>
+                            {availableBrands.map(brand => (
+                                <option key={brand} value={brand}>{brand}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
 
-            {/* Tabla de Resultados */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {filteredVehicles.length === 0 ? (
-                    <div className="p-12 text-center text-slate-500 flex flex-col items-center">
-                        <div className="bg-slate-50 p-4 rounded-full mb-3">
-                            <Car className="h-8 w-8 text-slate-300" />
-                        </div>
-                        <p className="font-medium">No se encontraron vehículos</p>
-                        <p className="text-sm text-slate-400">Prueba quitando los filtros o cambiando los criterios de búsqueda.</p>
+                    <div className="lg:col-span-2 relative">
+                        <select
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium disabled:bg-slate-50 disabled:text-slate-400"
+                            disabled={selectedBrand === "all"}
+                        >
+                            <option value="all">
+                                {selectedBrand === "all" ? "Modelo: -" : "Modelo: Todos"}
+                            </option>
+                            {selectedBrand !== "all" && availableModels.map(model => (
+                                <option key={model} value={model}>{model}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="lg:col-span-2 relative">
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
+                        >
+                            <option value="all">Año: Todos</option>
+                            {availableYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Botón Limpiar */}
+                    <div className="lg:col-span-3 flex justify-end">
                         {hasActiveFilters && (
                             <button
                                 onClick={handleClearFilters}
-                                className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                className="text-sm text-slate-500 hover:text-red-600 flex items-center gap-1 font-medium transition-colors px-3 py-2 hover:bg-red-50 rounded-lg"
                             >
-                                Limpiar todos los filtros
+                                <X className="h-4 w-4" />
+                                Limpiar filtros
                             </button>
                         )}
                     </div>
-                ) : (
+                </div>
+            </div>
+
+            {/* --- SECCIÓN 3: RESULTADOS (LOADING & TABLA) --- */}
+
+            {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-32 space-y-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                    <div className="relative">
+                        <div className="w-16 h-16 border-4 border-slate-100 border-t-red-500 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Car className="h-6 w-6 text-red-500/50" />
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-lg font-semibold text-slate-800">Cargando inventario</h3>
+                        <p className="text-slate-400 text-sm">Sincronizando con la base de datos...</p>
+                    </div>
+                </div>
+            ) : filteredVehicles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-dashed border-slate-300">
+                    <div className="p-4 bg-slate-50 rounded-full mb-4">
+                        <Search className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">No se encontraron vehículos</h3>
+                    <p className="text-slate-500 max-w-md text-center mt-2">
+                        No hay resultados que coincidan con tus filtros actuales. Intenta limpiar los filtros o realiza un nuevo escaneo.
+                    </p>
+                    {hasActiveFilters && (
+                        <button
+                            onClick={handleClearFilters}
+                            className="mt-6 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+                        >
+                            Restablecer búsqueda
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden flex flex-col">
+                    {/* Header de tabla con degradado sutil */}
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                                    <th className="py-3 px-4">Vehículo</th>
-                                    <th className="py-3 px-4">Marca</th>
-                                    <th className="py-3 px-4">Precio</th>
-                                    <th className="py-3 px-4">Año</th>
-                                    <th className="py-3 px-4">Descripción</th>
-                                    <th className="py-3 px-4 text-center">Ubicación Vendedor</th>
-                                    <th className="py-3 px-4 text-center">Kilometraje</th>
-                                    <th className="py-3 px-4 text-center">Acciones</th>
+                                <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    <th className="py-4 px-6 w-[350px]">Vehículo</th>
+                                    <th className="py-4 px-6">Detalles</th>
+                                    <th className="py-4 px-6">Precio</th>
+                                    <th className="py-4 px-6">Ubicación</th>
+                                    <th className="py-4 px-6 text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 text-sm">
                                 {filteredVehicles.map((vehicle) => (
-                                    <tr key={vehicle.id} className="hover:bg-slate-50/80 transition-colors group">
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-14 bg-slate-100 rounded-md overflow-hidden flex-shrink-0 border border-slate-200 relative flex items-center justify-center">
+                                    <tr
+                                        key={vehicle.id}
+                                        className="hover:bg-slate-50 transition-colors group relative"
+                                    >
+                                        <td className="py-4 px-6">
+                                            <div className="flex gap-4">
+                                                {/* Imagen con fallback elegante */}
+                                                <div className="h-20 w-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border border-slate-200 relative">
                                                     {vehicle.image_url ? (
                                                         <img
                                                             src={vehicle.image_url}
                                                             alt={vehicle.title || 'Vehículo'}
-                                                            className="h-full w-full object-cover"
+                                                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).src = ""; // Fallback logic si falla la img
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                                ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display = 'flex';
+                                                            }}
                                                         />
-                                                    ) : (
-                                                        <Car className="h-5 w-5 text-slate-300" />
-                                                    )}
+                                                    ) : null}
+                                                    {/* Fallback de icono si no hay imagen o falla */}
+                                                    <div className={`absolute inset-0 flex items-center justify-center bg-slate-100 ${vehicle.image_url ? 'hidden' : 'flex'}`}>
+                                                        <Car className="h-8 w-8 text-slate-300" />
+                                                    </div>
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="font-bold text-slate-900 truncate max-w-[180px]" title={vehicle.title || ''}>
-                                                        {vehicle.title || 'Sin título'}
+
+                                                <div className="flex flex-col justify-center gap-1">
+                                                    <div className="font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-red-600 transition-colors">
+                                                        {vehicle.title || 'Vehículo sin título'}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                        <span className="font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-600">
+                                                            {vehicle.category || 'N/A'}
+                                                        </span>
+                                                        <span>•</span>
+                                                        <span>{vehicle.model || 'Modelo N/A'}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-4">
-                                            <div className="text-xs font-semibold">
-                                                {vehicle.category || 'Sin marca'}
+
+                                        <td className="py-4 px-6">
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2 text-slate-700 font-medium">
+                                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                                    {vehicle.year || '----'}
+                                                </div>
+                                                <div className="flex items-center gap-2 text-slate-600">
+                                                    <Gauge className="h-3.5 w-3.5 text-slate-400" />
+                                                    {vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '---'}
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-4">
-                                            <div className="text-xs font-semibold">
-                                                {vehicle.price ? `$${vehicle.price.toLocaleString()}` : 'Precio N/A'}
+
+                                        <td className="py-4 px-6">
+                                            <div className="flex items-center gap-1 font-bold text-lg text-slate-900">
+                                                <span className="text-slate-400 text-sm font-normal">$</span>
+                                                {vehicle.price ? vehicle.price.toLocaleString() : 'N/A'}
+                                            </div>
+                                            {vehicle.price && vehicle.price < 15000 && (
+                                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                                                    Oportunidad
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        <td className="py-4 px-6">
+                                            <div className="flex flex-col items-start gap-1">
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                                                    <MapPin className="h-3 w-3" />
+                                                    {vehicle.seller?.location || 'Ubicación desc.'}
+                                                </div>
+                                                {/* <span className="text-[10px] text-slate-400 pl-1">
+                                                    {vehicle.seller?.is_dealer ? 'Revendedor' : 'Particular'}
+                                                </span> */}
                                             </div>
                                         </td>
-                                        <td className="py-3 px-4">
-                                            <div className="text-xs font-semibold">
-                                                {vehicle.year ? `${vehicle.year}` : 'Sin año'}
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <p className="text-xs text-slate-600 line-clamp-2 max-w-xs" title={vehicle.description || ''}>
-                                                {vehicle.description || <span className="italic text-slate-400">Sin descripción</span>}
-                                            </p>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
-                                                <MapPin className="h-3 w-3" />
-                                                {vehicle.seller?.location || 'N/A'}
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4 text-center text-slate-700 font-medium">
-                                            {vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '-'}
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
-                                            <div className="flex items-center justify-center gap-3">
-                                                {vehicle.url && (
+
+                                        <td className="py-4 px-6 text-center">
+                                            <div className="flex items-center justify-center">
+                                                {vehicle.url ? (
                                                     <a
                                                         href={vehicle.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:text-slate-800 transition-colors"
-                                                        title="Ver fuente original"
+                                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                                                        title="Ver en Marketplace"
                                                     >
-                                                        <ExternalLink className="h-4 w-4" />
+                                                        <ExternalLink className="h-5 w-5" />
                                                     </a>
+                                                ) : (
+                                                    <span className="text-slate-300 cursor-not-allowed">
+                                                        <AlertCircle className="h-5 w-5" />
+                                                    </span>
                                                 )}
                                             </div>
                                         </td>
@@ -750,8 +646,97 @@ export function OpportunitiesView({
                             </tbody>
                         </table>
                     </div>
-                )}
-            </div>
+
+                    {/* Footer de la tabla con conteo */}
+                    <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 text-xs text-slate-500 flex justify-between items-center">
+                        <span>Mostrando {filteredVehicles.length} vehículos</span>
+                        <span>Datos actualizados en tiempo real</span>
+                    </div>
+                </div>
+            )}
+
+            {/* --- MODAL: CAR PICKER --- */}
+            {showCarPicker && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setShowCarPicker(false)}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white w-[95%] max-w-4xl rounded-2xl shadow-2xl border border-slate-200 p-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col max-h-[85vh]"
+                    >
+                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">
+                                    Catálogo de Vehículos
+                                </h3>
+                                <p className="text-sm text-slate-500">Selecciona una marca y modelo para escanear.</p>
+                            </div>
+                            <button
+                                onClick={() => setShowCarPicker(false)}
+                                className="p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-500"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                            {!pickerBrand ? (
+                                <>
+                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+                                        Marcas Disponibles
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
+                                            <button
+                                                key={brand}
+                                                onClick={() => setPickerBrand(brand)}
+                                                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-all text-slate-700 shadow-sm"
+                                            >
+                                                {brand}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex items-center justify-between mb-4 sticky top-0 bg-white z-10 py-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold text-slate-600">{pickerBrand}</span>
+                                            <span className="text-xs text-slate-400">Selecciona el modelo</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setPickerBrand(null)}
+                                            className="text-xs text-red-600 hover:text-red-800 font-medium hover:underline"
+                                        >
+                                            ← Volver a marcas
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                        <button
+                                            onClick={() => handlePickAndScrap(pickerBrand)}
+                                            className="px-4 py-3 border-2 border-dashed border-red-300 bg-red-50 text-red-700 rounded-xl text-sm font-bold hover:bg-red-100 transition-all"
+                                        >
+                                            Todos los {pickerBrand}
+                                        </button>
+
+                                        {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
+                                            <button
+                                                key={model}
+                                                onClick={() => handlePickAndScrap(pickerBrand, model)}
+                                                className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 hover:border-slate-300 transition-all text-slate-600 shadow-sm"
+                                            >
+                                                {model}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
