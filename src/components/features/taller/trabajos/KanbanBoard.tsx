@@ -1,4 +1,5 @@
-import { OrdenTrabajo } from "@/types/taller"; // <--- Corregido
+import React from 'react';
+import { OrdenTrabajo } from "@/types/taller";
 import { JobCard } from "./JobCard";
 
 interface KanbanBoardProps {
@@ -6,49 +7,62 @@ interface KanbanBoardProps {
     onCardClick: (orden: OrdenTrabajo) => void;
 }
 
+// Configuración visual de las columnas (Paleta Azul/Negro/Gris)
+const COLUMN_STYLES: Record<string, string> = {
+    recepcion: 'border-slate-300 bg-slate-50/50', // Gris suave
+    en_cola: 'border-slate-500 bg-slate-100/50',   // Gris medio
+    en_proceso: 'border-blue-600 bg-blue-50/30',   // Azul (Foco)
+    terminado: 'border-black bg-slate-50/80',      // Negro
+};
+
 const COLUMNS = [
-    { id: 'recepcion', title: 'Recepción', color: 'bg-slate-100 border-slate-200' },
-    { id: 'en_cola', title: 'En Cola', color: 'bg-orange-50 border-orange-200' },
-    { id: 'en_proceso', title: 'En Proceso', color: 'bg-blue-50 border-blue-200' },
-    { id: 'control_calidad', title: 'Calidad', color: 'bg-purple-50 border-purple-200' },
-    { id: 'terminado', title: 'Terminado', color: 'bg-emerald-50 border-emerald-200' }
+    { id: 'recepcion', title: 'Recepción' },
+    { id: 'en_cola', title: 'En Cola' },
+    { id: 'en_proceso', title: 'En Proceso' },
+    { id: 'terminado', title: 'Terminado' }
 ];
 
-export function KanbanBoard({ ordenes, onCardClick }: KanbanBoardProps) {
+export default function KanbanBoard({ ordenes, onCardClick }: KanbanBoardProps) {
     return (
-        <div className="flex gap-4 overflow-x-auto pb-6 h-full min-h-[500px]">
+        <div className="flex h-full min-h-[600px] w-full gap-6 overflow-x-auto bg-white p-6 pb-8">
             {COLUMNS.map((col) => {
+                // Filtramos las órdenes reales que vienen por props
                 const columnOrders = ordenes.filter(o => o.estado === col.id);
+                const styleClass = COLUMN_STYLES[col.id] || 'border-slate-200';
                 
                 return (
-                    <div key={col.id} className="min-w-[280px] w-[300px] flex-shrink-0 flex flex-col">
-                        {/* Column Header */}
-                        <div className={`p-3 rounded-t-xl border-t border-x ${col.color} border-b-0`}>
-                            <div className="flex justify-between items-center">
-                                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">
+                    <div key={col.id} className="flex h-full w-[320px] min-w-[320px] flex-col flex-shrink-0">
+                        
+                        {/* Header de Columna Mejorado */}
+                        <div className={`mb-4 flex items-center justify-between border-t-4 pt-4 transition-all duration-300 ${styleClass.split(' ')[0]}`}>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800">
                                     {col.title}
                                 </h3>
-                                <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs font-bold text-slate-600">
+                                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-md bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
                                     {columnOrders.length}
                                 </span>
                             </div>
                         </div>
 
-                        {/* Column Body */}
-                        <div className="bg-slate-50/50 border border-slate-200 rounded-b-xl p-3 flex-1 space-y-3">
-                            {columnOrders.map((orden) => (
-                                <JobCard 
-                                    key={orden.id} 
-                                    orden={orden} 
-                                    onClick={onCardClick} 
-                                />
-                            ))}
-                            
-                            {columnOrders.length === 0 && (
-                                <div className="h-20 flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg text-slate-400 text-xs">
-                                    Sin órdenes
-                                </div>
-                            )}
+                        {/* Cuerpo de la columna (Drop Zone visual) */}
+                        <div className={`flex-1 rounded-xl p-3 transition-colors ${styleClass.split(' ')[1] || 'bg-slate-50'}`}>
+                            <div className="flex flex-col gap-3">
+                                {columnOrders.map((orden) => (
+                                    <JobCard 
+                                        key={orden.id} 
+                                        orden={orden} 
+                                        onClick={onCardClick} 
+                                    />
+                                ))}
+                                
+                                {/* Estado Vacío Sutil */}
+                                {columnOrders.length === 0 && (
+                                    <div className="flex h-32 flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200/60 text-center">
+                                        <span className="text-xs font-medium text-slate-400">Sin órdenes</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 );
