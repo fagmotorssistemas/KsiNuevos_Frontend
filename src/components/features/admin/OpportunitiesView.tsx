@@ -329,7 +329,7 @@ export function OpportunitiesView({
                             >
                                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                             </Button>
-                            {/* <button
+                            <button
                                 onClick={() => setShowCarPicker(!showCarPicker)}
                                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border shadow-sm ${showCarPicker
                                     ? "bg-indigo-600 border-indigo-600 text-white"
@@ -338,7 +338,7 @@ export function OpportunitiesView({
                             >
                                 <Car className="h-4 w-4" />
                                 <span className="whitespace-nowrap">Elegir Marca / Modelo</span>
-                            </button> */}
+                            </button>
                             <button
                                 disabled={isWebhookLoading}
                                 onClick={() => handleSubmitScraper(scraperTerm)}
@@ -362,7 +362,7 @@ export function OpportunitiesView({
                 </div>
             </div>
 
-            {/* Tarjetas Resumen */}
+            {/* Tarjetas Resumen
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
@@ -418,7 +418,7 @@ export function OpportunitiesView({
                     )}
                     <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-50 to-transparent opacity-50 pointer-events-none" />
                 </div>
-            </div>
+            </div> */}
 
             {/* Sub-filtros de ubicación de inventario */}
             <div className="flex flex-col gap-4 w-full py-2">
@@ -426,7 +426,7 @@ export function OpportunitiesView({
                 <div className="grid grid-cols-1 md:flex md:flex-wrap items-center gap-3 w-full">
 
                     {/* Input de búsqueda: Ancho completo en móvil, flexible en desktop */}
-                    <div className="relative w-full md:flex-1 md:min-w-[250px]">
+                    {/* <div className="relative w-full md:flex-1 md:min-w-[250px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input
                             type="text"
@@ -443,10 +443,29 @@ export function OpportunitiesView({
                                 <X className="h-4 w-4" />
                             </button>
                         )}
-                    </div>
+                    </div> */}
 
                     {/* Contenedor de Selects: Grid de 2 columnas en móvil, auto en desktop */}
-                    <div className="grid grid-cols-2 lg:flex gap-2 w-full md:w-auto">
+                    <div className="flex flex-col gap-1 w-full sm:w-auto">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Resumen de inventario</div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-slate-600">
+                                Patio: <strong className="text-slate-900">{displayStats.enPatio}</strong>
+                            </span>
+                            <span className="text-slate-300">|</span>
+                            <span className="text-xs text-slate-600">
+                                Posible daño mecánico: <strong className="text-slate-900">{displayStats.enTaller}</strong>
+                            </span>
+                            <span className="text-slate-300">|</span>
+                            <span className="text-xs text-slate-600">
+                                Vendedor: <strong className="text-slate-900">{displayStats.enCliente}</strong>
+                            </span>
+                            <span className="text-xs text-slate-400 ml-2 italic">
+                                ({filteredVehicles.length} de {sourceVehicles.length})
+                            </span>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 lg:flex gap-2 w-full md:w-auto justify-end flex-1">
                         <div className="relative">
                             <select
                                 value={selectedBrand}
@@ -499,27 +518,6 @@ export function OpportunitiesView({
                 {/* Segunda fila: Estadísticas y Botones de Acción */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-slate-100 pt-3">
 
-                    {/* Info de Stock */}
-                    <div className="flex flex-col gap-1 w-full sm:w-auto">
-                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Resumen de inventario</div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs text-slate-600">
-                                Patio: <strong className="text-slate-900">{displayStats.enPatio}</strong>
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">
-                                Posible daño mecánico: <strong className="text-slate-900">{displayStats.enTaller}</strong>
-                            </span>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-xs text-slate-600">
-                                Vendedor: <strong className="text-slate-900">{displayStats.enCliente}</strong>
-                            </span>
-                            <span className="text-xs text-slate-400 ml-2 italic">
-                                ({filteredVehicles.length} de {sourceVehicles.length})
-                            </span>
-                        </div>
-                    </div>
-
                     <div className="flex gap-2 w-full sm:w-auto">
                         {hasActiveFilters && (
                             <button
@@ -556,64 +554,83 @@ export function OpportunitiesView({
                 </div>
             </div>
             {showCarPicker && (
-                <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-4 animate-in fade-in slide-in-from-top-2">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in"
+                    onClick={() => setShowCarPicker(false)}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white w-[95%] max-w-4xl rounded-xl shadow-xl border border-slate-200 p-5 animate-in zoom-in-95 slide-in-from-bottom-3"
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold uppercase text-slate-500">
+                                Seleccionar Marca / Modelo
+                            </h3>
 
-                    {!pickerBrand ? (
-                        <>
-                            <div className="text-xs font-bold text-slate-500 uppercase mb-3">
-                                Selecciona una marca
-                            </div>
+                            <button
+                                onClick={() => setShowCarPicker(false)}
+                                className="p-1 rounded-md hover:bg-slate-100 transition"
+                            >
+                                <X className="h-4 w-4 text-slate-600" />
+                            </button>
+                        </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
-                                    <button
-                                        key={brand}
-                                        onClick={() => setPickerBrand(brand)}
-                                        className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
-                                    >
-                                        {brand}
-                                    </button>
-                                ))}
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="text-xs font-bold text-slate-500 uppercase">
-                                    {pickerBrand} — Selecciona modelo
+                        {!pickerBrand ? (
+                            <>
+                                <div className="text-xs font-bold text-slate-500 uppercase mb-3">
+                                    Selecciona una marca
                                 </div>
-                                <button
-                                    onClick={() => setPickerBrand(null)}
-                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-                                >
-                                    ← Cambiar marca
-                                </button>
-                            </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                <button
-                                    onClick={() => handlePickAndScrap(pickerBrand)}
-                                    className="px-3 py-2 border border-indigo-500 bg-indigo-500 text-white rounded-lg text-xs font-bold hover:bg-indigo-600 transition-all"
-                                >
-                                    Todos los modelos
-                                </button>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+                                    {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
+                                        <button
+                                            key={brand}
+                                            onClick={() => setPickerBrand(brand)}
+                                            className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
+                                        >
+                                            {brand}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="text-xs font-bold text-slate-500 uppercase">
+                                        {pickerBrand} — Selecciona modelo
+                                    </div>
 
-                                {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
                                     <button
-                                        key={model}
-                                        onClick={() => handlePickAndScrap(pickerBrand, model)}
-                                        className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
+                                        onClick={() => setPickerBrand(null)}
+                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
                                     >
-                                        {model}
+                                        ← Cambiar marca
                                     </button>
-                                ))}
-                            </div>
-                        </>
-                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+                                    <button
+                                        onClick={() => handlePickAndScrap(pickerBrand)}
+                                        className="px-3 py-2 border border-indigo-500 bg-indigo-500 text-white rounded-lg text-xs font-bold hover:bg-indigo-600 transition-all"
+                                    >
+                                        Todos los modelos
+                                    </button>
+
+                                    {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
+                                        <button
+                                            key={model}
+                                            onClick={() => handlePickAndScrap(pickerBrand, model)}
+                                            className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-400 transition-all text-slate-700"
+                                        >
+                                            {model}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
-
-
             {showTopDeals && (
                 <div className="px-4 py-2 bg-orange-50 border-b border-orange-200 text-orange-700 text-xs font-bold flex items-center gap-2">
                     <TrendingUp className="h-4 w-4" />
