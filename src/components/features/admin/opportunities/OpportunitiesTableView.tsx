@@ -70,6 +70,8 @@ export function OpportunitiesTableView({
                     <thead>
                         <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                             <th className="py-4 px-6 w-[350px]">Vehículo</th>
+                            {/* <th className="py-4 px-6 w-[150px]">Marca</th>
+                            <th className="py-4 px-6 w-[150px]">Modelo</th> */}
                             <th className="py-4 px-6">Detalles</th>
                             <th className="py-4 px-6">Precio</th>
                             <th className="py-4 px-6">Ubicación</th>
@@ -106,19 +108,23 @@ export function OpportunitiesTableView({
 
                                         <div className="flex flex-col justify-center gap-1">
                                             <div className="font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-red-600 transition-colors">
-                                                {vehicle.title || 'Vehículo sin título'}
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                <span className="font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-600">
-                                                    {vehicle.category || 'N/A'}
-                                                </span>
-                                                <span>•</span>
-                                                <span>{vehicle.model || 'Modelo N/A'}</span>
+                                                {vehicle.category.toUpperCase()} {vehicle.model.toUpperCase()}
                                             </div>
                                         </div>
                                     </div>
                                 </td>
-
+                                {/* <td>
+                                    <div className="flex justify-center items-center text-center w-full">
+                                        <span className="font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-600 w-fit">
+                                            {vehicle.category || 'N/A'}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="flex justify-center items-center text-center text-xs w-full">
+                                        <span>{vehicle.model || 'Modelo N/A'}</span>
+                                    </div>
+                                </td> */}
                                 <td className="py-4 px-6">
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center gap-2 text-slate-700 font-medium">

@@ -26,6 +26,8 @@ export const scraperService = {
             // Solo con kilometraje válido
             .not("mileage", "is", null)
 
+            .not("location", "is", null)
+
             // Filtrar precios extremos (evitar basura)
             .gte("price", 1000)
             .lte("price", 50000)
