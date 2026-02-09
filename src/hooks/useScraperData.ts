@@ -66,46 +66,6 @@ export function useScraperData(initialFilters?: FilterOptions) {
     }
   }, [filters.isDealer]);
 
-  const updateVehicleStatus = async (id: string, status: ScraperCarStatus) => {
-    try {
-      await scraperService.updateVehicleStatus(id, status);
-      await loadVehicles();
-    } catch (error) {
-      console.error("Error al actualizar estado:", error);
-      throw error;
-    }
-  };
-
-  const updateVehicleLocation = async (id: string, location: ScraperCarLocation) => {
-    try {
-      await scraperService.updateVehicleLocation(id, location);
-      await loadVehicles();
-    } catch (error) {
-      console.error("Error al actualizar ubicación:", error);
-      throw error;
-    }
-  };
-
-  const updateTags = async (id: string, tags: string[]) => {
-    try {
-      await scraperService.updateVehicleTags(id, tags);
-      await loadVehicles();
-    } catch (error) {
-      console.error("Error al actualizar tags:", error);
-      throw error;
-    }
-  };
-
-  const deleteVehicle = async (id: string) => {
-    try {
-      await scraperService.deleteVehicle(id);
-      await loadVehicles();
-    } catch (error) {
-      console.error("Error al eliminar vehículo:", error);
-      throw error;
-    }
-  };
-
   const getSellerWithVehicles = async (sellerId: string) => {
     try {
       return await scraperService.getSellerWithVehicles(sellerId);
@@ -114,123 +74,123 @@ export function useScraperData(initialFilters?: FilterOptions) {
       throw error;
     }
   };
-const loadTopOpportunities = useCallback(async () => {
-  try {
-    // =============================
-    // 1. Traer candidatos desde Supabase
-    // =============================
-    const { data, error } = await supabase
-      .from("scraper_vehicles")
-      .select(`
+  const loadTopOpportunities = useCallback(async () => {
+    try {
+      // =============================
+      // 1. Traer candidatos desde Supabase
+      // =============================
+      const { data, error } = await supabase
+        .from("scraper_vehicles")
+        .select(`
         *,
         seller:scraper_sellers(*)
       `)
-      .not("price", "is", null)
-      .not("mileage", "is", null)
-      .gte("price", 1000)
-      .lte("price", 50000)
-      .lte("mileage", 250000)
-      .eq("seller.is_dealer", false)
-      .order("created_at", { ascending: false })
-      .limit(200);
+        .not("price", "is", null)
+        .not("mileage", "is", null)
+        .gte("price", 1000)
+        .lte("price", 50000)
+        .lte("mileage", 250000)
+        .eq("seller.is_dealer", false)
+        .order("created_at", { ascending: false })
+        .limit(200);
 
-    if (error) {
-      console.error("Error cargando oportunidades:", error);
-      setTopOpportunities([]);
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      console.warn("No se encontraron vehículos candidatos.");
-      setTopOpportunities([]);
-      return;
-    }
-
-    // =============================
-    // 2. Ranking inteligente (Deal Score)
-    // =============================
-    const scored = data.map((v) => {
-      let score = 0;
-
-      // 1. Precio bajo (mejor score)
-      if (v.price) score += 50000 / v.price;
-
-      // 2. Kilometraje bajo
-      if (v.mileage) score += 200000 / (v.mileage + 1);
-
-      // 3. Particular con pocas publicaciones
-      if (v.seller?.total_listings !== null && v.seller?.total_listings !== undefined) {
-        score += 50 / (v.seller.total_listings + 1);
+      if (error) {
+        console.error("Error cargando oportunidades:", error);
+        setTopOpportunities([]);
+        return;
       }
 
-      // 4. Bonus por palabras positivas
-      const goodWords = [
-        "único dueño",
-        "mantenimientos al día",
-        "como nuevo",
-        "garaje",
-        "full equipo",
-        "factura",
-        "negociable",
-      ];
+      if (!data || data.length === 0) {
+        console.warn("No se encontraron vehículos candidatos.");
+        setTopOpportunities([]);
+        return;
+      }
 
-      // Texto completo para análisis
-      const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase();
+      // =============================
+      // 2. Ranking inteligente (Deal Score)
+      // =============================
+      const scored = data.map((v) => {
+        let score = 0;
 
-      goodWords.forEach((word) => {
-        if (text.includes(word)) score += 10;
+        // 1. Precio bajo (mejor score)
+        if (v.price) score += 50000 / v.price;
+
+        // 2. Kilometraje bajo
+        if (v.mileage) score += 200000 / (v.mileage + 1);
+
+        // 3. Particular con pocas publicaciones
+        if (v.seller?.total_listings !== null && v.seller?.total_listings !== undefined) {
+          score += 50 / (v.seller.total_listings + 1);
+        }
+
+        // 4. Bonus por palabras positivas
+        const goodWords = [
+          "único dueño",
+          "mantenimientos al día",
+          "como nuevo",
+          "garaje",
+          "full equipo",
+          "factura",
+          "negociable",
+        ];
+
+        // Texto completo para análisis
+        const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase();
+
+        goodWords.forEach((word) => {
+          if (text.includes(word)) score += 10;
+        });
+
+        // 5. Penalización por palabras sospechosas
+        const badWords = [
+          "chocado",
+          "sin papeles",
+          "remato urgente",
+          "para repuestos",
+          "motor dañado",
+          "no matriculado",
+        ];
+
+        badWords.forEach((word) => {
+          if (text.includes(word)) score -= 30;
+        });
+
+        return {
+          ...v,
+          deal_score: score,
+        };
       });
 
-      // 5. Penalización por palabras sospechosas
-      const badWords = [
-        "chocado",
-        "sin papeles",
-        "remato urgente",
-        "para repuestos",
-        "motor dañado",
-        "no matriculado",
-      ];
+      // =============================
+      // 3. Ordenar por score (mejores primero)
+      // =============================
+      const sorted = scored.sort((a, b) => b.deal_score - a.deal_score);
 
-      badWords.forEach((word) => {
-        if (text.includes(word)) score -= 30;
-      });
+      // =============================
+      // 4. Eliminar duplicados por TITLE
+      //    (nos quedamos con el mejor score)
+      // =============================
+      const uniqueByTitle = Array.from(
+        new Map(
+          sorted.map((v) => [
+            (v.title ?? "").trim().toLowerCase(), // clave normalizada
+            v, // vehículo
+          ])
+        ).values()
+      );
 
-      return {
-        ...v,
-        deal_score: score,
-      };
-    });
+      // =============================
+      // 5. Top 30 finales
+      // =============================
+      const top30 = uniqueByTitle.slice(0, 30);
 
-    // =============================
-    // 3. Ordenar por score (mejores primero)
-    // =============================
-    const sorted = scored.sort((a, b) => b.deal_score - a.deal_score);
-
-    // =============================
-    // 4. Eliminar duplicados por TITLE
-    //    (nos quedamos con el mejor score)
-    // =============================
-    const uniqueByTitle = Array.from(
-      new Map(
-        sorted.map((v) => [
-          (v.title ?? "").trim().toLowerCase(), // clave normalizada
-          v, // vehículo
-        ])
-      ).values()
-    );
-
-    // =============================
-    // 5. Top 30 finales
-    // =============================
-    const top30 = uniqueByTitle.slice(0, 30);
-
-    // Guardar en estado
-    setTopOpportunities(top30);
-  } catch (err) {
-    console.error("Error inesperado en oportunidades:", err);
-    setTopOpportunities([]);
-  }
-}, [supabase]);
+      // Guardar en estado
+      setTopOpportunities(top30);
+    } catch (err) {
+      console.error("Error inesperado en oportunidades:", err);
+      setTopOpportunities([]);
+    }
+  }, [supabase]);
 
 
 
@@ -319,10 +279,6 @@ const loadTopOpportunities = useCallback(async () => {
     stats,
     topOpportunities,
     refreshTopOpportunities: loadTopOpportunities,
-    updateVehicleStatus,
-    updateVehicleLocation,
-    updateTags,
-    deleteVehicle,
     getSellerWithVehicles,
     applyFilters,
     clearFilters,

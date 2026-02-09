@@ -7,6 +7,7 @@ import {
     AlertCircle,
     Gauge,
     Calendar,
+    Clock,
 } from "lucide-react";
 
 interface OpportunitiesTableViewProps {
@@ -14,6 +15,46 @@ interface OpportunitiesTableViewProps {
     isLoading: boolean;
     hasActiveFilters: boolean;
     onClearFilters: () => void;
+}
+
+// Instancia única del formateador (fuera del componente para evitar recreación)
+const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
+
+// Función para capitalizar la primera letra
+function capitalize(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// Función optimizada para formatear fecha relativa
+function formatRelativeTime(dateString: string): string {
+    try {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        let formatted: string;
+
+        // Seleccionar la unidad apropiada
+        if (diffInSeconds < 60) {
+            formatted = rtf.format(-Math.floor(diffInSeconds), 'second');
+        } else if (diffInSeconds < 3600) {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 60), 'minute');
+        } else if (diffInSeconds < 86400) {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 3600), 'hour');
+        } else if (diffInSeconds < 604800) {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 86400), 'day');
+        } else if (diffInSeconds < 2592000) {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 604800), 'week');
+        } else if (diffInSeconds < 31536000) {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 2592000), 'month');
+        } else {
+            formatted = rtf.format(-Math.floor(diffInSeconds / 31536000), 'year');
+        }
+
+        return capitalize(formatted);
+    } catch {
+        return "Fecha no disponible";
+    }
 }
 
 export function OpportunitiesTableView({
@@ -64,14 +105,11 @@ export function OpportunitiesTableView({
 
     return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden flex flex-col">
-            {/* Header de tabla con degradado sutil */}
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                             <th className="py-4 px-6 w-[350px]">Vehículo</th>
-                            {/* <th className="py-4 px-6 w-[150px]">Marca</th>
-                            <th className="py-4 px-6 w-[150px]">Modelo</th> */}
                             <th className="py-4 px-6">Detalles</th>
                             <th className="py-4 px-6">Precio</th>
                             <th className="py-4 px-6">Ubicación</th>
@@ -86,7 +124,6 @@ export function OpportunitiesTableView({
                             >
                                 <td className="py-4 px-6">
                                     <div className="flex gap-4">
-                                        {/* Imagen con fallback elegante */}
                                         <div className="h-20 w-28 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 border border-slate-200 relative">
                                             {vehicle.image_url ? (
                                                 <img
@@ -100,7 +137,6 @@ export function OpportunitiesTableView({
                                                     }}
                                                 />
                                             ) : null}
-                                            {/* Fallback de icono si no hay imagen o falla */}
                                             <div className={`absolute inset-0 flex items-center justify-center bg-slate-100 ${vehicle.image_url ? 'hidden' : 'flex'}`}>
                                                 <Car className="h-8 w-8 text-slate-300" />
                                             </div>
@@ -108,23 +144,24 @@ export function OpportunitiesTableView({
 
                                         <div className="flex flex-col justify-center gap-1">
                                             <div className="font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-red-600 transition-colors">
-                                                {vehicle.category.toUpperCase()} {vehicle.model.toUpperCase()}
+                                                {vehicle.category?.toUpperCase()} {vehicle.model?.toUpperCase()}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                                <Clock className="h-3 w-3 text-slate-400" />
+                                                <span>{formatRelativeTime(vehicle.publication_date)}</span>
                                             </div>
                                         </div>
                                     </div>
                                 </td>
+
                                 {/* <td>
-                                    <div className="flex justify-center items-center text-center w-full">
-                                        <span className="font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-600 w-fit">
-                                            {vehicle.category || 'N/A'}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div className="flex justify-center items-center text-center text-xs w-full">
-                                        <span>{vehicle.model || 'Modelo N/A'}</span>
+                                    <div className="flex flex-col justify-center gap-1">
+                                        <div className="font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-red-600 transition-colors">
+                                            {vehicle.category?.toUpperCase()} {vehicle.model?.toUpperCase()}
+                                        </div>
                                     </div>
                                 </td> */}
+
                                 <td className="py-4 px-6">
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center gap-2 text-slate-700 font-medium">
@@ -149,7 +186,7 @@ export function OpportunitiesTableView({
                                     <div className="flex flex-col items-start gap-1">
                                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 text-red-700 text-xs font-bold border border-red-100">
                                             <MapPin className="h-3 w-3" />
-                                            {vehicle.seller?.location || 'Ubicación desc.'}
+                                            {vehicle.location || 'Ubicación desc.'}
                                         </div>
                                     </div>
                                 </td>
@@ -179,7 +216,6 @@ export function OpportunitiesTableView({
                 </table>
             </div>
 
-            {/* Footer de la tabla con conteo */}
             <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 text-xs text-slate-500 flex justify-between items-center">
                 <span>Mostrando {vehicles.length} vehículos</span>
                 <span>Datos actualizados en tiempo real</span>

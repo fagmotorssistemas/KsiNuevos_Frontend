@@ -301,7 +301,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'http://138.197.35.10:5678/webhook-test/buscar-producto-marketplace',
+                'http://138.197.35.10:5678/webhook/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {

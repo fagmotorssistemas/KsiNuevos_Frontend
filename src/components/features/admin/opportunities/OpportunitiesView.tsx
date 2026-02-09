@@ -2,8 +2,8 @@ import { VehicleWithSeller } from "@/services/scraper.service";
 import { useMemo, useState, useCallback } from "react";
 import { Database } from "@/types/supabase";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
-import { OpportunitiesTableView } from "./OpportunitiesTableView";
 import { OpportunitiesFiltersView } from "./OpportunitiesFiltersView";
+import { OpportunitiesTableView } from "./OpportunitiesTableView";
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 
@@ -40,6 +40,7 @@ export function OpportunitiesView({
     const [selectedBrand, setSelectedBrand] = useState<string>("all");
     const [selectedYear, setSelectedYear] = useState<string>("all");
     const [selectedModel, setSelectedModel] = useState<string>("all");
+    const [selectedDateRange, setSelectedDateRange] = useState<string>("all");
 
     const sourceVehicles = useMemo(() =>
         showTopDeals ? topOpportunities : vehicles,
@@ -53,7 +54,7 @@ export function OpportunitiesView({
         if (!onlyCoast) return sourceVehicles;
 
         return sourceVehicles.filter(vehicle => {
-            const sellerLocation = vehicle.seller?.location?.toLowerCase() || '';
+            const sellerLocation = vehicle.location?.toLowerCase() || '';
             return !regex.test(sellerLocation);
         });
     }, [sourceVehicles, onlyCoast]);
@@ -89,9 +90,32 @@ export function OpportunitiesView({
                 return false;
             }
 
+            // Filtro por rango de fecha
+            if (selectedDateRange !== "all") {
+                const publicationDate = new Date(vehicle.publication_date);
+                const now = new Date();
+                const diffInMs = now.getTime() - publicationDate.getTime();
+                const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+                switch (selectedDateRange) {
+                    case "today":
+                        if (diffInDays > 0) return false;
+                        break;
+                    case "week":
+                        if (diffInDays > 7) return false;
+                        break;
+                    case "month":
+                        if (diffInDays > 30) return false;
+                        break;
+                    case "3months":
+                        if (diffInDays > 90) return false;
+                        break;
+                }
+            }
+
             return true;
         });
-    }, [coastFilteredVehicles, searchTerm, selectedBrand, selectedModel, selectedYear]);
+    }, [coastFilteredVehicles, searchTerm, selectedBrand, selectedModel, selectedYear, selectedDateRange]);
 
     const handleClearFilters = useCallback(() => {
         setSelectedBrand("all");
@@ -99,43 +123,49 @@ export function OpportunitiesView({
         setSelectedModel("all");
         setSearchTerm("");
         setOnlyCoast(true);
+        setSelectedDateRange("all");
     }, []);
 
     const hasActiveFilters = useMemo(() =>
         selectedBrand !== "all" ||
         selectedModel !== "all" ||
         selectedYear !== "all" ||
+        selectedDateRange !== "all" ||
         searchTerm !== "" ||
         onlyCoast === false,
-        [selectedBrand, selectedModel, selectedYear, searchTerm, onlyCoast]
+        [selectedBrand, selectedModel, selectedYear, selectedDateRange, searchTerm, onlyCoast]
     );
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700 pb-12">
             {/* Sección 1: Centro de Oportunidades */}
-            <OpportunitiesCenterView
-                topOpportunities={topOpportunities}
-                vehicles={vehicles}
-                isLoading={isLoading}
-                onScraperComplete={onScraperComplete}
+            <OpportunitiesCenterView 
+                topOpportunities={topOpportunities} 
+                vehicles={vehicles} 
+                isLoading={isLoading} 
+                onScraperComplete={onScraperComplete} 
             />
 
             {/* Sección 2: Filtros */}
             <OpportunitiesFiltersView
                 vehicles={vehicles}
                 topOpportunities={topOpportunities}
+                filteredVehicles={filteredVehicles}
+                coastFilteredVehicles={coastFilteredVehicles}
                 showTopDeals={showTopDeals}
                 onlyCoast={onlyCoast}
                 searchTerm={searchTerm}
                 selectedBrand={selectedBrand}
                 selectedModel={selectedModel}
                 selectedYear={selectedYear}
+                selectedDateRange={selectedDateRange}
                 onShowTopDealsChange={setShowTopDeals}
                 onOnlyCoastChange={setOnlyCoast}
                 onSearchTermChange={setSearchTerm}
                 onBrandChange={setSelectedBrand}
                 onModelChange={setSelectedModel}
                 onYearChange={setSelectedYear}
+                onDateRangeChange={setSelectedDateRange}
                 onClearFilters={handleClearFilters}
             />
 
