@@ -25,7 +25,6 @@ export const TestimonialsSection = () => {
 
   return (
     <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto bg-white" id="testimonios">
-      {/* ... Tu Header original con "Confianza K-si Nuevos" ... */}
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-10">
         {testimonials.map((test) => (
