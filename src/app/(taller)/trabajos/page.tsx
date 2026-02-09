@@ -15,9 +15,6 @@ import { useOrdenes } from "@/hooks/taller/useOrdenes";
 
 // Types
 import { OrdenTrabajo } from "@/types/taller";
-
-// Components
-// CORRECCIÓN 1: Importación por defecto (sin llaves) para KanbanBoard
 import KanbanBoard from "@/components/features/taller/trabajos/KanbanBoard";
 import { WorkOrderModal } from "@/components/features/taller/trabajos/WorkOrderModal";
 import { OrderPrintView } from "@/components/features/taller/OrderPrintView";

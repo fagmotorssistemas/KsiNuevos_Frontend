@@ -15,7 +15,7 @@ export function ChecklistGroup({ title, items, values, onChange }: ChecklistGrou
             <h4 className="text-sm font-bold text-slate-700 uppercase mb-3 border-b border-slate-200 pb-2">
                 {title}
             </h4>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
                 {items.map((item) => {
                     const isChecked = values[item.key] || false;
                     return (

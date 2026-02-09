@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { 
-    Car, 
-    AlertTriangle, 
-    TrendingUp, 
+import {
+    Car,
+    AlertTriangle,
+    TrendingUp,
     Clock,
     Plus,
     Wrench,
@@ -21,7 +21,7 @@ export default function TallerPage() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-10">
-            
+
             {/* Header de Bienvenida */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -32,10 +32,10 @@ export default function TallerPage() {
                         Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}. Aquí tienes el resumen de hoy.
                     </p>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                    <Link 
-                        href="/taller/recepcion" 
+                    <Link
+                        href="/taller/recepcion"
                         className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all"
                     >
                         <Plus className="h-4 w-4" />
@@ -53,31 +53,31 @@ export default function TallerPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KpiCard 
-                        title="Vehículos en Planta" 
-                        value={metrics.vehiculosEnPlanta} 
-                        icon={Car} 
+                    <KpiCard
+                        title="Vehículos en Planta"
+                        value={metrics.vehiculosEnPlanta}
+                        icon={Car}
                         color="bg-blue-600"
                         subtitle="En proceso de reparación"
                     />
-                    <KpiCard 
-                        title="Por Entregar" 
-                        value={metrics.entregasPendientes} 
-                        icon={Clock} 
+                    <KpiCard
+                        title="Por Entregar"
+                        value={metrics.entregasPendientes}
+                        icon={Clock}
                         color="bg-amber-500"
                         subtitle="Trabajos terminados"
                     />
-                    <KpiCard 
-                        title="Alertas Stock" 
-                        value={metrics.alertasStock} 
-                        icon={AlertTriangle} 
+                    <KpiCard
+                        title="Alertas Stock"
+                        value={metrics.alertasStock}
+                        icon={AlertTriangle}
                         color="bg-red-500"
                         subtitle="Materiales bajo mínimo"
                     />
-                    <KpiCard 
-                        title="Ingresos Mes" 
-                        value={`$${metrics.ingresosMes.toLocaleString('en-US')}`} 
-                        icon={TrendingUp} 
+                    <KpiCard
+                        title="Ingresos Mes"
+                        value={`$${metrics.ingresosMes.toLocaleString('en-US')}`}
+                        icon={TrendingUp}
                         color="bg-emerald-600"
                         subtitle="Facturación acumulada"
                     />
@@ -86,14 +86,14 @@ export default function TallerPage() {
 
             {/* Sección de Accesos Rápidos y Actividad */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
+
                 {/* Panel Principal: Accesos Rápidos */}
-                <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
+                <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
                     <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                         <Wrench className="h-5 w-5 text-slate-400" />
                         Gestión Operativa
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Link href="/taller/recepcion" className="group p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-100 transition-all cursor-pointer">
                             <div className="flex items-center justify-between mb-3">
@@ -138,39 +138,6 @@ export default function TallerPage() {
                             <h4 className="font-bold text-slate-800">Caja y Finanzas</h4>
                             <p className="text-xs text-slate-500 mt-1">Registrar pagos, gastos y nómina.</p>
                         </Link>
-                    </div>
-                </div>
-
-                {/* Sidebar Derecho: Estado Rápido */}
-                <div className="bg-slate-900 rounded-3xl shadow-xl p-8 text-white relative overflow-hidden">
-                    {/* Decoración de fondo */}
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-500 rounded-full blur-3xl opacity-20"></div>
-                    <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-purple-500 rounded-full blur-3xl opacity-20"></div>
-
-                    <h3 className="font-bold text-lg mb-4 relative z-10">Estado del Sistema</h3>
-                    
-                    <div className="space-y-6 relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
-                            <div>
-                                <p className="text-sm font-medium text-slate-200">Base de Datos</p>
-                                <p className="text-xs text-slate-400">Conectado y sincronizado</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <div className="h-2 w-2 rounded-full bg-blue-400"></div>
-                            <div>
-                                <p className="text-sm font-medium text-slate-200">Módulo Taller</p>
-                                <p className="text-xs text-slate-400">v1.0.0 (Beta)</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 p-4 bg-white/10 rounded-xl border border-white/5 backdrop-blur-sm">
-                            <p className="text-xs text-slate-300 leading-relaxed">
-                                "La calidad no es un acto, es un hábito."
-                            </p>
-                        </div>
                     </div>
                 </div>
             </div>
