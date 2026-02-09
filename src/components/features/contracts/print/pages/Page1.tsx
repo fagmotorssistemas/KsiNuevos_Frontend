@@ -96,7 +96,6 @@ export function Page1({ data }: PageProps) {
                         <div className="space-y-0.5">
                             <div className="grid grid-cols-[100px_1fr]">
                                 <span className="font-medium">por el año:</span>
-                                <span>{data.anio}</span>
                             </div>
                             <div className="grid grid-cols-[100px_1fr]">
                                 <span className="font-medium">Marca:</span>
@@ -104,7 +103,7 @@ export function Page1({ data }: PageProps) {
                             </div>
                             <div className="grid grid-cols-[100px_1fr]">
                                 <span className="font-medium">Año de Fabricación:</span>
-                                <span>{data.anioFabricacion || data.anio}</span>
+                                <span>{data.anio}</span>
                             </div>
                             <div className="grid grid-cols-[100px_1fr]">
                                 <span className="font-medium">Motor:</span>

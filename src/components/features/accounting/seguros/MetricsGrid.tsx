@@ -13,36 +13,33 @@ interface MetricsGridProps {
 
 export function MetricsGrid({ activeFilter, setActiveFilter, metrics }: MetricsGridProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <MetricCard 
-                title="Recaudación Rastreo" 
+                title="Rastreo Satelital" 
                 unitLabel="Rastreadores"
-                icon={<Shield size={20} />} 
+                icon={<Shield size={22} />} 
                 amount={metrics.rastreador.total} 
                 count={metrics.rastreador.cant}
                 isActive={activeFilter === 'rastreador'}
                 onClick={() => setActiveFilter('rastreador')}
-                color="blue"
             />
             <MetricCard 
-                title="Recaudación Seguros" 
+                title="Pólizas de Seguro" 
                 unitLabel="Seguros"
-                icon={<HeartHandshake size={20} />} 
+                icon={<HeartHandshake size={22} />} 
                 amount={metrics.seguro.total} 
                 count={metrics.seguro.cant}
                 isActive={activeFilter === 'seguro'}
                 onClick={() => setActiveFilter('seguro')}
-                color="emerald"
             />
             <MetricCard 
                 title="Paquetes Completos" 
-                unitLabel="Seguros y Rastreadores"
-                icon={<Box size={20} />} 
+                unitLabel="Ambos"
+                icon={<Box size={22} />} 
                 amount={metrics.ambos.total} 
                 count={metrics.ambos.cant}
                 isActive={activeFilter === 'ambos'}
                 onClick={() => setActiveFilter('ambos')}
-                color="indigo"
             />
         </div>
     );
