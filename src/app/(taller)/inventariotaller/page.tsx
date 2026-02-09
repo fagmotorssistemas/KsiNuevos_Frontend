@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Plus, Filter, Package, AlertTriangle, Edit2 } from "lucide-react";
-import { useInventario, InventarioItem } from "@/hooks/taller/useInventario";
+import { Search, Plus, AlertTriangle, Edit2, Package } from "lucide-react";
+import { useInventario } from "@/hooks/taller/useInventario";
+import { InventarioItem } from "@/types/taller"; // <--- Importación corregida
 import { InventoryModal } from "@/components/features/taller/inventario/InventoryModal";
 
 export default function InventarioPage() {

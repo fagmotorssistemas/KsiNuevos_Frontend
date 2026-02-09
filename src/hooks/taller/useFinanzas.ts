@@ -1,25 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import type { Cuenta, TransaccionFinanciera } from "@/types/taller";
 
-export interface Cuenta {
-    id: string;
-    nombre_cuenta: string;
-    saldo_actual: number;
-    numero_cuenta: string;
-    es_caja_chica: boolean;
-}
-
-export interface Transaccion {
-    id: string;
-    tipo: 'ingreso' | 'gasto_operativo' | 'pago_proveedor' | 'nomina';
-    monto: number;
-    descripcion: string;
-    fecha_transaccion: string;
-    comprobante_url: string | null;
-    cuenta: { nombre_cuenta: string };
-    orden?: { numero_orden: number; vehiculo_placa: string };
-    registrado_por?: { full_name: string };
-}
+// Alias para mantener compatibilidad con componentes que esperen "Transaccion"
+export type Transaccion = TransaccionFinanciera;
 
 export function useFinanzas() {
     const { supabase, profile } = useAuth();
@@ -37,12 +21,12 @@ export function useFinanzas() {
                 .order('nombre_cuenta');
             
             if (cuentasData) {
-                // CORRECCIÓN AQUÍ: Mapeamos los datos para eliminar los nulls
+                // Mapeamos los datos para eliminar los nulls y asegurar el tipo Cuenta
                 const cuentasSeguras: Cuenta[] = cuentasData.map((c: any) => ({
                     id: c.id,
                     nombre_cuenta: c.nombre_cuenta,
-                    saldo_actual: c.saldo_actual ?? 0, // Si es null, pone 0
-                    numero_cuenta: c.numero_cuenta ?? "", // Si es null, pone texto vacío
+                    saldo_actual: c.saldo_actual ?? 0, 
+                    numero_cuenta: c.numero_cuenta ?? "", 
                     es_caja_chica: c.es_caja_chica ?? false
                 }));
                 setCuentas(cuentasSeguras);
@@ -60,7 +44,7 @@ export function useFinanzas() {
                 .order('fecha_transaccion', { ascending: false })
                 .limit(50);
 
-            if (transData) setTransacciones(transData as any);
+            if (transData) setTransacciones(transData as unknown as Transaccion[]);
 
         } catch (error) {
             console.error("Error cargando finanzas:", error);
@@ -107,8 +91,7 @@ export function useFinanzas() {
 
             if (txError) throw txError;
 
-            // 3. Actualizar Saldo de la Cuenta (Manual update en backendless)
-            // Lógica: Si es Ingreso SUMA, si es Gasto RESTA
+            // 3. Actualizar Saldo de la Cuenta (Manual update)
             const cuentaActual = cuentas.find(c => c.id === formData.cuenta_id);
             if (cuentaActual) {
                 const esIngreso = formData.tipo === 'ingreso';

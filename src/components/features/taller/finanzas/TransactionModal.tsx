@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Save, DollarSign, Upload, Loader2, Search } from "lucide-react";
-import type { Cuenta } from "@/hooks/taller/useFinanzas";
+import type { Cuenta } from "@/types/taller"; // <--- Importación corregida
 import { useAuth } from "@/hooks/useAuth";
 
 interface TransactionModalProps {

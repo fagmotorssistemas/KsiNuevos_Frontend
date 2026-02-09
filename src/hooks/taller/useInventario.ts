@@ -1,19 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-
-export interface InventarioItem {
-    id: string;
-    codigo_interno: string;
-    nombre: string;
-    descripcion: string;
-    tipo: 'material' | 'herramienta' | 'repuesto';
-    unidad_medida: string;
-    stock_actual: number;
-    stock_minimo: number;
-    costo_promedio: number;
-    precio_venta: number;
-    ubicacion_bodega: string;
-}
+import type { InventarioItem } from "@/types/taller";
 
 export function useInventario() {
     const { supabase } = useAuth();

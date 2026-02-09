@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Save, Package, Loader2 } from "lucide-react";
-import type { InventarioItem } from "@/hooks/taller/useInventario";
+import type { InventarioItem } from "@/types/taller"; // <--- Importación corregida
 
 interface InventoryModalProps {
     isOpen: boolean;

@@ -1,5 +1,5 @@
 import { Wallet, CreditCard, Building, Plus } from "lucide-react";
-import type { Cuenta } from "@/hooks/taller/useFinanzas";
+import type { Cuenta } from "@/types/taller"; // <--- Importación corregida (antes venía de useFinanzas)
 
 interface AccountsHeaderProps {
     cuentas: Cuenta[];
