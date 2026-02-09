@@ -27,8 +27,8 @@ import {
     LucideIcon,
     Handshake,
 } from "lucide-react";
-import { OpportunitiesView } from "@/components/features/admin/OpportunitiesView";
 import { useScraperData } from "@/hooks/useScraperData";
+import { OpportunitiesView } from "@/components/features/admin/opportunities/OpportunitiesView";
 
 // --- INTERFACES ---
 

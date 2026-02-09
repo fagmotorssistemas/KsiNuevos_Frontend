@@ -328,14 +328,7 @@ export interface WebhookResponse {
     status: 'done' | 'not found' | 'error';
     message: string;
     summary: {
-        sellers: {
-            failed: number
-            inserted: number
-            total: number
-        }
         vehicles: {
-            failed: number
-            inserted: number
             total: number
         }
     }
