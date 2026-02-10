@@ -20,6 +20,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
     const [color, setColor] = useState("");
     const [notes, setNotes] = useState("");
     const [priority, setPriority] = useState("media");
+    
 
     // Estado de Errores
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -72,7 +73,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
             lead_id: lead.id,
             brand,
             model,
-            type, // Insertamos el nuevo campo
+            type: type as "sedan" | "suv" | "camioneta" | "deportivo" | "hatchback" | "van",
             year_min: parseInt(yearMin),
             year_max: parseInt(yearMax),
             color_preference: color,
@@ -98,6 +99,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
             setColor("");
             setNotes("");
             setBudgetMax("");
+            setType(""); // Reset tipo
             setErrors({});
         }
     };
