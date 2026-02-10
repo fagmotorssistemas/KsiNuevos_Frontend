@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/buttontable";
 import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 import { scraperService, VehicleWithSeller, WebhookResponse } from "@/services/scraper.service";
+import { data } from "framer-motion/client";
 import { DatabaseZap, RefreshCw, Search, Car, RefreshCcw, XIcon, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -24,7 +25,15 @@ export const OpportunitiesCenterView = ({ onScraperComplete, isLoading, topOppor
     useEffect(() => {
         if (currentToastId && isWebhookLoading) {
             toast.loading(
-                <div className="flex flex-col gap-3 ml-2 w-full pr-4">
+                <div className="relative flex flex-col justify-center gap-3 ml-2 w-full pr-8">
+                    {/* Botón de Cierre */}
+                    <button
+                        onClick={() => toast.dismiss(currentToastId)}
+                        className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+
                     <div className="flex justify-between items-center">
                         <div className="font-semibold text-red-400 text-sm">Analizando Marketplace...</div>
                         <span className="text-[10px] font-mono text-red-300">{Math.round(progress)}%</span>
@@ -59,20 +68,21 @@ export const OpportunitiesCenterView = ({ onScraperComplete, isLoading, topOppor
 
         // Crear el toast inicial y guardar su ID
         const toastId = toast.loading(
-            <div className="flex flex-col gap-3 ml-2 w-full pr-4">
+            <div className="relative flex flex-col gap-3 ml-2 w-full pr-8">
+                <button
+                    onClick={() => toast.dismiss(toastId)}
+                    className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
+                >
+                    <X className="h-4 w-4" />
+                </button>
                 <div className="flex justify-between items-center">
                     <div className="font-semibold text-red-400 text-sm">Analizando Marketplace...</div>
                     <span className="text-[10px] font-mono text-red-300">0%</span>
                 </div>
                 <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                    <div
-                        className="bg-red-500 h-full transition-all duration-500 ease-out"
-                        style={{ width: '0%' }}
-                    />
+                    <div className="bg-red-500 h-full transition-all duration-500" style={{ width: '0%' }} />
                 </div>
-                <div className="text-[10px] text-gray-400 italic">
-                    Iniciando motores de búsqueda...
-                </div>
+                <div className="text-[10px] text-gray-400 italic">Iniciando motores de búsqueda...</div>
             </div>
         );
 
@@ -89,48 +99,82 @@ export const OpportunitiesCenterView = ({ onScraperComplete, isLoading, topOppor
 
         try {
             const response = await scraperService.scrapMarketplace(searchValue);
-            
-            if (!response) throw new Error("Respuesta vacía");
-            if (response.status === "error") throw new Error(response.message);
-            if (response.status === "not found") throw new Error("NOT_FOUND");
+
+            // Detener el intervalo de progreso
+            clearInterval(progressInterval);
+
+            // Validar respuesta
+            if (!response) {
+                throw new Error("No se recibió respuesta del servidor");
+            }
+
+            // Manejar respuesta de error desde el servidor
+            if (response.status === "error") {
+                throw new Error(response.message || "Error desconocido en el servidor");
+            }
+
+            // Manejar caso de "not found"
+            if (response.status === "not found") {
+                throw new Error("No se encontraron resultados para la búsqueda");
+            }
+
+            // Validar que sea respuesta exitosa
+            if (response.status !== "done") {
+                throw new Error(response.message || "Respuesta inesperada del servidor");
+            }
 
             // Completar al 100%
-            clearInterval(progressInterval);
             setProgress(100);
-            
+
             // Esperar 1 segundo antes de mostrar el success
             setTimeout(() => {
                 toast.success(
-                    <div className="flex flex-col gap-1 ml-2">
-                        <div className="font-semibold text-green-400 text-sm">¡Extracción completa!</div>
-                        <div className="text-xs text-gray-300">
-                            Se han procesado <span className="font-bold text-white">{response.summary.vehicles.total}</span> vehículos.
+                    <div className="relative flex flex-col justify-center gap-1 ml-2 pr-8">
+                        <button
+                            onClick={() => toast.dismiss(toastId)}
+                            className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                        <div className="font-semibold text-green-600 text-sm">¡Extracción completa!</div>
+                        <div className="text-xs text-gray-500">
+                            {response.message && <div className="mb-1">{response.message}</div>}
+                            Se han procesado <span className="font-bold text-gray-200">{response.summary?.vehicles?.total || 0}</span> vehículos.
                         </div>
                     </div>,
-                    { id: toastId, duration: 4000 }
+                    { id: toastId, duration: Infinity }
                 );
-                
+
                 setIsWebhookLoading(false);
                 setCurrentToastId(null);
-                
+
                 // Llamar al callback después del success
                 setTimeout(() => {
                     onScraperComplete?.();
                     setProgress(0);
                 }, 500);
             }, 1000);
-            
+
         } catch (err: any) {
             clearInterval(progressInterval);
-            
+
+            // Obtener mensaje de error
+            const errorMessage = err.message || "Error desconocido";
+
             toast.error(
-                <div className="flex flex-col gap-1 ml-2">
-                    <div className="font-semibold text-red-400 text-sm">Error en el proceso</div>
-                    <div className="text-xs text-gray-400">{err.message === "NOT_FOUND" ? "Sin resultados" : "Reintenta en un momento"}</div>
+                <div className="relative flex flex-col justify-center gap-1 ml-2 pr-8">
+                    <button
+                        onClick={() => toast.dismiss(toastId)}
+                        className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                    <div className="font-semibold text-red-600 text-sm">Error en el proceso</div>
+                    <div className="text-xs text-red-400/80">{err.message || "Error desconocido"}</div>
                 </div>,
-                { id: toastId, duration: 4000 }
+                { id: toastId, duration: Infinity }
             );
-            
+
             setIsWebhookLoading(false);
             setCurrentToastId(null);
             setProgress(0);

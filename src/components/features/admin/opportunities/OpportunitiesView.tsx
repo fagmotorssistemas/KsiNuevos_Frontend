@@ -67,7 +67,7 @@ export function OpportunitiesView({
                 const searchLower = searchTerm.toLowerCase();
                 const titleMatch = vehicle.title?.toLowerCase().includes(searchLower);
                 const descMatch = vehicle.description?.toLowerCase().includes(searchLower);
-                const brandMatch = vehicle.category?.toLowerCase().includes(searchLower);
+                const brandMatch = vehicle.brand?.toLowerCase().includes(searchLower);
                 const modelMatch = vehicle.model?.toLowerCase().includes(searchLower);
 
                 if (!titleMatch && !descMatch && !brandMatch && !modelMatch) {
@@ -76,7 +76,7 @@ export function OpportunitiesView({
             }
 
             // Filtro por marca
-            if (selectedBrand !== "all" && vehicle.category !== selectedBrand) {
+            if (selectedBrand !== "all" && vehicle.brand !== selectedBrand) {
                 return false;
             }
 

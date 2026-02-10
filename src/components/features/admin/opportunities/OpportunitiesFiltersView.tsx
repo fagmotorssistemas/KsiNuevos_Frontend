@@ -13,8 +13,8 @@ import { VehicleWithSeller } from "@/services/scraper.service";
 interface OpportunitiesFiltersViewProps {
     vehicles: VehicleWithSeller[];
     topOpportunities: VehicleWithSeller[];
-    filteredVehicles: VehicleWithSeller[]; // Nueva prop
-    coastFilteredVehicles: VehicleWithSeller[]; // Nueva prop
+    filteredVehicles: VehicleWithSeller[];
+    coastFilteredVehicles: VehicleWithSeller[];
     showTopDeals: boolean;
     onlyCoast: boolean;
     searchTerm: string;
@@ -33,6 +33,7 @@ interface OpportunitiesFiltersViewProps {
 }
 
 export function OpportunitiesFiltersView({
+    vehicles, // Usar todos los vehículos base
     filteredVehicles,
     coastFilteredVehicles,
     showTopDeals,
@@ -52,42 +53,48 @@ export function OpportunitiesFiltersView({
     onClearFilters,
 }: OpportunitiesFiltersViewProps) {
 
-    // Extraer todas las marcas únicas disponibles (después del filtro de costa)
+    // Extraer todas las marcas únicas desde TODOS los vehículos (no filtrados)
     const availableBrands = useMemo(() => {
         const brands = new Set<string>();
-        coastFilteredVehicles.forEach(vehicle => {
-            if (vehicle.category) {
-                brands.add(vehicle.category);
+        vehicles.forEach(vehicle => {
+            if (vehicle.brand && vehicle.brand.trim() !== '') {
+                brands.add(vehicle.brand);
             }
         });
-        return Array.from(brands).sort();
-    }, [coastFilteredVehicles]);
+        const sortedBrands = Array.from(brands).sort();
+        console.log('Marcas disponibles:', sortedBrands); // Debug
+        return sortedBrands;
+    }, [vehicles]);
 
-    // Extraer todos los modelos únicos disponibles (filtrados por marca si hay una seleccionada)
+    // Extraer todos los modelos únicos (filtrados por marca si hay una seleccionada)
     const availableModels = useMemo(() => {
         const models = new Set<string>();
-        coastFilteredVehicles.forEach(vehicle => {
+        vehicles.forEach(vehicle => {
             // Si hay una marca seleccionada, solo mostrar modelos de esa marca
-            if (selectedBrand !== "all" && vehicle.category !== selectedBrand) {
+            if (selectedBrand !== "all" && vehicle.brand !== selectedBrand) {
                 return;
             }
-            if (vehicle.model) {
+            if (vehicle.model && vehicle.model.trim() !== '') {
                 models.add(vehicle.model);
             }
         });
-        return Array.from(models).sort();
-    }, [coastFilteredVehicles, selectedBrand]);
+        const sortedModels = Array.from(models).sort();
+        console.log('Modelos disponibles para marca', selectedBrand, ':', sortedModels); // Debug
+        return sortedModels;
+    }, [vehicles, selectedBrand]);
 
-    // Extraer todos los años únicos disponibles (después del filtro de costa)
+    // Extraer todos los años únicos desde TODOS los vehículos
     const availableYears = useMemo(() => {
         const years = new Set<string>();
-        coastFilteredVehicles.forEach(vehicle => {
-            if (vehicle.year) {
+        vehicles.forEach(vehicle => {
+            if (vehicle.year && vehicle.year.trim() !== '') {
                 years.add(vehicle.year);
             }
         });
-        return Array.from(years).sort((a, b) => Number(b) - Number(a));
-    }, [coastFilteredVehicles]);
+        const sortedYears = Array.from(years).sort((a, b) => Number(b) - Number(a));
+        console.log('Años disponibles:', sortedYears); // Debug
+        return sortedYears;
+    }, [vehicles]);
 
     const displayStats = useMemo(() => {
         return {
@@ -99,6 +106,7 @@ export function OpportunitiesFiltersView({
     }, [filteredVehicles]);
 
     const handleBrandChange = useCallback((brand: string) => {
+        console.log('Cambiando marca a:', brand); // Debug
         onBrandChange(brand);
         onModelChange("all");
     }, [onBrandChange, onModelChange]);
@@ -128,7 +136,7 @@ export function OpportunitiesFiltersView({
                     </div>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-700">
                         <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                        <span>Taller: <strong>{displayStats.enTaller}</strong></span>
+                        <span>Posible daño mecanico: <strong>{displayStats.enTaller}</strong></span>
                     </div>
                 </div>
 
@@ -181,7 +189,7 @@ export function OpportunitiesFiltersView({
                         onChange={(e) => handleBrandChange(e.target.value)}
                         className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
                     >
-                        <option value="all">Marca: Todas</option>
+                        <option value="all">Marca: Todas ({availableBrands.length})</option>
                         {availableBrands.map(brand => (
                             <option key={brand} value={brand}>{brand}</option>
                         ))}
@@ -198,7 +206,7 @@ export function OpportunitiesFiltersView({
                         disabled={selectedBrand === "all"}
                     >
                         <option value="all">
-                            {selectedBrand === "all" ? "Modelo: -" : "Modelo: Todos"}
+                            {selectedBrand === "all" ? "Modelo: -" : `Modelo: Todos (${availableModels.length})`}
                         </option>
                         {selectedBrand !== "all" && availableModels.map(model => (
                             <option key={model} value={model}>{model}</option>
@@ -214,7 +222,7 @@ export function OpportunitiesFiltersView({
                         onChange={(e) => onYearChange(e.target.value)}
                         className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
                     >
-                        <option value="all">Año: Todos</option>
+                        <option value="all">Año: Todos ({availableYears.length})</option>
                         {availableYears.map(year => (
                             <option key={year} value={year}>{year}</option>
                         ))}
