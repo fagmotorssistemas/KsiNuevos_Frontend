@@ -19,11 +19,11 @@ import {
 
 // Definición de los items del menú del Taller
 const menuItems = [
-    { name: 'Dashboard', href: '/dashboardTaller', icon: LayoutDashboard },
-    { name: 'Recepción', href: '/recepcion', icon: ClipboardList },
-    { name: 'Trabajos Activos', href: '/trabajos', icon: Car },
-    { name: 'Inventario', href: '/inventariotaller', icon: Package },
-    { name: 'Finanzas', href: '/finanzastaller', icon: Landmark },
+    { name: 'Dashboard', href: '/taller/dashboard', icon: LayoutDashboard },
+    { name: 'Recepción', href: '/taller/recepcion', icon: ClipboardList },
+    { name: 'Trabajos Activos', href: '/taller/trabajos', icon: Car },
+    { name: 'Inventario', href: '/taller/inventario', icon: Package },
+    { name: 'Finanzas', href: '/taller/finanzas', icon: Landmark },
     // Podemos agregar configuración si hace falta a futuro
     // { name: 'Configuración', href: '/taller/configuracion', icon: Settings },
 ];

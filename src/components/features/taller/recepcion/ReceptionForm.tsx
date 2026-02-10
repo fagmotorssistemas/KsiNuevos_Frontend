@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-    Search, 
-    Car, 
-    User, 
-    Save, 
-    Camera, 
-    Loader2, 
+import {
+    Search,
+    Car,
+    User,
+    Save,
+    Camera,
+    Loader2,
     CheckCircle2,
     Fuel,
     ClipboardCheck,
@@ -29,7 +29,7 @@ const CHECKLIST_ITEMS = {
         { key: 'espejos', label: 'Espejos Laterales en buen estado' },
         { key: 'faros', label: 'Faros y Luces Funcionales' },
         { key: 'parachoques', label: 'Parachoques en Buen Estado' },
-        
+
     ],
     interior: [
         { key: 'asientos', label: 'Asientos en Buen Estado' },
@@ -151,7 +151,7 @@ export function ReceptionForm() {
 
     return (
         <form onSubmit={handleSubmit} className=" bg-slate-50/50 mx-auto px-4 pt-8 pb-32 space-y-10">
-            
+
             {/* ENCABEZADO DE FORMULARIO */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-8">
                 <div>
@@ -169,22 +169,22 @@ export function ReceptionForm() {
                     </div>
                     <User className="text-slate-400 h-5 w-5" />
                 </div>
-                
+
                 <div className="p-8 grid grid-cols-1 md:grid-cols-6 gap-6">
                     <div className="md:col-span-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Identificación (Cédula/RUC)</label>
                         <div className="relative group">
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 required
                                 className="w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-semibold"
                                 placeholder="0000000000"
                                 value={cliente.cedula}
-                                onChange={(e) => setCliente({...cliente, cedula: e.target.value})}
+                                onChange={(e) => setCliente({ ...cliente, cedula: e.target.value })}
                                 onBlur={handleSearchCliente}
                             />
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 onClick={handleSearchCliente}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-xl shadow-sm text-slate-400 hover:text-blue-600 transition-all border border-slate-100"
                             >
@@ -195,36 +195,36 @@ export function ReceptionForm() {
 
                     <div className="md:col-span-4">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Nombre del Propietario</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
                             placeholder="Nombre y Apellidos"
                             value={cliente.nombre}
-                            onChange={(e) => setCliente({...cliente, nombre: e.target.value})}
+                            onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })}
                         />
                     </div>
 
                     <div className="md:col-span-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Teléfono de Contacto</label>
-                        <input 
-                            type="tel" 
+                        <input
+                            type="tel"
                             required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
                             placeholder="+593 ..."
                             value={cliente.telefono}
-                            onChange={(e) => setCliente({...cliente, telefono: e.target.value})}
+                            onChange={(e) => setCliente({ ...cliente, telefono: e.target.value })}
                         />
                     </div>
-                    
+
                     <div className="md:col-span-4">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dirección de Domicilio</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
                             placeholder="Calle principal, secundaria, nro de casa"
                             value={cliente.direccion}
-                            onChange={(e) => setCliente({...cliente, direccion: e.target.value})}
+                            onChange={(e) => setCliente({ ...cliente, direccion: e.target.value })}
                         />
                     </div>
                 </div>
@@ -240,59 +240,59 @@ export function ReceptionForm() {
                     <Car className="text-slate-400 h-5 w-5" />
                 </div>
 
-                <div className="p-8 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8">
+                <div className="p-8 grid grid-cols-2 md:grid-cols-2 gap-x-6 gap-y-8">
                     <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Placa</label>
                         <div className="relative pt-1">
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 required
                                 className="w-full px-4 py-3 rounded-lg border-2 border-slate-900 bg-amber-50 text-slate-900 font-mono text-xl font-black text-center uppercase focus:ring-4 focus:ring-amber-500/20 outline-none transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]"
                                 placeholder="ABC-123"
                                 value={vehiculo.placa}
-                                onChange={(e) => setVehiculo({...vehiculo, placa: e.target.value.toUpperCase()})}
+                                onChange={(e) => setVehiculo({ ...vehiculo, placa: e.target.value.toUpperCase() })}
                             />
                             <div className="absolute -top-1 left-1/2 -translate-x-1/2 px-2 bg-slate-900 text-[8px] text-white rounded font-bold">ECUADOR</div>
                         </div>
                     </div>
-                    
+
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Marca</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                             value={vehiculo.marca}
-                            onChange={(e) => setVehiculo({...vehiculo, marca: e.target.value})}
+                            onChange={(e) => setVehiculo({ ...vehiculo, marca: e.target.value })}
                         />
                     </div>
 
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Modelo</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                             value={vehiculo.modelo}
-                            onChange={(e) => setVehiculo({...vehiculo, modelo: e.target.value})}
+                            onChange={(e) => setVehiculo({ ...vehiculo, modelo: e.target.value })}
                         />
                     </div>
 
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Año / Color</label>
                         <div className="flex gap-2">
-                            <input 
-                                type="number" 
-                                className="w-20 px-3 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
+                            <input
+                                type="number"
+                                className="w-30 px-3 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                                 value={vehiculo.anio}
-                                onChange={(e) => setVehiculo({...vehiculo, anio: parseInt(e.target.value)})}
+                                onChange={(e) => setVehiculo({ ...vehiculo, anio: parseInt(e.target.value) })}
                             />
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 className="flex-1 px-3 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                                 placeholder="Color"
                                 value={vehiculo.color}
-                                onChange={(e) => setVehiculo({...vehiculo, color: e.target.value})}
+                                onChange={(e) => setVehiculo({ ...vehiculo, color: e.target.value })}
                             />
                         </div>
                     </div>
@@ -300,11 +300,11 @@ export function ReceptionForm() {
                     <div className="md:col-span-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Kilometraje Actual</label>
                         <div className="relative">
-                            <input 
-                                type="number" 
+                            <input
+                                type="number"
                                 className="w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-bold text-lg"
                                 value={vehiculo.kilometraje}
-                                onChange={(e) => setVehiculo({...vehiculo, kilometraje: parseInt(e.target.value)})}
+                                onChange={(e) => setVehiculo({ ...vehiculo, kilometraje: parseInt(e.target.value) })}
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">KM</span>
                         </div>
@@ -315,17 +315,17 @@ export function ReceptionForm() {
                             <Fuel className="h-3 w-3 text-amber-500" /> Nivel de Combustible ({vehiculo.nivel_gasolina}%)
                         </label>
                         <div className="px-2">
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max="100" 
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
                                 step="5"
                                 className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                 style={{
                                     background: `linear-gradient(to right, #ef4444 0%, #f59e0b 50%, #10b981 100%)`
                                 }}
                                 value={vehiculo.nivel_gasolina}
-                                onChange={(e) => setVehiculo({...vehiculo, nivel_gasolina: parseInt(e.target.value)})}
+                                onChange={(e) => setVehiculo({ ...vehiculo, nivel_gasolina: parseInt(e.target.value) })}
                             />
                             <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-bold tracking-tighter uppercase px-1">
                                 <span>Vacío</span>
@@ -355,33 +355,33 @@ export function ReceptionForm() {
                             <h4 className="text-xs font-black text-blue-600 uppercase tracking-widest flex items-center gap-2 border-b border-blue-50 pb-2">
                                 <Box className="h-3.5 w-3.5" /> Estado Exterior
                             </h4>
-                            <ChecklistGroup 
-                                title="" 
-                                items={CHECKLIST_ITEMS.exterior} 
+                            <ChecklistGroup
+                                title=""
+                                items={CHECKLIST_ITEMS.exterior}
                                 values={checklist}
-                                onChange={(key, val) => setChecklist({...checklist, [key]: val})}
+                                onChange={(key, val) => setChecklist({ ...checklist, [key]: val })}
                             />
                         </div>
                         <div className="space-y-4">
                             <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2 border-b border-emerald-50 pb-2">
                                 <Info className="h-3.5 w-3.5" /> Cabina / Interior
                             </h4>
-                            <ChecklistGroup 
-                                title="" 
-                                items={CHECKLIST_ITEMS.interior} 
+                            <ChecklistGroup
+                                title=""
+                                items={CHECKLIST_ITEMS.interior}
                                 values={checklist}
-                                onChange={(key, val) => setChecklist({...checklist, [key]: val})}
+                                onChange={(key, val) => setChecklist({ ...checklist, [key]: val })}
                             />
                         </div>
                         <div className="space-y-4">
                             <h4 className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center gap-2 border-b border-amber-50 pb-2">
                                 <div className="h-3.5 w-3.5 rounded-full border-2 border-amber-600" /> Funcionamiento
                             </h4>
-                            <ChecklistGroup 
-                                title="" 
-                                items={CHECKLIST_ITEMS.mecanico} 
+                            <ChecklistGroup
+                                title=""
+                                items={CHECKLIST_ITEMS.mecanico}
                                 values={checklist}
-                                onChange={(key, val) => setChecklist({...checklist, [key]: val})}
+                                onChange={(key, val) => setChecklist({ ...checklist, [key]: val })}
                             />
                         </div>
                     </div>
@@ -392,28 +392,28 @@ export function ReceptionForm() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="bg-slate-100 px-6 py-4 flex items-center gap-3 border-b border-slate-200">
-                         <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white font-bold text-xs">4</div>
-                         <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Inventario de Objetos</h4>
+                        <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white font-bold text-xs">4</div>
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Inventario de Objetos</h4>
                     </div>
                     <div className="p-6">
-                        <ChecklistGroup 
-                            title="" 
-                            items={INVENTARIO_ITEMS} 
+                        <ChecklistGroup
+                            title=""
+                            items={INVENTARIO_ITEMS}
                             values={inventario}
-                            onChange={(key, val) => setInventario({...inventario, [key]: val})}
+                            onChange={(key, val) => setInventario({ ...inventario, [key]: val })}
                         />
                     </div>
                 </div>
 
                 <div className="lg:col-span-3 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                     <div className="bg-slate-100 px-6 py-4 flex items-center gap-3 border-b border-slate-200">
-                         <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white font-bold text-xs">5</div>
-                         <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Observaciones y Requerimientos</h4>
+                        <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-400 text-white font-bold text-xs">5</div>
+                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest">Observaciones y Requerimientos Del Cliente</h4>
                     </div>
                     <div className="p-6 flex-1">
-                        <textarea 
+                        <textarea
                             className="w-full h-full min-h-[180px] p-5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none resize-none font-medium text-slate-700 leading-relaxed transition-all"
-                            placeholder="Escriba aquí detalles del daño, peticiones especiales del cliente o cualquier nota relevante para el técnico..."
+                            placeholder="Escriba aquí el trabajo solicitados por el cliente, detalles del daño, peticiones especiales del cliente o cualquier nota relevante."
                             value={observaciones}
                             onChange={(e) => setObservaciones(e.target.value)}
                         ></textarea>
@@ -443,17 +443,17 @@ export function ReceptionForm() {
                                 </div>
                             </div>
                         ))}
-                        
+
                         <label className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-all flex flex-col items-center justify-center cursor-pointer group">
                             <div className="p-4 bg-white rounded-2xl shadow-sm group-hover:scale-110 transition-transform border border-slate-100">
                                 <Camera className="h-6 w-6 text-slate-400 group-hover:text-blue-500 transition-colors" />
                             </div>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">Subir Foto</span>
-                            <input 
-                                type="file" 
-                                accept="image/*" 
-                                multiple 
-                                className="hidden" 
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
                                 onChange={handlePhotoChange}
                             />
                         </label>
@@ -464,7 +464,7 @@ export function ReceptionForm() {
             {/* FOOTER ACCIONES */}
             <div className="  rounded-2xl p-6 border-2 bg-white border-slate-100 shadow-sm">
                 <div className="max-w-6xl w-full flex items-center justify-between gap-6">
-                    <button 
+                    <button
                         type="button"
                         onClick={() => router.back()}
                         className="px-8 py-3.5 text-slate-500 font-bold hover:text-slate-800 transition-colors flex items-center gap-2 group"
@@ -472,8 +472,8 @@ export function ReceptionForm() {
                         <X className="h-4 w-4 group-hover:scale-110 transition-transform" />
                         Descartar
                     </button>
-                    
-                    <button 
+
+                    <button
                         type="submit"
                         disabled={isLoading}
                         className="px-10 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-2xl shadow-slate-900/30 hover:bg-slate-800 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
