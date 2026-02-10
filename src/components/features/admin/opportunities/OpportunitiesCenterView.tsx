@@ -1,11 +1,12 @@
 import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
 import {
-    DatabaseZap, RefreshCw, Search, Car, RefreshCcw, X, Sparkles, Zap,
-    TrendingUp, Filter, MapPin, ChevronDown, Gauge
+    DatabaseZap, Search, Car, RefreshCcw, X, Sparkles, Zap
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { OpportunitiesFiltersView } from "./OpportunitiesFiltersView";
+import { PriceStatistics } from "./PriceStatisticsModal";
 
 interface OpportunitiesCenterViewProps {
     onScraperComplete?: () => void;
@@ -21,6 +22,7 @@ interface OpportunitiesCenterViewProps {
     selectedModel: string;
     selectedYear: string;
     selectedDateRange: string;
+    priceStatistics: PriceStatistics[]
     onShowTopDealsChange: (value: boolean) => void;
     onOnlyCoastChange: (value: boolean) => void;
     onSearchTermChange: (value: string) => void;
@@ -45,6 +47,7 @@ export const OpportunitiesCenterView = ({
     selectedModel,
     selectedYear,
     selectedDateRange,
+    priceStatistics,
     onShowTopDealsChange,
     onOnlyCoastChange,
     onSearchTermChange,
@@ -60,92 +63,19 @@ export const OpportunitiesCenterView = ({
     const [pickerBrand, setPickerBrand] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
+    const [catalogSearch, setCatalogSearch] = useState("");
 
-    // Extraer todas las marcas únicas disponibles
-    const availableBrands = useMemo(() => {
-        const brands = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (vehicle.brand && vehicle.brand.trim() !== '') {
-                brands.add(vehicle.brand);
-            }
-        });
-        return Array.from(brands).sort();
-    }, [vehicles]);
-
-    // Extraer todos los modelos únicos disponibles
-    const availableModels = useMemo(() => {
-        const models = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (selectedBrand !== "all" && vehicle.brand !== selectedBrand) {
-                return;
-            }
-            if (vehicle.model && vehicle.model.trim() !== '') {
-                models.add(vehicle.model);
-            }
-        });
-        return Array.from(models).sort();
-    }, [vehicles, selectedBrand]);
-
-    // Extraer todos los años únicos disponibles
-    const availableYears = useMemo(() => {
-        const years = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (vehicle.year && vehicle.year.trim() !== '') {
-                years.add(vehicle.year);
-            }
-        });
-        return Array.from(years).sort((a, b) => Number(b) - Number(a));
-    }, [vehicles]);
-
-    const displayStats = useMemo(() => {
-        return {
-            total: filteredVehicles.length,
-            enPatio: filteredVehicles.filter(v => v.seller?.location === 'patio').length,
-            enTaller: filteredVehicles.filter(v => v.seller?.location === 'taller').length,
-        };
-    }, [filteredVehicles]);
-
-    const handleBrandChange = useCallback((brand: string) => {
-        onBrandChange(brand);
-        onModelChange("all");
-    }, [onBrandChange, onModelChange]);
-
-    const hasActiveFilters = useMemo(() =>
-        selectedBrand !== "all" ||
-        selectedModel !== "all" ||
-        selectedYear !== "all" ||
-        selectedDateRange !== "all" ||
-        searchTerm !== "" ||
-        onlyCoast === false,
-        [selectedBrand, selectedModel, selectedYear, selectedDateRange, searchTerm, onlyCoast]
-    );
-
-    // Actualizar el toast cuando cambia el progreso
     useEffect(() => {
         if (currentToastId && isWebhookLoading) {
             toast.loading(
                 <div className="relative flex flex-col justify-center gap-3 ml-2 w-full pr-8">
-                    <button
-                        onClick={() => toast.dismiss(currentToastId)}
-                        className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+                    <button onClick={() => toast.dismiss(currentToastId)} className="absolute -right-10 p-1 text-red-300 hover:opacity-50"><X className="h-4 w-4" /></button>
                     <div className="flex justify-between items-center">
                         <div className="font-semibold text-red-400 text-sm">Analizando Marketplace...</div>
                         <span className="text-[10px] font-mono text-red-300">{Math.round(progress)}%</span>
                     </div>
                     <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                        <div
-                            className="bg-red-500 h-full transition-all duration-500 ease-out"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                    <div className="text-[10px] text-gray-400 italic">
-                        {progress < 30 && "Iniciando motores de búsqueda..."}
-                        {progress >= 30 && progress < 70 && "Recopilando datos de vendedores..."}
-                        {progress >= 70 && progress < 100 && "Analizando mejores precios en la región..."}
-                        {progress === 100 && "Finalizando proceso..."}
+                        <div className="bg-red-500 h-full transition-all duration-500" style={{ width: `${progress}%` }} />
                     </div>
                 </div>,
                 { id: currentToastId }
@@ -154,449 +84,237 @@ export const OpportunitiesCenterView = ({
     }, [progress, currentToastId, isWebhookLoading]);
 
     const handleSubmitScraper = useCallback(async (searchValue: string) => {
-        if (!searchValue.trim()) {
-            toast.error("Por favor ingresa un término de búsqueda");
-            return;
-        }
-
-        setIsWebhookLoading(true);
-        setProgress(0);
-
-        const toastId = toast.loading(
-            <div className="relative flex flex-col gap-3 ml-2 w-full pr-8">
-                <button
-                    onClick={() => toast.dismiss(toastId)}
-                    className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
-                >
-                    <X className="h-4 w-4" />
-                </button>
-                <div className="flex justify-between items-center">
-                    <div className="font-semibold text-red-400 text-sm">Analizando Marketplace...</div>
-                    <span className="text-[10px] font-mono text-red-300">0%</span>
-                </div>
-                <div className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-red-500 h-full transition-all duration-500" style={{ width: '0%' }} />
-                </div>
-                <div className="text-[10px] text-gray-400 italic">Iniciando motores de búsqueda...</div>
-            </div>
-        );
-
+        if (!searchValue.trim()) { toast.error("Ingresa un término de búsqueda", { duration: 2000 }); return; }
+        setIsWebhookLoading(true); setProgress(0);
+        const toastId = toast.loading("Iniciando escaneo...");
         setCurrentToastId(toastId);
-
         const progressInterval = setInterval(() => {
-            setProgress((prev) => {
-                if (prev >= 95) return prev;
-                const increment = prev < 70 ? 2 : 0.5;
-                return prev + increment;
-            });
+            setProgress((prev) => prev >= 95 ? prev : prev + (prev < 70 ? 2 : 0.5));
         }, 1000);
-
         try {
             const response = await scraperService.scrapMarketplace(searchValue);
             clearInterval(progressInterval);
-
-            if (!response) {
-                throw new Error("No se recibió respuesta del servidor");
-            }
-
-            if (response.status === "error") {
-                throw new Error(response.message || "Error desconocido en el servidor");
-            }
-
-            if (response.status === "not found") {
-                throw new Error("No se encontraron resultados para la búsqueda");
-            }
-
-            if (response.status !== "done") {
-                throw new Error(response.message || "Respuesta inesperada del servidor");
-            }
-
+            if (!response || response.status !== "done") throw new Error(response?.message || "Error inesperado");
             setProgress(100);
-
             setTimeout(() => {
-                toast.success(
-                    <div className="relative flex flex-col justify-center gap-1 ml-2 pr-8">
-                        <button
-                            onClick={() => toast.dismiss(toastId)}
-                            className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                        <div className="font-semibold text-green-600 text-sm">¡Extracción completa!</div>
-                        <div className="text-xs text-gray-500">
-                            {response.message && <div className="mb-1">{response.message}</div>}
-                            Se han procesado <span className="font-bold text-gray-200">{response.summary?.vehicles?.total || 0}</span> vehículos.
-                        </div>
-                    </div>,
-                    { id: toastId, duration: Infinity }
-                );
-
-                setIsWebhookLoading(false);
-                setCurrentToastId(null);
-
-                setTimeout(() => {
-                    onScraperComplete?.();
-                    setProgress(0);
-                }, 500);
+                toast.success(<div className="ml-2">¡Extracción completa! <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total || 0} vehículos encontrados</span></div>, { id: toastId, duration: Infinity });
+                setIsWebhookLoading(false); setCurrentToastId(null);
+                onScraperComplete?.();
             }, 1000);
-
         } catch (err: any) {
             clearInterval(progressInterval);
-
             toast.error(
-                <div className="relative flex flex-col justify-center gap-1 ml-2 pr-8">
+                <div className="relative flex items-center gap-3 ml-2 w-full pr-8">
                     <button
                         onClick={() => toast.dismiss(toastId)}
-                        className="absolute -right-10 p-1 rounded-md hover:opacity-50 text-red-300 transition-colors"
+                        className="absolute -right-10 p-1 text-red-300 hover:opacity-50"
                     >
                         <X className="h-4 w-4" />
                     </button>
-                    <div className="font-semibold text-red-600 text-sm">Error en el proceso</div>
-                    <div className="text-xs text-red-400/80">{err.message || "Error desconocido"}</div>
+                    <div className="font-semibold text-sm">
+                        {err.message || "Error en el proceso"}
+                    </div>
                 </div>,
                 { id: toastId, duration: Infinity }
             );
-
-            setIsWebhookLoading(false);
-            setCurrentToastId(null);
-            setProgress(0);
+            setIsWebhookLoading(false); setCurrentToastId(null); setProgress(0);
         }
     }, [onScraperComplete]);
 
     const handlePickAndScrap = useCallback((brand: string, model?: string) => {
         const term = model ? `${brand} ${model}` : brand;
-        setScraperTerm(term);
-        setShowCarPicker(false);
-        handleSubmitScraper(term);
+        setScraperTerm(term); setShowCarPicker(false); handleSubmitScraper(term);
     }, [handleSubmitScraper]);
 
     return (
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
-            {/* Header con título y botón actualizar */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-sm">
-                        <DatabaseZap className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800">Centro de Oportunidades</h2>
-                        <p className="text-xs text-slate-500">Escanea Marketplace y filtra resultados</p>
-                    </div>
-                </div>
-
-                <button
-                    onClick={onScraperComplete}
-                    disabled={isLoading}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-white text-sm font-medium shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                    Actualizar
-                </button>
-            </div>
-
-            <div className="h-px bg-slate-100 w-full" />
-
-            {/* Sección de Scraper */}
-            <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <Zap className="h-4 w-4 text-red-500" />
-                    <span>Escanear Marketplace</span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Ej: Toyota Fortuner 2020..."
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50/50"
-                            value={scraperTerm}
-                            onChange={(e) => setScraperTerm(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !isWebhookLoading) {
-                                    handleSubmitScraper(scraperTerm);
-                                }
-                            }}
-                        />
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+            {/* 1. SECCIÓN: HEADER & ENGINE */}
+            <div className="p-6 bg-slate-50/50 border-b border-slate-100">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 bg-slate-900 flex items-center justify-center rounded-2xl shadow-lg shadow-slate-200">
+                            <DatabaseZap className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Centro de Oportunidades</h2>
+                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Marketplace Scraper
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2 w-full lg:w-auto">
+                        <div className="relative flex-1 lg:w-80">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Escaneo rápido: Ej. Vitara 2015..."
+                                className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all shadow-sm"
+                                value={scraperTerm}
+                                onChange={(e) => setScraperTerm(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
+                            />
+                        </div>
                         <button
-                            onClick={() => setShowCarPicker(!showCarPicker)}
-                            disabled={isWebhookLoading}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            onClick={() => setShowCarPicker(true)}
+                            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm"
+                            title="Abrir Catálogo"
                         >
-                            <Car className="h-4 w-4" />
-                            Catálogo
+                            <Car className="h-5 w-5" />
                         </button>
-
                         <button
                             disabled={isWebhookLoading || !scraperTerm.trim()}
                             onClick={() => handleSubmitScraper(scraperTerm)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 disabled:opacity-50"
                         >
-                            {isWebhookLoading ? (
-                                <>
-                                    <RefreshCcw className="h-4 w-4 animate-spin" />
-                                    {Math.round(progress)}%
-                                </>
-                            ) : (
-                                <>
-                                    <DatabaseZap className="h-4 w-4" />
-                                    Escanear
-                                </>
-                            )}
+                            {isWebhookLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                            <span className="hidden sm:inline">{isWebhookLoading ? `${Math.round(progress)}%` : 'Escanear'}</span>
                         </button>
                     </div>
                 </div>
-
-                {/* Barra de progreso cuando está cargando */}
-                {isWebhookLoading && (
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-xs font-medium text-slate-600">
-                            <span>Progreso</span>
-                            <span>{Math.round(progress)}%</span>
-                        </div>
-                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                            <div
-                                className="bg-gradient-to-r from-red-500 to-orange-500 h-full transition-all duration-500 ease-out"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                    </div>
-                )}
             </div>
-
-            <div className="h-px bg-slate-100 w-full" />
-
-            {/* Stats y botones de vista */}
-            <div className="flex flex-col lg:flex-row justify-between gap-4 items-end lg:items-center">
-                <div className="flex flex-wrap gap-2 text-sm w-full lg:w-auto">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">
-                        <Gauge className="h-4 w-4 text-slate-400" />
-                        <span>Total: <strong className="text-slate-900">{displayStats.total}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-green-700">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        <span>Patio: <strong>{displayStats.enPatio}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-700">
-                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                        <span>Posible daño: <strong>{displayStats.enTaller}</strong></span>
-                    </div>
-                </div>
-
-                <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
-                    <button
-                        onClick={() => onShowTopDealsChange(!showTopDeals)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${showTopDeals
-                            ? "bg-orange-50 border-orange-200 text-orange-700 shadow-sm"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                            }`}
-                    >
-                        <TrendingUp className="h-4 w-4" />
-                        {showTopDeals ? "Top Oportunidades" : "Ver Oportunidades"}
-                    </button>
-
-                    <button
-                        onClick={() => onOnlyCoastChange(!onlyCoast)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${onlyCoast
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                            }`}
-                    >
-                        {onlyCoast ? <Filter className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-                        {onlyCoast ? "Sin Sierra/Oriente" : "Todo el País"}
-                    </button>
-                </div>
-            </div>
-
-            <div className="h-px bg-slate-100 w-full" />
-
-            {/* Filtros */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-                {/* Búsqueda */}
-                <div className="lg:col-span-3 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                        type="text"
-                        placeholder="Filtrar resultados..."
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50/50"
-                        value={searchTerm}
-                        onChange={(e) => onSearchTermChange(e.target.value)}
-                    />
-                </div>
-
-                {/* Marca */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedBrand}
-                        onChange={(e) => handleBrandChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
-                    >
-                        <option value="all">Marca: Todas</option>
-                        {availableBrands.map(brand => (
-                            <option key={brand} value={brand}>{brand}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Modelo */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => onModelChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium disabled:bg-slate-50 disabled:text-slate-400"
-                        disabled={selectedBrand === "all"}
-                    >
-                        <option value="all">
-                            {selectedBrand === "all" ? "Modelo: -" : "Modelo: Todos"}
-                        </option>
-                        {selectedBrand !== "all" && availableModels.map(model => (
-                            <option key={model} value={model}>{model}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Año */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedYear}
-                        onChange={(e) => onYearChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
-                    >
-                        <option value="all">Año: Todos</option>
-                        {availableYears.map(year => (
-                            <option key={year} value={year}>{year}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Fecha de publicación */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedDateRange}
-                        onChange={(e) => onDateRangeChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
-                    >
-                        <option value="all">Publicado: Cualquiera</option>
-                        <option value="today">Hoy</option>
-                        <option value="week">Última semana</option>
-                        <option value="month">Último mes</option>
-                        <option value="3months">Últimos 3 meses</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Limpiar filtros */}
-                <div className="lg:col-span-1 flex justify-end">
-                    {hasActiveFilters && (
-                        <button
-                            onClick={onClearFilters}
-                            className="text-sm text-slate-500 hover:text-red-600 flex items-center gap-1 font-medium transition-colors px-3 py-2 hover:bg-red-50 rounded-lg"
-                        >
-                            <X className="h-4 w-4" />
-                            Limpiar
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Modal del catálogo */}
+            <OpportunitiesFiltersView
+                vehicles={vehicles}
+                topOpportunities={topOpportunities}
+                filteredVehicles={filteredVehicles}
+                coastFilteredVehicles={coastFilteredVehicles}
+                showTopDeals={showTopDeals}
+                onlyCoast={onlyCoast}
+                priceStatistics={priceStatistics}
+                searchTerm={searchTerm}
+                selectedBrand={selectedBrand}
+                selectedModel={selectedModel}
+                selectedYear={selectedYear}
+                selectedDateRange={selectedDateRange}
+                onShowTopDealsChange={onShowTopDealsChange}
+                onOnlyCoastChange={onOnlyCoastChange}
+                onSearchTermChange={onSearchTermChange}
+                onBrandChange={onBrandChange}
+                onModelChange={onModelChange}
+                onYearChange={onYearChange}
+                onDateRangeChange={onDateRangeChange}
+                onClearFilters={onClearFilters}
+                onScraperComplete={onScraperComplete}
+                isWebhookLoading={isWebhookLoading}
+            />
+            {/* MODAL CATÁLOGO (Refactorizado visualmente) */}
             {showCarPicker && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200 p-4"
-                    onClick={() => setShowCarPicker(false)}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col max-h-[90vh]"
-                    >
-                        <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-red-100 rounded-lg">
-                                    <Car className="h-6 w-6 text-red-600" />
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">
+
+                        {/* HEADER */}
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-gradient-to-b from-slate-50 to-white">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-red-600 rounded-2xl shadow-lg shadow-red-200">
+                                    <Car className="h-6 w-6 text-white" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-slate-800">Catálogo de Vehículos</h3>
-                                    <p className="text-sm text-slate-500 mt-0.5">
-                                        {pickerBrand ? `Modelos de ${pickerBrand}` : 'Selecciona una marca para comenzar'}
+                                    <h3 className="text-2xl font-black text-slate-900">Catálogo Maestro</h3>
+                                    <p className="text-sm text-slate-500">
+                                        {pickerBrand ? `Selecciona el modelo de ${pickerBrand}` : 'Explora marcas disponibles'}
                                     </p>
                                 </div>
                             </div>
                             <button
-                                onClick={() => setShowCarPicker(false)}
-                                className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700"
+                                onClick={() => {
+                                    setShowCarPicker(false);
+                                    setPickerBrand(null);
+                                    setCatalogSearch("");
+                                }}
+                                className="p-3 hover:bg-slate-100 rounded-full transition-colors"
                             >
-                                <X className="h-6 w-6" />
+                                <X className="h-6 w-6 text-slate-400" />
                             </button>
                         </div>
 
-                        <div className="overflow-y-auto flex-1 p-6 bg-slate-50">
+                        {/* BARRA DE BÚSQUEDA INTERNA */}
+                        <div className="px-8 py-4 bg-slate-50/50 border-b border-slate-100">
+                            <div className="relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-red-500 transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder={pickerBrand ? `Buscar modelo de ${pickerBrand}...` : "Buscar marca (Ej: Toyota, Kia...)"}
+                                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500 transition-all text-slate-800 font-medium"
+                                    value={catalogSearch}
+                                    onChange={(e) => setCatalogSearch(e.target.value)}
+                                    autoFocus
+                                />
+                                {catalogSearch && (
+                                    <button
+                                        onClick={() => setCatalogSearch("")}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full text-slate-400"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* CONTENIDO SCROLLABLE */}
+                        <div className="flex-1 overflow-y-auto p-8 bg-white custom-scrollbar">
                             {!pickerBrand ? (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Marcas Disponibles</h4>
-                                        <span className="text-xs text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-200">
-                                            {Object.keys(ECUADOR_CAR_DATA).length} marcas
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                        {Object.keys(ECUADOR_CAR_DATA).map((brand) => (
+                                /* LISTADO DE MARCAS FILTRADO */
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {Object.keys(ECUADOR_CAR_DATA)
+                                        .filter(brand => brand.toLowerCase().includes(catalogSearch.toLowerCase()))
+                                        .map((brand) => (
                                             <button
                                                 key={brand}
-                                                onClick={() => setPickerBrand(brand)}
-                                                className="group relative px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold hover:border-red-500 hover:shadow-lg hover:shadow-red-100 transition-all text-slate-700 hover:text-red-600 hover:scale-[1.02] active:scale-[0.98]"
+                                                onClick={() => {
+                                                    setPickerBrand(brand);
+                                                    setCatalogSearch(""); // Limpiar búsqueda al entrar a modelos
+                                                }}
+                                                className="p-6 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-700 hover:bg-white hover:border-red-500 hover:text-red-600 hover:shadow-xl hover:shadow-red-100 transition-all active:scale-95"
                                             >
-                                                <span className="relative z-10">{brand}</span>
-                                                <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-orange-50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                {brand}
                                             </button>
                                         ))}
-                                    </div>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between sticky top-0 bg-slate-50 z-10 pb-4">
-                                        <div className="flex items-center gap-2">
-                                            <span className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold shadow-sm">
-                                                {pickerBrand}
-                                            </span>
-                                            <span className="text-slate-400">→</span>
-                                            <span className="text-sm text-slate-600 font-medium">Selecciona un modelo</span>
-                                        </div>
-                                        <button
-                                            onClick={() => setPickerBrand(null)}
-                                            className="flex items-center gap-1 text-sm text-slate-600 hover:text-red-600 font-semibold hover:underline transition-colors"
-                                        >
-                                            ← Cambiar marca
-                                        </button>
-                                    </div>
+                                /* LISTADO DE MODELOS FILTRADO */
+                                <div className="space-y-6">
+                                    <button
+                                        onClick={() => {
+                                            setPickerBrand(null);
+                                            setCatalogSearch(""); // Limpiar al volver
+                                        }}
+                                        className="flex items-center gap-2 text-xs font-bold text-red-500 hover:underline"
+                                    >
+                                        ← VOLVER A MARCAS
+                                    </button>
 
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                        <button
-                                            onClick={() => handlePickAndScrap(pickerBrand)}
-                                            className="group relative px-5 py-4 border-2 border-dashed border-red-400 bg-gradient-to-br from-red-50 to-orange-50 text-red-700 rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-red-100 transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
-                                        >
-                                            <div className="relative z-10">
-                                                <div className="text-xs opacity-70 mb-1">Ver todos</div>
-                                                <div>{pickerBrand}</div>
-                                            </div>
-                                            <Sparkles className="absolute top-2 right-2 h-4 w-4 text-red-400 opacity-50" />
-                                        </button>
-
-                                        {ECUADOR_CAR_DATA[pickerBrand].map((model) => (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                        {/* Botón de "Todo" solo si no hay búsqueda activa o si coincide */}
+                                        {!catalogSearch && (
                                             <button
-                                                key={model}
-                                                onClick={() => handlePickAndScrap(pickerBrand, model)}
-                                                className="px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-semibold hover:border-slate-400 hover:shadow-md transition-all text-slate-700 hover:text-slate-900 hover:scale-[1.02] active:scale-[0.98]"
+                                                onClick={() => handlePickAndScrap(pickerBrand)}
+                                                className="p-6 bg-red-600 border border-red-500 rounded-2xl text-sm font-black text-white hover:bg-red-700 transition-all flex flex-col items-center gap-1 shadow-lg shadow-red-100"
                                             >
-                                                {model}
+                                                <Sparkles className="h-4 w-4" /> TODO {pickerBrand}
                                             </button>
-                                        ))}
+                                        )}
+
+                                        {ECUADOR_CAR_DATA[pickerBrand]
+                                            .filter(model => model.toLowerCase().includes(catalogSearch.toLowerCase()))
+                                            .map((model) => (
+                                                <button
+                                                    key={model}
+                                                    onClick={() => handlePickAndScrap(pickerBrand, model)}
+                                                    className="p-6 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 hover:border-slate-900 hover:text-slate-900 transition-all hover:shadow-md"
+                                                >
+                                                    {model}
+                                                </button>
+                                            ))}
                                     </div>
+
+                                    {/* Mensaje si no hay resultados */}
+                                    {ECUADOR_CAR_DATA[pickerBrand].filter(model => model.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 && (
+                                        <div className="py-12 text-center text-slate-400">
+                                            <Search className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                                            <p>No se encontraron modelos que coincidan con "{catalogSearch}"</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

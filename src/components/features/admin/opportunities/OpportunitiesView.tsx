@@ -14,6 +14,7 @@ interface OpportunitiesViewProps {
     isLoading: boolean;
     statusFilter?: string;
     locationFilter?: string;
+    priceStatistics: any
     stats: {
         total: number;
         nuevos: number;
@@ -31,6 +32,7 @@ export function OpportunitiesView({
     vehicles,
     topOpportunities,
     isLoading,
+    priceStatistics,
     onScraperComplete
 }: OpportunitiesViewProps) {
 
@@ -140,6 +142,7 @@ export function OpportunitiesView({
         <div className="space-y-8 animate-in fade-in duration-700 pb-12">
             {/* Sección 1: Centro de Oportunidades */}
             <OpportunitiesCenterView
+                priceStatistics={priceStatistics}
                 coastFilteredVehicles={coastFilteredVehicles}
                 topOpportunities={topOpportunities}
                 vehicles={vehicles}
@@ -162,28 +165,6 @@ export function OpportunitiesView({
                 onDateRangeChange={setSelectedDateRange}
                 onClearFilters={handleClearFilters}
             />
-{/* 
-            <OpportunitiesFiltersView
-                vehicles={vehicles}
-                topOpportunities={topOpportunities}
-                filteredVehicles={filteredVehicles}
-                coastFilteredVehicles={coastFilteredVehicles}
-                showTopDeals={showTopDeals}
-                onlyCoast={onlyCoast}
-                searchTerm={searchTerm}
-                selectedBrand={selectedBrand}
-                selectedModel={selectedModel}
-                selectedYear={selectedYear}
-                selectedDateRange={selectedDateRange}
-                onShowTopDealsChange={setShowTopDeals}
-                onOnlyCoastChange={setOnlyCoast}
-                onSearchTermChange={setSearchTerm}
-                onBrandChange={setSelectedBrand}
-                onModelChange={setSelectedModel}
-                onYearChange={setSelectedYear}
-                onDateRangeChange={setSelectedDateRange}
-                onClearFilters={handleClearFilters}
-            /> */}
 
             {/* Sección 3: Tabla de resultados */}
             <OpportunitiesTableView

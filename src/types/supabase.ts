@@ -316,7 +316,7 @@ export type Database = {
         Row: {
           costo_compra: number | null
           created_at: string | null
-          evidencia_url: string | null
+          evidencias: string[] | null
           id: string
           identificacion_cliente: string
           imei: string
@@ -332,7 +332,7 @@ export type Database = {
         Insert: {
           costo_compra?: number | null
           created_at?: string | null
-          evidencia_url?: string | null
+          evidencias?: string[] | null
           id?: string
           identificacion_cliente: string
           imei: string
@@ -348,7 +348,7 @@ export type Database = {
         Update: {
           costo_compra?: number | null
           created_at?: string | null
-          evidencia_url?: string | null
+          evidencias?: string[] | null
           id?: string
           identificacion_cliente?: string
           imei?: string
@@ -1090,6 +1090,57 @@ export type Database = {
         }
         Relationships: []
       }
+      scraper_vehicle_price_statistics: {
+        Row: {
+          avg_mileage: number | null
+          avg_price: number | null
+          brand: string
+          created_at: string | null
+          id: string
+          last_updated: string | null
+          max_price: number | null
+          median_price: number | null
+          min_price: number | null
+          model: string
+          price_p25: number | null
+          price_p75: number | null
+          price_stddev: number | null
+          year: string | null
+        }
+        Insert: {
+          avg_mileage?: number | null
+          avg_price?: number | null
+          brand: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          max_price?: number | null
+          median_price?: number | null
+          min_price?: number | null
+          model: string
+          price_p25?: number | null
+          price_p75?: number | null
+          price_stddev?: number | null
+          year?: string | null
+        }
+        Update: {
+          avg_mileage?: number | null
+          avg_price?: number | null
+          brand?: string
+          created_at?: string | null
+          id?: string
+          last_updated?: string | null
+          max_price?: number | null
+          median_price?: number | null
+          min_price?: number | null
+          model?: string
+          price_p25?: number | null
+          price_p75?: number | null
+          price_stddev?: number | null
+          year?: string | null
+        }
+        Relationships: []
+      }
       scraper_vehicles: {
         Row: {
           brand: string
@@ -1173,7 +1224,7 @@ export type Database = {
           broker: string
           costo_seguro: number | null
           created_at: string | null
-          evidencia_url: string | null
+          evidencias: string[] | null
           id: string
           identificacion_cliente: string
           nota_venta: string
@@ -1186,7 +1237,7 @@ export type Database = {
           broker: string
           costo_seguro?: number | null
           created_at?: string | null
-          evidencia_url?: string | null
+          evidencias?: string[] | null
           id?: string
           identificacion_cliente: string
           nota_venta: string
@@ -1199,7 +1250,7 @@ export type Database = {
           broker?: string
           costo_seguro?: number | null
           created_at?: string | null
-          evidencia_url?: string | null
+          evidencias?: string[] | null
           id?: string
           identificacion_cliente?: string
           nota_venta?: string
@@ -2203,6 +2254,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      update_price_statistics: {
+        Args: { p_brand: string; p_model: string; p_year?: string }
+        Returns: undefined
+      }
     }
     Enums: {
       acquisition_source:

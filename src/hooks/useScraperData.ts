@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 type ScraperCarStatus = Database['public']['Enums']['scraper_car_status'];
 type ScraperCarLocation = Database['public']['Enums']['scraper_car_location'];
+type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
 
 export type FilterOptions = {
   status?: ScraperCarStatus;
@@ -20,6 +21,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOptions>(initialFilters || {});
   const [topOpportunities, setTopOpportunities] = useState<VehicleWithSeller[]>([]);
+  const [priceStatistics, setPriceStatistics] = useState<PriceStatistics[]>([]);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -66,6 +68,16 @@ export function useScraperData(initialFilters?: FilterOptions) {
     }
   }, [filters.isDealer]);
 
+  const loadPriceStatistics = useCallback(async () => {
+    try {
+      const data = await scraperService.getPriceStatistics();
+      setPriceStatistics(data);
+    } catch (error) {
+      console.error("Error al cargar estadísticas de precios:", error);
+      setPriceStatistics([]);
+    }
+  }, []);
+
   const getSellerWithVehicles = async (sellerId: string) => {
     try {
       return await scraperService.getSellerWithVehicles(sellerId);
@@ -74,6 +86,43 @@ export function useScraperData(initialFilters?: FilterOptions) {
       throw error;
     }
   };
+
+  const getPriceStatisticsForVehicle = async (brand: string, model: string, year?: string) => {
+    try {
+      return await scraperService.getPriceStatisticsForVehicle(brand, model, year);
+    } catch (error) {
+      console.error("Error al obtener estadísticas del vehículo:", error);
+      return null;
+    }
+  };
+
+  const getPriceStatisticsByBrand = async (brand: string) => {
+    try {
+      return await scraperService.getPriceStatisticsByBrand(brand);
+    } catch (error) {
+      console.error("Error al obtener estadísticas por marca:", error);
+      return [];
+    }
+  };
+
+  const getPriceStatisticsByModel = async (brand: string, model: string) => {
+    try {
+      return await scraperService.getPriceStatisticsByModel(brand, model);
+    } catch (error) {
+      console.error("Error al obtener estadísticas por modelo:", error);
+      return [];
+    }
+  };
+
+  const getAllBrandsWithStats = async () => {
+    try {
+      return await scraperService.getAllBrandPricesWithStats();
+    } catch (error) {
+      console.error("Error al obtener marcas con estadísticas:", error);
+      return [];
+    }
+  };
+
   const loadTopOpportunities = useCallback(async () => {
     try {
       // =============================
@@ -203,8 +252,13 @@ export function useScraperData(initialFilters?: FilterOptions) {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadVehicles(), loadSellers(), loadTopOpportunities()]);
-  }, [loadVehicles, loadSellers, loadTopOpportunities]);
+    await Promise.all([
+      loadVehicles(), 
+      loadSellers(), 
+      loadTopOpportunities(),
+      loadPriceStatistics()
+    ]);
+  }, [loadVehicles, loadSellers, loadTopOpportunities, loadPriceStatistics]);
 
   const stats = useMemo(() => {
     return {
@@ -228,6 +282,10 @@ export function useScraperData(initialFilters?: FilterOptions) {
   useEffect(() => {
     loadSellers();
   }, [loadSellers]);
+
+  useEffect(() => {
+    loadPriceStatistics();
+  }, [loadPriceStatistics]);
 
   useEffect(() => {
     const vehiclesChannel = supabase
@@ -261,11 +319,27 @@ export function useScraperData(initialFilters?: FilterOptions) {
       )
       .subscribe();
 
+    const statsChannel = supabase
+      .channel('scraper_vehicle_price_statistics_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'scraper_vehicle_price_statistics'
+        },
+        () => {
+          loadPriceStatistics();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(vehiclesChannel);
       supabase.removeChannel(sellersChannel);
+      supabase.removeChannel(statsChannel);
     };
-  }, [supabase, loadVehicles, loadSellers]);
+  }, [supabase, loadVehicles, loadSellers, loadPriceStatistics]);
 
   useEffect(() => {
     loadTopOpportunities();
@@ -278,12 +352,18 @@ export function useScraperData(initialFilters?: FilterOptions) {
     filters,
     stats,
     topOpportunities,
+    priceStatistics,
     refreshTopOpportunities: loadTopOpportunities,
     getSellerWithVehicles,
+    getPriceStatisticsForVehicle,
+    getPriceStatisticsByBrand,
+    getPriceStatisticsByModel,
+    getAllBrandsWithStats,
     applyFilters,
     clearFilters,
     refresh: loadVehicles,
     refreshSellers: loadSellers,
+    refreshPriceStatistics: loadPriceStatistics,
     refreshAll
   };
 }

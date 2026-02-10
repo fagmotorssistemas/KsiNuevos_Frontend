@@ -250,7 +250,7 @@ export default function AdminDashboardPage() {
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
-    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities } = useScraperData()
+    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities, priceStatistics } = useScraperData()
 
     const handleReload = async () => {
         await reloadSellers();
@@ -414,6 +414,7 @@ export default function AdminDashboardPage() {
                         statusFilter={filters.status}
                         topOpportunities={topOpportunities}
                         onScraperComplete={handleScraperRefresh} 
+                        priceStatistics={priceStatistics}
                     />
                 )}
             </div>

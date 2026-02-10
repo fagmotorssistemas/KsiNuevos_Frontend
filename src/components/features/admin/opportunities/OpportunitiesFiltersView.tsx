@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import {
     TrendingUp,
     Filter,
@@ -7,8 +7,11 @@ import {
     ChevronDown,
     X,
     Gauge,
+    LayoutGrid,
+    RefreshCcw,
 } from "lucide-react";
 import { VehicleWithSeller } from "@/services/scraper.service";
+import { PriceStatistics, PriceStatisticsModal } from "./PriceStatisticsModal";
 
 interface OpportunitiesFiltersViewProps {
     vehicles: VehicleWithSeller[];
@@ -22,6 +25,8 @@ interface OpportunitiesFiltersViewProps {
     selectedModel: string;
     selectedYear: string;
     selectedDateRange: string;
+    isWebhookLoading: boolean
+    priceStatistics: PriceStatistics[];
     onShowTopDealsChange: (value: boolean) => void;
     onOnlyCoastChange: (value: boolean) => void;
     onSearchTermChange: (value: string) => void;
@@ -30,6 +35,7 @@ interface OpportunitiesFiltersViewProps {
     onYearChange: (value: string) => void;
     onDateRangeChange: (value: string) => void;
     onClearFilters: () => void;
+    onScraperComplete: (() => void) | undefined;
 }
 
 export function OpportunitiesFiltersView({
@@ -43,6 +49,8 @@ export function OpportunitiesFiltersView({
     selectedModel,
     selectedYear,
     selectedDateRange,
+    isWebhookLoading,
+    priceStatistics,
     onShowTopDealsChange,
     onOnlyCoastChange,
     onSearchTermChange,
@@ -51,8 +59,10 @@ export function OpportunitiesFiltersView({
     onYearChange,
     onDateRangeChange,
     onClearFilters,
+    onScraperComplete,
 }: OpportunitiesFiltersViewProps) {
 
+    const [showStatsModal, setShowStatsModal] = useState(false);
     // Extraer todas las marcas únicas desde TODOS los vehículos (no filtrados)
     const availableBrands = useMemo(() => {
         const brands = new Set<string>();
@@ -106,7 +116,6 @@ export function OpportunitiesFiltersView({
     }, [filteredVehicles]);
 
     const handleBrandChange = useCallback((brand: string) => {
-        console.log('Cambiando marca a:', brand); // Debug
         onBrandChange(brand);
         onModelChange("all");
     }, [onBrandChange, onModelChange]);
@@ -122,143 +131,104 @@ export function OpportunitiesFiltersView({
     );
 
     return (
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-col lg:flex-row justify-between gap-4 items-end lg:items-center">
-                {/* Stats */}
-                <div className="flex flex-wrap gap-2 text-sm w-full lg:w-auto">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">
-                        <Gauge className="h-4 w-4 text-slate-400" />
-                        <span>Total: <strong className="text-slate-900">{displayStats.total}</strong></span>
+        <>
+            <div className="p-4 px-6 flex flex-col md:flex-row justify-between items-center gap-4 bg-white">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full text-[11px] font-bold text-slate-600 border border-slate-200/50">
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        <span>TOTAL: {displayStats.total}</span>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-lg text-green-700">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        <span>Patio: <strong>{displayStats.enPatio}</strong></span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full text-[11px] font-bold text-emerald-700 border border-emerald-100">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span>PATIO: {displayStats.enPatio}</span>
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-700">
-                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                        <span>Posible daño mecanico: <strong>{displayStats.enTaller}</strong></span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-full text-[11px] font-bold text-orange-700 border border-orange-100">
+                        <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                        <span>POSIBLE DAÑO MECÁNICO: {displayStats.enTaller}</span>
                     </div>
                 </div>
 
-                {/* Botones de vista */}
-                <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
+                <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-100">
                     <button
                         onClick={() => onShowTopDealsChange(!showTopDeals)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${showTopDeals
-                            ? "bg-orange-50 border-orange-200 text-orange-700 shadow-sm"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${showTopDeals ? "bg-white text-orange-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
                     >
-                        <TrendingUp className="h-4 w-4" />
-                        {showTopDeals ? "Viendo Top Oportunidades" : "Ver Oportunidades"}
+                        <TrendingUp className="h-3.5 w-3.5" /> Oportunidades
                     </button>
-
                     <button
                         onClick={() => onOnlyCoastChange(!onlyCoast)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border whitespace-nowrap ${onlyCoast
-                            ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm"
-                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${onlyCoast ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
                     >
-                        {onlyCoast ? <Filter className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-                        {onlyCoast ? "Sin Sierra/Oriente" : "Todo el País"}
+                        <MapPin className="h-3.5 w-3.5" /> Solo Costa
+                    </button>
+                    <button
+                        onClick={onScraperComplete}
+                        disabled={isWebhookLoading}
+                        className={`flex items-center gap-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-red-400 hover:bg-red-50 ${isWebhookLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                    >
+                        <RefreshCcw className={`h-3.5 w-3.5`} />
                     </button>
                 </div>
             </div>
 
-            <div className="h-px bg-slate-100 w-full" />
-
-            {/* Filtros */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-                {/* Búsqueda */}
-                <div className="lg:col-span-3 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            {/* 3. SECCIÓN: FILTROS AVANZADOS */}
+            <div className="p-6 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-3 relative group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-red-500 transition-colors" />
                     <input
                         type="text"
                         placeholder="Filtrar resultados..."
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50/50"
+                        className="w-full pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-red-500/20 transition-all"
                         value={searchTerm}
                         onChange={(e) => onSearchTermChange(e.target.value)}
                     />
                 </div>
 
-                {/* Marca */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedBrand}
-                        onChange={(e) => handleBrandChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
-                    >
-                        <option value="all">Marca: Todas ({availableBrands.length})</option>
-                        {availableBrands.map(brand => (
-                            <option key={brand} value={brand}>{brand}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
+                {[
+                    { label: "Marca", value: selectedBrand, onChange: (v: any) => handleBrandChange(v), options: availableBrands, allLabel: "Todas las Marcas" },
+                    { label: "Modelo", value: selectedModel, onChange: onModelChange, options: availableModels, allLabel: "Todos los Modelos", disabled: selectedBrand === "all" },
+                    { label: "Año", value: selectedYear, onChange: onYearChange, options: availableYears, allLabel: "Todos los Años" }
+                ].map((filter, idx) => (
+                    <div key={idx} className="lg:col-span-2 relative">
+                        <select
+                            value={filter.value}
+                            disabled={filter.disabled}
+                            onChange={(e) => filter.onChange(e.target.value)}
+                            className="w-full appearance-none pl-3 pr-10 py-2 text-sm border border-slate-200 rounded-xl bg-white hover:border-slate-300 outline-none focus:ring-2 focus:ring-red-500/20 cursor-pointer disabled:opacity-50 font-medium text-slate-700"
+                        >
+                            <option value="all">{filter.allLabel}</option>
+                            {filter.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
+                ))}
 
-                {/* Modelo */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => onModelChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium disabled:bg-slate-50 disabled:text-slate-400"
-                        disabled={selectedBrand === "all"}
-                    >
-                        <option value="all">
-                            {selectedBrand === "all" ? "Modelo: -" : `Modelo: Todos (${availableModels.length})`}
-                        </option>
-                        {selectedBrand !== "all" && availableModels.map(model => (
-                            <option key={model} value={model}>{model}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Año */}
-                <div className="lg:col-span-2 relative">
-                    <select
-                        value={selectedYear}
-                        onChange={(e) => onYearChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
-                    >
-                        <option value="all">Año: Todos ({availableYears.length})</option>
-                        {availableYears.map(year => (
-                            <option key={year} value={year}>{year}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* Fecha de publicación */}
                 <div className="lg:col-span-2 relative">
                     <select
                         value={selectedDateRange}
                         onChange={(e) => onDateRangeChange(e.target.value)}
-                        className="w-full appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white cursor-pointer hover:bg-slate-50 text-slate-700 font-medium"
+                        className="w-full appearance-none pl-3 pr-10 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-red-500/20 cursor-pointer font-medium text-slate-700"
                     >
-                        <option value="all">Publicado: Cualquiera</option>
+                        <option value="all">Cualquier Fecha</option>
                         <option value="today">Hoy</option>
                         <option value="week">Última semana</option>
                         <option value="month">Último mes</option>
-                        <option value="3months">Últimos 3 meses</option>
                     </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                 </div>
 
-                {/* Limpiar filtros */}
-                <div className="lg:col-span-1 flex justify-end">
+                <div className="lg:col-span-1 flex items-center justify-center">
                     {hasActiveFilters && (
-                        <button
-                            onClick={onClearFilters}
-                            className="text-sm text-slate-500 hover:text-red-600 flex items-center gap-1 font-medium transition-colors px-3 py-2 hover:bg-red-50 rounded-lg"
-                        >
-                            <X className="h-4 w-4" />
-                            Limpiar
+                        <button onClick={onClearFilters} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Limpiar Filtros">
+                            <X className="h-5 w-5" />
                         </button>
                     )}
                 </div>
             </div>
-        </div>
+            <PriceStatisticsModal
+                priceStatistics={priceStatistics}
+                isOpen={showStatsModal}
+                onClose={() => setShowStatsModal(false)} />
+        </>
     );
 }

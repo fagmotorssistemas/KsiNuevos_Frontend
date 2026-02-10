@@ -296,12 +296,117 @@ export const scraperService = {
         }
     },
 
+    // ========== PRICE STATISTICS ==========
+    async getPriceStatistics(): Promise<Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'][]> {
+        const { data, error } = await supabase
+            .from('scraper_vehicle_price_statistics')
+            .select('*')
+            .order('last_updated', { ascending: false });
+
+        if (error) {
+            console.error('Error al obtener estadísticas de precios:', error);
+            return [];
+        }
+
+        return data;
+    },
+
+    async getPriceStatisticsByBrand(brand: string): Promise<Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'][]> {
+        const { data, error } = await supabase
+            .from('scraper_vehicle_price_statistics')
+            .select('*')
+            .eq('brand', brand)
+            .order('model', { ascending: true });
+
+        if (error) {
+            console.error('Error al obtener estadísticas por marca:', error);
+            return [];
+        }
+
+        return data;
+    },
+
+    async getPriceStatisticsByModel(brand: string, model: string): Promise<Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'][]> {
+        const { data, error } = await supabase
+            .from('scraper_vehicle_price_statistics')
+            .select('*')
+            .eq('brand', brand)
+            .eq('model', model)
+            .order('year', { ascending: false });
+
+        if (error) {
+            console.error('Error al obtener estadísticas por modelo:', error);
+            return [];
+        }
+
+        return data;
+    },
+
+    async getPriceStatisticsForVehicle(brand: string, model: string, year?: string): Promise<Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'] | null> {
+        const query = supabase
+            .from('scraper_vehicle_price_statistics')
+            .select('*')
+            .eq('brand', brand)
+            .eq('model', model);
+
+        if (year) {
+            query.eq('year', year);
+        } else {
+            query.is('year', null);
+        }
+
+        const { data, error } = await query.single();
+
+        if (error) {
+            console.error('Error al obtener estadística específica:', error);
+            return null;
+        }
+
+        return data;
+    },
+
+    async getAllBrandPricesWithStats(): Promise<{ brand: string; total_models: number; avg_price: number }[]> {
+        const { data, error } = await supabase
+            .from('scraper_vehicle_price_statistics')
+            .select('brand, avg_price')
+            .not('year', 'is', null);
+
+        if (error) {
+            console.error('Error al obtener marcas con estadísticas:', error);
+            return [];
+        }
+
+        // Agrupar por marca en el cliente
+        const brandStats = data.reduce((acc, row) => {
+            if (!acc[row.brand]) {
+                acc[row.brand] = {
+                    brand: row.brand,
+                    total_models: 0,
+                    total_price: 0,
+                    count: 0
+                };
+            }
+            acc[row.brand].total_models++;
+            if (row.avg_price) {
+                acc[row.brand].total_price += Number(row.avg_price);
+                acc[row.brand].count++;
+            }
+            return acc;
+        }, {} as Record<string, { brand: string; total_models: number; total_price: number; count: number }>);
+
+        return Object.values(brandStats).map(stat => ({
+            brand: stat.brand,
+            total_models: stat.total_models,
+            avg_price: stat.count > 0 ? stat.total_price / stat.count : 0
+        })).sort((a, b) => b.total_models - a.total_models);
+    },
+
     async scrapMarketplace(searchTerm: string) {
         try {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'http://138.197.35.10:5678/webhook-test/buscar-producto-marketplace',
+                'http://138.197.35.10:5678/webhook/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {
@@ -326,6 +431,7 @@ export const scraperService = {
     }
 
 };
+
 export interface WebhookResponse {
     status: 'done' | 'not found' | 'error';
     message: string;
