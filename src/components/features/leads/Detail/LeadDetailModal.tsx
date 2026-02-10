@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageCircle, Calendar, MapPin, ShoppingBag } from "lucide-react";
+import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity} from "lucide-react";
 import type { LeadWithDetails } from "@/types/leads.types";
 
 // Importación de componentes divididos
@@ -9,13 +9,14 @@ import { LeadHistoryTab } from "./LeadHistoryTab";
 import { LeadAgendaTab } from "./LeadAgendaTab";
 import { LeadShowroomTab } from "./LeadShowroomTab"; 
 import { LeadRequestsTab } from "./LeadRequestsTab"; 
+import { LeadRecoveryTab } from "./LeadRecoveryTab";
 
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
 }
 
-type TabType = 'history' | 'agenda' | 'showroom' | 'requests';
+type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar';
 
 export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>('history');
@@ -68,6 +69,12 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                                 icon={ShoppingBag} 
                                 label="Pedidos" 
                             />
+                            <TabButton 
+                                active={activeTab === 'recuperar'} 
+                                onClick={() => setActiveTab('recuperar')} 
+                                icon={Activity} 
+                                label="Recuperar" 
+                            />
                         </div>
 
                         {/* --- CONTENIDO DE LA PESTAÑA ACTIVA --- */}
@@ -81,6 +88,7 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                             {activeTab === 'agenda' && <LeadAgendaTab lead={lead} />}
                             {activeTab === 'showroom' && <LeadShowroomTab lead={lead} />}
                             {activeTab === 'requests' && <LeadRequestsTab lead={lead} />}
+                            {activeTab === 'recuperar' && <LeadRecoveryTab lead={lead} />}
                         </div>
                     </div>
                 </div>

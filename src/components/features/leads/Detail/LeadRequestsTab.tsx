@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Car, DollarSign, Loader2, CheckCircle2, AlertCircle, Calendar, Palette, FileText, BarChart3, ChevronDown } from "lucide-react";
+import { Car, DollarSign, Loader2, CheckCircle2, AlertCircle, Calendar, Palette, FileText, BarChart3, ChevronDown, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, TextArea } from "./ui-components";
 import type { LeadWithDetails } from "@/types/leads.types";
@@ -13,6 +13,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
     // Formulario
     const [brand, setBrand] = useState("");
     const [model, setModel] = useState("");
+    const [type, setType] = useState(""); // Nuevo campo
     const [yearMin, setYearMin] = useState("");
     const [yearMax, setYearMax] = useState("");
     const [budgetMax, setBudgetMax] = useState(lead.budget?.toString() || "");
@@ -40,6 +41,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
 
         if (!brand.trim()) newErrors.brand = "La marca es obligatoria.";
         if (!model.trim()) newErrors.model = "El modelo es obligatorio.";
+        if (!type) newErrors.type = "El tipo es obligatorio."; // Validación nueva
         
         if (!yearMin) newErrors.yearMin = "Requerido";
         if (!yearMax) newErrors.yearMax = "Requerido";
@@ -67,8 +69,10 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
         const { error } = await supabase.from('vehicle_requests').insert({
             requested_by: user.id,
             client_name: lead.name,
+            lead_id: lead.id,
             brand,
             model,
+            type, // Insertamos el nuevo campo
             year_min: parseInt(yearMin),
             year_max: parseInt(yearMax),
             color_preference: color,
@@ -88,6 +92,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
             // Reset completo
             setBrand("");
             setModel("");
+            setType(""); // Reset tipo
             setYearMin("");
             setYearMax("");
             setColor("");
@@ -143,6 +148,32 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
                             </div>
                             {errors.model && <p className="text-xs text-red-500 ml-1">{errors.model}</p>}
                         </div>
+                    </div>
+
+                    {/* NUEVO: Tipo de Vehículo */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500 uppercase ml-1">Tipo de Vehículo <span className="text-red-500">*</span></label>
+                        <div className="relative group">
+                            <LayoutGrid className={`absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors ${errors.type ? 'text-red-400' : 'text-slate-400 group-focus-within:text-gray-500'}`} />
+                            <select 
+                                value={type} 
+                                onChange={(e) => {
+                                    setType(e.target.value);
+                                    if(errors.type) setErrors({...errors, type: ''});
+                                }}
+                                className={`${getInputClasses(!!errors.type)} appearance-none cursor-pointer`}
+                            >
+                                <option value="" disabled>Seleccione un tipo...</option>
+                                <option value="sedan">sedan</option>
+                                <option value="suv">suv</option>
+                                <option value="camioneta">camioneta / pickup</option>
+                                <option value="deportivo">deportivo</option>
+                                <option value="hatchback">hatchback</option>
+                                <option value="van">van</option>
+                            </select>
+                            <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                        </div>
+                        {errors.type && <p className="text-xs text-red-500 ml-1">{errors.type}</p>}
                     </div>
 
                     {/* Años */}
