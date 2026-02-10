@@ -138,8 +138,15 @@ export function useAgenda() {
                 .map(a => a.lead_id)
         );
 
-        return rawSuggestions.filter(lead => !activeLeadIds.has(lead.id));
-    }, [rawSuggestions, allAppointments]);
+        let filtered = rawSuggestions.filter(lead => !activeLeadIds.has(lead.id));
+
+        // NUEVO: Aplicar filtro de responsable si es admin
+        if (isAdmin && filters.responsibleId !== 'all') {
+            filtered = filtered.filter(lead => lead.assigned_to === filters.responsibleId);
+        }
+
+        return filtered;
+    }, [rawSuggestions, allAppointments, isAdmin, filters.responsibleId]);
 
 
     // B. Filtrado de Citas (Admin y Fechas)
