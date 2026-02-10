@@ -209,13 +209,13 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const stats = useMemo(() => {
     return {
       total: vehicles.length,
-      nuevos: vehicles.filter(v => v.status === 'NUEVO').length,
-      descartados: vehicles.filter(v => v.status === 'DESCARTADO').length,
-      vendidos: vehicles.filter(v => v.status === 'VENDIDO').length,
-      enMantenimiento: vehicles.filter(v => v.status === 'MANTENIMIENTO').length,
-      enPatio: vehicles.filter(v => v.location === 'patio').length,
-      enTaller: vehicles.filter(v => v.location === 'taller').length,
-      enCliente: vehicles.filter(v => v.location === 'cliente').length,
+      nuevos: vehicles.filter(v => v.condition === 'NEW_ITEM').length,
+      usados: vehicles.filter(v => v.condition === 'USED').length,
+      usados_bueno: vehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
+      usados_como_nuevo: vehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
+      enPatio: vehicles.filter(v => v.seller?.location === 'patio').length,
+      enTaller: vehicles.filter(v => v.seller?.location === 'taller').length,
+      enCliente: vehicles.filter(v => v.seller?.location === 'cliente').length,
     };
   }, [vehicles]);
 

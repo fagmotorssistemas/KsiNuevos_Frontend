@@ -316,6 +316,7 @@ export type Database = {
         Row: {
           costo_compra: number | null
           created_at: string | null
+          evidencia_url: string | null
           id: string
           identificacion_cliente: string
           imei: string
@@ -331,6 +332,7 @@ export type Database = {
         Insert: {
           costo_compra?: number | null
           created_at?: string | null
+          evidencia_url?: string | null
           id?: string
           identificacion_cliente: string
           imei: string
@@ -346,6 +348,7 @@ export type Database = {
         Update: {
           costo_compra?: number | null
           created_at?: string | null
+          evidencia_url?: string | null
           id?: string
           identificacion_cliente?: string
           imei?: string
@@ -1170,6 +1173,7 @@ export type Database = {
           broker: string
           costo_seguro: number | null
           created_at: string | null
+          evidencia_url: string | null
           id: string
           identificacion_cliente: string
           nota_venta: string
@@ -1182,6 +1186,7 @@ export type Database = {
           broker: string
           costo_seguro?: number | null
           created_at?: string | null
+          evidencia_url?: string | null
           id?: string
           identificacion_cliente: string
           nota_venta: string
@@ -1194,6 +1199,7 @@ export type Database = {
           broker?: string
           costo_seguro?: number | null
           created_at?: string | null
+          evidencia_url?: string | null
           id?: string
           identificacion_cliente?: string
           nota_venta?: string

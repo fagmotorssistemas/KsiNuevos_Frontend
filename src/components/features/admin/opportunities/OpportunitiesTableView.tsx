@@ -17,39 +17,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
+import { DateFormatter } from "@/utils/DateFormatter";
 
 interface OpportunitiesTableViewProps {
     vehicles: VehicleWithSeller[];
     isLoading: boolean;
     hasActiveFilters: boolean;
     onClearFilters: () => void;
-}
-
-// --- UTILIDADES ---
-const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
-
-function capitalize(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatRelativeTime(dateString: string | null | undefined): string {
-    if (!dateString) return "N/A";
-    try {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-        let formatted: string;
-        if (diffInSeconds < 60) formatted = rtf.format(-Math.floor(diffInSeconds), 'second');
-        else if (diffInSeconds < 3600) formatted = rtf.format(-Math.floor(diffInSeconds / 60), 'minute');
-        else if (diffInSeconds < 86400) formatted = rtf.format(-Math.floor(diffInSeconds / 3600), 'hour');
-        else if (diffInSeconds < 604800) formatted = rtf.format(-Math.floor(diffInSeconds / 86400), 'day');
-        else if (diffInSeconds < 2592000) formatted = rtf.format(-Math.floor(diffInSeconds / 604800), 'week');
-        else if (diffInSeconds < 31536000) formatted = rtf.format(-Math.floor(diffInSeconds / 2592000), 'month');
-        else formatted = rtf.format(-Math.floor(diffInSeconds / 31536000), 'year');
-        return capitalize(formatted);
-    } catch {
-        return "Fecha no disponible";
-    }
 }
 
 function formatAbsoluteDate(dateString: string | null | undefined): string {
@@ -194,7 +168,7 @@ export function OpportunitiesTableView({
                                                 </div>
                                                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                                                     <Clock className="h-3 w-3" />
-                                                    <span>{formatRelativeTime(vehicle.publication_date)}</span>
+                                                    <span>{DateFormatter.formatRelativeTime(vehicle.publication_date)}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -288,7 +262,7 @@ export function OpportunitiesTableView({
                                         </span>
                                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider bg-zinc-50 px-2.5 py-1 rounded-md border border-zinc-100">
                                             <Clock className="h-3 w-3" />
-                                            {formatRelativeTime(selectedVehicle.publication_date)}
+                                            {DateFormatter.formatRelativeTime(selectedVehicle.publication_date)}
                                         </div>
                                     </div>
                                     <h2 className="text-2xl lg:text-4xl font-black text-zinc-900 tracking-tight leading-none">

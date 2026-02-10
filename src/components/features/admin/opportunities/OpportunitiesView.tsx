@@ -17,9 +17,9 @@ interface OpportunitiesViewProps {
     stats: {
         total: number;
         nuevos: number;
-        descartados: number;
-        vendidos: number;
-        enMantenimiento: number;
+        usados: number;
+        usados_bueno: number;
+        usados_como_nuevo: number;
         enPatio: number;
         enTaller: number;
         enCliente: number;
@@ -139,14 +139,30 @@ export function OpportunitiesView({
     return (
         <div className="space-y-8 animate-in fade-in duration-700 pb-12">
             {/* Sección 1: Centro de Oportunidades */}
-            <OpportunitiesCenterView 
-                topOpportunities={topOpportunities} 
-                vehicles={vehicles} 
-                isLoading={isLoading} 
-                onScraperComplete={onScraperComplete} 
+            <OpportunitiesCenterView
+                coastFilteredVehicles={coastFilteredVehicles}
+                topOpportunities={topOpportunities}
+                vehicles={vehicles}
+                isLoading={isLoading}
+                onScraperComplete={onScraperComplete}
+                filteredVehicles={filteredVehicles}
+                showTopDeals={showTopDeals}
+                onlyCoast={onlyCoast}
+                searchTerm={searchTerm}
+                selectedBrand={selectedBrand}
+                selectedModel={selectedModel}
+                selectedYear={selectedYear}
+                selectedDateRange={selectedDateRange}
+                onShowTopDealsChange={setShowTopDeals}
+                onOnlyCoastChange={setOnlyCoast}
+                onSearchTermChange={setSearchTerm}
+                onBrandChange={setSelectedBrand}
+                onModelChange={setSelectedModel}
+                onYearChange={setSelectedYear}
+                onDateRangeChange={setSelectedDateRange}
+                onClearFilters={handleClearFilters}
             />
-
-            {/* Sección 2: Filtros */}
+{/* 
             <OpportunitiesFiltersView
                 vehicles={vehicles}
                 topOpportunities={topOpportunities}
@@ -167,7 +183,7 @@ export function OpportunitiesView({
                 onYearChange={setSelectedYear}
                 onDateRangeChange={setSelectedDateRange}
                 onClearFilters={handleClearFilters}
-            />
+            /> */}
 
             {/* Sección 3: Tabla de resultados */}
             <OpportunitiesTableView
