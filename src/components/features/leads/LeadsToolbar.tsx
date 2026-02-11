@@ -130,6 +130,7 @@ export function LeadsToolbar({
                             <option value="ganado">✅ Ganado</option>
                             <option value="perdido">❌ Perdido</option>
                             <option value="en_proceso">⏳ En Proceso</option>
+                            <option value="datos_pedidos">📋 Datos Pedidos</option>
                         </CustomSelect>
                     </div>
 

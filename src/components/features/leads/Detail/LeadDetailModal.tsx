@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity} from "lucide-react";
+import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity, BookAlert } from "lucide-react";
 import type { LeadWithDetails } from "@/types/leads.types";
 
 // Importación de componentes divididos
@@ -10,13 +10,14 @@ import { LeadAgendaTab } from "./LeadAgendaTab";
 import { LeadShowroomTab } from "./LeadShowroomTab"; 
 import { LeadRequestsTab } from "./LeadRequestsTab"; 
 import { LeadRecoveryTab } from "./LeadRecoveryTab";
+import { LeadDatosPedidosTab } from "./LeadDatosPedidosTab";
 
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
 }
 
-type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar';
+type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos';
 
 export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>('history');
@@ -75,6 +76,12 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                                 icon={Activity} 
                                 label="Recuperar" 
                             />
+                            <TabButton 
+                                active={activeTab === 'datos_pedidos'} 
+                                onClick={() => setActiveTab('datos_pedidos')}
+                                icon={BookAlert}
+                                label="Datos Pedidos"
+                            />
                         </div>
 
                         {/* --- CONTENIDO DE LA PESTAÑA ACTIVA --- */}
@@ -89,6 +96,7 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                             {activeTab === 'showroom' && <LeadShowroomTab lead={lead} />}
                             {activeTab === 'requests' && <LeadRequestsTab lead={lead} />}
                             {activeTab === 'recuperar' && <LeadRecoveryTab lead={lead} />}
+                            {activeTab === 'datos_pedidos' && <LeadDatosPedidosTab leadId={lead.id} />}
                         </div>
                     </div>
                 </div>
