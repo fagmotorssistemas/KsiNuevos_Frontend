@@ -31,7 +31,7 @@ const menuItems = [
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
     { name: 'Mensajería', href: '/messaging', icon: MessagesSquare },
-    { name: 'Contratos', href: '/contracts', icon: StickyNote },
+   // { name: 'Contratos', href: '/contracts', icon: StickyNote },
 ];
 
 export function SellerSidebar() {

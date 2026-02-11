@@ -19,6 +19,7 @@ import {
     BanknoteArrowDown,
     Box,
     ShieldCheck,
+    StickyNote,
 } from 'lucide-react';
 
 // Definición de los items del menú (Lista completa original)
@@ -33,7 +34,8 @@ const menuItems = [
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
     { name: 'Seguros / Rastreador', href: '/seguros', icon: ShieldCheck },
-    { name: 'Inventario', href: '/inventario', icon: Box }
+    { name: 'Inventario', href: '/inventario', icon: Box },
+    { name: 'Contratos', href: '/contracts', icon: StickyNote },
 ];
 
 export function AccountingSidebar() {
@@ -51,10 +53,12 @@ export function AccountingSidebar() {
     // 3. Lógica de filtrado de menú según el rol
     let displayedItems = menuItems;
 
-    if (profile?.role === 'finanzas') {
-        // Si es finanzas, filtramos para dejar SOLO Inventario
-        displayedItems = menuItems.filter(item => item.href === '/inventario');
-    } 
+if (profile?.role === 'finanzas') {
+    displayedItems = menuItems.filter(item =>
+        ['/inventario', '/contracts'].includes(item.href)
+    );
+}
+
     // Si quisieras agregar lógica para otros roles, podrías hacerlo aquí con else if...
 
     return (
