@@ -1,12 +1,12 @@
 import { Wallet, CreditCard, Building, Plus } from "lucide-react";
-import type { Cuenta } from "@/types/taller"; // <--- Importación corregida (antes venía de useFinanzas)
+import type { Cuenta } from "@/types/taller";
 
 interface AccountsHeaderProps {
     cuentas: Cuenta[];
-    onNewAccount?: () => void; // Por si quisieras crear cuentas desde el UI
+    onNewAccount: () => void; 
 }
 
-export function AccountsHeader({ cuentas }: AccountsHeaderProps) {
+export function AccountsHeader({ cuentas, onNewAccount }: AccountsHeaderProps) {
     // Calculamos total global
     const totalGlobal = cuentas.reduce((acc, c) => acc + c.saldo_actual, 0);
 
@@ -27,7 +27,7 @@ export function AccountsHeader({ cuentas }: AccountsHeaderProps) {
 
             {/* Listado de Cuentas Individuales */}
             {cuentas.map((cuenta) => (
-                <div key={cuenta.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-blue-300 transition-colors">
+                <div key={cuenta.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-blue-300 transition-colors group">
                     <div className="flex justify-between items-start mb-4">
                         <div className={`p-2 rounded-lg ${cuenta.es_caja_chica ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                             {cuenta.es_caja_chica ? <Wallet className="h-5 w-5" /> : <CreditCard className="h-5 w-5" />}
@@ -42,18 +42,24 @@ export function AccountsHeader({ cuentas }: AccountsHeaderProps) {
                             ${cuenta.saldo_actual.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </p>
                         {cuenta.numero_cuenta && (
-                            <p className="text-xs text-slate-400 mt-1 font-mono">**** {cuenta.numero_cuenta.slice(-4)}</p>
+                            <p className="text-xs text-slate-400 mt-1 font-mono group-hover:text-blue-500 transition-colors">
+                                **** {cuenta.numero_cuenta.slice(-4)}
+                            </p>
                         )}
                     </div>
                 </div>
             ))}
             
-            {/* Botón Ghost para añadir (Visual) */}
-            {cuentas.length === 0 && (
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 p-6">
-                    <p className="text-sm font-medium">No hay cuentas configuradas</p>
+            {/* Botón para añadir NUEVA CUENTA */}
+            <button 
+                onClick={onNewAccount}
+                className="border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-2xl flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 p-6 transition-all min-h-[160px] group"
+            >
+                <div className="p-3 bg-slate-100 group-hover:bg-blue-100 rounded-full mb-3 transition-colors">
+                    <Plus className="h-6 w-6" />
                 </div>
-            )}
+                <p className="text-sm font-bold">Añadir Cuenta</p>
+            </button>
         </div>
     );
 }

@@ -1,4 +1,4 @@
-import { OrdenTrabajo } from "@/types/taller"; // <--- Importación corregida
+import { OrdenTrabajo } from "@/types/taller"; 
 import { Wrench } from "lucide-react";
 
 interface OrderPrintViewProps {

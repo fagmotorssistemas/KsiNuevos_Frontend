@@ -54,6 +54,11 @@ const CustomSelect = ({
     </div>
 );
 
+// Helper seguro para obtener fecha Ecuador usando Intl (Infalible)
+const getEcuadorDateISO = () => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+};
+
 export function LeadsToolbar({
     filters,
     onFilterChange,
@@ -169,9 +174,11 @@ export function LeadsToolbar({
                                     value={filters.dateRange}
                                     onChange={(e) => {
                                         if (e.target.value === 'custom') {
-                                            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                                            // Cuando elige fecha personalizada, le ponemos hoy por defecto
+                                            const today = getEcuadorDateISO(); 
                                             onFilterChange('exactDate', today);
                                         } else {
+                                            // Si elige "Hoy" en la lista, el servicio ahora lo maneja con rango horario exacto
                                             onFilterChange('dateRange', e.target.value);
                                         }
                                     }}
@@ -217,7 +224,7 @@ export function LeadsToolbar({
 
                     <span className="hidden sm:inline h-1 w-1 rounded-full bg-slate-300"></span>
 
-                    {/* MÉTRICA 1 (Original): Respondidos en la lista visual actual */}
+                    {/* MÉTRICA 1: Respondidos (Ahora calculado manualmente y preciso) */}
                     <div className="flex items-center gap-1.5 text-brand-600 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-100">
                         <MessageSquare className="h-3.5 w-3.5" />
                         <span>
@@ -231,8 +238,7 @@ export function LeadsToolbar({
                     {/* SEPARADOR */}
                     <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
 
-                    {/* MÉTRICA 2 (Nueva Inteligente): Interacciones realizadas en la fecha X */}
-                    {/* Esta reacciona a los filtros de Responsable y Fecha */}
+                    {/* MÉTRICA 2: Interacciones (Calculado con offset manual) */}
                     <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-sm animate-in fade-in"
                         title="Leads gestionados en la fecha seleccionada por el responsable seleccionado">
                         <ClipboardList className="h-3.5 w-3.5 text-orange-500" />

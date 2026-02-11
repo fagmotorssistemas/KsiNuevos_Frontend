@@ -18,7 +18,7 @@ export function useFinanzas() {
             const { data: cuentasData } = await supabase
                 .from('taller_cuentas')
                 .select('*')
-                .order('nombre_cuenta');
+                .order('created_at', { ascending: true }); // Ordenado por creación
             
             if (cuentasData) {
                 // Mapeamos los datos para eliminar los nulls y asegurar el tipo Cuenta
@@ -52,6 +52,27 @@ export function useFinanzas() {
             setIsLoading(false);
         }
     }, [supabase]);
+
+    const crearCuenta = async (datosCuenta: any) => {
+        try {
+            const { error } = await supabase
+                .from('taller_cuentas')
+                .insert([{
+                    nombre_cuenta: datosCuenta.nombre_cuenta,
+                    numero_cuenta: datosCuenta.numero_cuenta,
+                    saldo_actual: datosCuenta.saldo_actual,
+                    es_caja_chica: datosCuenta.es_caja_chica
+                }]);
+
+            if (error) throw error;
+            
+            await fetchData(); // Recargar la lista de cuentas
+            return { success: true };
+        } catch (error: any) {
+            console.error("Error creando cuenta:", error);
+            return { success: false, error: error.message };
+        }
+    };
 
     const registrarTransaccion = async (formData: any, file: File | null) => {
         if (!profile?.id) return { success: false, error: "No autorizado" };
@@ -123,6 +144,7 @@ export function useFinanzas() {
         transacciones,
         isLoading,
         registrarTransaccion,
+        crearCuenta, // <--- Exportamos la nueva función
         refresh: fetchData
     };
 }
