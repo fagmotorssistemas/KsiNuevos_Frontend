@@ -18,6 +18,7 @@ import {
     TrendingUp,
     TrendingDown,
     DollarSign,
+    AlertCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
@@ -95,19 +96,31 @@ export function OpportunitiesTableView({
     useEffect(() => {
         if (selectedVehicle && getPriceStatisticsForVehicle) {
             setLoadingStats(true);
+            console.log('🔍 Buscando estadísticas para:', {
+                brand: selectedVehicle.brand,
+                model: selectedVehicle.model,
+                year: selectedVehicle.year
+            });
+
             getPriceStatisticsForVehicle(
                 selectedVehicle.brand || '',
                 selectedVehicle.model || '',
                 selectedVehicle.year || undefined
             )
-                .then(stats => setVehicleStats(stats))
+                .then(stats => {
+                    console.log('✅ Estadísticas recibidas:', stats);
+                    setVehicleStats(stats);
+                })
                 .catch(err => {
-                    console.error('Error cargando estadísticas:', err);
+                    console.error('❌ Error cargando estadísticas:', err);
                     setVehicleStats(null);
                 })
                 .finally(() => setLoadingStats(false));
         } else {
             setVehicleStats(null);
+            if (!getPriceStatisticsForVehicle) {
+                console.warn('⚠️ getPriceStatisticsForVehicle no está definida');
+            }
         }
     }, [selectedVehicle, getPriceStatisticsForVehicle]);
 
@@ -341,46 +354,59 @@ export function OpportunitiesTableView({
 
                                 {/* Price Statistics Bar */}
                                 {vehicleStats && !loadingStats && (
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {/* Precio Sugerido (Mediana) */}
-                                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className="p-1 bg-blue-100 rounded-md">
-                                                    <DollarSign className="h-3 w-3 text-blue-600" />
+                                    <>
+                                        {/* CONDICIONAL: Si el precio mínimo es igual al máximo, no hay variación estadística suficiente */}
+                                        {vehicleStats.min_price === vehicleStats.max_price ? (
+                                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
+                                                <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                                                <p className="text-sm font-medium text-slate-500">
+                                                    Unidad única detectada: No hay suficientes carros para promediar un precio.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            /* SI HAY VARIACIÓN, MOSTRAMOS LA GRID ORIGINAL */
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {/* Precio Sugerido (Mediana) */}
+                                                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="p-1 bg-blue-100 rounded-md">
+                                                            <DollarSign className="h-3 w-3 text-blue-600" />
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Precio Sugerido</span>
+                                                    </div>
+                                                    <div className="text-xl font-black text-blue-700">
+                                                        ${vehicleStats.median_price ? Number(vehicleStats.median_price).toLocaleString() : 'N/A'}
+                                                    </div>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Precio Sugerido</span>
-                                            </div>
-                                            <div className="text-xl font-black text-blue-700">
-                                                ${vehicleStats.median_price ? Number(vehicleStats.median_price).toLocaleString() : 'N/A'}
-                                            </div>
-                                        </div>
 
-                                        {/* Precio Más Bajo */}
-                                        <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className="p-1 bg-green-100 rounded-md">
-                                                    <TrendingDown className="h-3 w-3 text-green-600" />
+                                                {/* Precio Más Bajo */}
+                                                <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="p-1 bg-green-100 rounded-md">
+                                                            <TrendingDown className="h-3 w-3 text-green-600" />
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Más Barato</span>
+                                                    </div>
+                                                    <div className="text-xl font-black text-green-700">
+                                                        ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
+                                                    </div>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Más Barato</span>
-                                            </div>
-                                            <div className="text-xl font-black text-green-700">
-                                                ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
-                                            </div>
-                                        </div>
 
-                                        {/* Precio Más Alto */}
-                                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className="p-1 bg-red-100 rounded-md">
-                                                    <TrendingUp className="h-3 w-3 text-red-600" />
+                                                {/* Precio Más Alto */}
+                                                <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className="p-1 bg-red-100 rounded-md">
+                                                            <TrendingUp className="h-3 w-3 text-red-600" />
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Más Caro</span>
+                                                    </div>
+                                                    <div className="text-xl font-black text-red-700">
+                                                        ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
+                                                    </div>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Más Caro</span>
                                             </div>
-                                            <div className="text-xl font-black text-red-700">
-                                                ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
-                                            </div>
-                                        </div>
-                                    </div>
+                                        )}
+                                    </>
                                 )}
 
                                 {/* Loading Stats */}
@@ -392,6 +418,26 @@ export function OpportunitiesTableView({
                                         </div>
                                     </div>
                                 )}
+
+                                {/* No Stats Available - Debug */}
+                                {!loadingStats && !vehicleStats && getPriceStatisticsForVehicle && (
+                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-1.5 bg-amber-100 rounded-md">
+                                                <TrendingUp className="h-4 w-4 text-amber-600" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-xs text-amber-700 font-semibold">
+                                                    No hay estadísticas disponibles para este modelo
+                                                </p>
+                                                <p className="text-[10px] text-amber-600 mt-0.5">
+                                                    {selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
 
                             {/* Cuerpo Scrollable */}
@@ -537,8 +583,9 @@ export function OpportunitiesTableView({
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                </div >
+            )
+            }
         </>
     );
 }

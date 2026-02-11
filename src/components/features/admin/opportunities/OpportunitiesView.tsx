@@ -2,7 +2,6 @@ import { VehicleWithSeller } from "@/services/scraper.service";
 import { useMemo, useState, useCallback } from "react";
 import { Database } from "@/types/supabase";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
-import { OpportunitiesFiltersView } from "./OpportunitiesFiltersView";
 import { OpportunitiesTableView } from "./OpportunitiesTableView";
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
@@ -15,6 +14,7 @@ interface OpportunitiesViewProps {
     statusFilter?: string;
     locationFilter?: string;
     priceStatistics: any
+    getPriceStatisticsForVehicle?: (brand: string, model: string, year?: string) => Promise<any>;
     stats: {
         total: number;
         nuevos: number;
@@ -33,6 +33,7 @@ export function OpportunitiesView({
     topOpportunities,
     isLoading,
     priceStatistics,
+    getPriceStatisticsForVehicle,
     onScraperComplete
 }: OpportunitiesViewProps) {
 
@@ -43,6 +44,8 @@ export function OpportunitiesView({
     const [selectedYear, setSelectedYear] = useState<string>("all");
     const [selectedModel, setSelectedModel] = useState<string>("all");
     const [selectedDateRange, setSelectedDateRange] = useState<string>("all");
+    const [selectedCity, setSelectedCity] = useState("all");
+    const [sortBy, setSortBy] = useState("created_at_desc");
 
     const sourceVehicles = useMemo(() =>
         showTopDeals ? topOpportunities : vehicles,
@@ -62,8 +65,9 @@ export function OpportunitiesView({
     }, [sourceVehicles, onlyCoast]);
 
     // Aplicar todos los filtros
+    // Aplicar todos los filtros
     const filteredVehicles = useMemo(() => {
-        return coastFilteredVehicles.filter(vehicle => {
+        const filtered = coastFilteredVehicles.filter(vehicle => {
             // Filtro de búsqueda por texto
             if (searchTerm) {
                 const searchLower = searchTerm.toLowerCase();
@@ -92,6 +96,11 @@ export function OpportunitiesView({
                 return false;
             }
 
+            // Filtro por ciudad
+            if (selectedCity !== "all" && vehicle.location !== selectedCity) {
+                return false;
+            }
+
             // Filtro por rango de fecha
             if (selectedDateRange !== "all") {
                 const publicationDate = new Date(vehicle.publication_date);
@@ -102,6 +111,9 @@ export function OpportunitiesView({
                 switch (selectedDateRange) {
                     case "today":
                         if (diffInDays > 0) return false;
+                        break;
+                    case "yesterday":
+                        if (diffInDays !== 1) return false;
                         break;
                     case "week":
                         if (diffInDays > 7) return false;
@@ -117,8 +129,29 @@ export function OpportunitiesView({
 
             return true;
         });
-    }, [coastFilteredVehicles, searchTerm, selectedBrand, selectedModel, selectedYear, selectedDateRange]);
 
+        // Aplicar ordenamiento
+        const sorted = [...filtered].sort((a, b) => {
+            switch (sortBy) {
+                case "publication_date_desc":
+                    return new Date(b.publication_date).getTime() - new Date(a.publication_date).getTime();
+                case "publication_date_asc":
+                    return new Date(a.publication_date).getTime() - new Date(b.publication_date).getTime();
+                case "price_asc":
+                    return (a.price || 0) - (b.price || 0);
+                case "price_desc":
+                    return (b.price || 0) - (a.price || 0);
+                case "created_at_desc":
+                    return new Date(b.created_at || b.publication_date).getTime() - new Date(a.created_at || a.publication_date).getTime();
+                case "created_at_asc":
+                    return new Date(a.created_at || a.publication_date).getTime() - new Date(b.created_at || b.publication_date).getTime();
+                default:
+                    return 0;
+            }
+        });
+
+        return sorted;
+    }, [coastFilteredVehicles, searchTerm, selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, sortBy]);
     const handleClearFilters = useCallback(() => {
         setSelectedBrand("all");
         setSelectedYear("all");
@@ -126,6 +159,8 @@ export function OpportunitiesView({
         setSearchTerm("");
         setOnlyCoast(true);
         setSelectedDateRange("all");
+        setSelectedCity("all");
+        setSortBy("created_at_desc");
     }, []);
 
     const hasActiveFilters = useMemo(() =>
@@ -133,9 +168,10 @@ export function OpportunitiesView({
         selectedModel !== "all" ||
         selectedYear !== "all" ||
         selectedDateRange !== "all" ||
+        selectedCity !== "all" ||
         searchTerm !== "" ||
         onlyCoast === false,
-        [selectedBrand, selectedModel, selectedYear, selectedDateRange, searchTerm, onlyCoast]
+        [selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, searchTerm, onlyCoast]
     );
 
     return (
@@ -149,6 +185,8 @@ export function OpportunitiesView({
                 isLoading={isLoading}
                 onScraperComplete={onScraperComplete}
                 filteredVehicles={filteredVehicles}
+                selectedCity={selectedCity}
+                sortBy={sortBy}
                 showTopDeals={showTopDeals}
                 onlyCoast={onlyCoast}
                 searchTerm={searchTerm}
@@ -156,6 +194,8 @@ export function OpportunitiesView({
                 selectedModel={selectedModel}
                 selectedYear={selectedYear}
                 selectedDateRange={selectedDateRange}
+                onCityChange={setSelectedCity}
+                onSortChange={setSortBy}
                 onShowTopDealsChange={setShowTopDeals}
                 onOnlyCoastChange={setOnlyCoast}
                 onSearchTermChange={setSearchTerm}
@@ -166,12 +206,12 @@ export function OpportunitiesView({
                 onClearFilters={handleClearFilters}
             />
 
-            {/* Sección 3: Tabla de resultados */}
             <OpportunitiesTableView
                 vehicles={filteredVehicles}
                 isLoading={isLoading}
                 hasActiveFilters={hasActiveFilters}
                 onClearFilters={handleClearFilters}
+                getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
             />
         </div>
     );

@@ -1,7 +1,7 @@
 import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
 import {
-    DatabaseZap, Search, Car, RefreshCcw, X, Sparkles, Zap
+    DatabaseZap, Search, Car, RefreshCcw, X, Sparkles, Zap, ChevronDown, ChevronUp, SlidersHorizontal
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ interface OpportunitiesCenterViewProps {
     selectedModel: string;
     selectedYear: string;
     selectedDateRange: string;
+    selectedCity: string;
+    sortBy: string;
     priceStatistics: PriceStatistics[]
     onShowTopDealsChange: (value: boolean) => void;
     onOnlyCoastChange: (value: boolean) => void;
@@ -30,6 +32,8 @@ interface OpportunitiesCenterViewProps {
     onModelChange: (value: string) => void;
     onYearChange: (value: string) => void;
     onDateRangeChange: (value: string) => void;
+    onCityChange: (value: string) => void;
+    onSortChange: (value: string) => void;
     onClearFilters: () => void;
 }
 
@@ -47,6 +51,8 @@ export const OpportunitiesCenterView = ({
     selectedModel,
     selectedYear,
     selectedDateRange,
+    selectedCity,
+    sortBy,
     priceStatistics,
     onShowTopDealsChange,
     onOnlyCoastChange,
@@ -55,6 +61,8 @@ export const OpportunitiesCenterView = ({
     onModelChange,
     onYearChange,
     onDateRangeChange,
+    onCityChange,
+    onSortChange,
     onClearFilters,
 }: OpportunitiesCenterViewProps) => {
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
@@ -64,6 +72,8 @@ export const OpportunitiesCenterView = ({
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
     const [catalogSearch, setCatalogSearch] = useState("");
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [isFiltersExpanded, setIsFiltersExpanded] = useState(false); // Estado independiente para filtros
 
     useEffect(() => {
         if (currentToastId && isWebhookLoading) {
@@ -127,83 +137,131 @@ export const OpportunitiesCenterView = ({
     }, [handleSubmitScraper]);
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-            {/* 1. SECCIÓN: HEADER & ENGINE */}
-            <div className="p-6 bg-slate-50/50 border-b border-slate-100">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                    <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 bg-slate-900 flex items-center justify-center rounded-2xl shadow-lg shadow-slate-200">
-                            <DatabaseZap className="h-6 w-6 text-white" />
+        <div className="flex flex-col w-full gap-4 mb-4">
+            {/* FILA PRINCIPAL: Centro de Oportunidades + Botón Filtros */}
+            <div className="flex w-full gap-4 items-stretch">
+
+                {/* CENTRO DE OPORTUNIDADES (ocupa la mayor parte) */}
+                <div className="bg-white flex-1 min-w-0 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                    {/* BOTÓN TOGGLE PRINCIPAL */}
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="w-full p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all border-b border-slate-200 group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-slate-900 flex items-center justify-center rounded-xl shadow-md group-hover:bg-slate-800 transition-colors">
+                                <DatabaseZap className="h-5 w-5 text-white" />
+                            </div>
+                            <div className="text-left">
+                                <h2 className="text-lg font-black text-slate-900 tracking-tight">Centro de Oportunidades</h2>
+                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Marketplace Scraper
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Centro de Oportunidades</h2>
-                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Marketplace Scraper
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-slate-500 hidden sm:inline">
+                                {isExpanded ? 'Ocultar' : 'Mostrar'}
+                            </span>
+                            {isExpanded ? (
+                                <ChevronUp className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                            ) : (
+                                <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                            )}
+                        </div>
+                    </button>
+
+                    {/* CONTENIDO COLAPSABLE */}
+                    <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                        <div className="p-6 bg-slate-50/50">
+                            <div className="flex items-center gap-2 w-full">
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Escaneo rápido: Ej. Vitara 2015..."
+                                        className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all shadow-sm"
+                                        value={scraperTerm}
+                                        onChange={(e) => setScraperTerm(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => setShowCarPicker(true)}
+                                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0"
+                                    title="Abrir Catálogo"
+                                >
+                                    <Car className="h-5 w-5" />
+                                </button>
+                                <button
+                                    disabled={isWebhookLoading || !scraperTerm.trim()}
+                                    onClick={() => handleSubmitScraper(scraperTerm)}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 disabled:opacity-50 flex-shrink-0"
+                                >
+                                    {isWebhookLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                                    <span className="hidden sm:inline">{isWebhookLoading ? `${Math.round(progress)}%` : 'Escanear'}</span>
+                                </button>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div className="flex items-center gap-2 w-full lg:w-auto">
-                        <div className="relative flex-1 lg:w-80">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <input
-                                type="text"
-                                placeholder="Escaneo rápido: Ej. Vitara 2015..."
-                                className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all shadow-sm"
-                                value={scraperTerm}
-                                onChange={(e) => setScraperTerm(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
-                            />
-                        </div>
-                        <button
-                            onClick={() => setShowCarPicker(true)}
-                            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm"
-                            title="Abrir Catálogo"
-                        >
-                            <Car className="h-5 w-5" />
-                        </button>
-                        <button
-                            disabled={isWebhookLoading || !scraperTerm.trim()}
-                            onClick={() => handleSubmitScraper(scraperTerm)}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 disabled:opacity-50"
-                        >
-                            {isWebhookLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                            <span className="hidden sm:inline">{isWebhookLoading ? `${Math.round(progress)}%` : 'Escanear'}</span>
-                        </button>
+                {/* BOTÓN FILTROS MANUALES (alineado verticalmente al centro) */}
+                <button
+                    onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+                    className={`flex-shrink-0 w-32 flex flex-col items-center justify-center gap-1.5 px-5 rounded-2xl border shadow-lg transition-all p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all border-b border-slate-200 `}
+                    title="Filtros manuales"
+                >
+                    <div className="flex justify-center items-center gap-3">
+                        <span className="hidden whitespace-nowrap text-xs font-semibold text-slate-500 hidden sm:inline">Filtros</span>
+                        {isFiltersExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                        ) : (
+                            <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                        )}
                     </div>
+                </button>
+            </div>
+
+            {/* PANEL DE FILTROS (debajo de la fila, ocupa todo el ancho) */}
+            <div className={`transition-all duration-300 ease-in-out ${isFiltersExpanded ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                    <OpportunitiesFiltersView
+                        vehicles={vehicles}
+                        topOpportunities={topOpportunities}
+                        filteredVehicles={filteredVehicles}
+                        coastFilteredVehicles={coastFilteredVehicles}
+                        showTopDeals={showTopDeals}
+                        onlyCoast={onlyCoast}
+                        priceStatistics={priceStatistics}
+                        searchTerm={searchTerm}
+                        selectedBrand={selectedBrand}
+                        selectedModel={selectedModel}
+                        selectedYear={selectedYear}
+                        selectedDateRange={selectedDateRange}
+                        selectedCity={selectedCity}
+                        sortBy={sortBy}
+                        onShowTopDealsChange={onShowTopDealsChange}
+                        onOnlyCoastChange={onOnlyCoastChange}
+                        onSearchTermChange={onSearchTermChange}
+                        onBrandChange={onBrandChange}
+                        onModelChange={onModelChange}
+                        onYearChange={onYearChange}
+                        onDateRangeChange={onDateRangeChange}
+                        onCityChange={onCityChange}
+                        onSortChange={onSortChange}
+                        onClearFilters={onClearFilters}
+                        onScraperComplete={onScraperComplete}
+                        isWebhookLoading={isWebhookLoading}
+                    />
                 </div>
             </div>
-            <OpportunitiesFiltersView
-                vehicles={vehicles}
-                topOpportunities={topOpportunities}
-                filteredVehicles={filteredVehicles}
-                coastFilteredVehicles={coastFilteredVehicles}
-                showTopDeals={showTopDeals}
-                onlyCoast={onlyCoast}
-                priceStatistics={priceStatistics}
-                searchTerm={searchTerm}
-                selectedBrand={selectedBrand}
-                selectedModel={selectedModel}
-                selectedYear={selectedYear}
-                selectedDateRange={selectedDateRange}
-                onShowTopDealsChange={onShowTopDealsChange}
-                onOnlyCoastChange={onOnlyCoastChange}
-                onSearchTermChange={onSearchTermChange}
-                onBrandChange={onBrandChange}
-                onModelChange={onModelChange}
-                onYearChange={onYearChange}
-                onDateRangeChange={onDateRangeChange}
-                onClearFilters={onClearFilters}
-                onScraperComplete={onScraperComplete}
-                isWebhookLoading={isWebhookLoading}
-            />
-            {/* MODAL CATÁLOGO (Refactorizado visualmente) */}
+
+            {/* MODAL CATÁLOGO (sin cambios) */}
             {showCarPicker && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">
-
-                        {/* HEADER */}
                         <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-gradient-to-b from-slate-50 to-white">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-red-600 rounded-2xl shadow-lg shadow-red-200">
@@ -217,18 +275,12 @@ export const OpportunitiesCenterView = ({
                                 </div>
                             </div>
                             <button
-                                onClick={() => {
-                                    setShowCarPicker(false);
-                                    setPickerBrand(null);
-                                    setCatalogSearch("");
-                                }}
+                                onClick={() => { setShowCarPicker(false); setPickerBrand(null); setCatalogSearch(""); }}
                                 className="p-3 hover:bg-slate-100 rounded-full transition-colors"
                             >
                                 <X className="h-6 w-6 text-slate-400" />
                             </button>
                         </div>
-
-                        {/* BARRA DE BÚSQUEDA INTERNA */}
                         <div className="px-8 py-4 bg-slate-50/50 border-b border-slate-100">
                             <div className="relative group">
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-red-500 transition-colors" />
@@ -241,74 +293,45 @@ export const OpportunitiesCenterView = ({
                                     autoFocus
                                 />
                                 {catalogSearch && (
-                                    <button
-                                        onClick={() => setCatalogSearch("")}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full text-slate-400"
-                                    >
+                                    <button onClick={() => setCatalogSearch("")} className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full text-slate-400">
                                         <X className="h-4 w-4" />
                                     </button>
                                 )}
                             </div>
                         </div>
-
-                        {/* CONTENIDO SCROLLABLE */}
                         <div className="flex-1 overflow-y-auto p-8 bg-white custom-scrollbar">
                             {!pickerBrand ? (
-                                /* LISTADO DE MARCAS FILTRADO */
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {Object.keys(ECUADOR_CAR_DATA)
                                         .filter(brand => brand.toLowerCase().includes(catalogSearch.toLowerCase()))
                                         .map((brand) => (
-                                            <button
-                                                key={brand}
-                                                onClick={() => {
-                                                    setPickerBrand(brand);
-                                                    setCatalogSearch(""); // Limpiar búsqueda al entrar a modelos
-                                                }}
-                                                className="p-6 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-700 hover:bg-white hover:border-red-500 hover:text-red-600 hover:shadow-xl hover:shadow-red-100 transition-all active:scale-95"
-                                            >
+                                            <button key={brand} onClick={() => { setPickerBrand(brand); setCatalogSearch(""); }}
+                                                className="p-6 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-700 hover:bg-white hover:border-red-500 hover:text-red-600 hover:shadow-xl hover:shadow-red-100 transition-all active:scale-95">
                                                 {brand}
                                             </button>
                                         ))}
                                 </div>
                             ) : (
-                                /* LISTADO DE MODELOS FILTRADO */
                                 <div className="space-y-6">
-                                    <button
-                                        onClick={() => {
-                                            setPickerBrand(null);
-                                            setCatalogSearch(""); // Limpiar al volver
-                                        }}
-                                        className="flex items-center gap-2 text-xs font-bold text-red-500 hover:underline"
-                                    >
+                                    <button onClick={() => { setPickerBrand(null); setCatalogSearch(""); }} className="flex items-center gap-2 text-xs font-bold text-red-500 hover:underline">
                                         ← VOLVER A MARCAS
                                     </button>
-
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                        {/* Botón de "Todo" solo si no hay búsqueda activa o si coincide */}
                                         {!catalogSearch && (
-                                            <button
-                                                onClick={() => handlePickAndScrap(pickerBrand)}
-                                                className="p-6 bg-red-600 border border-red-500 rounded-2xl text-sm font-black text-white hover:bg-red-700 transition-all flex flex-col items-center gap-1 shadow-lg shadow-red-100"
-                                            >
+                                            <button onClick={() => handlePickAndScrap(pickerBrand)}
+                                                className="p-6 bg-red-600 border border-red-500 rounded-2xl text-sm font-black text-white hover:bg-red-700 transition-all flex flex-col items-center gap-1 shadow-lg shadow-red-100">
                                                 <Sparkles className="h-4 w-4" /> TODO {pickerBrand}
                                             </button>
                                         )}
-
                                         {ECUADOR_CAR_DATA[pickerBrand]
                                             .filter(model => model.toLowerCase().includes(catalogSearch.toLowerCase()))
                                             .map((model) => (
-                                                <button
-                                                    key={model}
-                                                    onClick={() => handlePickAndScrap(pickerBrand, model)}
-                                                    className="p-6 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 hover:border-slate-900 hover:text-slate-900 transition-all hover:shadow-md"
-                                                >
+                                                <button key={model} onClick={() => handlePickAndScrap(pickerBrand, model)}
+                                                    className="p-6 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 hover:border-slate-900 hover:text-slate-900 transition-all hover:shadow-md">
                                                     {model}
                                                 </button>
                                             ))}
                                     </div>
-
-                                    {/* Mensaje si no hay resultados */}
                                     {ECUADOR_CAR_DATA[pickerBrand].filter(model => model.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 && (
                                         <div className="py-12 text-center text-slate-400">
                                             <Search className="h-10 w-10 mx-auto mb-3 opacity-20" />
