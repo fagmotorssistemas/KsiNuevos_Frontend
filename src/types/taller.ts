@@ -92,3 +92,25 @@ export interface ConsumoMaterial {
     item?: { nombre: string; unidad_medida: string; costo_promedio: number };
     registrado_por?: { full_name: string };
 }
+
+// --- NUEVOS TIPOS PARA PRESUPUESTO ---
+
+export interface ServicioCatalogo {
+    id: string;
+    nombre_servicio: string;
+    precio_sugerido: number;
+    tiempo_estimado_horas?: number;
+}
+
+export interface DetalleOrden {
+    id: string;
+    orden_id: string;
+    descripcion: string;
+    precio_unitario: number;
+    cantidad: number;
+    total: number; // Campo generado
+    mecanico_asignado_id?: string;
+    estado_trabajo: string;
+    // Relation
+    mecanico?: { full_name: string };
+}

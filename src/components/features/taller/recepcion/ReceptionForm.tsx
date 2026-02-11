@@ -15,7 +15,8 @@ import {
     Box,
     X,
     ChevronRight,
-    Info
+    Info,
+    CalendarClock // Importamos el icono para la fecha
 } from "lucide-react";
 import { useRecepcion } from "@/hooks/taller/useRecepcion";
 import { ChecklistGroup } from "./ChecklistInspection";
@@ -87,7 +88,8 @@ export function ReceptionForm() {
         color: '',
         vin: '',
         kilometraje: 0,
-        nivel_gasolina: 50
+        nivel_gasolina: 50,
+        fecha_promesa: '' // 1. AGREGADO: Estado para la fecha
     });
 
     const [checklist, setChecklist] = useState<any>({});
@@ -137,6 +139,8 @@ export function ReceptionForm() {
             vehiculo_vin: vehiculo.vin,
             kilometraje: vehiculo.kilometraje,
             nivel_gasolina: vehiculo.nivel_gasolina,
+            // 2. AGREGADO: Enviar la fecha al backend (convertida a ISO)
+            fecha_promesa_entrega: vehiculo.fecha_promesa ? new Date(vehiculo.fecha_promesa).toISOString() : null,
             checklist,
             inventario,
             observaciones
@@ -256,7 +260,7 @@ export function ReceptionForm() {
                         </div>
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Marca</label>
                         <input
                             type="text"
@@ -267,7 +271,7 @@ export function ReceptionForm() {
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Modelo</label>
                         <input
                             type="text"
@@ -278,7 +282,7 @@ export function ReceptionForm() {
                         />
                     </div>
 
-                    <div>
+                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Año / Color</label>
                         <div className="flex gap-2">
                             <input
@@ -297,7 +301,21 @@ export function ReceptionForm() {
                         </div>
                     </div>
 
-                    <div className="md:col-span-2">
+                    {/* 3. AGREGADO: Campo Visual para Fecha de Promesa */}
+                    <div className="col-span-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                            <CalendarClock className="h-3 w-3" /> Fecha Promesa Entrega
+                        </label>
+                        <input
+                            type="datetime-local"
+                            required
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
+                            value={vehiculo.fecha_promesa}
+                            onChange={(e) => setVehiculo({ ...vehiculo, fecha_promesa: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Kilometraje Actual</label>
                         <div className="relative">
                             <input

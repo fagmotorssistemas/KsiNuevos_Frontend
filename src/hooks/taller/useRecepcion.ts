@@ -98,6 +98,8 @@ export function useRecepcion() {
                     vehiculo_vin: formData.vehiculo_vin,
                     kilometraje: formData.kilometraje,
                     nivel_gasolina: formData.nivel_gasolina,
+                    // CORRECCIÓN: Agregar este campo para que se guarde en la BD
+                    fecha_promesa_entrega: formData.fecha_promesa_entrega, 
                     checklist_ingreso: formData.checklist, // JSON con el estado
                     inventario_pertenencias: formData.inventario, // JSON con gata, llaves, etc
                     observaciones_ingreso: formData.observaciones,
