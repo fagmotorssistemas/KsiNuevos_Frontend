@@ -12,7 +12,6 @@ const getEcuadorDateISO = () => {
 
 const getEcuadorRange = (dateStr: string) => {
     // Genera el rango exacto para el día en Ecuador, forzando el offset -05:00
-    // Esto evita que a las 7PM (00:00 UTC) se salte al día siguiente
     return {
         start: `${dateStr}T00:00:00-05:00`,
         end: `${dateStr}T23:59:59-05:00`
@@ -20,13 +19,12 @@ const getEcuadorRange = (dateStr: string) => {
 };
 
 // --- FETCH PRINCIPAL (GRID & CONTADORES) ---
-// Reemplazamos el RPC por una consulta directa para controlar 100% las zonas horarias
 export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: number, filters: LeadsFilters) => {
     try {
         const from = (page - 1) * rowsPerPage;
         const to = from + rowsPerPage - 1;
 
-        // 1. Construcción de la Query Base
+        // 1. Construcción de la Query Base (DATOS)
         let query = supabase
             .from('leads')
             .select(`
@@ -38,20 +36,16 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .order('updated_at', { ascending: false })
             .range(from, to);
 
-        // 2. Aplicar Filtros
+        // 2. Aplicar Filtros a la Query Principal
         if (filters.search) {
-            // Buscamos por nombre o teléfono (ajusta los campos según tu DB real)
             query = query.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
         }
-
         if (filters.status && filters.status !== 'all') {
             query = query.eq('status', filters.status);
         }
-
         if (filters.temperature && filters.temperature !== 'all') {
             query = query.eq('temperature', filters.temperature);
         }
-
         if (filters.assignedTo && filters.assignedTo !== 'all') {
             query = query.eq('assigned_to', filters.assignedTo);
         }
@@ -67,12 +61,10 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 const { start, end } = getEcuadorRange(today);
                 query = query.gte('updated_at', start).lte('updated_at', end);
             } else {
-                // Para 7, 15, 30 días, calculamos hacia atrás
                 const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
                 const pastDate = new Date();
                 pastDate.setDate(pastDate.getDate() - daysBack);
                 const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                // Desde el inicio de hace X días hasta el final de hoy
                 query = query.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
             }
         }
@@ -82,15 +74,15 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (error) throw error;
 
         // 5. Query Secundaria para "Respondidos" (Métrica 1)
-        // Calculamos esto por separado para asegurar que el número sea correcto sobre el total filtrado
-        // Asumimos que "Respondido" es cualquier estado que NO sea 'nuevo'
+        // CORRECCIÓN: Ahora contamos como respondido si 'resume' NO es nulo y NO está vacío.
         let respondedQuery = supabase
             .from('leads')
             .select('id', { count: 'exact', head: true })
             .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
-            .neq('status', 'nuevo'); // Criterio de "Respondido"
+            .not('resume', 'is', null) // Que no sea NULL
+            .neq('resume', '');        // Que no esté vacío
 
-        // Re-aplicamos los mismos filtros a esta query de conteo
+        // Re-aplicamos los mismos filtros para que el porcentaje sea sobre lo que el usuario ve
         if (filters.search) respondedQuery = respondedQuery.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
         if (filters.status && filters.status !== 'all') respondedQuery = respondedQuery.eq('status', filters.status);
         if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
@@ -104,14 +96,12 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             const { start, end } = getEcuadorRange(getEcuadorDateISO());
             respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
         }
-        // Nota: Omitimos rangos largos en respondedCount para optimizar, o puedes replicarlos si es crítico.
 
         const { count: respondedCount } = await respondedQuery;
 
         // 6. Mapeo de Datos
         const mappedData: LeadWithDetails[] = (data || []).map((item: any) => ({
             ...item,
-            // Direct query devuelve arrays/objetos, aseguramos compatibilidad
             interested_cars: item.interested_cars || [],
             profiles: item.profiles || { full_name: '' }
         }));
@@ -129,6 +119,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
 };
 
 // --- GESTIONADOS HOY (Métrica 2) ---
+// Esta query ya estaba correcta usando el campo 'resume', la mantenemos igual.
 export const fetchDailyInteractions = async (supabase: any, assignedTo: string, exactDate: string) => {
     try {
         const targetDateStr = exactDate ? exactDate : getEcuadorDateISO();
@@ -138,7 +129,7 @@ export const fetchDailyInteractions = async (supabase: any, assignedTo: string, 
             .from('leads')
             .select('*', { count: 'exact', head: true })
             .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
-            .neq('resume', null)
+            .not('resume', 'is', null)
             .neq('resume', '') 
             .gte('updated_at', start)
             .lte('updated_at', end);
