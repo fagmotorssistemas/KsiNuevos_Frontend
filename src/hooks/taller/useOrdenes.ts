@@ -14,7 +14,7 @@ export function useOrdenes() {
             .from('taller_ordenes')
             .select(`
                 *,
-                cliente:taller_clientes(nombre_completo, telefono)
+                cliente:taller_clientes(*)
             `)
             .neq('estado', 'entregado') // Solo trabajos activos
             .order('fecha_ingreso', { ascending: false });

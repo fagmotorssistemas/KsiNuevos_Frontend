@@ -16,7 +16,9 @@ import {
     X,
     ChevronRight,
     Info,
-    CalendarClock // Importamos el icono para la fecha
+    CalendarClock,
+    Mail,
+    Fingerprint // Icono para el VIN
 } from "lucide-react";
 import { useRecepcion } from "@/hooks/taller/useRecepcion";
 import { ChecklistGroup } from "./ChecklistInspection";
@@ -86,10 +88,10 @@ export function ReceptionForm() {
         modelo: '',
         anio: new Date().getFullYear(),
         color: '',
-        vin: '',
+        vin: '', // VIN / Chasis
         kilometraje: 0,
         nivel_gasolina: 50,
-        fecha_promesa: '' // 1. AGREGADO: Estado para la fecha
+        fecha_promesa: ''
     });
 
     const [checklist, setChecklist] = useState<any>({});
@@ -139,7 +141,6 @@ export function ReceptionForm() {
             vehiculo_vin: vehiculo.vin,
             kilometraje: vehiculo.kilometraje,
             nivel_gasolina: vehiculo.nivel_gasolina,
-            // 2. AGREGADO: Enviar la fecha al backend (convertida a ISO)
             fecha_promesa_entrega: vehiculo.fecha_promesa ? new Date(vehiculo.fecha_promesa).toISOString() : null,
             checklist,
             inventario,
@@ -156,7 +157,7 @@ export function ReceptionForm() {
     return (
         <form onSubmit={handleSubmit} className=" bg-slate-50/50 mx-auto px-4 pt-8 pb-32 space-y-10">
 
-            {/* ENCABEZADO DE FORMULARIO */}
+            {/* ENCABEZADO */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-8">
                 <div>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight">Recepción de Vehículo</h1>
@@ -210,7 +211,7 @@ export function ReceptionForm() {
                     </div>
 
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Teléfono de Contacto</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Teléfono</label>
                         <input
                             type="tel"
                             required
@@ -221,12 +222,23 @@ export function ReceptionForm() {
                         />
                     </div>
 
-                    <div className="md:col-span-4">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dirección de Domicilio</label>
+                    <div className="md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Email</label>
+                        <input
+                            type="email"
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
+                            placeholder="correo@ejemplo.com"
+                            value={cliente.email}
+                            onChange={(e) => setCliente({ ...cliente, email: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dirección</label>
                         <input
                             type="text"
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
-                            placeholder="Calle principal, secundaria, nro de casa"
+                            placeholder="Dirección completa"
                             value={cliente.direccion}
                             onChange={(e) => setCliente({ ...cliente, direccion: e.target.value })}
                         />
@@ -257,6 +269,20 @@ export function ReceptionForm() {
                                 onChange={(e) => setVehiculo({ ...vehiculo, placa: e.target.value.toUpperCase() })}
                             />
                             <div className="absolute -top-1 left-1/2 -translate-x-1/2 px-2 bg-slate-900 text-[8px] text-white rounded font-bold">ECUADOR</div>
+                        </div>
+                    </div>
+
+                    <div className="col-span-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">VIN / Chasis</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                className="w-full pl-4 pr-10 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-semibold uppercase"
+                                placeholder="17 DÍGITOS..."
+                                value={vehiculo.vin}
+                                onChange={(e) => setVehiculo({ ...vehiculo, vin: e.target.value.toUpperCase() })}
+                            />
+                            <Fingerprint className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                         </div>
                     </div>
 
@@ -301,7 +327,6 @@ export function ReceptionForm() {
                         </div>
                     </div>
 
-                    {/* 3. AGREGADO: Campo Visual para Fecha de Promesa */}
                     <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                             <CalendarClock className="h-3 w-3" /> Fecha Promesa Entrega
@@ -316,7 +341,7 @@ export function ReceptionForm() {
                     </div>
 
                     <div className="col-span-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Kilometraje Actual</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Kilometraje</label>
                         <div className="relative">
                             <input
                                 type="number"
@@ -328,7 +353,7 @@ export function ReceptionForm() {
                         </div>
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <Fuel className="h-3 w-3 text-amber-500" /> Nivel de Combustible ({vehiculo.nivel_gasolina}%)
                         </label>

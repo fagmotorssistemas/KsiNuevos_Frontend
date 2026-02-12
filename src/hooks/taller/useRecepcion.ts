@@ -17,7 +17,7 @@ export function useRecepcion() {
                 .eq('cedula_ruc', cedula)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 es "No rows found", que es normal
+            if (error && error.code !== 'PGRST116') { // PGRST116 es "No rows found"
                 console.error("Error buscando cliente:", error);
             }
             return data;
@@ -35,7 +35,7 @@ export function useRecepcion() {
             const filePath = `recepcion/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('taller-evidencias') // Asegúrate de crear este bucket en Supabase
+                .from('taller-evidencias')
                 .upload(filePath, file);
 
             if (uploadError) {
@@ -63,12 +63,12 @@ export function useRecepcion() {
                 cedula_ruc: formData.cliente_cedula,
                 nombre_completo: formData.cliente_nombre,
                 telefono: formData.cliente_telefono,
-                email: formData.cliente_email,
+                email: formData.cliente_email, // NUEVO
                 direccion: formData.cliente_direccion
             };
 
             if (clienteId) {
-                // Actualizar existente
+                // Actualizar existente (por si cambió dirección o email)
                 await supabase.from('taller_clientes').update(datosCliente).eq('id', clienteId);
             } else {
                 // Crear nuevo
@@ -95,17 +95,15 @@ export function useRecepcion() {
                     vehiculo_modelo: formData.vehiculo_modelo,
                     vehiculo_anio: formData.vehiculo_anio,
                     vehiculo_color: formData.vehiculo_color,
-                    vehiculo_vin: formData.vehiculo_vin,
+                    vehiculo_vin: formData.vehiculo_vin, // NUEVO
                     kilometraje: formData.kilometraje,
                     nivel_gasolina: formData.nivel_gasolina,
-                    // CORRECCIÓN: Agregar este campo para que se guarde en la BD
-                    fecha_promesa_entrega: formData.fecha_promesa_entrega, 
-                    checklist_ingreso: formData.checklist, // JSON con el estado
-                    inventario_pertenencias: formData.inventario, // JSON con gata, llaves, etc
+                    fecha_promesa_entrega: formData.fecha_promesa_entrega,
+                    checklist_ingreso: formData.checklist,
+                    inventario_pertenencias: formData.inventario,
                     observaciones_ingreso: formData.observaciones,
                     fotos_ingreso_urls: fotoUrls,
                     estado: 'recepcion',
-                    // Si tienes el campo asignado a quién lo recibió:
                     // registrado_por: profile?.id 
                 }])
                 .select()

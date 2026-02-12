@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import {
     X, Save, Car, Share2, MapPin, Tag,
     DollarSign, Gauge, Calendar, Loader2, 
-    Image as ImageIcon, UploadCloud, Plus, Trash2
+    Image as ImageIcon, UploadCloud, Plus, Trash2,
+    Link // <--- Nuevo icono importado
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -46,8 +47,8 @@ interface InventoryDetailModalProps {
 
 export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetailModalProps) {
     const { supabase } = useAuth();
-    // Añadimos 'photos' a las pestañas
-    const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos'>('general');
+    // Añadimos 'publications' a las pestañas
+    const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos' | 'publications'>('general');
     const [isSaving, setIsSaving] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
 
@@ -81,7 +82,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
         img_main_url: car.img_main_url || '', // URL actual
         color: car.color || '',
         plate_short: car.plate_short || '',
-        year: car.year || new Date().getFullYear()
+        year: car.year || new Date().getFullYear(),
+        publication_url: (car as any).publication_url || '' // Nueva columna
     });
 
     const handleChange = (field: string, value: any) => {
@@ -195,6 +197,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                         description: formData.description,
                         color: formData.color,
                         year: Number(formData.year),
+                        publication_url: formData.publication_url, // Guardar nueva columna
                         updated_at: new Date().toISOString()
                     })
                     .eq('plate', car.plate.toUpperCase());
@@ -259,6 +262,12 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                         className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'marketing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Share2 className="h-4 w-4" /> Marketing
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('publications')}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'publications' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Link className="h-4 w-4" /> Publicaciones
                     </button>
                 </div>
 
@@ -515,6 +524,23 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                                     />
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* --- PESTAÑA PUBLICACIONES --- */}
+                    {activeTab === 'publications' && (
+                        <div className="space-y-6">
+                            <InputGroup label="URLs de Publicación">
+                                <textarea
+                                    className="w-full min-h-[150px] px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-y font-mono"
+                                    placeholder="https://facebook.com/...\nhttps://instagram.com/..."
+                                    value={formData.publication_url}
+                                    onChange={(e) => handleChange('publication_url', e.target.value)}
+                                />
+                                <p className="text-xs text-slate-500">
+                                    Pega aquí los enlaces a las publicaciones en redes sociales o portales.
+                                </p>
+                            </InputGroup>
                         </div>
                     )}
 
