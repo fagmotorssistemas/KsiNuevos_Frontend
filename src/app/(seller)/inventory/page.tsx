@@ -79,7 +79,7 @@ export default function InventoryPage() {
                     </p>
                 </div>
                 
-                {/* BOTÓN CREAR: Solo visible si tiene permisos */}
+                {/* BOTÓN CREAR: Solo visible si tiene permisos
                 <div className="flex gap-3">
                     {canCreate && (
                         <Button 
@@ -92,7 +92,7 @@ export default function InventoryPage() {
                             Nuevo Vehículo
                         </Button>
                     )}
-                </div>
+                </div> */}
             </div>
 
             {/* Barra de Herramientas */}
