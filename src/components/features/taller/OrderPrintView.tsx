@@ -39,9 +39,20 @@ const LABELS_MAP: Record<string, string> = {
 export function OrderPrintView({ orden }: OrderPrintViewProps) {
     // Función auxiliar para renderizar items del checklist con estado
     const renderChecklistGrid = (items: Record<string, boolean>) => {
+        // Parsear si viene como string
+        let parsedItems = items;
+        if (typeof items === 'string') {
+            try {
+                parsedItems = JSON.parse(items);
+            } catch (e) {
+                console.error("Error parsing checklist items", e);
+                parsedItems = {};
+            }
+        }
+
         return (
             <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[9px]">
-                {Object.entries(items).map(([key, value]) => (
+                {Object.entries(parsedItems || {}).map(([key, value]) => (
                     <div key={key} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 flex items-center justify-center border rounded-sm ${value ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-300'}`}>
                             {value && <span className="text-[8px] font-bold">✓</span>}
@@ -56,15 +67,16 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
     };
 
     return (
-        <div className="hidden print:block fixed inset-0 bg-white z-[9999] overflow-y-auto">
-            <div className="max-w-[210mm] mx-auto p-10 h-full flex flex-col text-slate-900 font-sans">
+        <div id="print-area" className="w-full h-auto bg-white">
+            
+            {/* CORRECCIÓN: Removido min-h-screen y flex flex-col para permitir múltiples páginas */}
+            <div className="w-full max-w-none mx-auto p-10 text-slate-900 font-sans">
                 
                 {/* --- HEADER --- */}
                 <header className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-6">
                     <div className="flex items-center gap-5">
-                        <img src="/LogoAutoNova.png" alt="Logo Auto Nova" className="h-20 w-42" onError={(e) => e.currentTarget.style.display = 'none'} />
+                        <img src="/LogoAutoNova.png" alt="Logo Auto Nova" className="h-20 w-42 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
                         
-                        {/* Fallback si no hay logo */}
                         <div className="hidden first:block">
                             <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Auto Nova</h1>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Centro de Latonería y Pintura</p>
@@ -73,7 +85,6 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                         <div className="text-[9px] text-slate-500 font-medium  border-l pl-4 border-slate-200 space-y-1">
                             <p className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Av. España y Madrid</p>
                             <p className="flex items-center gap-1"><Phone className="h-3 w-3" /> 097 956 1456</p>
-                            {/* <p className="flex items-center gap-1"><Mail className="h-3 w-3" /> contacto@autonova.ec</p> */}
                         </div>
                     </div>
                     <div className="text-right">
@@ -194,7 +205,7 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
 
                 {/* --- FOTOS GRANDES --- */}
                 {orden.fotos_ingreso_urls && orden.fotos_ingreso_urls.length > 0 && (
-                    <div className="mb-8 page-break-inside-avoid">
+                    <div className="mb-8">
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Evidencia Fotográfica</h3>
                         <div className="grid grid-cols-2 gap-4">
                             {orden.fotos_ingreso_urls.map((url, idx) => (
@@ -207,7 +218,7 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                 )}
 
                 {/* --- FOOTER Y FIRMAS --- */}
-                <div className="mt-auto pt-8 page-break-inside-avoid">
+                <div className="mt-8 pt-8">
                     <div className="grid grid-cols-2 gap-20">
                         <div className="border-t border-slate-900 pt-2 text-center">
                             <p className="font-bold text-[10px] uppercase text-slate-900">Firma Cliente</p>
@@ -230,10 +241,29 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
             
             <style jsx global>{`
                 @media print {
-                    @page { margin: 0; size: auto; }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    .print-container { position: absolute; left: 0; top: 0; width: 100%; min-height: 100%; background: white; z-index: 9999; }
-                    .page-break-inside-avoid { break-inside: avoid; }
+                    @page { 
+                        margin: 10mm; 
+                        size: auto; 
+                    }
+                    
+                    html, body { 
+                        height: auto !important; 
+                        overflow: visible !important; 
+                        margin: 0 !important; 
+                        padding: 0 !important;
+                        background: white !important;
+                    }
+
+                    /* Permitir que el contenido fluya naturalmente entre páginas */
+                    #print-area {
+                        page-break-after: auto;
+                    }
+
+                    /* Solo evitar saltos de página DENTRO de elementos críticos pequeños */
+                    .avoid-break {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                    }
                 }
             `}</style>
         </div>
