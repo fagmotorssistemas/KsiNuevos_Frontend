@@ -6,7 +6,7 @@ import { AmortizacionTable } from "../../AmortizacionTable";
 interface PageProps {
     data: ContratoDetalle;
     hasAmortization: boolean;
-    fechaImpresion?: string; // NUEVA PROP: Recibe el timestamp de impresión
+    fechaImpresion?: string;
 }
 
 export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
@@ -21,30 +21,15 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
         return val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
     };
 
-    // --- HELPER DE FECHAS (Fallback) ---
+    // --- HELPER DE FECHAS ---
     const formatDateHeader = (fechaFull: string | undefined) => {
         if (!fechaFull) return "";
-        
         const dateObj = new Date(fechaFull);
         if (isNaN(dateObj.getTime())) return fechaFull; 
-
         const dia = dateObj.getDate();
         const mes = dateObj.getMonth() + 1;
         const anio = dateObj.getFullYear();
-        
-        const hora = dateObj.getHours();
-        const min = dateObj.getMinutes();
-        const seg = dateObj.getSeconds();
-
-        if (hora === 0 && min === 0 && seg === 0) {
-            return `${dia}/${mes}/${anio}`;
-        }
-
-        const horaStr = hora.toString().padStart(2, '0');
-        const minStr = min.toString().padStart(2, '0');
-        const segStr = seg.toString().padStart(2, '0');
-
-        return `${dia}/${mes}/${anio} ${horaStr}:${minStr}:${segStr}`;
+        return `${dia}/${mes}/${anio}`;
     };
 
     // --- PREPARACIÓN DE DATOS PARA LA TABLA ---
@@ -55,16 +40,20 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
 
     return (
         <ContractPageLayout pageNumber={6}>
-            <div className="font-sans text-black text-[10px] leading-tight h-full">
+            {/* QUITAMOS 'flex flex-col justify-between h-full'.
+               Ahora usamos un flujo normal (block).
+               Esto hace que las firmas sigan inmediatamente al contenido anterior.
+            */}
+            <div className="font-sans text-black text-[10px] leading-tight">
                 
                 {/* --- HEADER --- */}
                 <div className="text-center mb-4 grid grid-cols-2">
                     <div className="h-[30px] w-auto mb-3 flex items-center justify-center">
-                            <img 
-                                src="/logol.png" 
-                                alt="Logo K-SI NUEVOS" 
-                                className="h-full w-auto object-contain"
-                            />
+                        <img 
+                            src="/logol.png" 
+                            alt="Logo K-SI NUEVOS" 
+                            className="h-full w-auto object-contain"
+                        />
                     </div>
                     <div>
                         <h3 className="text-sm font-semibold">Tabla de Amortización Venta</h3>
@@ -78,7 +67,6 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
                         <div className="grid grid-cols-[60px_1fr] gap-1">
                             <span className="font-bold">F.Emision</span>
                             <p className="text-[10px] text-gray-800 font-medium mb-0.5">
-                                {/* PRIORIDAD: Usamos la fecha de impresión si está disponible */}
                                 {fechaImpresion || formatDateHeader(data.fechaVentaFull)}
                             </p>
 
@@ -132,13 +120,41 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
                 </div>
 
                 {/* --- TABLA DE AMORTIZACIÓN --- */}
-                <div className="mb-8 print:mb-0">
+                {/* Ajustamos el margen inferior para dar aire antes de las firmas, 
+                    pero sin forzar posiciones */}
+                <div className="mb-8 print:mb-8">
                     <AmortizacionTable 
                         contratoId={data.ccoCodigo} 
                         printMode={true} 
                         totalCuotas={36}
                         cuotasAdicionales={cuotasParaTabla} 
                     />
+                </div>
+
+                {/* --- FIRMAS --- */}
+                {/* Al estar en flujo normal:
+                    1. Si la tabla es pequeña -> Aparecen justo aquí (mitad de hoja).
+                    2. Si la tabla crece -> Se empujan hacia abajo.
+                    3. Si la tabla llena la hoja -> Se empujan fuera del área visible y el 'overflow-hidden' del Layout las oculta.
+                */}
+                <div className="w-full px-4 pb-4">
+                    <div className="grid grid-cols-2 gap-16">
+                        {/* FIRMA EMPRESA */}
+                        <div className="flex flex-col items-center">
+                            <div className="w-full border-t border-black mb-1"></div>
+                            <p className="font-bold text-[9px]">ENTREGUÉ CONFORME</p>
+                            <p className="text-[8px] font-bold">AGUIRRE MARQUEZ FABIAN LEONARDO</p>
+                            <p>C.C. No. 0102109808</p>
+                        </div>
+
+                        {/* FIRMA CLIENTE */}
+                        <div className="flex flex-col items-center">
+                            <div className="w-full border-t border-black mb-1"></div>
+                            <p className="font-bold text-[9px]">RECIBÍ CONFORME</p>
+                            <p className="text-[9px] uppercase font-bold">{data.facturaNombre}</p>
+                            <p className="text-[9px]">C.I/RUC: {data.facturaRuc || '_________________'}</p>
+                        </div>
+                    </div>
                 </div>
                 
             </div>
