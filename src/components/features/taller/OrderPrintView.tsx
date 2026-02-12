@@ -1,11 +1,11 @@
+import React, { forwardRef } from 'react';
 import { OrdenTrabajo } from "@/types/taller";
-import { MapPin, Phone, Mail, Fuel, CheckSquare, User, Car } from "lucide-react";
+import { MapPin, Phone, User, Car, CheckSquare } from "lucide-react";
 
 interface OrderPrintViewProps {
     orden: OrdenTrabajo;
 }
 
-// Diccionario completo para el checklist
 const LABELS_MAP: Record<string, string> = {
     // Exterior
     rayones: 'Rayones / Golpes',
@@ -36,10 +36,10 @@ const LABELS_MAP: Record<string, string> = {
     objetos: 'Objetos Personales'
 };
 
-export function OrderPrintView({ orden }: OrderPrintViewProps) {
-    // Función auxiliar para renderizar items del checklist con estado
+// Envolvemos el componente en forwardRef para que react-to-print pueda acceder a él
+export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({ orden }, ref) => {
+    
     const renderChecklistGrid = (items: Record<string, boolean>) => {
-        // Parsear si viene como string
         let parsedItems = items;
         if (typeof items === 'string') {
             try {
@@ -67,22 +67,25 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
     };
 
     return (
-        <div id="print-area" className="w-full h-auto bg-white">
+        // Asignamos la ref aquí
+        <div ref={ref} className="w-full bg-white text-slate-900 font-sans print-container">
             
-            {/* CORRECCIÓN: Removido min-h-screen y flex flex-col para permitir múltiples páginas */}
-            <div className="w-full max-w-none mx-auto p-10 text-slate-900 font-sans">
+            <div className="w-full max-w-[210mm] mx-auto p-8">
                 
                 {/* --- HEADER --- */}
                 <header className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-6">
                     <div className="flex items-center gap-5">
-                        <img src="/LogoAutoNova.png" alt="Logo Auto Nova" className="h-20 w-42 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
-                        
+                        <img 
+                            src="/LogoAutoNova.png" 
+                            alt="Logo Auto Nova" 
+                            className="h-20 w-42 object-contain" 
+                            onError={(e) => e.currentTarget.style.display = 'none'} 
+                        />
                         <div className="hidden first:block">
                             <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Auto Nova</h1>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Centro de Latonería y Pintura</p>
                         </div>
-
-                        <div className="text-[9px] text-slate-500 font-medium  border-l pl-4 border-slate-200 space-y-1">
+                        <div className="text-[9px] text-slate-500 font-medium border-l pl-4 border-slate-200 space-y-1">
                             <p className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Av. España y Madrid</p>
                             <p className="flex items-center gap-1"><Phone className="h-3 w-3" /> 097 956 1456</p>
                         </div>
@@ -99,9 +102,8 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                 </header>
 
                 {/* --- GRILLA DE DATOS --- */}
-                <div className="grid grid-cols-2 gap-8 mb-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
-                    
-                    {/* Columna Cliente */}
+                <div className="grid grid-cols-2 gap-8 mb-6 bg-slate-50 p-6 rounded-xl border border-slate-200 break-inside-avoid">
+                    {/* Cliente */}
                     <div>
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <User className="h-3 w-3" /> Datos del Cliente
@@ -132,7 +134,7 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                         </table>
                     </div>
 
-                    {/* Columna Vehículo */}
+                    {/* Vehículo */}
                     <div>
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <Car className="h-3 w-3" /> Datos del Vehículo
@@ -180,13 +182,11 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                 </div>
 
                 {/* --- CHECKLIST DETALLADO --- */}
-                <div className="mb-6 border-t border-b border-slate-200 py-4">
+                <div className="mb-6 border-t border-b border-slate-200 py-4 break-inside-avoid">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <CheckSquare className="h-3 w-3" /> Inspección de Ingreso
                     </h3>
-                    
                     {renderChecklistGrid(orden.checklist_ingreso || {})}
-                    
                     <div className="mt-4 pt-4 border-t border-slate-100">
                         <h4 className="text-[9px] font-bold text-slate-500 uppercase mb-2">Inventario / Pertenencias</h4>
                         {renderChecklistGrid(orden.inventario_pertenencias || {})}
@@ -194,7 +194,7 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                 </div>
 
                 {/* --- OBSERVACIONES --- */}
-                <div className="mb-6">
+                <div className="mb-6 break-inside-avoid">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
                         Observaciones / Solicitud del Cliente
                     </h3>
@@ -203,14 +203,19 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                     </div>
                 </div>
 
-                {/* --- FOTOS GRANDES --- */}
+                {/* --- FOTOS --- */}
                 {orden.fotos_ingreso_urls && orden.fotos_ingreso_urls.length > 0 && (
-                    <div className="mb-8">
+                    <div className="mb-8 break-before-page">
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Evidencia Fotográfica</h3>
                         <div className="grid grid-cols-2 gap-4">
                             {orden.fotos_ingreso_urls.map((url, idx) => (
-                                <div key={idx} className="aspect-video rounded-lg border border-slate-200 overflow-hidden bg-slate-100">
-                                    <img src={url} alt={`Evidencia ${idx}`} className="w-full h-full object-contain" />
+                                // Usamos h-48 o h-64 fijo para asegurar que no se colapsen
+                                <div key={idx} className="h-56 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 break-inside-avoid flex items-center justify-center">
+                                    <img 
+                                        src={url} 
+                                        alt={`Evidencia ${idx}`} 
+                                        className="max-h-full max-w-full object-contain" 
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -218,7 +223,7 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                 )}
 
                 {/* --- FOOTER Y FIRMAS --- */}
-                <div className="mt-8 pt-8">
+                <div className="mt-8 pt-8 break-inside-avoid">
                     <div className="grid grid-cols-2 gap-20">
                         <div className="border-t border-slate-900 pt-2 text-center">
                             <p className="font-bold text-[10px] uppercase text-slate-900">Firma Cliente</p>
@@ -229,43 +234,31 @@ export function OrderPrintView({ orden }: OrderPrintViewProps) {
                             <p className="text-[8px] text-slate-500 mt-0.5">Auto Nova</p>
                         </div>
                     </div>
-                    
                     <div className="mt-6 text-[8px] text-justify text-slate-400 leading-tight">
                         <strong>CONDICIONES:</strong> El taller no se responsabiliza por pérdidas de objetos no declarados en el inventario. 
                         Pasados 3 días de la notificación de retiro, el vehículo causará bodegaje. 
                         La garantía aplica exclusivamente sobre la mano de obra realizada.
                     </div>
                 </div>
-
             </div>
             
             <style jsx global>{`
+                /* Ajustes específicos para cuando react-to-print genera el documento */
                 @media print {
                     @page { 
                         margin: 10mm; 
                         size: auto; 
                     }
-                    
-                    html, body { 
-                        height: auto !important; 
-                        overflow: visible !important; 
-                        margin: 0 !important; 
-                        padding: 0 !important;
-                        background: white !important;
-                    }
-
-                    /* Permitir que el contenido fluya naturalmente entre páginas */
-                    #print-area {
-                        page-break-after: auto;
-                    }
-
-                    /* Solo evitar saltos de página DENTRO de elementos críticos pequeños */
-                    .avoid-break {
+                    .break-inside-avoid {
                         page-break-inside: avoid;
-                        break-inside: avoid;
+                    }
+                    .break-before-page {
+                        page-break-before: always;
                     }
                 }
             `}</style>
         </div>
     );
-}
+});
+
+OrderPrintView.displayName = 'OrderPrintView';

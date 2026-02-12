@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Receipt } from "lucide-react";
+import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer } from "lucide-react";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
 import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo } from "@/types/taller";
 import { useInventario } from "@/hooks/taller/useInventario";
@@ -11,9 +11,10 @@ interface WorkOrderModalProps {
     isOpen: boolean;
     onClose: () => void;
     onStatusChange: (id: string, status: string) => void;
+    onPrint: () => void; // NUEVO PROP: Recibimos la función de imprimir desde el padre
 }
 
-export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange }: WorkOrderModalProps) {
+export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint }: WorkOrderModalProps) {
     const { items: inventario } = useInventario();
     const { 
         registrarConsumo, fetchConsumosOrden, 
@@ -228,18 +229,21 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange }: WorkO
                                 </div>
                             </div>
                             
+                            {/* BOTÓN IMPRIMIR CORREGIDO */}
                             <div className="flex justify-end pt-4">
                                 <button 
-                                    onClick={() => window.print()} 
-                                    className="text-slate-500 hover:text-slate-800 text-sm font-bold underline decoration-slate-300 underline-offset-4"
+                                    type="button"
+                                    onClick={onPrint} // USAMOS LA FUNCIÓN QUE VIENE DE LAS PROPS
+                                    className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-bold underline decoration-slate-300 underline-offset-4 transition-colors"
                                 >
+                                    <Printer className="h-4 w-4" />
                                     Imprimir Orden / PDF
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* TAB PRESUPUESTO (NUEVO) */}
+                    {/* TAB PRESUPUESTO */}
                     {activeTab === 'presupuesto' && (
                         <div className="space-y-6">
                             {/* Formulario Agregar Servicio */}
