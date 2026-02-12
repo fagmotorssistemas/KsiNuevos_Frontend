@@ -24,7 +24,7 @@ interface OpportunitiesFiltersViewProps {
     filteredVehicles: VehicleWithSeller[];
     coastFilteredVehicles: VehicleWithSeller[];
     showTopDeals: boolean;
-    onlyCoast: boolean;
+    regionFilter: 'all' | 'coast' | 'sierra';
     searchTerm: string;
     selectedBrand: string;
     selectedModel: string;
@@ -35,7 +35,7 @@ interface OpportunitiesFiltersViewProps {
     isWebhookLoading: boolean
     priceStatistics: PriceStatistics[];
     onShowTopDealsChange: (value: boolean) => void;
-    onOnlyCoastChange: (value: boolean) => void;
+    onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
     onSearchTermChange: (value: string) => void;
     onBrandChange: (value: string) => void;
     onModelChange: (value: string) => void;
@@ -52,7 +52,7 @@ export function OpportunitiesFiltersView({
     filteredVehicles,
     coastFilteredVehicles,
     showTopDeals,
-    onlyCoast,
+    regionFilter,
     searchTerm,
     selectedBrand,
     selectedModel,
@@ -63,7 +63,7 @@ export function OpportunitiesFiltersView({
     isWebhookLoading,
     priceStatistics,
     onShowTopDealsChange,
-    onOnlyCoastChange,
+    onRegionFilterChange,
     onSearchTermChange,
     onBrandChange,
     onModelChange,
@@ -151,7 +151,6 @@ export function OpportunitiesFiltersView({
         };
         return mapping[value] || "Cualquier Fecha";
     }, []);
-    // ---------------------------------------
 
     const sortOptions = [
         { value: "created_at_desc", label: "Recién scrapeados" },
@@ -187,8 +186,8 @@ export function OpportunitiesFiltersView({
         selectedCity !== "all" ||
         sortBy !== "created_at_desc" ||
         searchTerm !== "" ||
-        onlyCoast === false,
-        [selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, sortBy, searchTerm, onlyCoast]
+        regionFilter !== 'all',
+        [selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, sortBy, searchTerm, regionFilter]
     );
 
     const FilterButton = ({
@@ -261,16 +260,16 @@ export function OpportunitiesFiltersView({
                         <TrendingUp className="h-3.5 w-3.5" /> Oportunidades
                     </button> */}
                     <button
-                        onClick={() => onOnlyCoastChange(true)}
-                        className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${onlyCoast ? "bg-red-50 border-red-200 text-red-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
-                    >
-                        <MapPin className="h-3.5 w-3.5" /> Solo Sierra
-                    </button>
-                    <button
-                        onClick={() => onOnlyCoastChange(false)}
-                        className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${!onlyCoast ? "bg-red-50 border-red-200 text-red-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
+                        onClick={() => onRegionFilterChange('all')}
+                        className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${regionFilter === 'all' ? "bg-red-50 border-red-200 text-red-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
                     >
                         <MapPin className="h-3.5 w-3.5" /> Todos
+                    </button>
+                    <button
+                        onClick={() => onRegionFilterChange('sierra')}
+                        className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${regionFilter === 'sierra' ? "bg-red-50 border-red-200 text-red-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
+                    >
+                        <MapPin className="h-3.5 w-3.5" /> Solo Sierra
                     </button>
                     <div className="h-4 w-px bg-slate-200 mx-1 flex-shrink-0" />
                     <button

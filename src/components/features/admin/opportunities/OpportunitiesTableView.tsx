@@ -20,7 +20,7 @@ import {
     DollarSign,
     AlertCircle,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 import { DateFormatter } from "@/utils/DateFormatter";
 import { TextFormatter } from "@/utils/TextFormatter";
@@ -59,6 +59,46 @@ const displayTextCondition = (condition: string) => {
     }
 };
 
+// --- PRICE BADGE ---
+function PriceBadge({ type }: { type: 'min' | 'max' | null }) {
+    if (!type) return null;
+
+    if (type === 'min') {
+        return (
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
+                <TrendingDown className="h-2.5 w-2.5" />
+                Menor precio
+            </div>
+        );
+    }
+
+    return (
+        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold uppercase tracking-wide">
+            <TrendingUp className="h-2.5 w-2.5" />
+            Mayor precio
+        </div>
+    );
+}
+
+function MileageBadge({ type }: { type: 'min' | 'max' | null }) {
+    if (!type) return null;
+
+    if (type === 'min') {
+        return (
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
+                <TrendingDown className="h-2.5 w-2.5" />
+                Menor kilometraje
+            </div>
+        );
+    }
+
+    return (
+        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-bold uppercase tracking-wide">
+            <TrendingUp className="h-2.5 w-2.5" />
+            Mayor kilometraje
+        </div>
+    );
+}
 // --- TIMELINE BADGE ---
 function TimelineBadge({ label, value, icon: Icon, accent = false }: {
     label: string;
@@ -91,6 +131,82 @@ export function OpportunitiesTableView({
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithSeller | null>(null);
     const [vehicleStats, setVehicleStats] = useState<PriceStatistics | null>(null);
     const [loadingStats, setLoadingStats] = useState(false);
+
+    // Calcular min/max por marca+modelo dentro del listado actual
+    const priceRangeByModel = useMemo(() => {
+        const map = new Map<string, { min: number; max: number; minId: string; maxId: string }>();
+
+        vehicles.forEach((v) => {
+
+            if (!v.price || !v.brand || !v.model || !v.year) return;
+            const year = v.year;
+            const key = `${v.brand.toLowerCase()}__${v.model.toLowerCase()}__${year}`;
+            const existing = map.get(key);
+
+            if (!existing) {
+                map.set(key, { min: v.price, max: v.price, minId: v.id, maxId: v.id });
+            } else {
+                if (v.price < existing.min) {
+                    existing.min = v.price;
+                    existing.minId = v.id;
+                }
+                if (v.price > existing.max) {
+                    existing.max = v.price;
+                    existing.maxId = v.id;
+                }
+            }
+        });
+
+        return map;
+    }, [vehicles]);
+
+    const mileageRangeByModel = useMemo(() => {
+        const map = new Map<string, { min: number; max: number; minId: string; maxId: string }>();
+
+        vehicles.forEach((v) => {
+            if (!v.mileage || !v.brand || !v.model) return;
+            const year = v.year ?? 'unknown';
+            const key = `${v.brand.toLowerCase()}__${v.model.toLowerCase()}__${year}`;
+            const existing = map.get(key);
+
+            if (!existing) {
+                map.set(key, { min: v.mileage, max: v.mileage, minId: v.id, maxId: v.id });
+            } else {
+                if (v.mileage < existing.min) {
+                    existing.min = v.mileage;
+                    existing.minId = v.id;
+                }
+                if (v.mileage > existing.max) {
+                    existing.max = v.mileage;
+                    existing.maxId = v.id;
+                }
+            }
+        });
+
+        return map;
+    }, [vehicles]);
+
+    const getMileageBadge = (vehicle: VehicleWithSeller): 'min' | 'max' | null => {
+        if (!vehicle.mileage || !vehicle.brand || !vehicle.model) return null;
+        const year = vehicle.year ?? 'unknown';
+        const key = `${vehicle.brand.toLowerCase()}__${vehicle.model.toLowerCase()}__${year}`;
+        const range = mileageRangeByModel.get(key);
+        if (!range || range.min === range.max) return null;
+        if (vehicle.id === range.minId) return 'min';
+        if (vehicle.id === range.maxId) return 'max';
+        return null;
+    };
+
+    const getPriceBadge = (vehicle: VehicleWithSeller): 'min' | 'max' | null => {
+        if (!vehicle.price || !vehicle.brand || !vehicle.model || !vehicle.year) return null;
+        const year = vehicle.year;
+        const key = `${vehicle.brand.toLowerCase()}__${vehicle.model.toLowerCase()}__${year}`
+        const range = priceRangeByModel.get(key);
+        if (!range || range.min === range.max) return null;
+        if (vehicle.id === range.minId) return 'min';
+        if (vehicle.id === range.maxId) return 'max';
+        return null;
+    };
 
     // Cargar estadísticas cuando se selecciona un vehículo
     useEffect(() => {
@@ -246,15 +362,17 @@ export function OpportunitiesTableView({
                                                 </div>
                                                 <span>{vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '---'}</span>
                                             </div>
+                                            <MileageBadge type={getMileageBadge(vehicle)} />
                                         </div>
                                     </td>
 
                                     {/* Columna Precio */}
                                     <td className="py-5 px-6">
-                                        <div className="text-right">
+                                        <div className="flex flex-col items-end gap-1.5">
                                             <div className="font-black text-zinc-900 tracking-tight text-2xl">
                                                 ${vehicle.price ? vehicle.price.toLocaleString() : 'N/A'}
                                             </div>
+                                            <PriceBadge type={getPriceBadge(vehicle)} />
                                         </div>
                                     </td>
 
@@ -336,6 +454,8 @@ export function OpportunitiesTableView({
                                                 <Clock className="h-3.5 w-3.5" />
                                                 {DateFormatterInstance.formatRelativeTime(selectedVehicle.publication_date)}
                                             </div>
+                                            <PriceBadge type={getPriceBadge(selectedVehicle)} />
+
                                         </div>
                                         <h2 className="text-3xl lg:text-4xl font-black text-zinc-900 tracking-tight leading-none mb-2">
                                             {selectedVehicle.brand?.toUpperCase()}{" "}
@@ -355,7 +475,6 @@ export function OpportunitiesTableView({
                                 {/* Price Statistics Bar */}
                                 {vehicleStats && !loadingStats && (
                                     <>
-                                        {/* CONDICIONAL: Si el precio mínimo es igual al máximo, no hay variación estadística suficiente */}
                                         {vehicleStats.min_price === vehicleStats.max_price ? (
                                             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
                                                 <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
@@ -364,9 +483,7 @@ export function OpportunitiesTableView({
                                                 </p>
                                             </div>
                                         ) : (
-                                            /* SI HAY VARIACIÓN, MOSTRAMOS LA GRID ORIGINAL */
                                             <div className="grid grid-cols-3 gap-3">
-                                                {/* Precio Sugerido (Mediana) */}
                                                 <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <div className="p-1 bg-blue-100 rounded-md">
@@ -379,7 +496,6 @@ export function OpportunitiesTableView({
                                                     </div>
                                                 </div>
 
-                                                {/* Precio Más Bajo */}
                                                 <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <div className="p-1 bg-green-100 rounded-md">
@@ -392,7 +508,6 @@ export function OpportunitiesTableView({
                                                     </div>
                                                 </div>
 
-                                                {/* Precio Más Alto */}
                                                 <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <div className="p-1 bg-red-100 rounded-md">
@@ -409,7 +524,6 @@ export function OpportunitiesTableView({
                                     </>
                                 )}
 
-                                {/* Loading Stats */}
                                 {loadingStats && (
                                     <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl">
                                         <div className="flex items-center gap-3">
@@ -419,7 +533,6 @@ export function OpportunitiesTableView({
                                     </div>
                                 )}
 
-                                {/* No Stats Available - Debug */}
                                 {!loadingStats && !vehicleStats && getPriceStatisticsForVehicle && (
                                     <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
                                         <div className="flex items-center gap-3">
@@ -437,7 +550,6 @@ export function OpportunitiesTableView({
                                         </div>
                                     </div>
                                 )}
-
                             </div>
 
                             {/* Cuerpo Scrollable */}
@@ -583,9 +695,8 @@ export function OpportunitiesTableView({
                             </div>
                         </div>
                     </div>
-                </div >
-            )
-            }
+                </div>
+            )}
         </>
     );
 }

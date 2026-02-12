@@ -16,7 +16,7 @@ interface OpportunitiesCenterViewProps {
     filteredVehicles: VehicleWithSeller[];
     coastFilteredVehicles: VehicleWithSeller[];
     showTopDeals: boolean;
-    onlyCoast: boolean;
+    regionFilter: 'all' | 'coast' | 'sierra';
     searchTerm: string;
     selectedBrand: string;
     selectedModel: string;
@@ -26,7 +26,7 @@ interface OpportunitiesCenterViewProps {
     sortBy: string;
     priceStatistics: PriceStatistics[]
     onShowTopDealsChange: (value: boolean) => void;
-    onOnlyCoastChange: (value: boolean) => void;
+    onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
     onSearchTermChange: (value: string) => void;
     onBrandChange: (value: string) => void;
     onModelChange: (value: string) => void;
@@ -45,7 +45,7 @@ export const OpportunitiesCenterView = ({
     filteredVehicles,
     coastFilteredVehicles,
     showTopDeals,
-    onlyCoast,
+    regionFilter,
     searchTerm,
     selectedBrand,
     selectedModel,
@@ -55,7 +55,7 @@ export const OpportunitiesCenterView = ({
     sortBy,
     priceStatistics,
     onShowTopDealsChange,
-    onOnlyCoastChange,
+    onRegionFilterChange,
     onSearchTermChange,
     onBrandChange,
     onModelChange,
@@ -188,8 +188,9 @@ export const OpportunitiesCenterView = ({
                                     />
                                 </div>
                                 <button
+                                    disabled={isWebhookLoading}
                                     onClick={() => setShowCarPicker(true)}
-                                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0"
+                                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0 disabled:opacity-50"
                                     title="Abrir Catálogo"
                                 >
                                     <Car className="h-5 w-5" />
@@ -233,7 +234,7 @@ export const OpportunitiesCenterView = ({
                         filteredVehicles={filteredVehicles}
                         coastFilteredVehicles={coastFilteredVehicles}
                         showTopDeals={showTopDeals}
-                        onlyCoast={onlyCoast}
+                        regionFilter={regionFilter}
                         priceStatistics={priceStatistics}
                         searchTerm={searchTerm}
                         selectedBrand={selectedBrand}
@@ -243,7 +244,7 @@ export const OpportunitiesCenterView = ({
                         selectedCity={selectedCity}
                         sortBy={sortBy}
                         onShowTopDealsChange={onShowTopDealsChange}
-                        onOnlyCoastChange={onOnlyCoastChange}
+                        onRegionFilterChange={onRegionFilterChange}
                         onSearchTermChange={onSearchTermChange}
                         onBrandChange={onBrandChange}
                         onModelChange={onModelChange}
