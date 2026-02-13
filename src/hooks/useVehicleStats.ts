@@ -98,9 +98,10 @@ export function useVehicleStats(
         console.groupCollapsed(`🔍 Diagnóstico Stats Mejorado: ${dateFilter}`);
 
         try {
-            // 1. CARGAR INVENTARIO
+            // 1. CARGAR INVENTARIO (DESDE inventoryoracle)
+            // CAMBIO REALIZADO: Conectando a la nueva tabla 'inventoryoracle'
             let inventoryQuery = supabase
-                .from('inventory')
+                .from('inventoryoracle') 
                 .select('id, brand, model, year, img_main_url, price, status')
                 .limit(2000); 
             
@@ -128,14 +129,15 @@ export function useVehicleStats(
                 model: string 
             }[] = [];
 
-            inventoryData?.forEach(car => {
+            inventoryData?.forEach((car: any) => {
                 if (car.brand && car.model) {
                     invStatsMap.set(car.id, {
                         vehicle_uid: car.id,
                         brand: car.brand,
                         model: car.model,
                         year: car.year,
-                        img_url: car.img_main_url || undefined,
+                        // Verificamos si img_main_url existe, si no, undefined
+                        img_url: car.img_main_url || undefined, 
                         price: car.price,
                         status: car.status,
                         total_leads: 0,
@@ -169,6 +171,11 @@ export function useVehicleStats(
                 const from = page * PAGE_SIZE;
                 const to = (page + 1) * PAGE_SIZE - 1;
 
+                // Nota: Asumimos que la relación 'interested_cars' sigue funcionando. 
+                // Si la tabla 'leads' no ha cambiado, seguirá apuntando a vehicle_uid.
+                // Si vehicle_uid coincide con los IDs de inventoryoracle, funcionará directo.
+                // Si no coinciden los IDs (ej. migración de IDs), la lógica "Fuzzy Match" 
+                // abajo se encargará de re-asociarlos por nombre.
                 const { data: leadsPage, error: leadsError } = await supabase
                     .from('leads')
                     .select(`
@@ -201,6 +208,7 @@ export function useVehicleStats(
             }
 
             // 3. CARGAR SHOWROOM VISITS
+            // Asumimos que inventory_id en showroom_visits apunta al ID correcto del nuevo inventario
             const { data: visitsData, error: visitsError } = await supabase
                 .from('showroom_visits')
                 .select('inventory_id')
@@ -225,6 +233,7 @@ export function useVehicleStats(
                     let matchedCarId: string | null = null;
                     
                     // --- NIVEL 1: Match Exacto por ID ---
+                    // Verifica si el ID del lead existe en el nuevo inventario
                     if (c.vehicle_uid && invStatsMap.has(c.vehicle_uid)) {
                         matchedCarId = c.vehicle_uid;
                     } 
@@ -242,16 +251,8 @@ export function useVehicleStats(
                                 if (invCar.normalizedName.length > 4 && leadRequestNormalized.includes(invCar.normalizedName)) return true;
                                 
                                 // REGLA NÚMEROS: Solo si el texto es ambiguo o corto, verificamos números estrictamente.
-                                // Si el texto es muy parecido, asumimos match para evitar duplicados en oportunidades.
                                 if (leadNumbers.length > 0 && invCar.numbers.length > 0) {
-                                     // Lógica original conservada para atribución exacta
                                      const allNumbersMatch = leadNumbers.every(num => invCar.numbers.includes(num));
-                                     // Si los números no coinciden, pero el texto es casi idéntico,
-                                     // ¿deberíamos contarlo como inventario? 
-                                     // Para estadísticas de VENTA: NO (es otro carro).
-                                     // Para estadísticas de OPORTUNIDAD: SÍ (tenemos algo parecido).
-                                     // Aquí estamos decidiendo a qué CARRO del inventario atribuir el lead.
-                                     // Mantendremos estricto aquí, pero filtraremos en el paso final.
                                      if (!allNumbersMatch) return false;
                                 }
 
@@ -282,7 +283,6 @@ export function useVehicleStats(
                         const rawYear = c.year || null;
 
                         // MEJORA 1: CLAVE NORMALIZADA PARA EVITAR DUPLICADOS
-                        // Usamos normalizeStr para que "d-max" y "dmax" generen la misma clave.
                         const normBrand = normalizeStr(rawBrand);
                         const normModel = normalizeStr(rawModel);
                         const yearKey = rawYear ? rawYear.toString() : 'any';
@@ -330,10 +330,6 @@ export function useVehicleStats(
             finalInvStats.sort((a, b) => b.total_leads - a.total_leads);
 
             // MEJORA 2: FILTRO FINAL DE OPORTUNIDADES VS INVENTARIO REAL
-            // Aquí eliminamos las oportunidades que se parecen demasiado a lo que YA tenemos en stock.
-            // Esto soluciona el problema de "Suzuki Scross 1.6" apareciendo como oportunidad
-            // cuando ya tienes un "Suzuki Scross" en venta.
-            
             const availableInventoryForCheck = fuzzyInventoryList; // Usamos la lista pre-calculada
 
             let finalOppStats = Array.from(oppStatsMap.values());
@@ -342,8 +338,7 @@ export function useVehicleStats(
                 // Generamos la firma normalizada de la oportunidad
                 const oppSignature = normalizeStr(`${opp.brand} ${opp.model}`);
                 
-                // Buscamos si existe ALGO en el inventario que coincida, 
-                // ignorando diferencias de año o detalles técnicos menores.
+                // Buscamos si existe ALGO en el inventario que coincida
                 const isAlreadyInStock = availableInventoryForCheck.some(invItem => {
                     // Verificamos si la marca coincide primero (optimización)
                     if (!invItem.normalizedName.includes(normalizeStr(opp.brand)) && 
@@ -352,8 +347,6 @@ export function useVehicleStats(
                     }
 
                     // Chequeo cruzado de inclusión
-                    // Si el inventario es "scross" y la oportunidad es "scross16" -> MATCH (true) -> Se elimina de oportunidades
-                    // Si el inventario es "dmax" y la oportunidad es "dmaxhiride" -> MATCH (true) -> Se elimina
                     return invItem.normalizedName.includes(oppSignature) || oppSignature.includes(invItem.normalizedName);
                 });
 
