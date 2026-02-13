@@ -7,32 +7,35 @@ interface OrderPrintViewProps {
 }
 
 const LABELS_MAP: Record<string, string> = {
-    // Exterior
+    // --- Exterior ---
     rayones: 'Rayones / Golpes',
     pintura: 'Desprendimiento Pintura',
     oxidos: 'Óxidos / Corrosión',
-    cristales: 'Cristales Rotos/Rajados',
-    espejos: 'Espejos Laterales',
-    faros: 'Faros y Luces',
-    parachoques: 'Parachoques',
-    // Interior
-    asientos: 'Asientos / Tapicería',
-    tablero: 'Tablero',
-    audio: 'Equipo de Audio',
+    cristales: 'Cristales Rotos o Rajados',
+    espejos: 'Espejos Laterales en buen estado',
+    faros: 'Faros y Luces Funcionales',
+    parachoques: 'Parachoques en Buen Estado',
+
+    // --- Interior ---
+    asientos: 'Asientos en Buen Estado',
+    tablero: 'Tablero sin daños',
+    audio: 'Equipo de Audio o Pantalla en Buen Estado',
     aire: 'Aire Acondicionado',
-    alfombras: 'Alfombras',
-    // Mecanico
-    motor: 'Motor (Ruidos)',
-    frenos: 'Frenos',
-    bateria: 'Batería',
-    suspension: 'Suspensión',
-    direccion: 'Dirección',
-    llantas: 'Neumáticos',
-    // Inventario
+    alfombras: 'Alfombras y Tapiceria Limpia',
+
+    // --- Mecanico ---
+    motor: 'Motor en Buen Estado',
+    frenos: 'Frenos Operativos',
+    bateria: 'Batería en Buen Estado',
+    suspension: 'Suspensión sin ruidos extraños',
+    direccion: 'Dirección en Buen Estado',
+    llantas: 'Neumaticos con Desgaste',
+
+    // --- Inventario ---
     llanta_repuesto: 'Llanta Repuesto',
     gata: 'Gata y Herramientas',
-    documentos: 'Documentos',
-    llaves: 'Llaves',
+    documentos: 'Documentos del Vehículo',
+    llaves: 'Llaves De Seguridad',
     objetos: 'Objetos Personales'
 };
 
@@ -51,11 +54,13 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
         }
 
         return (
-            <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-[9px]">
+            // AUMENTADO: de text-[9px] a text-xs (aprox 12px)
+            <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
                 {Object.entries(parsedItems || {}).map(([key, value]) => (
                     <div key={key} className="flex items-center gap-1.5">
                         <div className={`w-3 h-3 flex items-center justify-center border rounded-sm ${value ? 'bg-slate-800 border-slate-800 text-white' : 'border-slate-300'}`}>
-                            {value && <span className="text-[8px] font-bold">✓</span>}
+                            {/* AUMENTADO: de text-[8px] a text-[10px] */}
+                            {value && <span className="text-[10px] font-bold">✓</span>}
                         </div>
                         <span className={`uppercase ${value ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
                             {LABELS_MAP[key] || key}
@@ -83,19 +88,23 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
                         />
                         <div className="hidden first:block">
                             <h1 className="text-3xl font-black tracking-tighter uppercase leading-none">Auto Nova</h1>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Centro de Latonería y Pintura</p>
+                            {/* AUMENTADO: de text-xs a text-sm */}
+                            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">Centro de Latonería y Pintura</p>
                         </div>
-                        <div className="text-[9px] text-slate-500 font-medium border-l pl-4 border-slate-200 space-y-1">
+                        {/* AUMENTADO: de text-[9px] a text-xs */}
+                        <div className="text-xs text-slate-500 font-medium border-l pl-4 border-slate-200 space-y-1">
                             <p className="flex items-center gap-1"><MapPin className="h-3 w-3" /> Av. España y Madrid</p>
                             <p className="flex items-center gap-1"><Phone className="h-3 w-3" /> 097 956 1456</p>
                         </div>
                     </div>
                     <div className="text-right">
                         <div className="bg-slate-900 text-white px-4 py-2 rounded-lg mb-1">
-                            <h2 className="text-[10px] font-bold uppercase tracking-widest opacity-80">Orden de Trabajo</h2>
+                            {/* AUMENTADO: de text-[10px] a text-xs */}
+                            <h2 className="text-xs font-bold uppercase tracking-widest opacity-80">Orden de Trabajo</h2>
                             <p className="text-2xl font-mono font-bold leading-none">#{orden.numero_orden.toString().padStart(6, '0')}</p>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-500">
+                        {/* AUMENTADO: de text-[10px] a text-xs */}
+                        <p className="text-xs font-bold text-slate-500">
                             Ingreso: {new Date(orden.fecha_ingreso).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' })}
                         </p>
                     </div>
@@ -105,13 +114,15 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
                 <div className="grid grid-cols-2 gap-8 mb-6 bg-slate-50 p-6 rounded-xl border border-slate-200 break-inside-avoid">
                     {/* Cliente */}
                     <div>
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        {/* AUMENTADO: de text-xs a text-sm */}
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <User className="h-3 w-3" /> Datos del Cliente
                         </h3>
-                        <table className="w-full text-[10px]">
+                        {/* AUMENTADO: de text-[10px] a text-xs */}
+                        <table className="w-full text-xs">
                             <tbody>
                                 <tr>
-                                    <td className="font-bold text-slate-500 py-1 w-20">Propietario:</td>
+                                    <td className="font-bold text-slate-500 py-1 w-24">Propietario:</td>
                                     <td className="font-bold text-slate-900 uppercase py-1">{orden.cliente?.nombre_completo}</td>
                                 </tr>
                                 <tr>
@@ -136,10 +147,12 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
 
                     {/* Vehículo */}
                     <div>
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        {/* AUMENTADO: de text-xs a text-sm */}
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                             <Car className="h-3 w-3" /> Datos del Vehículo
                         </h3>
-                        <table className="w-full text-[10px]">
+                        {/* AUMENTADO: de text-[10px] a text-xs */}
+                        <table className="w-full text-xs">
                             <tbody>
                                 <tr>
                                     <td className="font-bold text-slate-500 py-1 w-24">Vehículo:</td>
@@ -183,30 +196,35 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
 
                 {/* --- CHECKLIST DETALLADO --- */}
                 <div className="mb-6 border-t border-b border-slate-200 py-4 break-inside-avoid">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    {/* AUMENTADO: de text-xs a text-sm */}
+                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <CheckSquare className="h-3 w-3" /> Inspección de Ingreso
                     </h3>
                     {renderChecklistGrid(orden.checklist_ingreso || {})}
                     <div className="mt-4 pt-4 border-t border-slate-100">
-                        <h4 className="text-[9px] font-bold text-slate-500 uppercase mb-2">Inventario / Pertenencias</h4>
+                        {/* AUMENTADO: de text-[9px] a text-xs */}
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Inventario / Pertenencias</h4>
                         {renderChecklistGrid(orden.inventario_pertenencias || {})}
                     </div>
                 </div>
 
                 {/* --- OBSERVACIONES --- */}
                 <div className="mb-6 break-inside-avoid">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                    {/* AUMENTADO: de text-xs a text-sm */}
+                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">
                         Observaciones / Solicitud del Cliente
                     </h3>
-                    <div className="text-[10px] leading-relaxed text-slate-800 font-medium whitespace-pre-wrap p-3 bg-slate-50 border border-slate-200 rounded-lg min-h-[60px]">
+                    {/* AUMENTADO: de text-[10px] a text-sm */}
+                    <div className="text-sm leading-relaxed text-slate-800 font-medium whitespace-pre-wrap p-3 bg-slate-50 border border-slate-200 rounded-lg min-h-[60px]">
                         {orden.observaciones_ingreso || "Ninguna observación registrada."}
                     </div>
                 </div>
 
                 {/* --- FOTOS --- */}
                 {orden.fotos_ingreso_urls && orden.fotos_ingreso_urls.length > 0 && (
-                    <div className="mb-8 break-before-page">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Evidencia Fotográfica</h3>
+                    <div className="mb-24 break-before-page">
+                        {/* AUMENTADO: de text-xs a text-sm */}
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3">Evidencia Fotográfica</h3>
                         <div className="grid grid-cols-2 gap-4">
                             {orden.fotos_ingreso_urls.map((url, idx) => (
                                 // Usamos h-48 o h-64 fijo para asegurar que no se colapsen
@@ -226,17 +244,21 @@ export const OrderPrintView = forwardRef<HTMLDivElement, OrderPrintViewProps>(({
                 <div className="mt-8 pt-8 break-inside-avoid">
                     <div className="grid grid-cols-2 gap-20">
                         <div className="border-t border-slate-900 pt-2 text-center">
-                            <p className="font-bold text-[10px] uppercase text-slate-900">Firma Cliente</p>
-                            <p className="text-[8px] text-slate-500 mt-0.5">Acepto recepción y condiciones</p>
+                            {/* AUMENTADO: de text-[10px] a text-xs */}
+                            <p className="font-bold text-xs uppercase text-slate-900">Firma Cliente</p>
+                            {/* AUMENTADO: de text-[8px] a text-[10px] */}
+                            <p className="text-[10px] text-slate-500 mt-0.5">Acepto recepción y condiciones</p>
                         </div>
                         <div className="border-t border-slate-900 pt-2 text-center">
-                            <p className="font-bold text-[10px] uppercase text-slate-900">Recibido Por (Taller)</p>
-                            <p className="text-[8px] text-slate-500 mt-0.5">Auto Nova</p>
+                            {/* AUMENTADO: de text-[10px] a text-xs */}
+                            <p className="font-bold text-xs uppercase text-slate-900">Recibido Por (Taller)</p>
+                            {/* AUMENTADO: de text-[8px] a text-[10px] */}
+                            <p className="text-[10px] text-slate-500 mt-0.5">Auto Nova</p>
                         </div>
                     </div>
-                    <div className="mt-6 text-[8px] text-justify text-slate-400 leading-tight">
+                    {/* AUMENTADO: de text-[8px] a text-[10px] */}
+                    <div className="mt-6 text-[10px] text-justify text-slate-400 leading-tight">
                         <strong>CONDICIONES:</strong> El taller no se responsabiliza por pérdidas de objetos no declarados en el inventario. 
-                        Pasados 3 días de la notificación de retiro, el vehículo causará bodegaje. 
                         La garantía aplica exclusivamente sobre la mano de obra realizada.
                     </div>
                 </div>
