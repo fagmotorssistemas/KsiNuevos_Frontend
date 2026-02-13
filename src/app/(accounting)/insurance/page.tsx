@@ -28,9 +28,9 @@ export default function SegurosPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState<FilterType>('rastreador');
 
-    // --- MANEJO DE MODALES DIFERENCIADOS ---
-    const [selectedNotaId, setSelectedNotaId] = useState<string | null>(null); // Expediente (Lectura)
-    const [auditNotaId, setAuditNotaId] = useState<string | null>(null);       // Auditoría (Edición)
+    // --- ESTADO UNIFICADO: GESTIÓN INTEGRAL ---
+    // Ya no distinguimos entre "lectura" y "auditoría". 
+    const [selectedContratoId, setSelectedContratoId] = useState<string | null>(null);
 
     useEffect(() => {
         const procesarNotas = async () => {
@@ -55,7 +55,7 @@ export default function SegurosPage() {
 
                 const resultados = await Promise.all(promesas);
                 
-                // Categorización de resultados para el filtrado por tarjetas
+                // Categorización de resultados
                 setDetallesRastreador(resultados.filter((det): det is ContratoDetalle => 
                     parseFloat(det?.totalRastreador?.toString().replace(/[^0-9.]/g, '') || "0") > 0
                 ));
@@ -78,7 +78,7 @@ export default function SegurosPage() {
         if (!loadingLista) procesarNotas();
     }, [listaNotas, loadingLista]);
 
-    // Cálculo de métricas memorizado
+    // Cálculo de métricas
     const metricas = useMemo(() => ({
         rastreador: {
             cant: detallesRastreador.length,
@@ -98,7 +98,7 @@ export default function SegurosPage() {
         }
     }), [detallesRastreador, detallesSeguro, detallesAmbos]);
 
-    // Filtrado de la tabla según buscador y filtro activo
+    // Filtrado
     const filteredData = useMemo(() => {
         const base = activeFilter === 'rastreador' ? detallesRastreador : 
                      activeFilter === 'seguro' ? detallesSeguro : detallesAmbos;
@@ -123,7 +123,7 @@ export default function SegurosPage() {
                     <h1 className="text-3xl font-light text-slate-800 tracking-tight">
                         Panel de <span className="font-bold text-slate-900">Seguros y Rastreadores</span>
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1">Gestión administrativa y auditoría técnica de servicios adicionales.</p>
+                    <p className="text-slate-500 text-sm mt-1">Hoja de servicio unificada y gestión técnica.</p>
                 </div>
                 <ProcessingStatus isProcessing={isProcessing} progreso={progreso} />
             </header>
@@ -139,27 +139,15 @@ export default function SegurosPage() {
                 activeFilter={activeFilter} 
                 searchTerm={searchTerm} 
                 setSearchTerm={setSearchTerm} 
-                onViewDetail={setSelectedNotaId} // Acción para ver expediente
-                onAudit={setAuditNotaId}        // Acción para realizar auditoría
+                onManage={setSelectedContratoId} // Única acción: Gestionar
             />
 
-            {/* MODAL 1: CONSULTA DE EXPEDIENTE (Solo lectura, muestra todo) */}
-            {selectedNotaId && (
+            {/* MODAL UNIFICADO: GESTIÓN INTEGRAL */}
+            {selectedContratoId && (
                 <InsuranceContratoDetails 
-                    contratoId={selectedNotaId} 
-                    onClose={() => setSelectedNotaId(null)}
-                    isReadOnly={true}      // Desactiva formularios
-                    activeFilter="ambos"  // Muestra información completa
-                />
-            )}
-
-            {/* MODAL 2: AUDITORÍA TÉCNICA (Contextual según el filtro activo) */}
-            {auditNotaId && (
-                <InsuranceContratoDetails 
-                    contratoId={auditNotaId} 
-                    onClose={() => setAuditNotaId(null)} 
-                    isReadOnly={false}     // Activa formularios
-                    activeFilter={activeFilter} // Abre el formulario de la tarjeta actual
+                    contratoId={selectedContratoId} 
+                    onClose={() => setSelectedContratoId(null)} 
+                    activeFilter={activeFilter} 
                 />
             )}
         </div>

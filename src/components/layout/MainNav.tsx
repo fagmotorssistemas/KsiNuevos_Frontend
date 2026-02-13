@@ -15,10 +15,11 @@ export function MainNav({ className }: { className?: string }) {
   
   let navItems: NavItem[] = [];
 
-  // Lógica exclusiva para Finanzas: Solo ve Cartera
+  // Lógica exclusiva para Finanzas
   if (profile?.role === "finanzas") {
+    // Mantenemos la lógica de GitHub (probablemente 'Acceso Limitado' sea el nombre oficial ahora)
     navItems = [
-      { href: "/inventario", label: "Acceso Limitado" },
+      { href: "/inventario", label: "Acceso Limitado" }, 
     ];
   } else {
     // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
@@ -26,23 +27,30 @@ export function MainNav({ className }: { className?: string }) {
       { href: "/leads", label: "Ventas" },
     ];
 
-    // Admin también necesita ver Cartera (opcional, asumiendo que Admin ve todo)
+    // Admin
     if (profile?.role === "admin") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
-      navItems.push({ href: "/taller/dashboard", label: "Taller" });
+      
+      // IMPORTANTE: Usamos la ruta nueva que vino de GitHub para no romper nada
+      navItems.push({ href: "/taller/dashboard", label: "Taller" }); 
+
+      // --- RESTAURAMOS TUS BOTONES ---
+      navItems.push({ href: "/rastreadores", label: "Rastreadores" });
+      navItems.push({ href: "/seguros", label: "Seguros" });
+      // -------------------------------
     }
 
     // Admin y Marketing ven la sección de reportes
     if (profile?.role === "admin" || profile?.role === "marketing") {
       navItems.push({
         href: "/report",
-        label: profile?.role === "marketing" ? "Monitoreo" : "Monitoreo",
+        label: "Monitoreo", // Simplificado, sirve para ambos
       });
     }
   }
 
   return (
-    <nav className={`flex items-center space-x-1 ${className}`}>
+    <nav className={`flex items-center space-x-1 ${className || ''}`}>
       {navItems.map((item) => {
         const isActive = pathname?.startsWith(item.href);
 

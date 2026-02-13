@@ -1,4 +1,4 @@
-import { Shield, HeartHandshake, Box } from 'lucide-react';
+import { Shield, ShieldCheck, Package } from 'lucide-react'; // Cambié Box por Package para variar, o usa Box si prefieres
 import { MetricCard } from './MetricCard';
 
 interface MetricsGridProps {
@@ -13,33 +13,36 @@ interface MetricsGridProps {
 
 export function MetricsGrid({ activeFilter, setActiveFilter, metrics }: MetricsGridProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <MetricCard 
                 title="Rastreo Satelital" 
                 unitLabel="Rastreadores"
-                icon={<Shield size={22} />} 
+                icon={<Shield size={24} />} 
                 amount={metrics.rastreador.total} 
                 count={metrics.rastreador.cant}
                 isActive={activeFilter === 'rastreador'}
                 onClick={() => setActiveFilter('rastreador')}
+                variant="rose" // Rojo
             />
             <MetricCard 
                 title="Pólizas de Seguro" 
                 unitLabel="Seguros"
-                icon={<HeartHandshake size={22} />} 
+                icon={<ShieldCheck size={24} />} 
                 amount={metrics.seguro.total} 
                 count={metrics.seguro.cant}
                 isActive={activeFilter === 'seguro'}
                 onClick={() => setActiveFilter('seguro')}
+                variant="emerald" // Verde
             />
             <MetricCard 
                 title="Paquetes Completos" 
                 unitLabel="Ambos"
-                icon={<Box size={22} />} 
+                icon={<Package size={24} />} 
                 amount={metrics.ambos.total} 
                 count={metrics.ambos.cant}
                 isActive={activeFilter === 'ambos'}
                 onClick={() => setActiveFilter('ambos')}
+                variant="blue" // Azul
             />
         </div>
     );

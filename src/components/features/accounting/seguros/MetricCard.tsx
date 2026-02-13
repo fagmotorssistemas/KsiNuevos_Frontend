@@ -1,44 +1,103 @@
-import { Card } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card"; // Mantenemos tu import aunque no se use directamente, por si acaso.
 
 interface MetricCardProps {
-    title: string;
+    title: string;      // Ej: "Rastreo Satelital" (Ahora será el subtítulo pequeño)
+    unitLabel: string;  // Ej: "Rastreadores" (Ahora será el Título Grande)
     amount: number;
     count: number;
-    unitLabel: string;
     icon: React.ReactNode;
     isActive: boolean;
     onClick: () => void;
-    // Eliminado prop 'color' para forzar diseño de marca
+    variant?: 'rose' | 'emerald' | 'blue'; // Nuevo prop para el color
 }
 
-export function MetricCard({ title, amount, count, unitLabel, icon, isActive, onClick }: MetricCardProps) {
+export function MetricCard({ 
+    title, 
+    amount, 
+    count, 
+    unitLabel, 
+    icon, 
+    isActive, 
+    onClick,
+    variant = 'rose' // Color por defecto
+}: MetricCardProps) {
     
-    // Lógica de diseño: Solo blanco y rojo
-    const activeClass = isActive 
-        ? 'border-l-[#E11D48] bg-white shadow-xl shadow-slate-200/50 -translate-y-1 ring-1 ring-slate-100' 
-        : 'border-l-transparent bg-white/50 hover:bg-white hover:shadow-md hover:border-l-slate-200 opacity-80 hover:opacity-100';
+    // Configuración de temas basada en tu diseño
+    const themes = {
+        rose: {
+            border: 'border-rose-600',
+            iconBg: 'bg-[#E11D48]',
+            iconShadow: 'shadow-rose-200',
+            text: 'text-rose-600',
+            ring: 'ring-rose-100'
+        },
+        emerald: {
+            border: 'border-emerald-600',
+            iconBg: 'bg-emerald-600',
+            iconShadow: 'shadow-emerald-200',
+            text: 'text-emerald-600',
+            ring: 'ring-emerald-100'
+        },
+        blue: {
+            border: 'border-blue-600',
+            iconBg: 'bg-blue-600',
+            iconShadow: 'shadow-blue-200',
+            text: 'text-blue-600',
+            ring: 'ring-blue-100'
+        }
+    };
+
+    const theme = themes[variant];
 
     return (
         <button 
             onClick={onClick}
             className={`
-                text-left border border-slate-100 border-l-4 p-6 rounded-2xl transition-all duration-300 outline-none w-full
-                ${activeClass}
+                relative w-full text-left bg-white rounded-[1.5rem] p-7 transition-all duration-300 outline-none
+                border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1
+                ${isActive ? `border-l-[6px] ${theme.border} ring-1 ${theme.ring}` : 'border-l-[6px] border-l-transparent opacity-70 hover:opacity-100'}
             `}
         >
-            <div className="flex justify-between items-start mb-5">
-                <div className={`p-3 rounded-xl transition-colors ${isActive ? 'bg-[#E11D48] text-white shadow-lg shadow-rose-200' : 'bg-slate-100 text-slate-400'}`}>
-                    {icon}
+            {/* Header: Icono + Título Grande (unitLabel) */}
+            <div className="flex items-center gap-5 mb-8">
+                <div className={`
+                    p-3.5 rounded-2xl shadow-lg flex items-center justify-center text-white transition-all
+                    ${isActive ? `${theme.iconBg} ${theme.iconShadow}` : 'bg-slate-100 text-slate-400 shadow-none'}
+                `}>
+                    {/* Forzamos el tamaño del icono para que se vea como el diseño */}
+                    <div className="scale-125">
+                        {icon}
+                    </div>
                 </div>
-                <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${isActive ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-100'}`}>
-                    {count} {unitLabel}
-                </span>
-            </div>
-            <div>
-                <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.2em] mb-1">{title}</p>
-                <h3 className="text-3xl font-light text-slate-900 tracking-tight">
-                    <span className="font-bold">${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                
+                <h3 className={`text-3xl font-black tracking-tight ${isActive ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {unitLabel}
                 </h3>
+            </div>
+
+            {/* Body: Subtítulo + Monto + Resultados */}
+            <div className="flex flex-col gap-1">
+                {/* Subtítulo (title original) */}
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] pl-1">
+                    {title}
+                </p>
+                
+                <div className="flex items-baseline justify-between mt-1 flex-wrap gap-2">
+                    {/* Monto */}
+                    <span className={`text-4xl font-black tracking-tighter ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                        ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    
+                    {/* Contador */}
+                    <div className="flex items-baseline gap-1.5">
+                        <span className={`text-xl font-medium ${isActive ? 'text-slate-700' : 'text-slate-400'}`}>
+                            {count}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">
+                            Resultados
+                        </span>
+                    </div>
+                </div>
             </div>
         </button>
     );

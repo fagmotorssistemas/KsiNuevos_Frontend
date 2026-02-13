@@ -5,49 +5,55 @@ import { contratosService } from "@/services/contratos.service";
 import { dispositivosService } from "@/services/dispositivos.service";
 import { ContratoDetalle } from "@/types/contratos.types";
 import { 
-    X, Loader2, Shield, FileText, 
-    ShieldCheck, Layers, Calendar, 
-    CreditCard, MessageSquare, User, Car
+    X, Loader2, User, 
+    MapPin, CalendarDays, Edit2, CheckCircle2, Phone, Paperclip,
+    FileText, Image as ImageIcon, Download
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { InsuranceAmortizacionTable } from "./InsuranceAmortizacionTable";
 import { GPSForm } from "./GPSForm";
 import { InsuranceForm } from "./InsuranceForm"; 
-import { ClientVehicleInfo } from "./ClientVehicleInfo";
-import { EconomicSummary } from "./EconomicSummary";
 
 interface InsuranceContratoDetailsProps {
     contratoId: string;
     onClose: () => void;
     activeFilter?: 'rastreador' | 'seguro' | 'ambos'; 
-    isReadOnly?: boolean; 
 }
 
-// Estilos compartidos
-const cardStyle = "bg-white rounded-2xl shadow-sm border border-slate-100 p-8 flex flex-col h-full transition-all duration-300 hover:shadow-md";
-
+// --- COMPONENTE PRINCIPAL ---
 export function InsuranceContratoDetails({ 
     contratoId, 
     onClose, 
     activeFilter = 'ambos',
-    isReadOnly = true 
 }: InsuranceContratoDetailsProps) {
     const [contrato, setContrato] = useState<ContratoDetalle | null>(null);
     const [loading, setLoading] = useState(true);
     
-    // Estados para listas
     const [rastreadores, setRastreadores] = useState<any[]>([]);
     const [seguros, setSeguros] = useState<any[]>([]);
 
+    // Estados de Edición
+    const [editingGPS, setEditingGPS] = useState(false);
+    const [editingSeguro, setEditingSeguro] = useState(false);
+
+    // Estado del Visor de Evidencias
+    const [viewerState, setViewerState] = useState<{ isOpen: boolean; urls: string[]; title: string }>({
+        isOpen: false, urls: [], title: ''
+    });
+
+    const hasGPS = rastreadores.length > 0;
+    const hasSeguro = seguros.length > 0;
+    const isSingleView = activeFilter === 'rastreador' || activeFilter === 'seguro';
+
+    // --- CARGA DE DATOS ---
     const loadDispositivos = async () => {
         const res = await dispositivosService.obtenerRastreadoresPorNota(contratoId);
-        setRastreadores(res);
+        setRastreadores(res || []);
     };
 
     const loadSeguros = async () => {
         const res = await dispositivosService.obtenerSegurosPorNota(contratoId);
-        setSeguros(res);
+        setSeguros(res || []);
     };
 
     useEffect(() => {
@@ -56,7 +62,6 @@ export function InsuranceContratoDetails({
                 setLoading(true);
                 const data = await contratosService.getDetalleContrato(contratoId);
                 setContrato(data);
-
                 if (data) {
                     await Promise.all([loadDispositivos(), loadSeguros()]);
                 }
@@ -69,257 +74,350 @@ export function InsuranceContratoDetails({
         if (contratoId) loadAllData();
     }, [contratoId]);
 
+    // --- MANEJADORES DE ÉXITO (POST-EDICIÓN) ---
+    const handleSuccessGPS = async () => {
+        await loadDispositivos(); // Recargar datos frescos
+        setEditingGPS(false);     // Salir de modo edición
+    };
+
+    const handleSuccessSeguro = async () => {
+        await loadSeguros();
+        setEditingSeguro(false);
+    };
+
+    const handleOpenViewer = (urls: string[], title: string) => {
+        setViewerState({ isOpen: true, urls, title });
+    };
+
+    const getPrice = (val?: string | number) => {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        return parseFloat(val.toString().replace(/[^0-9.]/g, '') || "0");
+    };
+
     if (loading) return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-8 w-8 animate-spin text-[#E11D48]" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Cargando Expediente</p>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md">
+            <Loader2 className="h-12 w-12 animate-spin text-white" />
         </div>
     );
 
     if (!contrato) return null;
 
-    // Lógica para mostrar formularios según filtro
-    const showGPSForm = !isReadOnly && (activeFilter === 'rastreador' || activeFilter === 'ambos');
-    const showInsuranceForm = !isReadOnly && (activeFilter === 'seguro' || activeFilter === 'ambos');
+    const showGPS = activeFilter === 'rastreador' || activeFilter === 'ambos';
+    const showInsurance = activeFilter === 'seguro' || activeFilter === 'ambos';
+    
+    const presupuestoGPS = getPrice(contrato.totalRastreador);
+    const presupuestoSeguro = getPrice(contrato.totalSeguro);
+    const fechaDisplay = contrato.fechaCiudad || contrato.textoFecha || "Fecha Pendiente";
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/10 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-[90rem] h-full shadow-2xl flex flex-col border-l border-slate-100 animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className={`bg-white w-full ${isSingleView ? 'max-w-2xl' : 'max-w-5xl'} max-h-[95vh] flex flex-col rounded-[2.5rem] shadow-2xl overflow-hidden`}>
                 
-                {/* HEADER */}
-                <header className="flex items-center justify-between px-8 py-6 border-b border-slate-50 shrink-0">
-                    <div className="flex items-center gap-5">
-                        <div className={`p-3 rounded-xl ${isReadOnly ? 'bg-slate-50 text-slate-400' : 'bg-red-50 text-[#E11D48]'}`}>
-                            {isReadOnly ? <FileText size={20} /> : <ShieldCheck size={20} />}
+                {/* --- HEADER --- */}
+                <div className="px-8 pt-8 pb-6 bg-white relative shrink-0">
+                    <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all z-10">
+                        <X size={22} />
+                    </button>
+
+                    <div className="border-b border-slate-100 pb-6">
+                        
+                        {/* 1. Contexto (Badge + Fecha) */}
+                        <div className="flex items-center gap-3 mb-4">
+                            <span className="bg-slate-900 text-white text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">
+                                {contrato.nroContrato}
+                            </span>
+                            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                <CalendarDays size={12} /> {fechaDisplay}
+                            </span>
                         </div>
-                        <div>
-                            <div className="flex items-center gap-3">
-                                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                                    {isReadOnly ? 'Expediente Digital' : 'Gestión y Auditoría'}
-                                </h2>
-                                <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                    {contrato.nroContrato}
+
+                        {/* 2. NOMBRE DEL CLIENTE */}
+                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight uppercase leading-none mb-5">
+                            {contrato.facturaNombre}
+                        </h1>
+
+                        {/* 3. TARJETA VEHÍCULO */}
+                        <div className="inline-flex items-center gap-4 bg-slate-50 border border-slate-100 rounded-2xl p-2 pr-6 mb-5 max-w-full">
+                            <div className="bg-white border-[2px] border-slate-900 text-slate-900 px-3 py-1.5 rounded-xl text-center min-w-[100px] shadow-sm shrink-0">
+                                <span className="block text-[7px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none mb-0.5">PLACA</span>
+                                <span className="block text-xl font-black tracking-widest leading-none font-mono">
+                                    {contrato.placa || 'S/N'}
                                 </span>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
-                                {isReadOnly ? 'Modo Consulta 360°' : 'Modo Edición Técnica'}
-                            </p>
+                            <div className="min-w-0">
+                                <p className="text-sm font-black text-slate-900 uppercase leading-tight truncate">
+                                    {contrato.marca} {contrato.modelo}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-wide">
+                                    {contrato.color} • {contrato.anio} • {contrato.tipoVehiculo}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 4. DATOS DE CONTACTO */}
+                        <div className="flex flex-col gap-2 text-xs text-slate-500 font-bold pl-1">
+                            <div className="flex items-center gap-3">
+                                <div className="w-5 flex justify-center"><User size={14} className="text-slate-300"/></div>
+                                <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100 text-slate-700">
+                                    {contrato.facturaRuc}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-5 flex justify-center"><Phone size={14} className="text-slate-300"/></div>
+                                <span>{contrato.facturaTelefono || 'Sin teléfono registrado'}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-5 flex justify-center"><MapPin size={14} className="text-slate-300"/></div>
+                                <span className="uppercase">{contrato.facturaDireccion}</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* --- BODY --- */}
+                <div className="overflow-y-auto flex-1 bg-slate-50/50 p-6 md:p-8 custom-scrollbar">
+                    <div className={`grid ${isSingleView ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-2'} gap-6 h-full items-start`}>
+                        
+                        {/* --- COLUMNA GPS --- */}
+                        {showGPS && (
+                            <div className="h-full flex flex-col">
+                                {/* Lógica:
+                                    1. No tiene GPS -> Formulario Crear
+                                    2. Tiene GPS y NO Edita -> Tarjeta Éxito
+                                    3. Tiene GPS y Edita -> Formulario Editar (con initialData)
+                                */}
+                                {!hasGPS ? (
+                                    <GPSForm 
+                                        contratoId={contrato.ccoCodigo}
+                                        facturaRuc={contrato.facturaRuc}
+                                        precioVenta={presupuestoGPS} 
+                                        onSuccess={loadDispositivos} 
+                                    />
+                                ) : !editingGPS ? (
+                                    <SuccessCard 
+                                        title="Rastreo Satelital" 
+                                        data={rastreadores[0]} 
+                                        type="gps" 
+                                        price={presupuestoGPS} 
+                                        onViewEvidence={(urls) => handleOpenViewer(urls, "Evidencias GPS")}
+                                        onEdit={() => setEditingGPS(true)} // Activar edición
+                                    />
+                                ) : (
+                                    <GPSForm 
+                                        contratoId={contrato.ccoCodigo}
+                                        facturaRuc={contrato.facturaRuc}
+                                        precioVenta={presupuestoGPS} 
+                                        initialData={rastreadores[0]} // Pasar datos existentes
+                                        onSuccess={handleSuccessGPS} // Refrescar y salir
+                                        onCancel={() => setEditingGPS(false)} // Cancelar
+                                    />
+                                )}
+                            </div>
+                        )}
+
+                        {/* --- COLUMNA SEGUROS --- */}
+                        {showInsurance && (
+                            <div className="h-full flex flex-col">
+                                {!hasSeguro ? (
+                                    <InsuranceForm 
+                                        contratoId={contrato.ccoCodigo}
+                                        facturaRuc={contrato.facturaRuc}
+                                        precioVenta={presupuestoSeguro}
+                                        onSuccess={loadSeguros}
+                                    />
+                                ) : !editingSeguro ? (
+                                    <SuccessCard 
+                                        title="Póliza de Seguro" 
+                                        data={seguros[0]} 
+                                        type="seguro" 
+                                        price={presupuestoSeguro}
+                                        onViewEvidence={(urls) => handleOpenViewer(urls, "Póliza de Seguro")}
+                                        onEdit={() => setEditingSeguro(true)} // Activar edición
+                                    />
+                                ) : (
+                                    <InsuranceForm 
+                                        contratoId={contrato.ccoCodigo}
+                                        facturaRuc={contrato.facturaRuc}
+                                        precioVenta={presupuestoSeguro}
+                                        initialData={seguros[0]} // Pasar datos existentes
+                                        onSuccess={handleSuccessSeguro} // Refrescar y salir
+                                        onCancel={() => setEditingSeguro(false)} // Cancelar
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* --- FOOTER --- */}
+                <div className="px-8 py-4 bg-white border-t border-slate-100 flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
+                    <span>Vendedor: <span className="text-slate-900">{contrato.vendedor || 'Oficina'}</span></span>
+                    <span className="opacity-50">K-si Nuevos System v2.0</span>
+                </div>
+            </div>
+
+            {/* VISOR DE EVIDENCIAS INTEGRADO */}
+            <EvidenceViewer 
+                isOpen={viewerState.isOpen}
+                onClose={() => setViewerState(prev => ({ ...prev, isOpen: false }))}
+                urls={viewerState.urls}
+                title={viewerState.title}
+            />
+        </div>
+    );
+}
+
+// --- SUB-COMPONENTE: VISOR DE EVIDENCIAS ---
+function EvidenceViewer({ isOpen, onClose, urls, title }: { isOpen: boolean, onClose: () => void, urls: string[], title: string }) {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    useEffect(() => { if (isOpen) setCurrentIndex(0); }, [isOpen]);
+
+    if (!isOpen || urls.length === 0) return null;
+
+    const currentUrl = urls[currentIndex];
+    const isPDF = currentUrl.toLowerCase().includes('.pdf');
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-50">
+                <X size={24} />
+            </button>
+
+            <div className="w-full max-w-6xl h-full max-h-[90vh] flex flex-col md:flex-row gap-6">
+                <div className="flex-1 bg-black/50 rounded-2xl border border-white/10 relative flex items-center justify-center overflow-hidden">
+                    {isPDF ? (
+                        <iframe src={`${currentUrl}#toolbar=0`} className="w-full h-full rounded-xl" title="Visor PDF"/>
+                    ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={currentUrl} alt="Evidencia" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
+                    )}
+                    <a href={currentUrl} target="_blank" rel="noreferrer" className="absolute bottom-4 right-4 p-2 bg-black/60 text-white text-xs font-bold uppercase rounded-lg border border-white/20 hover:bg-white hover:text-black transition-all flex items-center gap-2">
+                        <Download size={14}/> Abrir Original
+                    </a>
+                </div>
+
+                {urls.length > 1 && (
+                    <div className="w-full md:w-72 flex flex-col gap-4 shrink-0">
+                        <div className="text-white">
+                            <h3 className="text-lg font-black uppercase tracking-tight">{title}</h3>
+                            <p className="text-xs text-white/50 font-bold uppercase">Archivo {currentIndex + 1} de {urls.length}</p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                            {urls.map((url, idx) => {
+                                const isTypePDF = url.toLowerCase().includes('.pdf');
+                                const isActive = idx === currentIndex;
+                                return (
+                                    <button key={idx} onClick={() => setCurrentIndex(idx)} className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3 ${isActive ? 'bg-white text-slate-900 border-white' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:border-white/30'}`}>
+                                        <div className={`p-2 rounded-lg ${isActive ? 'bg-slate-200 text-slate-900' : 'bg-black/30 text-slate-500'}`}>
+                                            {isTypePDF ? <FileText size={18}/> : <ImageIcon size={18}/>}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wide truncate">Evidencia #{idx + 1}</p>
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                    <button 
-                        onClick={onClose} 
-                        className="group p-2 rounded-full hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
-                    >
-                        <X size={20} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
-                    </button>
-                </header>
+                )}
+            </div>
+        </div>
+    );
+}
 
-                {/* CONTENIDO PRINCIPAL */}
-                <div className="overflow-y-auto flex-1 p-8 bg-[#F8FAFC]">
-                    <div className="max-w-7xl mx-auto space-y-8">
-                        
-                        {/* ============================================================== */}
-                        {/* CASO 1: MODO AUDITORÍA (SOLO FORMULARIOS)                      */}
-                        {/* ============================================================== */}
-                        {!isReadOnly && (
-                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-                                
-                                {/* Tarjeta de Contexto Rápido (Para saber a quién auditamos) */}
-                                <div className="bg-white border border-slate-100 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-slate-50 rounded-full text-slate-400">
-                                            <User size={20} />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cliente Titular</p>
-                                            <h3 className="text-lg font-bold text-slate-900 uppercase">{contrato.facturaNombre}</h3>
-                                        </div>
-                                    </div>
-                                    <div className="h-10 w-px bg-slate-100 hidden md:block"></div>
-                                    <div className="flex items-center gap-4">
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-right">Vehículo en Proceso</p>
-                                            <h3 className="text-sm font-bold text-slate-900 uppercase text-right">
-                                                {contrato.marca} {contrato.modelo} <span className="text-slate-300 mx-2">|</span> {contrato.placa || 'S/P'}
-                                            </h3>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 rounded-full text-slate-400">
-                                            <Car size={20} />
-                                        </div>
-                                    </div>
-                                </div>
+// --- SUB-COMPONENTE: TARJETA DE ÉXITO ---
+function SuccessCard({ 
+    title, data, type, price, onViewEvidence, onEdit 
+}: { 
+    title: string, data: any, type: 'gps' | 'seguro', price: number,
+    onViewEvidence: (urls: string[]) => void,
+    onEdit?: () => void
+}) {
+    const isGPS = type === 'gps';
+    const accentColor = isGPS ? 'bg-blue-600' : 'bg-emerald-600';
+    const iconColor = isGPS ? 'text-blue-600 bg-blue-50' : 'text-emerald-600 bg-emerald-50';
 
-                                {/* Grid de Formularios Centrado */}
-                                <div className={`grid grid-cols-1 ${showGPSForm && showInsuranceForm ? 'xl:grid-cols-2' : 'max-w-3xl mx-auto'} gap-8`}>
-                                    {showGPSForm && (
-                                        <GPSForm 
-                                            contratoId={contrato.ccoCodigo}
-                                            facturaRuc={contrato.facturaRuc}
-                                            precioVenta={contrato.precioVehiculo}
-                                            initialData={rastreadores}
-                                            onSuccess={loadDispositivos} 
-                                        />
-                                    )}
-                                    {showInsuranceForm && (
-                                        <InsuranceForm 
-                                            contratoId={contrato.ccoCodigo}
-                                            facturaRuc={contrato.facturaRuc}
-                                            precioVenta={contrato.precioVehiculo}
-                                            initialData={seguros}
-                                            onSuccess={loadSeguros}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                        )}
+    let evidenceUrls: string[] = [];
+    if (Array.isArray(data.evidencias) && data.evidencias.length > 0) {
+        evidenceUrls = data.evidencias;
+    } else if (data.evidencia_url) {
+        evidenceUrls = [data.evidencia_url];
+    }
 
-
-                        {/* ============================================================== */}
-                        {/* CASO 2: MODO EXPEDIENTE (SOLO VISIBLE SI ES READONLY)          */}
-                        {/* ============================================================== */}
-                        {isReadOnly && (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-500">
-                                
-                                {/* COLUMNA IZQUIERDA: DATOS PRINCIPALES */}
-                                <div className="lg:col-span-8 space-y-6">
-                                    {/* Fila Cliente/Vehículo */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className={cardStyle}>
-                                            <HeaderSection icon={<User size={16} />} title="Cliente" />
-                                            <ClientVehicleInfo contrato={contrato} onlyClient />
-                                        </div>
-                                        <div className={cardStyle}>
-                                            <HeaderSection icon={<Car size={16} />} title="Vehículo" />
-                                            <ClientVehicleInfo contrato={contrato} onlyVehicle />
-                                        </div>
-                                    </div>
-
-                                    {/* Fila Fechas y Ubicación */}
-                                    <div className={cardStyle}>
-                                        <HeaderSection icon={<Calendar size={16} />} title="Cláusulas y Ubicación" />
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                            <div className="space-y-4">
-                                                <DetailItem label="Fecha Texto" value={contrato.textoFecha} />
-                                                <DetailItem label="Dado en" value={contrato.textoFechaDado} />
-                                            </div>
-                                            <div className="space-y-4">
-                                                <DetailItem label="Fecha CR" value={contrato.textoFechaCr} />
-                                                <DetailItem label="Ciudad Contrato" value={contrato.ciudadContrato} />
-                                            </div>
-                                            <div className="space-y-4">
-                                                <DetailItem label="Ciudad Cliente" value={contrato.ciudadCliente} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Resumen de Auditoría (Lectura) */}
-                                    <div className={cardStyle}>
-                                         <HeaderSection icon={<ShieldCheck size={16} />} title="Resumen de Auditoría" />
-                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div>
-                                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3">Rastreadores Vinculados</p>
-                                                {rastreadores.length > 0 ? (
-                                                    <div className="space-y-2">
-                                                        {rastreadores.map((r, i) => (
-                                                            <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                                                <span className="text-xs font-mono font-bold text-slate-700">{r.imei}</span>
-                                                                <span className="text-[10px] font-bold text-slate-400">{r.modelo}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : <p className="text-xs text-slate-400 italic">No hay dispositivos</p>}
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3">Pólizas Vigentes</p>
-                                                {seguros.length > 0 ? (
-                                                    <div className="space-y-2">
-                                                        {seguros.map((s, i) => (
-                                                            <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                                                <span className="text-xs font-bold text-slate-700">{s.aseguradora}</span>
-                                                                <span className="text-[10px] font-bold text-slate-400">{s.tipo_seguro}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : <p className="text-xs text-slate-400 italic">No hay pólizas</p>}
-                                            </div>
-                                         </div>
-                                    </div>
-
-                                    {/* Tabla Amortización */}
-                                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                        <div className="px-8 py-6 border-b border-slate-50">
-                                            <HeaderSection icon={<Layers size={16} />} title="Cronograma Financiero" />
-                                        </div>
-                                        <div className="p-6">
-                                            <InsuranceAmortizacionTable contratoId={contrato.ccoCodigo} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* COLUMNA DERECHA: ECONÓMICO Y EXTRAS (Sticky) */}
-                                <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                                    <div className={`${cardStyle} bg-slate-900 border-slate-800 text-white`}>
-                                        <EconomicSummary contrato={contrato} />
-                                    </div>
-
-                                    {(contrato.montoVehiculoUsado > 0 || contrato.montoCuotaAdicional > 0) && (
-                                        <div className={cardStyle}>
-                                            <HeaderSection icon={<CreditCard size={16} />} title="Pagos Especiales" />
-                                            <div className="space-y-6">
-                                                {contrato.montoVehiculoUsado > 0 && (
-                                                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Retoma Vehículo</p>
-                                                        <p className="text-lg font-mono font-bold text-slate-900">${contrato.montoVehiculoUsado.toLocaleString()}</p>
-                                                    </div>
-                                                )}
-                                                {contrato.montoCuotaAdicional > 0 && (
-                                                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Cuota Adicional</p>
-                                                        <p className="text-lg font-mono font-bold text-slate-900">${contrato.montoCuotaAdicional.toLocaleString()}</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    <div className={cardStyle}>
-                                        <HeaderSection icon={<MessageSquare size={16} />} title="Observaciones" />
-                                        <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
-                                            {contrato.observaciones || 'Sin observaciones registradas.'}
-                                        </p>
-                                        <div className="mt-4 pt-4 border-t border-slate-50">
-                                            <p className="text-[9px] font-black text-slate-300 uppercase mb-1">Forma de Pago</p>
-                                            <p className="text-xs font-bold text-slate-900">{contrato.formaPago}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
+    return (
+        <div className="bg-white rounded-3xl p-0 shadow-sm border border-slate-100 relative overflow-hidden flex flex-col group hover:shadow-md transition-all h-full">
+            <div className={`h-1.5 w-full ${accentColor} shrink-0`}></div>
+            
+            <div className="p-6 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl ${iconColor}`}>
+                            <CheckCircle2 size={22} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">{title}</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Estado: Activo</p>
+                        </div>
                     </div>
+                    <div className="text-right">
+                        <span className="block text-[9px] font-black text-slate-300 uppercase">Valor Venta</span>
+                        <span className="block text-sm font-mono font-black text-slate-900">${price.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-5 mb-6 space-y-4 border border-slate-100 flex-1">
+                    {isGPS ? (
+                        <>
+                            <Row label="Modelo" value={data.modelo} />
+                            <Row label="IMEI" value={data.imei} isMono />
+                            <Row label="Proveedor" value={data.proveedor} />
+                        </>
+                    ) : (
+                        <>
+                            <Row label="Aseguradora" value={data.aseguradora} />
+                            <Row label="Broker" value={data.broker} />
+                            <Row label="Plan" value={data.tipo_seguro} />
+                        </>
+                    )}
+                </div>
+
+                <div className="flex gap-3 mt-auto shrink-0">
+                    {evidenceUrls.length > 0 ? (
+                        <button 
+                            onClick={() => onViewEvidence(evidenceUrls)}
+                            className="flex-1 py-3.5 rounded-xl bg-slate-900 text-white text-[10px] font-bold uppercase text-center hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 flex items-center justify-center gap-2"
+                        >
+                            <Paperclip size={12}/> Ver Evidencias ({evidenceUrls.length})
+                        </button>
+                    ) : (
+                        <button disabled className="flex-1 py-3.5 rounded-xl bg-slate-100 text-slate-400 text-[10px] font-bold uppercase cursor-not-allowed">
+                            Sin Evidencia
+                        </button>
+                    )}
+                    
+                    <button 
+                        onClick={onEdit}
+                        className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 text-[10px] font-bold uppercase hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Edit2 size={14} /> Editar
+                    </button>
                 </div>
             </div>
         </div>
     );
 }
 
-function HeaderSection({ icon, title }: { icon: React.ReactNode, title: string }) {
+function Row({ label, value, isMono }: { label: string, value: string, isMono?: boolean }) {
     return (
-        <div className="flex items-center gap-2.5 mb-6 text-[#E11D48]">
-            {icon}
-            <h3 className="text-[11px] font-black uppercase tracking-[0.2em]">{title}</h3>
-        </div>
-    );
-}
-
-function DetailItem({ label, value }: { label: string, value?: string }) {
-    if (!value) return null;
-    return (
-        <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">{label}</p>
-            <p className="text-[13px] font-semibold text-slate-900 uppercase">{value}</p>
+        <div className="flex justify-between items-center border-b border-slate-200 pb-2 last:border-0 last:pb-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{label}</span>
+            <span className={`text-xs font-bold text-slate-900 ${isMono ? 'font-mono tracking-wider' : ''} truncate max-w-[180px] text-right`}>
+                {value}
+            </span>
         </div>
     );
 }
