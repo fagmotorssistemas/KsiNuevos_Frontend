@@ -17,6 +17,7 @@ import {
 import { VehicleWithSeller } from "@/services/scraper.service";
 import { PriceStatistics, PriceStatisticsModal } from "./PriceStatisticsModal";
 import { FilterModal } from "./FilterModal";
+import { FilterButton } from "./components/FilterButton";
 
 interface OpportunitiesFiltersViewProps {
     vehicles: VehicleWithSeller[];
@@ -189,49 +190,19 @@ export function OpportunitiesFiltersView({
         regionFilter !== 'all',
         [selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, sortBy, searchTerm, regionFilter]
     );
+    // Agregar estos useMemo antes del return
+    const brandFilteredCount = useMemo(() => {
+        if (selectedBrand === "all") return 0;
+        return vehicles.filter(v => v.brand === selectedBrand).length;
+    }, [vehicles, selectedBrand]);
 
-    const FilterButton = ({
-        label,
-        active,
-        icon: Icon,
-        onClick,
-        disabled = false,
-        hasSelection = false
-    }: {
-        label: string;
-        active: boolean;
-        icon: any;
-        onClick: () => void;
-        disabled?: boolean;
-        hasSelection?: boolean
-    }) => (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            className={`
-                relative w-full flex items-center justify-between px-3 py-2.5 text-xs sm:text-sm 
-                border rounded-xl transition-all duration-200 group
-                ${disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-100' : 'cursor-pointer hover:shadow-md'}
-                ${hasSelection
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}
-            `}
-        >
-            <div className="flex items-center gap-2 truncate">
-                <Icon className={`h-4 w-4 flex-shrink-0 ${hasSelection ? 'text-slate-300' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                <span className={`font-medium truncate ${hasSelection ? 'text-slate-100' : ''}`}>
-                    {label}
-                </span>
-            </div>
-            {hasSelection ? (
-                <div className="h-1.5 w-1.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.5)]" />
-            ) : (
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowUpDown className="h-3 w-3 text-slate-300" />
-                </div>
-            )}
-        </button>
-    );
+    const modelFilteredCount = useMemo(() => {
+        if (selectedModel === "all") return 0;
+        return vehicles.filter(v =>
+            v.brand === selectedBrand &&
+            v.model === selectedModel
+        ).length;
+    }, [vehicles, selectedBrand, selectedModel]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -326,14 +297,22 @@ export function OpportunitiesFiltersView({
             <div className="px-4 pb-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                     <FilterButton
-                        label={selectedBrand === "all" ? "Marca" : selectedBrand}
+                        label={
+                            selectedBrand === "all"
+                                ? "Marca"
+                                : `${selectedBrand} (${brandFilteredCount})`
+                        }
                         active={selectedBrand !== "all"}
                         hasSelection={selectedBrand !== "all"}
                         icon={Tag}
                         onClick={() => setShowBrandModal(true)}
                     />
                     <FilterButton
-                        label={selectedModel === "all" ? "Modelo" : selectedModel}
+                        label={
+                            selectedModel === "all"
+                                ? "Modelo"
+                                : `${selectedModel} (${modelFilteredCount})`
+                        }
                         active={selectedModel !== "all"}
                         hasSelection={selectedModel !== "all"}
                         icon={Car}
