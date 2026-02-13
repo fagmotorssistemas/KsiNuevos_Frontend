@@ -423,7 +423,6 @@ export const scraperService = {
             }
 
             const data = await response.json()
-            console.log('Webhook ejecutado:', data)
             return data as WebhookResponse
         } catch (error) {
             console.error('Error al scrapear:', error)

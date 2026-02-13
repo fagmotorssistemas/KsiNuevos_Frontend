@@ -68,12 +68,13 @@ export const OpportunitiesCenterView = ({
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
     const [scraperTerm, setScraperTerm] = useState("");
     const [showCarPicker, setShowCarPicker] = useState(false);
+    const [showScannerModal, setShowScannerModal] = useState(false);
     const [pickerBrand, setPickerBrand] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
     const [catalogSearch, setCatalogSearch] = useState("");
     const [isExpanded, setIsExpanded] = useState(true);
-    const [isFiltersExpanded, setIsFiltersExpanded] = useState(false); // Estado independiente para filtros
+    const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
 
     useEffect(() => {
         if (currentToastId && isWebhookLoading) {
@@ -109,6 +110,7 @@ export const OpportunitiesCenterView = ({
             setTimeout(() => {
                 toast.success(<div className="ml-2">¡Extracción completa! <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total || 0} vehículos encontrados</span></div>, { id: toastId, duration: Infinity });
                 setIsWebhookLoading(false); setCurrentToastId(null);
+                setShowScannerModal(false);
                 onScraperComplete?.();
             }, 1000);
         } catch (err: any) {
@@ -117,7 +119,7 @@ export const OpportunitiesCenterView = ({
                 <div className="relative flex items-center gap-3 ml-2 w-full pr-8">
                     <button
                         onClick={() => toast.dismiss(toastId)}
-                        className="absolute -right-10 p-1 text-red-300 hover:opacity-50"
+                        className="absolute -right-30 p-1 text-red-300 hover:opacity-50"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -138,84 +140,37 @@ export const OpportunitiesCenterView = ({
 
     return (
         <div className="flex flex-col w-full gap-4 mb-4">
-            {/* FILA PRINCIPAL: Centro de Oportunidades + Botón Filtros */}
-            <div className="flex w-full gap-4 items-stretch">
+            {/* FILA PRINCIPAL: Botón Escanear + Botón Filtros */}
+            <div className="flex justify-between w-full gap-4 items-stretch">
 
-                {/* CENTRO DE OPORTUNIDADES (ocupa la mayor parte) */}
-                <div className="bg-white flex-1 min-w-0 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-                    {/* BOTÓN TOGGLE PRINCIPAL */}
-                    <button
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className="w-full p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all border-b border-slate-200 group"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-slate-900 flex items-center justify-center rounded-xl shadow-md group-hover:bg-slate-800 transition-colors">
-                                <DatabaseZap className="h-5 w-5 text-white" />
-                            </div>
-                            <div className="text-left">
-                                <h2 className="text-lg font-black text-slate-900 tracking-tight">Centro de Oportunidades</h2>
-                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    Marketplace Scraper
-                                </div>
-                            </div>
+                {/* BOTÓN ESCANEAR */}
+                <button
+                    onClick={() => setShowScannerModal(true)}
+                    className="flex-1 min-w-0 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all group"
+                >
+                    <div className="flex items-center gap-3 mr-4">
+                        <div className="h-10 w-10 bg-slate-900 flex items-center justify-center rounded-xl shadow-md group-hover:bg-slate-800 transition-colors">
+                            <DatabaseZap className="h-5 w-5 text-white" />
                         </div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-slate-500 hidden sm:inline">
-                                {isExpanded ? 'Ocultar' : 'Mostrar'}
-                            </span>
-                            {isExpanded ? (
-                                <ChevronUp className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
-                            ) : (
-                                <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
-                            )}
-                        </div>
-                    </button>
-
-                    {/* CONTENIDO COLAPSABLE */}
-                    <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                        <div className="p-6 bg-slate-50/50">
-                            <div className="flex items-center gap-2 w-full">
-                                <div className="relative flex-1 min-w-0">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Escaneo rápido: Ej. Vitara 2015..."
-                                        className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all shadow-sm"
-                                        value={scraperTerm}
-                                        onChange={(e) => setScraperTerm(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
-                                    />
-                                </div>
-                                <button
-                                    disabled={isWebhookLoading}
-                                    onClick={() => setShowCarPicker(true)}
-                                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0 disabled:opacity-50"
-                                    title="Abrir Catálogo"
-                                >
-                                    <Car className="h-5 w-5" />
-                                </button>
-                                <button
-                                    disabled={isWebhookLoading || !scraperTerm.trim()}
-                                    onClick={() => handleSubmitScraper(scraperTerm)}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 disabled:opacity-50 flex-shrink-0"
-                                >
-                                    {isWebhookLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                                    <span className="hidden sm:inline">{isWebhookLoading ? `${Math.round(progress)}%` : 'Escanear'}</span>
-                                </button>
+                        <div className="text-left">
+                            <h2 className="text-lg font-black text-slate-900 tracking-tight">Escanear</h2>
+                            <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Marketplace Scraper
                             </div>
                         </div>
                     </div>
-                </div>
+                    <Zap className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                </button>
 
-                {/* BOTÓN FILTROS MANUALES (alineado verticalmente al centro) */}
+                {/* BOTÓN FILTROS MANUALES */}
                 <button
                     onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-                    className={`flex-shrink-0 w-32 flex flex-col items-center justify-center gap-1.5 px-5 rounded-2xl border shadow-lg transition-all p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all border-b border-slate-200 `}
+                    className="flex-shrink-0 w-32 flex flex-col items-center justify-center gap-1.5 px-5 rounded-2xl border shadow-lg transition-all p-4 bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 border-slate-200"
                     title="Filtros manuales"
                 >
                     <div className="flex justify-center items-center gap-3">
-                        <span className="hidden whitespace-nowrap text-xs font-semibold text-slate-500 hidden sm:inline">Filtros</span>
+                        <span className="hidden whitespace-nowrap text-xs font-semibold text-slate-500 sm:inline">Filtros</span>
                         {isFiltersExpanded ? (
                             <ChevronUp className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
                         ) : (
@@ -259,7 +214,65 @@ export const OpportunitiesCenterView = ({
                 </div>
             </div>
 
-            {/* MODAL CATÁLOGO (sin cambios) */}
+            {/* MODAL DE SCANNER */}
+            {showScannerModal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-b from-slate-50 to-white">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-slate-900 rounded-2xl shadow-lg">
+                                    <DatabaseZap className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">Centro de Oportunidades</h3>
+                                    <p className="text-sm text-slate-500">Escanea vehículos en Marketplace</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowScannerModal(false)}
+                                className="p-3 hover:bg-slate-100 rounded-full transition-colors"
+                            >
+                                <X className="h-6 w-6 text-slate-400" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 bg-slate-50/50">
+                            <div className="flex items-center gap-2 w-full">
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Escaneo rápido: Ej. Vitara 2015..."
+                                        className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all shadow-sm"
+                                        value={scraperTerm}
+                                        onChange={(e) => setScraperTerm(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <button
+                                    disabled={isWebhookLoading}
+                                    onClick={() => setShowCarPicker(true)}
+                                    className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0 disabled:opacity-50"
+                                    title="Abrir Catálogo"
+                                >
+                                    <Car className="h-5 w-5" />
+                                </button>
+                                <button
+                                    disabled={isWebhookLoading || !scraperTerm.trim()}
+                                    onClick={() => handleSubmitScraper(scraperTerm)}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 disabled:opacity-50 flex-shrink-0"
+                                >
+                                    {isWebhookLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                                    <span>{isWebhookLoading ? `${Math.round(progress)}%` : 'Escanear'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CATÁLOGO */}
             {showCarPicker && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">

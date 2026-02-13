@@ -25,6 +25,10 @@ import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 import { DateFormatter } from "@/utils/DateFormatter";
 import { TextFormatter } from "@/utils/TextFormatter";
 import { Database } from "@/types/supabase";
+import { SoldBadge } from "./components/SoldBadge";
+import { MileageBadge } from "./components/MileageBadge";
+import { PriceBadge } from "./components/PriceBadge";
+import { TimelineBadge } from "./components/TimelineBadge";
 
 type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
 
@@ -58,66 +62,6 @@ const displayTextCondition = (condition: string) => {
         default: return condition;
     }
 };
-
-// --- PRICE BADGE ---
-function PriceBadge({ type }: { type: 'min' | 'max' | null }) {
-    if (!type) return null;
-
-    if (type === 'min') {
-        return (
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
-                <TrendingDown className="h-2.5 w-2.5" />
-                Menor precio
-            </div>
-        );
-    }
-
-    return (
-        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-[10px] font-bold uppercase tracking-wide">
-            <TrendingUp className="h-2.5 w-2.5" />
-            Mayor precio
-        </div>
-    );
-}
-
-function MileageBadge({ type }: { type: 'min' | 'max' | null }) {
-    if (!type) return null;
-
-    if (type === 'min') {
-        return (
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
-                <TrendingDown className="h-2.5 w-2.5" />
-                Menor kilometraje
-            </div>
-        );
-    }
-
-    return (
-        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-bold uppercase tracking-wide">
-            <TrendingUp className="h-2.5 w-2.5" />
-            Mayor kilometraje
-        </div>
-    );
-}
-// --- TIMELINE BADGE ---
-function TimelineBadge({ label, value, icon: Icon, accent = false }: {
-    label: string;
-    value: string;
-    icon: React.ElementType;
-    accent?: boolean;
-}) {
-    return (
-        <li className="flex items-start gap-3">
-            <div className={`mt-0.5 p-1.5 rounded-md shrink-0 ${accent ? 'bg-red-100 text-red-600' : 'bg-zinc-100 text-zinc-500'}`}>
-                <Icon className="h-3 w-3" />
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{label}</span>
-                <span className="text-xs font-semibold text-zinc-900 mt-0.5">{value}</span>
-            </div>
-        </li>
-    );
-}
 
 const DateFormatterInstance = new DateFormatter(new TextFormatter());
 
@@ -212,19 +156,12 @@ export function OpportunitiesTableView({
     useEffect(() => {
         if (selectedVehicle && getPriceStatisticsForVehicle) {
             setLoadingStats(true);
-            console.log('🔍 Buscando estadísticas para:', {
-                brand: selectedVehicle.brand,
-                model: selectedVehicle.model,
-                year: selectedVehicle.year
-            });
-
             getPriceStatisticsForVehicle(
                 selectedVehicle.brand || '',
                 selectedVehicle.model || '',
                 selectedVehicle.year || undefined
             )
                 .then(stats => {
-                    console.log('✅ Estadísticas recibidas:', stats);
                     setVehicleStats(stats);
                 })
                 .catch(err => {
@@ -319,6 +256,9 @@ export function OpportunitiesTableView({
                                                 ) : null}
                                                 <div className={`absolute inset-0 flex items-center justify-center bg-zinc-100 ${vehicle.image_url ? 'hidden' : 'flex'}`}>
                                                     <Car className="h-7 w-7 text-zinc-300" />
+                                                </div>
+                                                <div className="absolute top-2 left-2">
+                                                    <SoldBadge isSold={vehicle.is_sold} />
                                                 </div>
                                                 {vehicle.listing_image_urls && vehicle.listing_image_urls.length > 0 && (
                                                     <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm border border-white/10">
