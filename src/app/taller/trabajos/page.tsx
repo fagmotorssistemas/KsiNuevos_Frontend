@@ -43,9 +43,9 @@ export default function TrabajosPage() {
     // 1. Referencia al componente oculto que queremos imprimir
     const printComponentRef = useRef<HTMLDivElement>(null);
 
-    // 2. Configuración de react-to-print (Corrigiendo el error de TS)
+    // 2. Configuración de react-to-print
     const handlePrint = useReactToPrint({
-        contentRef: printComponentRef, // CORRECCIÓN: Usamos contentRef en lugar de content
+        contentRef: printComponentRef,
         documentTitle: selectedOrder ? `Orden_${selectedOrder.numero_orden}` : 'Orden_Trabajo',
     });
 
@@ -70,9 +70,21 @@ export default function TrabajosPage() {
         setIsModalOpen(true);
     };
 
+    // Función para cambios desde el Modal (refresca todo al terminar)
     const handleStatusChange = async (id: string, newStatus: string) => {
         await actualizarEstado(id, newStatus);
         void handleRefresh();
+    };
+
+    // --- NUEVA FUNCIÓN: Maneja el cambio desde el Drag & Drop ---
+    const handleDragMove = async (id: string, newStatus: string) => {
+        // Llamamos al hook para actualizar en la BD
+        await actualizarEstado(id, newStatus);
+        
+        // OPCIONAL: Si quieres asegurar sincronía total, descomenta la siguiente línea.
+        // Pero como el KanbanBoard ya hace actualización optimista (visual), 
+        // a veces es mejor NO refrescar inmediatamente para evitar parpadeos.
+        // void refresh(); 
     };
 
     const handleRefresh = async () => {
@@ -138,26 +150,26 @@ export default function TrabajosPage() {
                 </div>
 
                 {/* Área del Tablero */}
-                <div className="flex-1 bg-slate-100/50 rounded-xl border border-slate-200 relative">
+                <div className="flex-1 relative">
                     <div className="absolute inset-0 p-1">
                         <KanbanBoard
                             ordenes={ordenes}
                             onCardClick={handleCardClick}
+                            onOrderMove={handleDragMove}
                         />
                     </div>
                 </div>
 
-                {/* 3. Pasamos handlePrint al modal */}
                 <WorkOrderModal
                     orden={selectedOrder}
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
                     onStatusChange={handleStatusChange}
-                    onPrint={() => handlePrint && handlePrint()} // Pasamos la función de imprimir
+                    onPrint={() => handlePrint && handlePrint()}
                 />
             </div>
 
-            {/* 4. Componente de Impresión Oculto (Fuente de verdad para el PDF) */}
+            {/* Componente de Impresión Oculto */}
             <div className="hidden">
                 {selectedOrder && (
                     <OrderPrintView 
@@ -168,4 +180,4 @@ export default function TrabajosPage() {
             </div>
         </>
     );
-}   
+}
