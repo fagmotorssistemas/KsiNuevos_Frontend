@@ -40,16 +40,13 @@ export default function TrabajosPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // 1. Referencia al componente oculto que queremos imprimir
     const printComponentRef = useRef<HTMLDivElement>(null);
 
-    // 2. Configuración de react-to-print
     const handlePrint = useReactToPrint({
         contentRef: printComponentRef,
         documentTitle: selectedOrder ? `Orden_${selectedOrder.numero_orden}` : 'Orden_Trabajo',
     });
 
-    // Stats
     const stats = useMemo(() => {
         if (!ordenes) return { total: 0, criticos: 0, proceso: 0 };
         const hoy = new Date().getTime();
@@ -70,21 +67,13 @@ export default function TrabajosPage() {
         setIsModalOpen(true);
     };
 
-    // Función para cambios desde el Modal (refresca todo al terminar)
     const handleStatusChange = async (id: string, newStatus: string) => {
         await actualizarEstado(id, newStatus);
         void handleRefresh();
     };
 
-    // --- NUEVA FUNCIÓN: Maneja el cambio desde el Drag & Drop ---
     const handleDragMove = async (id: string, newStatus: string) => {
-        // Llamamos al hook para actualizar en la BD
         await actualizarEstado(id, newStatus);
-        
-        // OPCIONAL: Si quieres asegurar sincronía total, descomenta la siguiente línea.
-        // Pero como el KanbanBoard ya hace actualización optimista (visual), 
-        // a veces es mejor NO refrescar inmediatamente para evitar parpadeos.
-        // void refresh(); 
     };
 
     const handleRefresh = async () => {
@@ -104,8 +93,9 @@ export default function TrabajosPage() {
 
     return (
         <>
-            <div className="flex flex-col h-full bg-slate-50/50 p-6">
-                {/* Header y Acciones */}
+            {/* CAMBIO 1: Usar min-h-screen en lugar de h-full para que el fondo crezca con el scroll */}
+            <div className="flex flex-col min-h-screen bg-slate-50/50 p-6">
+                
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 flex-shrink-0">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -127,7 +117,6 @@ export default function TrabajosPage() {
                     </div>
                 </div>
 
-                {/* Tarjetas de Resumen (Stats) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 flex-shrink-0">
                     <StatCard
                         icon={<Clock className="h-5 w-5 text-blue-600" />}
@@ -149,15 +138,16 @@ export default function TrabajosPage() {
                     />
                 </div>
 
-                {/* Área del Tablero */}
-                <div className="flex-1 relative">
-                    <div className="absolute inset-0 p-1">
-                        <KanbanBoard
-                            ordenes={ordenes}
-                            onCardClick={handleCardClick}
-                            onOrderMove={handleDragMove}
-                        />
-                    </div>
+                {/* CAMBIO 2: ELIMINADA la "cárcel" de absolute inset-0.
+                    Antes: <div className="flex-1 relative"><div className="absolute inset-0 p-1">...</div></div>
+                    Ahora: Dejamos que el KanbanBoard fluya naturalmente en el DOM.
+                */}
+                <div className="flex-1">
+                    <KanbanBoard
+                        ordenes={ordenes}
+                        onCardClick={handleCardClick}
+                        onOrderMove={handleDragMove}
+                    />
                 </div>
 
                 <WorkOrderModal
@@ -169,7 +159,6 @@ export default function TrabajosPage() {
                 />
             </div>
 
-            {/* Componente de Impresión Oculto */}
             <div className="hidden">
                 {selectedOrder && (
                     <OrderPrintView 
