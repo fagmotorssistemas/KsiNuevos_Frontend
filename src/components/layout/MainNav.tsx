@@ -15,17 +15,19 @@ export function MainNav({ className }: { className?: string }) {
   
   let navItems: NavItem[] = [];
 
-  // Lógica exclusiva para Finanzas
-  if (profile?.role === "finanzas") {
-    // Mantenemos la lógica de GitHub (probablemente 'Acceso Limitado' sea el nombre oficial ahora)
-    navItems = [
-      { href: "/inventario", label: "Acceso Limitado" }, 
-    ];
-  } else {
-    // Lógica para los demás roles (Admin, Ventas, Marketing, etc.)
-    navItems = [
-      { href: "/leads", label: "Ventas" },
-    ];
+if (profile?.role === "finanzas") {
+  navItems = [
+    { href: "/inventario", label: "Acceso Limitado" }, 
+  ];
+} else if (profile?.role === "contable") {
+  navItems = [
+    { href: "/wallet", label: "Contabilidad" },
+  ];
+} else {
+  navItems = [
+    { href: "/leads", label: "Ventas" },
+  ];
+
 
     // Admin
     if (profile?.role === "admin") {
@@ -39,6 +41,8 @@ export function MainNav({ className }: { className?: string }) {
       navItems.push({ href: "/seguros", label: "Seguros" });
       // -------------------------------
     }
+
+
 
     // Admin y Marketing ven la sección de reportes
     if (profile?.role === "admin" || profile?.role === "marketing") {

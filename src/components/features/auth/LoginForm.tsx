@@ -66,6 +66,10 @@ export const LoginForm = () => {
           case 'finanzas':
             router.push('/inventario') // A Finanzas
             break
+          case 'contable':
+            router.push('/wallet') // A Finanzas
+            break
+
           default:
             router.push('/') // Por seguridad, al home
         }
@@ -85,21 +89,21 @@ export const LoginForm = () => {
       {/* ... Tus inputs de Email y Password ... */}
       <div>
         <label className="mb-1 block text-sm font-medium">Email</label>
-        <Input 
-          type="email" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          required 
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
           disabled={isLoading}
         />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium">Contraseña</label>
-        <Input 
-          type="password" 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          required 
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
           disabled={isLoading}
         />
       </div>
@@ -107,7 +111,7 @@ export const LoginForm = () => {
       <Button type="submit" className="w-full" disabled={isLoading}>
         {isLoading ? <Spinner size="sm" className="mr-2" /> : 'Iniciar Sesión'}
       </Button>
-      
+
       {error && <p className="text-center text-sm text-red-500">{error}</p>}
     </form>
   )
