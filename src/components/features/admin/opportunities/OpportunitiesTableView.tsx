@@ -357,6 +357,7 @@ export function OpportunitiesTableView({
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest w-[200px]">Vehículo</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Marca / Modelo</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Motor</th>
+                                <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Transmision</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Publicado</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Detalles</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest text-right">Precio</th>
@@ -421,6 +422,12 @@ export function OpportunitiesTableView({
                                             onSave={handleSaveMotor}
                                             onSuccess={onVehicleUpdate} // NUEVO: callback de actualización
                                         />
+                                    </td>
+
+                                    <td>
+                                        <p className="text-center text-sm font-semibold text-zinc-500">
+                                            {vehicle.transmission ?? 'Desconocido'}
+                                        </p>
                                     </td>
 
                                     <td className="py-5 px-6">

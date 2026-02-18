@@ -186,12 +186,12 @@ export function OpportunitiesFiltersView({
                         <MapPin className="h-3.5 w-3.5" /> Solo Sierra
                     </button>
                     <div className="h-4 w-px bg-slate-200 mx-1 flex-shrink-0" />
-                    <button
+                    {/* <button
                         onClick={() => setShowStatsModal(true)}
                         className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                     >
                         <BarChart3 className="h-4 w-4" />
-                    </button>
+                    </button> */}
                     <button
                         onClick={onScraperComplete}
                         disabled={isWebhookLoading}

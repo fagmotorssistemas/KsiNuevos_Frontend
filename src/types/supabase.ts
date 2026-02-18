@@ -1418,6 +1418,7 @@ export type Database = {
           seller_id: string
           tags: string[] | null
           title: string | null
+          transmission: string | null
           updated_at: string | null
           url: string
           year: string | null
@@ -1442,6 +1443,7 @@ export type Database = {
           seller_id: string
           tags?: string[] | null
           title?: string | null
+          transmission?: string | null
           updated_at?: string | null
           url: string
           year?: string | null
@@ -1466,6 +1468,7 @@ export type Database = {
           seller_id?: string
           tags?: string[] | null
           title?: string | null
+          transmission?: string | null
           updated_at?: string | null
           url?: string
           year?: string | null
