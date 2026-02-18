@@ -9,7 +9,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- CONFIGURACIÓN API LEGACY ---
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.117:3005/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
 
 // --- INTERFACES PARA ESCRITURA (SUPABASE) ---
 export interface SeguroPayload {
