@@ -1,38 +1,50 @@
-import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
 import {
-    DatabaseZap, Search, Car, RefreshCcw, X, Sparkles, Zap, ChevronDown, ChevronUp, SlidersHorizontal
+    DatabaseZap, Search, Car, RefreshCcw, X, Zap, ChevronDown, ChevronUp, Sparkles
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { OpportunitiesFiltersView } from "./OpportunitiesFiltersView";
 import { PriceStatistics } from "./PriceStatisticsModal";
+import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
 
 interface OpportunitiesCenterViewProps {
     onScraperComplete?: () => void;
     isLoading?: boolean;
     topOpportunities: VehicleWithSeller[];
     vehicles: VehicleWithSeller[];
-    filteredVehicles: VehicleWithSeller[];
-    coastFilteredVehicles: VehicleWithSeller[];
-    showTopDeals: boolean;
-    regionFilter: 'all' | 'coast' | 'sierra';
-    searchTerm: string;
+
+    // Filtros actuales
     selectedBrand: string;
     selectedModel: string;
     selectedYear: string;
-    selectedDateRange: string;
     selectedCity: string;
+    selectedDateRange: string;
+    regionFilter: 'all' | 'coast' | 'sierra';
+    searchTerm: string;
     sortBy: string;
-    priceStatistics: PriceStatistics[]
-    onShowTopDealsChange: (value: boolean) => void;
-    onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
-    onSearchTermChange: (value: string) => void;
+
+    // Opciones disponibles
+    availableBrands: string[];
+    availableModels: string[];
+    availableYears: string[];
+    availableCities: string[];
+
+    // Stats
+    totalCount: number;
+    enPatio: number;
+    enTaller: number;
+
+    priceStatistics: PriceStatistics[];
+
+    // Callbacks
     onBrandChange: (value: string) => void;
     onModelChange: (value: string) => void;
     onYearChange: (value: string) => void;
-    onDateRangeChange: (value: string) => void;
     onCityChange: (value: string) => void;
+    onDateRangeChange: (value: string) => void;
+    onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
+    onSearchTermChange: (value: string) => void;
     onSortChange: (value: string) => void;
     onClearFilters: () => void;
 }
@@ -40,28 +52,30 @@ interface OpportunitiesCenterViewProps {
 export const OpportunitiesCenterView = ({
     onScraperComplete,
     isLoading,
-    topOpportunities,
     vehicles,
-    filteredVehicles,
-    coastFilteredVehicles,
-    showTopDeals,
-    regionFilter,
-    searchTerm,
     selectedBrand,
     selectedModel,
     selectedYear,
-    selectedDateRange,
     selectedCity,
+    selectedDateRange,
+    regionFilter,
+    searchTerm,
     sortBy,
+    availableBrands,
+    availableModels,
+    availableYears,
+    availableCities,
+    totalCount,
+    enPatio,
+    enTaller,
     priceStatistics,
-    onShowTopDealsChange,
-    onRegionFilterChange,
-    onSearchTermChange,
     onBrandChange,
     onModelChange,
     onYearChange,
-    onDateRangeChange,
     onCityChange,
+    onDateRangeChange,
+    onRegionFilterChange,
+    onSearchTermChange,
     onSortChange,
     onClearFilters,
 }: OpportunitiesCenterViewProps) => {
@@ -73,14 +87,15 @@ export const OpportunitiesCenterView = ({
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
     const [catalogSearch, setCatalogSearch] = useState("");
-    const [isExpanded, setIsExpanded] = useState(true);
     const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
 
     useEffect(() => {
         if (currentToastId && isWebhookLoading) {
             toast.loading(
                 <div className="relative flex flex-col justify-center gap-3 ml-2 w-full pr-8">
-                    <button onClick={() => toast.dismiss(currentToastId)} className="absolute -right-10 p-1 text-red-300 hover:opacity-50"><X className="h-4 w-4" /></button>
+                    <button onClick={() => toast.dismiss(currentToastId)} className="absolute -right-10 p-1 text-red-300 hover:opacity-50">
+                        <X className="h-4 w-4" />
+                    </button>
                     <div className="flex justify-between items-center">
                         <div className="font-semibold text-red-400 text-sm">Analizando Marketplace...</div>
                         <span className="text-[10px] font-mono text-red-300">{Math.round(progress)}%</span>
@@ -95,21 +110,41 @@ export const OpportunitiesCenterView = ({
     }, [progress, currentToastId, isWebhookLoading]);
 
     const handleSubmitScraper = useCallback(async (searchValue: string) => {
-        if (!searchValue.trim()) { toast.error("Ingresa un término de búsqueda", { duration: 2000 }); return; }
-        setIsWebhookLoading(true); setProgress(0);
+        if (!searchValue.trim()) {
+            toast.error("Ingresa un término de búsqueda", { duration: 2000 });
+            return;
+        }
+
+        setIsWebhookLoading(true);
+        setProgress(0);
         const toastId = toast.loading("Iniciando escaneo...");
         setCurrentToastId(toastId);
+
         const progressInterval = setInterval(() => {
             setProgress((prev) => prev >= 95 ? prev : prev + (prev < 70 ? 2 : 0.5));
         }, 1000);
+
         try {
             const response = await scraperService.scrapMarketplace(searchValue);
             clearInterval(progressInterval);
-            if (!response || response.status !== "done") throw new Error(response?.message || "Error inesperado");
+
+            if (!response || response.status !== "done") {
+                throw new Error(response?.message || "Error inesperado");
+            }
+
             setProgress(100);
             setTimeout(() => {
-                toast.success(<div className="ml-2">¡Extracción completa! <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total || 0} vehículos encontrados</span></div>, { id: toastId, duration: Infinity });
-                setIsWebhookLoading(false); setCurrentToastId(null);
+                toast.success(
+                    <div className="ml-2">
+                        ¡Extracción completa!
+                        <span className="block text-[10px] opacity-70">
+                            {response.summary?.vehicles?.total || 0} vehículos encontrados
+                        </span>
+                    </div>,
+                    { id: toastId, duration: Infinity }
+                );
+                setIsWebhookLoading(false);
+                setCurrentToastId(null);
                 setShowScannerModal(false);
                 onScraperComplete?.();
             }, 1000);
@@ -129,21 +164,29 @@ export const OpportunitiesCenterView = ({
                 </div>,
                 { id: toastId, duration: Infinity }
             );
-            setIsWebhookLoading(false); setCurrentToastId(null); setProgress(0);
+            setIsWebhookLoading(false);
+            setCurrentToastId(null);
+            setProgress(0);
         }
     }, [onScraperComplete]);
 
     const handlePickAndScrap = useCallback((brand: string, model?: string) => {
         const term = model ? `${brand} ${model}` : brand;
-        setScraperTerm(term); setShowCarPicker(false); handleSubmitScraper(term);
+        setScraperTerm(term);
+        setShowCarPicker(false);
+        handleSubmitScraper(term);
     }, [handleSubmitScraper]);
+
+    // Contadores de filtros
+    const brandFilteredCount = vehicles.filter(v => v.brand === selectedBrand).length;
+    const modelFilteredCount = vehicles.filter(v =>
+        v.brand === selectedBrand && v.model === selectedModel
+    ).length;
 
     return (
         <div className="flex flex-col w-full gap-4 mb-4">
-            {/* FILA PRINCIPAL: Botón Escanear + Botón Filtros */}
+            {/* FILA PRINCIPAL */}
             <div className="flex justify-between w-full gap-4 items-stretch">
-
-                {/* BOTÓN ESCANEAR */}
                 <button
                     onClick={() => setShowScannerModal(true)}
                     className="flex-1 min-w-0 rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 transition-all group"
@@ -163,42 +206,43 @@ export const OpportunitiesCenterView = ({
                     <Zap className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
                 </button>
 
-                {/* BOTÓN FILTROS MANUALES */}
                 <button
                     onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
                     className="flex-shrink-0 w-32 flex flex-col items-center justify-center gap-1.5 px-5 rounded-2xl border shadow-lg transition-all p-4 bg-gradient-to-r from-slate-50 to-white hover:from-slate-100 hover:to-slate-50 border-slate-200"
-                    title="Filtros manuales"
                 >
                     <div className="flex justify-center items-center gap-3">
                         <span className="hidden whitespace-nowrap text-xs font-semibold text-slate-500 sm:inline">Filtros</span>
                         {isFiltersExpanded ? (
-                            <ChevronUp className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                            <ChevronUp className="h-5 w-5 text-slate-400" />
                         ) : (
-                            <ChevronDown className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                            <ChevronDown className="h-5 w-5 text-slate-400" />
                         )}
                     </div>
                 </button>
             </div>
 
-            {/* PANEL DE FILTROS (debajo de la fila, ocupa todo el ancho) */}
+            {/* PANEL DE FILTROS */}
             <div className={`transition-all duration-300 ease-in-out ${isFiltersExpanded ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
                     <OpportunitiesFiltersView
-                        vehicles={vehicles}
-                        topOpportunities={topOpportunities}
-                        filteredVehicles={filteredVehicles}
-                        coastFilteredVehicles={coastFilteredVehicles}
-                        showTopDeals={showTopDeals}
-                        regionFilter={regionFilter}
-                        priceStatistics={priceStatistics}
-                        searchTerm={searchTerm}
+                        totalCount={totalCount}
+                        enPatio={enPatio}
+                        enTaller={enTaller}
+                        enCliente={0}
                         selectedBrand={selectedBrand}
                         selectedModel={selectedModel}
                         selectedYear={selectedYear}
                         selectedDateRange={selectedDateRange}
                         selectedCity={selectedCity}
+                        regionFilter={regionFilter}
+                        searchTerm={searchTerm}
                         sortBy={sortBy}
-                        onShowTopDealsChange={onShowTopDealsChange}
+                        availableBrands={availableBrands}
+                        availableModels={availableModels}
+                        availableYears={availableYears}
+                        availableCities={availableCities}
+                        brandFilteredCount={brandFilteredCount}
+                        modelFilteredCount={modelFilteredCount}
                         onRegionFilterChange={onRegionFilterChange}
                         onSearchTermChange={onSearchTermChange}
                         onBrandChange={onBrandChange}
@@ -210,6 +254,7 @@ export const OpportunitiesCenterView = ({
                         onClearFilters={onClearFilters}
                         onScraperComplete={onScraperComplete}
                         isWebhookLoading={isWebhookLoading}
+                        priceStatistics={priceStatistics}
                     />
                 </div>
             </div>
@@ -247,7 +292,6 @@ export const OpportunitiesCenterView = ({
                                         value={scraperTerm}
                                         onChange={(e) => setScraperTerm(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && !isWebhookLoading && handleSubmitScraper(scraperTerm)}
-                                        autoFocus
                                     />
                                 </div>
                                 <button

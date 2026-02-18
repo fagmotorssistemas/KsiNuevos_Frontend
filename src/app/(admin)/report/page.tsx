@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminStats } from "@/hooks/useAdminStats";
 import { useVehicleStats } from "@/hooks/useVehicleStats";
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useScraperData } from "@/hooks/useScraperData";
 import { OpportunitiesView } from "@/components/features/admin/opportunities/OpportunitiesView";
+import { useEffect } from "react";
 
 // --- INTERFACES ---
 
@@ -250,7 +251,27 @@ export default function AdminDashboardPage() {
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
-    const { vehicles, sellers, stats, isLoading: isScraperLoading, filters, refreshAll, topOpportunities, priceStatistics, getPriceStatisticsForVehicle } = useScraperData()
+    const {
+        vehicles,
+        sellers,
+        stats,
+        isLoading: isScraperLoading,
+        filters,
+        refreshAll,
+        topOpportunities,
+        priceStatistics,
+        getPriceStatisticsForVehicle,
+        pagination,
+        goToPage,
+        nextPage,
+        prevPage,
+        // NUEVO: Props de filtros
+        vehicleFilters,
+        filterOptions,
+        updateFilter,
+        updateBrand,
+        clearFilters,
+    } = useScraperData();
 
     const handleReload = async () => {
         await reloadSellers();
@@ -294,7 +315,7 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* Toolbar solo visible si NO estamos en testimonios */}
+            {/* Toolbar solo visible si NO estamos en testimonios u oportunidades */}
             {activeTab !== 'testimonials' && activeTab !== 'opportunities' && (
                 <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
                     <AdminToolbar
@@ -326,7 +347,6 @@ export default function AdminDashboardPage() {
                         <Handshake className="h-4 w-4" />
                         Oportunidades
                     </button>
-                    {/* Botón de historial modal siempre accesible */}
                     <button onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 rounded-md transition-colors shadow-sm">
                         <FileText className="h-4 w-4" />
                         Historial Proformas (PDF)
@@ -337,7 +357,6 @@ export default function AdminDashboardPage() {
             <div className="min-h-[400px]">
                 {activeTab === 'sellers' ? (
                     <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
-                        {/* StatCards movidos aquí dentro */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <StatCard icon={MessageCircle} label="Leads Resp." value={grandTotals.leads} color="text-blue-600" bg="bg-blue-50" />
                             <StatCard icon={MapPin} label="Showroom" value={grandTotals.showroom} color="text-purple-600" bg="bg-purple-50" />
@@ -416,6 +435,16 @@ export default function AdminDashboardPage() {
                         onScraperComplete={handleScraperRefresh}
                         priceStatistics={priceStatistics}
                         getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
+                        goToPage={goToPage}
+                        nextPage={nextPage}
+                        prevPage={prevPage}
+                        pagination={pagination}
+                        // NUEVO: Props de filtros
+                        vehicleFilters={vehicleFilters}
+                        filterOptions={filterOptions}
+                        updateFilter={updateFilter}
+                        updateBrand={updateBrand}
+                        clearFilters={clearFilters}
                     />
                 )}
             </div>

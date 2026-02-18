@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Database } from '@/types/supabase';
-import { scraperService, VehicleWithSeller } from '@/services/scraper.service';
+import { scraperService, VehicleWithSeller, VehicleFilters } from '@/services/scraper.service';
 import { createClient } from '@/lib/supabase/client';
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
@@ -15,46 +15,108 @@ export type FilterOptions = {
   isDealer?: boolean;
 };
 
+const ITEMS_PER_PAGE = 20;
+
 export function useScraperData(initialFilters?: FilterOptions) {
-  const [vehicles, setVehicles] = useState<VehicleWithSeller[]>([]);
+  const [allVehicles, setAllVehicles] = useState<VehicleWithSeller[]>([]);
   const [sellers, setSellers] = useState<ScraperSeller[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOptions>(initialFilters || {});
   const [topOpportunities, setTopOpportunities] = useState<VehicleWithSeller[]>([]);
   const [priceStatistics, setPriceStatistics] = useState<PriceStatistics[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // NUEVO: Estados para filtros avanzados
+  const [vehicleFilters, setVehicleFilters] = useState<VehicleFilters>({
+    brand: 'all',
+    model: 'all',
+    year: 'all',
+    city: 'all',
+    dateRange: 'all',
+    regionFilter: 'all',
+    searchTerm: '',
+    sortBy: 'created_at_desc',
+    page: 1,
+    itemsPerPage: ITEMS_PER_PAGE
+  });
+
+  // NUEVO: Ref para debounce del searchTerm
+  const searchDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // NUEVO: Opciones de filtros disponibles
+  const [filterOptions, setFilterOptions] = useState<{
+    brands: string[];
+    models: string[];
+    years: string[];
+    cities: string[];
+  }>({
+    brands: [],
+    models: [],
+    years: [],
+    cities: []
+  });
 
   const supabase = useMemo(() => createClient(), []);
 
-  const loadVehicles = useCallback(async () => {
+  // NUEVO: Cargar vehículos con filtros desde BD
+  const loadVehiclesWithFilters = useCallback(async () => {
     setIsLoading(true);
     try {
-      let data: VehicleWithSeller[];
+      const normalizedFilters: VehicleFilters = {
+        brand: vehicleFilters.brand !== 'all' ? vehicleFilters.brand : undefined,
+        model: vehicleFilters.model !== 'all' ? vehicleFilters.model : undefined,
+        year: vehicleFilters.year !== 'all' ? vehicleFilters.year : undefined,
+        city: vehicleFilters.city !== 'all' ? vehicleFilters.city : undefined,
+        dateRange: vehicleFilters.dateRange !== 'all' ? vehicleFilters.dateRange as any : 'all',
+        regionFilter: vehicleFilters.regionFilter,
+        searchTerm: vehicleFilters.searchTerm,
+        sortBy: vehicleFilters.sortBy,
+        page: currentPage, // Usar currentPage del estado
+        itemsPerPage: ITEMS_PER_PAGE
+      };
 
-      if (filters.status) {
-        data = await scraperService.getVehiclesByStatus(filters.status);
-      } else if (filters.location) {
-        data = await scraperService.getVehiclesByLocation(filters.location);
-      } else {
-        data = await scraperService.getVehicles();
-      }
+      const { data, totalCount: count } = await scraperService.getVehiclesWithFilters(normalizedFilters);
 
-      // Filtros adicionales en cliente
-      if (filters.sellerId) {
-        data = data.filter(v => v.seller_id === filters.sellerId);
-      }
-
-      if (filters.isDealer !== undefined) {
-        data = data.filter(v => v.seller?.is_dealer === filters.isDealer);
-      }
-
-      setVehicles(data);
+      setAllVehicles(data);
+      setTotalCount(count);
     } catch (error) {
       console.error("Error al cargar vehículos:", error);
-      setVehicles([]);
+      setAllVehicles([]);
+      setTotalCount(0);
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [vehicleFilters, currentPage]);
+
+  // NUEVO: Cargar opciones de filtros
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      const options = await scraperService.getFilterOptions();
+      setFilterOptions(options);
+    } catch (error) {
+      console.error("Error al cargar opciones de filtros:", error);
+    }
+  }, []);
+
+  // NUEVO: Cargar modelos cuando cambia la marca
+  const loadModelsForBrand = useCallback(async (brand: string) => {
+    if (brand === 'all') {
+      // Recargar todas las opciones
+      loadFilterOptions();
+      return;
+    }
+
+    try {
+      const models = await scraperService.getModelsByBrand(brand);
+      setFilterOptions(prev => ({
+        ...prev,
+        models
+      }));
+    } catch (error) {
+      console.error("Error al cargar modelos:", error);
+    }
+  }, [loadFilterOptions]);
 
   const loadSellers = useCallback(async () => {
     try {
@@ -125,15 +187,12 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const loadTopOpportunities = useCallback(async () => {
     try {
-      // =============================
-      // 1. Traer candidatos desde Supabase
-      // =============================
       const { data, error } = await supabase
         .from("scraper_vehicles")
         .select(`
-        *,
-        seller:scraper_sellers(*)
-      `)
+          *,
+          seller:scraper_sellers(*)
+        `)
         .not("price", "is", null)
         .not("mileage", "is", null)
         .gte("price", 1000)
@@ -150,90 +209,52 @@ export function useScraperData(initialFilters?: FilterOptions) {
       }
 
       if (!data || data.length === 0) {
-        console.warn("No se encontraron vehículos candidatos.");
         setTopOpportunities([]);
         return;
       }
 
-      // =============================
-      // 2. Ranking inteligente (Deal Score)
-      // =============================
       const scored = data.map((v) => {
         let score = 0;
 
-        // 1. Precio bajo (mejor score)
         if (v.price) score += 50000 / v.price;
-
-        // 2. Kilometraje bajo
         if (v.mileage) score += 200000 / (v.mileage + 1);
 
-        // 3. Particular con pocas publicaciones
         if (v.seller?.total_listings !== null && v.seller?.total_listings !== undefined) {
           score += 50 / (v.seller.total_listings + 1);
         }
 
-        // 4. Bonus por palabras positivas
         const goodWords = [
-          "único dueño",
-          "mantenimientos al día",
-          "como nuevo",
-          "garaje",
-          "full equipo",
-          "factura",
-          "negociable",
+          "único dueño", "mantenimientos al día", "como nuevo",
+          "garaje", "full equipo", "factura", "negociable",
         ];
 
-        // Texto completo para análisis
         const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase();
 
         goodWords.forEach((word) => {
           if (text.includes(word)) score += 10;
         });
 
-        // 5. Penalización por palabras sospechosas
         const badWords = [
-          "chocado",
-          "sin papeles",
-          "remato urgente",
-          "para repuestos",
-          "motor dañado",
-          "no matriculado",
+          "chocado", "sin papeles", "remato urgente",
+          "para repuestos", "motor dañado", "no matriculado",
         ];
 
         badWords.forEach((word) => {
           if (text.includes(word)) score -= 30;
         });
 
-        return {
-          ...v,
-          deal_score: score,
-        };
+        return { ...v, deal_score: score };
       });
 
-      // =============================
-      // 3. Ordenar por score (mejores primero)
-      // =============================
       const sorted = scored.sort((a, b) => b.deal_score - a.deal_score);
 
-      // =============================
-      // 4. Eliminar duplicados por TITLE
-      //    (nos quedamos con el mejor score)
-      // =============================
       const uniqueByTitle = Array.from(
         new Map(
-          sorted.map((v) => [
-            (v.title ?? "").trim().toLowerCase(), // clave normalizada
-            v, // vehículo
-          ])
+          sorted.map((v) => [(v.title ?? "").trim().toLowerCase(), v])
         ).values()
       );
 
-      // =============================
-      // 5. Top 30 finales
-      // =============================
       const top30 = uniqueByTitle.slice(0, 30);
-
-      // Guardar en estado
       setTopOpportunities(top30);
     } catch (err) {
       console.error("Error inesperado en oportunidades:", err);
@@ -241,43 +262,139 @@ export function useScraperData(initialFilters?: FilterOptions) {
     }
   }, [supabase]);
 
+  const updateFilter = useCallback((key: string, value: any) => {
+    if (key === 'searchTerm') {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+      searchDebounceTimer.current = setTimeout(() => {
+        setVehicleFilters(prev => ({
+          ...prev,
+          [key]: value
+        }));
+        setCurrentPage(1);
+      }, 500);
+    } else {
+      setVehicleFilters(prev => ({
+        ...prev,
+        [key]: value
+      }));
+      setCurrentPage(1);
+    }
+  }, []);
 
+  const updateBrand = useCallback((brand: string) => {
+    setVehicleFilters(prev => ({
+      ...prev,
+      brand,
+      model: 'all'
+    }));
+    setCurrentPage(1);
+
+    if (brand !== 'all') {
+      loadModelsForBrand(brand);
+    } else {
+      loadFilterOptions();
+    }
+  }, [loadModelsForBrand, loadFilterOptions]);
+
+  const clearFilters = useCallback(() => {
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    setVehicleFilters({
+      brand: 'all',
+      model: 'all',
+      year: 'all',
+      city: 'all',
+      dateRange: 'all',
+      regionFilter: 'all',
+      searchTerm: '',
+      sortBy: 'created_at_desc',
+      page: 1,
+      itemsPerPage: ITEMS_PER_PAGE
+    });
+    setCurrentPage(1);
+  }, []);
 
   const applyFilters = useCallback((newFilters: FilterOptions) => {
     setFilters(newFilters);
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilters({});
+    setCurrentPage(1);
   }, []);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
-      loadVehicles(), 
-      loadSellers(), 
+      loadVehiclesWithFilters(),
+      loadSellers(),
       loadTopOpportunities(),
-      loadPriceStatistics()
+      loadPriceStatistics(),
+      loadFilterOptions()
     ]);
-  }, [loadVehicles, loadSellers, loadTopOpportunities, loadPriceStatistics]);
+  }, [loadVehiclesWithFilters, loadSellers, loadTopOpportunities, loadPriceStatistics, loadFilterOptions]);
 
   const stats = useMemo(() => {
     return {
-      total: vehicles.length,
-      nuevos: vehicles.filter(v => v.condition === 'NEW_ITEM').length,
-      usados: vehicles.filter(v => v.condition === 'USED').length,
-      usados_bueno: vehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
-      usados_como_nuevo: vehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
-      enPatio: vehicles.filter(v => v.seller?.location === 'patio').length,
-      enTaller: vehicles.filter(v => v.seller?.location === 'taller').length,
-      enCliente: vehicles.filter(v => v.seller?.location === 'cliente').length,
+      total: totalCount,
+      nuevos: allVehicles.filter(v => v.condition === 'NEW_ITEM').length,
+      usados: allVehicles.filter(v => v.condition === 'USED').length,
+      usados_bueno: allVehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
+      usados_como_nuevo: allVehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
+      enPatio: allVehicles.filter(v => v.seller?.location === 'patio').length,
+      enTaller: allVehicles.filter(v => v.seller?.location === 'taller').length,
+      enCliente: allVehicles.filter(v => v.seller?.location === 'cliente').length,
     };
-  }, [vehicles]);
+  }, [allVehicles, totalCount]);
 
+  // Información de paginación
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
+  const pagination = useMemo(() => {
+    const hasNextPage = currentPage < totalPages;
+    const hasPrevPage = currentPage > 1;
+    const startIndex = totalCount > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
+    const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
+
+    return {
+      currentPage,
+      totalPages,
+      totalItems: totalCount,
+      itemsPerPage: ITEMS_PER_PAGE,
+      hasNextPage,
+      hasPrevPage,
+      startIndex,
+      endIndex,
+    };
+  }, [currentPage, totalPages, totalCount]);
+
+  // Funciones de navegación
+  const goToPage = useCallback((page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      window.scrollTo({ top: 70, behavior: 'auto' });
+      setCurrentPage(page);
+    }
+  }, [totalPages]);
+
+  const nextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      goToPage(currentPage + 1);
+    }
+  }, [currentPage, totalPages, goToPage]);
+
+  const prevPage = useCallback(() => {
+    if (currentPage > 1) {
+      goToPage(currentPage - 1);
+    }
+  }, [currentPage, goToPage]);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
 
   useEffect(() => {
-    loadVehicles();
-  }, [loadVehicles]);
+    loadVehiclesWithFilters();
+  }, [loadVehiclesWithFilters]);
 
   useEffect(() => {
     loadSellers();
@@ -287,6 +404,11 @@ export function useScraperData(initialFilters?: FilterOptions) {
     loadPriceStatistics();
   }, [loadPriceStatistics]);
 
+  useEffect(() => {
+    loadTopOpportunities();
+  }, [loadTopOpportunities]);
+
+  // Suscripciones en tiempo real
   useEffect(() => {
     const vehiclesChannel = supabase
       .channel('scraper_vehicles_changes')
@@ -298,8 +420,9 @@ export function useScraperData(initialFilters?: FilterOptions) {
           table: 'scraper_vehicles'
         },
         () => {
-          loadVehicles();
+          loadVehiclesWithFilters();
           loadTopOpportunities();
+          loadFilterOptions();
         }
       )
       .subscribe();
@@ -335,24 +458,39 @@ export function useScraperData(initialFilters?: FilterOptions) {
       .subscribe();
 
     return () => {
+      // Limpiar debounce timer si existe
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
+      }
+
       supabase.removeChannel(vehiclesChannel);
       supabase.removeChannel(sellersChannel);
       supabase.removeChannel(statsChannel);
     };
-  }, [supabase, loadVehicles, loadSellers, loadPriceStatistics]);
-
-  useEffect(() => {
-    loadTopOpportunities();
-  }, [loadTopOpportunities]);
+  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadTopOpportunities, loadFilterOptions]);
 
   return {
-    vehicles,
+    vehicles: allVehicles, // Ya vienen paginados desde la BD
+    allVehicles,
     sellers,
     isLoading,
     filters,
     stats,
     topOpportunities,
     priceStatistics,
+    pagination,
+    goToPage,
+    nextPage,
+    prevPage,
+
+    // NUEVO: Filtros avanzados
+    vehicleFilters,
+    filterOptions,
+    updateFilter,
+    updateBrand,
+    clearFilters,
+
+    // Funciones existentes
     refreshTopOpportunities: loadTopOpportunities,
     getSellerWithVehicles,
     getPriceStatisticsForVehicle,
@@ -360,8 +498,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
     getPriceStatisticsByModel,
     getAllBrandsWithStats,
     applyFilters,
-    clearFilters,
-    refresh: loadVehicles,
+    refresh: loadVehiclesWithFilters,
     refreshSellers: loadSellers,
     refreshPriceStatistics: loadPriceStatistics,
     refreshAll

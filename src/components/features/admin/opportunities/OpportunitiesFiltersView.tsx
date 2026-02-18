@@ -1,6 +1,5 @@
 import { useMemo, useCallback, useState } from "react";
 import {
-    TrendingUp,
     MapPin,
     Search,
     X,
@@ -14,28 +13,38 @@ import {
     ArrowUpDown,
     Filter,
 } from "lucide-react";
-import { VehicleWithSeller } from "@/services/scraper.service";
 import { PriceStatistics, PriceStatisticsModal } from "./PriceStatisticsModal";
 import { FilterModal } from "./FilterModal";
 import { FilterButton } from "./components/FilterButton";
 
 interface OpportunitiesFiltersViewProps {
-    vehicles: VehicleWithSeller[];
-    topOpportunities: VehicleWithSeller[];
-    filteredVehicles: VehicleWithSeller[];
-    coastFilteredVehicles: VehicleWithSeller[];
-    showTopDeals: boolean;
-    regionFilter: 'all' | 'coast' | 'sierra';
-    searchTerm: string;
+    // NUEVO: Props simplificadas - ahora viene del hook
+    totalCount: number;
+    enPatio: number;
+    enTaller: number;
+    enCliente: number;
+
+    // Filtros actuales
     selectedBrand: string;
     selectedModel: string;
     selectedYear: string;
     selectedDateRange: string;
     selectedCity: string;
+    regionFilter: 'all' | 'coast' | 'sierra';
+    searchTerm: string;
     sortBy: string;
-    isWebhookLoading: boolean
-    priceStatistics: PriceStatistics[];
-    onShowTopDealsChange: (value: boolean) => void;
+
+    // Opciones disponibles
+    availableBrands: string[];
+    availableModels: string[];
+    availableYears: string[];
+    availableCities: string[];
+
+    // Contadores de filtros
+    brandFilteredCount: number;
+    modelFilteredCount: number;
+
+    // Callbacks
     onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
     onSearchTermChange: (value: string) => void;
     onBrandChange: (value: string) => void;
@@ -46,24 +55,30 @@ interface OpportunitiesFiltersViewProps {
     onSortChange: (value: string) => void;
     onClearFilters: () => void;
     onScraperComplete: (() => void) | undefined;
+
+    isWebhookLoading: boolean;
+    priceStatistics: PriceStatistics[];
 }
 
 export function OpportunitiesFiltersView({
-    vehicles,
-    filteredVehicles,
-    coastFilteredVehicles,
-    showTopDeals,
-    regionFilter,
-    searchTerm,
+    totalCount,
+    enPatio,
+    enTaller,
+    enCliente,
     selectedBrand,
     selectedModel,
     selectedYear,
     selectedDateRange,
     selectedCity,
+    regionFilter,
+    searchTerm,
     sortBy,
-    isWebhookLoading,
-    priceStatistics,
-    onShowTopDealsChange,
+    availableBrands,
+    availableModels,
+    availableYears,
+    availableCities,
+    brandFilteredCount,
+    modelFilteredCount,
     onRegionFilterChange,
     onSearchTermChange,
     onBrandChange,
@@ -74,6 +89,8 @@ export function OpportunitiesFiltersView({
     onSortChange,
     onClearFilters,
     onScraperComplete,
+    isWebhookLoading,
+    priceStatistics,
 }: OpportunitiesFiltersViewProps) {
 
     const [showStatsModal, setShowStatsModal] = useState(false);
@@ -84,51 +101,6 @@ export function OpportunitiesFiltersView({
     const [showDateModal, setShowDateModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
 
-    // --- LÓGICA DE DATOS ---
-    const availableBrands = useMemo(() => {
-        const brands = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (vehicle.brand && vehicle.brand.trim() !== '') {
-                brands.add(vehicle.brand);
-            }
-        });
-        return Array.from(brands).sort();
-    }, [vehicles]);
-
-    const availableModels = useMemo(() => {
-        const models = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (selectedBrand !== "all" && vehicle.brand !== selectedBrand) {
-                return;
-            }
-            if (vehicle.model && vehicle.model.trim() !== '') {
-                models.add(vehicle.model);
-            }
-        });
-        return Array.from(models).sort();
-    }, [vehicles, selectedBrand]);
-
-    const availableYears = useMemo(() => {
-        const years = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (vehicle.year && vehicle.year.trim() !== '') {
-                years.add(vehicle.year);
-            }
-        });
-        return Array.from(years).sort((a, b) => Number(b) - Number(a));
-    }, [vehicles]);
-
-    const availableCities = useMemo(() => {
-        const cities = new Set<string>();
-        vehicles.forEach(vehicle => {
-            if (vehicle.location && vehicle.location.trim() !== '') {
-                cities.add(vehicle.location);
-            }
-        });
-        return Array.from(cities).sort();
-    }, [vehicles]);
-
-    // --- CORRECCIÓN DEL FILTRO DE FECHA ---
     const dateRangeOptions = useMemo(() => ["Hoy", "Ayer", "Última semana", "Último mes"], []);
 
     const handleDateRangeChange = useCallback((value: string) => {
@@ -138,7 +110,6 @@ export function OpportunitiesFiltersView({
             "Última semana": "week",
             "Último mes": "month"
         };
-        // Si el valor no está en el mapeo (ej. "Cualquier Fecha"), envía "all"
         onDateRangeChange(mapping[value] || "all");
     }, [onDateRangeChange]);
 
@@ -158,21 +129,12 @@ export function OpportunitiesFiltersView({
         { value: "publication_date_desc", label: "Fecha de publicación: más recientes" },
         { value: "price_asc", label: "Precio: menor a mayor" },
         { value: "price_desc", label: "Precio: mayor a menor" }
-    ]
+    ];
 
     const getSortLabel = (value: string): string => {
         const option = sortOptions.find(opt => opt.value === value);
         return option?.label || "Ordenar por";
     };
-
-    const displayStats = useMemo(() => {
-        return {
-            total: filteredVehicles.length,
-            enPatio: filteredVehicles.filter(v => v.seller?.location === 'patio').length,
-            enTaller: filteredVehicles.filter(v => v.seller?.location === 'taller').length,
-            enCliente: filteredVehicles.filter(v => v.seller?.location === 'cliente').length,
-        };
-    }, [filteredVehicles]);
 
     const handleBrandChange = useCallback((brand: string) => {
         onBrandChange(brand);
@@ -190,19 +152,6 @@ export function OpportunitiesFiltersView({
         regionFilter !== 'all',
         [selectedBrand, selectedModel, selectedYear, selectedDateRange, selectedCity, sortBy, searchTerm, regionFilter]
     );
-    // Agregar estos useMemo antes del return
-    const brandFilteredCount = useMemo(() => {
-        if (selectedBrand === "all") return 0;
-        return vehicles.filter(v => v.brand === selectedBrand).length;
-    }, [vehicles, selectedBrand]);
-
-    const modelFilteredCount = useMemo(() => {
-        if (selectedModel === "all") return 0;
-        return vehicles.filter(v =>
-            v.brand === selectedBrand &&
-            v.model === selectedModel
-        ).length;
-    }, [vehicles, selectedBrand, selectedModel]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -211,25 +160,19 @@ export function OpportunitiesFiltersView({
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-[10px] sm:text-xs font-bold text-slate-600 border border-slate-200/50">
                         <LayoutGrid className="h-3 w-3" />
-                        <span>TOTAL: {displayStats.total}</span>
+                        <span>TOTAL: {totalCount}</span>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-full text-[10px] sm:text-xs font-bold text-emerald-700 border border-emerald-100">
                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        <span>PATIO: {displayStats.enPatio}</span>
+                        <span>PATIO: {enPatio}</span>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 rounded-full text-[10px] sm:text-xs font-bold text-orange-700 border border-orange-100">
                         <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-                        <span>POSIBLE FALLA MECÁNICA: {displayStats.enTaller}</span>
+                        <span>POSIBLE FALLA MECÁNICA: {enTaller}</span>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0 scrollbar-hide">
-                    {/* <button
-                        onClick={() => onShowTopDealsChange(!showTopDeals)}
-                        className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${showTopDeals ? "bg-orange-50 border-orange-200 text-orange-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
-                    >
-                        <TrendingUp className="h-3.5 w-3.5" /> Oportunidades
-                    </button> */}
                     <button
                         onClick={() => onRegionFilterChange('all')}
                         className={`whitespace-nowrap flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${regionFilter === 'all' ? "bg-red-50 border-red-200 text-red-700 shadow-sm" : "bg-white border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
@@ -430,7 +373,8 @@ export function OpportunitiesFiltersView({
             <PriceStatisticsModal
                 priceStatistics={priceStatistics}
                 isOpen={showStatsModal}
-                onClose={() => setShowStatsModal(false)} />
+                onClose={() => setShowStatsModal(false)}
+            />
         </div>
     );
 }

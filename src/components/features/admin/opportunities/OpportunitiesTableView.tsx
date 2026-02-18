@@ -19,6 +19,8 @@ import {
     TrendingDown,
     DollarSign,
     AlertCircle,
+    Edit3,
+    Check,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
@@ -29,6 +31,7 @@ import { SoldBadge } from "./components/SoldBadge";
 import { MileageBadge } from "./components/MileageBadge";
 import { PriceBadge } from "./components/PriceBadge";
 import { TimelineBadge } from "./components/TimelineBadge";
+import { scraperService } from "@/services/scraper.service";
 
 type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
 
@@ -38,6 +41,7 @@ interface OpportunitiesTableViewProps {
     hasActiveFilters: boolean;
     onClearFilters: () => void;
     getPriceStatisticsForVehicle?: (brand: string, model: string, year?: string) => Promise<PriceStatistics | null>;
+    onVehicleUpdate?: () => void; // NUEVO: callback para recargar datos
 }
 
 function formatAbsoluteDate(dateString: string | null | undefined): string {
@@ -63,6 +67,117 @@ const displayTextCondition = (condition: string) => {
     }
 };
 
+// COMPONENTE ACTUALIZADO para editar motor
+function MotorEditableField({
+    vehicleId,
+    initialMotor,
+    onSave,
+    onSuccess
+}: {
+    vehicleId: string;
+    initialMotor: string | null;
+    onSave?: (vehicleId: string, motor: string) => Promise<void>;
+    onSuccess?: () => void; // NUEVO: callback después de guardar
+}) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [motorValue, setMotorValue] = useState(initialMotor || '');
+    const [isSaving, setIsSaving] = useState(false);
+
+    // NUEVO: Actualizar cuando cambia el prop
+    useEffect(() => {
+        setMotorValue(initialMotor || '');
+    }, [initialMotor]);
+
+    const hasMotor = initialMotor !== null && initialMotor.trim() !== '';
+
+    const handleSave = async () => {
+        if (!motorValue.trim()) return;
+
+        setIsSaving(true);
+        try {
+            if (onSave) {
+                await onSave(vehicleId, motorValue.trim());
+                if (onSuccess) {
+                    onSuccess(); // Llamar callback de éxito
+                }
+            }
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Error guardando motor:', error);
+            // Revertir al valor original si hay error
+            setMotorValue(initialMotor || '');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setMotorValue(initialMotor || '');
+        setIsEditing(false);
+    };
+
+    if (hasMotor && !isEditing) {
+        return (
+            <div className="flex items-center gap-2 group">
+                <span className="text-zinc-700 font-bold text-sm">
+                    {initialMotor}
+                </span>
+                <button
+                    onClick={() => setIsEditing(true)}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-100 rounded transition-all"
+                    title="Editar motor"
+                >
+                    <Edit3 className="h-3 w-3 text-zinc-400" />
+                </button>
+            </div>
+        );
+    }
+
+    if (isEditing || !hasMotor) {
+        return (
+            <div className="flex items-center gap-2">
+                <input
+                    type="text"
+                    value={motorValue}
+                    onChange={(e) => setMotorValue(e.target.value)}
+                    placeholder="Ej: 2.0l turbo diesel"
+                    className="text-sm px-2 py-1 border border-zinc-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none w-full"
+                    autoFocus
+                    disabled={isSaving}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSave();
+                        if (e.key === 'Escape') handleCancel();
+                    }}
+                />
+                <button
+                    onClick={handleSave}
+                    disabled={!motorValue.trim() || isSaving}
+                    className="p-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                    title="Guardar"
+                >
+                    {isSaving ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                        <Check className="h-3.5 w-3.5" />
+                    )}
+                </button>
+                {hasMotor && (
+                    <button
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                        className="p-1.5 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                        title="Cancelar"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    return null;
+}
+
 const DateFormatterInstance = new DateFormatter(new TextFormatter());
 
 export function OpportunitiesTableView({
@@ -71,17 +186,33 @@ export function OpportunitiesTableView({
     hasActiveFilters,
     onClearFilters,
     getPriceStatisticsForVehicle,
+    onVehicleUpdate, // NUEVO
 }: OpportunitiesTableViewProps) {
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithSeller | null>(null);
     const [vehicleStats, setVehicleStats] = useState<PriceStatistics | null>(null);
     const [loadingStats, setLoadingStats] = useState(false);
+
+    // ACTUALIZADO: Función para guardar motor con recarga de datos
+    const handleSaveMotor = async (vehicleId: string, motor: string) => {
+        try {
+            await scraperService.updateVehicleMotor(vehicleId, motor);
+            console.log('✅ Motor actualizado correctamente');
+
+            // NUEVO: Recargar datos después de guardar
+            if (onVehicleUpdate) {
+                onVehicleUpdate();
+            }
+        } catch (error) {
+            console.error('❌ Error al guardar motor:', error);
+            throw error; // Re-lanzar para que el componente hijo maneje el error
+        }
+    };
 
     // Calcular min/max por marca+modelo dentro del listado actual
     const priceRangeByModel = useMemo(() => {
         const map = new Map<string, { min: number; max: number; minId: string; maxId: string }>();
 
         vehicles.forEach((v) => {
-
             if (!v.price || !v.brand || !v.model || !v.year) return;
             const year = v.year;
             const key = `${v.brand.toLowerCase()}__${v.model.toLowerCase()}__${year}`;
@@ -225,6 +356,7 @@ export function OpportunitiesTableView({
                             <tr className="bg-zinc-50/80 border-b border-zinc-100">
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest w-[200px]">Vehículo</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Marca / Modelo</th>
+                                <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Motor</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Publicado</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Detalles</th>
                                 <th className="py-5 px-6 text-[11px] font-bold text-zinc-400 uppercase tracking-widest text-right">Precio</th>
@@ -239,7 +371,7 @@ export function OpportunitiesTableView({
                                     onClick={() => setSelectedVehicle(vehicle)}
                                     className="hover:bg-red-50/40 transition-all group cursor-pointer"
                                 >
-                                    {/* Columna Vehículo: Imagen + Timestamp */}
+                                    {/* Columna Vehículo: Imagen */}
                                     <td className="py-5 px-6">
                                         <div className="flex gap-4 items-center">
                                             <div className="h-20 w-32 bg-zinc-100 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-200 relative shadow-sm">
@@ -280,6 +412,17 @@ export function OpportunitiesTableView({
                                             </div>
                                         </div>
                                     </td>
+
+                                    {/* Columna Motor - CON ACTUALIZACIÓN */}
+                                    <td className="py-5 px-6" onClick={(e) => e.stopPropagation()}>
+                                        <MotorEditableField
+                                            vehicleId={vehicle.id}
+                                            initialMotor={vehicle.motor}
+                                            onSave={handleSaveMotor}
+                                            onSuccess={onVehicleUpdate} // NUEVO: callback de actualización
+                                        />
+                                    </td>
+
                                     <td className="py-5 px-6">
                                         <div className="flex gap-2 text-[11px] font-semibold text-zinc-500 bg-zinc-50 px-2.5 py-1 rounded-lg border border-zinc-100 w-fit">
                                             <Clock className="h-3.5 w-3.5" />
@@ -291,16 +434,16 @@ export function OpportunitiesTableView({
                                     <td className="py-5 px-6">
                                         <div className="flex flex-col gap-2">
                                             <div className="flex items-center gap-2 text-zinc-700 font-bold text-sm">
-                                                <div className="p-1.5 bg-zinc-900 rounded-lg">
-                                                    <Calendar className="h-3.5 w-3.5 text-white" />
+                                                <div className="text-zinc-400 font-bold text-sm">
+                                                    Año:
                                                 </div>
                                                 <span>{vehicle.year || '----'}</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-zinc-600 text-sm font-semibold">
-                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                    <Gauge className="h-3.5 w-3.5 text-zinc-500" />
+                                                <div className="text-zinc-400 font-bold text-sm">
+                                                    km:
                                                 </div>
-                                                <span>{vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '---'}</span>
+                                                <span>{vehicle.mileage ? `${vehicle.mileage.toLocaleString()}` : '---'}</span>
                                             </div>
                                             <MileageBadge type={getMileageBadge(vehicle)} />
                                         </div>
@@ -364,279 +507,286 @@ export function OpportunitiesTableView({
                     </span>
                     <span className="text-zinc-400 text-[10px]">Actualizado recientemente</span>
                 </div>
-            </div>
+            </div >
 
-            {/* --- MODAL SPLIT VIEW --- */}
-            {selectedVehicle && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-300"
-                    onClick={() => setSelectedVehicle(null)}
-                >
+            {
+                selectedVehicle && (
                     <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-white w-full max-w-7xl h-[90vh] lg:h-[85vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 slide-in-from-bottom-8"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-300"
+                        onClick={() => setSelectedVehicle(null)}
                     >
-                        {/* LADO IZQUIERDO: Carousel */}
-                        <OpportunitiesCarousel vehicle={selectedVehicle} />
+                        <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-white w-full max-w-7xl h-[90vh] lg:h-[85vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 slide-in-from-bottom-8"
+                        >
+                            {/* LADO IZQUIERDO: Carousel */}
+                            <OpportunitiesCarousel vehicle={selectedVehicle} />
 
-                        {/* LADO DERECHO: Información */}
-                        <div className="flex-1 flex flex-col h-full bg-white relative">
+                            {/* LADO DERECHO: Información */}
+                            <div className="flex-1 flex flex-col h-full bg-white relative">
 
-                            {/* Header Fijo */}
-                            <div className="p-6 lg:p-8 pb-5 border-b border-zinc-100 flex flex-col gap-4 bg-gradient-to-b from-white to-zinc-50/30 z-10">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <span className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-xs font-bold uppercase tracking-wider shadow-sm">
-                                                {selectedVehicle.year}
-                                            </span>
-                                            <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm">
-                                                <Clock className="h-3.5 w-3.5" />
-                                                {DateFormatterInstance.formatRelativeTime(selectedVehicle.publication_date)}
-                                            </div>
-                                            <PriceBadge type={getPriceBadge(selectedVehicle)} />
-
-                                        </div>
-                                        <h2 className="text-3xl lg:text-4xl font-black text-zinc-900 tracking-tight leading-none mb-2">
-                                            {selectedVehicle.brand?.toUpperCase()}{" "}
-                                            <span className="text-zinc-400">{selectedVehicle.model?.toUpperCase()}</span>
-                                        </h2>
-                                        <p className="text-zinc-500 text-sm font-medium line-clamp-2 max-w-2xl">{selectedVehicle.title}</p>
-                                    </div>
-
-                                    <button
-                                        onClick={() => setSelectedVehicle(null)}
-                                        className="p-3 rounded-xl bg-zinc-100 hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-all border border-zinc-200 hover:border-red-200 shadow-sm"
-                                    >
-                                        <X className="h-5 w-5" />
-                                    </button>
-                                </div>
-
-                                {/* Price Statistics Bar */}
-                                {vehicleStats && !loadingStats && (
-                                    <>
-                                        {vehicleStats.min_price === vehicleStats.max_price ? (
-                                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
-                                                <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                                                <p className="text-sm font-medium text-slate-500">
-                                                    Unidad única detectada: No hay suficientes carros para promediar un precio.
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="p-1 bg-blue-100 rounded-md">
-                                                            <DollarSign className="h-3 w-3 text-blue-600" />
-                                                        </div>
-                                                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Precio Sugerido</span>
-                                                    </div>
-                                                    <div className="text-xl font-black text-blue-700">
-                                                        ${vehicleStats.median_price ? Number(vehicleStats.median_price).toLocaleString() : 'N/A'}
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="p-1 bg-green-100 rounded-md">
-                                                            <TrendingDown className="h-3 w-3 text-green-600" />
-                                                        </div>
-                                                        <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Más Barato</span>
-                                                    </div>
-                                                    <div className="text-xl font-black text-green-700">
-                                                        ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <div className="p-1 bg-red-100 rounded-md">
-                                                            <TrendingUp className="h-3 w-3 text-red-600" />
-                                                        </div>
-                                                        <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Más Caro</span>
-                                                    </div>
-                                                    <div className="text-xl font-black text-red-700">
-                                                        ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-
-                                {loadingStats && (
-                                    <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin"></div>
-                                            <span className="text-xs text-zinc-500 font-semibold">Cargando estadísticas de mercado...</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!loadingStats && !vehicleStats && getPriceStatisticsForVehicle && (
-                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-1.5 bg-amber-100 rounded-md">
-                                                <TrendingUp className="h-4 w-4 text-amber-600" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-xs text-amber-700 font-semibold">
-                                                    No hay estadísticas disponibles para este modelo
-                                                </p>
-                                                <p className="text-[10px] text-amber-600 mt-0.5">
-                                                    {selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Cuerpo Scrollable */}
-                            <div className="flex-1 overflow-y-auto p-6 lg:p-8 pt-6 space-y-6 custom-scrollbar">
-
-                                {/* A. Precio y CTA */}
-                                <div className="flex flex-col sm:flex-row items-end justify-between gap-4 p-6 bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 rounded-2xl border border-zinc-200 shadow-sm">
-                                    <div>
-                                        <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                            <TagIcon className="h-3.5 w-3.5" />
-                                            Precio de Venta
-                                        </div>
-                                        <div className="text-5xl lg:text-6xl font-black text-zinc-900 tracking-tighter">
-                                            ${selectedVehicle.price ? selectedVehicle.price.toLocaleString() : '---'}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2 w-full sm:w-auto">
-                                        {selectedVehicle.url && (
-                                            <a
-                                                href={selectedVehicle.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex-1 sm:flex-none px-6 py-4 bg-zinc-900 hover:bg-red-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-zinc-900/10 hover:shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98]"
-                                            >
-                                                Ver en marketplace
-                                                <ChevronRight className="h-5 w-5" />
-                                            </a>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* B. Grid de Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-                                    {/* Card: Estado */}
-                                    <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                            <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                <History className="h-4 w-4 text-zinc-500" />
-                                            </div>
-                                            Estado
-                                        </h3>
-                                        <ul className="space-y-4">
-                                            <li className="flex justify-between items-center text-sm pb-3 border-b border-zinc-100">
-                                                <span className="text-zinc-500 font-semibold">Condición</span>
-                                                <span className="font-bold text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">{displayTextCondition(selectedVehicle.condition || 'Usado')}</span>
-                                            </li>
-                                            <li className="flex justify-between items-center text-sm pb-3 border-b border-zinc-100">
-                                                <span className="text-zinc-500 font-semibold">Ubicación</span>
-                                                <span className="font-bold text-zinc-900 capitalize flex items-center gap-1.5">
-                                                    <MapPin className="h-3.5 w-3.5 text-zinc-400" />
-                                                    {selectedVehicle.location || 'N/A'}
+                                {/* Header Fijo */}
+                                <div className="p-6 lg:p-8 pb-5 border-b border-zinc-100 flex flex-col gap-4 bg-gradient-to-b from-white to-zinc-50/30 z-10">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <span className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-xs font-bold uppercase tracking-wider shadow-sm">
+                                                    {selectedVehicle.year}
                                                 </span>
-                                            </li>
-                                        </ul>
-                                    </div>
-
-                                    {/* Card: Specs */}
-                                    <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                            <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                <Gauge className="h-4 w-4 text-zinc-500" />
+                                                <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm">
+                                                    <Clock className="h-3.5 w-3.5" />
+                                                    {DateFormatterInstance.formatRelativeTime(selectedVehicle.publication_date)}
+                                                </div>
+                                                <PriceBadge type={getPriceBadge(selectedVehicle)} />
+                                                <SoldBadge isSold={selectedVehicle.is_sold} />
                                             </div>
-                                            Especificaciones
-                                        </h3>
-                                        <div className="mb-5 pb-4 border-b border-zinc-100 flex justify-between items-center">
-                                            <span className="text-sm text-zinc-500 font-semibold">Kilometraje</span>
-                                            <span className="text-xl font-black text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">
-                                                {selectedVehicle.mileage ? selectedVehicle.mileage.toLocaleString() + ' km' : 'N/A'}
-                                            </span>
+                                            <h2 className="text-3xl lg:text-4xl font-black text-zinc-900 tracking-tight leading-none mb-2">
+                                                {selectedVehicle.brand?.toUpperCase()}{" "}
+                                                <span className="text-zinc-400">{selectedVehicle.model?.toUpperCase()}</span>
+                                            </h2>
+                                            <p className="text-zinc-500 text-sm font-medium line-clamp-2 max-w-2xl">{selectedVehicle.title}</p>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selectedVehicle.characteristics && selectedVehicle.characteristics.length > 0 ? (
-                                                selectedVehicle.characteristics.slice(0, 4).map((char, i) => (
-                                                    <span key={i} className="text-xs font-bold px-3 py-1.5 bg-zinc-50 text-zinc-700 rounded-lg border border-zinc-200 hover:bg-zinc-100 transition-colors">
-                                                        {char}
-                                                    </span>
-                                                ))
-                                            ) : <span className="text-xs text-zinc-400 italic">Sin datos disponibles</span>}
-                                        </div>
+
+                                        <button
+                                            onClick={() => setSelectedVehicle(null)}
+                                            className="p-3 rounded-xl bg-zinc-100 hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-all border border-zinc-200 hover:border-red-200 shadow-sm"
+                                        >
+                                            <X className="h-5 w-5" />
+                                        </button>
                                     </div>
 
-                                    {/* Card: Registro */}
-                                    <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                            <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                <DatabaseIcon className="h-4 w-4 text-zinc-500" />
-                                            </div>
-                                            Línea de tiempo
-                                        </h3>
-                                        <ul className="space-y-4">
-                                            <TimelineBadge
-                                                label="Publicado"
-                                                value={formatAbsoluteDate(selectedVehicle.publication_date)}
-                                                icon={Eye}
-                                            />
-                                            <TimelineBadge
-                                                label="Añadido al sistema"
-                                                value={formatAbsoluteDate(selectedVehicle.created_at)}
-                                                icon={DatabaseIcon}
-                                                accent
-                                            />
-                                        </ul>
-                                    </div>
-
-                                    {/* Card: Extras */}
-                                    <div className="p-6 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20 text-white hover:shadow-xl hover:shadow-zinc-900/30 transition-shadow">
-                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <div className="p-1.5 bg-zinc-800 rounded-lg">
-                                                <Sparkles className="h-4 w-4 text-red-400" />
-                                            </div>
-                                            Extras Destacados
-                                        </h3>
-                                        {selectedVehicle.extras && selectedVehicle.extras.length > 0 ? (
-                                            <div className="flex flex-wrap gap-3">
-                                                {selectedVehicle.extras.map((extra, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-sm font-semibold text-zinc-100 bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700">
-                                                        <TagIcon className="h-3.5 w-3.5 text-red-400" />
-                                                        {extra}
+                                    {/* Price Statistics Bar */}
+                                    {vehicleStats && !loadingStats && (
+                                        <>
+                                            {vehicleStats.min_price === vehicleStats.max_price ? (
+                                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
+                                                    <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                                                    <p className="text-sm font-medium text-slate-500">
+                                                        Unidad única detectada: No hay suficientes carros para promediar un precio.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <div className="p-1 bg-blue-100 rounded-md">
+                                                                <DollarSign className="h-3 w-3 text-blue-600" />
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Precio Sugerido</span>
+                                                        </div>
+                                                        <div className="text-xl font-black text-blue-700">
+                                                            ${vehicleStats.median_price ? Number(vehicleStats.median_price).toLocaleString() : 'N/A'}
+                                                        </div>
                                                     </div>
-                                                ))}
+
+                                                    <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <div className="p-1 bg-green-100 rounded-md">
+                                                                <TrendingDown className="h-3 w-3 text-green-600" />
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Más Barato</span>
+                                                        </div>
+                                                        <div className="text-xl font-black text-green-700">
+                                                            ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <div className="p-1 bg-red-100 rounded-md">
+                                                                <TrendingUp className="h-3 w-3 text-red-600" />
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Más Caro</span>
+                                                        </div>
+                                                        <div className="text-xl font-black text-red-700">
+                                                            ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {loadingStats && (
+                                        <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin"></div>
+                                                <span className="text-xs text-zinc-500 font-semibold">Cargando estadísticas de mercado...</span>
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-zinc-400 italic">No se especifican extras adicionales.</p>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
+
+                                    {!loadingStats && !vehicleStats && getPriceStatisticsForVehicle && (
+                                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-1.5 bg-amber-100 rounded-md">
+                                                    <TrendingUp className="h-4 w-4 text-amber-600" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-xs text-amber-700 font-semibold">
+                                                        No hay estadísticas disponibles para este modelo
+                                                    </p>
+                                                    <p className="text-[10px] text-amber-600 mt-0.5">
+                                                        {selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* C. Descripción */}
-                                <div className="pt-2 border-t border-zinc-100">
-                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                            <FileText className="h-4 w-4 text-zinc-500" />
+                                {/* Cuerpo Scrollable */}
+                                <div className="flex-1 overflow-y-auto p-6 lg:p-8 pt-6 space-y-6 custom-scrollbar">
+
+                                    {/* A. Precio y CTA */}
+                                    <div className="flex flex-col sm:flex-row items-end justify-between gap-4 p-6 bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 rounded-2xl border border-zinc-200 shadow-sm">
+                                        <div>
+                                            <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <TagIcon className="h-3.5 w-3.5" />
+                                                Precio de Venta
+                                            </div>
+                                            <div className="text-5xl lg:text-6xl font-black text-zinc-900 tracking-tighter">
+                                                ${selectedVehicle.price ? selectedVehicle.price.toLocaleString() : '---'}
+                                            </div>
                                         </div>
-                                        Nota del Vendedor
-                                    </h3>
-                                    <div className="p-5 bg-zinc-50/50 rounded-xl border border-zinc-100">
-                                        <p className="text-zinc-600 text-sm leading-relaxed whitespace-pre-wrap">
-                                            {selectedVehicle.description || "Sin descripción detallada disponible."}
-                                        </p>
+                                        <div className="flex gap-2 w-full sm:w-auto">
+                                            {selectedVehicle.url && (
+                                                <a
+                                                    href={selectedVehicle.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className={`flex-1 sm:flex-none px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${selectedVehicle.is_sold
+                                                        ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed'
+                                                        : 'bg-zinc-900 hover:bg-red-600 text-white shadow-zinc-900/10 hover:shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98]'
+                                                        }`}
+                                                    {...(selectedVehicle.is_sold && {
+                                                        onClick: (e) => e.preventDefault(),
+                                                    })}
+                                                >
+                                                    {selectedVehicle.is_sold ? 'No disponible' : 'Ver en marketplace'}
+                                                    <ChevronRight className="h-5 w-5" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* B. Grid de Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                                        {/* Card: Estado */}
+                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
+                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
+                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
+                                                    <History className="h-4 w-4 text-zinc-500" />
+                                                </div>
+                                                Estado
+                                            </h3>
+                                            <ul className="space-y-4">
+                                                <li className="flex justify-between items-center text-sm pb-3 border-b border-zinc-100">
+                                                    <span className="text-zinc-500 font-semibold">Condición</span>
+                                                    <span className="font-bold text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">{displayTextCondition(selectedVehicle.condition || 'Usado')}</span>
+                                                </li>
+                                                <li className="flex justify-between items-center text-sm pb-3 border-zinc-100">
+                                                    <span className="text-zinc-500 font-semibold">Ubicación</span>
+                                                    <span className="font-bold text-zinc-900 capitalize flex items-center gap-1.5">
+                                                        <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+                                                        {selectedVehicle.location || 'N/A'}
+                                                    </span>
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        {/* Card: Specs */}
+                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
+                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
+                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
+                                                    <Gauge className="h-4 w-4 text-zinc-500" />
+                                                </div>
+                                                Especificaciones
+                                            </h3>
+                                            <div className="mb-5 pb-4 border-b border-zinc-100 flex justify-between items-center">
+                                                <span className="text-sm text-zinc-500 font-semibold">Kilometraje</span>
+                                                <span className="text-xl font-black text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">
+                                                    {selectedVehicle.mileage ? selectedVehicle.mileage.toLocaleString() + ' km' : 'N/A'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {selectedVehicle.characteristics && selectedVehicle.characteristics.length > 0 ? (
+                                                    selectedVehicle.characteristics.slice(0, 4).map((char, i) => (
+                                                        <span key={i} className="text-xs font-bold px-3 py-1.5 bg-zinc-50 text-zinc-700 rounded-lg border border-zinc-200 hover:bg-zinc-100 transition-colors">
+                                                            {char}
+                                                        </span>
+                                                    ))
+                                                ) : <span className="text-xs text-zinc-400 italic">Sin datos disponibles</span>}
+                                            </div>
+                                        </div>
+
+                                        {/* Card: Registro */}
+                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
+                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
+                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
+                                                    <DatabaseIcon className="h-4 w-4 text-zinc-500" />
+                                                </div>
+                                                Línea de tiempo
+                                            </h3>
+                                            <ul className="space-y-4">
+                                                <TimelineBadge
+                                                    label="Publicado"
+                                                    value={formatAbsoluteDate(selectedVehicle.publication_date)}
+                                                    icon={Eye}
+                                                />
+                                                <TimelineBadge
+                                                    label="Añadido al sistema"
+                                                    value={formatAbsoluteDate(selectedVehicle.created_at)}
+                                                    icon={DatabaseIcon}
+                                                    accent
+                                                />
+                                            </ul>
+                                        </div>
+
+                                        {/* Card: Extras */}
+                                        <div className="p-6 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20 text-white hover:shadow-xl hover:shadow-zinc-900/30 transition-shadow">
+                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <div className="p-1.5 bg-zinc-800 rounded-lg">
+                                                    <Sparkles className="h-4 w-4 text-red-400" />
+                                                </div>
+                                                Extras Destacados
+                                            </h3>
+                                            {selectedVehicle.extras && selectedVehicle.extras.length > 0 ? (
+                                                <div className="flex flex-wrap gap-3">
+                                                    {selectedVehicle.extras.map((extra, i) => (
+                                                        <div key={i} className="flex items-center gap-2 text-sm font-semibold text-zinc-100 bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700">
+                                                            <TagIcon className="h-3.5 w-3.5 text-red-400" />
+                                                            {extra}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-zinc-400 italic">No se especifican extras adicionales.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* C. Descripción */}
+                                    <div className="pt-2 border-t border-zinc-100">
+                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <div className="p-1.5 bg-zinc-100 rounded-lg">
+                                                <FileText className="h-4 w-4 text-zinc-500" />
+                                            </div>
+                                            Nota del Vendedor
+                                        </h3>
+                                        <div className="p-5 bg-zinc-50/50 rounded-xl border border-zinc-100">
+                                            <p className="text-zinc-600 text-sm leading-relaxed whitespace-pre-wrap">
+                                                {selectedVehicle.description || "Sin descripción detallada disponible."}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </div >
+                )
+            }
         </>
     );
 }
