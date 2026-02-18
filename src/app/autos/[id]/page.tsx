@@ -62,8 +62,7 @@ export default function CarDetailPage() {
             year={car.year}
             price={car.price || 0}
             mileage={car.mileage}
-            city={car.city_registration} 
-        />
+        /> 
         
         <div className="mt-8 space-y-3">
             <BookingButton 

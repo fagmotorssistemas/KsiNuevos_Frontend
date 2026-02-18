@@ -8,11 +8,11 @@ export const filterByPrice = (
   let filtered = cars;
 
   if (minPrice !== null && minPrice > 0) {
-    filtered = filtered.filter((car) => car.price >= minPrice);
+    filtered = filtered.filter((car) => car.price !== null && car.price >= minPrice);
   }
 
   if (maxPrice !== null && maxPrice > 0) {
-    filtered = filtered.filter((car) => car.price <= maxPrice);
+    filtered = filtered.filter((car) => car.price !== null && car.price <= maxPrice);
   }
 
   return filtered;

@@ -40,39 +40,38 @@ export const CarSpecs = ({ car }: CarSpecsProps) => {
     // --- MOTOR ---
     { label: "Motor", value: formatValue(car.engine_displacement) },
     { label: "Combustible", value: formatValue(car.fuel_type) },
-    { label: "Cilindros", value: car.cylinders },
+    { label: "Cilindros", value: car.cylinder_count },
     { label: "Transmisión", value: formatValue(car.transmission) },
-    { label: "Velocidades", value: car.transmission_speeds },
+    { label: "Potencia", value: car.horse_power ? `${car.horse_power} hp` : null },
     { label: "Tracción", value: formatValue(car.drive_type) },
 
     // --- CARROCERÍA ---
     { label: "Carrocería", value: formatValue(car.type_body) },
     { label: "Color Exterior", value: formatValue(car.color) },
-    { label: "Condición", value: formatValue(car.condition) },
-    { label: "Puertas", value: car.doors },
+    { label: "Condición Estética", value: formatValue(car.aesthetic_condition) },
+    { label: "Condición Mecánica", value: formatValue(car.mechanical_condition) },
+    { label: "Puertas", value: car.doors_count },
 
     // --- INTERIOR ---
-    { label: "Color Interior", value: formatValue(car.interior_color) },
     { label: "Tapicería", value: formatValue(car.upholstery_type) },
     { label: "Pasajeros", value: car.passenger_capacity },
 
     // --- HISTORIAL ---
     { label: "Kilometraje", value: car.mileage ? `${car.mileage.toLocaleString()} km` : null },
     { label: "Placa", value: car.plate_short?.toUpperCase() },
-    { label: "Ciudad", value: formatValue(car.city_registration) },
+    { label: "Lugar de Registro", value: formatValue(car.registration_place) },
+    { label: "Año Registro", value: car.registration_year },
     { label: "Dueños", value: car.previous_owners },
     
     { 
-        label: "Mantenimientos", 
-        value: car.has_maintenance_record != null 
-            ? (car.has_maintenance_record ? "Sí" : "No") 
+        label: "Documentación", 
+        value: car.documentation_up_to_date != null 
+            ? (car.documentation_up_to_date ? "Al día" : "Pendiente") 
             : null 
     },
     { 
-        label: "Certificado", 
-        value: car.is_certified != null 
-            ? (car.is_certified ? "Sí" : "No") 
-            : null 
+        label: "Historial de Accidentes", 
+        value: formatValue(car.accident_history)
     },
   ];
 
