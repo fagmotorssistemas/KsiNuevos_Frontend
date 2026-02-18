@@ -126,8 +126,6 @@ export interface TallerProveedor {
     created_at?: string;
 }
 
-// --- NUEVOS TIPOS PARA GASTOS BÁSICOS ---
-
 export interface GastoFijoConfig {
     id: string;
     nombre: string;
@@ -135,7 +133,7 @@ export interface GastoFijoConfig {
     dia_limite_pago: number;
     activo: boolean;
     created_at?: string;
-    // Auxiliar para frontend (saber si ya se pagó este mes)
+    // Auxiliar para frontend
     ultimo_pago_mes?: PagoGasto | null; 
 }
 
@@ -147,4 +145,29 @@ export interface PagoGasto {
     comprobante_url?: string;
     observacion?: string;
     registrado_por?: string;
+}
+
+// --- NUEVOS TIPOS PARA PERSONAL ---
+
+export interface TallerPersonal {
+    id: string;
+    profile_id: string;
+    cargo: string;
+    salario_mensual: number;
+    fecha_ingreso?: string;
+    activo: boolean;
+    datos_bancarios?: string;
+    // Join con Profiles para saber el nombre real
+    profile?: { 
+        full_name: string; 
+        email: string; 
+        phone: string;
+        role?: string;
+    };
+}
+
+export interface CandidatoProfile {
+    id: string;
+    full_name: string;
+    email: string;
 }

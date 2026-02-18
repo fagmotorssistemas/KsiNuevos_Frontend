@@ -13,7 +13,8 @@ import {
     X,
     ChevronLeft,
     ChevronRight,
-    Wrench
+    Wrench,
+    PersonStanding ,
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,7 +23,8 @@ const menuItems = [
     { name: 'Trabajos Activos', href: '/taller/trabajos', icon: Car },
     { name: 'Inventario', href: '/taller/inventario', icon: Package },
     { name: 'Finanzas', href: '/taller/finanzas', icon: Landmark },
-    { name: 'Proveedores', href: '/taller/proveedores', icon :ClipboardList}
+    { name: 'Proveedores', href: '/taller/proveedores', icon :ClipboardList},
+    { name: 'Personal', href: '/taller/personal', icon :PersonStanding },
 ];
 
 export function TallerSidebar() {
