@@ -32,7 +32,7 @@ export const CarCard = ({ car }: CarCardProps) => {
 
         <div className="absolute top-3 left-3 flex flex-col gap-2">
             <KsBadge variant="glass">Disponible</KsBadge>
-            {car.condition && <KsBadge variant="dark">{car.condition}</KsBadge>}
+            {car.aesthetic_condition && <KsBadge variant="dark">{car.aesthetic_condition}</KsBadge>}
         </div>
       </div>    
 

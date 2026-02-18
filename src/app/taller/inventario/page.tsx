@@ -10,16 +10,16 @@ export default function InventarioPage() {
     const { items, isLoading, crearItem, actualizarItem } = useInventario();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState<'todos' | 'bajo_stock'>('todos');
-    
+
     // Estados del Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<InventarioItem | null>(null);
 
     // Filtrado
     const filteredItems = items.filter(item => {
-        const matchesSearch = item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              item.codigo_interno?.toLowerCase().includes(searchTerm.toLowerCase());
-        
+        const matchesSearch = item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.codigo_interno?.toLowerCase().includes(searchTerm.toLowerCase());
+
         if (filterType === 'bajo_stock') {
             return matchesSearch && (item.stock_actual <= item.stock_minimo);
         }
@@ -52,7 +52,7 @@ export default function InventarioPage() {
                     <h1 className="text-2xl font-bold text-slate-900">Inventario de Taller</h1>
                     <p className="text-slate-500">Gestión de materiales, herramientas y alertas de stock.</p>
                 </div>
-                <button 
+                <button
                     onClick={handleCreate}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-blue-600/20"
                 >
@@ -65,7 +65,7 @@ export default function InventarioPage() {
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input 
+                    <input
                         type="text"
                         placeholder="Buscar por nombre, código..."
                         className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -74,13 +74,13 @@ export default function InventarioPage() {
                     />
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
                         onClick={() => setFilterType('todos')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterType === 'todos' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
                         Todos
                     </button>
-                    <button 
+                    <button
                         onClick={() => setFilterType('bajo_stock')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${filterType === 'bajo_stock' ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
@@ -126,9 +126,9 @@ export default function InventarioPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide
-                                                    ${item.tipo === 'material' ? 'bg-blue-50 text-blue-600' : 
-                                                      item.tipo === 'herramienta' ? 'bg-purple-50 text-purple-600' : 
-                                                      'bg-slate-100 text-slate-600'}`
+                                                    ${item.tipo === 'material' ? 'bg-blue-50 text-blue-600' :
+                                                        item.tipo === 'herramienta' ? 'bg-purple-50 text-purple-600' :
+                                                            'bg-slate-100 text-slate-600'}`
                                                 }>
                                                     {item.tipo}
                                                 </span>
@@ -148,7 +148,7 @@ export default function InventarioPage() {
                                                 ${item.costo_promedio.toFixed(2)}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <button 
+                                                <button
                                                     onClick={() => handleEdit(item)}
                                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                     title="Editar"
@@ -174,8 +174,8 @@ export default function InventarioPage() {
             </div>
 
             {/* Modal */}
-            <InventoryModal 
-                isOpen={isModalOpen} 
+            <InventoryModal
+                isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
                 itemToEdit={editingItem}

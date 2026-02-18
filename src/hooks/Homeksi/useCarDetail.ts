@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 
 // Traemos el tipo completo de la fila de la base de datos
-export type CarDetail = Database['public']['Tables']['inventory']['Row'];
+export type CarDetail = Database['public']['Tables']['inventoryoracle']['Row'];
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -23,7 +23,7 @@ export function useCarDetail(id: string) {
     try {
       // Solicitamos un auto específico por su ID
       const { data, error } = await supabase
-        .from('inventory')
+        .from('inventoryoracle') // Asegúrate de usar la tabla correcta
         .select('*')
         .eq('id', id)
         .single(); // .single() es clave: devuelve un objeto, no un array

@@ -22,6 +22,7 @@ const menuItems = [
     { name: 'Trabajos Activos', href: '/taller/trabajos', icon: Car },
     { name: 'Inventario', href: '/taller/inventario', icon: Package },
     { name: 'Finanzas', href: '/taller/finanzas', icon: Landmark },
+    { name: 'Proveedores', href: '/taller/proveedores', icon :ClipboardList}
 ];
 
 export function TallerSidebar() {

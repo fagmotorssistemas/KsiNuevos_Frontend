@@ -93,8 +93,6 @@ export interface ConsumoMaterial {
     registrado_por?: { full_name: string };
 }
 
-// --- NUEVOS TIPOS PARA PRESUPUESTO ---
-
 export interface ServicioCatalogo {
     id: string;
     nombre_servicio: string;
@@ -113,4 +111,40 @@ export interface DetalleOrden {
     estado_trabajo: string;
     // Relation
     mecanico?: { full_name: string };
+}
+
+export interface TallerProveedor {
+    id: string;
+    nombre_comercial: string;
+    ruc?: string;
+    telefono?: string;
+    categoria?: string;
+    contacto_nombre?: string;
+    email?: string;
+    dia_pago_habitual?: number;
+    notas?: string;
+    created_at?: string;
+}
+
+// --- NUEVOS TIPOS PARA GASTOS BÁSICOS ---
+
+export interface GastoFijoConfig {
+    id: string;
+    nombre: string;
+    monto_habitual: number;
+    dia_limite_pago: number;
+    activo: boolean;
+    created_at?: string;
+    // Auxiliar para frontend (saber si ya se pagó este mes)
+    ultimo_pago_mes?: PagoGasto | null; 
+}
+
+export interface PagoGasto {
+    id: string;
+    gasto_fijo_id: string;
+    monto_pagado: number;
+    fecha_pago: string;
+    comprobante_url?: string;
+    observacion?: string;
+    registrado_por?: string;
 }

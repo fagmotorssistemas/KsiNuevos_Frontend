@@ -6,15 +6,16 @@ import { useFinanzas } from "@/hooks/taller/useFinanzas";
 import { AccountsHeader } from "@/components/features/taller/finanzas/AccountsHeader";
 import { TransactionTable } from "@/components/features/taller/finanzas/TransactionTable";
 import { TransactionModal } from "@/components/features/taller/finanzas/TransactionModal";
-import { CreateAccountModal } from "@/components/features/taller/finanzas/CreateAccountModal"; // <--- Importar Modal Nuevo
+import { CreateAccountModal } from "@/components/features/taller/finanzas/CreateAccountModal";
+// Importar el nuevo gestor
+import { GastosManager } from "@/components/features/taller/finanzas/GastosManager";
 
 export default function FinanzasPage() {
-    // Extraemos crearCuenta del hook
-    const { cuentas, transacciones, isLoading, registrarTransaccion, crearCuenta } = useFinanzas();
+    const { cuentas, transacciones, isLoading, registrarTransaccion, crearCuenta, refresh } = useFinanzas();
     
-    // Estados para los modales
+    // Estados para los modales existentes
     const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false); // <--- Estado nuevo modal
+    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
     if (isLoading && cuentas.length === 0) {
         return <div className="p-12 text-center text-slate-400">Cargando datos financieros...</div>;
@@ -26,7 +27,7 @@ export default function FinanzasPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Finanzas y Tesorería</h1>
-                    <p className="text-slate-500">Control de cajas, bancos y registro de movimientos.</p>
+                    <p className="text-slate-500">Control de cajas, bancos y gastos recurrentes.</p>
                 </div>
                 <button 
                     onClick={() => setIsTransactionModalOpen(true)}
@@ -37,16 +38,22 @@ export default function FinanzasPage() {
                 </button>
             </div>
 
-            {/* Saldos + Botón de Añadir Cuenta */}
+            {/* Saldos de Cuentas */}
             <AccountsHeader 
                 cuentas={cuentas} 
-                onNewAccount={() => setIsAccountModalOpen(true)} // <--- Abrir modal al hacer click
+                onNewAccount={() => setIsAccountModalOpen(true)} 
             />
 
-            {/* Historial */}
+            {/* NUEVO: Gestor de Gastos Básicos */}
+            <GastosManager 
+                cuentas={cuentas} 
+                onRecargarFinanzas={refresh} // Pasamos refresh para actualizar saldos si se paga algo
+            />
+
+            {/* Historial de Transacciones */}
             <TransactionTable transacciones={transacciones} />
 
-            {/* Modal de Transacciones (Existente) */}
+            {/* Modales Existentes */}
             <TransactionModal 
                 isOpen={isTransactionModalOpen}
                 onClose={() => setIsTransactionModalOpen(false)}
@@ -54,7 +61,6 @@ export default function FinanzasPage() {
                 onSave={registrarTransaccion}
             />
 
-            {/* Modal de Crear Cuenta (NUEVO) */}
             <CreateAccountModal 
                 isOpen={isAccountModalOpen}
                 onClose={() => setIsAccountModalOpen(false)}

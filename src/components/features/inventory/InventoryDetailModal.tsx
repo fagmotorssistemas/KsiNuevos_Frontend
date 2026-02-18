@@ -197,6 +197,14 @@ export function InventoryDetailModal({ car, onClose, onUpdate }: InventoryDetail
                         description: formData.description,
                         color: formData.color,
                         year: Number(formData.year),
+                         marketing_in_patio: formData.marketing_in_patio,
+                    marketing_posts_count: Number(formData.marketing_posts_count),
+                    marketing_videos_count: Number(formData.marketing_videos_count),
+                    marketing_stories_count: Number(formData.marketing_stories_count),
+                    
+                    // Actualizamos imágenes
+                    img_main_url: finalMainUrl,
+                    img_gallery_urls: finalGalleryUrls,
                         publication_url: formData.publication_url, // Guardar nueva columna
                         updated_at: new Date().toISOString()
                     })

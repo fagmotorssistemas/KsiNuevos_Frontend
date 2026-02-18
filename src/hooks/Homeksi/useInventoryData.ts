@@ -7,7 +7,7 @@ import type { Database } from "@/types/supabase";
 // Definimos 'InventoryCar' aquí mismo, igual que en tu otro hook.
 // Usamos 'Pick' para decirle a TS: "De la tabla completa, solo vamos a usar estos campos".
 export type InventoryCar = Pick<
-  Database["public"]["Tables"]["inventory"]["Row"],
+  Database["public"]["Tables"]["inventoryoracle"]["Row"],
   | "id"
   | "brand"
   | "model"
@@ -24,14 +24,14 @@ export type InventoryCar = Pick<
   | "fuel_type"
   | "drive_type"
   | "passenger_capacity"
-  | "cylinders"
+  | "cylinder_count"
   | "version"
   | "plate_short"
-  | "condition"
+  | "aesthetic_condition"
+  | "mechanical_condition"
   | "created_at"
-  | "city_registration"
+  | "registration_place"
   | "previous_owners"
-  | "is_certified"
 >;
 
 export function useInventoryData() {
@@ -46,9 +46,9 @@ export function useInventoryData() {
     const SELECT_QUERY = `
         id, brand, model, year, color, type_body, transmission, 
         mileage, price, img_main_url, slug, features, specs, 
-        fuel_type, drive_type, passenger_capacity, cylinders, 
-        version, plate_short, condition, created_at,
-        city_registration, previous_owners, is_certified
+        fuel_type, drive_type, passenger_capacity, cylinder_count, 
+        version, plate_short, aesthetic_condition, mechanical_condition, created_at,
+        registration_place, previous_owners
     `;
 
     const fetchInventory = useCallback(async () => {
@@ -60,7 +60,7 @@ export function useInventoryData() {
 
         try {
             const { data, error } = await supabase
-                .from('inventory')
+                .from('inventoryoracle')
                 .select(SELECT_QUERY)
                 .eq('status', 'disponible') // Solo disponibles
                 .order('created_at', { ascending: false });
