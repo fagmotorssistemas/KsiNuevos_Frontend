@@ -38,6 +38,12 @@ export interface OrdenTrabajo {
     estado: TallerEstadoOrden;
     fecha_ingreso: string;
     fecha_promesa_entrega?: string;
+
+    // --- NUEVOS CAMPOS PARA EXPEDIENTES ---
+    fecha_salida_real?: string;
+    pdf_url?: string;
+    total_final_cliente?: number;
+    transacciones?: TransaccionFinanciera[];
     
     checklist_ingreso: Record<string, boolean>;
     inventario_pertenencias: Record<string, boolean>;
@@ -146,8 +152,6 @@ export interface PagoGasto {
     observacion?: string;
     registrado_por?: string;
 }
-
-// --- NUEVOS TIPOS PARA PERSONAL ---
 
 export interface TallerPersonal {
     id: string;

@@ -25,6 +25,7 @@ const menuItems = [
     { name: 'Finanzas', href: '/taller/finanzas', icon: Landmark },
     { name: 'Proveedores', href: '/taller/proveedores', icon :ClipboardList},
     { name: 'Personal', href: '/taller/personal', icon :PersonStanding },
+    { name: 'Expedientes', href: '/taller/expedientes', icon :ClipboardList },
 ];
 
 export function TallerSidebar() {
