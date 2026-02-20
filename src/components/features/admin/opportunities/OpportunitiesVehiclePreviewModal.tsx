@@ -9,7 +9,6 @@ import { ScoredVehicle } from "./opportunitiesScorer";
 import { CARD_CONFIG } from "./OpportunitiesWizardSelection";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 
-// --- FORMATTER CORREGIDO ---
 const currencyFormatter = new Intl.NumberFormat("es-EC", {
     style: "currency",
     currency: "USD",
@@ -21,7 +20,6 @@ function formatPrice(n: number | null | undefined) {
     if (!n) return "N/A";
     return currencyFormatter.format(n);
 }
-// ---------------------------
 
 function formatAbsoluteDate(dateString: string | null | undefined): string {
     if (!dateString) return "N/A";
@@ -95,7 +93,6 @@ export function OpportunitiesVehiclePreviewModal({
                 onClick={(e) => e.stopPropagation()}
                 className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[28px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-6 duration-300"
             >
-                {/* HERO IMAGE */}
                 <div className="relative h-56 sm:h-72 flex-shrink-0 overflow-hidden">
                     <OpportunitiesCarousel fullWidth vehicle={vehicle} />
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/20 to-transparent pointer-events-none" />
@@ -111,10 +108,10 @@ export function OpportunitiesVehiclePreviewModal({
                     </div>
                 </div>
 
-                {/* BODY */}
+
                 <div className="flex-1 overflow-y-auto">
 
-                    {/* Score breakdown */}
+                    {/* Score breakdown
                     <div className="px-6 pt-6 pb-5 border-b border-zinc-100 bg-slate-50/50">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Análisis de Oportunidad</h3>
@@ -136,7 +133,7 @@ export function OpportunitiesVehiclePreviewModal({
                             <ScoreItem value={vehicle.scoreBreakdown.marketScore} label="Liquidez" color="orange" />
                             <ScoreItem value={vehicle.scoreBreakdown.recencyScore} label="Novedad" color="red" />
                         </div>
-                    </div>
+                    </div> */}
 
                     {/* Savings indicator */}
                     {isGoodDeal && (
@@ -153,9 +150,7 @@ export function OpportunitiesVehiclePreviewModal({
                         </div>
                     )}
 
-                    {/* Detalles Grid */}
                     <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Especificaciones */}
                         <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
                             <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                                 <Gauge className="h-3.5 w-3.5" /> Datos Clave
@@ -167,7 +162,6 @@ export function OpportunitiesVehiclePreviewModal({
                             </div>
                         </div>
 
-                        {/* Detalles Ubicación/Estado */}
                         <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
                             <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                                 <MapPin className="h-3.5 w-3.5" /> Ubicación
@@ -175,7 +169,6 @@ export function OpportunitiesVehiclePreviewModal({
                             <ul className="space-y-2.5">
                                 <DetailRow label="Condición" value={displayTextCondition(vehicle.condition)} isBadge />
                                 <DetailRow label="Ciudad" value={vehicle.location || 'N/A'} />
-                                <DetailRow label="Vendedor" value={category.toLowerCase()} />
                             </ul>
                         </div>
 
@@ -225,7 +218,6 @@ export function OpportunitiesVehiclePreviewModal({
     );
 }
 
-// Subcomponentes auxiliares para limpiar el código
 function ScoreItem({ value, label, color }: { value: number, label: string, color: string }) {
     const colorClasses: Record<string, string> = {
         blue: 'text-blue-600', emerald: 'text-emerald-600', purple: 'text-purple-600', orange: 'text-orange-600', red: 'text-red-600'

@@ -10,8 +10,9 @@ export type VehicleWithSeller = Database['public']['Tables']['scraper_vehicles']
 export interface VehicleFilters {
     brand?: string;
     model?: string;
+    motor?: string;
     year?: string;
-    city?: string;
+    location?: string;
     dateRange?: 'today' | 'yesterday' | 'week' | 'month' | 'all';
     regionFilter?: 'all' | 'coast' | 'sierra';
     searchTerm?: string;
@@ -103,8 +104,9 @@ export const scraperService = {
         const {
             brand,
             model,
+            motor,
             year,
-            city,
+            location,
             dateRange = 'all',
             regionFilter = 'all',
             searchTerm,
@@ -133,14 +135,19 @@ export const scraperService = {
             query = query.eq('model', model);
         }
 
+        // FILTRO: Motor
+        if (motor && motor !== 'all') {
+            query = query.eq('motor', motor);
+        }
+
         // FILTRO: Año
         if (year && year !== 'all') {
             query = query.eq('year', year);
         }
 
         // FILTRO: Ciudad
-        if (city && city !== 'all') {
-            query = query.eq('location', city);
+        if (location && location !== 'all') {
+            query = query.eq('location', location);
         }
 
         // FILTRO: Región (Costa/Sierra) - usando OR con ilike para case-insensitive
@@ -381,26 +388,29 @@ export const scraperService = {
     async getFilterOptions(): Promise<{
         brands: string[];
         models: string[];
+        motors: string[];
         years: string[];
         cities: string[];
     }> {
         const { data, error } = await supabase
             .from('scraper_vehicles')
-            .select('brand, model, year, location');
+            .select('brand, model, motor, year, location');
 
         if (error) {
             console.error('Error al obtener opciones de filtros:', error);
-            return { brands: [], models: [], years: [], cities: [] };
+            return { brands: [], models: [], motors: [], years: [], cities: [] };
         }
 
         const brands = new Set<string>();
         const models = new Set<string>();
+        const motors = new Set<string>();
         const years = new Set<string>();
         const cities = new Set<string>();
 
         data.forEach(vehicle => {
             if (vehicle.brand) brands.add(vehicle.brand);
             if (vehicle.model) models.add(vehicle.model);
+            if (vehicle.motor) motors.add(vehicle.motor);
             if (vehicle.year) years.add(vehicle.year);
             if (vehicle.location) cities.add(vehicle.location);
         });
@@ -408,12 +418,104 @@ export const scraperService = {
         return {
             brands: Array.from(brands).sort(),
             models: Array.from(models).sort(),
+            motors: Array.from(motors).sort(),
             years: Array.from(years).sort((a, b) => Number(b) - Number(a)),
             cities: Array.from(cities).sort()
         };
     },
 
-    // NUEVA FUNCIÓN: Obtener modelos por marca
+    // Agregar este método dentro de scraperService, justo después de getFilterOptions
+
+    async getCascadingFilterOptions(filters: {
+        brand?: string;
+        model?: string;
+        motor?: string;
+        year?: string;
+        regionFilter?: 'all' | 'coast' | 'sierra';
+    } = {}): Promise<{
+        brands: string[];
+        models: string[];
+        motors: string[];
+        years: string[];
+        cities: string[];
+    }> {
+        const { brand, model, motor, year, regionFilter = 'all' } = filters;
+        const empty = { brands: [], models: [], motors: [], years: [], cities: [] };
+
+        // 1. Traer todos los vehículos con solo los campos necesarios
+        //    Aplicar región igual que getVehiclesWithFilters (ilike OR)
+        let query = supabase
+            .from('scraper_vehicles')
+            .select('brand, model, motor, year, location');
+
+        if (regionFilter === 'coast') {
+            const conditions = COAST_CITIES.map(c => `location.ilike.%${c}%`).join(',');
+            query = query.or(conditions);
+        } else if (regionFilter === 'sierra') {
+            const conditions = SIERRA_CITIES.map(c => `location.ilike.%${c}%`).join(',');
+            query = query.or(conditions);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error al obtener opciones en cascada:', error);
+            return empty;
+        }
+
+        if (!data) return empty;
+
+        // 2. Derivar opciones en memoria, en cascada
+        //    Igual que getFilterOptions pero filtrando por los seleccionados
+        const brandsSet = new Set<string>();
+        const modelsSet = new Set<string>();
+        const motorsSet = new Set<string>();
+        const yearsSet = new Set<string>();
+        const citiesSet = new Set<string>();
+
+        data.forEach(v => {
+            // Marcas: sin restricción adicional (ya filtrado por región arriba)
+            if (v.brand) brandsSet.add(v.brand);
+
+            // Modelos: solo de la marca seleccionada
+            if (!brand || v.brand === brand) {
+                if (v.model) modelsSet.add(v.model);
+            }
+
+            // Motores: solo de marca + modelo seleccionados
+            if ((!brand || v.brand === brand) && (!model || v.model === model)) {
+                if (v.motor) motorsSet.add(v.motor);
+            }
+
+            // Años: solo de marca + modelo + motor seleccionados
+            if (
+                (!brand || v.brand === brand) &&
+                (!model || v.model === model) &&
+                (!motor || v.motor === motor)
+            ) {
+                if (v.year) yearsSet.add(v.year);
+            }
+
+            // Ciudades: solo de marca + modelo + motor + año seleccionados
+            if (
+                (!brand || v.brand === brand) &&
+                (!model || v.model === model) &&
+                (!motor || v.motor === motor) &&
+                (!year || v.year === year)
+            ) {
+                if (v.location) citiesSet.add(v.location);
+            }
+        });
+
+        return {
+            brands: Array.from(brandsSet).sort(),
+            models: Array.from(modelsSet).sort(),
+            motors: Array.from(motorsSet).sort(),
+            years: Array.from(yearsSet).sort((a, b) => Number(b) - Number(a)),
+            cities: Array.from(citiesSet).sort(),
+        };
+    },
+
     async getModelsByBrand(brand: string): Promise<string[]> {
         const { data, error } = await supabase
             .from('scraper_vehicles')
@@ -606,7 +708,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook/buscar-producto-marketplace',
+                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {

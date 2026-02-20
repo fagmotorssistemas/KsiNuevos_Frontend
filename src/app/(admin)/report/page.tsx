@@ -265,7 +265,6 @@ export default function AdminDashboardPage() {
         goToPage,
         nextPage,
         prevPage,
-        // NUEVO: Props de filtros
         vehicleFilters,
         filterOptions,
         updateFilter,
@@ -439,7 +438,6 @@ export default function AdminDashboardPage() {
                         nextPage={nextPage}
                         prevPage={prevPage}
                         pagination={pagination}
-                        // NUEVO: Props de filtros
                         vehicleFilters={vehicleFilters}
                         filterOptions={filterOptions}
                         updateFilter={updateFilter}

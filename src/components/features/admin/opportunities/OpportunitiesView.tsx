@@ -50,6 +50,7 @@ interface OpportunitiesViewProps {
     vehicleFilters: {
         brand?: string;
         model?: string;
+        motor?: string;
         year?: string;
         city?: string;
         dateRange?: string;
@@ -60,6 +61,7 @@ interface OpportunitiesViewProps {
     filterOptions: {
         brands: string[];
         models: string[];
+        motors: string[];
         years: string[];
         cities: string[];
     };
@@ -109,6 +111,7 @@ export function OpportunitiesView({
     const hasActiveFilters = useMemo(() =>
         vehicleFilters.brand !== 'all' ||
         vehicleFilters.model !== 'all' ||
+        vehicleFilters.motor !== 'all' ||
         vehicleFilters.year !== 'all' ||
         vehicleFilters.city !== 'all' ||
         vehicleFilters.dateRange !== 'all' ||
@@ -155,6 +158,7 @@ export function OpportunitiesView({
                         // Filtros desde el hook
                         selectedBrand={vehicleFilters.brand || 'all'}
                         selectedModel={vehicleFilters.model || 'all'}
+                        selectedMotor={vehicleFilters.motor || 'all'}
                         selectedYear={vehicleFilters.year || 'all'}
                         selectedCity={vehicleFilters.city || 'all'}
                         selectedDateRange={vehicleFilters.dateRange || 'all'}
@@ -165,12 +169,14 @@ export function OpportunitiesView({
                         // Opciones disponibles
                         availableBrands={filterOptions.brands}
                         availableModels={filterOptions.models}
+                        availableMotors={filterOptions.motors}
                         availableYears={filterOptions.years}
                         availableCities={filterOptions.cities}
 
                         // Callbacks
                         onBrandChange={updateBrand}
                         onModelChange={(value) => updateFilter('model', value)}
+                        onMotorChange={(value) => updateFilter('motor', value)}
                         onYearChange={(value) => updateFilter('year', value)}
                         onCityChange={(value) => updateFilter('city', value)}
                         onDateRangeChange={(value) => updateFilter('dateRange', value)}

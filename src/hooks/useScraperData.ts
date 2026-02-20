@@ -27,12 +27,12 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  // NUEVO: Estados para filtros avanzados
   const [vehicleFilters, setVehicleFilters] = useState<VehicleFilters>({
     brand: 'all',
     model: 'all',
+    motor: 'all',
     year: 'all',
-    city: 'all',
+    location: 'all',
     dateRange: 'all',
     regionFilter: 'all',
     searchTerm: '',
@@ -41,43 +41,84 @@ export function useScraperData(initialFilters?: FilterOptions) {
     itemsPerPage: ITEMS_PER_PAGE
   });
 
-  // NUEVO: Ref para debounce del searchTerm
   const searchDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const [searchInput, setSearchInput] = useState(vehicleFilters.searchTerm || '');
 
-  // NUEVO: Opciones de filtros disponibles
+  useEffect(() => {
+    setSearchInput(vehicleFilters.searchTerm || '');
+  }, [vehicleFilters.searchTerm]);
+
+  useEffect(() => {
+    if (searchInput === vehicleFilters.searchTerm) return;
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+    searchDebounceTimer.current = setTimeout(() => {
+      setVehicleFilters(prev => ({ ...prev, searchTerm: searchInput }));
+      setCurrentPage(1);
+    }, 500);
+    return () => {
+      if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+    };
+  }, [searchInput, vehicleFilters.searchTerm]);
+
   const [filterOptions, setFilterOptions] = useState<{
     brands: string[];
     models: string[];
+    motors: string[];
     years: string[];
     cities: string[];
   }>({
     brands: [],
     models: [],
+    motors: [],
     years: [],
     cities: []
   });
 
   const supabase = useMemo(() => createClient(), []);
 
-  // NUEVO: Cargar vehículos con filtros desde BD
+  // ── OPCIONES EN CASCADA ──────────────────────────────────────────────────
+  // Delega completamente en scraperService.getCascadingFilterOptions,
+  // que usa el mismo patrón que getFilterOptions (trae todo, filtra en memoria)
+  // y aplica región con el mismo ilike que getVehiclesWithFilters.
+  const loadCascadingOptions = useCallback(async (
+    brand: string,
+    model: string,
+    motor: string,
+    year: string,
+    regionFilter: 'all' | 'coast' | 'sierra' = 'all'
+  ) => {
+    try {
+      const options = await scraperService.getCascadingFilterOptions({
+        brand: brand !== 'all' ? brand : undefined,
+        model: model !== 'all' ? model : undefined,
+        motor: motor !== 'all' ? motor : undefined,
+        year: year !== 'all' ? year : undefined,
+        regionFilter,
+      });
+      setFilterOptions(options);
+    } catch (error) {
+      console.error("Error al cargar opciones en cascada:", error);
+    }
+  }, []);
+  // ────────────────────────────────────────────────────────────────────────
+
   const loadVehiclesWithFilters = useCallback(async () => {
     setIsLoading(true);
     try {
       const normalizedFilters: VehicleFilters = {
         brand: vehicleFilters.brand !== 'all' ? vehicleFilters.brand : undefined,
         model: vehicleFilters.model !== 'all' ? vehicleFilters.model : undefined,
+        motor: vehicleFilters.motor !== 'all' ? vehicleFilters.motor : undefined,
         year: vehicleFilters.year !== 'all' ? vehicleFilters.year : undefined,
-        city: vehicleFilters.city !== 'all' ? vehicleFilters.city : undefined,
+        location: vehicleFilters.location !== 'all' ? vehicleFilters.location : undefined,
         dateRange: vehicleFilters.dateRange !== 'all' ? vehicleFilters.dateRange as any : 'all',
         regionFilter: vehicleFilters.regionFilter,
         searchTerm: vehicleFilters.searchTerm,
         sortBy: vehicleFilters.sortBy,
-        page: currentPage, // Usar currentPage del estado
+        page: currentPage,
         itemsPerPage: ITEMS_PER_PAGE
       };
-
       const { data, totalCount: count } = await scraperService.getVehiclesWithFilters(normalizedFilters);
-
       setAllVehicles(data);
       setTotalCount(count);
     } catch (error) {
@@ -89,34 +130,9 @@ export function useScraperData(initialFilters?: FilterOptions) {
     }
   }, [vehicleFilters, currentPage]);
 
-  // NUEVO: Cargar opciones de filtros
   const loadFilterOptions = useCallback(async () => {
-    try {
-      const options = await scraperService.getFilterOptions();
-      setFilterOptions(options);
-    } catch (error) {
-      console.error("Error al cargar opciones de filtros:", error);
-    }
-  }, []);
-
-  // NUEVO: Cargar modelos cuando cambia la marca
-  const loadModelsForBrand = useCallback(async (brand: string) => {
-    if (brand === 'all') {
-      // Recargar todas las opciones
-      loadFilterOptions();
-      return;
-    }
-
-    try {
-      const models = await scraperService.getModelsByBrand(brand);
-      setFilterOptions(prev => ({
-        ...prev,
-        models
-      }));
-    } catch (error) {
-      console.error("Error al cargar modelos:", error);
-    }
-  }, [loadFilterOptions]);
+    await loadCascadingOptions('all', 'all', 'all', 'all', 'all');
+  }, [loadCascadingOptions]);
 
   const loadSellers = useCallback(async () => {
     try {
@@ -189,10 +205,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
     try {
       const { data, error } = await supabase
         .from("scraper_vehicles")
-        .select(`
-          *,
-          seller:scraper_sellers(*)
-        `)
+        .select(`*, seller:scraper_sellers(*)`)
         .not("price", "is", null)
         .not("mileage", "is", null)
         .gte("price", 1000)
@@ -202,121 +215,72 @@ export function useScraperData(initialFilters?: FilterOptions) {
         .order("created_at", { ascending: false })
         .limit(200);
 
-      if (error) {
-        console.error("Error cargando oportunidades:", error);
-        setTopOpportunities([]);
-        return;
-      }
-
-      if (!data || data.length === 0) {
-        setTopOpportunities([]);
-        return;
-      }
+      if (error) { setTopOpportunities([]); return; }
+      if (!data || data.length === 0) { setTopOpportunities([]); return; }
 
       const scored = data.map((v) => {
         let score = 0;
-
         if (v.price) score += 50000 / v.price;
         if (v.mileage) score += 200000 / (v.mileage + 1);
-
-        if (v.seller?.total_listings !== null && v.seller?.total_listings !== undefined) {
-          score += 50 / (v.seller.total_listings + 1);
-        }
-
-        const goodWords = [
-          "único dueño", "mantenimientos al día", "como nuevo",
-          "garaje", "full equipo", "factura", "negociable",
-        ];
-
+        if (v.seller?.total_listings != null) score += 50 / (v.seller.total_listings + 1);
         const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase();
-
-        goodWords.forEach((word) => {
-          if (text.includes(word)) score += 10;
-        });
-
-        const badWords = [
-          "chocado", "sin papeles", "remato urgente",
-          "para repuestos", "motor dañado", "no matriculado",
-        ];
-
-        badWords.forEach((word) => {
-          if (text.includes(word)) score -= 30;
-        });
-
+        ["único dueño", "mantenimientos al día", "como nuevo", "garaje", "full equipo", "factura", "negociable"]
+          .forEach(w => { if (text.includes(w)) score += 10; });
+        ["chocado", "sin papeles", "remato urgente", "para repuestos", "motor dañado", "no matriculado"]
+          .forEach(w => { if (text.includes(w)) score -= 30; });
         return { ...v, deal_score: score };
       });
 
-      const sorted = scored.sort((a, b) => b.deal_score - a.deal_score);
-
       const uniqueByTitle = Array.from(
-        new Map(
-          sorted.map((v) => [(v.title ?? "").trim().toLowerCase(), v])
-        ).values()
+        new Map(scored.sort((a, b) => b.deal_score - a.deal_score)
+          .map(v => [(v.title ?? "").trim().toLowerCase(), v])).values()
       );
-
-      const top30 = uniqueByTitle.slice(0, 30);
-      setTopOpportunities(top30);
+      setTopOpportunities(uniqueByTitle.slice(0, 30));
     } catch (err) {
-      console.error("Error inesperado en oportunidades:", err);
       setTopOpportunities([]);
     }
   }, [supabase]);
 
+  // ── ACTUALIZAR FILTROS ───────────────────────────────────────────────────
   const updateFilter = useCallback((key: string, value: any) => {
     if (key === 'searchTerm') {
-      if (searchDebounceTimer.current) {
-        clearTimeout(searchDebounceTimer.current);
-      }
-      searchDebounceTimer.current = setTimeout(() => {
-        setVehicleFilters(prev => ({
-          ...prev,
-          [key]: value
-        }));
-        setCurrentPage(1);
-      }, 500);
+      setSearchInput(value);
     } else {
-      setVehicleFilters(prev => ({
-        ...prev,
-        [key]: value
-      }));
+      setVehicleFilters(prev => {
+        const next = { ...prev, [key]: value };
+        if (['brand', 'model', 'motor', 'year', 'regionFilter'].includes(key)) {
+          loadCascadingOptions(
+            key === 'brand' ? value : next.brand ?? 'all',
+            key === 'model' ? value : next.model ?? 'all',
+            key === 'motor' ? value : next.motor ?? 'all',
+            key === 'year' ? value : next.year ?? 'all',
+            (key === 'regionFilter' ? value : next.regionFilter ?? 'all') as 'all' | 'coast' | 'sierra'
+          );
+        }
+        return next;
+      });
       setCurrentPage(1);
     }
-  }, []);
+  }, [loadCascadingOptions]);
 
   const updateBrand = useCallback((brand: string) => {
-    setVehicleFilters(prev => ({
-      ...prev,
-      brand,
-      model: 'all'
-    }));
-    setCurrentPage(1);
-
-    if (brand !== 'all') {
-      loadModelsForBrand(brand);
-    } else {
-      loadFilterOptions();
-    }
-  }, [loadModelsForBrand, loadFilterOptions]);
-
-  const clearFilters = useCallback(() => {
-    if (searchDebounceTimer.current) {
-      clearTimeout(searchDebounceTimer.current);
-    }
-
-    setVehicleFilters({
-      brand: 'all',
-      model: 'all',
-      year: 'all',
-      city: 'all',
-      dateRange: 'all',
-      regionFilter: 'all',
-      searchTerm: '',
-      sortBy: 'created_at_desc',
-      page: 1,
-      itemsPerPage: ITEMS_PER_PAGE
+    setVehicleFilters(prev => {
+      loadCascadingOptions(brand, 'all', 'all', 'all', prev.regionFilter ?? 'all');
+      return { ...prev, brand, model: 'all' };
     });
     setCurrentPage(1);
-  }, []);
+  }, [loadCascadingOptions]);
+
+  const clearFilters = useCallback(() => {
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+    setVehicleFilters({
+      brand: 'all', model: 'all', motor: 'all', year: 'all', location: 'all',
+      dateRange: 'all', regionFilter: 'all', searchTerm: '',
+      sortBy: 'created_at_desc', page: 1, itemsPerPage: ITEMS_PER_PAGE
+    });
+    setCurrentPage(1);
+    loadCascadingOptions('all', 'all', 'all', 'all', 'all');
+  }, [loadCascadingOptions]);
 
   const applyFilters = useCallback((newFilters: FilterOptions) => {
     setFilters(newFilters);
@@ -325,49 +289,31 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
-      loadVehiclesWithFilters(),
-      loadSellers(),
-      loadTopOpportunities(),
-      loadPriceStatistics(),
-      loadFilterOptions()
+      loadVehiclesWithFilters(), loadSellers(), loadTopOpportunities(),
+      loadPriceStatistics(), loadFilterOptions()
     ]);
   }, [loadVehiclesWithFilters, loadSellers, loadTopOpportunities, loadPriceStatistics, loadFilterOptions]);
 
-  const stats = useMemo(() => {
-    return {
-      total: totalCount,
-      nuevos: allVehicles.filter(v => v.condition === 'NEW_ITEM').length,
-      usados: allVehicles.filter(v => v.condition === 'USED').length,
-      usados_bueno: allVehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
-      usados_como_nuevo: allVehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
-      enPatio: allVehicles.filter(v => v.seller?.location === 'patio').length,
-      enTaller: allVehicles.filter(v => v.seller?.location === 'taller').length,
-      enCliente: allVehicles.filter(v => v.seller?.location === 'cliente').length,
-    };
-  }, [allVehicles, totalCount]);
+  const stats = useMemo(() => ({
+    total: totalCount,
+    nuevos: allVehicles.filter(v => v.condition === 'NEW_ITEM').length,
+    usados: allVehicles.filter(v => v.condition === 'USED').length,
+    usados_bueno: allVehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
+    usados_como_nuevo: allVehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
+    enPatio: allVehicles.filter(v => v.seller?.location === 'patio').length,
+    enTaller: allVehicles.filter(v => v.seller?.location === 'taller').length,
+    enCliente: allVehicles.filter(v => v.seller?.location === 'cliente').length,
+  }), [allVehicles, totalCount]);
 
-  // Información de paginación
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
-  const pagination = useMemo(() => {
-    const hasNextPage = currentPage < totalPages;
-    const hasPrevPage = currentPage > 1;
-    const startIndex = totalCount > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0;
-    const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, totalCount);
+  const pagination = useMemo(() => ({
+    currentPage, totalPages, totalItems: totalCount, itemsPerPage: ITEMS_PER_PAGE,
+    hasNextPage: currentPage < totalPages, hasPrevPage: currentPage > 1,
+    startIndex: totalCount > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0,
+    endIndex: Math.min(currentPage * ITEMS_PER_PAGE, totalCount),
+  }), [currentPage, totalPages, totalCount]);
 
-    return {
-      currentPage,
-      totalPages,
-      totalItems: totalCount,
-      itemsPerPage: ITEMS_PER_PAGE,
-      hasNextPage,
-      hasPrevPage,
-      startIndex,
-      endIndex,
-    };
-  }, [currentPage, totalPages, totalCount]);
-
-  // Funciones de navegación
   const goToPage = useCallback((page: number) => {
     if (page >= 1 && page <= totalPages) {
       window.scrollTo({ top: 70, behavior: 'auto' });
@@ -375,132 +321,58 @@ export function useScraperData(initialFilters?: FilterOptions) {
     }
   }, [totalPages]);
 
-  const nextPage = useCallback(() => {
-    if (currentPage < totalPages) {
-      goToPage(currentPage + 1);
-    }
-  }, [currentPage, totalPages, goToPage]);
+  const nextPage = useCallback(() => { if (currentPage < totalPages) goToPage(currentPage + 1); }, [currentPage, totalPages, goToPage]);
+  const prevPage = useCallback(() => { if (currentPage > 1) goToPage(currentPage - 1); }, [currentPage, goToPage]);
 
-  const prevPage = useCallback(() => {
-    if (currentPage > 1) {
-      goToPage(currentPage - 1);
-    }
-  }, [currentPage, goToPage]);
+  useEffect(() => { loadFilterOptions(); }, [loadFilterOptions]);
+  useEffect(() => { loadVehiclesWithFilters(); }, [loadVehiclesWithFilters]);
+  useEffect(() => { loadSellers(); }, [loadSellers]);
+  useEffect(() => { loadPriceStatistics(); }, [loadPriceStatistics]);
+  useEffect(() => { loadTopOpportunities(); }, [loadTopOpportunities]);
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    loadFilterOptions();
-  }, [loadFilterOptions]);
-
-  useEffect(() => {
-    loadVehiclesWithFilters();
-  }, [loadVehiclesWithFilters]);
-
-  useEffect(() => {
-    loadSellers();
-  }, [loadSellers]);
-
-  useEffect(() => {
-    loadPriceStatistics();
-  }, [loadPriceStatistics]);
-
-  useEffect(() => {
-    loadTopOpportunities();
-  }, [loadTopOpportunities]);
-
-  // Suscripciones en tiempo real
   useEffect(() => {
     const vehiclesChannel = supabase
       .channel('scraper_vehicles_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scraper_vehicles'
-        },
-        () => {
-          loadVehiclesWithFilters();
-          loadTopOpportunities();
-          loadFilterOptions();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scraper_vehicles' }, () => {
+        loadVehiclesWithFilters();
+        loadTopOpportunities();
+        loadCascadingOptions(
+          vehicleFilters.brand ?? 'all',
+          vehicleFilters.model ?? 'all',
+          vehicleFilters.motor ?? 'all',
+          vehicleFilters.year ?? 'all',
+          vehicleFilters.regionFilter ?? 'all'
+        );
+      })
       .subscribe();
 
     const sellersChannel = supabase
       .channel('scraper_sellers_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scraper_sellers'
-        },
-        () => {
-          loadSellers();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scraper_sellers' }, () => { loadSellers(); })
       .subscribe();
 
     const statsChannel = supabase
       .channel('scraper_vehicle_price_statistics_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scraper_vehicle_price_statistics'
-        },
-        () => {
-          loadPriceStatistics();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scraper_vehicle_price_statistics' }, () => { loadPriceStatistics(); })
       .subscribe();
 
     return () => {
-      // Limpiar debounce timer si existe
-      if (searchDebounceTimer.current) {
-        clearTimeout(searchDebounceTimer.current);
-      }
-
+      if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
       supabase.removeChannel(vehiclesChannel);
       supabase.removeChannel(sellersChannel);
       supabase.removeChannel(statsChannel);
     };
-  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadTopOpportunities, loadFilterOptions]);
+  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadTopOpportunities, loadCascadingOptions, vehicleFilters]);
 
   return {
-    vehicles: allVehicles, // Ya vienen paginados desde la BD
-    allVehicles,
-    sellers,
-    isLoading,
-    filters,
-    stats,
-    topOpportunities,
-    priceStatistics,
-    pagination,
-    goToPage,
-    nextPage,
-    prevPage,
-
-    // NUEVO: Filtros avanzados
-    vehicleFilters,
-    filterOptions,
-    updateFilter,
-    updateBrand,
-    clearFilters,
-
-    // Funciones existentes
+    vehicles: allVehicles, allVehicles, sellers, isLoading, filters, stats,
+    topOpportunities, priceStatistics, pagination, goToPage, nextPage, prevPage,
+    vehicleFilters: { ...vehicleFilters, searchTerm: searchInput },
+    filterOptions, updateFilter, updateBrand, clearFilters,
     refreshTopOpportunities: loadTopOpportunities,
-    getSellerWithVehicles,
-    getPriceStatisticsForVehicle,
-    getPriceStatisticsByBrand,
-    getPriceStatisticsByModel,
-    getAllBrandsWithStats,
-    applyFilters,
-    refresh: loadVehiclesWithFilters,
-    refreshSellers: loadSellers,
-    refreshPriceStatistics: loadPriceStatistics,
-    refreshAll
+    getSellerWithVehicles, getPriceStatisticsForVehicle,
+    getPriceStatisticsByBrand, getPriceStatisticsByModel, getAllBrandsWithStats,
+    applyFilters, refresh: loadVehiclesWithFilters,
+    refreshSellers: loadSellers, refreshPriceStatistics: loadPriceStatistics, refreshAll
   };
 }
