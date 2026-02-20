@@ -36,6 +36,19 @@ export function useOrdenes() {
             .eq('id', id);
     };
 
+    // --- NUEVA FUNCIÓN: Cambiar Estado Contable ---
+    const actualizarEstadoContable = async (id: string, nuevoEstado: string) => {
+        // Actualización optimista local
+        setOrdenes(prev => prev.map(o => o.id === id ? { ...o, estado_contable: nuevoEstado } : o));
+        
+        const { error } = await supabase
+            .from('taller_ordenes')
+            .update({ estado_contable: nuevoEstado })
+            .eq('id', id);
+            
+        return { success: !error, error: error?.message };
+    };
+
     // Registrar Consumo (Materiales)
     const registrarConsumo = async (ordenId: string, itemId: string, cantidad: number) => {
         if (!profile?.id) return { success: false, error: "No usuario" };
@@ -129,6 +142,7 @@ export function useOrdenes() {
         ordenes,
         isLoading,
         actualizarEstado,
+        actualizarEstadoContable, // <--- EXPORTAMOS LA NUEVA FUNCIÓN
         registrarConsumo,
         fetchConsumosOrden,
         fetchDetallesOrden,

@@ -11,9 +11,13 @@ import { FolderCard } from "@/components/features/taller/expedientes/FolderCard"
 import { ExpedienteDetail } from "@/components/features/taller/expedientes/ExpedienteDetail";
 
 export default function ExpedientesPage() {
-    const { ordenes, isLoading, subirArchivo } = useExpedientes();
+    const { ordenes, isLoading, subirArchivo, actualizarEstadoContable } = useExpedientes();
+    
+    // Estados de Filtros
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [selectedContableStatus, setSelectedContableStatus] = useState<string | null>(null); // NUEVO ESTADO CONTABLE
+    
     const [selectedOrder, setSelectedOrder] = useState<OrdenTrabajo | null>(null);
 
     // Estados para Subida de Archivos
@@ -35,10 +39,14 @@ export default function ExpedientesPage() {
             const matchesSearch = o.vehiculo_placa.toLowerCase().includes(term) || 
                                   o.cliente?.nombre_completo?.toLowerCase().includes(term) ||
                                   o.numero_orden.toString().includes(term);
+            
             const matchesStatus = selectedStatus ? o.estado === selectedStatus : true;
-            return matchesSearch && matchesStatus;
+            // @ts-ignore
+            const matchesContable = selectedContableStatus ? o.estado_contable === selectedContableStatus : true;
+            
+            return matchesSearch && matchesStatus && matchesContable;
         });
-    }, [ordenes, searchTerm, selectedStatus]);
+    }, [ordenes, searchTerm, selectedStatus, selectedContableStatus]);
 
     // Función que se pasa a los TABS para abrir el input file
     const triggerUpload = (bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo', transaccionId?: string) => {
@@ -78,6 +86,8 @@ export default function ExpedientesPage() {
                     onSelectStatus={(status) => setSelectedStatus(status)}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
+                    selectedContableStatus={selectedContableStatus}
+                    onSelectContableStatus={setSelectedContableStatus}
                 />
             )}
 
@@ -89,6 +99,7 @@ export default function ExpedientesPage() {
                         onClose={() => setSelectedOrder(null)}
                         isUploading={isUploading}
                         onTriggerUpload={triggerUpload}
+                        onUpdateContable={actualizarEstadoContable} // Pasamos la función al detalle
                     />
 
                 ) : (

@@ -26,6 +26,19 @@ export function useExpedientes() {
         setIsLoading(false);
     }, [supabase]);
 
+    // --- NUEVA FUNCIÓN: Cambiar Estado Contable ---
+    const actualizarEstadoContable = async (id: string, nuevoEstado: string) => {
+        // Actualización optimista local
+        setOrdenes(prev => prev.map(o => o.id === id ? { ...o, estado_contable: nuevoEstado } : o));
+        
+        const { error } = await supabase
+            .from('taller_ordenes')
+            .update({ estado_contable: nuevoEstado })
+            .eq('id', id);
+            
+        return { success: !error, error: error?.message };
+    };
+
     const subirArchivo = async (
         ordenId: string, 
         file: File, 
@@ -88,6 +101,7 @@ export function useExpedientes() {
         ordenes,
         isLoading,
         fetchExpedientes,
-        subirArchivo
+        subirArchivo,
+        actualizarEstadoContable // Exportamos la nueva función
     };
 }

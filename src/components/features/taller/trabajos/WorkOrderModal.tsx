@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer } from "lucide-react";
+import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, ChevronDown } from "lucide-react";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
 import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo } from "@/types/taller";
 import { useInventario } from "@/hooks/taller/useInventario";
@@ -19,11 +19,17 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const { 
         registrarConsumo, fetchConsumosOrden, 
         fetchDetallesOrden, agregarDetalle, eliminarDetalle,
-        fetchServiciosCatalogo, fetchMecanicos
+        fetchServiciosCatalogo, fetchMecanicos,
+        actualizarEstadoContable // <--- Extraemos la nueva función
     } = useOrdenes();
     
     const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales'>('info');
     
+    // --- ESTADO LOCAL CONTABLE ---
+    // @ts-ignore: Asumimos que estado_contable existe en el tipo OrdenTrabajo de la BD
+    const [localEstadoContable, setLocalEstadoContable] = useState(orden?.estado_contable || 'pendiente');
+    const [isUpdatingContable, setIsUpdatingContable] = useState(false);
+
     // Estados Materiales
     const [consumos, setConsumos] = useState<ConsumoMaterial[]>([]);
     const [selectedItem, setSelectedItem] = useState("");
@@ -46,6 +52,8 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
             loadConsumos();
             loadPresupuesto();
             loadCatalogos();
+            // @ts-ignore
+            setLocalEstadoContable(orden.estado_contable || 'pendiente'); // Sincronizar estado contable al abrir
         }
     }, [orden, isOpen]);
 
@@ -67,6 +75,18 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
         if (!orden) return;
         const data = await fetchDetallesOrden(orden.id);
         setDetalles(data);
+    };
+
+    // --- MANEJADOR DE ESTADO CONTABLE ---
+    const handleEstadoContableChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        if (!orden) return;
+        const nuevoEstado = e.target.value;
+        
+        setIsUpdatingContable(true);
+        setLocalEstadoContable(nuevoEstado); // UI Update optimista
+        
+        await actualizarEstadoContable(orden.id, nuevoEstado);
+        setIsUpdatingContable(false);
     };
 
     // --- MANEJADORES MATERIALES ---
@@ -126,14 +146,25 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
     const totalPresupuesto = detalles.reduce((acc, curr) => acc + (curr.precio_unitario * curr.cantidad), 0);
 
+    // Helper para dar color al texto del selector contable
+    const getContableColor = (estado: string) => {
+        switch(estado) {
+            case 'pendiente': return 'text-amber-600';
+            case 'facturado': return 'text-blue-600';
+            case 'pagado': return 'text-emerald-600';
+            case 'anulado': return 'text-red-600';
+            default: return 'text-slate-600';
+        }
+    };
+
     if (!isOpen || !orden) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
                 
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                {/* Header Actualizado */}
+                <div className="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:justify-between md:items-center bg-slate-50 gap-4">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">ORDEN #{orden.numero_orden}</span>
@@ -141,28 +172,51 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                         </div>
                         <h2 className="font-bold text-xl text-slate-900">{orden.vehiculo_marca} {orden.vehiculo_modelo} <span className="text-slate-400 font-normal">({orden.vehiculo_placa})</span></h2>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
-                        <X className="h-6 w-6" />
-                    </button>
+                    
+                    {/* SECCIÓN DE CONTROLES: Selector y Cerrar */}
+                    <div className="flex items-center gap-4">
+                        
+                        {/* Selector de Estado Contable */}
+                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                            <span className="text-xs font-bold text-slate-400 uppercase hidden sm:inline-block">Pago:</span>
+                            {isUpdatingContable && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                            <select 
+                                value={localEstadoContable}
+                                onChange={handleEstadoContableChange}
+                                disabled={isUpdatingContable}
+                                className={`text-sm font-bold outline-none bg-transparent cursor-pointer disabled:opacity-50 ${getContableColor(localEstadoContable)}`}
+                            >
+                                <option value="pendiente" className="text-amber-600 font-bold">Pendiente</option>
+                                <option value="facturado" className="text-blue-600 font-bold">Facturado</option>
+                                <option value="pagado" className="text-emerald-600 font-bold">Pagado</option>
+                                <option value="anulado" className="text-red-600 font-bold">Anulado</option>
+                            </select>
+                        </div>
+
+                        {/* Botón Cerrar */}
+                        <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
+                            <X className="h-6 w-6" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-200 px-6 gap-6">
+                <div className="flex border-b border-slate-200 px-6 gap-6 overflow-x-auto">
                     <button 
                         onClick={() => setActiveTab('info')}
-                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Wrench className="h-4 w-4" /> Info
                     </button>
                     <button 
                         onClick={() => setActiveTab('presupuesto')}
-                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'presupuesto' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'presupuesto' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <DollarSign className="h-4 w-4" /> Presupuesto
                     </button>
                     <button 
                         onClick={() => setActiveTab('materiales')}
-                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'materiales' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'materiales' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Package className="h-4 w-4" /> Materiales
                     </button>
@@ -207,7 +261,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             </div>
 
                             <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
-                                <h3 className="text-sm font-bold text-blue-800 mb-3">Mover Etapa</h3>
+                                <h3 className="text-sm font-bold text-blue-800 mb-3">Mover Etapa (Taller)</h3>
                                 <div className="flex flex-wrap gap-2">
                                     {['en_cola', 'en_proceso', 'control_calidad', 'terminado'].map((estado) => (
                                         <button
@@ -229,11 +283,10 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 </div>
                             </div>
                             
-                            {/* BOTÓN IMPRIMIR CORREGIDO */}
                             <div className="flex justify-end pt-4">
                                 <button 
                                     type="button"
-                                    onClick={onPrint} // USAMOS LA FUNCIÓN QUE VIENE DE LAS PROPS
+                                    onClick={onPrint}
                                     className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-bold underline decoration-slate-300 underline-offset-4 transition-colors"
                                 >
                                     <Printer className="h-4 w-4" />
@@ -251,9 +304,9 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="col-span-1 md:col-span-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Servicio / Trabajo</label>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 flex-col sm:flex-row">
                                             <select 
-                                                className="w-1/3 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                                className="w-full sm:w-1/3 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                                                 onChange={handleSelectServicio}
                                                 defaultValue=""
                                             >
@@ -313,8 +366,8 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             </form>
 
                             {/* Tabla Presupuesto */}
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                <table className="w-full text-sm text-left">
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                                <table className="w-full text-sm text-left min-w-[600px]">
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
                                             <th className="px-4 py-3">Descripción</th>
@@ -377,7 +430,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                         ))}
                                     </select>
                                 </div>
-                                <div className="w-24">
+                                <div className="w-full md:w-24">
                                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Cant.</label>
                                     <input 
                                         type="number" 
@@ -392,7 +445,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 <button 
                                     type="submit"
                                     disabled={isAddingMaterial}
-                                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-purple-700 transition-colors flex items-center gap-2 h-10"
+                                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 h-10 w-full md:w-auto"
                                 >
                                     {isAddingMaterial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                                     Registrar
@@ -400,8 +453,8 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             </form>
 
                             {/* Lista de Consumos */}
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                <table className="w-full text-sm text-left">
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                                <table className="w-full text-sm text-left min-w-[500px]">
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
                                             <th className="px-4 py-3">Material</th>

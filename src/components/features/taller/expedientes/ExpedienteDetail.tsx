@@ -10,9 +10,10 @@ interface DetailProps {
     onClose: () => void;
     isUploading: boolean;
     onTriggerUpload: (bucket: any, transaccionId?: string) => void;
+    onUpdateContable: (id: string, status: string) => void; // NUEVA PROP
 }
 
-export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload }: DetailProps) {
+export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable }: DetailProps) {
     const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>('resumen');
 
     return (
@@ -47,7 +48,8 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload 
             {/* Contenedor del contenido */}
             <div className="flex-1 p-4 bg-slate-50/30">
                 <div className=" mx-auto">
-                    {activeTab === 'resumen' && <ResumenTab orden={orden} />}
+                    {/* Pasamos la función al Tab de Resumen */}
+                    {activeTab === 'resumen' && <ResumenTab orden={orden} onUpdateContable={onUpdateContable} />}
                     
                     {activeTab === 'finanzas' && (
                         <FinanzasTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} />
