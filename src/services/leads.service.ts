@@ -88,13 +88,24 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
         
-        // Filtros de fecha para el conteo de respondidos
+        // Filtros de fecha para el conteo de respondidos (AQUÍ ESTABA EL ERROR - ARREGLADO)
         if (filters.exactDate) {
             const { start, end } = getEcuadorRange(filters.exactDate);
             respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
-        } else if (filters.dateRange === 'today') {
-            const { start, end } = getEcuadorRange(getEcuadorDateISO());
-            respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
+        } else if (filters.dateRange !== 'all') {
+            const today = getEcuadorDateISO();
+            
+            if (filters.dateRange === 'today') {
+                const { start, end } = getEcuadorRange(today);
+                respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
+            } else {
+                // Faltaba esta lógica en la query de respondidos para 7days, 15days, 30days
+                const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
+                const pastDate = new Date();
+                pastDate.setDate(pastDate.getDate() - daysBack);
+                const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+                respondedQuery = respondedQuery.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+            }
         }
 
         const { count: respondedCount } = await respondedQuery;
