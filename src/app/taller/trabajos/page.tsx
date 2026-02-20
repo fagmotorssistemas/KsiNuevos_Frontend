@@ -53,10 +53,14 @@ export default function TrabajosPage() {
 
         return {
             total: ordenes.length,
+            // NUEVO CÁLCULO DE RETRASO: Usamos la fecha_promesa_entrega
             criticos: ordenes.filter(o => {
-                const fechaIngreso = new Date(o.fecha_ingreso).getTime();
-                const dias = (hoy - fechaIngreso) / (1000 * 3600 * 24);
-                return dias > 15 && o.estado !== 'entregado';
+                if (o.estado === 'entregado') return false; // Descartar los entregados
+                if (!o.fecha_promesa_entrega) return false; // Si no hay fecha de promesa, no puede estar retrasado
+                
+                const fechaPromesa = new Date(o.fecha_promesa_entrega).getTime();
+                // Si la fecha de hoy ya superó la fecha de promesa, se considera retrasado
+                return hoy > fechaPromesa;
             }).length,
             proceso: ordenes.filter(o => o.estado !== 'terminado' && o.estado !== 'entregado').length
         };
@@ -93,7 +97,6 @@ export default function TrabajosPage() {
 
     return (
         <>
-            {/* CAMBIO 1: Usar min-h-screen en lugar de h-full para que el fondo crezca con el scroll */}
             <div className="flex flex-col min-h-screen bg-slate-50/50 p-6">
                 
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 flex-shrink-0">
@@ -125,10 +128,10 @@ export default function TrabajosPage() {
                         color="bg-blue-100 text-blue-600"
                     />
                     <StatCard
-                        icon={<AlertCircle className="h-5 w-5 text-amber-600" />}
-                        label="Retrasados (+15 días)"
+                        icon={<AlertCircle className="h-5 w-5 text-red-600" />}
+                        label="Retrasados"
                         value={stats.criticos}
-                        color="bg-amber-100 text-amber-600"
+                        color="bg-red-100 text-red-600"
                     />
                     <StatCard
                         icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
@@ -138,10 +141,6 @@ export default function TrabajosPage() {
                     />
                 </div>
 
-                {/* CAMBIO 2: ELIMINADA la "cárcel" de absolute inset-0.
-                    Antes: <div className="flex-1 relative"><div className="absolute inset-0 p-1">...</div></div>
-                    Ahora: Dejamos que el KanbanBoard fluya naturalmente en el DOM.
-                */}
                 <div className="flex-1">
                     <KanbanBoard
                         ordenes={ordenes}

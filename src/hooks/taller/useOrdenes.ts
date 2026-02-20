@@ -25,21 +25,42 @@ export function useOrdenes() {
         setIsLoading(false);
     }, [supabase]);
 
-    // Cambiar estado (Mover en el Kanban)
+    // Cambiar estado (Mover en el Kanban o Modal)
     const actualizarEstado = async (id: string, nuevoEstado: string) => {
-        // Optimistic update
-        setOrdenes(prev => prev.map(o => o.id === id ? { ...o, estado: nuevoEstado as TallerEstadoOrden } : o));
+        const isEntregado = nuevoEstado === 'entregado';
+        const fechaSalida = isEntregado ? new Date().toISOString() : undefined;
+
+        // Optimistic update para UI más rápida
+        setOrdenes(prev => prev.map(o => {
+            if (o.id === id) {
+                return { 
+                    ...o, 
+                    estado: nuevoEstado as TallerEstadoOrden,
+                    // Si pasa a entregado, actualizamos optimísticamente la fecha de salida localmente
+                    ...(isEntregado && { fecha_salida_real: fechaSalida })
+                } as OrdenTrabajo;
+            }
+            return o;
+        }));
         
+        // Payload para la base de datos
+        const updatePayload: any = { estado: nuevoEstado as TallerEstadoOrden };
+        
+        // Si el nuevo estado es entregado, agregamos la fecha de salida real
+        if (isEntregado) {
+            updatePayload.fecha_salida_real = fechaSalida;
+        }
+
         await supabase
             .from('taller_ordenes')
-            .update({ estado: nuevoEstado as TallerEstadoOrden })
+            .update(updatePayload)
             .eq('id', id);
     };
 
-    // --- NUEVA FUNCIÓN: Cambiar Estado Contable ---
+    // --- FUNCIÓN: Cambiar Estado Contable ---
     const actualizarEstadoContable = async (id: string, nuevoEstado: string) => {
         // Actualización optimista local
-        setOrdenes(prev => prev.map(o => o.id === id ? { ...o, estado_contable: nuevoEstado } : o));
+        setOrdenes(prev => prev.map(o => o.id === id ? { ...o, estado_contable: nuevoEstado } as OrdenTrabajo : o));
         
         const { error } = await supabase
             .from('taller_ordenes')
@@ -81,7 +102,7 @@ export function useOrdenes() {
         return (data as unknown as ConsumoMaterial[]) || [];
     };
 
-    // --- NUEVAS FUNCIONES PARA PRESUPUESTO / SERVICIOS ---
+    // --- FUNCIONES PARA PRESUPUESTO / SERVICIOS ---
 
     const fetchDetallesOrden = async (ordenId: string) => {
         const { data } = await supabase
@@ -115,8 +136,6 @@ export function useOrdenes() {
     };
 
     const fetchServiciosCatalogo = async () => {
-        // CORRECCIÓN AQUÍ: Usamos 'as any' para evitar el error de TypeScript
-        // ya que la tabla es nueva y los tipos locales no la tienen aún.
         const { data } = await supabase
             .from('taller_servicios_catalogo' as any)
             .select('*')
@@ -126,7 +145,6 @@ export function useOrdenes() {
     };
 
     const fetchMecanicos = async () => {
-        // Asumiendo que usamos la tabla profiles. Podrías filtrar por rol si tuvieras uno.
         const { data } = await supabase
             .from('profiles')
             .select('id, full_name');
@@ -142,7 +160,7 @@ export function useOrdenes() {
         ordenes,
         isLoading,
         actualizarEstado,
-        actualizarEstadoContable, // <--- EXPORTAMOS LA NUEVA FUNCIÓN
+        actualizarEstadoContable,
         registrarConsumo,
         fetchConsumosOrden,
         fetchDetallesOrden,
