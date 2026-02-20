@@ -16,11 +16,11 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload 
     const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>('resumen');
 
     return (
-        <div className="flex flex-col h-full bg-white">
+        <div className="flex flex-col h-full">
             {/* Header del Expediente */}
             <div className="border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
                 <div>
-                    <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 mb-2 font-medium transition-colors">
+                    <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 mb-4 font-medium transition-colors">
                         <ArrowLeft className="h-4 w-4" /> Volver a Carpetas
                     </button>
                     <div className="flex items-center gap-3">
@@ -45,8 +45,8 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload 
             </div>
 
             {/* Contenedor del contenido */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-                <div className="max-w-4xl mx-auto">
+            <div className="flex-1 p-4 bg-slate-50/30">
+                <div className=" mx-auto">
                     {activeTab === 'resumen' && <ResumenTab orden={orden} />}
                     
                     {activeTab === 'finanzas' && (
