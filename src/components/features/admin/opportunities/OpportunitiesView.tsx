@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
 import { OpportunitiesTableView } from "./OpportunitiesTableView";
 import { ArrowLeft } from "lucide-react";
@@ -87,27 +87,6 @@ export function OpportunitiesView({
     updateBrand,
     clearFilters,
 }: OpportunitiesViewProps) {
-    const [showFullInventory, setShowFullInventory] = useState(false);
-
-    // Calcular las mejores oportunidades usando el scoring system
-    const bestOpportunities = useMemo<ScoredVehicle[]>(() => {
-        if (!vehicles || vehicles.length === 0) return [];
-
-        const priceStatsMap = new Map<string, PriceStatistics>();
-        if (priceStatistics && priceStatistics.length > 0) {
-            priceStatistics.forEach(stat => {
-                const key = `${stat.brand}_${stat.model}_${stat.year || ''}`;
-                priceStatsMap.set(key, stat);
-            });
-        }
-
-        const validVehicles = vehicles.filter(v =>
-            v.price && v.price > 0 && v.year && v.brand && v.model
-        );
-
-        return OpportunityScorer.getTopOpportunities(validVehicles, priceStatsMap, 4);
-    }, [vehicles, priceStatistics]);
-
     const hasActiveFilters = useMemo(() =>
         vehicleFilters.brand !== 'all' ||
         vehicleFilters.model !== 'all' ||
@@ -121,99 +100,84 @@ export function OpportunitiesView({
         [vehicleFilters]
     );
 
-    // Scroll al top cuando cambian los datos de la tabla
+    // Guardar posición antes de que cambien los datos
+    const scrollPositionRef = useRef<number>(0);
+
     useEffect(() => {
-        if (showFullInventory) {
-            window.scrollTo({ top: 70, behavior: 'auto' });
+        if (isLoading) {
+            scrollPositionRef.current = window.scrollY;
+        } else {
+            window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
         }
-    }, [vehicles, showFullInventory]);
+    }, [isLoading]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700 pb-12">
-            {!showFullInventory ? (
-                <OpportunitiesWizardSelection
-                    topOpportunities={bestOpportunities}
-                    onViewAll={() => setShowFullInventory(true)}
+            <div className="space-y-6 animate-in slide-in-from-bottom-8 fade-in duration-500">
+
+                <OpportunitiesCenterView
+                    priceStatistics={priceStatistics}
+                    topOpportunities={topOpportunities}
+                    vehicles={vehicles}
                     isLoading={isLoading}
+                    onScraperComplete={onScraperComplete}
+
+                    // Filtros desde el hook
+                    selectedBrand={vehicleFilters.brand || 'all'}
+                    selectedModel={vehicleFilters.model || 'all'}
+                    selectedMotor={vehicleFilters.motor || 'all'}
+                    selectedYear={vehicleFilters.year || 'all'}
+                    selectedCity={vehicleFilters.city || 'all'}
+                    selectedDateRange={vehicleFilters.dateRange || 'all'}
+                    regionFilter={vehicleFilters.regionFilter || 'all'}
+                    searchTerm={vehicleFilters.searchTerm || ''}
+                    sortBy={vehicleFilters.sortBy || 'created_at_desc'}
+
+                    // Opciones disponibles
+                    availableBrands={filterOptions.brands}
+                    availableModels={filterOptions.models}
+                    availableMotors={filterOptions.motors}
+                    availableYears={filterOptions.years}
+                    availableCities={filterOptions.cities}
+
+                    // Callbacks
+                    onBrandChange={updateBrand}
+                    onModelChange={(value) => updateFilter('model', value)}
+                    onMotorChange={(value) => updateFilter('motor', value)}
+                    onYearChange={(value) => updateFilter('year', value)}
+                    onCityChange={(value) => updateFilter('city', value)}
+                    onDateRangeChange={(value) => updateFilter('dateRange', value)}
+                    onRegionFilterChange={(value) => updateFilter('regionFilter', value)}
+                    onSearchTermChange={(value) => updateFilter('searchTerm', value)}
+                    onSortChange={(value) => updateFilter('sortBy', value)}
+                    onClearFilters={clearFilters}
+
+                    // Stats
+                    totalCount={pagination.totalItems}
+                    enPatio={vehicles.filter(v => v.seller?.location === 'patio').length}
+                    enTaller={vehicles.filter(v => v.seller?.location === 'taller').length}
                 />
-            ) : (
-                <div className="space-y-6 animate-in slide-in-from-bottom-8 fade-in duration-500">
-                    <div className="flex items-center justify-between gap-4">
-                        <button
-                            onClick={() => setShowFullInventory(false)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Volver al resumen
-                        </button>
-                    </div>
-
-                    <OpportunitiesCenterView
-                        priceStatistics={priceStatistics}
-                        topOpportunities={topOpportunities}
-                        vehicles={vehicles}
-                        isLoading={isLoading}
-                        onScraperComplete={onScraperComplete}
-
-                        // Filtros desde el hook
-                        selectedBrand={vehicleFilters.brand || 'all'}
-                        selectedModel={vehicleFilters.model || 'all'}
-                        selectedMotor={vehicleFilters.motor || 'all'}
-                        selectedYear={vehicleFilters.year || 'all'}
-                        selectedCity={vehicleFilters.city || 'all'}
-                        selectedDateRange={vehicleFilters.dateRange || 'all'}
-                        regionFilter={vehicleFilters.regionFilter || 'all'}
-                        searchTerm={vehicleFilters.searchTerm || ''}
-                        sortBy={vehicleFilters.sortBy || 'created_at_desc'}
-
-                        // Opciones disponibles
-                        availableBrands={filterOptions.brands}
-                        availableModels={filterOptions.models}
-                        availableMotors={filterOptions.motors}
-                        availableYears={filterOptions.years}
-                        availableCities={filterOptions.cities}
-
-                        // Callbacks
-                        onBrandChange={updateBrand}
-                        onModelChange={(value) => updateFilter('model', value)}
-                        onMotorChange={(value) => updateFilter('motor', value)}
-                        onYearChange={(value) => updateFilter('year', value)}
-                        onCityChange={(value) => updateFilter('city', value)}
-                        onDateRangeChange={(value) => updateFilter('dateRange', value)}
-                        onRegionFilterChange={(value) => updateFilter('regionFilter', value)}
-                        onSearchTermChange={(value) => updateFilter('searchTerm', value)}
-                        onSortChange={(value) => updateFilter('sortBy', value)}
-                        onClearFilters={clearFilters}
-
-                        // Stats
-                        totalCount={pagination.totalItems}
-                        enPatio={vehicles.filter(v => v.seller?.location === 'patio').length}
-                        enTaller={vehicles.filter(v => v.seller?.location === 'taller').length}
-                    />
-                    <Pagination
-                        currentPage={pagination.currentPage}
-                        totalPages={pagination.totalPages}
-                        totalItems={pagination.totalItems}
-                        startIndex={pagination.startIndex}
-                        endIndex={pagination.endIndex}
-                        onPageChange={goToPage}
-                        onNextPage={nextPage}
-                        onPrevPage={prevPage}
-                        hasNextPage={pagination.hasNextPage}
-                        hasPrevPage={pagination.hasPrevPage}
-                    />
-                    <OpportunitiesTableView
-                        vehicles={vehicles}
-                        isLoading={isLoading}
-                        hasActiveFilters={hasActiveFilters}
-                        onClearFilters={clearFilters}
-                        getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
-                        onVehicleUpdate={onScraperComplete}
-                    />
-
-
-                </div>
-            )}
+                <Pagination
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    totalItems={pagination.totalItems}
+                    startIndex={pagination.startIndex}
+                    endIndex={pagination.endIndex}
+                    onPageChange={goToPage}
+                    onNextPage={nextPage}
+                    onPrevPage={prevPage}
+                    hasNextPage={pagination.hasNextPage}
+                    hasPrevPage={pagination.hasPrevPage}
+                />
+                <OpportunitiesTableView
+                    vehicles={vehicles}
+                    isLoading={isLoading}
+                    hasActiveFilters={hasActiveFilters}
+                    onClearFilters={clearFilters}
+                    getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
+                    onVehicleUpdate={onScraperComplete}
+                />
+            </div>
         </div>
     );
 }

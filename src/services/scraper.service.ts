@@ -35,67 +35,6 @@ const SIERRA_CITIES = [
 
 export const scraperService = {
 
-    async getTopOpportunities(): Promise<VehicleWithSeller[]> {
-        const { data, error } = await supabase
-            .from("scraper_vehicles")
-            .select(`
-                *,
-                seller:scraper_sellers(*)
-            `)
-            .eq("status", "NUEVO")
-            .not("price", "is", null)
-            .not("mileage", "is", null)
-            .not("location", "is", null)
-            .gte("price", 1000)
-            .lte("price", 50000)
-            .gte("mileage", 0)
-            .lte("mileage", 250000)
-            .eq("seller.is_dealer", false)
-            .order("price", { ascending: true })
-            .limit(200)
-
-        if (error) {
-            console.error("Error obteniendo oportunidades:", error)
-            return []
-        }
-
-        if (!data) return []
-
-        const scored = data.map((v) => {
-            let score = 0
-            if (v.price) score += 50000 / v.price
-            if (v.mileage) score += 200000 / (v.mileage + 1)
-            if (v.seller?.total_listings) {
-                score += 50 / (v.seller.total_listings + 1)
-            }
-
-            const goodWords = [
-                "único dueño", "mantenimientos al día", "como nuevo",
-                "garaje", "full equipo", "factura", "negociable"
-            ]
-            const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase()
-            goodWords.forEach((w) => {
-                if (text.includes(w)) score += 10
-            })
-
-            const badWords = [
-                "chocado", "sin papeles", "remato urgente",
-                "para repuestos", "motor dañado", "no matriculado"
-            ]
-            badWords.forEach((w) => {
-                if (text.includes(w)) score -= 30
-            })
-
-            return { ...v, deal_score: score }
-        })
-
-        const top30 = scored
-            .sort((a, b) => b.deal_score - a.deal_score)
-            .slice(0, 30)
-
-        return top30 as VehicleWithSeller[]
-    },
-
     // NUEVA FUNCIÓN: Obtener vehículos con filtros avanzados
     async getVehiclesWithFilters(filters: VehicleFilters = {}): Promise<{
         data: VehicleWithSeller[];
@@ -708,7 +647,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
+                'https://n8n.ksinuevos.com/webhook/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {

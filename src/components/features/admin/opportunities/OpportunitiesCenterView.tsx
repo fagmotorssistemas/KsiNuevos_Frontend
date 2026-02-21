@@ -52,8 +52,6 @@ interface OpportunitiesCenterViewProps {
     onClearFilters: () => void;
 }
 
-// ── CONSTANTES ───────────────────────────────────────────────────────────────
-
 const DATE_RANGE_OPTIONS = ["Hoy", "Ayer", "Última semana", "Último mes"];
 
 const DATE_RANGE_TO_VALUE: Record<string, string> = {
@@ -73,8 +71,6 @@ const SORT_OPTIONS = [
     { value: "price_desc", label: "Precio: mayor a menor" },
 ];
 
-// ── COMPONENTE ───────────────────────────────────────────────────────────────
-
 export const OpportunitiesCenterView = ({
     onScraperComplete,
     vehicles,
@@ -88,13 +84,11 @@ export const OpportunitiesCenterView = ({
     onSearchTermChange, onSortChange, onClearFilters,
 }: OpportunitiesCenterViewProps) => {
 
-    // ── Scraper state ──────────────────────────────────────────────────────
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
     const [scraperTerm, setScraperTerm] = useState("");
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
 
-    // ── Modal state ────────────────────────────────────────────────────────
     const [showScannerModal, setShowScannerModal] = useState(false);
     const [showCarPicker, setShowCarPicker] = useState(false);
     const [pickerBrand, setPickerBrand] = useState<string | null>(null);
@@ -208,6 +202,9 @@ export const OpportunitiesCenterView = ({
         handleSubmitScraper(term);
     }, [handleSubmitScraper]);
 
+    console.log(selectedCity);
+
+
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
         <>
@@ -275,12 +272,6 @@ export const OpportunitiesCenterView = ({
                             >
                                 Sierra
                             </button>
-                            <button
-                                onClick={() => onRegionFilterChange('coast')}
-                                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all ${regionFilter === 'coast' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                            >
-                                Costa
-                            </button>
                         </div>
 
                         {/* Botón de Orden */}
@@ -309,7 +300,7 @@ export const OpportunitiesCenterView = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                         <FilterButton
                             label={selectedBrand === "all" ? "Marca" : `${selectedBrand} (${brandFilteredCount})`}
                             active={selectedBrand !== "all"} hasSelection={selectedBrand !== "all"}
@@ -331,11 +322,11 @@ export const OpportunitiesCenterView = ({
                             active={selectedYear !== "all"} hasSelection={selectedYear !== "all"}
                             icon={Calendar} onClick={() => setShowYearModal(true)}
                         />
-                        <FilterButton
+                        {/* <FilterButton
                             label={selectedCity === "all" ? "Ciudad" : selectedCity}
                             active={selectedCity !== "all"} hasSelection={selectedCity !== "all"}
                             icon={MapPinned} onClick={() => setShowCityModal(true)}
-                        />
+                        /> */}
                         <FilterButton
                             label={getDateRangeLabel(selectedDateRange) === "Cualquier Fecha" ? "Fecha Pub." : getDateRangeLabel(selectedDateRange)}
                             active={selectedDateRange !== "all"} hasSelection={selectedDateRange !== "all"}
