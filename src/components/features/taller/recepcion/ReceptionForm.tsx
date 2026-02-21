@@ -148,7 +148,7 @@ export function ReceptionForm() {
         };
         const result = await crearOrdenIngreso(payload, fotos);
         if (result.success) {
-            router.push('/taller');
+            router.push('/taller/trabajos');
         } else {
             alert("Error al crear la orden: " + result.error);
         }

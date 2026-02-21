@@ -16,15 +16,15 @@ interface WorkOrderModalProps {
 
 export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint }: WorkOrderModalProps) {
     const { items: inventario } = useInventario();
-    const { 
-        registrarConsumo, fetchConsumosOrden, 
+    const {
+        registrarConsumo, fetchConsumosOrden,
         fetchDetallesOrden, agregarDetalle, eliminarDetalle,
         fetchServiciosCatalogo, fetchMecanicos,
         actualizarEstadoContable
     } = useOrdenes();
-    
+
     const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales'>('info');
-    
+
     // @ts-ignore
     const [localEstadoContable, setLocalEstadoContable] = useState(orden?.estado_contable || 'pendiente');
     const [isUpdatingContable, setIsUpdatingContable] = useState(false);
@@ -39,7 +39,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const [detalles, setDetalles] = useState<DetalleOrden[]>([]);
     const [catalogo, setCatalogo] = useState<ServicioCatalogo[]>([]);
     const [mecanicos, setMecanicos] = useState<any[]>([]);
-    
+
     const [descServicio, setDescServicio] = useState("");
     const [precioServicio, setPrecioServicio] = useState("");
     const [mecanicoId, setMecanicoId] = useState("");
@@ -130,7 +130,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     };
 
     const handleDeleteService = async (id: string) => {
-        if(confirm("¿Eliminar este item del presupuesto?")) {
+        if (confirm("¿Eliminar este item del presupuesto?")) {
             await eliminarDetalle(id);
             loadPresupuesto();
         }
@@ -146,7 +146,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const totalPresupuesto = detalles.reduce((acc, curr) => acc + (curr.precio_unitario * curr.cantidad), 0);
 
     const getContableColor = (estado: string) => {
-        switch(estado) {
+        switch (estado) {
             case 'pendiente': return 'text-amber-600';
             case 'facturado': return 'text-blue-600';
             case 'pagado': return 'text-emerald-600';
@@ -163,7 +163,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative">
-                
+
                 {showEntregaConfirm && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-2xl p-4">
                         <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full text-center animate-in zoom-in-95">
@@ -172,17 +172,17 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             </div>
                             <h3 className="text-lg font-black text-slate-900 mb-2">¿Entregar Vehículo?</h3>
                             <p className="text-sm text-slate-500 mb-6">
-                                Al marcar esta orden como <span className="font-bold text-slate-700">"Entregado"</span>, el vehículo se considerará fuera del taller y <strong className="text-blue-600">se guardará la fecha actual como Fecha de Salida Real.</strong> <br/><br/>
+                                Al marcar esta orden como <span className="font-bold text-slate-700">"Entregado"</span>, el vehículo se considerará fuera del taller <br /><br />
                                 La orden desaparecerá de la vista de trabajos activos y se archivará. A partir de ahora, solo podrás encontrarla en el módulo de <strong>Expedientes</strong>.
                             </p>
                             <div className="flex gap-3 justify-center">
-                                <button 
+                                <button
                                     onClick={() => setShowEntregaConfirm(false)}
                                     className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
                                 >
                                     Cancelar
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleEntregarVehiculo}
                                     className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md"
                                 >
@@ -201,12 +201,12 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                         </div>
                         <h2 className="font-bold text-xl text-slate-900">{orden.vehiculo_marca} {orden.vehiculo_modelo} <span className="text-slate-400 font-normal">({orden.vehiculo_placa})</span></h2>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 flex-wrap justify-end">
                         <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
                             <span className="text-xs font-bold text-slate-400 uppercase hidden sm:inline-block">Pago:</span>
                             {isUpdatingContable && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-                            <select 
+                            <select
                                 value={localEstadoContable}
                                 onChange={handleEstadoContableChange}
                                 disabled={isUpdatingContable}
@@ -220,7 +220,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                         </div>
 
                         {orden.estado !== 'entregado' && (
-                            <button 
+                            <button
                                 onClick={() => setShowEntregaConfirm(true)}
                                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors shadow-sm"
                             >
@@ -237,19 +237,19 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                 </div>
 
                 <div className="flex border-b border-slate-200 px-6 gap-6 overflow-x-auto">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('info')}
                         className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Wrench className="h-4 w-4" /> Info
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('presupuesto')}
                         className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'presupuesto' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <DollarSign className="h-4 w-4" /> Presupuesto
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('materiales')}
                         className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'materiales' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
@@ -258,7 +258,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-                    
+
                     {activeTab === 'info' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -317,20 +317,19 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                                 onClose();
                                             }}
                                             disabled={orden.estado === estado}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
-                                                orden.estado === estado 
-                                                ? 'bg-blue-600 text-white shadow-md' 
-                                                : 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${orden.estado === estado
+                                                    ? 'bg-blue-600 text-white shadow-md'
+                                                    : 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
+                                                }`}
                                         >
                                             {estado.replace('_', ' ')}
                                         </button>
                                     ))}
                                 </div>
                             </div>
-                            
+
                             <div className="flex justify-end pt-4">
-                                <button 
+                                <button
                                     type="button"
                                     onClick={onPrint}
                                     className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-bold underline decoration-slate-300 underline-offset-4 transition-colors"
@@ -349,7 +348,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                     <div className="col-span-1 md:col-span-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Servicio / Trabajo</label>
                                         <div className="flex gap-2 flex-col sm:flex-row">
-                                            <select 
+                                            <select
                                                 className="w-full sm:w-1/3 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                                                 onChange={handleSelectServicio}
                                                 defaultValue=""
@@ -359,9 +358,9 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                                     <option key={s.id} value={s.id}>{s.nombre_servicio} (${s.precio_sugerido})</option>
                                                 ))}
                                             </select>
-                                            <input 
+                                            <input
                                                 required
-                                                type="text" 
+                                                type="text"
                                                 placeholder="Descripción del trabajo..."
                                                 className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                                                 value={descServicio}
@@ -369,12 +368,12 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                             />
                                         </div>
                                     </div>
-                                    
+
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Costo ($)</label>
-                                        <input 
+                                        <input
                                             required
-                                            type="number" 
+                                            type="number"
                                             step="0.01"
                                             min="0"
                                             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
@@ -385,7 +384,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Mecánico (Opcional)</label>
-                                        <select 
+                                        <select
                                             className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                                             value={mecanicoId}
                                             onChange={e => setMecanicoId(e.target.value)}
@@ -398,7 +397,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                     </div>
                                 </div>
                                 <div className="flex justify-end">
-                                    <button 
+                                    <button
                                         type="submit"
                                         disabled={isAddingService}
                                         className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2"
@@ -457,7 +456,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             <form onSubmit={handleAddMaterial} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end">
                                 <div className="flex-1 w-full">
                                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Producto / Material</label>
-                                    <select 
+                                    <select
                                         required
                                         className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-purple-500"
                                         value={selectedItem}
@@ -473,9 +472,9 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 </div>
                                 <div className="w-full md:w-24">
                                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Cant.</label>
-                                    <input 
-                                        type="number" 
-                                        min="0.1" 
+                                    <input
+                                        type="number"
+                                        min="0.1"
                                         step="0.1"
                                         required
                                         className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-purple-500"
@@ -483,7 +482,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                         onChange={(e) => setCantidadMat(parseFloat(e.target.value))}
                                     />
                                 </div>
-                                <button 
+                                <button
                                     type="submit"
                                     disabled={isAddingMaterial}
                                     className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 h-10 w-full md:w-auto"
