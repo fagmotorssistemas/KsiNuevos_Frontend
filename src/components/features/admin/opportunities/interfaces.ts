@@ -73,7 +73,6 @@ export interface OpportunitiesWizardSelectionProps {
 export interface OpportunitiesCenterViewProps {
     onScraperComplete?: () => void;
     isLoading?: boolean;
-    topOpportunities: VehicleWithSeller[];
     vehicles: VehicleWithSeller[];
 
     selectedBrand: string;
@@ -128,7 +127,6 @@ export interface OpportunitiesViewProps {
     goToPage: (page: number) => void;
     nextPage: () => void;
     prevPage: () => void;
-    topOpportunities: VehicleWithSeller[];
     sellers: ScraperSeller[];
     isLoading: boolean;
     statusFilter?: string;

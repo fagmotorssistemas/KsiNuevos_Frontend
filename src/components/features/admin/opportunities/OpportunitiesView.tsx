@@ -3,17 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
 import { OpportunitiesTableView } from "./OpportunitiesTableView";
-import { OpportunitiesWizardSelection } from "./OpportunitiesWizardSelection";
-import { VehicleComparisonPanel } from "./VehicleComparisonPanel";
 import { Pagination } from "@/shared/components/Pagination";
-import { Trophy, X } from "lucide-react";
 import type { OpportunitiesViewProps } from "./interfaces";
-import { OpportunitiesModal } from "./OpportunitiesModal";
 
 export function OpportunitiesView({
     vehicles,
     pagination,
-    topOpportunities,
     isLoading,
     priceStatistics,
     vehicleFilters,
@@ -59,7 +54,6 @@ export function OpportunitiesView({
 
                 <OpportunitiesCenterView
                     priceStatistics={priceStatistics}
-                    topOpportunities={topOpportunities}
                     vehicles={vehicles}
                     isLoading={isLoading}
                     onScraperComplete={onScraperComplete}

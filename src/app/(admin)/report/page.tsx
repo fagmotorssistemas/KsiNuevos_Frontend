@@ -258,7 +258,6 @@ export default function AdminDashboardPage() {
         isLoading: isScraperLoading,
         filters,
         refreshAll,
-        topOpportunities,
         priceStatistics,
         getPriceStatisticsForVehicle,
         pagination,
@@ -430,7 +429,6 @@ export default function AdminDashboardPage() {
                         stats={stats}
                         locationFilter={filters.location ?? undefined}
                         statusFilter={filters.status}
-                        topOpportunities={topOpportunities}
                         onScraperComplete={handleScraperRefresh}
                         priceStatistics={priceStatistics}
                         getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
