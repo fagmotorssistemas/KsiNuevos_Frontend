@@ -645,7 +645,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
+                'https://n8n.ksinuevos.com/webhook/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {

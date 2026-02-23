@@ -22,7 +22,6 @@ export function OpportunitiesView({
     updateBrand,
     clearFilters,
 }: OpportunitiesViewProps) {
-    const [showComparisonPanel, setShowComparisonPanel] = useState(false);
 
     const hasActiveFilters = useMemo(() =>
         vehicleFilters.brand !== 'all' ||

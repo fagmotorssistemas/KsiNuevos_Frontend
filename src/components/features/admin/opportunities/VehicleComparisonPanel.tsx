@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Trophy, Star, Gauge, Fuel, Car, Zap, TrendingDown,
     ChevronRight, MapPin, Clock, Flame, Leaf, Layers, AlertCircle,
@@ -46,25 +46,11 @@ const LIMITS = [3, 6, 10];
 
 // ─── Extractores desde texto ──────────────────────────────────────────────────
 
-/** Texto completo de un vehículo para búsqueda de patrones */
 function getFullText(v: VehicleWithSeller): string {
-    return [
-        v.title,
-        v.description,
-        v.motor,
-        ...(v.extras ?? []),
-        ...(v.characteristics ?? []),
-        ...(v.tags ?? []),
-    ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+    return [v.title, v.description, v.motor, ...(v.extras ?? []), ...(v.characteristics ?? []), ...(v.tags ?? [])]
+        .filter(Boolean).join(" ").toLowerCase();
 }
 
-/**
- * Extrae el tipo de combustible desde los campos de texto.
- * Retorna una clave normalizada: 'gasolina' | 'diesel' | 'hibrido' | 'electrico' | 'glp' | ''
- */
 function extractFuelType(v: VehicleWithSeller): string {
     const text = getFullText(v);
     if (/\b(el[eé]ctrico|ev\b|bev\b|100%\s*el[eé]ctrico)\b/.test(text)) return "electrico";
@@ -72,14 +58,10 @@ function extractFuelType(v: VehicleWithSeller): string {
     if (/\b(diesel|di[eé]sel|tdi|cdi|dci|bluemotion)\b/.test(text)) return "diesel";
     if (/\b(glp|gnv|gas natural|gas licuado)\b/.test(text)) return "glp";
     if (/\b(gasolina|nafta|flex|gasoline)\b/.test(text)) return "gasolina";
-    // Si el motor tiene cc numérico sin mención de diésel → asumimos gasolina
     if (v.motor && /\d[\.,]\d/.test(v.motor)) return "gasolina";
     return "";
 }
 
-/**
- * Extrae la tracción: 'awd' | '4x4' | '4wd' | 'fwd' | 'rwd' | ''
- */
 function extractTraction(v: VehicleWithSeller): string {
     const text = getFullText(v);
     if (/\b(awd|all[\s-]?wheel[\s-]?drive)\b/.test(text)) return "awd";
@@ -88,10 +70,6 @@ function extractTraction(v: VehicleWithSeller): string {
     if (/\b(rwd|rear[\s-]?wheel[\s-]?drive|tracción\s*trasera|propulsión)\b/.test(text)) return "rwd";
     return "";
 }
-
-/**
- * Extrae la carrocería: 'suv' | 'pickup' | 'sedan' | 'hatchback' | 'coupe' | 'van' | 'convertible' | ''
- */
 
 function extractBodyType(v: VehicleWithSeller): string {
     const text = getFullText(v);
@@ -105,33 +83,16 @@ function extractBodyType(v: VehicleWithSeller): string {
     return "";
 }
 
-/**
- * Extrae el trim/versión desde el título.
- * Busca siglas conocidas como LX, EX, Sport, Limited, XLT, etc.
- * Solo toma la primera coincidencia fuerte para no sobre-segmentar.
- */
-
 function extractTrim(v: VehicleWithSeller): string {
     const text = v.title?.toLowerCase() ?? "";
-
-    // Patrones de trim comunes en Latinoamérica
     const TRIM_PATTERNS = [
-        /\b(full\s*equipo|full)\b/,
-        /\b(touring|tourer)\b/,
-        /\b(limited|ltz|ltz\+)\b/,
-        /\b(platinum|premium|prestige|exclusive)\b/,
-        /\b(sport|sport\+|s-line|m-sport|m sport)\b/,
-        /\b(lx|ex[-\s]?l?|ex-t)\b/,
-        /\b(xlt|xle|xse|xsr)\b/,
-        /\b(se|sel|sei)\b/,
-        /\b(lariat|king\s*ranch|raptor|fx4)\b/,
-        /\b(active|advance|highline|trendline)\b/,
-        /\b(luxury|executive|comfort)\b/,
-        /\b(base|standard|entry)\b/,
-        /\b(gls|glx|gts|gt[i]?)\b/,
-        /\b(rs|ss|zr[12]|z71)\b/,
+        /\b(full\s*equipo|full)\b/, /\b(touring|tourer)\b/, /\b(limited|ltz|ltz\+)\b/,
+        /\b(platinum|premium|prestige|exclusive)\b/, /\b(sport|sport\+|s-line|m-sport|m sport)\b/,
+        /\b(lx|ex[-\s]?l?|ex-t)\b/, /\b(xlt|xle|xse|xsr)\b/, /\b(se|sel|sei)\b/,
+        /\b(lariat|king\s*ranch|raptor|fx4)\b/, /\b(active|advance|highline|trendline)\b/,
+        /\b(luxury|executive|comfort)\b/, /\b(base|standard|entry)\b/,
+        /\b(gls|glx|gts|gt[i]?)\b/, /\b(rs|ss|zr[12]|z71)\b/,
     ];
-
     for (const pattern of TRIM_PATTERNS) {
         const match = text.match(pattern);
         if (match) return match[1].trim().replace(/\s+/g, "-");
@@ -141,7 +102,6 @@ function extractTrim(v: VehicleWithSeller): string {
 
 // ─── Agrupación ───────────────────────────────────────────────────────────────
 
-/** Bucket de 50.000 km para comparar kilometrajes similares sin exigir valor exacto */
 function getMileageBucket(mileage: number | null | undefined): string {
     if (mileage == null) return "unknown";
     const step = 50_000;
@@ -154,14 +114,17 @@ function normalize(value: string | null | undefined): string {
     return value.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-/** Clave gruesa (prerrequisito, ya filtrado por el servicio con 5+ vehículos) */
+/** Clave gruesa: brand + model + year. Usada para:
+ *  1. Prerrequisito de 5+ vehículos
+ *  2. Agrupar los vehículos que se mostrarán en el modal de comparación
+ */
 function getBaseKey(v: VehicleWithSeller): string {
-    return `${normalize(v.brand)}_${normalize(v.model)}_${v.year ?? "sin-año"}`;
+    return `${normalize(v.brand)}__${normalize(v.model)}__${v.year ?? "sin-año"}`;
 }
 
-/**
- * Clave fina: brand + model + year + trim + fuel + traction + body + transmission + mileage bucket.
- * Con esta clave comparamos "el mismo carro de verdad".
+/** Clave fina: base + trim + fuel + traction + body + transmission + km bucket.
+ *  Usada SOLO para elegir el mejor ganador dentro de un grupo base,
+ *  evitando comparar versiones muy distintas entre sí.
  */
 function getDetailedKey(v: VehicleWithSeller): string {
     return [
@@ -172,25 +135,15 @@ function getDetailedKey(v: VehicleWithSeller): string {
         extractBodyType(v),
         normalize(v.transmission),
         getMileageBucket(v.mileage),
-    ].join("__");
+    ].join("|");
 }
 
 // ─── Scoring dentro del sub-grupo ─────────────────────────────────────────────
 
 function scoreInGroup(v: VehicleWithSeller, groupAvgPrice: number): number {
     let score = 0;
-
-    // Precio vs promedio del sub-grupo (hasta +40 pts)
-    if (v.price && groupAvgPrice > 0) {
-        score += ((groupAvgPrice - v.price) / groupAvgPrice) * 40;
-    }
-
-    // Kilometraje (menos = mejor, hasta +30 pts)
-    if (v.mileage != null) {
-        score += Math.max(0, 1 - v.mileage / 300_000) * 30;
-    }
-
-    // Cilindrada del motor (bonus menor)
+    if (v.price && groupAvgPrice > 0) score += ((groupAvgPrice - v.price) / groupAvgPrice) * 40;
+    if (v.mileage != null) score += Math.max(0, 1 - v.mileage / 300_000) * 30;
     if (v.motor) {
         const match = v.motor.match(/(\d+[\.,]\d+)/);
         if (match) {
@@ -199,24 +152,17 @@ function scoreInGroup(v: VehicleWithSeller, groupAvgPrice: number): number {
             if (cc >= 3.0) score += 5;
         }
     }
-
-    // Señales positivas/negativas en el texto completo
     const text = getFullText(v);
-    const positive = ["único dueño", "mantenimientos al día", "como nuevo", "garaje", "full equipo", "factura", "sin choques"];
-    const negative = ["chocado", "sin papeles", "remato urgente", "para repuestos", "motor dañado", "accidentado"];
-
-    positive.forEach(w => { if (text.includes(w)) score += 3; });
-    negative.forEach(w => { if (text.includes(w)) score -= 15; });
-
+    ["único dueño", "mantenimientos al día", "como nuevo", "garaje", "full equipo", "factura", "sin choques"]
+        .forEach(w => { if (text.includes(w)) score += 3; });
+    ["chocado", "sin papeles", "remato urgente", "para repuestos", "motor dañado", "accidentado"]
+        .forEach(w => { if (text.includes(w)) score -= 15; });
     return score;
 }
 
 function getBestFromGroup(group: VehicleWithSeller[]): VehicleWithSeller {
     const priced = group.filter(v => v.price);
-    const avgPrice = priced.length
-        ? priced.reduce((sum, v) => sum + v.price!, 0) / priced.length
-        : 0;
-
+    const avgPrice = priced.length ? priced.reduce((sum, v) => sum + v.price!, 0) / priced.length : 0;
     let best = group[0];
     let bestScore = -Infinity;
     group.forEach(v => {
@@ -234,12 +180,21 @@ interface Props {
 }
 
 export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 6 }: Props) {
-    const [activeVehicle, setActiveVehicle] = useState<ScoredVehicle | null>(null);
+    const [activeVehicle, setActiveVehicle] = useState<{
+        vehicle: ScoredVehicle;
+        group: VehicleWithSeller[];
+    } | null>(null);
     const [limit, setLimit] = useState(initialLimit);
     const [rawVehicles, setRawVehicles] = useState<VehicleWithSeller[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const dateFormatter = new DateFormatter(new TextFormatter());
+
+    /**
+     * Mapa: id del ganador → todos los vehículos del mismo brand+model+año
+     * (el grupo completo para mostrar en el modal de comparación)
+     */
+    const groupMapRef = useRef(new Map<string, VehicleWithSeller[]>());
 
     useEffect(() => {
         setIsLoading(true);
@@ -262,57 +217,84 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
         return map;
     }, [priceStatistics]);
 
-    /**
-     * Pipeline de agrupación en dos niveles:
-     *
-     * Nivel 1 — prerrequisito (hecho en el servicio):
-     *   brand + model + year con 5+ vehículos.
-     *
-     * Nivel 2 — sub-agrupación fina (aquí):
-     *   Extraemos trim, fuel, tracción, carrocería, transmisión y bucket de km
-     *   directamente desde los campos de texto disponibles.
-     *   De cada sub-grupo elegimos el mejor deal.
-     */
     const bestPerGroup = useMemo(() => {
         if (!rawVehicles.length) return [];
 
-        // ── Nivel 1: Prerrequisito ─────────────────────────────────────────────
-        // Solo procesamos vehículos cuyo brand+model+year tenga 5+ ejemplares.
-        // Sin esto no hay comparación estadísticamente válida.
-        const baseGroupCounts = new Map<string, number>();
+        // ── Nivel 1: agrupar por brand+model+year ────────────────────────────
+        // Solo tomamos grupos con 5+ vehículos (prerrequisito estadístico)
+        const baseGroups = new Map<string, VehicleWithSeller[]>();
         rawVehicles.forEach(v => {
-            const key = `${normalize(v.brand)}_${normalize(v.model)}_${v.year ?? "sin-año"}`;
-            baseGroupCounts.set(key, (baseGroupCounts.get(key) ?? 0) + 1);
+            const key = getBaseKey(v);
+            if (!baseGroups.has(key)) baseGroups.set(key, []);
+            baseGroups.get(key)!.push(v);
         });
 
-        const eligible = rawVehicles.filter(v => {
-            const key = `${normalize(v.brand)}_${normalize(v.model)}_${v.year ?? "sin-año"}`;
-            return (baseGroupCounts.get(key) ?? 0) >= 5;
+        const eligibleBaseGroups = new Map<string, VehicleWithSeller[]>();
+        baseGroups.forEach((group, key) => {
+            if (group.length >= 5) eligibleBaseGroups.set(key, group);
         });
 
-        if (!eligible.length) return [];
-
-        const subGroups = new Map<string, VehicleWithSeller[]>();
-        eligible.forEach(v => {
-            const key = getDetailedKey(v);
-            if (!subGroups.has(key)) subGroups.set(key, []);
-            subGroups.get(key)!.push(v);
-        });
+        if (!eligibleBaseGroups.size) return [];
 
         if (process.env.NODE_ENV === "development") {
-            console.group("[VehicleComparisonPanel] Pipeline de agrupación");
-            console.log(`Total vehículos: ${rawVehicles.length}`);
-            console.log(`Elegibles (5+ por brand+model+year): ${eligible.length}`);
-            console.log(`Sub-grupos detallados: ${subGroups.size}`);
-            subGroups.forEach((g, k) => console.log(`  ${k}: ${g.length} vehículos`));
+            console.group("[VehicleComparisonPanel] Pipeline");
+            console.log(`Total: ${rawVehicles.length} | Grupos base elegibles (5+): ${eligibleBaseGroups.size}`);
+            eligibleBaseGroups.forEach((g, k) => console.log(`  ${k}: ${g.length} vehículos`));
             console.groupEnd();
         }
 
-        // De cada sub-grupo, elegimos el mejor deal
+        // ── Nivel 2: dentro de cada grupo base, elegir UN solo ganador ───────
+        //
+        // Estrategia:
+        //   a) Sub-agrupar por clave detallada para no comparar un diésel con un
+        //      gasolina ni un 4x4 con un FWD al momento de puntuar.
+        //   b) Elegir el mejor de cada sub-grupo.
+        //   c) Si hay varios sub-grupos dentro del grupo base, quedarnos con el
+        //      mejor de todos (el que tenga mayor scoreInGroup).
+        //   d) Guardar en groupMap el grupo BASE completo (brand+model+año)
+        //      para que el modal muestre TODOS los vehículos comparados.
+        //
+        // Resultado: 1 ganador por brand+model+año, con el grupo completo visible.
+
         const bests: VehicleWithSeller[] = [];
-        subGroups.forEach(group => bests.push(getBestFromGroup(group)));
+        const groupMap = new Map<string, VehicleWithSeller[]>();
+
+        eligibleBaseGroups.forEach((baseGroup, _baseKey) => {
+            // Sub-agrupar por clave detallada
+            const subGroups = new Map<string, VehicleWithSeller[]>();
+            baseGroup.forEach(v => {
+                const key = getDetailedKey(v);
+                if (!subGroups.has(key)) subGroups.set(key, []);
+                subGroups.get(key)!.push(v);
+            });
+
+            // Elegir el mejor candidato de cada sub-grupo
+            const candidates: VehicleWithSeller[] = [];
+            subGroups.forEach(subGroup => candidates.push(getBestFromGroup(subGroup)));
+
+            // De los candidatos, elegir el mejor de todos usando el grupo base completo
+            // (para que el precio promedio de referencia sea el del grupo completo)
+            const priced = baseGroup.filter(v => v.price);
+            const baseAvgPrice = priced.length
+                ? priced.reduce((sum, v) => sum + v.price!, 0) / priced.length
+                : 0;
+
+            let overallBest = candidates[0];
+            let bestScore = -Infinity;
+            candidates.forEach(c => {
+                const s = scoreInGroup(c, baseAvgPrice);
+                if (s > bestScore) { bestScore = s; overallBest = c; }
+            });
+
+            // Guardar en el mapa: id del ganador → grupo base completo
+            groupMap.set(overallBest.id, baseGroup);
+            bests.push(overallBest);
+        });
+
+        groupMapRef.current = groupMap;
         return bests;
     }, [rawVehicles]);
+
     const topVehicles = useMemo(() => {
         if (!bestPerGroup.length) return [];
         return OpportunityScorer.getTopOpportunities(bestPerGroup, priceStatsMap, limit);
@@ -383,7 +365,7 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                             <div>
                                 <h2 className="text-base font-black text-slate-900">Mejores Oportunidades</h2>
                                 <p className="text-xs text-slate-400 mt-0.5">
-                                    Mejor deal por versión · {rawVehicles.length} vehículos analizados · {bestPerGroup.length} combinaciones
+                                    Mejor deal por modelo · {rawVehicles.length} vehículos analizados · {bestPerGroup.length} grupos
                                 </p>
                             </div>
                         </div>
@@ -392,8 +374,7 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                                 <button
                                     key={l}
                                     onClick={() => setLimit(l)}
-                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${limit === l ? "bg-white shadow text-slate-900" : "text-slate-400 hover:text-slate-700"
-                                        }`}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${limit === l ? "bg-white shadow text-slate-900" : "text-slate-400 hover:text-slate-700"}`}
                                 >
                                     Top {l}
                                 </button>
@@ -402,20 +383,19 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                     </div>
                 </div>
 
-                {/* Grid */}
+                {/* Grid de cards */}
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {topVehicles.map((v, i) => {
-                        // Extraemos atributos visuales desde ScoredVehicle
-                        // (que ya viene procesado por OpportunityScorer)
                         const fuelKey = v.parsedFuelType ? normalize(v.parsedFuelType) : "";
                         const fuelCfg = FUEL_CONFIG[fuelKey] ?? null;
                         const FuelIcon = fuelCfg?.icon ?? Fuel;
                         const isTop = i === 0;
+                        const group = groupMapRef.current.get(v.id) ?? [];
 
                         return (
                             <button
                                 key={v.id}
-                                onClick={() => setActiveVehicle(v)}
+                                onClick={() => setActiveVehicle({ vehicle: v, group })}
                                 style={{ animationDelay: `${i * 60}ms` }}
                                 className={`
                                     group relative flex flex-col text-left w-full
@@ -471,9 +451,10 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                                         </h3>
                                         <div className="flex items-center gap-1.5 mt-0.5">
                                             <span className="text-xs font-bold text-slate-400">{v.year ?? "N/A"}</span>
-                                            {v.parsedTrim && (
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-900 text-white rounded-md uppercase tracking-wide">
-                                                    {v.parsedTrim}
+
+                                            {group.length > 1 && (
+                                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+                                                    1 de {group.length}
                                                 </span>
                                             )}
                                         </div>
@@ -552,7 +533,8 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
 
             {activeVehicle && (
                 <OpportunitiesVehiclePreviewModal
-                    vehicle={activeVehicle}
+                    vehicle={activeVehicle.vehicle}
+                    groupVehicles={activeVehicle.group}
                     onClose={() => setActiveVehicle(null)}
                 />
             )}

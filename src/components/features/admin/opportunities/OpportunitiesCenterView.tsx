@@ -50,7 +50,6 @@ export const OpportunitiesCenterView = ({
     const [scraperTerm, setScraperTerm] = useState("");
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
-
     const [showScannerModal, setShowScannerModal] = useState(false);
     const [showCarPicker, setShowCarPicker] = useState(false);
     const [pickerBrand, setPickerBrand] = useState<string | null>(null);
@@ -64,6 +63,7 @@ export const OpportunitiesCenterView = ({
     const [showDateModal, setShowDateModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
     const [showComparisonPanel, setShowComparisonPanel] = useState(false);
+
     // ── Helpers ────────────────────────────────────────────────────────────
     const getDateRangeLabel = (v: string) => VALUE_TO_DATE_LABEL[v] ?? "Cualquier Fecha";
     const getSortLabel = (v: string) => SORT_OPTIONS.find(o => o.value === v)?.label ?? "Ordenar por";
@@ -132,6 +132,7 @@ export const OpportunitiesCenterView = ({
             setTimeout(() => {
                 toast.success(
                     <div className="ml-2">
+                        <button onClick={() => toast.dismiss(toastId)} className="absolute right-2 top-2 p-1 text-red-300 hover:opacity-50"><X className="h-4 w-4" /></button>
                         ¡Extracción completa!
                         <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total ?? 0} vehículos encontrados</span>
                     </div>,
