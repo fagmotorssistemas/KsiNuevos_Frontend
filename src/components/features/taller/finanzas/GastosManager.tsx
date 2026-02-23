@@ -44,7 +44,7 @@ export function GastosManager({ cuentas, onRecargarFinanzas }: GastosManagerProp
                 </div>
                 
                 {/* Mini Dashboard de Progreso */}
-                <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                {/* <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
                     <div className="text-right">
                         <p className="text-xs font-bold text-slate-400 uppercase">Estimado Total</p>
                         <p className="font-bold text-slate-700">${resumen.totalPagar.toLocaleString()}</p>
@@ -54,11 +54,11 @@ export function GastosManager({ cuentas, onRecargarFinanzas }: GastosManagerProp
                         <p className="text-xs font-bold text-emerald-600 uppercase">Pagado</p>
                         <p className="font-bold text-emerald-700">${resumen.totalPagado.toLocaleString()}</p>
                     </div>
-                </div>
+                </div> */}
 
                 <button 
                     onClick={() => setIsCreateOpen(true)}
-                    className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors whitespace-nowrap"
+                    className="text-white bg-emerald-800 hover:bg-emerald-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors whitespace-nowrap"
                 >
                     <Plus className="h-4 w-4" /> Nuevo Servicio
                 </button>

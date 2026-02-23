@@ -44,7 +44,7 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
             </div>
 
             {/* Grid de Deudores */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-5">
                 {cuentas.map(c => {
                     const coberturaCompleta = c.total_pagado >= c.presupuesto && c.presupuesto > 0;
 
