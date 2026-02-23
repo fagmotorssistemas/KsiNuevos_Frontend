@@ -1,92 +1,34 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
 import { OpportunitiesTableView } from "./OpportunitiesTableView";
-import { ArrowLeft } from "lucide-react";
-import { OpportunityScorer, ScoredVehicle } from "./opportunitiesScorer";
 import { OpportunitiesWizardSelection } from "./OpportunitiesWizardSelection";
+import { VehicleComparisonPanel } from "./VehicleComparisonPanel";
 import { Pagination } from "@/shared/components/Pagination";
-import type { VehicleWithSeller } from "@/services/scraper.service";
-import type { Database } from "@/types/supabase";
-
-type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
-type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
-
-interface OpportunitiesViewProps {
-    vehicles: VehicleWithSeller[];
-    pagination: {
-        currentPage: number;
-        totalPages: number;
-        totalItems: number;
-        startIndex: number;
-        endIndex: number;
-        hasNextPage: boolean;
-        hasPrevPage: boolean;
-    };
-    goToPage: (page: number) => void;
-    nextPage: () => void;
-    prevPage: () => void;
-    topOpportunities: VehicleWithSeller[];
-    sellers: ScraperSeller[];
-    isLoading: boolean;
-    statusFilter?: string;
-    locationFilter?: string;
-    priceStatistics: PriceStatistics[];
-    getPriceStatisticsForVehicle?: (brand: string, model: string, year?: string) => Promise<PriceStatistics | null>;
-    stats: {
-        total: number;
-        nuevos: number;
-        usados: number;
-        usados_bueno: number;
-        usados_como_nuevo: number;
-        enPatio: number;
-        enTaller: number;
-        enCliente: number;
-    };
-    onScraperComplete?: () => Promise<void>;
-
-    // NUEVO: Props de filtros desde el hook
-    vehicleFilters: {
-        brand?: string;
-        model?: string;
-        motor?: string;
-        year?: string;
-        city?: string;
-        dateRange?: string;
-        regionFilter?: 'all' | 'coast' | 'sierra';
-        searchTerm?: string;
-        sortBy?: string;
-    };
-    filterOptions: {
-        brands: string[];
-        models: string[];
-        motors: string[];
-        years: string[];
-        cities: string[];
-    };
-    updateFilter: (key: string, value: any) => void;
-    updateBrand: (brand: string) => void;
-    clearFilters: () => void;
-}
+import { Trophy, X } from "lucide-react";
+import type { OpportunitiesViewProps } from "./interfaces";
+import { OpportunitiesModal } from "./OpportunitiesModal";
 
 export function OpportunitiesView({
     vehicles,
-    goToPage,
-    nextPage,
     pagination,
-    prevPage,
     topOpportunities,
     isLoading,
     priceStatistics,
-    getPriceStatisticsForVehicle,
-    onScraperComplete,
     vehicleFilters,
     filterOptions,
+    goToPage,
+    nextPage,
+    prevPage,
+    getPriceStatisticsForVehicle,
+    onScraperComplete,
     updateFilter,
     updateBrand,
     clearFilters,
 }: OpportunitiesViewProps) {
+    const [showComparisonPanel, setShowComparisonPanel] = useState(false);
+
     const hasActiveFilters = useMemo(() =>
         vehicleFilters.brand !== 'all' ||
         vehicleFilters.model !== 'all' ||
@@ -157,6 +99,7 @@ export function OpportunitiesView({
                     enPatio={vehicles.filter(v => v.seller?.location === 'patio').length}
                     enTaller={vehicles.filter(v => v.seller?.location === 'taller').length}
                 />
+
                 <Pagination
                     currentPage={pagination.currentPage}
                     totalPages={pagination.totalPages}
@@ -169,6 +112,7 @@ export function OpportunitiesView({
                     hasNextPage={pagination.hasNextPage}
                     hasPrevPage={pagination.hasPrevPage}
                 />
+
                 <OpportunitiesTableView
                     vehicles={vehicles}
                     isLoading={isLoading}

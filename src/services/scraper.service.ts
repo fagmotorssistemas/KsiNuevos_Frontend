@@ -21,21 +21,12 @@ export interface VehicleFilters {
     itemsPerPage?: number;
 }
 
-// Ciudades de la costa y sierra
-const COAST_CITIES = [
-    'guayaquil', 'quito', 'cuenca', 'machala', 'manta', 'portoviejo',
-    'esmeraldas', 'santo domingo', 'quevedo', 'babahoyo', 'milagro',
-    'salinas', 'playas', 'santa elena', 'la libertad'
-];
-
 const SIERRA_CITIES = [
     'quito', 'cuenca', 'ambato', 'riobamba', 'loja', 'ibarra',
     'tulcán', 'latacunga', 'guaranda', 'azogues', 'cañar'
 ];
 
 export const scraperService = {
-
-    // NUEVA FUNCIÓN: Obtener vehículos con filtros avanzados
     async getVehiclesWithFilters(filters: VehicleFilters = {}): Promise<{
         data: VehicleWithSeller[];
         totalCount: number;
@@ -89,11 +80,7 @@ export const scraperService = {
             query = query.eq('location', location);
         }
 
-        // FILTRO: Región (Costa/Sierra) - usando OR con ilike para case-insensitive
-        if (regionFilter === 'coast') {
-            const coastConditions = COAST_CITIES.map(city => `location.ilike.%${city}%`).join(',');
-            query = query.or(coastConditions);
-        } else if (regionFilter === 'sierra') {
+        if (regionFilter === 'sierra') {
             const sierraConditions = SIERRA_CITIES.map(city => `location.ilike.%${city}%`).join(',');
             query = query.or(sierraConditions);
         }
@@ -196,6 +183,19 @@ export const scraperService = {
             data: filteredData,
             totalCount: count || 0
         };
+    },
+
+    async getVehiclesForOpportunities(): Promise<VehicleWithSeller[]> {
+        const { data, error } = await supabase
+            .from('scraper_vehicles')
+            .select(`*, seller:scraper_sellers(*)`)
+
+        if (error) {
+            console.error('Error al obtener vehículos para oportunidades:', error);
+            return [];
+        }
+
+        return data as VehicleWithSeller[];
     },
 
     async getVehicles(): Promise<VehicleWithSeller[]> {
@@ -370,6 +370,7 @@ export const scraperService = {
         model?: string;
         motor?: string;
         year?: string;
+        city?: string;
         regionFilter?: 'all' | 'coast' | 'sierra';
     } = {}): Promise<{
         brands: string[];
@@ -378,7 +379,7 @@ export const scraperService = {
         years: string[];
         cities: string[];
     }> {
-        const { brand, model, motor, year, regionFilter = 'all' } = filters;
+        const { brand, model, motor, year, city, regionFilter = 'all' } = filters;
         const empty = { brands: [], models: [], motors: [], years: [], cities: [] };
 
         // 1. Traer todos los vehículos con solo los campos necesarios
@@ -387,10 +388,7 @@ export const scraperService = {
             .from('scraper_vehicles')
             .select('brand, model, motor, year, location');
 
-        if (regionFilter === 'coast') {
-            const conditions = COAST_CITIES.map(c => `location.ilike.%${c}%`).join(',');
-            query = query.or(conditions);
-        } else if (regionFilter === 'sierra') {
+        if (regionFilter === 'sierra') {
             const conditions = SIERRA_CITIES.map(c => `location.ilike.%${c}%`).join(',');
             query = query.or(conditions);
         }
@@ -647,7 +645,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook/buscar-producto-marketplace',
+                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {

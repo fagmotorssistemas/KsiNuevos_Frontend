@@ -2,14 +2,7 @@ import { Database } from "@/types/supabase";
 import { TextFormatter } from "@/utils/TextFormatter";
 import { Search, X, TrendingUp, TrendingDown, DollarSign, BarChart3, Package, ChevronRight, Activity, Gauge, ArrowRight } from "lucide-react";
 import { useState, useMemo } from "react";
-
-export type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
-
-interface PriceStatisticsModalProps {
-    priceStatistics: PriceStatistics[];
-    isOpen: boolean;
-    onClose: () => void;
-}
+import type { PriceStatistics, PriceStatisticsModalProps } from "./interfaces";
 
 export function PriceStatisticsModal({
     priceStatistics,
@@ -192,7 +185,7 @@ export function PriceStatisticsModal({
                                     <h3 className="text-xl font-black text-slate-900 mb-1 group-hover:text-indigo-700 transition-colors">
                                         {textFormatter.capitalize(brand.brand)}
                                     </h3>
-                                    
+
                                     <div className="mt-auto pt-4 space-y-3">
                                         <div className="space-y-1">
                                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Precio Promedio</p>

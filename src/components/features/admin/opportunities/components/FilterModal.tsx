@@ -1,22 +1,6 @@
 import { X, Search } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
-
-// Definimos el tipo: puede ser un string simple o un objeto { value, label }
-export type FilterOptionType = string | { value: string; label: string };
-
-interface FilterModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    description: string;
-    icon: React.ReactNode;
-    options: FilterOptionType[];
-    selectedValue: string;
-    onSelect: (value: string) => void;
-    searchPlaceholder?: string;
-    allLabel?: string;
-    showAllOption?: boolean;
-}
+import type { FilterOptionType, FilterModalProps } from "../interfaces";
 
 export function FilterModal({
     isOpen,
@@ -92,7 +76,7 @@ export function FilterModal({
 
     return (
         <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-[60] h-[100vh] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200"
             onClick={handleBackdropClick}
         >
             <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300">

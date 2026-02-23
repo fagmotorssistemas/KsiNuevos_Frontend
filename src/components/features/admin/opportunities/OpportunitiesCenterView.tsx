@@ -4,53 +4,17 @@ import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
 import {
     DatabaseZap, Search, Car, RefreshCcw, X, Zap, Sparkles,
     MapPin, Tag, Calendar, MapPinned, ArrowUpDown, Filter,
+    Trophy,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PriceStatistics, PriceStatisticsModal } from "./PriceStatisticsModal";
-import { FilterModal } from "./FilterModal";
+import { PriceStatisticsModal } from "./PriceStatisticsModal";
+import { FilterModal } from "./components/FilterModal";
 import { FilterButton } from "./components/FilterButton";
 import { ECUADOR_CAR_DATA } from "@/data/ecuadorCars";
-
-interface OpportunitiesCenterViewProps {
-    onScraperComplete?: () => void;
-    isLoading?: boolean;
-    topOpportunities: VehicleWithSeller[];
-    vehicles: VehicleWithSeller[];
-
-    selectedBrand: string;
-    selectedModel: string;
-    selectedMotor: string;
-    selectedYear: string;
-    selectedCity: string;
-    selectedDateRange: string;
-    regionFilter: 'all' | 'coast' | 'sierra';
-    searchTerm: string;
-    sortBy: string;
-
-    availableBrands: string[];
-    availableModels: string[];
-    availableMotors: string[];
-    availableYears: string[];
-    availableCities: string[];
-
-    totalCount: number;
-    enPatio: number;
-    enTaller: number;
-
-    priceStatistics: PriceStatistics[];
-
-    onBrandChange: (value: string) => void;
-    onModelChange: (value: string) => void;
-    onMotorChange: (value: string) => void;
-    onYearChange: (value: string) => void;
-    onCityChange: (value: string) => void;
-    onDateRangeChange: (value: string) => void;
-    onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
-    onSearchTermChange: (value: string) => void;
-    onSortChange: (value: string) => void;
-    onClearFilters: () => void;
-}
+import type { OpportunitiesCenterViewProps } from "./interfaces";
+import { OpportunitiesModal } from "./OpportunitiesModal";
+import { VehicleComparisonPanel } from "./VehicleComparisonPanel";
 
 const DATE_RANGE_OPTIONS = ["Hoy", "Ayer", "Última semana", "Último mes"];
 
@@ -76,9 +40,7 @@ export const OpportunitiesCenterView = ({
     vehicles,
     selectedBrand, selectedModel, selectedMotor, selectedYear,
     selectedCity, selectedDateRange, regionFilter, searchTerm, sortBy,
-    availableBrands, availableModels, availableMotors, availableYears, availableCities,
-    totalCount, enPatio, enTaller,
-    priceStatistics,
+    availableBrands, availableModels, availableMotors, availableYears, availableCities, priceStatistics,
     onBrandChange, onModelChange, onMotorChange, onYearChange,
     onCityChange, onDateRangeChange, onRegionFilterChange,
     onSearchTermChange, onSortChange, onClearFilters,
@@ -101,7 +63,7 @@ export const OpportunitiesCenterView = ({
     const [showCityModal, setShowCityModal] = useState(false);
     const [showDateModal, setShowDateModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
-
+    const [showComparisonPanel, setShowComparisonPanel] = useState(false);
     // ── Helpers ────────────────────────────────────────────────────────────
     const getDateRangeLabel = (v: string) => VALUE_TO_DATE_LABEL[v] ?? "Cualquier Fecha";
     const getSortLabel = (v: string) => SORT_OPTIONS.find(o => o.value === v)?.label ?? "Ordenar por";
@@ -211,34 +173,51 @@ export const OpportunitiesCenterView = ({
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mb-4">
 
                 {/* ZONA 1: CABECERA Y ACCIONES GLOBALES */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-6 py-5 border-b border-slate-100 bg-white">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-6 py-5 border-b border-slate-100 bg-white">
                     <div>
                         <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                             <DatabaseZap className="h-5 w-5 text-red-600" />
-                            Explorador de Mercado
+                            Explorador de Marketplace
                         </h2>
-                        <p className="text-sm text-slate-500 mt-1">
-                            {totalCount} vehículos listos para analizar
-                        </p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                         <button
                             onClick={() => onScraperComplete?.()}
                             disabled={isWebhookLoading}
-                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all ${isWebhookLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${isWebhookLoading ? 'cursor-not-allowed opacity-50' : ''}`}
                             title="Actualizar datos"
                         >
                             <RefreshCcw className={`h-5 w-5 ${isWebhookLoading ? 'animate-spin' : ''}`} />
                         </button>
+
+                        {/* ── Botón de Oportunidades Mejorado ── */}
+                        <button
+                            onClick={() => setShowComparisonPanel(true)}
+                            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                        >
+                            <Trophy className="h-4 w-4 text-amber-500 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300" />
+                            <span className="truncate">Mejores Oportunidades</span>
+                        </button>
+
                         <button
                             onClick={() => setShowScannerModal(true)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95"
                         >
                             <Zap className="h-4 w-4" />
-                            Escanear Marketplace
+                            <span>Escanear</span>
                         </button>
                     </div>
+
+                    {/* ── Modal ── */}
+                    {showComparisonPanel && (
+                        <OpportunitiesModal onClose={() => setShowComparisonPanel(false)}>
+                            <VehicleComparisonPanel
+                                priceStatistics={priceStatistics}
+                                limit={6}
+                            />
+                        </OpportunitiesModal>
+                    )}
                 </div>
 
                 {/* ZONA 2: BÚSQUEDA, REGIÓN Y ORDEN (Navegación principal) */}
@@ -300,7 +279,7 @@ export const OpportunitiesCenterView = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <FilterButton
                             label={selectedBrand === "all" ? "Marca" : `${selectedBrand} (${brandFilteredCount})`}
                             active={selectedBrand !== "all"} hasSelection={selectedBrand !== "all"}
@@ -322,11 +301,11 @@ export const OpportunitiesCenterView = ({
                             active={selectedYear !== "all"} hasSelection={selectedYear !== "all"}
                             icon={Calendar} onClick={() => setShowYearModal(true)}
                         />
-                        {/* <FilterButton
+                        <FilterButton
                             label={selectedCity === "all" ? "Ciudad" : selectedCity}
                             active={selectedCity !== "all"} hasSelection={selectedCity !== "all"}
                             icon={MapPinned} onClick={() => setShowCityModal(true)}
-                        /> */}
+                        />
                         <FilterButton
                             label={getDateRangeLabel(selectedDateRange) === "Cualquier Fecha" ? "Fecha Pub." : getDateRangeLabel(selectedDateRange)}
                             active={selectedDateRange !== "all"} hasSelection={selectedDateRange !== "all"}
@@ -336,7 +315,6 @@ export const OpportunitiesCenterView = ({
                 </div>
             </div>
 
-            {/* ── MODALES DE FILTROS ───────────────────────────────────────────────── */}
             <FilterModal isOpen={showBrandModal} onClose={() => setShowBrandModal(false)}
                 title="Seleccionar Marca" description="Elige la marca del vehículo que buscas"
                 icon={<Tag className="h-6 w-6 text-white" />}
@@ -385,7 +363,7 @@ export const OpportunitiesCenterView = ({
 
             {/* ── MODAL SCANNER ────────────────────────────────────────────────────── */}
             {showScannerModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[60] flex items-center h-[100vh] justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl border border-white/20 overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-b from-slate-50 to-white">
                             <div className="flex items-center gap-4">

@@ -15,14 +15,7 @@ import { DateFormatter } from "@/utils/DateFormatter";
 import { TextFormatter } from "@/utils/TextFormatter";
 import { OpportunitiesVehiclePreviewModal } from "./OpportunitiesVehiclePreviewModal";
 import { ScoredVehicle } from "./opportunitiesScorer";
-
-export type VehicleViewType = "ALL" | "PATIO" | "TALLER" | "CLIENTE";
-
-export interface OpportunitiesWizardSelectionProps {
-    topOpportunities: ScoredVehicle[];
-    onViewAll: () => void;
-    isLoading?: boolean;
-}
+import type { VehicleViewType, OpportunitiesWizardSelectionProps } from "./interfaces";
 
 export const CARD_CONFIG: Record<VehicleViewType, {
     label: string;

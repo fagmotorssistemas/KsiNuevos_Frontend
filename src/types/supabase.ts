@@ -404,6 +404,7 @@ export type Database = {
           created_at: string | null
           es_concesionaria: boolean | null
           es_venta_externa: boolean | null
+          estado: Database["public"]["Enums"]["estado_dispositivo_enum"]
           evidencias: string[] | null
           fecha_nota_venta: string | null
           id: string
@@ -419,6 +420,7 @@ export type Database = {
           precio_venta: number | null
           proveedor: string | null
           registrado_por: string | null
+          sim_id: string | null
           tipo_dispositivo: string | null
           tipo_pago: string | null
         }
@@ -430,6 +432,7 @@ export type Database = {
           created_at?: string | null
           es_concesionaria?: boolean | null
           es_venta_externa?: boolean | null
+          estado?: Database["public"]["Enums"]["estado_dispositivo_enum"]
           evidencias?: string[] | null
           fecha_nota_venta?: string | null
           id?: string
@@ -445,6 +448,7 @@ export type Database = {
           precio_venta?: number | null
           proveedor?: string | null
           registrado_por?: string | null
+          sim_id?: string | null
           tipo_dispositivo?: string | null
           tipo_pago?: string | null
         }
@@ -456,6 +460,7 @@ export type Database = {
           created_at?: string | null
           es_concesionaria?: boolean | null
           es_venta_externa?: boolean | null
+          estado?: Database["public"]["Enums"]["estado_dispositivo_enum"]
           evidencias?: string[] | null
           fecha_nota_venta?: string | null
           id?: string
@@ -471,6 +476,7 @@ export type Database = {
           precio_venta?: number | null
           proveedor?: string | null
           registrado_por?: string | null
+          sim_id?: string | null
           tipo_dispositivo?: string | null
           tipo_pago?: string | null
         }
@@ -482,7 +488,41 @@ export type Database = {
             referencedRelation: "clientes_externos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "dispositivos_rastreo_sim_id_fkey"
+            columns: ["sim_id"]
+            isOneToOne: false
+            referencedRelation: "gps_sims"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      gps_instaladores: {
+        Row: {
+          activo: boolean
+          created_at: string | null
+          id: string
+          nombre: string
+          telefono: string | null
+          valor_por_instalacion: number | null
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string | null
+          id?: string
+          nombre: string
+          telefono?: string | null
+          valor_por_instalacion?: number | null
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string | null
+          id?: string
+          nombre?: string
+          telefono?: string | null
+          valor_por_instalacion?: number | null
+        }
+        Relationships: []
       }
       gps_inventario: {
         Row: {
@@ -2722,6 +2762,12 @@ export type Database = {
         | "conwilsonhernan"
         | "consignacion"
       credit_status: "aplica" | "no_aplica" | "pendiente" | "no_interesa"
+      estado_dispositivo_enum:
+        | "PENDIENTE_INSTALACION"
+        | "INSTALADO"
+        | "ACTIVO"
+        | "SUSPENDIDO"
+        | "RETIRADO"
       interaction_type:
         | "llamada"
         | "whatsapp"
@@ -2951,6 +2997,13 @@ export const Constants = {
         "consignacion",
       ],
       credit_status: ["aplica", "no_aplica", "pendiente", "no_interesa"],
+      estado_dispositivo_enum: [
+        "PENDIENTE_INSTALACION",
+        "INSTALADO",
+        "ACTIVO",
+        "SUSPENDIDO",
+        "RETIRADO",
+      ],
       interaction_type: [
         "llamada",
         "whatsapp",

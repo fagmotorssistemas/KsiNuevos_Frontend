@@ -26,23 +26,12 @@ import { useState, useEffect, useMemo } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 import { DateFormatter } from "@/utils/DateFormatter";
 import { TextFormatter } from "@/utils/TextFormatter";
-import { Database } from "@/types/supabase";
 import { SoldBadge } from "./components/SoldBadge";
 import { MileageBadge } from "./components/MileageBadge";
 import { PriceBadge } from "./components/PriceBadge";
 import { TimelineBadge } from "./components/TimelineBadge";
 import { scraperService } from "@/services/scraper.service";
-
-type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
-
-interface OpportunitiesTableViewProps {
-    vehicles: VehicleWithSeller[];
-    isLoading: boolean;
-    hasActiveFilters: boolean;
-    onClearFilters: () => void;
-    getPriceStatisticsForVehicle?: (brand: string, model: string, year?: string) => Promise<PriceStatistics | null>;
-    onVehicleUpdate?: () => void; // NUEVO: callback para recargar datos
-}
+import type { PriceStatistics, OpportunitiesTableViewProps } from "./interfaces";
 
 function formatAbsoluteDate(dateString: string | null | undefined): string {
     if (!dateString) return "N/A";

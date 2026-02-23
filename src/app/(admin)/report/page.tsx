@@ -428,7 +428,7 @@ export default function AdminDashboardPage() {
                         sellers={sellers}
                         isLoading={isScraperLoading}
                         stats={stats}
-                        locationFilter={filters.location}
+                        locationFilter={filters.location ?? undefined}
                         statusFilter={filters.status}
                         topOpportunities={topOpportunities}
                         onScraperComplete={handleScraperRefresh}

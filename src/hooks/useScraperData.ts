@@ -5,12 +5,12 @@ import { createClient } from '@/lib/supabase/client';
 
 type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 type ScraperCarStatus = Database['public']['Enums']['scraper_car_status'];
-type ScraperCarLocation = Database['public']['Enums']['scraper_car_location'];
 type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
+type ScraperVehicle = Database['public']['Tables']['scraper_vehicles']['Row'];
 
 export type FilterOptions = {
   status?: ScraperCarStatus;
-  location?: ScraperCarLocation;
+  location?: ScraperVehicle['location'];
   sellerId?: string;
   isDealer?: boolean;
 };
@@ -27,12 +27,14 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  const [vehicleFilters, setVehicleFilters] = useState<VehicleFilters>({
+  // ── Estado de filtros de vehículos ───────────────────────────────────────
+  // "city" es el nombre interno del filtro, se mapea a "location" al llamar al servicio
+  const [vehicleFilters, setVehicleFilters] = useState<VehicleFilters & { city: string }>({
     brand: 'all',
     model: 'all',
     motor: 'all',
     year: 'all',
-    location: 'all',
+    city: 'all',       // <-- ciudad del anuncio (scraper_vehicles.location)
     dateRange: 'all',
     regionFilter: 'all',
     searchTerm: '',
@@ -77,14 +79,12 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const supabase = useMemo(() => createClient(), []);
 
   // ── OPCIONES EN CASCADA ──────────────────────────────────────────────────
-  // Delega completamente en scraperService.getCascadingFilterOptions,
-  // que usa el mismo patrón que getFilterOptions (trae todo, filtra en memoria)
-  // y aplica región con el mismo ilike que getVehiclesWithFilters.
   const loadCascadingOptions = useCallback(async (
     brand: string,
     model: string,
     motor: string,
     year: string,
+    city: string,
     regionFilter: 'all' | 'coast' | 'sierra' = 'all'
   ) => {
     try {
@@ -93,6 +93,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
         model: model !== 'all' ? model : undefined,
         motor: motor !== 'all' ? motor : undefined,
         year: year !== 'all' ? year : undefined,
+        city: city !== 'all' ? city : undefined,
         regionFilter,
       });
       setFilterOptions(options);
@@ -110,7 +111,8 @@ export function useScraperData(initialFilters?: FilterOptions) {
         model: vehicleFilters.model !== 'all' ? vehicleFilters.model : undefined,
         motor: vehicleFilters.motor !== 'all' ? vehicleFilters.motor : undefined,
         year: vehicleFilters.year !== 'all' ? vehicleFilters.year : undefined,
-        location: vehicleFilters.location !== 'all' ? vehicleFilters.location : undefined,
+        // "city" se mapea a "location" que es el campo real en la DB
+        location: vehicleFilters.city !== 'all' ? vehicleFilters.city : undefined,
         dateRange: vehicleFilters.dateRange !== 'all' ? vehicleFilters.dateRange as any : 'all',
         regionFilter: vehicleFilters.regionFilter,
         searchTerm: vehicleFilters.searchTerm,
@@ -131,7 +133,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
   }, [vehicleFilters, currentPage]);
 
   const loadFilterOptions = useCallback(async () => {
-    await loadCascadingOptions('all', 'all', 'all', 'all', 'all');
+    await loadCascadingOptions('all', 'all', 'all', 'all', 'all', 'all');
   }, [loadCascadingOptions]);
 
   const loadSellers = useCallback(async () => {
@@ -200,47 +202,6 @@ export function useScraperData(initialFilters?: FilterOptions) {
       return [];
     }
   };
-
-  const loadTopOpportunities = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("scraper_vehicles")
-        .select(`*, seller:scraper_sellers(*)`)
-        .not("price", "is", null)
-        .not("mileage", "is", null)
-        .gte("price", 1000)
-        .lte("price", 50000)
-        .lte("mileage", 250000)
-        .eq("seller.is_dealer", false)
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (error) { setTopOpportunities([]); return; }
-      if (!data || data.length === 0) { setTopOpportunities([]); return; }
-
-      const scored = data.map((v) => {
-        let score = 0;
-        if (v.price) score += 50000 / v.price;
-        if (v.mileage) score += 200000 / (v.mileage + 1);
-        if (v.seller?.total_listings != null) score += 50 / (v.seller.total_listings + 1);
-        const text = `${v.title ?? ""} ${v.description ?? ""}`.toLowerCase();
-        ["único dueño", "mantenimientos al día", "como nuevo", "garaje", "full equipo", "factura", "negociable"]
-          .forEach(w => { if (text.includes(w)) score += 10; });
-        ["chocado", "sin papeles", "remato urgente", "para repuestos", "motor dañado", "no matriculado"]
-          .forEach(w => { if (text.includes(w)) score -= 30; });
-        return { ...v, deal_score: score };
-      });
-
-      const uniqueByTitle = Array.from(
-        new Map(scored.sort((a, b) => b.deal_score - a.deal_score)
-          .map(v => [(v.title ?? "").trim().toLowerCase(), v])).values()
-      );
-      setTopOpportunities(uniqueByTitle.slice(0, 30));
-    } catch (err) {
-      setTopOpportunities([]);
-    }
-  }, [supabase]);
-
   // ── ACTUALIZAR FILTROS ───────────────────────────────────────────────────
   const updateFilter = useCallback((key: string, value: any) => {
     if (key === 'searchTerm') {
@@ -248,12 +209,13 @@ export function useScraperData(initialFilters?: FilterOptions) {
     } else {
       setVehicleFilters(prev => {
         const next = { ...prev, [key]: value };
-        if (['brand', 'model', 'motor', 'year', 'regionFilter'].includes(key)) {
+        if (['brand', 'model', 'motor', 'year', 'city', 'regionFilter'].includes(key)) {
           loadCascadingOptions(
             key === 'brand' ? value : next.brand ?? 'all',
             key === 'model' ? value : next.model ?? 'all',
             key === 'motor' ? value : next.motor ?? 'all',
             key === 'year' ? value : next.year ?? 'all',
+            key === 'city' ? value : next.city ?? 'all',
             (key === 'regionFilter' ? value : next.regionFilter ?? 'all') as 'all' | 'coast' | 'sierra'
           );
         }
@@ -265,7 +227,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const updateBrand = useCallback((brand: string) => {
     setVehicleFilters(prev => {
-      loadCascadingOptions(brand, 'all', 'all', 'all', prev.regionFilter ?? 'all');
+      loadCascadingOptions(brand, 'all', 'all', 'all', prev.city ?? 'all', prev.regionFilter ?? 'all');
       return { ...prev, brand, model: 'all' };
     });
     setCurrentPage(1);
@@ -274,12 +236,12 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const clearFilters = useCallback(() => {
     if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
     setVehicleFilters({
-      brand: 'all', model: 'all', motor: 'all', year: 'all', location: 'all',
+      brand: 'all', model: 'all', motor: 'all', year: 'all', city: 'all',
       dateRange: 'all', regionFilter: 'all', searchTerm: '',
       sortBy: 'created_at_desc', page: 1, itemsPerPage: ITEMS_PER_PAGE
     });
     setCurrentPage(1);
-    loadCascadingOptions('all', 'all', 'all', 'all', 'all');
+    loadCascadingOptions('all', 'all', 'all', 'all', 'all', 'all');
   }, [loadCascadingOptions]);
 
   const applyFilters = useCallback((newFilters: FilterOptions) => {
@@ -289,10 +251,10 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
-      loadVehiclesWithFilters(), loadSellers(), loadTopOpportunities(),
+      loadVehiclesWithFilters(), loadSellers(),
       loadPriceStatistics(), loadFilterOptions()
     ]);
-  }, [loadVehiclesWithFilters, loadSellers, loadTopOpportunities, loadPriceStatistics, loadFilterOptions]);
+  }, [loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadFilterOptions]);
 
   const stats = useMemo(() => ({
     total: totalCount,
@@ -328,19 +290,18 @@ export function useScraperData(initialFilters?: FilterOptions) {
   useEffect(() => { loadVehiclesWithFilters(); }, [loadVehiclesWithFilters]);
   useEffect(() => { loadSellers(); }, [loadSellers]);
   useEffect(() => { loadPriceStatistics(); }, [loadPriceStatistics]);
-  useEffect(() => { loadTopOpportunities(); }, [loadTopOpportunities]);
 
   useEffect(() => {
     const vehiclesChannel = supabase
       .channel('scraper_vehicles_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scraper_vehicles' }, () => {
         loadVehiclesWithFilters();
-        loadTopOpportunities();
         loadCascadingOptions(
           vehicleFilters.brand ?? 'all',
           vehicleFilters.model ?? 'all',
           vehicleFilters.motor ?? 'all',
           vehicleFilters.year ?? 'all',
+          vehicleFilters.city ?? 'all',
           vehicleFilters.regionFilter ?? 'all'
         );
       })
@@ -362,14 +323,13 @@ export function useScraperData(initialFilters?: FilterOptions) {
       supabase.removeChannel(sellersChannel);
       supabase.removeChannel(statsChannel);
     };
-  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadTopOpportunities, loadCascadingOptions, vehicleFilters]);
+  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadCascadingOptions, vehicleFilters]);
 
   return {
     vehicles: allVehicles, allVehicles, sellers, isLoading, filters, stats,
-    topOpportunities, priceStatistics, pagination, goToPage, nextPage, prevPage,
+    priceStatistics, pagination, goToPage, nextPage, prevPage,
     vehicleFilters: { ...vehicleFilters, searchTerm: searchInput },
     filterOptions, updateFilter, updateBrand, clearFilters,
-    refreshTopOpportunities: loadTopOpportunities,
     getSellerWithVehicles, getPriceStatisticsForVehicle,
     getPriceStatisticsByBrand, getPriceStatisticsByModel, getAllBrandsWithStats,
     applyFilters, refresh: loadVehiclesWithFilters,
