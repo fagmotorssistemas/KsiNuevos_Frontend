@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import type { Cuenta, TransaccionFinanciera } from "@/types/taller";
+import type { Cuenta, TransaccionFinanciera, CuentaPorCobrar } from "@/types/taller";
 
-// Alias para mantener compatibilidad con componentes que esperen "Transaccion"
 export type Transaccion = TransaccionFinanciera;
 
 export function useFinanzas() {
     const { supabase, profile } = useAuth();
     const [cuentas, setCuentas] = useState<Cuenta[]>([]);
     const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
+    const [cuentasPorCobrar, setCuentasPorCobrar] = useState<CuentaPorCobrar[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
@@ -18,10 +18,9 @@ export function useFinanzas() {
             const { data: cuentasData } = await supabase
                 .from('taller_cuentas')
                 .select('*')
-                .order('created_at', { ascending: true }); // Ordenado por creación
+                .order('created_at', { ascending: true });
             
             if (cuentasData) {
-                // Mapeamos los datos para eliminar los nulls y asegurar el tipo Cuenta
                 const cuentasSeguras: Cuenta[] = cuentasData.map((c: any) => ({
                     id: c.id,
                     nombre_cuenta: c.nombre_cuenta,
@@ -32,19 +31,70 @@ export function useFinanzas() {
                 setCuentas(cuentasSeguras);
             }
 
-            // 2. Cargar Últimos 50 Movimientos
+            // 2. Cargar Movimientos (Con datos de cliente integrados para el modal)
             const { data: transData } = await supabase
                 .from('taller_transacciones')
                 .select(`
                     *,
                     cuenta:taller_cuentas(nombre_cuenta),
-                    orden:taller_ordenes(numero_orden, vehiculo_placa),
+                    orden:taller_ordenes(id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo, estado, cliente:taller_clientes(nombre_completo, telefono)),
                     registrado_por:profiles(full_name)
                 `)
                 .order('fecha_transaccion', { ascending: false })
-                .limit(50);
+                .limit(100);
 
             if (transData) setTransacciones(transData as unknown as Transaccion[]);
+
+            // 3. Cargar Cuentas por Cobrar (Extrae detalles para Presupuesto y transacciones para Gastado/Pagado)
+            const { data: deudasData } = await supabase
+                .from('taller_ordenes')
+                .select(`
+                    id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo, estado_contable, fecha_ingreso,
+                    cliente:taller_clientes(nombre_completo, telefono),
+                    transacciones:taller_transacciones(monto, tipo, fecha_transaccion, descripcion),
+                    detalles:taller_detalles_orden(total)
+                `)
+                .in('estado_contable', ['pendiente', 'facturado'])
+                .order('fecha_ingreso', { ascending: false });
+
+            if (deudasData) {
+                const cuentasPendientes = deudasData.map((orden: any) => {
+                    // Calculamos Presupuesto desde los detalles
+                    const presupuesto = orden.detalles
+                        ?.reduce((acc: number, d: any) => acc + Number(d.total), 0) || 0;
+
+                    // Calculamos ingresos
+                    const pagado = orden.transacciones
+                        ?.filter((t: any) => t.tipo === 'ingreso')
+                        .reduce((acc: number, t: any) => acc + Number(t.monto), 0) || 0;
+                    
+                    // Calculamos egresos
+                    const gastado = orden.transacciones
+                        ?.filter((t: any) => t.tipo !== 'ingreso')
+                        .reduce((acc: number, t: any) => acc + Number(t.monto), 0) || 0;
+                    
+                    // El saldo nunca es negativo para los cálculos visuales, si pagó de más, debe 0.
+                    const saldo_pendiente = Math.max(0, presupuesto - pagado);
+                    
+                    return {
+                        id: orden.id,
+                        numero_orden: orden.numero_orden,
+                        vehiculo_placa: orden.vehiculo_placa,
+                        vehiculo_marca: orden.vehiculo_marca || 'Vehículo',
+                        vehiculo_modelo: orden.vehiculo_modelo || 'General',
+                        estado_contable: orden.estado_contable,
+                        fecha_ingreso: orden.fecha_ingreso,
+                        cliente: orden.cliente,
+                        transacciones: orden.transacciones,
+                        presupuesto: presupuesto,
+                        total_pagado: pagado,
+                        total_gastado: gastado,
+                        saldo_pendiente: saldo_pendiente
+                    };
+                }); 
+
+                setCuentasPorCobrar(cuentasPendientes);
+            }
 
         } catch (error) {
             console.error("Error cargando finanzas:", error);
@@ -65,8 +115,7 @@ export function useFinanzas() {
                 }]);
 
             if (error) throw error;
-            
-            await fetchData(); // Recargar la lista de cuentas
+            await fetchData(); 
             return { success: true };
         } catch (error: any) {
             console.error("Error creando cuenta:", error);
@@ -79,8 +128,6 @@ export function useFinanzas() {
 
         try {
             let comprobanteUrl = null;
-
-            // 1. Subir Foto (si existe)
             if (file) {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `finanzas/${Date.now()}.${fileExt}`;
@@ -97,12 +144,11 @@ export function useFinanzas() {
                 comprobanteUrl = data.publicUrl;
             }
 
-            // 2. Insertar Transacción
             const { error: txError } = await supabase
                 .from('taller_transacciones')
                 .insert([{
                     cuenta_id: formData.cuenta_id,
-                    orden_id: formData.orden_id || null, // Opcional
+                    orden_id: formData.orden_id || null, 
                     tipo: formData.tipo,
                     monto: formData.monto,
                     descripcion: formData.descripcion,
@@ -112,7 +158,6 @@ export function useFinanzas() {
 
             if (txError) throw txError;
 
-            // 3. Actualizar Saldo de la Cuenta (Manual update)
             const cuentaActual = cuentas.find(c => c.id === formData.cuenta_id);
             if (cuentaActual) {
                 const esIngreso = formData.tipo === 'ingreso';
@@ -126,12 +171,27 @@ export function useFinanzas() {
                     .eq('id', formData.cuenta_id);
             }
 
-            await fetchData(); // Recargar todo
+            await fetchData(); 
             return { success: true };
-
         } catch (error: any) {
             console.error("Error en transacción:", error);
             return { success: false, error: error.message };
+        }
+    };
+
+    const marcarOrdenComoPagada = async (ordenId: string) => {
+        try {
+            const { error } = await supabase
+                .from('taller_ordenes')
+                .update({ estado_contable: 'pagado' })
+                .eq('id', ordenId);
+            
+            if (error) throw error;
+            await fetchData();
+            return { success: true };
+        } catch (err: any) {
+            console.error("Error actualizando orden:", err);
+            return { success: false, error: err.message };
         }
     };
 
@@ -142,9 +202,11 @@ export function useFinanzas() {
     return {
         cuentas,
         transacciones,
+        cuentasPorCobrar,
         isLoading,
         registrarTransaccion,
-        crearCuenta, // <--- Exportamos la nueva función
+        crearCuenta, 
+        marcarOrdenComoPagada, // <-- Nueva función
         refresh: fetchData
     };
 }

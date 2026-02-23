@@ -23,7 +23,6 @@ export interface OrdenTrabajo {
     id: string;
     numero_orden: number;
     cliente_id: string;
-    // Datos expandidos (Joined)
     cliente?: Partial<ClienteTaller>; 
     
     vehiculo_placa: string;
@@ -39,7 +38,6 @@ export interface OrdenTrabajo {
     fecha_ingreso: string;
     fecha_promesa_entrega?: string;
 
-    // --- NUEVOS CAMPOS PARA EXPEDIENTES ---
     fecha_salida_real?: string;
     pdf_url?: string;
     total_final_cliente?: number;
@@ -75,16 +73,27 @@ export interface Cuenta {
 
 export interface TransaccionFinanciera {
     id: string;
-    tipo: 'ingreso' | 'gasto_operativo' | 'pago_proveedor' | 'nomina';
+    tipo: string; 
     monto: number;
     descripcion: string;
     fecha_transaccion: string;
     comprobante_url?: string;
     cuenta_id: string;
     orden_id?: string;
-    // Relations
+    // Relations actualizadas para el modal
     cuenta?: { nombre_cuenta: string };
-    orden?: { numero_orden: number; vehiculo_placa: string };
+    orden?: { 
+        id: string;
+        numero_orden: number; 
+        vehiculo_placa: string;
+        vehiculo_marca?: string;
+        vehiculo_modelo?: string;
+        estado?: string;
+        cliente?: {
+            nombre_completo: string;
+            telefono: string;
+        };
+    };
     registrado_por?: { full_name: string };
 }
 
@@ -94,7 +103,6 @@ export interface ConsumoMaterial {
     cantidad: number;
     fecha_consumo: string;
     orden_id: string;
-    // Relations
     item?: { nombre: string; unidad_medida: string; costo_promedio: number };
     registrado_por?: { full_name: string };
 }
@@ -112,10 +120,9 @@ export interface DetalleOrden {
     descripcion: string;
     precio_unitario: number;
     cantidad: number;
-    total: number; // Campo generado
+    total: number;
     mecanico_asignado_id?: string;
     estado_trabajo: string;
-    // Relation
     mecanico?: { full_name: string };
 }
 
@@ -139,7 +146,6 @@ export interface GastoFijoConfig {
     dia_limite_pago: number;
     activo: boolean;
     created_at?: string;
-    // Auxiliar para frontend
     ultimo_pago_mes?: PagoGasto | null; 
 }
 
@@ -161,7 +167,6 @@ export interface TallerPersonal {
     fecha_ingreso?: string;
     activo: boolean;
     datos_bancarios?: string;
-    // Join con Profiles para saber el nombre real
     profile?: { 
         full_name: string; 
         email: string; 
@@ -174,4 +179,29 @@ export interface CandidatoProfile {
     id: string;
     full_name: string;
     email: string;
+}
+
+// Interfaz actualizada para manejar presupuesto real y gastos
+export interface CuentaPorCobrar {
+    id: string; 
+    numero_orden: number;
+    vehiculo_placa: string;
+    vehiculo_marca: string;
+    vehiculo_modelo: string;
+    estado_contable: string;
+    fecha_ingreso: string;
+    cliente?: {
+        nombre_completo: string;
+        telefono: string;
+    };
+    transacciones?: {
+        monto: number;
+        tipo: string;
+        fecha_transaccion: string;
+        descripcion: string;
+    }[];
+    presupuesto: number;
+    total_pagado: number;
+    total_gastado: number;
+    saldo_pendiente: number;
 }

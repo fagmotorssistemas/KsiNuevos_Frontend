@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Save, DollarSign, Upload, Loader2, Search } from "lucide-react";
-import type { Cuenta } from "@/types/taller"; // <--- Importación corregida
+import type { Cuenta } from "@/types/taller"; 
 import { useAuth } from "@/hooks/useAuth";
 
 interface TransactionModalProps {
@@ -10,9 +10,11 @@ interface TransactionModalProps {
     onClose: () => void;
     cuentas: Cuenta[];
     onSave: (data: any, file: File | null) => Promise<any>;
+    defaultOrdenId?: string; 
+    defaultTipo?: string;    
 }
 
-export function TransactionModal({ isOpen, onClose, cuentas, onSave }: TransactionModalProps) {
+export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrdenId, defaultTipo }: TransactionModalProps) {
     const { supabase } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     
@@ -21,25 +23,41 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
     const [monto, setMonto] = useState('');
     const [descripcion, setDescripcion] = useState('');
     const [cuentaId, setCuentaId] = useState('');
-    const [ordenId, setOrdenId] = useState(''); // Opcional
+    const [ordenId, setOrdenId] = useState(''); 
     const [file, setFile] = useState<File | null>(null);
 
     // Estado para buscar órdenes
     const [ordenesActivas, setOrdenesActivas] = useState<any[]>([]);
 
     useEffect(() => {
-        if (isOpen && cuentas.length > 0 && !cuentaId) {
-            setCuentaId(cuentas[0].id);
+        if (isOpen) {
+            if (cuentas.length > 0 && !cuentaId) {
+                setCuentaId(cuentas[0].id);
+            }
             cargarOrdenesActivas();
+            
+            // Si el modal se abre para cobrar una orden específica (Cuentas por Cobrar)
+            if (defaultOrdenId) setOrdenId(defaultOrdenId);
+            if (defaultTipo) setTipo(defaultTipo);
+        } else {
+            // Reset state al cerrar
+            setMonto('');
+            setDescripcion('');
+            setFile(null);
+            setOrdenId('');
+            setTipo('ingreso');
         }
-    }, [isOpen, cuentas]);
+    }, [isOpen, cuentas, defaultOrdenId, defaultTipo]);
 
     const cargarOrdenesActivas = async () => {
+        // Mejorado: Obtenemos las órdenes recientes que NO estén totalmente pagadas 
+        // para asegurar que las cuentas por cobrar aparezcan en el select.
         const { data } = await supabase
             .from('taller_ordenes')
             .select('id, numero_orden, vehiculo_placa, vehiculo_modelo')
-            .in('estado', ['recepcion', 'presupuesto', 'en_cola', 'en_proceso', 'control_calidad', 'terminado'])
-            .order('created_at', { ascending: false });
+            .neq('estado_contable', 'pagado')
+            .order('created_at', { ascending: false })
+            .limit(100);
         
         if (data) setOrdenesActivas(data);
     };
@@ -58,11 +76,6 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
 
         setIsLoading(false);
         onClose();
-        // Reset form
-        setMonto('');
-        setDescripcion('');
-        setFile(null);
-        setOrdenId('');
     };
 
     if (!isOpen) return null;
@@ -105,7 +118,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Tipo de Egreso</label>
                             <select 
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-red-500 outline-none bg-white"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-red-500 outline-none bg-white font-medium"
                                 value={tipo}
                                 onChange={(e) => setTipo(e.target.value)}
                             >
@@ -124,7 +137,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                                 type="number" 
                                 min="0.01" 
                                 step="0.01"
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-lg"
+                                className={`w-full px-3 py-2 rounded-lg border-2 focus:ring-0 outline-none font-mono font-bold text-lg ${tipo === 'ingreso' ? 'border-emerald-100 focus:border-emerald-500 text-emerald-700' : 'border-slate-200 focus:border-red-500'}`}
                                 placeholder="0.00"
                                 value={monto}
                                 onChange={(e) => setMonto(e.target.value)}
@@ -134,7 +147,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Cuenta Afectada</label>
                             <select 
                                 required
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                                 value={cuentaId}
                                 onChange={(e) => setCuentaId(e.target.value)}
                             >
@@ -151,7 +164,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                             required
                             type="text" 
                             className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                            placeholder="Ej: Anticipo reparación Mazda..."
+                            placeholder={tipo === 'ingreso' ? "Ej: Abono o Pago total reparación..." : "Ej: Pago de refacciones..."}
                             value={descripcion}
                             onChange={(e) => setDescripcion(e.target.value)}
                         />
@@ -160,7 +173,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                     {/* Asignar a Orden (Opcional) */}
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-2">
-                            <Search className="h-3 w-3" /> Vincular a Orden (Opcional)
+                            <Search className="h-3 w-3" /> Vincular a Orden {tipo === 'ingreso' ? '(Necesario para cobros)' : '(Opcional)'}
                         </label>
                         <select 
                             className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm"
@@ -207,7 +220,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave }: Transacti
                             className="flex-1 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all flex justify-center items-center gap-2"
                         >
                             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                            Registrar
+                            Registrar {tipo === 'ingreso' ? 'Ingreso' : 'Gasto'}
                         </button>
                     </div>
                 </form>
