@@ -203,7 +203,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                     </div>
 
                     <div className="flex items-center gap-4 flex-wrap justify-end">
-                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                        {/* <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
                             <span className="text-xs font-bold text-slate-400 uppercase hidden sm:inline-block">Pago:</span>
                             {isUpdatingContable && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
                             <select
@@ -217,7 +217,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 <option value="pagado" className="text-emerald-600 font-bold">Pagado</option>
                                 <option value="anulado" className="text-red-600 font-bold">Anulado</option>
                             </select>
-                        </div>
+                        </div> */}
 
                         {orden.estado !== 'entregado' && (
                             <button
