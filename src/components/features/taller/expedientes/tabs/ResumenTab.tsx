@@ -1,29 +1,21 @@
-import React, { useState, useEffect } from "react";
-import { User, Clock, DollarSign, Loader2 } from "lucide-react";
+import React from "react";
+import { User, Clock, DollarSign } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
 
+// Extendemos localmente el tipo para evitar el error de TypeScript ts(2339)
+// Nota: Se recomienda agregar 'estado_contable?: string;' directamente en @/types/taller.ts
+type OrdenTrabajoConContabilidad = OrdenTrabajo & { 
+    estado_contable?: string; 
+};
+
 interface ResumenTabProps {
-    orden: OrdenTrabajo;
-    onUpdateContable: (id: string, status: string) => void;
+    orden: OrdenTrabajoConContabilidad;
+    onUpdateContable?: (id: string, status: string) => void; // Mantenida por compatibilidad con el padre
 }
 
-export function ResumenTab({ orden, onUpdateContable }: ResumenTabProps) {
-    // @ts-ignore
-    const [localEstadoContable, setLocalEstadoContable] = useState(orden.estado_contable || 'pendiente');
-    const [isUpdating, setIsUpdating] = useState(false);
-
-    useEffect(() => {
-        // @ts-ignore
-        setLocalEstadoContable(orden.estado_contable || 'pendiente');
-    }, [orden]);
-
-    const handleEstadoChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const nuevoEstado = e.target.value;
-        setLocalEstadoContable(nuevoEstado);
-        setIsUpdating(true);
-        await onUpdateContable(orden.id, nuevoEstado);
-        setIsUpdating(false);
-    };
+export function ResumenTab({ orden }: ResumenTabProps) {
+    // Tomamos el estado directamente de la orden extendida
+    const estadoContable = orden.estado_contable || 'pendiente';
 
     const getContableColor = (estado: string) => {
         switch(estado) {
@@ -32,6 +24,16 @@ export function ResumenTab({ orden, onUpdateContable }: ResumenTabProps) {
             case 'pagado': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
             case 'anulado': return 'text-red-600 bg-red-50 border-red-200';
             default: return 'text-slate-600 bg-slate-50 border-slate-200';
+        }
+    };
+
+    const getContableName = (estado: string) => {
+        switch(estado) {
+            case 'pendiente': return 'Pendiente de Pago';
+            case 'facturado': return 'Facturado';
+            case 'pagado': return 'Pagado';
+            case 'anulado': return 'Anulado';
+            default: return estado;
         }
     };
 
@@ -81,7 +83,7 @@ export function ResumenTab({ orden, onUpdateContable }: ResumenTabProps) {
                 </div>
             </div>
 
-            {/* Tarjeta Estado Contable (NUEVO) */}
+            {/* Tarjeta Estado Contable (NUEVO - SOLO VISUAL) */}
             <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-50 pb-2">
                     <DollarSign className="h-4 w-4 text-slate-400" /> Estado Financiero
@@ -91,27 +93,21 @@ export function ResumenTab({ orden, onUpdateContable }: ResumenTabProps) {
                         <p className="text-xs font-bold text-slate-400 uppercase mb-2">Estado Actual</p>
                         
                         <div className="flex items-center gap-3">
-                            <select 
-                                value={localEstadoContable}
-                                onChange={handleEstadoChange}
-                                disabled={isUpdating}
-                                className={`w-full p-3 rounded-xl border text-sm font-bold outline-none cursor-pointer disabled:opacity-50 transition-colors ${getContableColor(localEstadoContable)}`}
+                            {/* Convertido a un div estático que funciona como una etiqueta visual */}
+                            <div 
+                                className={`w-full p-3 rounded-xl border text-sm font-bold flex items-center justify-center transition-colors ${getContableColor(estadoContable)}`}
                             >
-                                <option value="pendiente" className="text-amber-600 bg-white">Pendiente de Pago</option>
-                                <option value="facturado" className="text-blue-600 bg-white">Facturado</option>
-                                <option value="pagado" className="text-emerald-600 bg-white">Pagado</option>
-                                <option value="anulado" className="text-red-600 bg-white">Anulado</option>
-                            </select>
-                            {isUpdating && <Loader2 className="h-5 w-5 animate-spin text-slate-400 flex-shrink-0" />}
+                                {getContableName(estadoContable)}
+                            </div>
                         </div>
                     </div>
 
                     <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                         <p className="text-xs text-slate-500">
-                            {localEstadoContable === 'pendiente' && "El cliente aún no ha realizado el pago por esta orden."}
-                            {localEstadoContable === 'facturado' && "Facturado desde contabilidad"}
-                            {localEstadoContable === 'pagado' && "El dinero ha sido recaudado exitosamente."}
-                            {localEstadoContable === 'anulado' && "Esta orden o factura ha sido cancelada financieramente."}
+                            {estadoContable === 'pendiente' && "El cliente aún no ha realizado el pago por esta orden."}
+                            {estadoContable === 'facturado' && "Facturado desde contabilidad."}
+                            {estadoContable === 'pagado' && "El dinero ha sido recaudado exitosamente."}
+                            {estadoContable === 'anulado' && "Esta orden o factura ha sido cancelada financieramente."}
                         </p>
                     </div>
                 </div>

@@ -309,7 +309,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                                 <h3 className="text-sm font-bold text-blue-800 mb-3">Mover Etapa (Taller)</h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {['en_cola', 'en_proceso', 'control_calidad', 'terminado'].map((estado) => (
+                                    {['recepcion', 'en_proceso', 'terminado'].map((estado) => (
                                         <button
                                             key={estado}
                                             onClick={() => {
