@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // Definimos los tipos de vista disponibles
-export type RastreoView = 'DASHBOARD' | 'INVENTARIO' | 'FORMULARIO' | 'FINANCIERO';
+export type RastreoView = 'DASHBOARD' | 'INVENTARIO' | 'INSTALACION' | 'FORMULARIO' | 'FINANCIERO';
 
 interface SidebarProps {
     currentView: RastreoView;
@@ -34,6 +34,12 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
             label: 'Bodega & Stock', 
             icon: PackageSearch, // Icono perfecto para inventario
             description: 'Ingresos y control de IMEIs'
+        },
+        {
+            id: 'INSTALACION',
+            label: 'Instaladores',
+            icon: Wrench,
+            description: 'Gestión de técnicos e instalaciones'
         },
         { 
             id: 'FINANCIERO', 

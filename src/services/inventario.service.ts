@@ -84,5 +84,204 @@ export const inventarioService = {
         }
         
         return data;
+    },
+
+    // ---------------------------------------------------------
+    // VINCULACIÓN DE RASTREADORES GPS CON VEHÍCULOS
+    // ---------------------------------------------------------
+    
+    /**
+     * Obtiene datos completos del vehículo + Rastreador vinculado
+     * Une información de inventoryoracle + dispositivos_rastreo
+     */
+    async getVehiculoConRastreador(placa: string) {
+        const supabase = createClient();
+        const placaUpper = placa.toUpperCase();
+
+        try {
+            // 1. Obtener datos del vehículo desde Supabase
+            const { data: vehiculo, error: vehiculoError } = await supabase
+                .from('inventoryoracle')
+                .select('*')
+                .eq('plate', placaUpper)
+                .single();
+
+            if (vehiculoError) {
+                console.error("Error obteniendo vehículo:", vehiculoError);
+                return null;
+            }
+
+            // 2. Obtener rastreador vinculado (si existe)
+            const { data: rastreador, error: rastreadorError } = await supabase
+                .from('dispositivos_rastreo')
+                .select('*')
+                .eq('nota_venta', vehiculo.oracle_id || '')
+                .maybeSingle();
+
+            // 3. Fusionar datos
+            return {
+                vehiculo,
+                rastreador: rastreador || null,
+                vinculado: !!rastreador
+            };
+        } catch (error) {
+            console.error("Error en getVehiculoConRastreador:", error);
+            return null;
+        }
+    },
+
+    /**
+     * Busca vehículos + rastreadores por placa, marca o modelo
+     */
+    async buscarVehiculosConRastreador(query: string) {
+        const supabase = createClient();
+        const queryLower = query.toLowerCase();
+
+        try {
+            // 1. Buscar vehículos que coincidan
+            const { data: vehiculos, error } = await supabase
+                .from('inventoryoracle')
+                .select('*')
+                .or(`plate.ilike.%${query}%, brand.ilike.%${queryLower}%, model.ilike.%${queryLower}%`)
+                .limit(20);
+
+            if (error) {
+                console.error("Error buscando vehículos:", error);
+                return [];
+            }
+
+            // 2. Para cada vehículo, obtener rastreador si existe
+            const resultados = await Promise.all(
+                (vehiculos || []).map(async (v) => {
+                    const { data: rastreador } = await supabase
+                        .from('dispositivos_rastreo')
+                        .select('*')
+                        .eq('nota_venta', v.oracle_id || '')
+                        .maybeSingle();
+
+                    return {
+                        vehiculo: v,
+                        rastreador: rastreador || null,
+                        vinculado: !!rastreador
+                    };
+                })
+            );
+
+            return resultados;
+        } catch (error) {
+            console.error("Error en buscarVehiculosConRastreador:", error);
+            return [];
+        }
+    },
+
+    /**
+     * Vincula un rastreador GPS existente a un vehículo
+     * Actualiza el campo nota_venta en dispositivos_rastreo
+     */
+    async vincularRastreadorAVehiculo(placaVehiculo: string, rastreadorId: string, oracleId: string) {
+        const supabase = createClient();
+
+        try {
+            const { data, error } = await supabase
+                .from('dispositivos_rastreo')
+                .update({
+                    nota_venta: oracleId,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', rastreadorId)
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error vinculando rastreador:", error);
+                throw error;
+            }
+
+            return { success: true, data };
+        } catch (error) {
+            console.error("Error crítico en vincularRastreadorAVehiculo:", error);
+            return { success: false, error };
+        }
+    },
+
+    /**
+     * Desvincula un rastreador de un vehículo
+     */
+    async desvincularRastreador(rastreadorId: string) {
+        const supabase = createClient();
+
+        try {
+            const { data, error } = await supabase
+                .from('dispositivos_rastreo')
+                .update({
+                    nota_venta: `SIN-VINCULO-${Date.now()}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', rastreadorId)
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error desvinculando rastreador:", error);
+                throw error;
+            }
+
+            return { success: true, data };
+        } catch (error) {
+            console.error("Error crítico en desvincularRastreador:", error);
+            return { success: false, error };
+        }
+    },
+
+    /**
+     * Obtiene todos los vehículos con sus rastreadores vinculados
+     * Útil para mostrar en dashboard o reportes
+     */
+    async getVehiculosConRastreadores() {
+        const supabase = createClient();
+
+        try {
+            // 1. Obtener todos los rastreadores activos
+            const { data: rastreadores, error: gpsError } = await supabase
+                .from('dispositivos_rastreo')
+                .select('*')
+                .eq('es_venta_externa', false)
+                .order('created_at', { ascending: false });
+
+            if (gpsError) {
+                console.error("Error obteniendo rastreadores:", gpsError);
+                return [];
+            }
+
+            // 2. Agrupar por vehículo (oracle_id)
+            const porVehiculo = new Map();
+
+            for (const rastreador of rastreadores || []) {
+                const oracleId = rastreador.nota_venta;
+                if (!oracleId) continue;
+
+                if (!porVehiculo.has(oracleId)) {
+                    porVehiculo.set(oracleId, { rastreadores: [] });
+                }
+                porVehiculo.get(oracleId).rastreadores.push(rastreador);
+            }
+
+            // 3. Obtener datos de vehículos
+            const { data: vehiculos } = await supabase
+                .from('inventoryoracle')
+                .select('*');
+
+            // 4. Fusionar
+            const resultados = (vehiculos || []).map(v => ({
+                vehiculo: v,
+                rastreadores: porVehiculo.get(v.oracle_id)?.rastreadores || [],
+                tieneRastreador: porVehiculo.has(v.oracle_id)
+            }));
+
+            return resultados;
+        } catch (error) {
+            console.error("Error en getVehiculosConRastreadores:", error);
+            return [];
+        }
     }
 };

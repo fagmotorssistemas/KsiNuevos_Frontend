@@ -55,6 +55,10 @@ export interface RegistroGPSPayload {
     // Opcionales para soporte externo
     cliente_externo_id?: string;
     es_venta_externa?: boolean;
+    // Campos adicionales para vinculación
+    sim_id?: string;
+    instalador_id?: string;
+    costo_instalacion?: number;
 }
 
 // Tipos de Inventario
@@ -87,4 +91,37 @@ export interface IngresoGPSPayload {
     costo_compra: number;
     factura_compra: string;
     serie?: string;
+}
+
+// Añadir al final de tu archivo types/rastreadores.types.ts
+export interface InventarioSIM {
+    id: string;
+    iccid: string;
+    numero: string | null;
+    operadora: string | null;
+    estado: 'STOCK' | 'ACTIVA' | 'SUSPENDIDA' | 'BAJA'; // Ajusta según tus estados reales
+    costo_mensual: number | null;
+    created_at: string;
+}
+
+export interface IngresoSIMPayload {
+    iccid: string;
+    numero?: string;
+    operadora?: string;
+    costo_mensual?: number;
+}
+
+// Añadir en types/rastreadores.types.ts
+export interface Instalador {
+    id: string;
+    nombre: string;
+    telefono: string | null;
+    valor_por_instalacion: number;
+    activo: boolean;
+    created_at: string;
+}
+export interface NuevoInstaladorPayload {
+    nombre: string;
+    telefono?: string;
+    valor_por_instalacion?: number;
 }

@@ -1,8 +1,18 @@
 "use client";
-import { useState } from "react";
-import { Search, MapPin, Building2, Users, Plus } from "lucide-react"; // <--- Importamos Plus
+import { useState, useEffect } from "react";
+import { Search, MapPin, Building2, Users, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2 } from "lucide-react"; // <--- Importamos iconos de estado
 import { ContratoGPS } from "@/types/rastreadores.types";
+import { rastreadoresService } from "@/services/rastreadores.service";
 import { RastreoStats } from "./RastreoStats";
+
+// Mapeo de estados con colores e iconos
+const ESTADO_CONFIG = {
+    'PENDIENTE_INSTALACION': { color: 'bg-yellow-50 text-yellow-700 border-yellow-100', icon: Clock, label: 'Pendiente', bgIcon: 'bg-yellow-100' },
+    'INSTALADO': { color: 'bg-blue-50 text-blue-700 border-blue-100', icon: CheckCircle, label: 'Instalado', bgIcon: 'bg-blue-100' },
+    'ACTIVO': { color: 'bg-green-50 text-green-700 border-green-100', icon: CheckCircle, label: 'Activo', bgIcon: 'bg-green-100' },
+    'SUSPENDIDO': { color: 'bg-orange-50 text-orange-700 border-orange-100', icon: AlertCircle, label: 'Suspendido', bgIcon: 'bg-orange-100' },
+    'RETIRADO': { color: 'bg-red-50 text-red-700 border-red-100', icon: Trash2, label: 'Retirado', bgIcon: 'bg-red-100' }
+} as const;
 
 interface RastreoListProps {
     data: ContratoGPS[];
@@ -14,6 +24,40 @@ interface RastreoListProps {
 export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoListProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [filtroOrigen, setFiltroOrigen] = useState<'TODOS' | 'AUTO' | 'EXTERNO'>('TODOS');
+    const [gpsMap, setGpsMap] = useState<Map<string, any>>(new Map()); // Mapea notaVenta -> GPS
+    const [refreshKey, setRefreshKey] = useState(0); // Trigger para refrescar
+
+    // Función para recargar el mapa de GPS
+    const cargarGPS = async () => {
+        try {
+            const ventasConGPS = await rastreadoresService.obtenerVentasConGPS('TODOS');
+            const mapa = new Map();
+            
+            ventasConGPS.forEach(gps => {
+                if (gps.nota_venta) {
+                    mapa.set(gps.nota_venta, gps);
+                }
+            });
+            
+            setGpsMap(mapa);
+        } catch (err) {
+            console.error("Error cargando GPS map:", err);
+        }
+    };
+
+    // Cargar GPSs vinculados al montar
+    useEffect(() => {
+        cargarGPS();
+    }, [data, refreshKey]); // Se refresca cuando data cambia o cuando refreshKey cambia
+
+    // Auto-refrescar cada 5 segundos para detectar cambios en tiempo real
+    useEffect(() => {
+        const intervalo = setInterval(() => {
+            cargarGPS();
+        }, 5000);
+
+        return () => clearInterval(intervalo);
+    }, []);
 
     const filteredData = data.filter(c => {
         const matchesSearch = 
@@ -80,43 +124,75 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                 <th className="px-6 py-4">Origen</th>
                                 <th className="px-6 py-4">Cliente / Nota</th>
                                 <th className="px-6 py-4">Vehículo</th>
+                                <th className="px-6 py-4">GPS Vinculado</th>
                                 <th className="px-6 py-4 text-right">Valor Venta</th>
                                 <th className="px-6 py-4 text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
                             ) : filteredData.length > 0 ? (
-                                filteredData.map((item) => (
-                                    <tr key={item.ccoCodigo} className="group hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            {item.origen === 'AUTO' ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black border border-blue-100"><Building2 size={10}/> K-SI</span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100"><Users size={10}/> EXT</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-900 uppercase">{item.cliente}</div>
-                                            <div className="text-xs text-slate-400 font-mono mt-0.5">{item.ruc}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-700 uppercase">{item.marca} {item.modelo}</div>
-                                            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200 font-black uppercase mt-1 inline-block">{item.placa}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <span className="font-mono font-black text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">${item.totalRastreador.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <button onClick={() => onManage(item)} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-slate-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95">
-                                                <MapPin size={14} /> Gestionar
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
+                                filteredData.map((item) => {
+                                    const gpsVinculado = gpsMap.get(item.notaVenta);
+                                    return (
+                                        <tr key={item.ccoCodigo} className="group hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                {item.origen === 'AUTO' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black border border-blue-100"><Building2 size={10}/> K-SI</span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100"><Users size={10}/> EXT</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-900 uppercase">{item.cliente}</div>
+                                                <div className="text-xs text-slate-400 font-mono mt-0.5">{item.ruc}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-slate-700 uppercase">{item.marca} {item.modelo}</div>
+                                                <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200 font-black uppercase mt-1 inline-block">{item.placa}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {gpsVinculado ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-full">
+                
+                                                            {/* Estado del dispositivo */}
+                                                            {(() => {
+                                                                const estado = gpsVinculado.estado || 'PENDIENTE_INSTALACION';
+                                                                const config = ESTADO_CONFIG[estado as keyof typeof ESTADO_CONFIG] || ESTADO_CONFIG['PENDIENTE_INSTALACION'];
+                                                                const IconoEstado = config.icon;
+                                                                
+                                                                return (
+                                                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black border ${config.color}`}>
+                                                                        <div className={`p-1 rounded ${config.bgIcon}`}>
+                                                                            <IconoEstado size={10} />
+                                                                        </div>
+                                                                        {config.label}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-yellow-50 text-yellow-700 text-[10px] font-black border border-yellow-100">
+                                                        <Smartphone size={12}/> Sin GPS
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="font-mono font-black text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">${item.totalRastreador.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <button onClick={() => onManage(item)} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-slate-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95">
+                                                    <MapPin size={14} /> Gestionar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
-                                <tr><td colSpan={5} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
+                                <tr><td colSpan={6} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
                             )}
                         </tbody>
                     </table>
