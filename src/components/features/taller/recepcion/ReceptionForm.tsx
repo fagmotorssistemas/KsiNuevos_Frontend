@@ -60,6 +60,15 @@ const INVENTARIO_ITEMS = [
     { key: 'objetos', label: 'Objetos Personales' }
 ];
 
+// INICIALIZAMOS TODOS LOS CAMPOS EN FALSE PARA QUE SE GUARDEN EN LA BD
+const initialChecklist = [
+    ...CHECKLIST_ITEMS.exterior,
+    ...CHECKLIST_ITEMS.interior,
+    ...CHECKLIST_ITEMS.mecanico
+].reduce((acc, item) => ({ ...acc, [item.key]: false }), {});
+
+const initialInventario = INVENTARIO_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: false }), {});
+
 interface ClienteState {
     id: string | null;
     cedula: string;
@@ -88,14 +97,15 @@ export function ReceptionForm() {
         modelo: '',
         anio: new Date().getFullYear(),
         color: '',
-        vin: '', // VIN / Chasis
+        vin: '', 
         kilometraje: 0,
         nivel_gasolina: 50,
         fecha_promesa: ''
     });
 
-    const [checklist, setChecklist] = useState<any>({});
-    const [inventario, setInventario] = useState<any>({});
+    // APLICAMOS EL ESTADO INICIAL
+    const [checklist, setChecklist] = useState<any>(initialChecklist);
+    const [inventario, setInventario] = useState<any>(initialInventario);
     const [observaciones, setObservaciones] = useState('');
     const [fotos, setFotos] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
