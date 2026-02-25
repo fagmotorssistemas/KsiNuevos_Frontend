@@ -38,10 +38,10 @@ const SORT_OPTIONS = [
 export const OpportunitiesCenterView = ({
     onScraperComplete,
     vehicles,
-    selectedBrand, selectedModel, selectedMotor, selectedYear,
+    selectedBrand, selectedModel, selectedYear,
     selectedCity, selectedDateRange, regionFilter, searchTerm, sortBy,
-    availableBrands, availableModels, availableMotors, availableYears, availableCities, priceStatistics,
-    onBrandChange, onModelChange, onMotorChange, onYearChange,
+    availableBrands, availableModels, availableYears, availableCities, priceStatistics,
+    onBrandChange, onModelChange, onYearChange,
     onCityChange, onDateRangeChange, onRegionFilterChange,
     onSearchTermChange, onSortChange, onClearFilters,
 }: OpportunitiesCenterViewProps) => {
@@ -78,10 +78,10 @@ export const OpportunitiesCenterView = ({
     }, [onBrandChange, onModelChange]);
 
     const hasActiveFilters = useMemo(() =>
-        selectedBrand !== "all" || selectedModel !== "all" || selectedMotor !== "all" ||
+        selectedBrand !== "all" || selectedModel !== "all" ||
         selectedYear !== "all" || selectedDateRange !== "all" || selectedCity !== "all" ||
         sortBy !== "created_at_desc" || searchTerm !== "" || regionFilter !== "all",
-        [selectedBrand, selectedModel, selectedMotor, selectedYear, selectedDateRange,
+        [selectedBrand, selectedModel, selectedYear, selectedDateRange,
             selectedCity, sortBy, searchTerm, regionFilter]
     );
 
@@ -130,11 +130,18 @@ export const OpportunitiesCenterView = ({
             if (!response || response.status !== "done") throw new Error(response?.message ?? "Error inesperado");
             setProgress(100);
             setTimeout(() => {
+                const r = response.resumen;
                 toast.success(
-                    <div className="ml-2">
+                    <div className="ml-2 space-y-1.5 min-w-[220px]">
                         <button onClick={() => toast.dismiss(toastId)} className="absolute right-2 top-2 p-1 text-red-300 hover:opacity-50"><X className="h-4 w-4" /></button>
-                        ¡Extracción completa!
-                        <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total ?? 0} vehículos encontrados</span>
+                        <p className="font-semibold">¡Extracción completa!</p>
+                        {r && (
+                            <ul className="text-[11px] opacity-90 space-y-0.5">
+                                <li><strong>{r.total_scrapeados}</strong> total scrapeados</li>
+                                <li className="text-green-600 dark:text-green-400"><strong>{r.listings_nuevos_guardados}</strong> vehiculos nuevos guardados</li>
+                                <li className="text-blue-600 dark:text-blue-400"><strong>{r.total_vehiculos_actualizados}</strong> vehículos actualizados</li>
+                            </ul>
+                        )}
                     </div>,
                     { id: toastId, duration: Infinity }
                 );
@@ -164,9 +171,6 @@ export const OpportunitiesCenterView = ({
         setShowCarPicker(false);
         handleSubmitScraper(term);
     }, [handleSubmitScraper]);
-
-    console.log(selectedCity);
-
 
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
@@ -280,7 +284,7 @@ export const OpportunitiesCenterView = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                         <FilterButton
                             label={selectedBrand === "all" ? "Marca" : `${selectedBrand} (${brandFilteredCount})`}
                             active={selectedBrand !== "all"} hasSelection={selectedBrand !== "all"}
@@ -291,11 +295,6 @@ export const OpportunitiesCenterView = ({
                             active={selectedModel !== "all"} hasSelection={selectedModel !== "all"}
                             icon={Car} onClick={() => setShowModelModal(true)}
                             disabled={selectedBrand === "all"}
-                        />
-                        <FilterButton
-                            label={selectedMotor === "all" ? "Motor" : selectedMotor}
-                            active={selectedMotor !== "all"} hasSelection={selectedMotor !== "all"}
-                            icon={Zap} onClick={() => setShowMotorModal(true)}
                         />
                         <FilterButton
                             label={selectedYear === "all" ? "Año" : selectedYear}
@@ -327,12 +326,6 @@ export const OpportunitiesCenterView = ({
                 icon={<Car className="h-6 w-6 text-white" />}
                 options={availableModels} selectedValue={selectedModel} onSelect={onModelChange}
                 searchPlaceholder={`Buscar modelo de ${selectedBrand}...`} allLabel="Todos los Modelos" />
-
-            <FilterModal isOpen={showMotorModal} onClose={() => setShowMotorModal(false)}
-                title="Seleccionar Motor" description="Filtra vehículos por tipo de motor"
-                icon={<Zap className="h-6 w-6 text-white" />}
-                options={availableMotors} selectedValue={selectedMotor} onSelect={onMotorChange}
-                searchPlaceholder="Buscar motor..." allLabel="Todos los Motores" />
 
             <FilterModal isOpen={showYearModal} onClose={() => setShowYearModal(false)}
                 title="Seleccionar Año" description="Filtra vehículos por año de fabricación"

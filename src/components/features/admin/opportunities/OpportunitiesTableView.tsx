@@ -379,9 +379,9 @@ export function OpportunitiesTableView({
                                                 <div className={`absolute inset-0 flex items-center justify-center bg-zinc-100 ${vehicle.image_url ? 'hidden' : 'flex'}`}>
                                                     <Car className="h-7 w-7 text-zinc-300" />
                                                 </div>
-                                                <div className="absolute top-2 left-2">
+                                                {/* <div className="absolute top-2 left-2">
                                                     <SoldBadge isSold={vehicle.is_sold} />
-                                                </div>
+                                                </div> */}
                                                 {vehicle.listing_image_urls && vehicle.listing_image_urls.length > 0 && (
                                                     <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm border border-white/10">
                                                         +{vehicle.listing_image_urls.length}

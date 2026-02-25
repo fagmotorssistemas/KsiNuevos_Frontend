@@ -328,13 +328,15 @@ function DiscardedMiniModal({ vehicle, avgPrice, onClose }: {
 
 // ─── Tarjeta pequeña de vehículo descartado ───────────────────────────────────
 
-function DiscardedCard({ vehicle, avgPrice, rank }: {
-    vehicle: VehicleWithSeller; avgPrice: number; rank: number;
+function DiscardedCard({ vehicle, winnerVehicle, avgPrice, rank }: {
+    vehicle: VehicleWithSeller; winnerVehicle: VehicleWithSeller; avgPrice: number; rank: number;
 }) {
     const [open, setOpen] = useState(false);
 
-    const priceVsAvg = vehicle.price && avgPrice > 0
-        ? ((vehicle.price - avgPrice) / avgPrice) * 100 : null;
+    // 1. Calculamos la diferencia de precio contra el ganador
+    const diffVsWinner = (vehicle.price && winnerVehicle?.price)
+        ? vehicle.price - winnerVehicle.price
+        : null;
 
     // Prioridad: todas las fotos del listing, luego image_url
     const imgUrls = [
@@ -363,14 +365,20 @@ function DiscardedCard({ vehicle, avgPrice, rank }: {
                         {rank}
                     </div>
 
-                    {/* Precio + diferencia */}
+                    {/* Precio + diferencia vs Ganador */}
                     <div className="absolute bottom-1.5 left-2 right-2 flex items-end justify-between gap-1">
                         <span className="text-white font-black text-[10px] leading-none drop-shadow truncate">
                             {formatPrice(vehicle.price)}
                         </span>
-                        {priceVsAvg !== null && (
-                            <span className={`text-[8px] font-black px-1 py-0.5 rounded flex-shrink-0 ${priceVsAvg > 0 ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                                {priceVsAvg > 0 ? '+' : ''}{Math.round(priceVsAvg)}%
+
+                        {/* 2. Renderizamos el badge con formato de moneda */}
+                        {diffVsWinner !== null && (
+                            <span className={`text-[8px] font-black px-1 py-0.5 rounded flex-shrink-0 ${diffVsWinner > 0 ? 'bg-red-600 text-white' :
+                                    diffVsWinner < 0 ? 'bg-emerald-600 text-white' :
+                                        'bg-zinc-600 text-white'
+                                }`}>
+                                {diffVsWinner > 0 ? '+' : diffVsWinner < 0 ? '-' : ''}
+                                {diffVsWinner !== 0 ? formatPrice(Math.abs(diffVsWinner)) : 'Igual'}
                             </span>
                         )}
                     </div>
@@ -402,7 +410,6 @@ function DiscardedCard({ vehicle, avgPrice, rank }: {
         </>
     );
 }
-
 export function OpportunitiesVehiclePreviewModal({
     vehicle,
     groupVehicles = [],
@@ -503,7 +510,7 @@ export function OpportunitiesVehiclePreviewModal({
                                     [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full">
                                 {discardedVehicles.slice(0, 10).map((v, i) => (
                                     <div key={v.id} className="flex-none w-[80%] sm:w-60 snap-start">
-                                        <DiscardedCard vehicle={v} avgPrice={avgPrice} rank={i + 2} />
+                                        <DiscardedCard vehicle={v} winnerVehicle={vehicle} avgPrice={avgPrice} rank={i + 2} />
                                     </div>
                                 ))}
                             </div>
@@ -639,7 +646,7 @@ export function OpportunitiesVehiclePreviewModal({
                             rel="noopener noreferrer"
                             className="w-full py-4 bg-zinc-950 hover:bg-red-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-300 shadow-lg shadow-zinc-950/20 hover:shadow-red-600/30 transform active:scale-[0.98]"
                         >
-                            Contactar al vendedor en Marketplace
+                            Ver en Marketplace
                             <ChevronRight className="h-5 w-5" />
                         </a>
                     </div>
