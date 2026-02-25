@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Save, DollarSign, Upload, Loader2, Search } from "lucide-react";
+import { toast } from "sonner";
+import { X, Save, DollarSign, Upload, Loader2, Search, ImageIcon } from "lucide-react";
 import type { Cuenta } from "@/types/taller";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -176,6 +177,16 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!file) {
+            toast.error("Comprobante requerido", {
+                description: "Por favor sube la foto del comprobante para registrar el movimiento.",
+                icon: <ImageIcon className="h-4 w-4" />,
+                duration: 5000,
+                className: "!bg-red-700 !border-red-800 !text-white !font-sans",
+                
+            });
+            return;
+        }
         setIsLoading(true);
         
         await onSave({
@@ -221,11 +232,11 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
                             onClick={() => setTipo('gasto_operativo')}
                             className={`py-2 text-sm font-bold rounded-lg transition-all ${tipo !== 'ingreso' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            Egreso (Gasto)
+                            Egreso
                         </button>
                     </div>
 
-                    {/* Subtipos de Gasto (Solo si no es ingreso) */}
+                    {/* Subtipos de Egreso (según enum public.taller_tipo_transaccion) */}
                     {tipo !== 'ingreso' && (
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Tipo de Egreso</label>
@@ -234,9 +245,10 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
                                 value={tipo}
                                 onChange={(e) => setTipo(e.target.value)}
                             >
-                                <option value="gasto_operativo">Gasto Operativo (Luz, Agua, Arriendo)</option>
-                                <option value="pago_proveedor">Pago a Proveedores (Materiales)</option>
-                                <option value="nomina">Pago de Nómina (Sueldos)</option>
+                                <option value="gasto_operativo"> Gasto Operativo </option>
+                                <option value="pago_proveedor"> Pago a Proveedores </option>
+                                <option value="nomina"> Pago de Nómina </option>
+                                <option value="otros"> Otros </option>
                             </select>
                         </div>
                     )}
@@ -333,7 +345,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
 
                     {/* Subir Comprobante */}
                     <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Comprobante / Recibo</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Comprobante / Recibo (Requerido)</label>
                         <label className="flex items-center gap-3 px-3 py-2 rounded-lg border border-dashed border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors">
                             <Upload className="h-4 w-4 text-slate-400" />
                             <span className="text-sm text-slate-600 truncate">

@@ -1763,7 +1763,6 @@ export type Database = {
           descripcion: string
           estado_trabajo: string | null
           id: string
-          mecanico_asignado_id: string | null
           orden_id: string
           precio_unitario: number | null
           total: number | null
@@ -1774,7 +1773,6 @@ export type Database = {
           descripcion: string
           estado_trabajo?: string | null
           id?: string
-          mecanico_asignado_id?: string | null
           orden_id: string
           precio_unitario?: number | null
           total?: number | null
@@ -1785,19 +1783,11 @@ export type Database = {
           descripcion?: string
           estado_trabajo?: string | null
           id?: string
-          mecanico_asignado_id?: string | null
           orden_id?: string
           precio_unitario?: number | null
           total?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "taller_detalles_mecanico_fkey"
-            columns: ["mecanico_asignado_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "taller_detalles_orden_fkey"
             columns: ["orden_id"]
@@ -1955,6 +1945,7 @@ export type Database = {
           fecha_salida_real: string | null
           firma_cliente_url: string | null
           fotos_ingreso_urls: string[] | null
+          fotos_salida_urls: string[] | null
           id: string
           inventario_pertenencias: Json | null
           kilometraje: number | null
@@ -1984,6 +1975,7 @@ export type Database = {
           fecha_salida_real?: string | null
           firma_cliente_url?: string | null
           fotos_ingreso_urls?: string[] | null
+          fotos_salida_urls?: string[] | null
           id?: string
           inventario_pertenencias?: Json | null
           kilometraje?: number | null
@@ -2013,6 +2005,7 @@ export type Database = {
           fecha_salida_real?: string | null
           firma_cliente_url?: string | null
           fotos_ingreso_urls?: string[] | null
+          fotos_salida_urls?: string[] | null
           id?: string
           inventario_pertenencias?: Json | null
           kilometraje?: number | null
@@ -2816,6 +2809,8 @@ export type Database = {
         | "gasto_operativo"
         | "pago_proveedor"
         | "nomina"
+        | "obligaciones"
+        | "otros"
       user_role_enum:
         | "admin"
         | "vendedor"
@@ -3057,6 +3052,8 @@ export const Constants = {
         "gasto_operativo",
         "pago_proveedor",
         "nomina",
+        "obligaciones",
+        "otros",
       ],
       user_role_enum: [
         "admin",

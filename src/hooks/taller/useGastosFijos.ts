@@ -120,12 +120,12 @@ export function useGastosFijos() {
             
             if (pagoError) throw pagoError;
 
-            // C. Descontar el dinero de la cuenta (Transacción)
+            // C. Descontar el dinero de la cuenta (Transacción) — obligaciones fijas usan tipo 'obligaciones'
             const { error: txError } = await supabase
                 .from('taller_transacciones')
                 .insert([{
                     cuenta_id: cuentaId,
-                    tipo: 'gasto_operativo',
+                    tipo: 'obligaciones',
                     monto: monto,
                     descripcion: observacion, // Ej: "Pago Luz Febrero 2024"
                     comprobante_url: comprobanteUrl,

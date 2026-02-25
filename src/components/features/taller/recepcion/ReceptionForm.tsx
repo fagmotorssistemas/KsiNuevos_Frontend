@@ -355,6 +355,8 @@ export function ReceptionForm() {
                         <div className="relative">
                             <input
                                 type="number"
+                                required
+                                min="0"
                                 className="w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-bold text-lg"
                                 value={vehiculo.kilometraje}
                                 onChange={(e) => setVehiculo({ ...vehiculo, kilometraje: parseInt(e.target.value) })}
@@ -465,6 +467,7 @@ export function ReceptionForm() {
                     </div>
                     <div className="p-6 flex-1">
                         <textarea
+                            required
                             className="w-full h-full min-h-[180px] p-5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none resize-none font-medium text-slate-700 leading-relaxed transition-all"
                             placeholder="Escriba aquí el trabajo solicitados por el cliente, detalles del daño, peticiones especiales del cliente o cualquier nota relevante."
                             value={observaciones}

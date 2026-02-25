@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, CalendarClock } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, CalendarClock, Search, Camera, ImagePlus } from "lucide-react";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
 import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo } from "@/types/taller";
 import { useInventario } from "@/hooks/taller/useInventario";
@@ -19,11 +19,13 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const {
         registrarConsumo, fetchConsumosOrden,
         fetchDetallesOrden, agregarDetalle, eliminarDetalle,
-        fetchServiciosCatalogo, fetchMecanicos,
-        actualizarEstadoContable
+        fetchServiciosCatalogo,
+        actualizarEstadoContable,
+        uploadFotoSalida,
+        actualizarFotosSalida
     } = useOrdenes();
 
-    const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales'>('info');
+    const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales' | 'evidencia'>('info');
 
     // @ts-ignore
     const [localEstadoContable, setLocalEstadoContable] = useState(orden?.estado_contable || 'pendiente');
@@ -38,12 +40,22 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
     const [detalles, setDetalles] = useState<DetalleOrden[]>([]);
     const [catalogo, setCatalogo] = useState<ServicioCatalogo[]>([]);
-    const [mecanicos, setMecanicos] = useState<any[]>([]);
 
     const [descServicio, setDescServicio] = useState("");
     const [precioServicio, setPrecioServicio] = useState("");
-    const [mecanicoId, setMecanicoId] = useState("");
     const [isAddingService, setIsAddingService] = useState(false);
+    const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+    const serviceSearchRef = useRef<HTMLDivElement>(null);
+
+    const [fotosSalida, setFotosSalida] = useState<string[]>([]);
+    const [uploadingFoto, setUploadingFoto] = useState(false);
+    const inputFotosRef = useRef<HTMLInputElement>(null);
+
+    const serviciosFiltrados = useMemo(() => {
+        const q = descServicio.trim().toLowerCase();
+        if (!q) return catalogo.slice(0, 12);
+        return catalogo.filter(s => s.nombre_servicio.toLowerCase().includes(q)).slice(0, 12);
+    }, [catalogo, descServicio]);
 
     useEffect(() => {
         if (orden && isOpen) {
@@ -52,15 +64,14 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
             loadCatalogos();
             // @ts-ignore
             setLocalEstadoContable(orden.estado_contable || 'pendiente');
-            setShowEntregaConfirm(false); // Resetear modal de confirmación al abrir
+            setShowEntregaConfirm(false);
+            setFotosSalida(orden.fotos_salida_urls ?? []);
         }
     }, [orden, isOpen]);
 
     const loadCatalogos = async () => {
         const servs = await fetchServiciosCatalogo();
         setCatalogo(servs);
-        const mecs = await fetchMecanicos();
-        setMecanicos(mecs);
     }
 
     const loadConsumos = async () => {
@@ -98,14 +109,45 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
         setIsAddingMaterial(false);
     };
 
-    const handleSelectServicio = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const servId = e.target.value;
-        if (!servId) return;
-        const servicio = catalogo.find(s => s.id === servId);
-        if (servicio) {
-            setDescServicio(servicio.nombre_servicio);
-            setPrecioServicio(servicio.precio_sugerido.toString());
+    const handleSelectServicioFromList = (servicio: ServicioCatalogo) => {
+        setDescServicio(servicio.nombre_servicio);
+        setPrecioServicio(String(servicio.precio_sugerido ?? 0));
+        setServiceDropdownOpen(false);
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (serviceSearchRef.current && !serviceSearchRef.current.contains(e.target as Node)) {
+                setServiceDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleUploadFotosSalida = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!orden || !files?.length) return;
+        setUploadingFoto(true);
+        const nuevasUrls: string[] = [...fotosSalida];
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const result = await uploadFotoSalida(orden.id, files[i]);
+                if ('url' in result) nuevasUrls.push(result.url);
+            }
+            const res = await actualizarFotosSalida(orden.id, nuevasUrls);
+            if (res.success) setFotosSalida(nuevasUrls);
+        } finally {
+            setUploadingFoto(false);
+            e.target.value = '';
         }
+    };
+
+    const handleRemoveFotoSalida = async (url: string) => {
+        if (!orden) return;
+        const nuevas = fotosSalida.filter(u => u !== url);
+        const res = await actualizarFotosSalida(orden.id, nuevas);
+        if (res.success) setFotosSalida(nuevas);
     };
 
     const handleAddService = async (e: React.FormEvent) => {
@@ -116,15 +158,13 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
             orden_id: orden.id,
             descripcion: descServicio,
             precio_unitario: parseFloat(precioServicio),
-            cantidad: 1,
-            mecanico_asignado_id: mecanicoId || undefined
+            cantidad: 1
         });
 
         if (result.success) {
             await loadPresupuesto();
             setDescServicio("");
             setPrecioServicio("");
-            setMecanicoId("");
         }
         setIsAddingService(false);
     };
@@ -203,21 +243,15 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                     </div>
 
                     <div className="flex items-center gap-4 flex-wrap justify-end">
-                        {/* <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-                            <span className="text-xs font-bold text-slate-400 uppercase hidden sm:inline-block">Pago:</span>
-                            {isUpdatingContable && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-                            <select
-                                value={localEstadoContable}
-                                onChange={handleEstadoContableChange}
-                                disabled={isUpdatingContable}
-                                className={`text-sm font-bold outline-none bg-transparent cursor-pointer disabled:opacity-50 ${getContableColor(localEstadoContable)}`}
-                            >
-                                <option value="pendiente" className="text-amber-600 font-bold">Pendiente</option>
-                                <option value="facturado" className="text-blue-600 font-bold">Facturado</option>
-                                <option value="pagado" className="text-emerald-600 font-bold">Pagado</option>
-                                <option value="anulado" className="text-red-600 font-bold">Anulado</option>
-                            </select>
-                        </div> */}
+                        <button
+                            type="button"
+                            onClick={onPrint}
+                            className="flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors"
+                        >
+                            <Printer className="h-4 w-4" />
+                            <span className="hidden sm:inline-block">Imprimir Orden / PDF</span>
+                            <span className="sm:hidden">PDF</span>
+                        </button>
 
                         {orden.estado !== 'entregado' && (
                             <button
@@ -254,6 +288,12 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                         className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'materiales' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Package className="h-4 w-4" /> Materiales
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('evidencia')}
+                        className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'evidencia' ? 'border-amber-600 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <Camera className="h-4 w-4" /> Evidencia salida
                     </button>
                 </div>
 
@@ -328,125 +368,131 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                 </div>
                             </div>
 
-                            <div className="flex justify-end pt-4">
-                                <button
-                                    type="button"
-                                    onClick={onPrint}
-                                    className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-bold underline decoration-slate-300 underline-offset-4 transition-colors"
-                                >
-                                    <Printer className="h-4 w-4" />
-                                    Imprimir Orden / PDF
-                                </button>
-                            </div>
                         </div>
                     )}
 
                     {activeTab === 'presupuesto' && (
-                        <div className="space-y-6">
-                            <form onSubmit={handleAddService} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="col-span-1 md:col-span-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Servicio / Trabajo</label>
-                                        <div className="flex gap-2 flex-col sm:flex-row">
-                                            <select
-                                                className="w-full sm:w-1/3 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                                onChange={handleSelectServicio}
-                                                defaultValue=""
-                                            >
-                                                <option value="" disabled>Cargar del Catálogo...</option>
-                                                {catalogo.map(s => (
-                                                    <option key={s.id} value={s.id}>{s.nombre_servicio} (${s.precio_sugerido})</option>
-                                                ))}
-                                            </select>
+                        <div className="space-y-5">
+                            <form onSubmit={handleAddService} className="bg-white rounded-xl border border-slate-200 shadow-sm ">
+                                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70">
+                                    <h3 className="text-sm font-bold text-slate-700">Agregar item al presupuesto</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">Busca en el catálogo o escribe el trabajo manualmente.</p>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-4 items-end">
+                                        <div ref={serviceSearchRef} className="relative">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Servicio / Trabajo</label>
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                                                <input
+                                                    required
+                                                    type="text"
+                                                    placeholder="Buscar o escribir trabajo..."
+                                                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-shadow placeholder:text-slate-400"
+                                                    value={descServicio}
+                                                    onChange={e => setDescServicio(e.target.value)}
+                                                    onFocus={() => setServiceDropdownOpen(true)}
+                                                    autoComplete="off"
+                                                />
+                                                {serviceDropdownOpen && catalogo.length > 0 && (
+                                                    <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1 text-sm">
+                                                        {serviciosFiltrados.length > 0 ? (
+                                                            serviciosFiltrados.map((s) => (
+                                                                <li key={s.id}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onMouseDown={(e) => { e.preventDefault(); handleSelectServicioFromList(s); }}
+                                                                        className="w-full px-3 py-2.5 text-left hover:bg-emerald-50 flex justify-between items-center gap-2 text-slate-800"
+                                                                    >
+                                                                        <span className="truncate">{s.nombre_servicio}</span>
+                                                                        <span className="text-emerald-600 font-mono font-medium shrink-0">${Number(s.precio_sugerido ?? 0).toFixed(2)}</span>
+                                                                    </button>
+                                                                </li>
+                                                            ))
+                                                        ) : (
+                                                            <li className="px-3 py-4 text-center text-slate-400 text-sm">
+                                                                Sin coincidencias. Escribe el nombre del trabajo y el precio abajo.
+                                                            </li>
+                                                        )}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Precio ($)</label>
                                             <input
                                                 required
-                                                type="text"
-                                                placeholder="Descripción del trabajo..."
-                                                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                                value={descServicio}
-                                                onChange={e => setDescServicio(e.target.value)}
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                placeholder="0.00"
+                                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-medium"
+                                                value={precioServicio}
+                                                onChange={e => setPrecioServicio(e.target.value)}
                                             />
                                         </div>
                                     </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Costo ($)</label>
-                                        <input
-                                            required
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
-                                            value={precioServicio}
-                                            onChange={e => setPrecioServicio(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Mecánico (Opcional)</label>
-                                        <select
-                                            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                            value={mecanicoId}
-                                            onChange={e => setMecanicoId(e.target.value)}
+                                    <div className="flex justify-end pt-1">
+                                        <button
+                                            type="submit"
+                                            disabled={isAddingService}
+                                            className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-emerald-700 active:bg-emerald-800 transition-colors flex items-center gap-2 shadow-sm"
                                         >
-                                            <option value="">Sin asignar</option>
-                                            {mecanicos.map(m => (
-                                                <option key={m.id} value={m.id}>{m.full_name}</option>
-                                            ))}
-                                        </select>
+                                            {isAddingService ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                            Agregar al presupuesto
+                                        </button>
                                     </div>
-                                </div>
-                                <div className="flex justify-end">
-                                    <button
-                                        type="submit"
-                                        disabled={isAddingService}
-                                        className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2"
-                                    >
-                                        {isAddingService ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                                        Agregar Item
-                                    </button>
                                 </div>
                             </form>
 
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-                                <table className="w-full text-sm text-left min-w-[600px]">
-                                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                                        <tr>
-                                            <th className="px-4 py-3">Descripción</th>
-                                            <th className="px-4 py-3">Mecánico</th>
-                                            <th className="px-4 py-3 text-right">Precio</th>
-                                            <th className="px-4 py-3 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {detalles.map((det) => (
-                                            <tr key={det.id}>
-                                                <td className="px-4 py-3 font-medium text-slate-800">{det.descripcion}</td>
-                                                <td className="px-4 py-3 text-slate-500 text-xs">{det.mecanico?.full_name || '-'}</td>
-                                                <td className="px-4 py-3 text-right font-mono font-bold">${det.precio_unitario.toFixed(2)}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <button onClick={() => handleDeleteService(det.id)} className="text-slate-400 hover:text-red-500">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {detalles.length > 0 && (
-                                            <tr className="bg-slate-50 font-bold text-slate-900 border-t border-slate-200">
-                                                <td colSpan={2} className="px-4 py-3 text-right">TOTAL ESTIMADO:</td>
-                                                <td className="px-4 py-3 text-right text-lg">${totalPresupuesto.toFixed(2)}</td>
-                                                <td></td>
-                                            </tr>
-                                        )}
-                                        {detalles.length === 0 && (
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/70 flex justify-between items-center">
+                                    <span className="text-sm font-bold text-slate-700">Items del presupuesto</span>
+
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left min-w-[400px]">
+                                        <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wide border-b border-slate-200">
                                             <tr>
-                                                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                                                    No hay items en el presupuesto.
-                                                </td>
+                                                <th className="px-4 py-3">Descripción</th>
+                                                <th className="px-4 py-3 text-right w-28">Precio</th>
+                                                <th className="px-4 py-3 w-12"></th>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {detalles.map((det) => (
+                                                <tr key={det.id} className="hover:bg-slate-50/50">
+                                                    <td className="px-4 py-3 font-medium text-slate-800">{det.descripcion}</td>
+                                                    <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">${det.precio_unitario.toFixed(2)}</td>
+                                                    <td className="px-4 py-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteService(det.id)}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                            title="Eliminar"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {detalles.length > 0 && (
+                                                <tr className="bg-emerald-50/80 font-bold text-slate-900 border-t-2 border-slate-200">
+                                                    <td className="px-4 py-3 text-right">Total estimado</td>
+                                                    <td className="px-4 py-3 text-right text-base font-mono text-emerald-700">${totalPresupuesto.toFixed(2)}</td>
+                                                    <td></td>
+                                                </tr>
+                                            )}
+                                            {detalles.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={3} className="px-4 py-10 text-center text-slate-400">
+                                                        No hay items. Agrega servicios o trabajos arriba.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -523,6 +569,82 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'evidencia' && (
+                        <div className="space-y-5">
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="px-5 py-4 border-b border-slate-100 bg-amber-50/50">
+                                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                        <Camera className="h-4 w-4 text-amber-600" />
+                                        Evidencia de salida del vehículo
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Sube fotos de cómo quedó el vehículo después del trabajo realizado.
+                                    </p>
+                                </div>
+                                <div className="p-5">
+                                    <input
+                                        ref={inputFotosRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        multiple
+                                        className="hidden"
+                                        onChange={handleUploadFotosSalida}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={uploadingFoto}
+                                        onClick={() => inputFotosRef.current?.click()}
+                                        className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition-colors text-slate-500 hover:text-amber-700 disabled:opacity-60 disabled:pointer-events-none"
+                                    >
+                                        {uploadingFoto ? (
+                                            <Loader2 className="h-10 w-10 animate-spin text-amber-600" />
+                                        ) : (
+                                            <ImagePlus className="h-10 w-10 text-slate-400" />
+                                        )}
+                                        <span className="text-sm font-medium">
+                                            {uploadingFoto ? "Subiendo..." : "Seleccionar fotos o arrastrar aquí"}
+                                        </span>
+                                        <span className="text-xs text-slate-400">JPG, PNG, WebP o GIF (máx. 5 MB por imagen)</span>
+                                    </button>
+
+                                    {fotosSalida.length > 0 && (
+                                        <div className="mt-5">
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">
+                                                Fotos subidas ({fotosSalida.length})
+                                            </p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                                {fotosSalida.map((url) => (
+                                                    <div key={url} className="relative group aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="block w-full h-full" title="Ver en tamaño completo">
+                                                            <img
+                                                                src={url}
+                                                                alt="Evidencia salida"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveFotoSalida(url)}
+                                                            className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-opacity shadow z-10"
+                                                            title="Eliminar foto"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {fotosSalida.length === 0 && !uploadingFoto && (
+                                        <p className="mt-4 text-center text-sm text-slate-400">
+                                            Aún no hay fotos de evidencia de salida.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
