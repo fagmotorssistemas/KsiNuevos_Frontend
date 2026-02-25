@@ -1,5 +1,5 @@
 import React from "react";
-import { Folder, FileText } from "lucide-react";
+import { Folder } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
 
 interface FolderCardProps {
@@ -7,77 +7,49 @@ interface FolderCardProps {
     onClick: () => void;
 }
 
-// Función utilitaria: Convertimos el estado a minúsculas para evitar errores de TypeScript
 const getStatusConfig = (estadoOriginal: string) => {
-    // Normalizamos el texto (ej: de 'COMPLETADO' o 'Completado' pasará a 'completado')
     const estado = (estadoOriginal as string).toLowerCase();
-
-    // NOTA: Si tus estados se llaman diferente (ej: 'finalizado', 'entregado'), 
-    // cambia las palabras aquí abajo para que coincidan con tu sistema.
     switch (estado) {
-        case 'completado': 
-        case 'completada':
-        case 'finalizado':
+        case 'entregado':
             return { color: 'text-green-700', bg: 'bg-green-100' };
-        case 'en_proceso': 
-        case 'en proceso':
+        case 'terminado':
             return { color: 'text-blue-700', bg: 'bg-blue-100' };
-        case 'cancelado': 
+        case 'en_proceso':
+        case 'en proceso':
+            return { color: 'text-slate-700', bg: 'bg-slate-100' };
+        case 'cancelado':
         case 'cancelada':
             return { color: 'text-red-700', bg: 'bg-red-100' };
-        default: 
+        default:
             return { color: 'text-amber-700', bg: 'bg-amber-100' };
     }
 };
 
 export function FolderCard({ orden, onClick }: FolderCardProps) {
-    const docCount = (orden.pdf_url ? 1 : 0) + 
-                     (orden.fotos_ingreso_urls?.length || 0) + 
-                     (orden.transacciones?.filter(t => t.comprobante_url).length || 0);
-
-    // Formateamos el texto del estado para mostrarlo limpio en la tarjeta
     const estadoFormateado = (orden.estado as string).replace(/_/g, ' ');
     const status = getStatusConfig(orden.estado as string);
-    
-    // Solución al error de TypeScript: forzamos a string y normalizamos
-    const estadoNormalizado = (orden.estado as string).toLowerCase();
-    
-    // Comprobamos si el estado incluye la palabra "completado", "completada" o "finalizado"
-    const isCompleted = estadoNormalizado === 'completado' || 
-                        estadoNormalizado === 'completada' || 
-                        estadoNormalizado === 'finalizado';
-                        
-    const folderBg = isCompleted ? 'bg-emerald-50' : 'bg-blue-50';
-    const tabBg = isCompleted ? 'bg-emerald-100' : 'bg-blue-100';
-    const hoverBg = isCompleted ? 'group-hover:bg-emerald-100' : 'group-hover:bg-blue-100';
+
+    const clienteNombre = orden.cliente?.nombre_completo || 'Sin cliente';
+    const vehiculoTexto = [orden.vehiculo_marca, orden.vehiculo_modelo].filter(Boolean).join(' ') || 'Sin vehículo';
 
     return (
-        <div onClick={onClick} className="group cursor-pointer flex flex-col w-full transition-all hover:-translate-y-1 mt-2">
-            {/* Pestaña superior suavizada */}
-            <div className={`w-1/3 h-4 ${tabBg} rounded-t-lg ml-3 relative z-10 transition-colors border border-b-0 border-slate-200/60`}></div>
-            
-            {/* Cuerpo de la carpeta */}
-            <div className={`w-full ${folderBg} ${hoverBg} rounded-2xl rounded-tl-none p-5 shadow-sm border border-slate-200/60 relative flex flex-col transition-colors min-h-[140px]`}>
-                
-                {/* Encabezado: Número de orden y Estado */}
-                <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-slate-800 text-base truncate">#{orden.numero_orden}</h3>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${status.bg} ${status.color}`}>
+        <div onClick={onClick} className="group cursor-pointer flex flex-col w-full transition-all hover:-translate-y-0.5 mt-2">
+            <div className="w-1/3 h-3 bg-slate-200 rounded-t-md ml-3 relative z-10 border border-b-0 border-slate-200" />
+            <div className="w-full bg-white group-hover:bg-slate-50 rounded-xl rounded-tl-none p-4 shadow-sm border border-slate-200 relative flex flex-col transition-colors min-h-[120px]">
+                <div className="flex justify-between items-start gap-2 mb-2">
+                    <h3 className="font-bold text-slate-800 text-sm truncate">#{orden.numero_orden}</h3>
+                    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wide shrink-0 ${status.bg} ${status.color}`}>
                         {estadoFormateado}
                     </span>
                 </div>
-                
-                {/* Nombre del cliente */}
-                <p className="text-sm text-slate-600 truncate mb-4">
-                    {orden.cliente?.nombre_completo || 'Sin cliente registrado'}
+                <p className="text-sm text-slate-700 truncate font-medium">
+                    {clienteNombre}
                 </p>
-                
-                {/* Pie de la tarjeta: Icono de carpeta y contador de archivos */}
-                <div className="mt-auto flex justify-between items-center text-slate-500">
-                    <Folder className="h-5 w-5 opacity-50" fill="currentColor" />
-                    <p className="text-xs font-medium flex items-center gap-1.5 bg-white/60 px-2 py-1 rounded-lg">
-                        <FileText className="h-3.5 w-3.5 text-slate-400" /> {docCount} archivos
-                    </p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">
+                    {vehiculoTexto}
+                </p>
+                <div className="mt-auto pt-3 flex items-center text-slate-400">
+                    <Folder className="h-4 w-4 opacity-60" fill="currentColor" />
                 </div>
             </div>
         </div>

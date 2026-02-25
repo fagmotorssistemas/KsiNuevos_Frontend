@@ -1,66 +1,178 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Save, DollarSign, Upload, Loader2, Search } from "lucide-react";
-import type { Cuenta } from "@/types/taller"; 
+import type { Cuenta } from "@/types/taller";
 import { useAuth } from "@/hooks/useAuth";
+
+type OrdenOption = { id: string; numero_orden: number; vehiculo_placa: string; vehiculo_marca: string | null; vehiculo_modelo: string | null };
 
 interface TransactionModalProps {
     isOpen: boolean;
     onClose: () => void;
     cuentas: Cuenta[];
     onSave: (data: any, file: File | null) => Promise<any>;
-    defaultOrdenId?: string; 
-    defaultTipo?: string;    
+    defaultOrdenId?: string;
+    defaultTipo?: string;
 }
 
 export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrdenId, defaultTipo }: TransactionModalProps) {
     const { supabase } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
-    
-    // Estado del formulario
+
     const [tipo, setTipo] = useState('ingreso');
     const [monto, setMonto] = useState('');
     const [descripcion, setDescripcion] = useState('');
     const [cuentaId, setCuentaId] = useState('');
-    const [ordenId, setOrdenId] = useState(''); 
+    const [ordenId, setOrdenId] = useState('');
     const [file, setFile] = useState<File | null>(null);
 
-    // Estado para buscar órdenes
-    const [ordenesActivas, setOrdenesActivas] = useState<any[]>([]);
+    const [ordenesRecientes, setOrdenesRecientes] = useState<OrdenOption[]>([]);
+    const [ordenesBusqueda, setOrdenesBusqueda] = useState<OrdenOption[]>([]);
+    const [searchOrden, setSearchOrden] = useState('');
+    const [buscandoOrden, setBuscandoOrden] = useState(false);
+
+    const cargarUltimasOrdenes = useCallback(async () => {
+        const { data } = await supabase
+            .from('taller_ordenes')
+            .select('id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo')
+            .order('created_at', { ascending: false })
+            .limit(5);
+        if (data) setOrdenesRecientes(data as OrdenOption[]);
+    }, [supabase]);
+
+    const asegurarOrdenPorDefecto = useCallback(async (id: string) => {
+        const { data } = await supabase
+            .from('taller_ordenes')
+            .select('id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo')
+            .eq('id', id)
+            .single();
+        if (data)
+            setOrdenesRecientes(prev => prev.some(o => o.id === id) ? prev : [data as OrdenOption, ...prev]);
+    }, [supabase]);
 
     useEffect(() => {
-        if (isOpen) {
-            if (cuentas.length > 0 && !cuentaId) {
-                setCuentaId(cuentas[0].id);
-            }
-            cargarOrdenesActivas();
-            
-            // Si el modal se abre para cobrar una orden específica (Cuentas por Cobrar)
-            if (defaultOrdenId) setOrdenId(defaultOrdenId);
-            if (defaultTipo) setTipo(defaultTipo);
+        if (!isOpen) return;
+        if (cuentas.length > 0 && !cuentaId) setCuentaId(cuentas[0].id);
+        cargarUltimasOrdenes();
+        if (defaultOrdenId) {
+            setOrdenId(defaultOrdenId);
+            asegurarOrdenPorDefecto(defaultOrdenId);
+        }
+        if (defaultTipo) setTipo(defaultTipo);
+    }, [isOpen, cuentas, defaultOrdenId, defaultTipo, cargarUltimasOrdenes, asegurarOrdenPorDefecto]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setSearchOrden('');
+        setOrdenesBusqueda([]);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || !searchOrden.trim()) {
+            setOrdenesBusqueda([]);
+            setBuscandoOrden(false);
+            return;
+        }
+        const term = searchOrden.trim().replace(/%/g, '');
+        const num = Number(term);
+        const incluirNumero = !isNaN(num) && String(num) === term;
+        setBuscandoOrden(true);
+        const t = setTimeout(async () => {
+            const orClause = incluirNumero
+                ? `vehiculo_placa.ilike.%${term}%,vehiculo_marca.ilike.%${term}%,vehiculo_modelo.ilike.%${term}%,numero_orden.eq.${num}`
+                : `vehiculo_placa.ilike.%${term}%,vehiculo_marca.ilike.%${term}%,vehiculo_modelo.ilike.%${term}%`;
+            const { data } = await supabase
+                .from('taller_ordenes')
+                .select('id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo')
+                .or(orClause)
+                .order('created_at', { ascending: false })
+                .limit(25);
+            setOrdenesBusqueda((data ?? []) as OrdenOption[]);
+            setBuscandoOrden(false);
+        }, 300);
+        return () => clearTimeout(t);
+    }, [isOpen, searchOrden, supabase]);
+
+    const ordenesParaLista = searchOrden.trim() ? ordenesBusqueda : ordenesRecientes;
+    const ordenSeleccionadaEnLista = ordenId && ordenesParaLista.some(o => o.id === ordenId);
+
+    const [ordenSeleccionadaInfo, setOrdenSeleccionadaInfo] = useState<OrdenOption | null>(null);
+    useEffect(() => {
+        if (!ordenId || ordenSeleccionadaEnLista) {
+            setOrdenSeleccionadaInfo(null);
+            return;
+        }
+        supabase
+            .from('taller_ordenes')
+            .select('id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo')
+            .eq('id', ordenId)
+            .single()
+            .then(({ data }) => { if (data) setOrdenSeleccionadaInfo(data as OrdenOption); });
+    }, [ordenId, ordenSeleccionadaEnLista, supabase]);
+
+    const opcionesSelect = ordenSeleccionadaInfo && !ordenesParaLista.some(o => o.id === ordenSeleccionadaInfo.id)
+        ? [ordenSeleccionadaInfo, ...ordenesParaLista]
+        : ordenesParaLista;
+
+    const labelOrden = (o: OrdenOption) => `#${o.numero_orden} - ${[o.vehiculo_marca, o.vehiculo_modelo].filter(Boolean).join(' ')} (${o.vehiculo_placa})`;
+
+    const [ordenDropdownAbierto, setOrdenDropdownAbierto] = useState(false);
+    const [ordenSeleccionada, setOrdenSeleccionada] = useState<OrdenOption | null>(null);
+    const ordenComboboxRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (ordenId && opcionesSelect.length > 0) {
+            const found = opcionesSelect.find(o => o.id === ordenId);
+            setOrdenSeleccionada(found ?? ordenSeleccionadaInfo ?? null);
         } else {
-            // Reset state al cerrar
+            setOrdenSeleccionada(null);
+        }
+    }, [ordenId, opcionesSelect, ordenSeleccionadaInfo]);
+
+    const valorInputOrden = ordenDropdownAbierto ? searchOrden : (ordenSeleccionada ? labelOrden(ordenSeleccionada) : searchOrden);
+
+    const alCambiarInputOrden = (value: string) => {
+        setSearchOrden(value);
+        setOrdenDropdownAbierto(true);
+        if (ordenId) {
+            setOrdenId('');
+        }
+    };
+
+    const alSeleccionarOrden = (o: OrdenOption) => {
+        setOrdenId(o.id);
+        setOrdenSeleccionada(o);
+        setSearchOrden('');
+        setOrdenDropdownAbierto(false);
+    };
+
+    const alLimpiarOrden = () => {
+        setOrdenId('');
+        setOrdenSeleccionada(null);
+        setSearchOrden('');
+        setOrdenDropdownAbierto(false);
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (ordenComboboxRef.current && !ordenComboboxRef.current.contains(e.target as Node)) {
+                setOrdenDropdownAbierto(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) {
             setMonto('');
             setDescripcion('');
             setFile(null);
             setOrdenId('');
             setTipo('ingreso');
         }
-    }, [isOpen, cuentas, defaultOrdenId, defaultTipo]);
-
-    const cargarOrdenesActivas = async () => {
-        // Mejorado: Obtenemos las órdenes recientes que NO estén totalmente pagadas 
-        // para asegurar que las cuentas por cobrar aparezcan en el select.
-        const { data } = await supabase
-            .from('taller_ordenes')
-            .select('id, numero_orden, vehiculo_placa, vehiculo_modelo')
-            .neq('estado_contable', 'pagado')
-            .order('created_at', { ascending: false })
-            .limit(100);
-        
-        if (data) setOrdenesActivas(data);
-    };
+    }, [isOpen]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -170,23 +282,53 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
                         />
                     </div>
 
-                    {/* Asignar a Orden (Opcional) */}
-                    <div>
+                    {/* Vincular a Orden: combobox único (escribes y se filtran las opciones) */}
+                    <div ref={ordenComboboxRef} className="relative">
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-2">
                             <Search className="h-3 w-3" /> Vincular a Orden {tipo === 'ingreso' ? '(Necesario para cobros)' : '(Opcional)'}
                         </label>
-                        <select 
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm"
-                            value={ordenId}
-                            onChange={(e) => setOrdenId(e.target.value)}
-                        >
-                            <option value="">-- Sin vinculación --</option>
-                            {ordenesActivas.map(o => (
-                                <option key={o.id} value={o.id}>
-                                    #{o.numero_orden} - {o.vehiculo_modelo} ({o.vehiculo_placa})
-                                </option>
-                            ))}
-                        </select>
+                        <div className="flex rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                            <input
+                                type="text"
+                                placeholder="Escribe placa, marca o modelo para buscar..."
+                                className="flex-1 min-w-0 px-3 py-2 rounded-l-lg outline-none text-sm"
+                                value={valorInputOrden}
+                                onChange={(e) => alCambiarInputOrden(e.target.value)}
+                                onFocus={() => setOrdenDropdownAbierto(true)}
+                            />
+                            {ordenSeleccionada && (
+                                <button
+                                    type="button"
+                                    onClick={alLimpiarOrden}
+                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-r-lg shrink-0"
+                                    title="Quitar vinculación"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                        {ordenDropdownAbierto && (
+                            <div className="absolute z-10 w-full mt-1 py-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                                {buscandoOrden && searchOrden.trim() ? (
+                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Buscando...</div>
+                                ) : searchOrden.trim() && opcionesSelect.length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Sin resultados</div>
+                                ) : opcionesSelect.length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Escribe para buscar una orden</div>
+                                ) : (
+                                    opcionesSelect.map(o => (
+                                        <button
+                                            key={o.id}
+                                            type="button"
+                                            className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 transition-colors ${ordenId === o.id ? 'bg-blue-50 text-blue-800 font-medium' : 'text-slate-700'}`}
+                                            onClick={() => alSeleccionarOrden(o)}
+                                        >
+                                            {labelOrden(o)}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Subir Comprobante */}

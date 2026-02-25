@@ -200,6 +200,12 @@ export interface CuentaPorCobrar {
         fecha_transaccion: string;
         descripcion: string;
     }[];
+    consumos_materiales?: {
+        id: string;
+        cantidad: number;
+        fecha_consumo: string;
+        item?: { nombre: string; unidad_medida: string; costo_promedio?: number };
+    }[];
     presupuesto: number;
     total_pagado: number;
     total_gastado: number;

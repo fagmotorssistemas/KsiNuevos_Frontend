@@ -52,7 +52,8 @@ export function useFinanzas() {
                     id, numero_orden, vehiculo_placa, vehiculo_marca, vehiculo_modelo, estado_contable, fecha_ingreso,
                     cliente:taller_clientes(nombre_completo, telefono),
                     transacciones:taller_transacciones(monto, tipo, fecha_transaccion, descripcion),
-                    detalles:taller_detalles_orden(total)
+                    detalles:taller_detalles_orden(total),
+                    consumos_materiales:taller_consumos_materiales(id, cantidad, fecha_consumo, item:taller_inventario_items(nombre, unidad_medida, costo_promedio))
                 `)
                 .in('estado_contable', ['pendiente', 'facturado'])
                 .order('fecha_ingreso', { ascending: false });
@@ -86,6 +87,7 @@ export function useFinanzas() {
                         fecha_ingreso: orden.fecha_ingreso,
                         cliente: orden.cliente,
                         transacciones: orden.transacciones,
+                        consumos_materiales: orden.consumos_materiales ?? [],
                         presupuesto: presupuesto,
                         total_pagado: pagado,
                         total_gastado: gastado,
