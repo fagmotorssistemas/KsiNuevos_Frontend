@@ -1,17 +1,18 @@
 import React from "react";
-import { FileText, Download, UploadCloud, Image as ImageIcon, Loader2 } from "lucide-react";
+import { FileText, Eye, UploadCloud, Image as ImageIcon, Loader2 } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
 
 interface ArchivosTabProps {
     orden: OrdenTrabajo;
     isUploading: boolean;
     onTriggerUpload: (bucket: any) => void;
+    onPrint: () => void;
 }
 
-export function ArchivosTab({ orden, isUploading, onTriggerUpload }: ArchivosTabProps) {
+export function ArchivosTab({ orden, isUploading, onTriggerUpload, onPrint }: ArchivosTabProps) {
     return (
         <div className="space-y-6 animate-in fade-in">
-            {/* Proforma PDF */}
+            {/* Proforma PDF - Ver archivo (misma acción que Imprimir/PDF del modal de trabajos) */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="bg-red-100 p-3 rounded-xl text-red-600">
@@ -22,18 +23,13 @@ export function ArchivosTab({ orden, isUploading, onTriggerUpload }: ArchivosTab
                         <p className="text-sm text-slate-500">Documento base del inicio del trabajo.</p>
                     </div>
                 </div>
-                {orden.pdf_url ? (
-                    <a href={orden.pdf_url} target="_blank" rel="noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2">
-                        <Download className="h-4 w-4" /> Descargar Archivo
-                    </a>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-400 border border-slate-200 border-dashed px-4 py-2 rounded-lg">Sin proforma</p>
-                        <button onClick={() => onTriggerUpload('ordenes-trabajo')} disabled={isUploading} className="text-blue-600 hover:text-blue-800 p-2 bg-blue-50 rounded-lg disabled:opacity-50">
-                            <UploadCloud className="h-5 w-5" />
-                        </button>
-                    </div>
-                )}
+                <button
+                    type="button"
+                    onClick={onPrint}
+                    className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2"
+                >
+                    <Eye className="h-4 w-4" /> Ver archivo
+                </button>
             </div>
 
             {/* Evidencias Fotográficas */}

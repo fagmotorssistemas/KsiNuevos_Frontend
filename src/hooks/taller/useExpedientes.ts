@@ -13,7 +13,7 @@ export function useExpedientes() {
             .from('taller_ordenes')
             .select(`
                 *,
-                cliente:taller_clientes(nombre_completo, telefono, email),
+                cliente:taller_clientes(nombre_completo, telefono, email, cedula_ruc, direccion),
                 transacciones:taller_transacciones(*)
             `)
             .order('fecha_ingreso', { ascending: false });

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import { Folder, FileText, Loader2 } from "lucide-react";
 import { useExpedientes } from "@/hooks/taller/useExpedientes";
 import { OrdenTrabajo } from "@/types/taller";
@@ -9,6 +10,7 @@ import { OrdenTrabajo } from "@/types/taller";
 import { ExpedientesTopBar } from "@/components/features/taller/expedientes/ExpedientesTopBar";
 import { FolderCard } from "@/components/features/taller/expedientes/FolderCard";
 import { ExpedienteDetail } from "@/components/features/taller/expedientes/ExpedienteDetail";
+import { OrderPrintView } from "@/components/features/taller/OrderPrintView";
 
 export default function ExpedientesPage() {
     const { ordenes, isLoading, subirArchivo, actualizarEstadoContable } = useExpedientes();
@@ -24,6 +26,12 @@ export default function ExpedientesPage() {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadConfig, setUploadConfig] = useState<{bucket: any, transaccionId?: string} | null>(null);
+
+    const printComponentRef = useRef<HTMLDivElement>(null);
+    const handlePrint = useReactToPrint({
+        contentRef: printComponentRef,
+        documentTitle: selectedOrder ? `Orden_${selectedOrder.numero_orden}` : "Orden_Trabajo",
+    });
 
     // Sincronizar selectedOrder con las actualizaciones de la BD
     useEffect(() => {
@@ -99,7 +107,8 @@ export default function ExpedientesPage() {
                         onClose={() => setSelectedOrder(null)}
                         isUploading={isUploading}
                         onTriggerUpload={triggerUpload}
-                        onUpdateContable={actualizarEstadoContable} // Pasamos la función al detalle
+                        onUpdateContable={actualizarEstadoContable}
+                        onPrint={() => handlePrint?.()}
                     />
 
                 ) : (
@@ -162,6 +171,12 @@ export default function ExpedientesPage() {
                             )}
                         </div>
                     </div>
+                )}
+            </div>
+
+            <div className="hidden">
+                {selectedOrder && (
+                    <OrderPrintView ref={printComponentRef} orden={selectedOrder} />
                 )}
             </div>
         </div>
