@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, FileSpreadsheet } from "lucide-react";
 
 import { useInventory, type InventoryCar } from "@/hooks/useInventory";
 import { InventoryToolbar } from "@/components/features/inventory/InventoryToolbar";
 import { InventoryTable } from "@/components/features/inventory/InventoryTable";
 import { InventoryDetailModal } from "@/components/features/inventory/InventoryDetailModal";
 import { InventoryCreateModal } from "@/components/features/inventory/InventoryCreateModal";
+import { InventoryExportPrintModal } from "@/components/features/inventory/InventoryExportPrintModal";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -21,10 +22,12 @@ export default function InventoryPage() {
     const { 
         cars, 
         isLoading, 
-        totalCount, // Usamos totalCount que viene del hook
-        page,       // <--- Paginación: Página actual
-        setPage,    // <--- Paginación: Función para cambiar página
-        rowsPerPage,// <--- Paginación: Límite por página (10)
+        totalCount,
+        processedInventory,
+        allCars,
+        page,
+        setPage,
+        rowsPerPage,
         filters,
         sortBy,
         updateFilter,
@@ -37,6 +40,7 @@ export default function InventoryPage() {
     const [selectedCar, setSelectedCar] = useState<InventoryCar | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isExportPrintModalOpen, setIsExportPrintModalOpen] = useState(false);
 
     // Handlers Edición
     const handleEditCar = (car: InventoryCar) => {
@@ -79,8 +83,17 @@ export default function InventoryPage() {
                     </p>
                 </div>
                 
-                {/* BOTÓN CREAR: Solo visible si tiene permisos
                 <div className="flex gap-3">
+                    <Button
+                        variant="primary"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setIsExportPrintModalOpen(true)}
+                    >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Exportar / Imprimir
+                    </Button>
+                    {/* BOTÓN CREAR: Solo visible si tiene permisos
                     {canCreate && (
                         <Button 
                             variant="primary" 
@@ -91,8 +104,8 @@ export default function InventoryPage() {
                             <Plus className="h-4 w-4" />
                             Nuevo Vehículo
                         </Button>
-                    )}
-                </div> */}
+                    )} */}
+                </div>
             </div>
 
             {/* Barra de Herramientas */}
@@ -142,6 +155,14 @@ export default function InventoryPage() {
                     onSuccess={handleCreateSuccess}
                 />
             )}
+
+            {/* MODAL EXPORTAR / IMPRIMIR */}
+            <InventoryExportPrintModal
+                isOpen={isExportPrintModalOpen}
+                onClose={() => setIsExportPrintModalOpen(false)}
+                allFilteredCars={processedInventory}
+                fullInventory={allCars}
+            />
         </div>
     );
 }
