@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
+import type { VehicleImageAnalysis } from '@/types/vehicleImageAnalysis';
 
 const supabase = createClient();
 

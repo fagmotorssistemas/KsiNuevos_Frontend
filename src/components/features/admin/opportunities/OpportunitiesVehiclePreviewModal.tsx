@@ -2,19 +2,24 @@ import {
     X, MapPin, ChevronRight, Gauge,
     FileText, CheckCircle2, Star, Eye,
     Database as DatabaseIcon, Trophy, Users, ThumbsUp,
-    Car, AlertCircle,
+    AlertCircle,
     Store,
     User,
     Wrench,
     ImageOff,
+    ScanSearch,
+    CarFront,
+    LayoutDashboard,
+    Hash,
+    Building2,
+    User as UserIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { DateFormatter } from "@/utils/DateFormatter";
-import { TextFormatter } from "@/utils/TextFormatter";
-import { ScoredVehicle } from "./opportunitiesScorer";
-import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 import { VehicleWithSeller } from "@/services/scraper.service";
 import { VehicleViewType } from "./interfaces";
+import type { VehicleImageAnalysis } from "@/types/vehicleImageAnalysis";
+import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
+import { ScoredVehicle } from "./opportunitiesScorer";
 
 // ─── CARD_CONFIG (sin cambios) ────────────────────────────────────────────────
 
@@ -55,6 +60,102 @@ export const CARD_CONFIG: Record<VehicleViewType, {
         badgeBg: "", badgeColor: "", tagBg: "bg-blue-600", tagText: "text-white",
     },
 };
+
+// ─── Análisis de imágenes (Vision) ────────────────────────────────────────────
+
+function ImageAnalysisSection({ analysis }: { analysis: VehicleImageAnalysis }) {
+    const cabinaLabels: Record<string, string> = {
+        una_cabina: "Una cabina",
+        doble_cabina: "Doble cabina",
+        no_aplica: "N/A",
+    };
+    const vendedorLabels: Record<string, string> = {
+        concesionaria: "Concesionaria",
+        particular: "Particular",
+        indeterminado: "Indeterminado",
+    };
+    const boolLabel = (v: boolean | null) => v === true ? "Sí" : v === false ? "No" : "—";
+
+    return (
+        <div className="p-5 bg-white border border-zinc-200 shadow-sm rounded-2xl">
+            <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                <ScanSearch className="h-3.5 w-3.5" /> Análisis por imágenes
+            </h3>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {analysis.cabina && (
+                        <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
+                            <p className="text-[9px] font-bold text-zinc-400 uppercase">Cabina</p>
+                            <p className="text-xs font-semibold text-zinc-800 mt-0.5">{cabinaLabels[analysis.cabina] ?? analysis.cabina}</p>
+                        </div>
+                    )}
+                    {analysis.marca_coincide_con_titulo !== null && (
+                        <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
+                            <p className="text-[9px] font-bold text-zinc-400 uppercase">Marca = título</p>
+                            <p className="text-xs font-semibold text-zinc-800 mt-0.5">{analysis.marca_coincide_con_titulo ? "Sí" : "No"}</p>
+                        </div>
+                    )}
+                    {analysis.placa_matricula && (
+                        <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5">
+                            <Hash className="h-3.5 w-3.5 text-zinc-400" />
+                            <div>
+                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Placa</p>
+                                <p className="text-xs font-bold text-zinc-800 mt-0.5">{analysis.placa_matricula}</p>
+                            </div>
+                        </div>
+                    )}
+                    {analysis.tipo_vendedor && (
+                        <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5">
+                            {analysis.tipo_vendedor === "concesionaria" ? <Building2 className="h-3.5 w-3.5 text-zinc-400" /> : <UserIcon className="h-3.5 w-3.5 text-zinc-400" />}
+                            <div>
+                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Vendedor</p>
+                                <p className="text-xs font-semibold text-zinc-800 mt-0.5">{vendedorLabels[analysis.tipo_vendedor] ?? analysis.tipo_vendedor}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                {analysis.exterior && (
+                    <div className="border border-zinc-100 rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 bg-zinc-50 border-b border-zinc-100 flex items-center gap-2">
+                            <CarFront className="h-3.5 w-3.5 text-zinc-500" />
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase">Exterior</span>
+                        </div>
+                        <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                            <DetailRow label="Golpes/abolladuras" value={boolLabel(analysis.exterior.golpes_abolladuras_raspones)} />
+                            <DetailRow label="Dif. tono paneles" value={boolLabel(analysis.exterior.diferencias_tono_paneles)} />
+                            <DetailRow label="Desalineación" value={boolLabel(analysis.exterior.desalineacion_puertas_capot_maletero)} />
+                            <DetailRow label="Oxidación" value={boolLabel(analysis.exterior.oxidacion_visible)} />
+                            <DetailRow label="Faros opacos/rotos" value={boolLabel(analysis.exterior.faros_opacos_o_rotos)} />
+                            <DetailRow label="Llantas desgaste irreg." value={boolLabel(analysis.exterior.llantas_desgaste_irregular)} />
+                            {analysis.exterior.llantas_vida_util && <DetailRow label="Vida útil llantas" value={analysis.exterior.llantas_vida_util} />}
+                            {analysis.exterior.notas && <div className="col-span-full text-zinc-500 mt-1">{analysis.exterior.notas}</div>}
+                        </div>
+                    </div>
+                )}
+                {analysis.interior && (
+                    <div className="border border-zinc-100 rounded-xl overflow-hidden">
+                        <div className="px-3 py-2 bg-zinc-50 border-b border-zinc-100 flex items-center gap-2">
+                            <LayoutDashboard className="h-3.5 w-3.5 text-zinc-500" />
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase">Interior</span>
+                        </div>
+                        <div className="p-3 space-y-2 text-[11px]">
+                            {analysis.interior.desgaste_volante_palanca_pedales && <DetailRow label="Desgaste volante/palanca/pedales" value={analysis.interior.desgaste_volante_palanca_pedales} />}
+                            <DetailRow label="Asientos rotos/gastados" value={boolLabel(analysis.interior.asientos_rotos_o_gastados)} />
+                            <DetailRow label="Humedad/inundación" value={boolLabel(analysis.interior.senales_humedad_inundacion)} />
+                            {analysis.interior.luces_warning_tablero && analysis.interior.luces_warning_tablero.length > 0 && (
+                                <DetailRow label="Luces warning" value={analysis.interior.luces_warning_tablero.join(", ")} />
+                            )}
+                            {analysis.interior.notas && <div className="text-zinc-500 mt-1">{analysis.interior.notas}</div>}
+                        </div>
+                    </div>
+                )}
+                {analysis.resumen && (
+                    <p className="text-xs text-zinc-600 leading-relaxed border-t border-zinc-100 pt-3">{analysis.resumen}</p>
+                )}
+            </div>
+        </div>
+    );
+}
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -374,8 +475,8 @@ function DiscardedCard({ vehicle, winnerVehicle, avgPrice, rank }: {
                         {/* 2. Renderizamos el badge con formato de moneda */}
                         {diffVsWinner !== null && (
                             <span className={`text-[8px] font-black px-1 py-0.5 rounded flex-shrink-0 ${diffVsWinner > 0 ? 'bg-red-600 text-white' :
-                                    diffVsWinner < 0 ? 'bg-emerald-600 text-white' :
-                                        'bg-zinc-600 text-white'
+                                diffVsWinner < 0 ? 'bg-emerald-600 text-white' :
+                                    'bg-zinc-600 text-white'
                                 }`}>
                                 {diffVsWinner > 0 ? '+' : diffVsWinner < 0 ? '-' : ''}
                                 {diffVsWinner !== 0 ? formatPrice(Math.abs(diffVsWinner)) : 'Igual'}
@@ -617,6 +718,11 @@ export function OpportunitiesVehiclePreviewModal({
                                 </div>
                             </div>
                         </div>
+
+                        {/* --- ANÁLISIS DE IMÁGENES (Vision) --- */}
+                        {vehicle.image_analysis && (
+                            <ImageAnalysisSection analysis={vehicle.image_analysis as unknown as VehicleImageAnalysis} />
+                        )}
 
                         {/* --- DESCRIPCIÓN --- */}
                         <div className="p-5 bg-white border border-zinc-200 shadow-sm rounded-2xl">

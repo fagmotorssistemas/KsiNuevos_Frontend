@@ -11,19 +11,12 @@ type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_stati
 export function extractTrim(text: string): string | null {
     const normalized = text.toUpperCase();
     const trims = [
-        // Toyota / Honda / Mazda
         'TOURING', 'PREMIUM', 'PLATINUM', 'TITANIUM', 'DIAMOND',
-        // Honda
         'EX-L', 'EX', 'LX',
-        // Toyota
         'XLE', 'XSE', 'XLS', 'LE', 'SE',
-        // Ford
         'LARIAT', 'KING RANCH', 'RAPTOR', 'PLATINUM', 'XLT', 'XL',
-        // Kia / Hyundai
         'SX', 'EX', 'LX', 'GT', 'SPORT',
-        // Nissan
         'ADVANCE', 'SENSE', 'EXCLUSIVE', 'TEKNA',
-        // Generic
         'LIMITED', 'SPORT', 'PLUS', 'PRO', 'BASE', 'FULL',
         'FULL EQUIPO', 'FULL EXTRAS', 'FULL OPCIONES',
     ];
@@ -70,27 +63,34 @@ export function extractBodyType(text: string): 'SUV' | 'Pick-up' | 'Sedán' | 'H
 }
 
 /**
+ * Extracts cabin type. Only meaningful for Pick-ups.
+ * Defaults to 'doble_cabina' for undetected pickups (more common in Ecuador).
+ */
+export function extractCabina(
+    text: string,
+    bodyType: 'SUV' | 'Pick-up' | 'Sedán' | 'Hatchback' | 'Coupé' | 'Van' | 'Camión' | null
+): 'una_cabina' | 'doble_cabina' | null {
+    if (bodyType !== 'Pick-up') return null;
+    const t = text.toLowerCase();
+    if (/doble\s*cab(ina)?|d[.]?cab|crew\s*cab|4\s*puertas/.test(t)) return 'doble_cabina';
+    if (/una\s*cab(ina)?|s[.]?cab|single\s*cab|2\s*puertas/.test(t)) return 'una_cabina';
+    return 'doble_cabina'; // Default for undetected pickups
+}
+
+/**
  * Parses engine displacement from the motor field.
- * Handles formats like "2.0", "2,0", "1800cc", "1.8L", "3000cc".
  * Returns liters as a float, or null if not parseable.
  */
 export function parseEngineCC(motor: string | null | undefined): number | null {
     if (!motor) return null;
     const m = motor.toLowerCase();
 
-    // Match "2.0", "2,0", "1.8L", "2.5l"
     const literMatch = m.match(/(\d+)[.,](\d+)\s*l?\b/);
-    if (literMatch) {
-        return parseFloat(`${literMatch[1]}.${literMatch[2]}`);
-    }
+    if (literMatch) return parseFloat(`${literMatch[1]}.${literMatch[2]}`);
 
-    // Match "1800cc", "2000 cc", "3000CC"
     const ccMatch = m.match(/(\d{3,4})\s*cc\b/);
-    if (ccMatch) {
-        return parseInt(ccMatch[1]) / 1000;
-    }
+    if (ccMatch) return parseInt(ccMatch[1]) / 1000;
 
-    // Match plain integers like "2000" or "1800" (assume cc if > 100)
     const plainMatch = m.match(/\b(\d{3,4})\b/);
     if (plainMatch) {
         const val = parseInt(plainMatch[1]);
@@ -119,7 +119,6 @@ export interface ScoredVehicle extends VehicleWithSeller {
         conditionScore: number;
         marketScore: number;
         recencyScore: number;
-        // Bonus breakdown (informational)
         motorBonus: number;
         transmissionBonus: number;
         trimBonus: number;
@@ -132,6 +131,13 @@ export interface ScoredVehicle extends VehicleWithSeller {
     parsedTraction: '4x4' | 'AWD' | '4WD' | 'FWD' | 'RWD' | null;
     parsedBodyType: 'SUV' | 'Pick-up' | 'Sedán' | 'Hatchback' | 'Coupé' | 'Van' | 'Camión' | null;
     parsedEngineCC: number | null;
+    parsedCabina: 'una_cabina' | 'doble_cabina' | null;
+}
+
+export interface TopOpportunitiesResult {
+    all: ScoredVehicle[];
+    unaCabina: ScoredVehicle[];
+    dobleCabina: ScoredVehicle[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,39 +164,16 @@ export class OpportunityScorer {
         'bmw', 'mercedes', 'audi', 'land rover', 'volvo', 'jeep', 'chery', 'jac', 'jetour',
     ];
 
-    // ── Bonus: Motor ─────────────────────────────────────────────────────────
-    /**
-     * Awards points based on engine displacement.
-     * Having any engine info = +1 (shows seller transparency).
-     * Displacement tiers are additive:
-     *   ≥1.0L → +2 pts   (on top of base +1, total = 3)
-     *   ≥2.0L → +5 pts   (replaces 1.0L tier, total = 6)
-     *   ≥3.0L → +10 pts  (replaces 2.0L tier, total = 11)
-     */
     private static calculateMotorBonus(engineCC: number | null, motor: string | null): number {
         if (!motor) return 0;
-
-        let bonus = 1; // Base: motor field is populated
-
-        if (engineCC === null) return bonus; // Has motor info but couldn't parse CC
-
-        if (engineCC >= 3.0) {
-            bonus += 10;
-        } else if (engineCC >= 2.0) {
-            bonus += 5;
-        } else if (engineCC >= 1.0) {
-            bonus += 2;
-        }
-
+        let bonus = 1;
+        if (engineCC === null) return bonus;
+        if (engineCC >= 3.0) bonus += 10;
+        else if (engineCC >= 2.0) bonus += 5;
+        else if (engineCC >= 1.0) bonus += 2;
         return bonus;
     }
 
-    // ── Bonus: Transmission ──────────────────────────────────────────────────
-    /**
-     * Automatic gets +5 (higher demand, easier resale in Ecuador).
-     * Manual gets +2 (at least it's documented).
-     * No transmission info = 0.
-     */
     private static calculateTransmissionBonus(transmission: string | null | undefined): number {
         if (!transmission) return 0;
         const t = transmission.toLowerCase();
@@ -199,7 +182,6 @@ export class OpportunityScorer {
         return 0;
     }
 
-    // ── Bonus: Trim ──────────────────────────────────────────────────────────
     private static calculateTrimBonus(parsedTrim: string | null): number {
         if (!parsedTrim) return 0;
         const t = parsedTrim.toLowerCase();
@@ -207,56 +189,27 @@ export class OpportunityScorer {
         return highResaleTrims.some(tr => t.includes(tr)) ? 5 : 0;
     }
 
-    // ── Bonus: Seller quality ────────────────────────────────────────────────
-    /**
-     * NEW: Rewards listings from sellers with proven track records.
-     * A seller with many successful listings is less likely to be a scam.
-     *   - Has seller data at all: +1
-     *   - total_listings ≥ 10:   +2 (experienced seller)
-     *   - total_listings ≥ 50:   +3 (high-volume, established)
-     *   - Has badges:            +2 (platform-verified)
-     */
     private static calculateSellerBonus(vehicle: VehicleWithSeller): number {
         const seller = vehicle.seller;
         if (!seller) return 0;
-
-        let bonus = 1; // Has seller info
-
+        let bonus = 1;
         const listings = seller.total_listings ?? 0;
         if (listings >= 50) bonus += 3;
         else if (listings >= 10) bonus += 2;
-
         if (seller.badges) bonus += 2;
-
         return bonus;
     }
 
-    // ── Bonus: Listing transparency ──────────────────────────────────────────
-    /**
-     * NEW: Rewards listings that are more complete and transparent.
-     * Buyers trust listings with more photos and detailed info.
-     *   - Has multiple images (≥3): +2
-     *   - Has multiple images (≥6): +3
-     *   - Has description:         +1
-     *   - Has extras list:         +1
-     *   - Has characteristics:     +1
-     * Max: +6 pts
-     */
     private static calculateTransparencyBonus(vehicle: VehicleWithSeller): number {
         let bonus = 0;
-
         const imgCount = vehicle.listing_image_urls?.length ?? 0;
         if (imgCount >= 6) bonus += 3;
         else if (imgCount >= 3) bonus += 2;
-
         if (vehicle.description && vehicle.description.trim().length > 50) bonus += 1;
         if (vehicle.extras && vehicle.extras.length > 0) bonus += 1;
         if (vehicle.characteristics && vehicle.characteristics.length > 0) bonus += 1;
-
         return bonus;
     }
-
-    // ── Main scorer ──────────────────────────────────────────────────────────
 
     static scoreVehicle(
         vehicle: VehicleWithSeller,
@@ -275,15 +228,14 @@ export class OpportunityScorer {
         const parsedTraction = extractTraction(rawText);
         const parsedBodyType = extractBodyType(rawText);
         const parsedEngineCC = parseEngineCC(vehicle.motor);
+        const parsedCabina = extractCabina(rawText, parsedBodyType);
 
-        // Core scores (weighted, each 0–100)
         const priceScore = this.calculatePriceScore(vehicle, priceStats);
         const mileageScore = this.calculateMileageScore(vehicle);
         const conditionScore = this.calculateConditionScore(vehicle);
         const marketScore = this.calculateMarketScore(vehicle);
         const recencyScore = this.calculateRecencyScore(vehicle);
 
-        // Bonuses (flat points added after weighted sum)
         const motorBonus = this.calculateMotorBonus(parsedEngineCC, vehicle.motor);
         const transmissionBonus = this.calculateTransmissionBonus(vehicle.transmission);
         const trimBonus = this.calculateTrimBonus(parsedTrim);
@@ -297,12 +249,9 @@ export class OpportunityScorer {
             (marketScore * this.WEIGHTS.MARKET) +
             (recencyScore * this.WEIGHTS.RECENCY);
 
-        const totalBonuses =
-            motorBonus + transmissionBonus + trimBonus + sellerBonus + transparencyBonus;
-
+        const totalBonuses = motorBonus + transmissionBonus + trimBonus + sellerBonus + transparencyBonus;
         const totalScore = weightedScore + totalBonuses;
 
-        // ── Tags ──
         const tags: string[] = [];
         if (priceScore > 85) tags.push('Precio Excelente');
         if (mileageScore > 90) tags.push('Poco Uso');
@@ -316,6 +265,8 @@ export class OpportunityScorer {
             tags.push('Trim Premium');
         }
         if (parsedFuelType === 'Híbrido' || parsedFuelType === 'Eléctrico') tags.push('Eco');
+        if (parsedCabina === 'doble_cabina') tags.push('Doble Cabina');
+        if (parsedCabina === 'una_cabina') tags.push('Una Cabina');
 
         return {
             ...vehicle,
@@ -338,10 +289,9 @@ export class OpportunityScorer {
             parsedTraction,
             parsedBodyType,
             parsedEngineCC,
+            parsedCabina,
         };
     }
-
-    // ── Core score calculators ────────────────────────────────────────────────
 
     private static calculatePriceScore(
         vehicle: VehicleWithSeller,
@@ -353,10 +303,10 @@ export class OpportunityScorer {
         const price = vehicle.price;
         const discountPct = ((median - price) / median) * 100;
 
-        if (discountPct > 45) return 40; // Sospechoso: demasiado barato
+        if (discountPct > 45) return 40;
         if (discountPct > 20) return 100;
         if (discountPct > 5) return 80 + ((discountPct - 5) / 15) * 20;
-        if (discountPct > -5) return 70; // Precio justo
+        if (discountPct > -5) return 70;
 
         return Math.max(0, 70 - (Math.abs(discountPct) * 1.5));
     }
@@ -430,8 +380,7 @@ export class OpportunityScorer {
         vehicles: VehicleWithSeller[],
         priceStatsMap: Map<string, PriceStatistics>,
         limit: number = 6
-    ): ScoredVehicle[] {
-        // 1. Scorear todos
+    ): TopOpportunitiesResult {
         const scored = vehicles
             .map(v => {
                 const key = `${v.brand}_${v.model}_${v.year ?? ''}`;
@@ -439,19 +388,23 @@ export class OpportunityScorer {
             })
             .filter(v => v.price && v.price > 1000);
 
-        // 2. Por cada brand+model+year, quedarse solo con el de mayor score
+        // Deduplicar por brand+model+year+cabina para no mezclar tipos de cabina
         const bestPerModel = new Map<string, ScoredVehicle>();
         scored.forEach(v => {
-            const key = `${v.brand?.toLowerCase()}_${v.model?.toLowerCase()}_${v.year ?? ''}`;
+            const key = `${v.brand?.toLowerCase()}_${v.model?.toLowerCase()}_${v.year ?? ''}_${v.parsedCabina ?? 'n/a'}`;
             const current = bestPerModel.get(key);
             if (!current || v.opportunityScore > current.opportunityScore) {
                 bestPerModel.set(key, v);
             }
         });
 
-        // 3. Ordenar y limitar
-        return Array.from(bestPerModel.values())
-            .sort((a, b) => b.opportunityScore - a.opportunityScore)
-            .slice(0, limit);
+        const sorted = Array.from(bestPerModel.values())
+            .sort((a, b) => b.opportunityScore - a.opportunityScore);
+
+        return {
+            all: sorted.slice(0, limit),
+            unaCabina: sorted.filter(v => v.parsedCabina === 'una_cabina').slice(0, limit),
+            dobleCabina: sorted.filter(v => v.parsedCabina === 'doble_cabina').slice(0, limit),
+        };
     }
 }

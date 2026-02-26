@@ -5,6 +5,7 @@ import {
     DatabaseZap, Search, Car, RefreshCcw, X, Zap, Sparkles,
     MapPin, Tag, Calendar, MapPinned, ArrowUpDown, Filter,
     Trophy,
+    Layers,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ export const OpportunitiesCenterView = ({
 }: OpportunitiesCenterViewProps) => {
 
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
+    const [isBulkScraping, setIsBulkScraping] = useState(false);
     const [scraperTerm, setScraperTerm] = useState("");
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
@@ -172,6 +174,52 @@ export const OpportunitiesCenterView = ({
         handleSubmitScraper(term);
     }, [handleSubmitScraper]);
 
+    // ── Scraper: todas las marcas (sin modal), hasta 30 simultáneas ───────────
+    // Termina solo cuando llegue la respuesta de la última marca (no al enviar las 30).
+    const CONCURRENT_SCRAPES = 30;
+
+    const handleBulkScrapByBrands = useCallback(async () => {
+        const brands = Object.keys(ECUADOR_CAR_DATA);
+        if (brands.length === 0) {
+            toast.error("No hay marcas configuradas");
+            return;
+        }
+        setIsBulkScraping(true);
+        const toastId = toast.loading(`Escaneando 0 / ${brands.length} marcas (hasta ${CONCURRENT_SCRAPES} en paralelo)...`);
+        let index = 0;
+        const results: { brand: string; ok: boolean }[] = [];
+
+        const runNext = (): Promise<void> => {
+            const currentIndex = index++;
+            if (currentIndex >= brands.length) return Promise.resolve();
+            const brand = brands[currentIndex];
+            return scraperService
+                .scrapMarketplace(brand)
+                .then((response) => {
+                    results.push({ brand, ok: response?.status === "done" });
+                })
+                .catch(() => {
+                    results.push({ brand, ok: false });
+                })
+                .finally(() => {
+                    toast.loading(`Escaneando ${results.length} / ${brands.length} marcas (hasta ${CONCURRENT_SCRAPES} en paralelo)...`, { id: toastId });
+                    return runNext();
+                });
+        };
+
+        const workers = Math.min(CONCURRENT_SCRAPES, brands.length);
+        await Promise.all(Array.from({ length: workers }, () => runNext()));
+
+        // Sólo terminamos cuando tenemos respuesta de todas las marcas
+        const okCount = results.filter((r) => r.ok).length;
+        toast.success(
+            `Escaneo por marcas completado: ${okCount}/${brands.length} marcas procesadas.`,
+            { id: toastId, duration: 5000 }
+        );
+        setIsBulkScraping(false);
+        onScraperComplete?.();
+    }, [onScraperComplete]);
+
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
         <>
@@ -189,11 +237,11 @@ export const OpportunitiesCenterView = ({
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                         <button
                             onClick={() => onScraperComplete?.()}
-                            disabled={isWebhookLoading}
-                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${isWebhookLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                            disabled={isWebhookLoading || isBulkScraping}
+                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${(isWebhookLoading || isBulkScraping) ? 'cursor-not-allowed opacity-50' : ''}`}
                             title="Actualizar datos"
                         >
-                            <RefreshCcw className={`h-5 w-5 ${isWebhookLoading ? 'animate-spin' : ''}`} />
+                            <RefreshCcw className={`h-5 w-5 ${(isWebhookLoading || isBulkScraping) ? 'animate-spin' : ''}`} />
                         </button>
 
                         {/* ── Botón de Oportunidades Mejorado ── */}
@@ -207,10 +255,20 @@ export const OpportunitiesCenterView = ({
 
                         <button
                             onClick={() => setShowScannerModal(true)}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95"
+                            disabled={isWebhookLoading || isBulkScraping}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Zap className="h-4 w-4" />
                             <span>Escanear</span>
+                        </button>
+                        <button
+                            onClick={handleBulkScrapByBrands}
+                            disabled={isWebhookLoading || isBulkScraping}
+                            title={`Escaneo por las ${Object.keys(ECUADOR_CAR_DATA).length} marcas (sin abrir modal)`}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-slate-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Layers className="h-4 w-4" />
+                            <span>Escanear todas las marcas</span>
                         </button>
                     </div>
 

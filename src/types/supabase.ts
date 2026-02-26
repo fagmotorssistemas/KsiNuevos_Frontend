@@ -280,6 +280,44 @@ export type Database = {
           },
         ]
       }
+      cuotas_rastreador: {
+        Row: {
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento: string
+          id: string
+          numero_cuota: number
+          valor: number
+          venta_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento: string
+          id?: string
+          numero_cuota: number
+          valor: number
+          venta_id: string
+        }
+        Update: {
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento?: string
+          id?: string
+          numero_cuota?: number
+          valor?: number
+          venta_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cuota_venta"
+            columns: ["venta_id"]
+            isOneToOne: false
+            referencedRelation: "ventas_rastreador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cuotaspb: {
         Row: {
           color_fila: string | null
@@ -411,6 +449,7 @@ export type Database = {
           identificacion_cliente: string
           imei: string
           instalador: string | null
+          instalador_id: string | null
           metodo_pago: string | null
           modelo: string | null
           nombre_concesionaria: string | null
@@ -439,6 +478,7 @@ export type Database = {
           identificacion_cliente: string
           imei: string
           instalador?: string | null
+          instalador_id?: string | null
           metodo_pago?: string | null
           modelo?: string | null
           nombre_concesionaria?: string | null
@@ -467,6 +507,7 @@ export type Database = {
           identificacion_cliente?: string
           imei?: string
           instalador?: string | null
+          instalador_id?: string | null
           metodo_pago?: string | null
           modelo?: string | null
           nombre_concesionaria?: string | null
@@ -486,6 +527,13 @@ export type Database = {
             columns: ["cliente_externo_id"]
             isOneToOne: false
             referencedRelation: "clientes_externos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispositivos_rastreo_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "gps_instaladores"
             referencedColumns: ["id"]
           },
           {
@@ -1446,6 +1494,7 @@ export type Database = {
           description: string | null
           extras: string[] | null
           id: string
+          image_analysis: Json | null
           image_url: string | null
           is_sold: boolean
           listing_image_urls: string[] | null
@@ -1471,6 +1520,7 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
+          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -1496,6 +1546,7 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
+          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -2367,6 +2418,50 @@ export type Database = {
           },
         ]
       }
+      ventas_rastreador: {
+        Row: {
+          abono_inicial: number | null
+          created_at: string | null
+          dispositivo_id: string
+          entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          id: string
+          numero_cuotas: number | null
+          precio_total: number
+          tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado: number | null
+        }
+        Insert: {
+          abono_inicial?: number | null
+          created_at?: string | null
+          dispositivo_id: string
+          entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          id?: string
+          numero_cuotas?: number | null
+          precio_total: number
+          tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado?: number | null
+        }
+        Update: {
+          abono_inicial?: number | null
+          created_at?: string | null
+          dispositivo_id?: string
+          entorno?: Database["public"]["Enums"]["entorno_venta_enum"]
+          id?: string
+          numero_cuotas?: number | null
+          precio_total?: number
+          tipo_pago?: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_venta_dispositivo"
+            columns: ["dispositivo_id"]
+            isOneToOne: false
+            referencedRelation: "dispositivos_rastreo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       web_appointments: {
         Row: {
           appointment_date: string
@@ -2755,6 +2850,8 @@ export type Database = {
         | "conwilsonhernan"
         | "consignacion"
       credit_status: "aplica" | "no_aplica" | "pendiente" | "no_interesa"
+      entorno_venta_enum: "KSI_NUEVOS" | "EXTERNO"
+      estado_cuota_enum: "PENDIENTE" | "PAGADA"
       estado_dispositivo_enum:
         | "PENDIENTE_INSTALACION"
         | "INSTALADO"
@@ -2811,6 +2908,7 @@ export type Database = {
         | "nomina"
         | "obligaciones"
         | "otros"
+      tipo_pago_enum: "CONTADO" | "CREDITO"
       user_role_enum:
         | "admin"
         | "vendedor"
@@ -2992,6 +3090,8 @@ export const Constants = {
         "consignacion",
       ],
       credit_status: ["aplica", "no_aplica", "pendiente", "no_interesa"],
+      entorno_venta_enum: ["KSI_NUEVOS", "EXTERNO"],
+      estado_cuota_enum: ["PENDIENTE", "PAGADA"],
       estado_dispositivo_enum: [
         "PENDIENTE_INSTALACION",
         "INSTALADO",
@@ -3055,6 +3155,7 @@ export const Constants = {
         "obligaciones",
         "otros",
       ],
+      tipo_pago_enum: ["CONTADO", "CREDITO"],
       user_role_enum: [
         "admin",
         "vendedor",

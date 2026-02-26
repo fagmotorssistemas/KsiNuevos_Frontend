@@ -44,6 +44,14 @@ const FUEL_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
 
 const LIMITS = [3, 6, 10];
 
+type CabinaFilter = "all" | "doble_cabina" | "una_cabina";
+
+const CABINA_TABS: { key: CabinaFilter; label: string }[] = [
+    { key: "all", label: "Todos" },
+    { key: "doble_cabina", label: "Doble Cabina" },
+    { key: "una_cabina", label: "Una Cabina" },
+];
+
 // ─── Extractores desde texto ──────────────────────────────────────────────────
 
 function getFullText(v: VehicleWithSeller): string {
@@ -114,18 +122,10 @@ function normalize(value: string | null | undefined): string {
     return value.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
-/** Clave gruesa: brand + model + year. Usada para:
- *  1. Prerrequisito de 5+ vehículos
- *  2. Agrupar los vehículos que se mostrarán en el modal de comparación
- */
 function getBaseKey(v: VehicleWithSeller): string {
     return `${normalize(v.brand)}__${normalize(v.model)}__${v.year ?? "sin-año"}`;
 }
 
-/** Clave fina: base + trim + fuel + traction + body + transmission + km bucket.
- *  Usada SOLO para elegir el mejor ganador dentro de un grupo base,
- *  evitando comparar versiones muy distintas entre sí.
- */
 function getDetailedKey(v: VehicleWithSeller): string {
     return [
         getBaseKey(v),
@@ -185,15 +185,12 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
         group: VehicleWithSeller[];
     } | null>(null);
     const [limit, setLimit] = useState(initialLimit);
+    const [cabinaFilter, setCabinaFilter] = useState<CabinaFilter>("all");
     const [rawVehicles, setRawVehicles] = useState<VehicleWithSeller[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const dateFormatter = new DateFormatter(new TextFormatter());
 
-    /**
-     * Mapa: id del ganador → todos los vehículos del mismo brand+model+año
-     * (el grupo completo para mostrar en el modal de comparación)
-     */
     const groupMapRef = useRef(new Map<string, VehicleWithSeller[]>());
 
     useEffect(() => {
@@ -220,8 +217,6 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
     const bestPerGroup = useMemo(() => {
         if (!rawVehicles.length) return [];
 
-        // ── Nivel 1: agrupar por brand+model+year ────────────────────────────
-        // Solo tomamos grupos con 5+ vehículos (prerrequisito estadístico)
         const baseGroups = new Map<string, VehicleWithSeller[]>();
         rawVehicles.forEach(v => {
             const key = getBaseKey(v);
@@ -243,24 +238,10 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
             console.groupEnd();
         }
 
-        // ── Nivel 2: dentro de cada grupo base, elegir UN solo ganador ───────
-        //
-        // Estrategia:
-        //   a) Sub-agrupar por clave detallada para no comparar un diésel con un
-        //      gasolina ni un 4x4 con un FWD al momento de puntuar.
-        //   b) Elegir el mejor de cada sub-grupo.
-        //   c) Si hay varios sub-grupos dentro del grupo base, quedarnos con el
-        //      mejor de todos (el que tenga mayor scoreInGroup).
-        //   d) Guardar en groupMap el grupo BASE completo (brand+model+año)
-        //      para que el modal muestre TODOS los vehículos comparados.
-        //
-        // Resultado: 1 ganador por brand+model+año, con el grupo completo visible.
-
         const bests: VehicleWithSeller[] = [];
         const groupMap = new Map<string, VehicleWithSeller[]>();
 
         eligibleBaseGroups.forEach((baseGroup, _baseKey) => {
-            // Sub-agrupar por clave detallada
             const subGroups = new Map<string, VehicleWithSeller[]>();
             baseGroup.forEach(v => {
                 const key = getDetailedKey(v);
@@ -268,12 +249,9 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                 subGroups.get(key)!.push(v);
             });
 
-            // Elegir el mejor candidato de cada sub-grupo
             const candidates: VehicleWithSeller[] = [];
             subGroups.forEach(subGroup => candidates.push(getBestFromGroup(subGroup)));
 
-            // De los candidatos, elegir el mejor de todos usando el grupo base completo
-            // (para que el precio promedio de referencia sea el del grupo completo)
             const priced = baseGroup.filter(v => v.price);
             const baseAvgPrice = priced.length
                 ? priced.reduce((sum, v) => sum + v.price!, 0) / priced.length
@@ -286,7 +264,6 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                 if (s > bestScore) { bestScore = s; overallBest = c; }
             });
 
-            // Guardar en el mapa: id del ganador → grupo base completo
             groupMap.set(overallBest.id, baseGroup);
             bests.push(overallBest);
         });
@@ -295,10 +272,23 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
         return bests;
     }, [rawVehicles]);
 
-    const topVehicles = useMemo(() => {
-        if (!bestPerGroup.length) return [];
+    const opportunitiesResult = useMemo(() => {
+        if (!bestPerGroup.length) return null;
         return OpportunityScorer.getTopOpportunities(bestPerGroup, priceStatsMap, limit);
     }, [bestPerGroup, priceStatsMap, limit]);
+
+    const topVehicles = useMemo(() => {
+        if (!opportunitiesResult) return [];
+        if (cabinaFilter === "doble_cabina") return opportunitiesResult.dobleCabina;
+        if (cabinaFilter === "una_cabina") return opportunitiesResult.unaCabina;
+        return opportunitiesResult.all;
+    }, [opportunitiesResult, cabinaFilter]);
+
+    const cabinaCounts = useMemo(() => ({
+        all: opportunitiesResult?.all.length ?? 0,
+        doble_cabina: opportunitiesResult?.dobleCabina.length ?? 0,
+        una_cabina: opportunitiesResult?.unaCabina.length ?? 0,
+    }), [opportunitiesResult]);
 
     // ── Loading ──
     if (isLoading) {
@@ -335,7 +325,7 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
     }
 
     // ── Empty ──
-    if (!topVehicles.length) {
+    if (!opportunitiesResult?.all.length) {
         return (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-10 text-center">
                 <Trophy className="h-10 w-10 mx-auto text-slate-300 mb-3" />
@@ -381,154 +371,199 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                             ))}
                         </div>
                     </div>
+
+                    {/* Cabina tabs */}
+                    <div className="flex items-center gap-1 mt-4">
+                        {CABINA_TABS.map(tab => {
+                            const count = cabinaCounts[tab.key];
+                            const isActive = cabinaFilter === tab.key;
+                            const isDisabled = count === 0 && tab.key !== "all";
+                            return (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => !isDisabled && setCabinaFilter(tab.key)}
+                                    disabled={isDisabled}
+                                    className={`
+                                        flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+                                        ${isActive
+                                            ? "bg-amber-500 text-white shadow-sm"
+                                            : isDisabled
+                                                ? "text-slate-300 cursor-not-allowed"
+                                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}
+                                    `}
+                                >
+                                    {tab.label}
+                                    {count > 0 && (
+                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500"}`}>
+                                            {count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {/* Grid de cards */}
-                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {topVehicles.map((v, i) => {
-                        const fuelKey = v.parsedFuelType ? normalize(v.parsedFuelType) : "";
-                        const fuelCfg = FUEL_CONFIG[fuelKey] ?? null;
-                        const FuelIcon = fuelCfg?.icon ?? Fuel;
-                        const isTop = i === 0;
-                        const group = groupMapRef.current.get(v.id) ?? [];
+                {/* Empty filter state */}
+                {topVehicles.length === 0 ? (
+                    <div className="p-10 text-center">
+                        <Car className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                        <p className="text-slate-400 text-sm font-semibold">
+                            No hay vehículos de {cabinaFilter === "doble_cabina" ? "doble cabina" : "una cabina"} disponibles
+                        </p>
+                    </div>
+                ) : (
+                    /* Grid de cards */
+                    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {topVehicles.map((v, i) => {
+                            const fuelKey = v.parsedFuelType ? normalize(v.parsedFuelType) : "";
+                            const fuelCfg = FUEL_CONFIG[fuelKey] ?? null;
+                            const FuelIcon = fuelCfg?.icon ?? Fuel;
+                            const isTop = i === 0;
+                            const group = groupMapRef.current.get(v.id) ?? [];
 
-                        return (
-                            <button
-                                key={v.id}
-                                onClick={() => setActiveVehicle({ vehicle: v, group })}
-                                style={{ animationDelay: `${i * 60}ms` }}
-                                className={`
-                                    group relative flex flex-col text-left w-full
-                                    bg-white rounded-xl border transition-all duration-300
-                                    hover:shadow-lg active:scale-[0.99]
-                                    animate-in fade-in slide-in-from-bottom-3
-                                    ${isTop
-                                        ? "border-amber-300 hover:border-amber-400 hover:shadow-amber-100"
-                                        : "border-slate-200 hover:border-slate-300"}
-                                    overflow-hidden
-                                `}
-                            >
-                                {isTop && (
-                                    <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full shadow-md">
-                                        <Trophy className="h-2.5 w-2.5" /> #1 MEJOR DEAL
-                                    </div>
-                                )}
-
-                                {/* Imagen */}
-                                <div className="relative w-full h-36 flex-shrink-0 overflow-hidden bg-slate-100">
-                                    {v.image_url ? (
-                                        <img
-                                            src={v.image_url}
-                                            alt={`${v.brand} ${v.model}`}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <Car className="h-10 w-10 text-slate-300" />
+                            return (
+                                <button
+                                    key={v.id}
+                                    onClick={() => setActiveVehicle({ vehicle: v, group })}
+                                    style={{ animationDelay: `${i * 60}ms` }}
+                                    className={`
+                                        group relative flex flex-col text-left w-full
+                                        bg-white rounded-xl border transition-all duration-300
+                                        hover:shadow-lg active:scale-[0.99]
+                                        animate-in fade-in slide-in-from-bottom-3
+                                        ${isTop
+                                            ? "border-amber-300 hover:border-amber-400 hover:shadow-amber-100"
+                                            : "border-slate-200 hover:border-slate-300"}
+                                        overflow-hidden
+                                    `}
+                                >
+                                    {isTop && (
+                                        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full shadow-md">
+                                            <Trophy className="h-2.5 w-2.5" /> #1 MEJOR DEAL
                                         </div>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm text-[10px] font-black text-slate-700 rounded-full shadow">
-                                        <Star className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
-                                        {Math.round(v.opportunityScore)}/100
-                                    </div>
-                                    <div className="absolute bottom-2 right-3 text-right">
-                                        <div className="text-white/60 text-[8px] font-bold uppercase tracking-wider leading-none mb-0.5">Precio</div>
-                                        <div className="text-white font-black text-base leading-none drop-shadow">{fmtPrice(v.price)}</div>
-                                    </div>
-                                    <div className="absolute bottom-2.5 left-3 flex items-center gap-1 text-white/80 text-[10px] font-semibold capitalize">
-                                        <MapPin className="h-2.5 w-2.5" />
-                                        {v.location ?? "N/A"}
-                                    </div>
-                                </div>
 
-                                {/* Body */}
-                                <div className="p-3.5 flex flex-col gap-2.5 flex-1">
-                                    <div>
-                                        <h3 className="font-black text-sm text-slate-900 leading-tight">
-                                            {v.brand?.toUpperCase()} {v.model?.toUpperCase()}
-                                        </h3>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span className="text-xs font-bold text-slate-400">{v.year ?? "N/A"}</span>
-
-                                            {group.length > 1 && (
-                                                <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
-                                                    1 de {group.length}
-                                                </span>
-                                            )}
+                                    {/* Imagen */}
+                                    <div className="relative w-full h-36 flex-shrink-0 overflow-hidden bg-slate-100">
+                                        {v.image_url ? (
+                                            <img
+                                                src={v.image_url}
+                                                alt={`${v.brand} ${v.model}`}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <Car className="h-10 w-10 text-slate-300" />
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm text-[10px] font-black text-slate-700 rounded-full shadow">
+                                            <Star className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                                            {Math.round(v.opportunityScore)}/100
+                                        </div>
+                                        <div className="absolute bottom-2 right-3 text-right">
+                                            <div className="text-white/60 text-[8px] font-bold uppercase tracking-wider leading-none mb-0.5">Precio</div>
+                                            <div className="text-white font-black text-base leading-none drop-shadow">{fmtPrice(v.price)}</div>
+                                        </div>
+                                        <div className="absolute bottom-2.5 left-3 flex items-center gap-1 text-white/80 text-[10px] font-semibold capitalize">
+                                            <MapPin className="h-2.5 w-2.5" />
+                                            {v.location ?? "N/A"}
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-wrap gap-1">
-                                        {fuelCfg && (
-                                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${fuelCfg.bg} ${fuelCfg.color}`}>
-                                                <FuelIcon className="h-2.5 w-2.5" />
-                                                {v.parsedFuelType}
-                                            </span>
-                                        )}
-                                        {v.parsedTraction && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">
-                                                <Layers className="h-2.5 w-2.5" />
-                                                {v.parsedTraction}
-                                            </span>
-                                        )}
-                                        {v.parsedBodyType && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-50 text-violet-600">
-                                                <Car className="h-2.5 w-2.5" />
-                                                {v.parsedBodyType}
-                                            </span>
-                                        )}
-                                        {v.mileage != null && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-slate-100">
-                                                <Gauge className="h-2.5 w-2.5" />
-                                                {v.mileage.toLocaleString()} km
-                                            </span>
-                                        )}
-                                        {v.transmission && (
-                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600">
-                                                {v.transmission}
-                                            </span>
-                                        )}
-                                    </div>
+                                    {/* Body */}
+                                    <div className="p-3.5 flex flex-col gap-2.5 flex-1">
+                                        <div>
+                                            <h3 className="font-black text-sm text-slate-900 leading-tight">
+                                                {v.brand?.toUpperCase()} {v.model?.toUpperCase()}
+                                            </h3>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <span className="text-xs font-bold text-slate-400">{v.year ?? "N/A"}</span>
+                                                {v.parsedCabina && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded-md border border-amber-100">
+                                                        {v.parsedCabina === "doble_cabina" ? "Doble Cabina" : "Una Cabina"}
+                                                    </span>
+                                                )}
+                                                {group.length > 1 && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+                                                        1 de {group.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                    {v.tags && v.tags.length > 0 && (
                                         <div className="flex flex-wrap gap-1">
-                                            {v.tags.slice(0, 2).map(tag => (
-                                                <span key={tag} className="text-[9px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 uppercase tracking-wide">
-                                                    {tag}
+                                            {fuelCfg && (
+                                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${fuelCfg.bg} ${fuelCfg.color}`}>
+                                                    <FuelIcon className="h-2.5 w-2.5" />
+                                                    {v.parsedFuelType}
                                                 </span>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Score</span>
-                                            {v.scoreBreakdown.priceScore > 85 && (
-                                                <TrendingDown className="h-2.5 w-2.5 text-emerald-500" />
+                                            )}
+                                            {v.parsedTraction && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">
+                                                    <Layers className="h-2.5 w-2.5" />
+                                                    {v.parsedTraction}
+                                                </span>
+                                            )}
+                                            {v.parsedBodyType && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-50 text-violet-600">
+                                                    <Car className="h-2.5 w-2.5" />
+                                                    {v.parsedBodyType}
+                                                </span>
+                                            )}
+                                            {v.mileage != null && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 border border-slate-100">
+                                                    <Gauge className="h-2.5 w-2.5" />
+                                                    {v.mileage.toLocaleString()} km
+                                                </span>
+                                            )}
+                                            {v.transmission && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600">
+                                                    {v.transmission}
+                                                </span>
                                             )}
                                         </div>
-                                        <ScoreMeter score={v.opportunityScore} />
+
+                                        {v.tags && v.tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {v.tags.slice(0, 2).map(tag => (
+                                                    <span key={tag} className="text-[9px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 uppercase tracking-wide">
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Score</span>
+                                                {v.scoreBreakdown.priceScore > 85 && (
+                                                    <TrendingDown className="h-2.5 w-2.5 text-emerald-500" />
+                                                )}
+                                            </div>
+                                            <ScoreMeter score={v.opportunityScore} />
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
+                                            <div className="flex items-center gap-1 text-[10px] text-slate-400 font-semibold">
+                                                <Clock className="h-2.5 w-2.5" />
+                                                {dateFormatter.formatRelativeTime(v.publication_date)}
+                                            </div>
+                                            <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors">
+                                                Ver detalle
+                                                <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
-                                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-semibold">
-                                            <Clock className="h-2.5 w-2.5" />
-                                            {dateFormatter.formatRelativeTime(v.publication_date)}
-                                        </div>
-                                        <div className="flex items-center gap-0.5 text-[10px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors">
-                                            Ver detalle
-                                            <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className={`absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent ${isTop ? "via-amber-400" : "via-slate-300"} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                            </button>
-                        );
-                    })}
-                </div>
+                                    <div className={`absolute inset-x-0 bottom-0 h-[3px] bg-gradient-to-r from-transparent ${isTop ? "via-amber-400" : "via-slate-300"} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {activeVehicle && (
