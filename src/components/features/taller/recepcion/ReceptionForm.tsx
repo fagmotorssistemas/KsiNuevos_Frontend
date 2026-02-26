@@ -338,7 +338,7 @@ export function ReceptionForm() {
                             <CalendarClock className="h-3 w-3" /> Fecha de ingreso
                         </label>
                         <input
-                            type="datetime-local"
+                            type="date"
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
                             value={vehiculo.fecha_ingreso}
                             onChange={(e) => setVehiculo({ ...vehiculo, fecha_ingreso: e.target.value })}
