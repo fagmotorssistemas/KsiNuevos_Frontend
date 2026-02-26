@@ -202,7 +202,7 @@ export const OpportunitiesCenterView = ({
                     results.push({ brand, ok: false });
                 })
                 .finally(() => {
-                    toast.loading(`Escaneando ${results.length} / ${brands.length} marcas (este proceso puede tardar unos minutos)`, { id: toastId });
+                    toast.loading(`Escaneando ${results.length} / ${brands.length} marcas, este proceso puede tardar unos minutos`, { id: toastId });
                     return runNext();
                 });
         };
