@@ -40,6 +40,8 @@ export interface OrdenTrabajo {
 
     fecha_salida_real?: string;
     pdf_url?: string;
+    factura_numero?: string | null;
+    factura_url?: string | null;
     total_final_cliente?: number;
     transacciones?: TransaccionFinanciera[];
     

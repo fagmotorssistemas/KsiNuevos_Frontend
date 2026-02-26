@@ -42,24 +42,28 @@ export function useExpedientes() {
     const subirArchivo = async (
         ordenId: string, 
         file: File, 
-        bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo', 
+        bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo' | 'taller-facturas', 
         transaccionId?: string
     ) => {
         try {
             const fileExt = file.name.split('.').pop();
-            const fileName = `${ordenId}/${Date.now()}.${fileExt}`;
+            // Facturas: misma bucket taller-evidencias, carpeta facturas/{ordenId}/
+            const storageBucket = bucket === 'taller-facturas' ? 'taller-evidencias' : bucket;
+            const filePath = bucket === 'taller-facturas'
+                ? `facturas/${ordenId}/${Date.now()}.${fileExt}`
+                : `${ordenId}/${Date.now()}.${fileExt}`;
             
             // 1. Subir a Storage
             const { error: uploadError } = await supabase.storage
-                .from(bucket)
-                .upload(fileName, file);
+                .from(storageBucket)
+                .upload(filePath, file);
                 
             if (uploadError) throw uploadError;
             
             // 2. Obtener URL Pública
             const { data: publicUrlData } = supabase.storage
-                .from(bucket)
-                .getPublicUrl(fileName);
+                .from(storageBucket)
+                .getPublicUrl(filePath);
                 
             const url = publicUrlData.publicUrl;
 
@@ -81,6 +85,10 @@ export function useExpedientes() {
             } else if (bucket === 'ordenes-trabajo') {
                 await supabase.from('taller_ordenes')
                     .update({ pdf_url: url })
+                    .eq('id', ordenId);
+            } else if (bucket === 'taller-facturas') {
+                await supabase.from('taller_ordenes')
+                    .update({ factura_url: url })
                     .eq('id', ordenId);
             }
             
