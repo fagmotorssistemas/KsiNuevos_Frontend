@@ -90,21 +90,21 @@ export function useRecepcion() {
                 .from('taller_ordenes')
                 .insert([{
                     cliente_id: clienteId,
-                    vehiculo_placa: formData.vehiculo_placa.toUpperCase(),
-                    vehiculo_marca: formData.vehiculo_marca,
-                    vehiculo_modelo: formData.vehiculo_modelo,
-                    vehiculo_anio: formData.vehiculo_anio,
-                    vehiculo_color: formData.vehiculo_color,
-                    vehiculo_vin: formData.vehiculo_vin, // NUEVO
-                    kilometraje: formData.kilometraje,
-                    nivel_gasolina: formData.nivel_gasolina,
-                    fecha_promesa_entrega: formData.fecha_promesa_entrega,
-                    checklist_ingreso: formData.checklist,
-                    inventario_pertenencias: formData.inventario,
-                    observaciones_ingreso: formData.observaciones,
+                    vehiculo_placa: formData.vehiculo_placa?.toUpperCase?.() ?? formData.vehiculo_placa,
+                    vehiculo_marca: formData.vehiculo_marca || null,
+                    vehiculo_modelo: formData.vehiculo_modelo || null,
+                    vehiculo_anio: formData.vehiculo_anio ?? null,
+                    vehiculo_color: formData.vehiculo_color || null,
+                    vehiculo_vin: formData.vehiculo_vin || null,
+                    kilometraje: formData.kilometraje ?? null,
+                    nivel_gasolina: formData.nivel_gasolina ?? null,
+                    fecha_ingreso: formData.fecha_ingreso || null,
+                    fecha_promesa_entrega: formData.fecha_promesa_entrega || null,
+                    checklist_ingreso: formData.checklist ?? {},
+                    inventario_pertenencias: formData.inventario ?? {},
+                    observaciones_ingreso: formData.observaciones || null,
                     fotos_ingreso_urls: fotoUrls,
                     estado: 'recepcion',
-                    // registrado_por: profile?.id 
                 }])
                 .select()
                 .single();

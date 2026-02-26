@@ -97,9 +97,10 @@ export function ReceptionForm() {
         modelo: '',
         anio: new Date().getFullYear(),
         color: '',
-        vin: '', 
+        vin: '',
         kilometraje: 0,
         nivel_gasolina: 50,
+        fecha_ingreso: '', // Vacío = DB usará now(). Puedes poner fecha pasada para registros viejos.
         fecha_promesa: ''
     });
 
@@ -151,6 +152,7 @@ export function ReceptionForm() {
             vehiculo_vin: vehiculo.vin,
             kilometraje: vehiculo.kilometraje,
             nivel_gasolina: vehiculo.nivel_gasolina,
+            fecha_ingreso: vehiculo.fecha_ingreso ? new Date(vehiculo.fecha_ingreso).toISOString() : null,
             fecha_promesa_entrega: vehiculo.fecha_promesa ? new Date(vehiculo.fecha_promesa).toISOString() : null,
             checklist,
             inventario,
@@ -191,7 +193,6 @@ export function ReceptionForm() {
                         <div className="relative group">
                             <input
                                 type="text"
-                                required
                                 className="w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-semibold"
                                 placeholder="0000000000"
                                 value={cliente.cedula}
@@ -212,7 +213,6 @@ export function ReceptionForm() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Nombre del Propietario</label>
                         <input
                             type="text"
-                            required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
                             placeholder="Nombre y Apellidos"
                             value={cliente.nombre}
@@ -224,7 +224,6 @@ export function ReceptionForm() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Teléfono</label>
                         <input
                             type="tel"
-                            required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-semibold"
                             placeholder="+593 ..."
                             value={cliente.telefono}
@@ -272,7 +271,6 @@ export function ReceptionForm() {
                         <div className="relative pt-1">
                             <input
                                 type="text"
-                                required
                                 className="w-full px-4 py-3 rounded-lg border-2 border-slate-900 bg-amber-50 text-slate-900 font-mono text-xl font-black text-center uppercase focus:ring-4 focus:ring-amber-500/20 outline-none transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]"
                                 placeholder="ABC-123"
                                 value={vehiculo.placa}
@@ -300,7 +298,6 @@ export function ReceptionForm() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Marca</label>
                         <input
                             type="text"
-                            required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                             value={vehiculo.marca}
                             onChange={(e) => setVehiculo({ ...vehiculo, marca: e.target.value })}
@@ -311,7 +308,6 @@ export function ReceptionForm() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Modelo</label>
                         <input
                             type="text"
-                            required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                             value={vehiculo.modelo}
                             onChange={(e) => setVehiculo({ ...vehiculo, modelo: e.target.value })}
@@ -339,11 +335,24 @@ export function ReceptionForm() {
 
                     <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                            <CalendarClock className="h-3 w-3" /> Fecha de ingreso
+                        </label>
+                        <input
+                            type="datetime-local"
+                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
+                            value={vehiculo.fecha_ingreso}
+                            onChange={(e) => setVehiculo({ ...vehiculo, fecha_ingreso: e.target.value })}
+                            title="Opcional. Vacío = fecha y hora actual. Útil para cargar registros con fecha pasada."
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Dejar vacío = fecha actual. Para registros viejos, elige la fecha.</p>
+                    </div>
+
+                    <div className="col-span-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                             <CalendarClock className="h-3 w-3" /> Fecha Promesa Entrega
                         </label>
                         <input
                             type="datetime-local"
-                            required
                             className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
                             value={vehiculo.fecha_promesa}
                             onChange={(e) => setVehiculo({ ...vehiculo, fecha_promesa: e.target.value })}
@@ -355,7 +364,6 @@ export function ReceptionForm() {
                         <div className="relative">
                             <input
                                 type="number"
-                                required
                                 min="0"
                                 className="w-full pl-4 pr-12 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-bold text-lg"
                                 value={vehiculo.kilometraje}
@@ -467,7 +475,6 @@ export function ReceptionForm() {
                     </div>
                     <div className="p-6 flex-1">
                         <textarea
-                            required
                             className="w-full h-full min-h-[180px] p-5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none resize-none font-medium text-slate-700 leading-relaxed transition-all"
                             placeholder="Escriba aquí el trabajo solicitados por el cliente, detalles del daño, peticiones especiales del cliente o cualquier nota relevante."
                             value={observaciones}
