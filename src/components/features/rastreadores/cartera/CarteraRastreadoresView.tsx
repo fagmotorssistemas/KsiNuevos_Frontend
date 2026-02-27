@@ -63,10 +63,7 @@ export function CarteraRastreadoresView() {
 
                 // Si tiene nota de venta, buscar en cartera
                 try {
-                    console.log(`🔍 Buscando documento cartera para nota: ${item.nota_venta}`);
                     const documento = await walletService.getDocumentoByNumeroFisico(item.nota_venta);
-                    
-                    console.log(`📄 Documento recibido:`, documento);
                     
                     if (!documento) {
                         console.warn(`⚠️ No se encontró documento para nota: ${item.nota_venta}`);
@@ -77,20 +74,8 @@ export function CarteraRastreadoresView() {
                     const cuotaMensualVehiculo = documento.valorOriginal ?? 0;
                     const precioGPS = item.precio_total ?? 0;
                     
-                    console.log(`📊 Valores para cálculo:`, {
-                        nota: item.nota_venta,
-                        precioGPS,
-                        cuotaMensualVehiculo,
-                        plazoTotal
-                    });
-                    
                     // Validar que tengamos datos válidos
                     if (plazoTotal <= 0 || cuotaMensualVehiculo <= 0 || precioGPS <= 0) {
-                        console.warn(`⚠️ Valores inválidos para ${item.nota_venta}`, {
-                            plazoTotal,
-                            cuotaMensualVehiculo,
-                            precioGPS
-                        });
                         continue;
                     }
                     
@@ -105,14 +90,6 @@ export function CarteraRastreadoresView() {
                     
                     // Calcular cuánto falta por cobrar del rastreador
                     const montoPorCobrarRastreador = Math.max(0, precioGPS - montoPagadoRastreador);
-                    
-                    console.log(`💰 Montos de rastreador para ${item.nota_venta}:`, {
-                        precioGPS,
-                        cuotaRastreadorMensual,
-                        cuotasCompletadas,
-                        montoPagadoRastreador,
-                        montoPorCobrarRastreador
-                    });
                     
                     // Calcular días para cobro (desde hoy hasta fecha de vencimiento)
                     let diasParaCobro: number | null = null;
@@ -130,7 +107,7 @@ export function CarteraRastreadoresView() {
                             const diffTime = fechaVenc.getTime() - hoy.getTime();
                             diasParaCobro = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         } catch (e) {
-                            console.warn(`Error calculando días para cobro:`, e);
+                            // Error silencioso en cálculo de días
                         }
                     }
                     
@@ -144,21 +121,11 @@ export function CarteraRastreadoresView() {
                         montoPagadoRastreador,
                         montoPorCobrarRastreador
                     });
-                    
-                    console.log(`✅ Datos calculados para ${item.nota_venta}:`, {
-                        precioGPS,
-                        cuotaVehiculo: cuotaMensualVehiculo,
-                        plazo: plazoTotal,
-                        totalContrato,
-                        porcentaje: (porcentajeRastreador * 100).toFixed(2) + '%',
-                        cuotaRastreadorMensual: cuotaRastreadorMensual.toFixed(2)
-                    });
                 } catch (err) {
                     console.error(`❌ Error enriqueciendo item ${item.id} (nota: ${item.nota_venta}):`, err);
                 }
             }
             
-            console.log(`📦 Total items enriquecidos: ${newEnrichedData.size} de ${items.length}`);
             setEnrichedData(newEnrichedData);
         };
 
