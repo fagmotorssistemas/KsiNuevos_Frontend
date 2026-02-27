@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Phone, Car, DollarSign, History, Receipt, CheckCircle2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { User, Phone, DollarSign, History, Receipt, CheckCircle2, ArrowDownLeft, ArrowUpRight, Package } from "lucide-react";
 import type { CuentaPorCobrar } from "@/types/taller";
 
 interface Props {
@@ -118,41 +118,79 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
 
                             {/* Historial Desplegable */}
                             {expandedId === c.id && (
-                                <div className="mt-5 border-t border-slate-100 pt-4 animate-in slide-in-from-top-2 duration-200">
-                                    <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Movimientos de la Orden</h5>
-                                    {c.transacciones && c.transacciones.length > 0 ? (
-                                        <div className="space-y-2">
-                                            {/* Ahora mapeamos TODOS los movimientos, no solo ingresos */}
-                                            {c.transacciones.map((t, i) => {
-                                                const esIngreso = t.tipo === 'ingreso';
-                                                
-                                                return (
-                                                    <div key={i} className={`flex justify-between items-center text-sm p-3 rounded-lg border ${esIngreso ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                                <div className="mt-5 border-t border-slate-100 pt-4 animate-in slide-in-from-top-2 duration-200 space-y-5">
+                                    <div>
+                                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Movimientos de la Orden</h5>
+                                        {c.transacciones && c.transacciones.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {c.transacciones.map((t, i) => {
+                                                    const esIngreso = t.tipo === 'ingreso';
+                                                    return (
+                                                        <div key={i} className={`flex justify-between items-center text-sm p-3 rounded-lg border ${esIngreso ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                                                            <div>
+                                                                <p className="font-medium text-slate-700 text-xs flex items-center gap-1.5">
+                                                                    {esIngreso ? (
+                                                                        <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-500" />
+                                                                    ) : (
+                                                                        <ArrowUpRight className="h-3.5 w-3.5 text-red-500" />
+                                                                    )}
+                                                                    {t.descripcion}
+                                                                </p>
+                                                                <p className="text-[11px] text-slate-400 mt-1 ml-5">
+                                                                    {new Date(t.fecha_transaccion).toLocaleDateString()} • {t.tipo.replace(/_/g, ' ')}
+                                                                </p>
+                                                            </div>
+                                                            <span className={`font-bold px-2 py-1 rounded bg-white border ${esIngreso ? 'text-emerald-700 border-emerald-200' : 'text-red-700 border-red-200'}`}>
+                                                                {esIngreso ? '+' : '-'}${t.monto.toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4 bg-slate-50 rounded-lg border border-slate-100">
+                                                <p className="text-sm text-slate-400">No se han registrado movimientos.</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                            <Package className="h-3.5 w-3.5" /> Materiales usados
+                                        </h5>
+                                        {c.consumos_materiales && c.consumos_materiales.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {c.consumos_materiales.map((cons) => (
+                                                    <div key={cons.id} className="flex justify-between items-center text-sm p-3 rounded-lg border bg-slate-50/80 border-slate-100">
                                                         <div>
-                                                            <p className="font-medium text-slate-700 text-xs flex items-center gap-1.5">
-                                                                {esIngreso ? (
-                                                                    <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-500" />
-                                                                ) : (
-                                                                    <ArrowUpRight className="h-3.5 w-3.5 text-red-500" />
-                                                                )}
-                                                                {t.descripcion}
+                                                            <p className="font-medium text-slate-700 text-xs">
+                                                                {cons.item?.nombre ?? 'Material'}
                                                             </p>
-                                                            <p className="text-[11px] text-slate-400 mt-1 ml-5">
-                                                                {new Date(t.fecha_transaccion).toLocaleDateString()} • {t.tipo.replace(/_/g, ' ')}
+                                                            <p className="text-[11px] text-slate-400 mt-1">
+                                                                {new Date(cons.fecha_consumo).toLocaleDateString()}
+                                                                {cons.item?.unidad_medida && ` • ${cons.item.unidad_medida}`}
                                                             </p>
                                                         </div>
-                                                        <span className={`font-bold px-2 py-1 rounded bg-white border ${esIngreso ? 'text-emerald-700 border-emerald-200' : 'text-red-700 border-red-200'}`}>
-                                                            {esIngreso ? '+' : '-'}${t.monto.toLocaleString()}
-                                                        </span>
+                                                        <div className="text-right shrink-0">
+                                                            <span className="font-semibold text-slate-700">
+                                                                {Number(cons.cantidad).toLocaleString()}
+                                                                {cons.item?.unidad_medida ? ` ${cons.item.unidad_medida}` : ''}
+                                                            </span>
+                                                            {cons.item?.costo_promedio != null && (
+                                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                                    ${(Number(cons.cantidad) * Number(cons.item.costo_promedio)).toLocaleString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-4 bg-slate-50 rounded-lg border border-slate-100">
-                                            <p className="text-sm text-slate-400">No se han registrado movimientos.</p>
-                                        </div>
-                                    )}
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4 bg-slate-50 rounded-lg border border-slate-100">
+                                                <p className="text-sm text-slate-400">No hay consumos de materiales registrados.</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

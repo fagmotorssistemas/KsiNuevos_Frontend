@@ -107,17 +107,14 @@ export function useOrdenes() {
     const fetchDetallesOrden = async (ordenId: string) => {
         const { data } = await supabase
             .from('taller_detalles_orden')
-            .select(`
-                *,
-                mecanico:profiles(full_name)
-            `)
+            .select('*')
             .eq('orden_id', ordenId)
             .order('created_at', { ascending: true });
             
         return (data as unknown as DetalleOrden[]) || [];
     };
 
-    const agregarDetalle = async (detalle: { orden_id: string, descripcion: string, precio_unitario: number, cantidad: number, mecanico_asignado_id?: string }) => {
+    const agregarDetalle = async (detalle: { orden_id: string, descripcion: string, precio_unitario: number, cantidad: number }) => {
         const { error } = await supabase
             .from('taller_detalles_orden')
             .insert([detalle]);
@@ -144,6 +141,29 @@ export function useOrdenes() {
         return (data as unknown as ServicioCatalogo[]) || [];
     };
 
+    const BUCKET_EVIDENCIA_SALIDA = 'taller-evidencias-salida';
+
+    const uploadFotoSalida = async (ordenId: string, file: File): Promise<{ url: string } | { error: string }> => {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const fileName = `${ordenId}/${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+            .from(BUCKET_EVIDENCIA_SALIDA)
+            .upload(fileName, file, { upsert: false });
+        if (uploadError) return { error: uploadError.message };
+        const { data } = supabase.storage.from(BUCKET_EVIDENCIA_SALIDA).getPublicUrl(fileName);
+        return { url: data.publicUrl };
+    };
+
+    const actualizarFotosSalida = async (ordenId: string, urls: string[]): Promise<{ success: boolean; error?: string }> => {
+        const { error } = await supabase
+            .from('taller_ordenes')
+            .update({ fotos_salida_urls: urls })
+            .eq('id', ordenId);
+        if (error) return { success: false, error: error.message };
+        setOrdenes(prev => prev.map(o => o.id === ordenId ? { ...o, fotos_salida_urls: urls } as OrdenTrabajo : o));
+        return { success: true };
+    };
+
     const fetchMecanicos = async () => {
         const { data } = await supabase
             .from('profiles')
@@ -168,6 +188,8 @@ export function useOrdenes() {
         eliminarDetalle,
         fetchServiciosCatalogo,
         fetchMecanicos,
+        uploadFotoSalida,
+        actualizarFotosSalida,
         refresh: fetchOrdenes
     };
 }

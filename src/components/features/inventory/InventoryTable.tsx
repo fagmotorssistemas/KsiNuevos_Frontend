@@ -362,7 +362,7 @@ export function InventoryTable({
 
                                             {canEdit && (
                                                 <Button
-                                                    variant="secondary"
+                                                    variant="danger"
                                                     size="sm"
                                                     onClick={() => onEdit && onEdit(car)}
                                                 >

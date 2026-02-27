@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
+import type { VehicleImageAnalysis } from '@/types/vehicleImageAnalysis';
 
 const supabase = createClient();
 
@@ -24,6 +25,12 @@ export interface VehicleFilters {
 const SIERRA_CITIES = [
     'quito', 'cuenca', 'ambato', 'riobamba', 'loja', 'ibarra',
     'tulcán', 'latacunga', 'guaranda', 'azogues', 'cañar'
+];
+
+const COAST_CITIES = [
+    'guayaquil', 'manta', 'esmeraldas', 'machala', 'santo domingo',
+    'portoviejo', 'babahoyo', 'quevedo', 'milagro', 'daule', 'salinas', "milagro", 
+    "samborondón", "durán", "manabí", "santa elena", "salinas"
 ];
 
 export const scraperService = {
@@ -186,9 +193,14 @@ export const scraperService = {
     },
 
     async getVehiclesForOpportunities(): Promise<VehicleWithSeller[]> {
-        const { data, error } = await supabase
+        let query = supabase
             .from('scraper_vehicles')
             .select(`*, seller:scraper_sellers(*)`)
+            .not('year', 'is', null);
+        for (const city of COAST_CITIES) {
+            query = query.not('location', 'ilike', `%${city}%`);
+        }
+        const { data, error } = await query;
 
         if (error) {
             console.error('Error al obtener vehículos para oportunidades:', error);
@@ -657,11 +669,13 @@ export const scraperService = {
                 }
             )
 
+
             if (!response.ok) {
                 throw new Error('Error al ejecutar el webhook')
             }
 
             const data = await response.json()
+            console.log('data', data)
             return data as WebhookResponse
         } catch (error) {
             console.error('Error al scrapear:', error)
@@ -673,9 +687,11 @@ export const scraperService = {
 export interface WebhookResponse {
     status: 'done' | 'not found' | 'error';
     message: string;
-    summary: {
-        vehicles: {
-            total: number
-        }
-    }
+    resumen?: {
+        listings_nuevos_guardados: number;
+        listings_descartados_por_precio: number;
+        total_scrapeados: number;
+        pasaron_filtro_precio: number;
+        total_vehiculos_actualizados: number;
+    };
 }

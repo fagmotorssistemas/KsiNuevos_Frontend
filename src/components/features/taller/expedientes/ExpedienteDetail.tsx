@@ -10,10 +10,11 @@ interface DetailProps {
     onClose: () => void;
     isUploading: boolean;
     onTriggerUpload: (bucket: any, transaccionId?: string) => void;
-    onUpdateContable: (id: string, status: string) => void; // NUEVA PROP
+    onUpdateContable: (id: string, status: string) => void;
+    onPrint: () => void;
 }
 
-export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable }: DetailProps) {
+export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable, onPrint }: DetailProps) {
     const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>('resumen');
 
     return (
@@ -56,7 +57,7 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload,
                     )}
                     
                     {activeTab === 'archivos' && (
-                        <ArchivosTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} />
+                        <ArchivosTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} onPrint={onPrint} />
                     )}
                 </div>
             </div>

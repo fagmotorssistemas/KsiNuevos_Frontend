@@ -1,17 +1,18 @@
 import React from "react";
-import { FileText, Download, UploadCloud, Image as ImageIcon, Loader2 } from "lucide-react";
+import { FileText, Eye, UploadCloud, Image as ImageIcon, Loader2, Receipt } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
 
 interface ArchivosTabProps {
     orden: OrdenTrabajo;
     isUploading: boolean;
     onTriggerUpload: (bucket: any) => void;
+    onPrint: () => void;
 }
 
-export function ArchivosTab({ orden, isUploading, onTriggerUpload }: ArchivosTabProps) {
+export function ArchivosTab({ orden, isUploading, onTriggerUpload, onPrint }: ArchivosTabProps) {
     return (
         <div className="space-y-6 animate-in fade-in">
-            {/* Proforma PDF */}
+            {/* Proforma PDF - Ver archivo (misma acción que Imprimir/PDF del modal de trabajos) */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="bg-red-100 p-3 rounded-xl text-red-600">
@@ -22,15 +23,54 @@ export function ArchivosTab({ orden, isUploading, onTriggerUpload }: ArchivosTab
                         <p className="text-sm text-slate-500">Documento base del inicio del trabajo.</p>
                     </div>
                 </div>
-                {orden.pdf_url ? (
-                    <a href={orden.pdf_url} target="_blank" rel="noreferrer" className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2">
-                        <Download className="h-4 w-4" /> Descargar Archivo
-                    </a>
+                <button
+                    type="button"
+                    onClick={onPrint}
+                    className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2"
+                >
+                    <Eye className="h-4 w-4" /> Ver archivo
+                </button>
+            </div>
+
+            {/* Factura de venta */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                    <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-emerald-600" /> Factura de venta
+                    </h3>
+                    <button
+                        type="button"
+                        onClick={() => onTriggerUpload('taller-facturas')}
+                        disabled={isUploading}
+                        className="text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                        Subir factura (imagen o PDF)
+                    </button>
+                </div>
+                {!orden.factura_url ? (
+                    <div className="text-center p-10 border-2 border-dashed border-slate-200 rounded-xl">
+                        <Receipt className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-500 font-medium text-sm">No hay factura de venta cargada.</p>
+                        <p className="text-slate-400 text-xs mt-1">Puedes subir una imagen o un PDF.</p>
+                    </div>
                 ) : (
-                    <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-400 border border-slate-200 border-dashed px-4 py-2 rounded-lg">Sin proforma</p>
-                        <button onClick={() => onTriggerUpload('ordenes-trabajo')} disabled={isUploading} className="text-blue-600 hover:text-blue-800 p-2 bg-blue-50 rounded-lg disabled:opacity-50">
-                            <UploadCloud className="h-5 w-5" />
+                    <div className="flex flex-wrap items-center gap-4">
+                        <a
+                            href={orden.factura_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-100 transition-colors"
+                        >
+                            <Eye className="h-4 w-4" /> Ver factura
+                        </a>
+                        <button
+                            type="button"
+                            onClick={() => onTriggerUpload('taller-facturas')}
+                            disabled={isUploading}
+                            className="text-sm font-bold text-slate-600 hover:text-slate-900 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                        >
+                            {isUploading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Reemplazar"}
                         </button>
                     </div>
                 )}

@@ -77,7 +77,6 @@ export interface OpportunitiesCenterViewProps {
 
     selectedBrand: string;
     selectedModel: string;
-    selectedMotor: string;
     selectedYear: string;
     selectedCity: string;
     selectedDateRange: string;
@@ -87,7 +86,6 @@ export interface OpportunitiesCenterViewProps {
 
     availableBrands: string[];
     availableModels: string[];
-    availableMotors: string[];
     availableYears: string[];
     availableCities: string[];
 

@@ -40,6 +40,8 @@ export interface OrdenTrabajo {
 
     fecha_salida_real?: string;
     pdf_url?: string;
+    factura_numero?: string | null;
+    factura_url?: string | null;
     total_final_cliente?: number;
     transacciones?: TransaccionFinanciera[];
     
@@ -47,6 +49,8 @@ export interface OrdenTrabajo {
     inventario_pertenencias: Record<string, boolean>;
     observaciones_ingreso?: string;
     fotos_ingreso_urls: string[];
+    /** URLs de fotos de evidencia de salida (vehículo después del trabajo) */
+    fotos_salida_urls?: string[] | null;
 }
 
 export interface InventarioItem {
@@ -121,9 +125,7 @@ export interface DetalleOrden {
     precio_unitario: number;
     cantidad: number;
     total: number;
-    mecanico_asignado_id?: string;
     estado_trabajo: string;
-    mecanico?: { full_name: string };
 }
 
 export interface TallerProveedor {
@@ -199,6 +201,12 @@ export interface CuentaPorCobrar {
         tipo: string;
         fecha_transaccion: string;
         descripcion: string;
+    }[];
+    consumos_materiales?: {
+        id: string;
+        cantidad: number;
+        fecha_consumo: string;
+        item?: { nombre: string; unidad_medida: string; costo_promedio?: number };
     }[];
     presupuesto: number;
     total_pagado: number;

@@ -5,6 +5,7 @@ import {
     DatabaseZap, Search, Car, RefreshCcw, X, Zap, Sparkles,
     MapPin, Tag, Calendar, MapPinned, ArrowUpDown, Filter,
     Trophy,
+    Layers,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -38,15 +39,16 @@ const SORT_OPTIONS = [
 export const OpportunitiesCenterView = ({
     onScraperComplete,
     vehicles,
-    selectedBrand, selectedModel, selectedMotor, selectedYear,
+    selectedBrand, selectedModel, selectedYear,
     selectedCity, selectedDateRange, regionFilter, searchTerm, sortBy,
-    availableBrands, availableModels, availableMotors, availableYears, availableCities, priceStatistics,
-    onBrandChange, onModelChange, onMotorChange, onYearChange,
+    availableBrands, availableModels, availableYears, availableCities, priceStatistics,
+    onBrandChange, onModelChange, onYearChange,
     onCityChange, onDateRangeChange, onRegionFilterChange,
     onSearchTermChange, onSortChange, onClearFilters,
 }: OpportunitiesCenterViewProps) => {
 
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
+    const [isBulkScraping, setIsBulkScraping] = useState(false);
     const [scraperTerm, setScraperTerm] = useState("");
     const [progress, setProgress] = useState(0);
     const [currentToastId, setCurrentToastId] = useState<string | number | null>(null);
@@ -78,10 +80,10 @@ export const OpportunitiesCenterView = ({
     }, [onBrandChange, onModelChange]);
 
     const hasActiveFilters = useMemo(() =>
-        selectedBrand !== "all" || selectedModel !== "all" || selectedMotor !== "all" ||
+        selectedBrand !== "all" || selectedModel !== "all" ||
         selectedYear !== "all" || selectedDateRange !== "all" || selectedCity !== "all" ||
         sortBy !== "created_at_desc" || searchTerm !== "" || regionFilter !== "all",
-        [selectedBrand, selectedModel, selectedMotor, selectedYear, selectedDateRange,
+        [selectedBrand, selectedModel, selectedYear, selectedDateRange,
             selectedCity, sortBy, searchTerm, regionFilter]
     );
 
@@ -130,11 +132,18 @@ export const OpportunitiesCenterView = ({
             if (!response || response.status !== "done") throw new Error(response?.message ?? "Error inesperado");
             setProgress(100);
             setTimeout(() => {
+                const r = response.resumen;
                 toast.success(
-                    <div className="ml-2">
+                    <div className="ml-2 space-y-1.5 min-w-[220px]">
                         <button onClick={() => toast.dismiss(toastId)} className="absolute right-2 top-2 p-1 text-red-300 hover:opacity-50"><X className="h-4 w-4" /></button>
-                        ¡Extracción completa!
-                        <span className="block text-[10px] opacity-70">{response.summary?.vehicles?.total ?? 0} vehículos encontrados</span>
+                        <p className="font-semibold">¡Extracción completa!</p>
+                        {r && (
+                            <ul className="text-[11px] opacity-90 space-y-0.5">
+                                <li><strong>{r.total_scrapeados}</strong> total scrapeados</li>
+                                <li className="text-green-600 dark:text-green-400"><strong>{r.listings_nuevos_guardados}</strong> vehiculos nuevos guardados</li>
+                                <li className="text-blue-600 dark:text-blue-400"><strong>{r.total_vehiculos_actualizados}</strong> vehículos actualizados</li>
+                            </ul>
+                        )}
                     </div>,
                     { id: toastId, duration: Infinity }
                 );
@@ -165,8 +174,51 @@ export const OpportunitiesCenterView = ({
         handleSubmitScraper(term);
     }, [handleSubmitScraper]);
 
-    console.log(selectedCity);
+    // ── Scraper: todas las marcas (sin modal), hasta 30 simultáneas ───────────
+    // Termina solo cuando llegue la respuesta de la última marca (no al enviar las 30).
+    const CONCURRENT_SCRAPES = 30;
 
+    const handleBulkScrapByBrands = useCallback(async () => {
+        const brands = Object.keys(ECUADOR_CAR_DATA);
+        if (brands.length === 0) {
+            toast.error("No hay marcas configuradas");
+            return;
+        }
+        setIsBulkScraping(true);
+        const toastId = toast.loading(`Escaneando 0 / ${brands.length} marcas (hasta ${CONCURRENT_SCRAPES} en paralelo)...`);
+        let index = 0;
+        const results: { brand: string; ok: boolean }[] = [];
+
+        const runNext = (): Promise<void> => {
+            const currentIndex = index++;
+            if (currentIndex >= brands.length) return Promise.resolve();
+            const brand = brands[currentIndex];
+            return scraperService
+                .scrapMarketplace(brand)
+                .then((response) => {
+                    results.push({ brand, ok: response?.status === "done" });
+                })
+                .catch(() => {
+                    results.push({ brand, ok: false });
+                })
+                .finally(() => {
+                    toast.loading(`Escaneando ${results.length} / ${brands.length} marcas, este proceso puede tardar unos minutos`, { id: toastId });
+                    return runNext();
+                });
+        };
+
+        const workers = Math.min(CONCURRENT_SCRAPES, brands.length);
+        await Promise.all(Array.from({ length: workers }, () => runNext()));
+
+        // Sólo terminamos cuando tenemos respuesta de todas las marcas
+        const okCount = results.filter((r) => r.ok).length;
+        toast.success(
+            `Escaneo por marcas completado: ${okCount}/${brands.length} marcas procesadas.`,
+            { id: toastId, duration: 5000 }
+        );
+        setIsBulkScraping(false);
+        onScraperComplete?.();
+    }, [onScraperComplete]);
 
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
@@ -185,11 +237,11 @@ export const OpportunitiesCenterView = ({
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
                         <button
                             onClick={() => onScraperComplete?.()}
-                            disabled={isWebhookLoading}
-                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${isWebhookLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+                            disabled={isWebhookLoading || isBulkScraping}
+                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${(isWebhookLoading || isBulkScraping) ? 'cursor-not-allowed opacity-50' : ''}`}
                             title="Actualizar datos"
                         >
-                            <RefreshCcw className={`h-5 w-5 ${isWebhookLoading ? 'animate-spin' : ''}`} />
+                            <RefreshCcw className={`h-5 w-5 ${(isWebhookLoading || isBulkScraping) ? 'animate-spin' : ''}`} />
                         </button>
 
                         {/* ── Botón de Oportunidades Mejorado ── */}
@@ -203,10 +255,20 @@ export const OpportunitiesCenterView = ({
 
                         <button
                             onClick={() => setShowScannerModal(true)}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95"
+                            disabled={isWebhookLoading || isBulkScraping}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Zap className="h-4 w-4" />
                             <span>Escanear</span>
+                        </button>
+                        <button
+                            onClick={handleBulkScrapByBrands}
+                            disabled={isWebhookLoading || isBulkScraping}
+                            title={`Escaneo por las ${Object.keys(ECUADOR_CAR_DATA).length} marcas (sin abrir modal)`}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-slate-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Layers className="h-4 w-4" />
+                            <span>Escanear todas las marcas</span>
                         </button>
                     </div>
 
@@ -280,7 +342,7 @@ export const OpportunitiesCenterView = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                         <FilterButton
                             label={selectedBrand === "all" ? "Marca" : `${selectedBrand} (${brandFilteredCount})`}
                             active={selectedBrand !== "all"} hasSelection={selectedBrand !== "all"}
@@ -291,11 +353,6 @@ export const OpportunitiesCenterView = ({
                             active={selectedModel !== "all"} hasSelection={selectedModel !== "all"}
                             icon={Car} onClick={() => setShowModelModal(true)}
                             disabled={selectedBrand === "all"}
-                        />
-                        <FilterButton
-                            label={selectedMotor === "all" ? "Motor" : selectedMotor}
-                            active={selectedMotor !== "all"} hasSelection={selectedMotor !== "all"}
-                            icon={Zap} onClick={() => setShowMotorModal(true)}
                         />
                         <FilterButton
                             label={selectedYear === "all" ? "Año" : selectedYear}
@@ -327,12 +384,6 @@ export const OpportunitiesCenterView = ({
                 icon={<Car className="h-6 w-6 text-white" />}
                 options={availableModels} selectedValue={selectedModel} onSelect={onModelChange}
                 searchPlaceholder={`Buscar modelo de ${selectedBrand}...`} allLabel="Todos los Modelos" />
-
-            <FilterModal isOpen={showMotorModal} onClose={() => setShowMotorModal(false)}
-                title="Seleccionar Motor" description="Filtra vehículos por tipo de motor"
-                icon={<Zap className="h-6 w-6 text-white" />}
-                options={availableMotors} selectedValue={selectedMotor} onSelect={onMotorChange}
-                searchPlaceholder="Buscar motor..." allLabel="Todos los Motores" />
 
             <FilterModal isOpen={showYearModal} onClose={() => setShowYearModal(false)}
                 title="Seleccionar Año" description="Filtra vehículos por año de fabricación"

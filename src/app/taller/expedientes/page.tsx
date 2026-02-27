@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import { Folder, FileText, Loader2 } from "lucide-react";
 import { useExpedientes } from "@/hooks/taller/useExpedientes";
 import { OrdenTrabajo } from "@/types/taller";
@@ -9,6 +10,7 @@ import { OrdenTrabajo } from "@/types/taller";
 import { ExpedientesTopBar } from "@/components/features/taller/expedientes/ExpedientesTopBar";
 import { FolderCard } from "@/components/features/taller/expedientes/FolderCard";
 import { ExpedienteDetail } from "@/components/features/taller/expedientes/ExpedienteDetail";
+import { OrderPrintView } from "@/components/features/taller/OrderPrintView";
 
 export default function ExpedientesPage() {
     const { ordenes, isLoading, subirArchivo, actualizarEstadoContable } = useExpedientes();
@@ -24,6 +26,12 @@ export default function ExpedientesPage() {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadConfig, setUploadConfig] = useState<{bucket: any, transaccionId?: string} | null>(null);
+
+    const printComponentRef = useRef<HTMLDivElement>(null);
+    const handlePrint = useReactToPrint({
+        contentRef: printComponentRef,
+        documentTitle: selectedOrder ? `Orden_${selectedOrder.numero_orden}` : "Orden_Trabajo",
+    });
 
     // Sincronizar selectedOrder con las actualizaciones de la BD
     useEffect(() => {
@@ -49,7 +57,7 @@ export default function ExpedientesPage() {
     }, [ordenes, searchTerm, selectedStatus, selectedContableStatus]);
 
     // Función que se pasa a los TABS para abrir el input file
-    const triggerUpload = (bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo', transaccionId?: string) => {
+    const triggerUpload = (bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo' | 'taller-facturas', transaccionId?: string) => {
         setUploadConfig({ bucket, transaccionId });
         if (fileInputRef.current) fileInputRef.current.click();
     };
@@ -99,7 +107,8 @@ export default function ExpedientesPage() {
                         onClose={() => setSelectedOrder(null)}
                         isUploading={isUploading}
                         onTriggerUpload={triggerUpload}
-                        onUpdateContable={actualizarEstadoContable} // Pasamos la función al detalle
+                        onUpdateContable={actualizarEstadoContable}
+                        onPrint={() => handlePrint?.()}
                     />
 
                 ) : (
@@ -130,38 +139,44 @@ export default function ExpedientesPage() {
                                 </div>
                             )}
 
-                            {!isLoading && filteredOrdenes.length > 0 && (
-                                <div className="mt-12">
-                                    <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Últimas Proformas Generadas</h3>
-                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                                                <tr>
-                                                    <th className="px-6 py-4">Documento</th>
-                                                    <th className="px-6 py-4">Expediente</th>
-                                                    <th className="px-6 py-4">Fecha de Ingreso</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {filteredOrdenes.slice(0, 3).map((o, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedOrder(o)}>
-                                                        <td className="px-6 py-4 font-medium flex items-center gap-3">
-                                                            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                                                                <FileText className="h-4 w-4" /> 
-                                                            </div>
-                                                            Proforma_Orden_{o.numero_orden}.pdf
-                                                        </td>
-                                                        <td className="px-6 py-4 text-slate-600">{o.vehiculo_marca} ({o.vehiculo_placa})</td>
-                                                        <td className="px-6 py-4 text-slate-400">{new Date(o.fecha_ingreso).toLocaleDateString()}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
+                            {/* {!isLoading && filteredOrdenes.length > 0 && (
+                                // <div className="mt-12">
+                                //     <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Últimas Proformas Generadas</h3>
+                                //     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                //         <table className="w-full text-sm text-left">
+                                //             <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                                //                 <tr>
+                                //                     <th className="px-6 py-4">Documento</th>
+                                //                     <th className="px-6 py-4">Expediente</th>
+                                //                     <th className="px-6 py-4">Fecha de Ingreso</th>
+                                //                 </tr>
+                                //             </thead>
+                                //             <tbody className="divide-y divide-slate-100">
+                                //                 {filteredOrdenes.slice(0, 3).map((o, idx) => (
+                                //                     <tr key={idx} className="hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => setSelectedOrder(o)}>
+                                //                         <td className="px-6 py-4 font-medium flex items-center gap-3">
+                                //                             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                //                                 <FileText className="h-4 w-4" /> 
+                                //                             </div>
+                                //                             Proforma_Orden_{o.numero_orden}.pdf
+                                //                         </td>
+                                //                         <td className="px-6 py-4 text-slate-600">{o.vehiculo_marca} ({o.vehiculo_placa})</td>
+                                //                         <td className="px-6 py-4 text-slate-400">{new Date(o.fecha_ingreso).toLocaleDateString()}</td>
+                                //                     </tr>
+                                //                 ))}
+                                //             </tbody>
+                                //         </table>
+                                //     </div>
+                                // </div>
+                            )} */}
                         </div>
                     </div>
+                )}
+            </div>
+
+            <div className="hidden">
+                {selectedOrder && (
+                    <OrderPrintView ref={printComponentRef} orden={selectedOrder} />
                 )}
             </div>
         </div>

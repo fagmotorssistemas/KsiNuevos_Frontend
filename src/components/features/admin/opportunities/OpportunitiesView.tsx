@@ -60,7 +60,6 @@ export function OpportunitiesView({
                     // Filtros desde el hook
                     selectedBrand={vehicleFilters.brand || 'all'}
                     selectedModel={vehicleFilters.model || 'all'}
-                    selectedMotor={vehicleFilters.motor || 'all'}
                     selectedYear={vehicleFilters.year || 'all'}
                     selectedCity={vehicleFilters.city || 'all'}
                     selectedDateRange={vehicleFilters.dateRange || 'all'}
@@ -71,7 +70,6 @@ export function OpportunitiesView({
                     // Opciones disponibles
                     availableBrands={filterOptions.brands}
                     availableModels={filterOptions.models}
-                    availableMotors={filterOptions.motors}
                     availableYears={filterOptions.years}
                     availableCities={filterOptions.cities}
 
@@ -114,6 +112,21 @@ export function OpportunitiesView({
                     getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
                     onVehicleUpdate={onScraperComplete}
                 />
+
+                {!isLoading && pagination.totalPages > 1 && (
+                    <Pagination
+                        currentPage={pagination.currentPage}
+                        totalPages={pagination.totalPages}
+                        totalItems={pagination.totalItems}
+                        startIndex={pagination.startIndex}
+                        endIndex={pagination.endIndex}
+                        onPageChange={goToPage}
+                        onNextPage={nextPage}
+                        onPrevPage={prevPage}
+                        hasNextPage={pagination.hasNextPage}
+                        hasPrevPage={pagination.hasPrevPage}
+                    />
+                )}
             </div>
         </div>
     );

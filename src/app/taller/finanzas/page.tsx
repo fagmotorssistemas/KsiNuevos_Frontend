@@ -102,11 +102,11 @@ export default function FinanzasPage() {
                         cuentas={cuentas} 
                         onRecargarFinanzas={refresh} 
                     />
-                    {/* Tabla de movimientos filtrada EXCLUSIVAMENTE para obligaciones (gasto_operativo) */}
+                    {/* Tabla de movimientos filtrada EXCLUSIVAMENTE para obligaciones fijas (tipo obligaciones) */}
                     <div className="mt-8">
                         <h3 className="text-lg font-bold text-slate-800 mb-4 px-1">Historial de Pagos de Obligaciones</h3>
                         <TransactionTable 
-                            transacciones={transacciones.filter(t => t.tipo === 'gasto_operativo')} 
+                            transacciones={transacciones.filter(t => t.tipo === 'obligaciones')} 
                         />
                     </div>
                 </div>

@@ -57,6 +57,9 @@ export function useInventory() {
         }
     }, [isAuthLoading, user, fetchInventory]);
 
+    // Lista cruda (sin filtrar) para exportar "todos" o por estado
+    const allCars = cars;
+
     // 2. LÓGICA DE FILTRADO Y ORDENAMIENTO (Memoizada)
     const processedInventory = useMemo(() => {
         let result = [...cars];
@@ -125,6 +128,8 @@ export function useInventory() {
 
     return {
         cars: paginatedCars, // Solo devolvemos los 10 de la página actual
+        processedInventory, // Lista completa filtrada y ordenada (para exportar/imprimir)
+        allCars, // Lista completa sin filtrar (para exportar "todos" o por estado)
         totalCount: processedInventory.length, // El total real para calcular páginas
         page,
         setPage,

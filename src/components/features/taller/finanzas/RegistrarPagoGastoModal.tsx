@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, CheckCircle2, Loader2, Upload, Wallet, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
+import { X, CheckCircle2, Loader2, Upload, Wallet, ArrowRight, ImageIcon } from "lucide-react";
 import type { GastoFijoConfig, Cuenta } from "@/types/taller";
 
 interface RegistrarPagoGastoModalProps {
@@ -36,7 +37,18 @@ export function RegistrarPagoGastoModal({ isOpen, onClose, gasto, cuentas, onPag
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!gasto) return;
-        
+        if (!file) {
+            toast.error("Comprobante requerido", {
+                description: "Por favor sube la foto del comprobante de pago para continuar.",
+                icon: <ImageIcon className="h-4 w-4" />,
+                duration: 5000,
+                className: "!bg-red-700 !border-red-800 !text-white !font-sans",
+
+                
+                
+            });
+            return;
+        }
         setIsLoading(true);
         await onPagar(gasto.id, parseFloat(monto), cuentaId, fecha, observacion, file);
         setIsLoading(false);
@@ -122,7 +134,7 @@ export function RegistrarPagoGastoModal({ isOpen, onClose, gasto, cuentas, onPag
                     </div>
 
                     <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Foto Comprobante (Opcional)</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Foto Comprobante (Requerido)</label>
                         <label className="flex items-center gap-3 px-3 py-3 rounded-xl border border-dashed border-slate-300 cursor-pointer hover:bg-slate-50 transition-colors group">
                             <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-white transition-colors">
                                 <Upload className="h-4 w-4 text-slate-500" />

@@ -21,7 +21,14 @@ import {
     AlertCircle,
     Edit3,
     Check,
+    ScanSearch,
+    CarFront,
+    LayoutDashboard,
+    Hash,
+    Building2,
+    User as UserIcon,
 } from "lucide-react";
+import type { VehicleImageAnalysis } from "@/types/vehicleImageAnalysis";
 import { useState, useEffect, useMemo } from "react";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
 import { DateFormatter } from "@/utils/DateFormatter";
@@ -169,6 +176,132 @@ function MotorEditableField({
 
 const DateFormatterInstance = new DateFormatter(new TextFormatter());
 
+// ─── Modal pequeño: Análisis de imágenes ────────────────────────────────────
+
+function AnalysisRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex items-center justify-between gap-2 py-1.5 border-b border-zinc-100 last:border-0">
+            <span className="text-[11px] font-semibold text-zinc-500">{label}</span>
+            <span className="text-xs font-bold text-zinc-800 text-right">{value}</span>
+        </div>
+    );
+}
+
+function ImageAnalysisModal({ analysis, onClose }: { analysis: VehicleImageAnalysis; onClose: () => void }) {
+    const cabinaLabels: Record<string, string> = {
+        una_cabina: "Una cabina",
+        doble_cabina: "Doble cabina",
+        no_aplica: "No aplica",
+    };
+    const vendedorLabels: Record<string, string> = {
+        concesionaria: "Concesionaria",
+        particular: "Particular",
+        indeterminado: "Indeterminado",
+    };
+    const boolLabel = (v: boolean | null) => (v === true ? "Sí" : v === false ? "No" : "—");
+
+    return (
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm animate-in h-[100vh] fade-in duration-200"
+            onClick={onClose}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white w-full max-w-lg max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+            >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
+                    <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
+                        <ScanSearch className="h-4 w-4 text-zinc-500" />
+                        Análisis por imágenes
+                    </h3>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-700 transition-colors"
+                        aria-label="Cerrar"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+                    <div className="grid grid-cols-2 gap-2">
+                        {analysis.cabina && (
+                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
+                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Cabina</p>
+                                <p className="text-xs font-semibold text-zinc-800 mt-0.5">{cabinaLabels[analysis.cabina] ?? analysis.cabina}</p>
+                            </div>
+                        )}
+                        {analysis.marca_coincide_con_titulo !== null && analysis.marca_coincide_con_titulo !== undefined && (
+                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
+                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Marca correcta</p>
+                                <p className="text-xs font-semibold text-zinc-800 mt-0.5">{analysis.marca_coincide_con_titulo ? "Si" : "No segura"}</p>
+                            </div>
+                        )}
+                        {analysis.placa_matricula && (
+                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5 col-span-2">
+                                <Hash className="h-3.5 w-3.5 text-zinc-400" />
+                                <div>
+                                    <p className="text-[9px] font-bold text-zinc-400 uppercase">Placa</p>
+                                    <p className="text-xs font-bold text-zinc-800 mt-0.5">{analysis.placa_matricula}</p>
+                                </div>
+                            </div>
+                        )}
+                        {analysis.tipo_vendedor && (
+                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5 col-span-2">
+                                {analysis.tipo_vendedor === "concesionaria" ? <Building2 className="h-3.5 w-3.5 text-zinc-400" /> : <UserIcon className="h-3.5 w-3.5 text-zinc-400" />}
+                                <div>
+                                    <p className="text-[9px] font-bold text-zinc-400 uppercase">Vendedor</p>
+                                    <p className="text-xs font-semibold text-zinc-800 mt-0.5">{vendedorLabels[analysis.tipo_vendedor] ?? analysis.tipo_vendedor}</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {analysis.exterior && (
+                        <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                            <div className="px-3 py-2 bg-zinc-100 border-b border-zinc-200 flex items-center gap-2">
+                                <CarFront className="h-3.5 w-3.5 text-zinc-500" />
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Exterior</span>
+                            </div>
+                            <div className="p-3 space-y-0 text-[11px]">
+                                <AnalysisRow label="Golpes/abolladuras/rayones" value={boolLabel(analysis.exterior.golpes_abolladuras_raspones)} />
+                                <AnalysisRow label="Diferencias tono paneles" value={boolLabel(analysis.exterior.diferencias_tono_paneles)} />
+                                <AnalysisRow label="Desalineación puertas/capó/maletero" value={boolLabel(analysis.exterior.desalineacion_puertas_capot_maletero)} />
+                                <AnalysisRow label="Oxidación visible" value={boolLabel(analysis.exterior.oxidacion_visible)} />
+                                <AnalysisRow label="Faros opacos/rotos" value={boolLabel(analysis.exterior.faros_opacos_o_rotos)} />
+                                <AnalysisRow label="Llantas desgaste irregular" value={boolLabel(analysis.exterior.llantas_desgaste_irregular)} />
+                                {analysis.exterior.llantas_vida_util && <AnalysisRow label="Vida útil llantas" value={analysis.exterior.llantas_vida_util} />}
+                                {analysis.exterior.notas && <div className="pt-2 mt-2 border-t border-zinc-100 text-zinc-500 text-xs">{analysis.exterior.notas}</div>}
+                            </div>
+                        </div>
+                    )}
+                    {analysis.interior && (
+                        <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                            <div className="px-3 py-2 bg-zinc-100 border-b border-zinc-200 flex items-center gap-2">
+                                <LayoutDashboard className="h-3.5 w-3.5 text-zinc-500" />
+                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Interior</span>
+                            </div>
+                            <div className="p-3 space-y-0 text-[11px]">
+                                {analysis.interior.desgaste_volante_palanca_pedales && <AnalysisRow label="Desgaste volante/palanca/pedales" value={analysis.interior.desgaste_volante_palanca_pedales} />}
+                                <AnalysisRow label="Asientos rotos/gastados" value={boolLabel(analysis.interior.asientos_rotos_o_gastados)} />
+                                <AnalysisRow label="Humedad/inundación" value={boolLabel(analysis.interior.senales_humedad_inundacion)} />
+                                {analysis.interior.luces_warning_tablero && analysis.interior.luces_warning_tablero.length > 0 && (
+                                    <AnalysisRow label="Luces warning tablero" value={analysis.interior.luces_warning_tablero.join(", ")} />
+                                )}
+                                {analysis.interior.notas && <div className="pt-2 mt-2 border-t border-zinc-100 text-zinc-500 text-xs">{analysis.interior.notas}</div>}
+                            </div>
+                        </div>
+                    )}
+                    {analysis.resumen && (
+                        <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                            <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Resumen</p>
+                            <p className="text-xs text-zinc-700 leading-relaxed">{analysis.resumen}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function OpportunitiesTableView({
     vehicles,
     isLoading,
@@ -180,6 +313,7 @@ export function OpportunitiesTableView({
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithSeller | null>(null);
     const [vehicleStats, setVehicleStats] = useState<PriceStatistics | null>(null);
     const [loadingStats, setLoadingStats] = useState(false);
+    const [analysisModalData, setAnalysisModalData] = useState<VehicleImageAnalysis | null>(null);
 
     // ACTUALIZADO: Función para guardar motor con recarga de datos
     const handleSaveMotor = async (vehicleId: string, motor: string) => {
@@ -379,9 +513,9 @@ export function OpportunitiesTableView({
                                                 <div className={`absolute inset-0 flex items-center justify-center bg-zinc-100 ${vehicle.image_url ? 'hidden' : 'flex'}`}>
                                                     <Car className="h-7 w-7 text-zinc-300" />
                                                 </div>
-                                                <div className="absolute top-2 left-2">
+                                                {/* <div className="absolute top-2 left-2">
                                                     <SoldBadge isSold={vehicle.is_sold} />
-                                                </div>
+                                                </div> */}
                                                 {vehicle.listing_image_urls && vehicle.listing_image_urls.length > 0 && (
                                                     <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-sm border border-white/10">
                                                         +{vehicle.listing_image_urls.length}
@@ -508,7 +642,7 @@ export function OpportunitiesTableView({
             {
                 selectedVehicle && (
                     <div
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in fade-in duration-300"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in h-[100vh] fade-in duration-300"
                         onClick={() => setSelectedVehicle(null)}
                     >
                         <div
@@ -542,6 +676,14 @@ export function OpportunitiesTableView({
                                             </h2>
                                             <p className="text-zinc-500 text-sm font-medium line-clamp-2 max-w-2xl">{selectedVehicle.title}</p>
                                         </div>
+                                        {/* {selectedVehicle.image_analysis && (
+                                            <button
+                                                onClick={() => setAnalysisModalData(selectedVehicle.image_analysis as unknown as VehicleImageAnalysis)}
+                                                className="p-3 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-700 border border-violet-200 transition-colors flex items-center gap-2 transition-all"
+                                            >
+                                                <ScanSearch className="h-5 w-5" />
+                                            </button>
+                                        )} */}
 
                                         <button
                                             onClick={() => setSelectedVehicle(null)}
@@ -783,6 +925,11 @@ export function OpportunitiesTableView({
                     </div >
                 )
             }
+
+            {/* Modal pequeño: análisis de imágenes */}
+            {analysisModalData && (
+                <ImageAnalysisModal analysis={analysisModalData} onClose={() => setAnalysisModalData(null)} />
+            )}
         </>
     );
 }
