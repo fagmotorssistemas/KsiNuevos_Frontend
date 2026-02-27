@@ -176,7 +176,7 @@ export const OpportunitiesCenterView = ({
 
     // ── Scraper: todas las marcas (sin modal), hasta 30 simultáneas ───────────
     // Termina solo cuando llegue la respuesta de la última marca (no al enviar las 30).
-    const CONCURRENT_SCRAPES = 30;
+    const CONCURRENT_SCRAPES = 15;
 
     const handleBulkScrapByBrands = useCallback(async () => {
         const brands = Object.keys(ECUADOR_CAR_DATA);
@@ -185,7 +185,7 @@ export const OpportunitiesCenterView = ({
             return;
         }
         setIsBulkScraping(true);
-        const toastId = toast.loading(`Escaneando 0 / ${brands.length} marcas (hasta ${CONCURRENT_SCRAPES} en paralelo)...`);
+        const toastId = toast.loading(`Escaneando 0 / ${brands.length} marcas, esto puede demorar unos minutos...`);
         let index = 0;
         const results: { brand: string; ok: boolean }[] = [];
 

@@ -676,14 +676,14 @@ export function OpportunitiesTableView({
                                             </h2>
                                             <p className="text-zinc-500 text-sm font-medium line-clamp-2 max-w-2xl">{selectedVehicle.title}</p>
                                         </div>
-                                        {/* {selectedVehicle.image_analysis && (
+                                        {selectedVehicle.image_analysis && (
                                             <button
                                                 onClick={() => setAnalysisModalData(selectedVehicle.image_analysis as unknown as VehicleImageAnalysis)}
                                                 className="p-3 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-700 border border-violet-200 transition-colors flex items-center gap-2 transition-all"
                                             >
                                                 <ScanSearch className="h-5 w-5" />
                                             </button>
-                                        )} */}
+                                        )}
 
                                         <button
                                             onClick={() => setSelectedVehicle(null)}
