@@ -18,13 +18,19 @@ export async function subirEvidencias(files: File[]): Promise<string[]> {
     }
 }
 
-/** Sube un comprobante de pago del rastreador (cheque, transferencia, depósito) y devuelve la URL pública */
+/** Bucket en Supabase para comprobantes de pago de rastreadores (vinculados a ventas_rastreador.url_comprobante_pago) */
+const BUCKET_COMPROBANTE_RASTREADOR = 'comprobante_deposito_sky';
+
+/** Sube un comprobante de pago del rastreador al bucket comprobante_deposito_sky. La URL se guarda en ventas_rastreador.url_comprobante_pago (vinculada al cliente por dispositivo_id). */
 export async function subirComprobantePago(file: File): Promise<string> {
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-    const fileName = `comprobantes-pago/rastreador/${Date.now()}_${safeName}`;
-    const { error } = await supabase.storage.from('evidencias').upload(fileName, file);
+    const fileName = `rastreador/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from(BUCKET_COMPROBANTE_RASTREADOR).upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+    });
     if (error) throw error;
-    const { data } = supabase.storage.from('evidencias').getPublicUrl(fileName);
+    const { data } = supabase.storage.from(BUCKET_COMPROBANTE_RASTREADOR).getPublicUrl(fileName);
     return data.publicUrl;
 }
 
