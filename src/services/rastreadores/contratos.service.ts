@@ -69,7 +69,12 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
             totalRastreador: item.precio_venta || 0,
             fechaInstalacion: item.created_at,
             origen: 'EXTERNO',
-            clienteExternoId: item.cliente_externo_id
+            clienteExternoId: item.cliente_externo_id,
+            esConcesionaria: !!item.es_concesionaria,
+            nombreConcesionaria: item.nombre_concesionaria ?? null,
+            clienteFinalNombre: item.cliente_final_nombre ?? null,
+            clienteFinalIdentificacion: item.cliente_final_identificacion ?? null,
+            clienteFinalTelefono: item.cliente_final_telefono ?? null
         }));
 
         // D. Retornamos la lista combinada

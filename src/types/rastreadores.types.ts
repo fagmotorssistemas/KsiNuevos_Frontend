@@ -29,6 +29,12 @@ export interface ContratoGPS {
     // --- CONTROL DE ORIGEN ---
     origen: 'AUTO' | 'EXTERNO';
     clienteExternoId?: string;
+    // Venta externa a concesionaria (B2B)
+    esConcesionaria?: boolean;
+    nombreConcesionaria?: string | null;
+    clienteFinalNombre?: string | null;
+    clienteFinalIdentificacion?: string | null;
+    clienteFinalTelefono?: string | null;
 }
 
 export interface ClienteExternoPayload {

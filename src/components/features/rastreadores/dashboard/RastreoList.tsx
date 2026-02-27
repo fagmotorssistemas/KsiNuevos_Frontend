@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Search, MapPin, Building2, Users, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2 } from "lucide-react"; // <--- Importamos iconos de estado
+import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2 } from "lucide-react"; // <--- Importamos iconos de estado
 import { ContratoGPS } from "@/types/rastreadores.types";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { RastreoStats } from "./RastreoStats";
@@ -21,9 +21,11 @@ interface RastreoListProps {
     onNewExternal: () => void; // <--- NUEVA PROP
 }
 
+type FiltroOrigen = 'TODOS' | 'AUTO' | 'EXTERNO' | 'EXTERNO_CLIENTE' | 'EXTERNO_CONCESIONARIA';
+
 export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoListProps) {
     const [searchTerm, setSearchTerm] = useState("");
-    const [filtroOrigen, setFiltroOrigen] = useState<'TODOS' | 'AUTO' | 'EXTERNO'>('TODOS');
+    const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>('TODOS');
     const [gpsMap, setGpsMap] = useState<Map<string, any>>(new Map()); // Mapea notaVenta -> GPS
     const [refreshKey, setRefreshKey] = useState(0); // Trigger para refrescar
 
@@ -60,11 +62,15 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
     }, []);
 
     const filteredData = data.filter(c => {
-        const matchesSearch = 
+        const matchesSearch =
             c.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.ruc.includes(searchTerm) ||
             c.placa.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesOrigen = filtroOrigen === 'TODOS' ? true : c.origen === filtroOrigen;
+        let matchesOrigen = true;
+        if (filtroOrigen === 'AUTO') matchesOrigen = c.origen === 'AUTO';
+        else if (filtroOrigen === 'EXTERNO') matchesOrigen = c.origen === 'EXTERNO';
+        else if (filtroOrigen === 'EXTERNO_CLIENTE') matchesOrigen = c.origen === 'EXTERNO' && !c.esConcesionaria;
+        else if (filtroOrigen === 'EXTERNO_CONCESIONARIA') matchesOrigen = c.origen === 'EXTERNO' && !!c.esConcesionaria;
         return matchesSearch && matchesOrigen;
     });
 
@@ -92,11 +98,13 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                         <Plus size={16} /> Nueva Venta
                     </button>
 
-                    {/* FILTROS (TABS) */}
-                    <div className="bg-slate-100 p-1 rounded-xl flex items-center font-bold text-xs uppercase shadow-inner">
-                        <button onClick={() => setFiltroOrigen('TODOS')} className={`px-4 py-2 rounded-lg transition-all ${filtroOrigen === 'TODOS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Todos</button>
-                        <button onClick={() => setFiltroOrigen('AUTO')} className={`px-4 py-2 rounded-lg transition-all flex gap-1 ${filtroOrigen === 'AUTO' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-400'}`}><Building2 size={14}/> K-si</button>
-                        <button onClick={() => setFiltroOrigen('EXTERNO')} className={`px-4 py-2 rounded-lg transition-all flex gap-1 ${filtroOrigen === 'EXTERNO' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-400'}`}><Users size={14}/> Ext</button>
+                    {/* FILTROS (TABS): Todos · K-si · Externos (todos / solo cliente / solo concesionaria) */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap items-center gap-0.5 font-bold text-xs uppercase shadow-inner">
+                        <button type="button" onClick={() => setFiltroOrigen('TODOS')} className={`px-3 py-2 rounded-lg transition-all ${filtroOrigen === 'TODOS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todos</button>
+                        <button type="button" onClick={() => setFiltroOrigen('AUTO')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'AUTO' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Building2 size={12}/> K-si</button>
+                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Users size={12}/> Ext</button>
+                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO_CLIENTE')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO_CLIENTE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><User size={12}/> Cliente</button>
+                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO_CONCESIONARIA')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO_CONCESIONARIA' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Store size={12}/> Conc.</button>
                     </div>
                 </div>
             </div>
@@ -140,8 +148,10 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                             <td className="px-6 py-4">
                                                 {item.origen === 'AUTO' ? (
                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black border border-blue-100"><Building2 size={10}/> K-SI</span>
+                                                ) : item.esConcesionaria ? (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-rose-50 text-rose-700 text-[10px] font-black border border-rose-100"><Store size={10}/> Conc.</span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100"><Users size={10}/> EXT</span>
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100"><User size={10}/> Cliente</span>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">

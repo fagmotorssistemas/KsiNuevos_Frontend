@@ -35,13 +35,6 @@ export function FinancieroView() {
             </div>
 
             <FinancialKPIs data={kpis} loading={loading} />
-            
-            {/* Espacio para futuros reportes simples (ej. lista de últimos movimientos) */}
-            <div className="p-8 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center">
-                <p className="text-xs text-slate-400 font-medium">
-                    Los gráficos históricos estarán disponibles próximamente.
-                </p>
-            </div>
         </div>
     );
 }

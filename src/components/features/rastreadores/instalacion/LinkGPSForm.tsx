@@ -352,7 +352,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
 
             <div className="space-y-6">
 
-                {/* Cliente Info (persona natural o concesionaria) */}
+                {/* 1. Información del cliente */}
                 <ClienteInfo
                     isExternal={isExternal}
                     seleccionado={seleccionado}
@@ -368,7 +368,16 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                     onClienteFinalChange={(data) => setClienteFinal(prev => ({ ...prev, ...data }))}
                 />
 
-                {/* ✨ Módulo de Pago del Rastreador: AUTO (con contrato). Tipo y valores desde cartera: sin doc = CONTADO, con doc = CRÉDITO */}
+                {/* 2. Historial del cliente (GPS ya comprados) — ordenado: ver historial antes de agregar otro */}
+                {historialgps.length > 0 && (
+                    <HistorialGPS
+                        historialgps={historialgps}
+                        onHistorialUpdate={(gps) => setHistorialGps(prev => prev.map(g => g.id === gps.id ? gps : g))}
+                        asCard
+                    />
+                )}
+
+                {/* 3. Módulo de Pago del Rastreador: AUTO (con contrato). Tipo y valores desde cartera */}
                 {!isExternal && seleccionado && (
                     <PagoRastreadorModule
                         seleccionado={seleccionado}
@@ -451,12 +460,6 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                             onFileSelect={(files) => setArchivosNuevos(prev => [...prev, ...files])}
                             onRemoveGuardada={(idx) => setEvidenciasGuardadas(p => p.filter((_, i) => i !== idx))}
                             onRemoveNueva={(idx) => setArchivosNuevos(p => p.filter((_, i) => i !== idx))}
-                        />
-
-                        {/* Historial GPS */}
-                        <HistorialGPS
-                            historialgps={historialgps}
-                            onHistorialUpdate={(gps) => setHistorialGps(prev => prev.map(g => g.id === gps.id ? gps : g))}
                         />
                     </div>
 

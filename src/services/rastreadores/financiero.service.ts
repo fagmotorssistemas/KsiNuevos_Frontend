@@ -1,11 +1,11 @@
 import { supabase } from './supabaseClient';
+import { getCarteraRastreadores } from './cartera-rastreadores.service';
 
 export async function getKpisFinancieros() {
     try {
-        console.log("💰 Calculando Finanzas...");
+        console.log("💰 Calculando Finanzas (coherentes con cartera)...");
 
         // 1. INVERSION (ACTIVO): Equipos en bodega ('STOCK')
-        // Sumamos el costo de compra de lo que NO se ha vendido.
         const { data: stockData, error: stockError } = await supabase
             .from('gps_inventario')
             .select('costo_compra')
@@ -13,45 +13,47 @@ export async function getKpisFinancieros() {
 
         if (stockError) throw stockError;
 
-        const valorInventario = stockData?.reduce((acc, item) => acc + (Number(item.costo_compra) || 0), 0) || 0;
+        const valorInventario =
+            stockData?.reduce((acc, item) => acc + (Number(item.costo_compra) || 0), 0) || 0;
 
-        // 2. VENTAS (INGRESOS) Y COSTOS (EGRESOS): Equipos instalados
-        // Consultamos la tabla de operaciones cerradas
+        // 2. BASE COMÚN: CARRERA DE RASTREADORES
+        // Usamos exactamente los mismos datos que ve el usuario en CarteraRastreadoresView
+        const carteraItems = await getCarteraRastreadores();
+
+        const ventasTotales = carteraItems.reduce(
+            (sum, item) => sum + (Number(item.precio_total) || 0),
+            0
+        );
+
+        const itemsVendidos = carteraItems.length;
+
+        // 3. COSTOS (EGRESOS): tomamos costo de equipos vendidos desde dispositivos_rastreo
         const { data: ventasData, error: ventasError } = await supabase
             .from('dispositivos_rastreo')
-            .select('precio_venta, costo_compra');
+            .select('costo_compra');
 
         if (ventasError) throw ventasError;
 
-        let ventasTotales = 0; // INGRESOS
-        let costosTotales = 0; // EGRESOS (Costo de venta)
+        const costosTotales =
+            ventasData?.reduce((acc, item) => acc + (Number(item.costo_compra) || 0), 0) || 0;
 
-        ventasData?.forEach(venta => {
-            // Ingreso: Lo que pago el cliente (totalRastreador)
-            ventasTotales += Number(venta.precio_venta) || 0;
-
-            // Egreso: Lo que te costo ese equipo especifico
-            costosTotales += Number(venta.costo_compra) || 0;
-        });
-
-        // 3. UTILIDAD (GANANCIA REAL)
+        // 4. UTILIDAD Y MARGEN
         const utilidadBruta = ventasTotales - costosTotales;
-
-        // 4. MARGEN (%)
         const margenGlobal = ventasTotales > 0 ? (utilidadBruta / ventasTotales) * 100 : 0;
 
-        console.log(`✅ Finanzas: Inv $${valorInventario} | Ventas $${ventasTotales} | Costos $${costosTotales}`);
+        console.log(
+            `✅ Finanzas: Inv $${valorInventario} | Ventas (cartera) $${ventasTotales} | Costos $${costosTotales}`
+        );
 
         return {
-            valorInventario, // Inversion
-            ventasTotales,   // Ingresos
-            costosTotales,   // Egresos
+            valorInventario, // Inversión en stock
+            ventasTotales,   // Ingresos totales según Cartera
+            costosTotales,   // Egresos (costo de equipos vendidos)
             utilidadBruta,   // Ganancia Neta
             margenGlobal,
-            itemsVendidos: ventasData?.length || 0,
+            itemsVendidos,          // Dispositivos en cartera (mismo universo que la tabla)
             itemsStock: stockData?.length || 0
         };
-
     } catch (error) {
         console.error("❌ Error calculando KPIs:", error);
         return null;
