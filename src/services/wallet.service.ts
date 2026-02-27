@@ -4,7 +4,8 @@ import {
     KpiCartera, 
     ClienteBusqueda,
     CreditoResumen,
-    CuotaAmortizacion 
+    CuotaAmortizacion,
+    DetalleDocumento 
 } from "@/types/wallet.types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
@@ -63,5 +64,21 @@ export const walletService = {
         if (!res.ok) throw new Error('Error fetching amortization table');
         const data = await res.json();
         return data.data;
+    },
+
+    // ✨ NUEVO: Buscar documento por número físico (nota de venta) - OPTIMIZADO
+    async getDocumentoByNumeroFisico(numeroFisico: string): Promise<DetalleDocumento | null> {
+        try {
+            const res = await fetch(`${API_URL}/cartera/documento/fisico/${numeroFisico}`);
+            if (!res.ok) {
+                if (res.status === 404) return null;
+                throw new Error('Error fetching documento by numero fisico');
+            }
+            const data = await res.json();
+            return data.data;
+        } catch (error) {
+            console.error('Error buscando documento por número físico:', error);
+            return null;
+        }
     }
 };

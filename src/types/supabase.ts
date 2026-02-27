@@ -155,6 +155,36 @@ export type Database = {
         }
         Relationships: []
       }
+      concesionarias: {
+        Row: {
+          created_at: string | null
+          direccion: string | null
+          email: string | null
+          id: string
+          nombre: string
+          ruc: string
+          telefono: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre: string
+          ruc: string
+          telefono?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre?: string
+          ruc?: string
+          telefono?: string | null
+        }
+        Relationships: []
+      }
       contratospb: {
         Row: {
           alias_vehiculo: string | null
@@ -280,6 +310,44 @@ export type Database = {
           },
         ]
       }
+      cuotas_rastreador: {
+        Row: {
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento: string
+          id: string
+          numero_cuota: number
+          valor: number
+          venta_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento: string
+          id?: string
+          numero_cuota: number
+          valor: number
+          venta_id: string
+        }
+        Update: {
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_cuota_enum"]
+          fecha_vencimiento?: string
+          id?: string
+          numero_cuota?: number
+          valor?: number
+          venta_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cuota_venta"
+            columns: ["venta_id"]
+            isOneToOne: false
+            referencedRelation: "ventas_rastreador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cuotaspb: {
         Row: {
           color_fila: string | null
@@ -398,7 +466,11 @@ export type Database = {
       dispositivos_rastreo: {
         Row: {
           cliente_externo_id: string | null
+          cliente_final_identificacion: string | null
+          cliente_final_nombre: string | null
+          cliente_final_telefono: string | null
           cliente_nombre: string | null
+          concesionaria_id: string | null
           costo_compra: number | null
           costo_instalacion: number | null
           created_at: string | null
@@ -411,6 +483,7 @@ export type Database = {
           identificacion_cliente: string
           imei: string
           instalador: string | null
+          instalador_id: string | null
           metodo_pago: string | null
           modelo: string | null
           nombre_concesionaria: string | null
@@ -426,7 +499,11 @@ export type Database = {
         }
         Insert: {
           cliente_externo_id?: string | null
+          cliente_final_identificacion?: string | null
+          cliente_final_nombre?: string | null
+          cliente_final_telefono?: string | null
           cliente_nombre?: string | null
+          concesionaria_id?: string | null
           costo_compra?: number | null
           costo_instalacion?: number | null
           created_at?: string | null
@@ -439,6 +516,7 @@ export type Database = {
           identificacion_cliente: string
           imei: string
           instalador?: string | null
+          instalador_id?: string | null
           metodo_pago?: string | null
           modelo?: string | null
           nombre_concesionaria?: string | null
@@ -454,7 +532,11 @@ export type Database = {
         }
         Update: {
           cliente_externo_id?: string | null
+          cliente_final_identificacion?: string | null
+          cliente_final_nombre?: string | null
+          cliente_final_telefono?: string | null
           cliente_nombre?: string | null
+          concesionaria_id?: string | null
           costo_compra?: number | null
           costo_instalacion?: number | null
           created_at?: string | null
@@ -467,6 +549,7 @@ export type Database = {
           identificacion_cliente?: string
           imei?: string
           instalador?: string | null
+          instalador_id?: string | null
           metodo_pago?: string | null
           modelo?: string | null
           nombre_concesionaria?: string | null
@@ -489,10 +572,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispositivos_rastreo_instalador_id_fkey"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "gps_instaladores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "dispositivos_rastreo_sim_id_fkey"
             columns: ["sim_id"]
             isOneToOne: false
             referencedRelation: "gps_sims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_dispositivo_concesionaria"
+            columns: ["concesionaria_id"]
+            isOneToOne: false
+            referencedRelation: "concesionarias"
             referencedColumns: ["id"]
           },
         ]
@@ -1446,6 +1543,7 @@ export type Database = {
           description: string | null
           extras: string[] | null
           id: string
+          image_analysis: Json | null
           image_url: string | null
           is_sold: boolean
           listing_image_urls: string[] | null
@@ -1471,6 +1569,7 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
+          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -1496,6 +1595,7 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
+          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -1763,7 +1863,6 @@ export type Database = {
           descripcion: string
           estado_trabajo: string | null
           id: string
-          mecanico_asignado_id: string | null
           orden_id: string
           precio_unitario: number | null
           total: number | null
@@ -1774,7 +1873,6 @@ export type Database = {
           descripcion: string
           estado_trabajo?: string | null
           id?: string
-          mecanico_asignado_id?: string | null
           orden_id: string
           precio_unitario?: number | null
           total?: number | null
@@ -1785,19 +1883,11 @@ export type Database = {
           descripcion?: string
           estado_trabajo?: string | null
           id?: string
-          mecanico_asignado_id?: string | null
           orden_id?: string
           precio_unitario?: number | null
           total?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "taller_detalles_mecanico_fkey"
-            columns: ["mecanico_asignado_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "taller_detalles_orden_fkey"
             columns: ["orden_id"]
@@ -1955,6 +2045,7 @@ export type Database = {
           fecha_salida_real: string | null
           firma_cliente_url: string | null
           fotos_ingreso_urls: string[] | null
+          fotos_salida_urls: string[] | null
           id: string
           inventario_pertenencias: Json | null
           kilometraje: number | null
@@ -1984,6 +2075,7 @@ export type Database = {
           fecha_salida_real?: string | null
           firma_cliente_url?: string | null
           fotos_ingreso_urls?: string[] | null
+          fotos_salida_urls?: string[] | null
           id?: string
           inventario_pertenencias?: Json | null
           kilometraje?: number | null
@@ -2013,6 +2105,7 @@ export type Database = {
           fecha_salida_real?: string | null
           firma_cliente_url?: string | null
           fotos_ingreso_urls?: string[] | null
+          fotos_salida_urls?: string[] | null
           id?: string
           inventario_pertenencias?: Json | null
           kilometraje?: number | null
@@ -2370,6 +2463,62 @@ export type Database = {
             columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ventas_rastreador: {
+        Row: {
+          abono_inicial: number | null
+          created_at: string | null
+          dispositivo_id: string
+          entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          id: string
+          metodo_pago:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
+          numero_cuotas: number | null
+          precio_total: number
+          tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado: number | null
+          url_comprobante_pago: string | null
+        }
+        Insert: {
+          abono_inicial?: number | null
+          created_at?: string | null
+          dispositivo_id: string
+          entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          id?: string
+          metodo_pago?:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
+          numero_cuotas?: number | null
+          precio_total: number
+          tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado?: number | null
+          url_comprobante_pago?: string | null
+        }
+        Update: {
+          abono_inicial?: number | null
+          created_at?: string | null
+          dispositivo_id?: string
+          entorno?: Database["public"]["Enums"]["entorno_venta_enum"]
+          id?: string
+          metodo_pago?:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
+          numero_cuotas?: number | null
+          precio_total?: number
+          tipo_pago?: Database["public"]["Enums"]["tipo_pago_enum"]
+          total_financiado?: number | null
+          url_comprobante_pago?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_venta_dispositivo"
+            columns: ["dispositivo_id"]
+            isOneToOne: false
+            referencedRelation: "dispositivos_rastreo"
             referencedColumns: ["id"]
           },
         ]
@@ -2762,6 +2911,8 @@ export type Database = {
         | "conwilsonhernan"
         | "consignacion"
       credit_status: "aplica" | "no_aplica" | "pendiente" | "no_interesa"
+      entorno_venta_enum: "KSI_NUEVOS" | "EXTERNO"
+      estado_cuota_enum: "PENDIENTE" | "PAGADA"
       estado_dispositivo_enum:
         | "PENDIENTE_INSTALACION"
         | "INSTALADO"
@@ -2792,6 +2943,11 @@ export type Database = {
         | "en_proceso"
         | "datos_pedidos"
       lead_temperature: "frio" | "tibio" | "caliente"
+      metodo_pago_rastreador_enum:
+        | "EFECTIVO"
+        | "TRANSFERENCIA"
+        | "DEPOSITO"
+        | "CHEQUE"
       request_priority: "baja" | "media" | "alta"
       request_status: "pendiente" | "aprobado" | "comprado" | "rechazado"
       scraper_car_location: "patio" | "taller" | "cliente"
@@ -2816,6 +2972,9 @@ export type Database = {
         | "gasto_operativo"
         | "pago_proveedor"
         | "nomina"
+        | "obligaciones"
+        | "otros"
+      tipo_pago_enum: "CONTADO" | "CREDITO"
       user_role_enum:
         | "admin"
         | "vendedor"
@@ -2997,6 +3156,8 @@ export const Constants = {
         "consignacion",
       ],
       credit_status: ["aplica", "no_aplica", "pendiente", "no_interesa"],
+      entorno_venta_enum: ["KSI_NUEVOS", "EXTERNO"],
+      estado_cuota_enum: ["PENDIENTE", "PAGADA"],
       estado_dispositivo_enum: [
         "PENDIENTE_INSTALACION",
         "INSTALADO",
@@ -3031,6 +3192,12 @@ export const Constants = {
         "datos_pedidos",
       ],
       lead_temperature: ["frio", "tibio", "caliente"],
+      metodo_pago_rastreador_enum: [
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "DEPOSITO",
+        "CHEQUE",
+      ],
       request_priority: ["baja", "media", "alta"],
       request_status: ["pendiente", "aprobado", "comprado", "rechazado"],
       scraper_car_location: ["patio", "taller", "cliente"],
@@ -3057,7 +3224,10 @@ export const Constants = {
         "gasto_operativo",
         "pago_proveedor",
         "nomina",
+        "obligaciones",
+        "otros",
       ],
+      tipo_pago_enum: ["CONTADO", "CREDITO"],
       user_role_enum: [
         "admin",
         "vendedor",

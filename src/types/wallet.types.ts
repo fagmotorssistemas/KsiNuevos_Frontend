@@ -29,6 +29,7 @@ export interface DetalleDocumento {
     numeroDocumento: string; 
     numeroFisico: string;
     numeroCuota: number;
+    totalCuotas?: number;
     fechaEmision: string;      
     fechaVencimiento: string;  
     diasMora: number;
