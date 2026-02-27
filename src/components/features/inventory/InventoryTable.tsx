@@ -225,7 +225,7 @@ export function InventoryTable({
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
 
     const role = currentUserRole?.toLowerCase() || '';
-    const canEdit = role === 'admin' || role === 'marketing';
+    const canEdit = role === 'admin'; // Solo admin puede editar / gestionar; el resto solo lectura
 
     const formatPrice = (price: number | null) => 
         new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price ?? 0);

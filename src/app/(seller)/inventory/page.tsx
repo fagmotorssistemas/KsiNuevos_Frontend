@@ -145,6 +145,7 @@ export default function InventoryPage() {
                     car={selectedCar}
                     onClose={handleCloseDetailModal}
                     onUpdate={handleUpdateSuccess}
+                    currentUserRole={profile?.role}
                 />
             )}
 
