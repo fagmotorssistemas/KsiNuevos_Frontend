@@ -29,7 +29,7 @@ const SIERRA_CITIES = [
 
 const COAST_CITIES = [
     'guayaquil', 'manta', 'esmeraldas', 'machala', 'santo domingo',
-    'portoviejo', 'babahoyo', 'quevedo', 'milagro', 'daule', 'salinas', "milagro", 
+    'portoviejo', 'babahoyo', 'quevedo', 'milagro', 'daule', 'salinas', "milagro",
     "samborondón", "durán", "manabí", "santa elena", "salinas"
 ];
 
@@ -657,7 +657,7 @@ export const scraperService = {
             if (!searchTerm.trim()) return
 
             const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook/buscar-producto-marketplace',
+                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
                 {
                     method: 'POST',
                     headers: {
@@ -666,6 +666,30 @@ export const scraperService = {
                     body: JSON.stringify({
                         searchValue: searchTerm,
                     }),
+                }
+            )
+
+
+            if (!response.ok) {
+                throw new Error('Error al ejecutar el webhook')
+            }
+
+            const data = await response.json()
+            console.log('data', data)
+            return data as WebhookResponse
+        } catch (error) {
+            console.error('Error al scrapear:', error)
+        }
+    },
+    async scrapAllBrands() {
+        try {
+            const response = await fetch(
+                'https://n8n.ksinuevos.com/webhook-test/buscar-todas-las-marcas',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
                 }
             )
 

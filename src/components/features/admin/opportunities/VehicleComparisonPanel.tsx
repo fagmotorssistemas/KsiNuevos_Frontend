@@ -373,7 +373,7 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                     </div>
 
                     {/* Cabina tabs */}
-                    <div className="flex items-center gap-1 mt-4">
+                    {/* <div className="flex items-center gap-1 mt-4">
                         {CABINA_TABS.map(tab => {
                             const count = cabinaCounts[tab.key];
                             const isActive = cabinaFilter === tab.key;
@@ -401,7 +401,7 @@ export function VehicleComparisonPanel({ priceStatistics, limit: initialLimit = 
                                 </button>
                             );
                         })}
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Empty filter state */}

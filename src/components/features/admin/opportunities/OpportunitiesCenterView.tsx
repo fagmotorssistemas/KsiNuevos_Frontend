@@ -1,6 +1,6 @@
 "use client";
 
-import { scraperService, VehicleWithSeller } from "@/services/scraper.service";
+import { scraperService } from "@/services/scraper.service";
 import {
     DatabaseZap, Search, Car, RefreshCcw, X, Zap, Sparkles,
     MapPin, Tag, Calendar, MapPinned, ArrowUpDown, Filter,
@@ -174,51 +174,21 @@ export const OpportunitiesCenterView = ({
         handleSubmitScraper(term);
     }, [handleSubmitScraper]);
 
-    // ── Scraper: todas las marcas (sin modal), hasta 30 simultáneas ───────────
-    // Termina solo cuando llegue la respuesta de la última marca (no al enviar las 30).
-    const CONCURRENT_SCRAPES = 15;
-
     const handleBulkScrapByBrands = useCallback(async () => {
-        const brands = Object.keys(ECUADOR_CAR_DATA);
-        if (brands.length === 0) {
-            toast.error("No hay marcas configuradas");
-            return;
-        }
         setIsBulkScraping(true);
-        const toastId = toast.loading(`Escaneando 0 / ${brands.length} marcas, esto puede demorar unos minutos...`);
-        let index = 0;
-        const results: { brand: string; ok: boolean }[] = [];
-
-        const runNext = (): Promise<void> => {
-            const currentIndex = index++;
-            if (currentIndex >= brands.length) return Promise.resolve();
-            const brand = brands[currentIndex];
-            return scraperService
-                .scrapMarketplace(brand)
-                .then((response) => {
-                    results.push({ brand, ok: response?.status === "done" });
-                })
-                .catch(() => {
-                    results.push({ brand, ok: false });
-                })
-                .finally(() => {
-                    toast.loading(`Escaneando ${results.length} / ${brands.length} marcas, este proceso puede tardar unos minutos`, { id: toastId });
-                    return runNext();
-                });
-        };
-
-        const workers = Math.min(CONCURRENT_SCRAPES, brands.length);
-        await Promise.all(Array.from({ length: workers }, () => runNext()));
-
-        // Sólo terminamos cuando tenemos respuesta de todas las marcas
-        const okCount = results.filter((r) => r.ok).length;
-        toast.success(
-            `Escaneo por marcas completado: ${okCount}/${brands.length} marcas procesadas.`,
-            { id: toastId, duration: 5000 }
-        );
-        setIsBulkScraping(false);
-        onScraperComplete?.();
-    }, [onScraperComplete]);
+        const toastId = toast.loading(`Escaneando todas las marcas, esto puede demorar unos minutos...`, { duration: Infinity });
+        return scraperService
+            .scrapAllBrands()
+            .then((response) => {
+                toast.success(`Escaneo completado: ${response?.resumen?.listings_nuevos_guardados} vehículos scrapeados`, { id: toastId, duration: 8000 });
+            })
+            .catch(() => {
+                toast.error(`Error al escanear todas las marcas`, { id: toastId });
+            })
+            .finally(() => {
+                setIsBulkScraping(false);
+            });
+    }, [setIsBulkScraping]);
 
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
@@ -253,15 +223,15 @@ export const OpportunitiesCenterView = ({
                             <span className="truncate">Mejores Oportunidades</span>
                         </button>
 
-                        <button
+                        {/* <button
                             onClick={() => setShowScannerModal(true)}
                             disabled={isWebhookLoading || isBulkScraping}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Zap className="h-4 w-4" />
                             <span>Escanear</span>
-                        </button>
-                        <button
+                        </button> */}
+                        {/* <button
                             onClick={handleBulkScrapByBrands}
                             disabled={isWebhookLoading || isBulkScraping}
                             title={`Escaneo por las ${Object.keys(ECUADOR_CAR_DATA).length} marcas (sin abrir modal)`}
@@ -269,7 +239,7 @@ export const OpportunitiesCenterView = ({
                         >
                             <Layers className="h-4 w-4" />
                             <span>Escanear todas las marcas</span>
-                        </button>
+                        </button> */}
                     </div>
 
                     {/* ── Modal ── */}
