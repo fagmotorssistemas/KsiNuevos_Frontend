@@ -7,18 +7,20 @@ import { useExpedientes } from "@/hooks/taller/useExpedientes";
 import { OrdenTrabajo } from "@/types/taller";
 
 // Componentes Modularizados
-import { ExpedientesTopBar } from "@/components/features/taller/expedientes/ExpedientesTopBar";
+import { ExpedientesTopBar, CLIENTE_INTERNO_FAG_ID, CLIENTE_INTERNO_AUTOMEKANO_ID, isOrdenClienteExterno, type ClienteTipoFilter, type OrdenamientoFilter } from "@/components/features/taller/expedientes/ExpedientesTopBar";
 import { FolderCard } from "@/components/features/taller/expedientes/FolderCard";
 import { ExpedienteDetail } from "@/components/features/taller/expedientes/ExpedienteDetail";
 import { OrderPrintView } from "@/components/features/taller/OrderPrintView";
 
 export default function ExpedientesPage() {
-    const { ordenes, isLoading, subirArchivo, actualizarEstadoContable } = useExpedientes();
+    const { ordenes, isLoading, subirArchivo, actualizarEstadoContable, fetchExpedientes } = useExpedientes();
     
     // Estados de Filtros
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
     const [selectedContableStatus, setSelectedContableStatus] = useState<string | null>(null); // NUEVO ESTADO CONTABLE
+    const [selectedClienteTipo, setSelectedClienteTipo] = useState<ClienteTipoFilter>("");
+    const [ordenamiento, setOrdenamiento] = useState<OrdenamientoFilter>("fecha_ingreso_desc");
     
     const [selectedOrder, setSelectedOrder] = useState<OrdenTrabajo | null>(null);
 
@@ -42,19 +44,47 @@ export default function ExpedientesPage() {
     }, [ordenes, selectedOrder]);
 
     const filteredOrdenes = useMemo(() => {
-        return ordenes.filter(o => {
-            const term = searchTerm.toLowerCase();
-            const matchesSearch = o.vehiculo_placa.toLowerCase().includes(term) || 
-                                  o.cliente?.nombre_completo?.toLowerCase().includes(term) ||
-                                  o.numero_orden.toString().includes(term);
+        const filtered = ordenes.filter(o => {
+            const term = searchTerm.toLowerCase().trim();
+            const vehiculoCompleto = [o.vehiculo_marca, o.vehiculo_modelo].filter(Boolean).join(' ').toLowerCase();
+            const matchesSearch = !term || 
+                (o.vehiculo_placa?.toLowerCase().includes(term)) || 
+                (o.cliente?.nombre_completo?.toLowerCase().includes(term)) ||
+                (o.numero_orden.toString().includes(term)) ||
+                (o.vehiculo_marca?.toLowerCase().includes(term)) ||
+                (o.vehiculo_modelo?.toLowerCase().includes(term)) ||
+                (vehiculoCompleto && vehiculoCompleto.includes(term));
             
             const matchesStatus = selectedStatus ? o.estado === selectedStatus : true;
             // @ts-ignore
             const matchesContable = selectedContableStatus ? o.estado_contable === selectedContableStatus : true;
+
+            const matchesClienteTipo = !selectedClienteTipo ? true
+                : selectedClienteTipo === "interno_fag" ? o.cliente_id === CLIENTE_INTERNO_FAG_ID
+                : selectedClienteTipo === "interno_automekano" ? o.cliente_id === CLIENTE_INTERNO_AUTOMEKANO_ID
+                : isOrdenClienteExterno(o.cliente_id);
             
-            return matchesSearch && matchesStatus && matchesContable;
+            return matchesSearch && matchesStatus && matchesContable && matchesClienteTipo;
         });
-    }, [ordenes, searchTerm, selectedStatus, selectedContableStatus]);
+
+        const sorted = [...filtered].sort((a, b) => {
+            switch (ordenamiento) {
+                case "fecha_ingreso_desc":
+                    return new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime();
+                case "fecha_ingreso_asc":
+                    return new Date(a.fecha_ingreso).getTime() - new Date(b.fecha_ingreso).getTime();
+                case "numero_orden_desc":
+                    return b.numero_orden - a.numero_orden;
+                case "numero_orden_asc":
+                    return a.numero_orden - b.numero_orden;
+                case "placa_asc":
+                    return (a.vehiculo_placa || "").localeCompare(b.vehiculo_placa || "", "es");
+                default:
+                    return 0;
+            }
+        });
+        return sorted;
+    }, [ordenes, searchTerm, selectedStatus, selectedContableStatus, selectedClienteTipo, ordenamiento]);
 
     // Función que se pasa a los TABS para abrir el input file
     const triggerUpload = (bucket: 'taller-evidencias' | 'taller-comprobantes' | 'ordenes-trabajo' | 'taller-facturas', transaccionId?: string) => {
@@ -96,19 +126,24 @@ export default function ExpedientesPage() {
                     onSearchChange={setSearchTerm}
                     selectedContableStatus={selectedContableStatus}
                     onSelectContableStatus={setSelectedContableStatus}
+                    selectedClienteTipo={selectedClienteTipo}
+                    onSelectClienteTipo={setSelectedClienteTipo}
+                    ordenamiento={ordenamiento}
+                    onOrdenamientoChange={setOrdenamiento}
                 />
             )}
 
             <div className="flex-1 flex flex-col w-full relative overflow-hidden">
                 {selectedOrder ? (
                     
-                    <ExpedienteDetail 
-                        orden={selectedOrder} 
+                    <ExpedienteDetail
+                        orden={selectedOrder}
                         onClose={() => setSelectedOrder(null)}
                         isUploading={isUploading}
                         onTriggerUpload={triggerUpload}
                         onUpdateContable={actualizarEstadoContable}
                         onPrint={() => handlePrint?.()}
+                        onRefreshOrder={fetchExpedientes}
                     />
 
                 ) : (

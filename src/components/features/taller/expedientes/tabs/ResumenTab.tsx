@@ -1,6 +1,7 @@
-import React from "react";
-import { User, Clock, DollarSign } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User, Clock, DollarSign, FileText, Wrench, Loader2 } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
+import { useOrdenes } from "@/hooks/taller/useOrdenes";
 
 // Extendemos localmente el tipo para evitar el error de TypeScript ts(2339)
 // Nota: Se recomienda agregar 'estado_contable?: string;' directamente en @/types/taller.ts
@@ -11,9 +12,29 @@ type OrdenTrabajoConContabilidad = OrdenTrabajo & {
 interface ResumenTabProps {
     orden: OrdenTrabajoConContabilidad;
     onUpdateContable?: (id: string, status: string) => void; // Mantenida por compatibilidad con el padre
+    /** Se llama al hacer clic en "Asignar presupuesto" cuando la orden no tiene items de presupuesto */
+    onAssignPresupuesto?: () => void;
+    /** Cuando cambia (ej. tras cerrar el modal de presupuesto), se vuelven a cargar los detalles */
+    refreshDeps?: number;
 }
 
-export function ResumenTab({ orden }: ResumenTabProps) {
+export function ResumenTab({ orden, onAssignPresupuesto, refreshDeps = 0 }: ResumenTabProps) {
+    const { fetchDetallesOrden } = useOrdenes();
+    const [detallesPresupuesto, setDetallesPresupuesto] = useState<{ id: string; descripcion: string; precio_unitario: number; cantidad: number }[]>([]);
+    const [loadingPresupuesto, setLoadingPresupuesto] = useState(true);
+
+    useEffect(() => {
+        if (!orden?.id) return;
+        setLoadingPresupuesto(true);
+        fetchDetallesOrden(orden.id).then((data) => {
+            setDetallesPresupuesto(data);
+            setLoadingPresupuesto(false);
+        });
+    }, [orden?.id, refreshDeps]);
+
+    const totalPresupuesto = detallesPresupuesto.reduce((acc, d) => acc + d.precio_unitario * d.cantidad, 0);
+    const tienePresupuesto = detallesPresupuesto.length > 0;
+
     // Tomamos el estado directamente de la orden extendida
     const estadoContable = orden.estado_contable || 'pendiente';
 
@@ -39,6 +60,16 @@ export function ResumenTab({ orden }: ResumenTabProps) {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in">
+            {/* Tarjeta: Lo que el cliente solicitó (observaciones_ingreso) */}
+            <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-50 pb-2">
+                    <FileText className="h-4 w-4 text-slate-400" /> Lo que el cliente solicitó
+                </h3>
+                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 min-h-[60px]">
+                    {orden.observaciones_ingreso?.trim() || "No se registraron observaciones ni solicitudes del cliente al ingreso."}
+                </p>
+            </div>
+
             {/* Tarjeta Cliente */}
             <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-50 pb-2">
@@ -81,6 +112,51 @@ export function ResumenTab({ orden }: ResumenTabProps) {
                         )}
                     </div>
                 </div>
+            </div>
+
+            {/* Tarjeta Presupuesto estimado */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-50 pb-2">
+                    <Wrench className="h-4 w-4 text-slate-400" /> Presupuesto estimado
+                </h3>
+                {loadingPresupuesto ? (
+                    <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin" /> <span className="text-sm">Cargando presupuesto...</span>
+                    </div>
+                ) : tienePresupuesto ? (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <p className="text-xs font-bold text-slate-500 uppercase mb-1">Total estimado</p>
+                            <p className="text-2xl font-black text-emerald-700">${totalPresupuesto.toFixed(2)}</p>
+                        </div>
+                        <ul className="space-y-2 text-sm">
+                            {detallesPresupuesto.slice(0, 5).map((d) => (
+                                <li key={d.id} className="flex justify-between text-slate-700">
+                                    <span className="truncate pr-2">{d.descripcion}</span>
+                                    <span className="font-mono font-medium shrink-0">${(d.precio_unitario * d.cantidad).toFixed(2)}</span>
+                                </li>
+                            ))}
+                            {detallesPresupuesto.length > 5 && (
+                                <li className="text-slate-500 text-xs">+ {detallesPresupuesto.length - 5} ítem(s) más</li>
+                            )}
+                        </ul>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <p className="text-slate-500 text-sm">
+                            Este trabajo no tiene presupuesto asignado. Puedes agregar servicios y trabajos para generar un presupuesto estimado.
+                        </p>
+                        {onAssignPresupuesto && (
+                            <button
+                                type="button"
+                                onClick={onAssignPresupuesto}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-slate-600 hover:text-emerald-700 font-bold text-sm transition-colors"
+                            >
+                                <Wrench className="h-4 w-4" /> Asignar presupuesto
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Tarjeta Estado Contable (NUEVO - SOLO VISUAL) */}

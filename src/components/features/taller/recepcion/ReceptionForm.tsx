@@ -18,10 +18,44 @@ import {
     Info,
     CalendarClock,
     Mail,
-    Fingerprint // Icono para el VIN
+    Fingerprint, // Icono para el VIN
+    Building2,
+    UserCircle,
+    Users
 } from "lucide-react";
 import { useRecepcion } from "@/hooks/taller/useRecepcion";
 import { ChecklistGroup } from "./ChecklistInspection";
+
+interface ClienteState {
+    id: string | null;
+    cedula: string;
+    nombre: string;
+    telefono: string;
+    email: string;
+    direccion: string;
+}
+
+/** Tipo de cliente seleccionado antes de mostrar el formulario */
+type ClienteTipoRecepcion = "fag" | "automekano" | "externo";
+
+/** Datos predefinidos de clientes internos (taller_clientes) */
+const CLIENTE_FAG: ClienteState = {
+    id: "36432144-fd73-4682-af49-3647b8e4958e",
+    cedula: "0102109808001",
+    nombre: "FABIAN LEONARDO AGUIRRE MARQUEZ",
+    telefono: "072808131",
+    email: "contabilidad@fagmotorsurfa.com",
+    direccion: "AV. ESPAÑA Y SEVILLA"
+};
+
+const CLIENTE_AUTOMEKANO: ClienteState = {
+    id: "8b44cf1d-3f5f-4408-91fd-f5b6a03b3bba",
+    cedula: "1891715664001",
+    nombre: "AUTOMEKANO",
+    telefono: "0989039144",
+    email: "contabilidad@fagmotorsurfa.com",
+    direccion: "AV ESPAÑA"
+};
 
 const CHECKLIST_ITEMS = {
     exterior: [
@@ -69,18 +103,12 @@ const initialChecklist = [
 
 const initialInventario = INVENTARIO_ITEMS.reduce((acc, item) => ({ ...acc, [item.key]: false }), {});
 
-interface ClienteState {
-    id: string | null;
-    cedula: string;
-    nombre: string;
-    telefono: string;
-    email: string;
-    direccion: string;
-}
-
 export function ReceptionForm() {
     const router = useRouter();
     const { buscarCliente, crearOrdenIngreso, isLoading, searchLoading } = useRecepcion();
+
+    /** null = mostrar cards de selección; 'fag' | 'automekano' | 'externo' = mostrar formulario */
+    const [clienteTipoSeleccionado, setClienteTipoSeleccionado] = useState<ClienteTipoRecepcion | null>(null);
 
     const [cliente, setCliente] = useState<ClienteState>({
         id: null,
@@ -126,6 +154,13 @@ export function ReceptionForm() {
         }
     };
 
+    const handleSeleccionarTipoCliente = (tipo: ClienteTipoRecepcion) => {
+        setClienteTipoSeleccionado(tipo);
+        if (tipo === "fag") setCliente(CLIENTE_FAG);
+        else if (tipo === "automekano") setCliente(CLIENTE_AUTOMEKANO);
+        else setCliente({ id: null, cedula: "", nombre: "", telefono: "", email: "", direccion: "" });
+    };
+
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const newFiles = Array.from(e.target.files);
@@ -137,6 +172,16 @@ export function ReceptionForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const placaTrim = vehiculo.placa.trim();
+        const observacionesTrim = observaciones.trim();
+        if (!placaTrim) {
+            alert("La placa del vehículo es obligatoria.");
+            return;
+        }
+        if (!observacionesTrim) {
+            alert("Las observaciones / trabajo solicitado por el cliente son obligatorias.");
+            return;
+        }
         const payload = {
             cliente_id: cliente.id,
             cliente_cedula: cliente.cedula,
@@ -144,7 +189,7 @@ export function ReceptionForm() {
             cliente_telefono: cliente.telefono,
             cliente_email: cliente.email,
             cliente_direccion: cliente.direccion,
-            vehiculo_placa: vehiculo.placa,
+            vehiculo_placa: placaTrim,
             vehiculo_marca: vehiculo.marca,
             vehiculo_modelo: vehiculo.modelo,
             vehiculo_anio: vehiculo.anio,
@@ -156,7 +201,7 @@ export function ReceptionForm() {
             fecha_promesa_entrega: vehiculo.fecha_promesa ? new Date(vehiculo.fecha_promesa).toISOString() : null,
             checklist,
             inventario,
-            observaciones
+            observaciones: observacionesTrim
         };
         const result = await crearOrdenIngreso(payload, fotos);
         if (result.success) {
@@ -167,11 +212,69 @@ export function ReceptionForm() {
     };
 
     return (
+        <>
+            {/* Paso 0: Selección de tipo de cliente */}
+            {clienteTipoSeleccionado === null && (
+                <div className="bg-slate-50/50 mx-auto px-4 pt-8 pb-16 max-w-4xl">
+                    <div className="border-b border-slate-200 pb-8">
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Recepción de Vehículo</h1>
+                        <p className="text-slate-500 mt-1 font-medium">Seleccione el tipo de cliente para continuar.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+                        <button
+                            type="button"
+                            onClick={() => handleSeleccionarTipoCliente("fag")}
+                            className="group flex flex-col items-center p-8 bg-white rounded-3xl border-2 border-slate-200 hover:border-blue-500 hover:shadow-xl transition-all text-left"
+                        >
+                            <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                <UserCircle className="h-7 w-7" />
+                            </div>
+                            <h3 className="font-bold text-slate-900 text-lg">Fabian Aguirre</h3>
+                            <p className="text-sm text-slate-500 mt-1">Cliente Frecuente · Datos precargados</p>
+                            <ChevronRight className="h-5 w-5 text-slate-300 mt-4 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSeleccionarTipoCliente("automekano")}
+                            className="group flex flex-col items-center p-8 bg-white rounded-3xl border-2 border-slate-200 hover:border-amber-500 hover:shadow-xl transition-all text-left"
+                        >
+                            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                <Building2 className="h-7 w-7" />
+                            </div>
+                            <h3 className="font-bold text-slate-900 text-lg">AUTOMEKANO</h3>
+                            <p className="text-sm text-slate-500 mt-1">Cliente Frecuente · Datos precargados</p>
+                            <ChevronRight className="h-5 w-5 text-slate-300 mt-4 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSeleccionarTipoCliente("externo")}
+                            className="group flex flex-col items-center p-8 bg-white rounded-3xl border-2 border-slate-200 hover:border-emerald-500 hover:shadow-xl transition-all text-left"
+                        >
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                <Users className="h-7 w-7" />
+                            </div>
+                            <h3 className="font-bold text-slate-900 text-lg">Clientes externos</h3>
+                            <p className="text-sm text-slate-500 mt-1">Completar datos del cliente manualmente</p>
+                            <ChevronRight className="h-5 w-5 text-slate-300 mt-4 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Formulario de recepción (solo si ya se eligió tipo de cliente) */}
+            {clienteTipoSeleccionado !== null && (
         <form onSubmit={handleSubmit} className=" bg-slate-50/50 mx-auto px-4 pt-8 pb-32 space-y-10">
 
             {/* ENCABEZADO */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-8">
                 <div>
+                    <button
+                        type="button"
+                        onClick={() => setClienteTipoSeleccionado(null)}
+                        className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 mb-4 font-medium transition-colors"
+                    >
+                        <X className="h-4 w-4" /> Cambiar tipo de cliente
+                    </button>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight">Recepción de Vehículo</h1>
                     <p className="text-slate-500 mt-1 font-medium">Complete la hoja de ingreso detalladamente.</p>
                 </div>
@@ -271,6 +374,7 @@ export function ReceptionForm() {
                         <div className="relative pt-1">
                             <input
                                 type="text"
+                                required
                                 className="w-full px-4 py-3 rounded-lg border-2 border-slate-900 bg-amber-50 text-slate-900 font-mono text-xl font-black text-center uppercase focus:ring-4 focus:ring-amber-500/20 outline-none transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]"
                                 placeholder="ABC-123"
                                 value={vehiculo.placa}
@@ -475,8 +579,9 @@ export function ReceptionForm() {
                     </div>
                     <div className="p-6 flex-1">
                         <textarea
+                            required
                             className="w-full h-full min-h-[180px] p-5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none resize-none font-medium text-slate-700 leading-relaxed transition-all"
-                            placeholder="Escriba aquí el trabajo solicitados por el cliente, detalles del daño, peticiones especiales del cliente o cualquier nota relevante."
+                            placeholder="Escriba aquí el trabajo solicitado por el cliente, detalles del daño, peticiones especiales del cliente o cualquier nota relevante. (Obligatorio)"
                             value={observaciones}
                             onChange={(e) => setObservaciones(e.target.value)}
                         ></textarea>
@@ -554,5 +659,7 @@ export function ReceptionForm() {
                 </div>
             </div>
         </form>
+            )}
+        </>
     );
 }

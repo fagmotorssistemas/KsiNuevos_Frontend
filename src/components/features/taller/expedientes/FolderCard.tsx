@@ -42,14 +42,19 @@ export function FolderCard({ orden, onClick }: FolderCardProps) {
                         {estadoFormateado}
                     </span>
                 </div>
-                <p className="text-sm text-slate-700 truncate font-medium">
-                    {clienteNombre}
-                </p>
-                <p className="text-xs text-slate-500 truncate mt-0.5">
+                <p className="text-base font-bold text-slate-800 truncate leading-tight">
                     {vehiculoTexto}
                 </p>
-                <div className="mt-auto pt-3 flex items-center text-slate-400">
-                    <Folder className="h-4 w-4 opacity-60" fill="currentColor" />
+                <p className="text-xs text-slate-500 truncate mt-1">
+                    {clienteNombre}
+                </p>
+                <div className="mt-auto pt-3 flex items-center justify-between">
+                    <Folder className="h-4 w-4 opacity-60 text-slate-400" fill="currentColor" />
+                    {orden.vehiculo_placa && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-200 text-slate-700">
+                            {orden.vehiculo_placa}
+                        </span>
+                    )}
                 </div>
             </div>
         </div>

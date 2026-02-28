@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
-    ClipboardList,
+    ClipboardCheck,
     Car,
     Package,
     Landmark,
@@ -14,18 +14,22 @@ import {
     ChevronLeft,
     ChevronRight,
     Wrench,
-    PersonStanding ,
+    PersonStanding,
+    HandCoins,
+    Truck,
+    FolderOpen,
 } from 'lucide-react';
 
 const menuItems = [
     { name: 'Dashboard', href: '/taller/dashboard', icon: LayoutDashboard },
-    { name: 'Recepción', href: '/taller/recepcion', icon: ClipboardList },
+    { name: 'Recepción', href: '/taller/recepcion', icon: ClipboardCheck },
     { name: 'Trabajos Activos', href: '/taller/trabajos', icon: Car },
     { name: 'Inventario', href: '/taller/inventario', icon: Package },
     { name: 'Finanzas', href: '/taller/finanzas', icon: Landmark },
-    { name: 'Proveedores', href: '/taller/proveedores', icon :ClipboardList},
-    { name: 'Personal', href: '/taller/personal', icon :PersonStanding },
-    { name: 'Expedientes', href: '/taller/expedientes', icon :ClipboardList },
+    { name: 'Cuentas por Cobrar', href: '/taller/cuentas-por-cobrar', icon: HandCoins },
+    { name: 'Proveedores', href: '/taller/proveedores', icon: Truck },
+    { name: 'Personal', href: '/taller/personal', icon: PersonStanding },
+    { name: 'Expedientes', href: '/taller/expedientes', icon: FolderOpen },
 ];
 
 export function TallerSidebar() {

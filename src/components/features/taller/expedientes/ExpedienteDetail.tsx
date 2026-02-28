@@ -4,6 +4,7 @@ import { OrdenTrabajo } from "@/types/taller";
 import { ResumenTab } from "./tabs/ResumenTab";
 import { FinanzasTab } from "./tabs/FinanzasTab";
 import { ArchivosTab } from "./tabs/ArchivosTab";
+import { WorkOrderModal } from "@/components/features/taller/trabajos/WorkOrderModal";
 
 interface DetailProps {
     orden: OrdenTrabajo;
@@ -12,10 +13,20 @@ interface DetailProps {
     onTriggerUpload: (bucket: any, transaccionId?: string) => void;
     onUpdateContable: (id: string, status: string) => void;
     onPrint: () => void;
+    /** Refrescar lista de órdenes (ej. tras cerrar el modal de presupuesto o cambiar estado) */
+    onRefreshOrder?: () => void;
 }
 
-export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable, onPrint }: DetailProps) {
+export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable, onPrint, onRefreshOrder }: DetailProps) {
     const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>('resumen');
+    const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
+    const [presupuestoUpdatedCount, setPresupuestoUpdatedCount] = useState(0);
+
+    const handleCloseWorkOrderModal = () => {
+        setShowWorkOrderModal(false);
+        setPresupuestoUpdatedCount((c) => c + 1);
+        onRefreshOrder?.();
+    };
 
     return (
         <div className="flex flex-col h-full">
@@ -47,10 +58,17 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload,
             </div>
 
             {/* Contenedor del contenido */}
-            <div className="flex-1 p-4 bg-slate-50/30">
+            <div className="flex-1 p-4 bg-slate-50/30 overflow-y-auto">
                 <div className=" mx-auto">
                     {/* Pasamos la función al Tab de Resumen */}
-                    {activeTab === 'resumen' && <ResumenTab orden={orden} onUpdateContable={onUpdateContable} />}
+                    {activeTab === 'resumen' && (
+                        <ResumenTab
+                            orden={orden}
+                            onUpdateContable={onUpdateContable}
+                            onAssignPresupuesto={() => setShowWorkOrderModal(true)}
+                            refreshDeps={presupuestoUpdatedCount}
+                        />
+                    )}
                     
                     {activeTab === 'finanzas' && (
                         <FinanzasTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} />
@@ -61,6 +79,14 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload,
                     )}
                 </div>
             </div>
+
+            <WorkOrderModal
+                orden={orden}
+                isOpen={showWorkOrderModal}
+                onClose={handleCloseWorkOrderModal}
+                onStatusChange={(id, status) => onRefreshOrder?.()}
+                onPrint={onPrint}
+            />
         </div>
     );
 }
