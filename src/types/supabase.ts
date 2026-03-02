@@ -2470,9 +2470,11 @@ export type Database = {
       ventas_rastreador: {
         Row: {
           abono_inicial: number | null
+          asesor_id: string | null
           created_at: string | null
           dispositivo_id: string
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          "fecha_de entrega": string | null
           id: string
           metodo_pago:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
@@ -2485,9 +2487,11 @@ export type Database = {
         }
         Insert: {
           abono_inicial?: number | null
+          asesor_id?: string | null
           created_at?: string | null
           dispositivo_id: string
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
+          "fecha_de entrega"?: string | null
           id?: string
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
@@ -2500,9 +2504,11 @@ export type Database = {
         }
         Update: {
           abono_inicial?: number | null
+          asesor_id?: string | null
           created_at?: string | null
           dispositivo_id?: string
           entorno?: Database["public"]["Enums"]["entorno_venta_enum"]
+          "fecha_de entrega"?: string | null
           id?: string
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
@@ -2519,6 +2525,13 @@ export type Database = {
             columns: ["dispositivo_id"]
             isOneToOne: false
             referencedRelation: "dispositivos_rastreo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_rastreador_asesor_id_fkey"
+            columns: ["asesor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

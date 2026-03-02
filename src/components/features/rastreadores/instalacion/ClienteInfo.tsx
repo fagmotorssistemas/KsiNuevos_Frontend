@@ -1,8 +1,9 @@
 "use client";
 
-import { User, Car, Building2 } from "lucide-react";
+import { User, Car, Building2, Calendar, UserCheck } from "lucide-react";
 import { ContratoGPS, ConcesionariaPayload, ClienteFinalPayload } from "@/types/rastreadores.types";
 import { VentaConcesionariaForm, emptyConcesionariaForm, emptyClienteFinal } from "./VentaConcesionariaForm";
+import type { Asesor } from "@/hooks/useAsesores";
 
 interface NuevoClienteState {
     nombre: string;
@@ -32,6 +33,13 @@ interface ClienteInfoProps {
     onConcesionariaIdChange?: (id: string | null) => void;
     onConcesionariaFormChange?: (data: Partial<ConcesionariaPayload>) => void;
     onClienteFinalChange?: (data: Partial<ClienteFinalPayload>) => void;
+    // Fecha de entrega y asesor que vendió (ventas_rastreador)
+    fechaEntrega?: string;
+    onFechaEntregaChange?: (value: string) => void;
+    asesorId?: string | null;
+    onAsesorIdChange?: (id: string | null) => void;
+    asesores?: Asesor[];
+    asesoresLoading?: boolean;
 }
 
 export function ClienteInfo({
@@ -46,7 +54,13 @@ export function ClienteInfo({
     clienteFinal = emptyClienteFinal,
     onConcesionariaIdChange,
     onConcesionariaFormChange,
-    onClienteFinalChange
+    onClienteFinalChange,
+    fechaEntrega = "",
+    onFechaEntregaChange,
+    asesorId = null,
+    onAsesorIdChange,
+    asesores = [],
+    asesoresLoading = false
 }: ClienteInfoProps) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -119,9 +133,40 @@ export function ClienteInfo({
                                     </p>
                                 </div>
                             )}
+                            {/* Fecha de entrega y asesor (modo lectura con datos editables) */}
+                            <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                        <Calendar size={12} /> Fecha de entrega
+                                    </label>
+                                    <input
+                                        type="date"
+                                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                        value={fechaEntrega}
+                                        onChange={e => onFechaEntregaChange?.(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                        <UserCheck size={12} /> Asesor que vendió
+                                    </label>
+                                    <select
+                                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                        value={asesorId ?? ""}
+                                        onChange={e => onAsesorIdChange?.(e.target.value || null)}
+                                        disabled={asesoresLoading}
+                                    >
+                                        <option value="">Seleccione asesor</option>
+                                        {asesores.map((a) => (
+                                            <option key={a.id} value={a.id}>{a.full_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     ) : (
                         // Cliente auto (Oracle o externo persona)
+                        <div className="space-y-4">
                         <div className="flex items-center gap-6">
                             <div className="bg-slate-100 border-2 border-slate-200 px-4 py-3 rounded-xl text-center shadow-sm">
                                 <span className="block text-[9px] font-black text-slate-400 uppercase leading-none mb-1">PLACA</span>
@@ -139,6 +184,37 @@ export function ClienteInfo({
                                     <span className="font-mono">{seleccionado?.notaVenta}</span>
                                 </div>
                             </div>
+                        </div>
+                        {/* Fecha de entrega y asesor (vinculación a auto) */}
+                        <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                    <Calendar size={12} /> Fecha de entrega
+                                </label>
+                                <input
+                                    type="date"
+                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                    value={fechaEntrega}
+                                    onChange={e => onFechaEntregaChange?.(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                    <UserCheck size={12} /> Asesor que vendió
+                                </label>
+                                <select
+                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                    value={asesorId ?? ""}
+                                    onChange={e => onAsesorIdChange?.(e.target.value || null)}
+                                    disabled={asesoresLoading}
+                                >
+                                    <option value="">Seleccione asesor</option>
+                                    {asesores.map((a) => (
+                                        <option key={a.id} value={a.id}>{a.full_name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                         </div>
                     )
                 ) : (
@@ -224,6 +300,36 @@ export function ClienteInfo({
                                         </div>
                                     </div>
                                 </div>
+                                {/* Fecha de entrega y asesor (concesionaria) */}
+                                <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                            <Calendar size={12} /> Fecha de entrega
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                            value={fechaEntrega}
+                                            onChange={e => onFechaEntregaChange?.(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                            <UserCheck size={12} /> Asesor que vendió
+                                        </label>
+                                        <select
+                                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                            value={asesorId ?? ""}
+                                            onChange={e => onAsesorIdChange?.(e.target.value || null)}
+                                            disabled={asesoresLoading}
+                                        >
+                                            <option value="">Seleccione asesor</option>
+                                            {asesores.map((a) => (
+                                                <option key={a.id} value={a.id}>{a.full_name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
                             </>
                         ) : (
                             <div className="space-y-6">
@@ -304,6 +410,36 @@ export function ClienteInfo({
                                                 onChange={e => onClientChange("modelo", e.target.value.toUpperCase())}
                                             />
                                         </div>
+                                    </div>
+                                </div>
+                                {/* Fecha de entrega y asesor (persona natural) */}
+                                <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                            <Calendar size={12} /> Fecha de entrega
+                                        </label>
+                                        <input
+                                            type="date"
+                                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                            value={fechaEntrega}
+                                            onChange={e => onFechaEntregaChange?.(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                            <UserCheck size={12} /> Asesor que vendió
+                                        </label>
+                                        <select
+                                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                            value={asesorId ?? ""}
+                                            onChange={e => onAsesorIdChange?.(e.target.value || null)}
+                                            disabled={asesoresLoading}
+                                        >
+                                            <option value="">Seleccione asesor</option>
+                                            {asesores.map((a) => (
+                                                <option key={a.id} value={a.id}>{a.full_name}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>

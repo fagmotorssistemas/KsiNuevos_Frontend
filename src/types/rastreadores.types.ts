@@ -221,6 +221,10 @@ export interface VentaRastreadorPayload {
     metodo_pago?: MetodoPagoRastreadorEnum | string;
     /** URL del comprobante (foto cheque, captura transferencia, comprobante depósito) */
     url_comprobante_pago?: string | null;
+    /** Fecha de entrega (tabla ventas_rastreador) */
+    fecha_entrega?: string | null;
+    /** ID del asesor que vendió (profiles con rol vendedor o admin) */
+    asesor_id?: string | null;
 }
 
 export interface CuotaRastreadorPayload {

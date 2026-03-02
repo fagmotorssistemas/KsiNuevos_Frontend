@@ -79,7 +79,9 @@ export function usePagoRastreador() {
                     total_financiado: payload.total_financiado != null ? Number(payload.total_financiado) : null,
                     numero_cuotas: payload.numero_cuotas != null ? Number(payload.numero_cuotas) : null,
                     ...(payload.metodo_pago != null && { metodo_pago: String(payload.metodo_pago) }),
-                    ...(payload.url_comprobante_pago != null && payload.url_comprobante_pago !== '' && { url_comprobante_pago: payload.url_comprobante_pago })
+                    ...(payload.url_comprobante_pago != null && payload.url_comprobante_pago !== '' && { url_comprobante_pago: payload.url_comprobante_pago }),
+                    ...(payload.fecha_entrega != null && payload.fecha_entrega !== '' && { fecha_entrega: payload.fecha_entrega }),
+                    ...(payload.asesor_id != null && payload.asesor_id !== '' && { asesor_id: payload.asesor_id })
                 })
                 .select()
                 .single();

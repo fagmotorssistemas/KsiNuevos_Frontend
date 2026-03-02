@@ -10,6 +10,7 @@ import { walletService } from "@/services/wallet.service";
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
 import { useInstaladores } from "@/hooks/useInstaladores";
 import { usePagoRastreador } from "@/hooks/usePagoRastreador";
+import { useAsesores } from "@/hooks/useAsesores";
 
 import { ClienteInfo, TipoCompradorExterno } from "./ClienteInfo";
 import { emptyConcesionariaForm, emptyClienteFinal } from "./VentaConcesionariaForm";
@@ -45,6 +46,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
     const { sims } = useInventarioSIM();
     const { instaladores } = useInstaladores();
     const { registrarVentaRastreador, generarCuotasRastreador } = usePagoRastreador();
+    const { asesores, isLoading: asesoresLoading } = useAsesores();
 
     const [formLoading, setFormLoading] = useState(false);
     const [loadingHistorial, setLoadingHistorial] = useState(false);
@@ -76,6 +78,10 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
     const [concesionariaId, setConcesionariaId] = useState<string | null>(null);
     const [concesionariaForm, setConcesionariaForm] = useState<ConcesionariaPayload>(emptyConcesionariaForm);
     const [clienteFinal, setClienteFinal] = useState<ClienteFinalPayload>(emptyClienteFinal);
+
+    // Fecha de entrega y asesor que vendió (ventas_rastreador)
+    const [fechaEntrega, setFechaEntrega] = useState("");
+    const [asesorId, setAsesorId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
         imei: '',
@@ -303,7 +309,9 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                                 abono_inicial: pagoRastreador.abono_inicial ?? 0,
                                 total_financiado: totalFinanciado,
                                 metodo_pago: pagoRastreador.metodo_pago_medio ?? metodoPagoRastreador,
-                                url_comprobante_pago: urlComprobante
+                                url_comprobante_pago: urlComprobante,
+                                fecha_entrega: fechaEntrega || null,
+                                asesor_id: asesorId || null
                             },
                             cuotasData
                         );
@@ -366,6 +374,12 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                     onConcesionariaIdChange={setConcesionariaId}
                     onConcesionariaFormChange={(data) => setConcesionariaForm(prev => ({ ...prev, ...data }))}
                     onClienteFinalChange={(data) => setClienteFinal(prev => ({ ...prev, ...data }))}
+                    fechaEntrega={fechaEntrega}
+                    onFechaEntregaChange={setFechaEntrega}
+                    asesorId={asesorId}
+                    onAsesorIdChange={setAsesorId}
+                    asesores={asesores}
+                    asesoresLoading={asesoresLoading}
                 />
 
                 {/* 2. Historial del cliente (GPS ya comprados) — ordenado: ver historial antes de agregar otro */}
