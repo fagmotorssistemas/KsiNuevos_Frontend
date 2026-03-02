@@ -112,9 +112,11 @@ export interface ProveedorGPS {
 
 export interface ModeloGPS {
     id: string;
-    nombre: string;
-    marca: string;
+    /** Nombre visible del modelo (en BD es `marca`) */
+    marca: string | null;
     costo_referencia: number;
+    /** Relación opcional: el modelo puede depender del proveedor */
+    provedor_id?: string | null;
 }
 
 /** Estado de conexión del dispositivo en inventario (individual por unidad) */

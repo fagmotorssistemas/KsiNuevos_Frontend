@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { FormIngresoGPS } from "./FormIngresoGPS";
 import { FormIngresoSIM } from "./FormIngresoSIM";
 import { rastreadoresService } from "@/services/rastreadores.service";
@@ -51,6 +51,12 @@ export function InventarioTabs() {
     const [editingItem, setEditingItem] = useState<InventarioGPS | null>(null);
     const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0, estado_coneccion: "offline" as EstadoConeccionGPS });
     const [savingEdit, setSavingEdit] = useState(false);
+
+    const modelosFiltradosEdicion = useMemo(() => {
+        const proveedorId = editForm.proveedor_id;
+        if (!proveedorId) return [] as ModeloGPS[];
+        return modelos.filter(m => (m as any)?.provedor_id === proveedorId);
+    }, [editForm.proveedor_id, modelos]);
 
     useEffect(() => {
         if (editingItem) {
@@ -117,23 +123,23 @@ export function InventarioTabs() {
             
             {/* Pestañas de Navegación */}
             <div className="flex space-x-2 border-b border-slate-200 pb-4">
-                <button 
-                    onClick={() => setActiveTab('GPS')}
-                    className={`px-5 py-2.5 text-xs font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${activeTab === 'GPS' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                >
-                    <Box size={16} /> Inventario GPS
-                </button>
-                <button 
-                    onClick={() => setActiveTab('SIMS')}
-                    className={`px-5 py-2.5 text-xs font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${activeTab === 'SIMS' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                >
-                    <CreditCard size={16} /> Inventario SIMs
-                </button>
+                    <button 
+                        onClick={() => setActiveTab('GPS')}
+                        className={`px-5 py-2.5 text-xs font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${activeTab === 'GPS' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <Box size={16} /> Inventario GPS
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('SIMS')}
+                        className={`px-5 py-2.5 text-xs font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${activeTab === 'SIMS' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                    >
+                        <CreditCard size={16} /> Inventario SIMs
+                    </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                {/* COLUMNA IZQUIERDA: Formularios de Ingreso (min-w-0 evita que se superponga a la derecha) */}
+                {/* COLUMNA IZQUIERDA: Formularios de Ingreso */}
                 <div className="lg:col-span-1 space-y-6 min-w-0 overflow-hidden">
                     {activeTab === 'GPS' ? (
                         <FormIngresoGPS onSuccess={loadInventarioGPS} />
@@ -207,8 +213,9 @@ export function InventarioTabs() {
                                         {inventarioGPS.length > 0 ? inventarioGPS.map((item) => (
                                             <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-5 py-3">
-                                                    <div className="font-bold text-slate-700">{item.modelo?.nombre ?? '—'}</div>
-                                                    <div className="text-[10px] text-slate-400">{item.modelo?.marca ?? ''}</div>
+                                                    <div className="font-bold text-slate-700">
+                                                        {item.modelo?.marca ?? '—'}
+                                                    </div>
                                                 </td>
                                                 <td className="px-5 py-3 font-mono font-medium text-slate-600 tracking-wider text-xs">
                                                     {item.imei}
@@ -323,11 +330,14 @@ export function InventarioTabs() {
                                 <select
                                     value={editForm.modelo_id}
                                     onChange={e => setEditForm(prev => ({ ...prev, modelo_id: e.target.value }))}
+                                    disabled={!editForm.proveedor_id}
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    <option value="">-- Seleccione --</option>
-                                    {modelos.map(m => (
-                                        <option key={m.id} value={m.id}>{m.nombre} ({m.marca})</option>
+                                    <option value="">
+                                        {editForm.proveedor_id ? "-- Seleccione --" : "Seleccione proveedor primero"}
+                                    </option>
+                                    {modelosFiltradosEdicion.map(m => (
+                                        <option key={m.id} value={m.id}>{m.marca ?? "—"}</option>
                                     ))}
                                 </select>
                             </div>

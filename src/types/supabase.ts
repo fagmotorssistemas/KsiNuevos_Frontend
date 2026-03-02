@@ -686,21 +686,29 @@ export type Database = {
           costo_referencia: number | null
           id: string
           marca: string | null
-          nombre: string
+          provedor_id: string | null
         }
         Insert: {
           costo_referencia?: number | null
           id?: string
           marca?: string | null
-          nombre: string
+          provedor_id?: string | null
         }
         Update: {
           costo_referencia?: number | null
           id?: string
           marca?: string | null
-          nombre?: string
+          provedor_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gps_modelos_provedor_id_fkey"
+            columns: ["provedor_id"]
+            isOneToOne: false
+            referencedRelation: "gps_proveedores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gps_proveedores: {
         Row: {

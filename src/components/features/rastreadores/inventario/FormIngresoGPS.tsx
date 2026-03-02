@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Save, Plus, Package, AlertCircle, X } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Save, Package, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { ModeloGPS, ProveedorGPS, type EstadoConeccionGPS } from "@/types/rastreadores.types";
 
 export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
     const [loading, setLoading] = useState(false);
+    const [modoIngreso, setModoIngreso] = useState<"SELECCIONAR" | "CREAR">("SELECCIONAR");
+    const [modoProveedorCrear, setModoProveedorCrear] = useState<"EXISTENTE" | "NUEVO">("EXISTENTE");
 
     // Catálogos
     const [modelos, setModelos] = useState<ModeloGPS[]>([]);
@@ -23,16 +25,10 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
         imei_input: ""
     });
 
-    // Agregar nuevo proveedor / modelo (inline)
-    const [showNewProveedor, setShowNewProveedor] = useState(false);
-    const [newProveedorNombre, setNewProveedorNombre] = useState("");
-    const [savingProveedor, setSavingProveedor] = useState(false);
-
-    const [showNewModelo, setShowNewModelo] = useState(false);
-    const [newModeloNombre, setNewModeloNombre] = useState("");
-    const [newModeloMarca, setNewModeloMarca] = useState("");
-    const [newModeloCosto, setNewModeloCosto] = useState<number>(0);
-    const [savingModelo, setSavingModelo] = useState(false);
+    // Vista CREAR (directo, sin "+Nuevo")
+    const [crearProveedorNombre, setCrearProveedorNombre] = useState("");
+    const [crearModeloNombre, setCrearModeloNombre] = useState("");
+    const [crearCostoRef, setCrearCostoRef] = useState<number>(0);
 
     const loadCatalogs = useCallback(async () => {
         const [m, p] = await Promise.all([
@@ -55,90 +51,90 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
         }
     }, [formData.modelo_id, modelos]);
 
-    const handleAgregarProveedor = async () => {
-        const nombre = newProveedorNombre.trim();
-        if (!nombre) return toast.error("Escriba el nombre del proveedor");
-        setSavingProveedor(true);
-        try {
-            const nuevo = await rastreadoresService.createProveedor(nombre);
-            await loadCatalogs();
-            setFormData(prev => ({ ...prev, proveedor_id: nuevo.id }));
-            setNewProveedorNombre("");
-            setShowNewProveedor(false);
-            toast.success(`Proveedor "${nuevo.nombre}" agregado`);
-        } catch (e: any) {
-            toast.error(e?.message || "Error al crear proveedor");
-        } finally {
-            setSavingProveedor(false);
-        }
-    };
-
-    const handleAgregarModelo = async () => {
-        const nombre = newModeloNombre.trim();
-        const marca = newModeloMarca.trim();
-        if (!nombre) return toast.error("Escriba el nombre del modelo");
-        setSavingModelo(true);
-        try {
-            const nuevo = await rastreadoresService.createModelo({
-                nombre,
-                marca: marca || "N/A",
-                costo_referencia: newModeloCosto || undefined
-            });
-            await loadCatalogs();
-            setFormData(prev => ({
-                ...prev,
-                modelo_id: nuevo.id,
-                costo_compra: nuevo.costo_referencia ?? prev.costo_compra
-            }));
-            setNewModeloNombre("");
-            setNewModeloMarca("");
-            setNewModeloCosto(0);
-            setShowNewModelo(false);
-            toast.success(`Modelo "${nuevo.nombre}" agregado`);
-        } catch (e: any) {
-            toast.error(e?.message || "Error al crear modelo");
-        } finally {
-            setSavingModelo(false);
-        }
-    };
+    const modelosFiltrados = useMemo(() => {
+        const proveedorId = formData.proveedor_id;
+        if (!proveedorId) return [];
+        return modelos.filter(m => (m as any)?.provedor_id === proveedorId);
+    }, [formData.proveedor_id, modelos]);
 
     const handleSubmit = async () => {
-        if (!formData.modelo_id || !formData.proveedor_id || !formData.imei_input) {
-            return toast.error("Complete los campos obligatorios");
+        if (modoIngreso === "SELECCIONAR" && !formData.imei_input) {
+            return toast.error("Ingrese al menos un IMEI");
         }
 
         setLoading(true);
         try {
-            // Procesar IMEIs (separar por saltos de línea o comas y limpiar espacios)
-            const imeis = formData.imei_input
-                .split(/[\n,]+/) // Separa por enter o coma
-                .map(i => i.trim())
-                .filter(i => i.length > 0); // Elimina vacíos
+            let proveedorId = formData.proveedor_id;
+            let modeloId = formData.modelo_id;
+            let costoRef = 0;
 
-            if (imeis.length === 0) return toast.error("Ingrese al menos un IMEI");
+            if (modoIngreso === "CREAR") {
+                const provNombre = crearProveedorNombre.trim();
+                const modNombre = crearModeloNombre.trim();
 
-            // Costo según modelo (gps_modelos.costo_referencia); el form ya lo autocompleta
-            const costo = formData.modelo_id
-                ? (modelos.find(m => m.id === formData.modelo_id)?.costo_referencia ?? formData.costo_compra)
-                : formData.costo_compra;
+                if (modoProveedorCrear === "NUEVO" && !provNombre) {
+                    return toast.error("Escriba el proveedor");
+                }
+                if (!modNombre) return toast.error("Escriba el modelo");
 
-            const lote = imeis.map(imei => ({
-                imei: imei.toUpperCase(),
-                modelo_id: formData.modelo_id,
-                proveedor_id: formData.proveedor_id,
-                factura_compra: formData.factura_compra.toUpperCase(),
-                costo_compra: Number(costo),
-                estado_coneccion: formData.estado_coneccion
-            }));
+                let provIdFinal = proveedorId;
+                if (modoProveedorCrear === "NUEVO") {
+                    const prov = await rastreadoresService.createProveedor(provNombre);
+                    provIdFinal = prov.id;
+                } else {
+                    if (!proveedorId) return toast.error("Seleccione un proveedor existente");
+                }
 
-            const res = await rastreadoresService.ingresarLoteGPS(lote);
+                const mod = await rastreadoresService.createModelo({
+                    marca: modNombre,
+                    costo_referencia: crearCostoRef || undefined,
+                    provedor_id: provIdFinal!
+                });
 
-            if (res.success) {
-                toast.success(`${res.count} Dispositivos ingresados al inventario`);
-                setFormData(prev => ({ ...prev, imei_input: "" })); // Limpiar solo IMEIs para seguir ingresando misma factura
-                onSuccess();
+                proveedorId = provIdFinal!;
+                modeloId = mod.id;
+                costoRef = mod.costo_referencia ?? crearCostoRef ?? 0;
+
+                await loadCatalogs();
+                setFormData(prev => ({ ...prev, proveedor_id: proveedorId, modelo_id: modeloId, costo_compra: costoRef }));
             } else {
-                toast.error(res.error || "Error al guardar (Verifique duplicados)");
+                if (!proveedorId || !modeloId) return toast.error("Seleccione proveedor y modelo");
+                costoRef = modelos.find(m => m.id === modeloId)?.costo_referencia ?? formData.costo_compra ?? 0;
+            }
+
+            if (modoIngreso === "SELECCIONAR") {
+                // Procesar IMEIs (separar por saltos de línea o comas y limpiar espacios)
+                const imeis = formData.imei_input
+                    .split(/[\n,]+/) // Separa por enter o coma
+                    .map(i => i.trim())
+                    .filter(i => i.length > 0); // Elimina vacíos
+
+                if (imeis.length === 0) return toast.error("Ingrese al menos un IMEI");
+
+                const lote = imeis.map(imei => ({
+                    imei: imei.toUpperCase(),
+                    modelo_id: modeloId,
+                    proveedor_id: proveedorId,
+                    factura_compra: formData.factura_compra.toUpperCase(),
+                    costo_compra: Number(costoRef),
+                    estado_coneccion: formData.estado_coneccion
+                }));
+
+                const res = await rastreadoresService.ingresarLoteGPS(lote);
+
+                if (res.success) {
+                    toast.success(`${res.count} Dispositivos ingresados al inventario`);
+                    setFormData(prev => ({ ...prev, imei_input: "" })); // Limpiar solo IMEIs para seguir ingresando misma factura
+                    onSuccess();
+                } else {
+                    toast.error(res.error || "Error al guardar (Verifique duplicados)");
+                }
+            } else {
+                // Solo crear proveedor/modelo, sin ingresar stock
+                toast.success("Proveedor y modelo creados correctamente");
+                setCrearProveedorNombre("");
+                setCrearModeloNombre("");
+                setCrearCostoRef(0);
             }
 
         } catch (error) {
@@ -150,21 +146,38 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 min-w-0 overflow-hidden border-l-4 border-l-blue-500">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 w-full max-w-full min-w-0 overflow-hidden border-l-4 border-l-blue-500">
             {/* Encabezado alineado con "Stock disponible de GPS" */}
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><Package size={18} /></div>
-                    <div>
-                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Ingreso de mercadería</h3>
+            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="p-1.5 sm:p-2 bg-blue-100 text-blue-600 rounded-xl shrink-0"><Package size={16} className="sm:w-[18px] sm:h-[18px]" /></div>
+                    <div className="min-w-0">
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider truncate">Ingreso de mercadería</h3>
                         <p className="text-[10px] text-slate-500 font-medium mt-0.5">Registro de dispositivos a bodega</p>
                     </div>
                 </div>
+
+                <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setModoIngreso("SELECCIONAR")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "SELECCIONAR" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}
+                    >
+                        Seleccionar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setModoIngreso("CREAR")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "CREAR" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-50"}`}
+                    >
+                        Crear
+                    </button>
+                </div>
             </div>
 
-            <div className="p-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 min-w-0">
-                    <div className="col-span-2 md:col-span-1 min-w-0">
+            <div className="p-4 sm:p-5 min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 min-w-0">
+                    <div className="col-span-2 sm:col-span-1 min-w-0">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Nro. factura</label>
                         <input
                             type="text"
@@ -175,230 +188,185 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
                         />
                     </div>
 
-                    <div className="col-span-2 md:col-span-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Proveedor</label>
-                            <button type="button" onClick={() => setShowNewProveedor(true)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0">
-                                <Plus size={12} /> Nuevo
-                            </button>
-                        </div>
-                        <select
-                            value={formData.proveedor_id}
-                            onChange={e => setFormData({ ...formData, proveedor_id: e.target.value })}
-                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="">-- Seleccione --</option>
-                            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                        </select>
-                    </div>
+                    {modoIngreso === "SELECCIONAR" ? (
+                        <>
+                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Proveedor</label>
+                                <select
+                                    value={formData.proveedor_id}
+                                    onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value, modelo_id: "" }))}
+                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Seleccione --</option>
+                                    {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                </select>
+                            </div>
 
-                    <div className="col-span-2 md:col-span-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Modelo</label>
-                            <button type="button" onClick={() => setShowNewModelo(true)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0">
-                                <Plus size={12} /> Nuevo modelo
-                            </button>
-                        </div>
-                        <select
-                            value={formData.modelo_id}
-                            onChange={e => setFormData({ ...formData, modelo_id: e.target.value })}
-                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="">-- Seleccione --</option>
-                            {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.marca})</option>)}
-                        </select>
-                    </div>
+                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Modelo</label>
+                                <select
+                                    value={formData.modelo_id}
+                                    onChange={e => setFormData({ ...formData, modelo_id: e.target.value })}
+                                    disabled={!formData.proveedor_id}
+                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">{formData.proveedor_id ? "-- Seleccione --" : "Seleccione proveedor primero"}</option>
+                                    {modelosFiltrados.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                            {m.marca ?? "—"}
+                                        </option>
+                                    ))}
+                                </select>
+                                {formData.proveedor_id && modelosFiltrados.length === 0 && (
+                                    <p className="text-[9px] text-amber-600 font-bold mt-1">
+                                        No hay modelos asociados a este proveedor.
+                                    </p>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="col-span-2 sm:col-span-1 min-w-0 space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Proveedor</label>
+                                    <div className="flex rounded-lg border border-emerald-200 overflow-hidden text-[9px] font-black uppercase">
+                                        <button
+                                            type="button"
+                                            onClick={() => setModoProveedorCrear("EXISTENTE")}
+                                            className={`px-2 py-1 ${modoProveedorCrear === "EXISTENTE" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}
+                                        >
+                                            Existente
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setModoProveedorCrear("NUEVO")}
+                                            className={`px-2 py-1 ${modoProveedorCrear === "NUEVO" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}
+                                        >
+                                            Nuevo
+                                        </button>
+                                    </div>
+                                </div>
 
-                    {/* Precio ref. según modelo - bloque claro */}
-                    <div className="col-span-2 md:col-span-1 min-w-0">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Precio ref.</label>
-                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                            {formData.modelo_id ? (
-                                <>
-                                    <span className="text-lg font-mono font-black text-slate-800">
-                                        {(() => {
-                                            const mod = modelos.find(m => m.id === formData.modelo_id);
-                                            return mod?.costo_referencia != null ? `$${mod.costo_referencia}` : "—";
-                                        })()}
-                                    </span>
-                                    <span className="text-[9px] text-slate-500 uppercase font-bold">gps_modelos</span>
-                                </>
-                            ) : (
-                                <span className="text-sm text-slate-400">Seleccione modelo</span>
-                            )}
-                        </div>
-                    </div>
+                                {modoProveedorCrear === "EXISTENTE" ? (
+                                    <select
+                                        value={formData.proveedor_id}
+                                        onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value }))}
+                                        className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                                    >
+                                        <option value="">-- Seleccione --</option>
+                                        {proveedores.map(p => (
+                                            <option key={p.id} value={p.id}>{p.nombre}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={crearProveedorNombre}
+                                        onChange={e => setCrearProveedorNombre(e.target.value)}
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        placeholder="Ej. Teltonika"
+                                    />
+                                )}
+                            </div>
 
-                    <div className="col-span-2 md:col-span-1 min-w-0">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Estado</label>
-                        <select
-                            value={formData.estado_coneccion}
-                            onChange={e => setFormData(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
-                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="online">Online</option>
-                            <option value="inactivo">Inactivo</option>
-                            <option value="offline">Offline</option>
-                        </select>
-                    </div>
+                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Modelo (crear)</label>
+                                <input
+                                    type="text"
+                                    value={crearModeloNombre}
+                                    onChange={e => setCrearModeloNombre(e.target.value)}
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    placeholder="Ej. FMC130"
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {/* Precio ref. y Estado solo aplican cuando se está ingresando mercadería (SELECCIONAR) */}
+                    {modoIngreso === "SELECCIONAR" && (
+                        <>
+                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Precio ref.</label>
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 w-full min-w-0 overflow-hidden">
+                                    {formData.modelo_id ? (
+                                        <>
+                                            <span className="text-sm sm:text-base font-mono font-black text-slate-800 min-w-0 truncate">
+                                                {(() => {
+                                                    const mod = modelos.find(m => m.id === formData.modelo_id);
+                                                    return mod?.costo_referencia != null ? `$${mod.costo_referencia}` : "—";
+                                                })()}
+                                            </span>
+                                            <span className="text-[9px] text-slate-500 uppercase font-bold shrink-0">gps_modelos</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-xs sm:text-sm text-slate-400">Seleccione modelo</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Estado</label>
+                                <select
+                                    value={formData.estado_coneccion}
+                                    onChange={e => setFormData(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
+                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="online">Online</option>
+                                    <option value="inactivo">Inactivo</option>
+                                    <option value="offline">Offline</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
+
+                    {modoIngreso === "CREAR" && (
+                        <div className="col-span-2 sm:col-span-1 min-w-0">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Costo ref. ($)</label>
+                            <input
+                                type="number"
+                                value={crearCostoRef || ""}
+                                onChange={e => setCrearCostoRef(parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                                min={0}
+                                step={0.01}
+                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                            />
+                        </div>
+                    )}
                 </div>
 
-                {/* Lista de IMEIs */}
-                <div className="mt-5 pt-5 border-t border-slate-100">
-                    <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lista de IMEIs (Escanear o Pegar)</label>
-                        <span className="text-[9px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">Soporta múltiples líneas</span>
-                    </div>
-                    <textarea 
-                        rows={4}
-                        value={formData.imei_input}
-                        onChange={e => setFormData({...formData, imei_input: e.target.value})}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="865432040001234&#10;865432040001235&#10;..."
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                        <AlertCircle size={10} />
-                        Los IMEIs duplicados no se guardarán.
-                    </p>
-                </div>
+                {/* Lista de IMEIs solo en modo SELECCIONAR */}
+                {modoIngreso === "SELECCIONAR" && (
+                    <>
+                        <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-slate-100 min-w-0">
+                            <div className="flex flex-wrap justify-between items-center gap-1 mb-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lista de IMEIs (Escanear o Pegar)</label>
+                                <span className="text-[9px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded shrink-0">Soporta múltiples líneas</span>
+                            </div>
+                            <textarea 
+                                rows={4}
+                                value={formData.imei_input}
+                                onChange={e => setFormData({...formData, imei_input: e.target.value})}
+                                className="w-full min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                                placeholder="865432040001234&#10;865432040001235&#10;..."
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                <AlertCircle size={10} className="shrink-0" />
+                                Los IMEIs duplicados no se guardarán.
+                            </p>
+                        </div>
+                    </>
+                )}
 
                 <button
                     onClick={handleSubmit}
                     disabled={loading}
-                    className="w-full mt-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full mt-4 sm:mt-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                    {loading ? "Guardando..." : <><Save size={16} /> Guardar ingreso</>}
+                    {loading ? "Guardando..." : <><Save size={16} /> {modoIngreso === "SELECCIONAR" ? "Guardar ingreso" : "Guardar catálogo"}</>}
                 </button>
             </div>
 
-            {/* Overlay: Nueva tarjeta proveedor */}
-            {showNewProveedor && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
-                    onClick={() => { setShowNewProveedor(false); setNewProveedorNombre(""); }}
-                >
-                    <div
-                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/80">
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">Nuevo proveedor</h4>
-                            <button
-                                type="button"
-                                onClick={() => { setShowNewProveedor(false); setNewProveedorNombre(""); }}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className="p-5 space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Nombre</label>
-                                <input
-                                    type="text"
-                                    value={newProveedorNombre}
-                                    onChange={e => setNewProveedorNombre(e.target.value)}
-                                    placeholder="Nombre del proveedor"
-                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300"
-                                    onKeyDown={e => e.key === "Enter" && handleAgregarProveedor()}
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={handleAgregarProveedor}
-                                    disabled={savingProveedor}
-                                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                >
-                                    {savingProveedor ? "Guardando..." : "Guardar"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowNewProveedor(false); setNewProveedorNombre(""); }}
-                                    className="px-4 py-3 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold uppercase transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Overlay: Nueva tarjeta modelo */}
-            {showNewModelo && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
-                    onClick={() => { setShowNewModelo(false); setNewModeloNombre(""); setNewModeloMarca(""); setNewModeloCosto(0); }}
-                >
-                    <div
-                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/80">
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">Nuevo modelo</h4>
-                            <button
-                                type="button"
-                                onClick={() => { setShowNewModelo(false); setNewModeloNombre(""); setNewModeloMarca(""); setNewModeloCosto(0); }}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className="p-5 space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Nombre del modelo</label>
-                                <input
-                                    type="text"
-                                    value={newModeloNombre}
-                                    onChange={e => setNewModeloNombre(e.target.value)}
-                                    placeholder="Ej. TK905"
-                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Marca</label>
-                                <input
-                                    type="text"
-                                    value={newModeloMarca}
-                                    onChange={e => setNewModeloMarca(e.target.value)}
-                                    placeholder="Ej. Concox"
-                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Costo ref. ($)</label>
-                                <input
-                                    type="number"
-                                    value={newModeloCosto || ""}
-                                    onChange={e => setNewModeloCosto(parseFloat(e.target.value) || 0)}
-                                    placeholder="0"
-                                    min={0}
-                                    step={0.01}
-                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300"
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={handleAgregarModelo}
-                                    disabled={savingModelo}
-                                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                >
-                                    {savingModelo ? "Guardando..." : "Guardar"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowNewModelo(false); setNewModeloNombre(""); setNewModeloMarca(""); setNewModeloCosto(0); }}
-                                    className="px-4 py-3 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold uppercase transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
             </div>
     );
 }

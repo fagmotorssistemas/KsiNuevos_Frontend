@@ -8,7 +8,7 @@ import { rastreadoresService } from "@/services/rastreadores.service";
 interface StockItem {
     id: string;
     imei: string;
-    modelo?: { nombre: string };
+    modelo?: { marca?: string | null };
     proveedor?: { nombre: string };
     costo_compra: number;
 }
@@ -36,7 +36,7 @@ export function BuscarStock({ imei, onImeiChange, onStockFound, onFormUpdate, st
                 onStockFound(item);
 
                 onFormUpdate({
-                    modelo: item.modelo?.nombre || 'Desconocido',
+                    modelo: item.modelo?.marca || 'Desconocido',
                     proveedor: item.proveedor?.nombre || 'Bodega',
                     costo: item.costo_compra,
                     imei: item.imei

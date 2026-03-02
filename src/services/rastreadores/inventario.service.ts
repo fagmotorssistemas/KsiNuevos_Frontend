@@ -9,7 +9,8 @@ import {
 import { supabase } from './supabaseClient';
 
 export async function getModelos(): Promise<ModeloGPS[]> {
-    const { data } = await supabase.from('gps_modelos').select('*').order('nombre');
+    const { data, error } = await supabase.from('gps_modelos').select('*').order('marca');
+    if (error) return [];
     return data || [];
 }
 
@@ -28,13 +29,13 @@ export async function createProveedor(nombre: string): Promise<ProveedorGPS> {
     return data as ProveedorGPS;
 }
 
-export async function createModelo(payload: { nombre: string; marca: string; costo_referencia?: number }): Promise<ModeloGPS> {
+export async function createModelo(payload: { marca: string; costo_referencia?: number; provedor_id?: string | null }): Promise<ModeloGPS> {
     const { data, error } = await supabase
         .from('gps_modelos')
         .insert([{
-            nombre: payload.nombre.trim(),
             marca: payload.marca.trim() || null,
-            costo_referencia: payload.costo_referencia ?? null
+            costo_referencia: payload.costo_referencia ?? null,
+            ...(payload.provedor_id ? { provedor_id: payload.provedor_id } : {})
         }])
         .select()
         .single();
