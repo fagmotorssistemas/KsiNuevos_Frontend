@@ -18,6 +18,30 @@ export async function getProveedores(): Promise<ProveedorGPS[]> {
     return data || [];
 }
 
+export async function createProveedor(nombre: string): Promise<ProveedorGPS> {
+    const { data, error } = await supabase
+        .from('gps_proveedores')
+        .insert([{ nombre: nombre.trim() }])
+        .select()
+        .single();
+    if (error) throw new Error(error.message);
+    return data as ProveedorGPS;
+}
+
+export async function createModelo(payload: { nombre: string; marca: string; costo_referencia?: number }): Promise<ModeloGPS> {
+    const { data, error } = await supabase
+        .from('gps_modelos')
+        .insert([{
+            nombre: payload.nombre.trim(),
+            marca: payload.marca.trim() || null,
+            costo_referencia: payload.costo_referencia ?? null
+        }])
+        .select()
+        .single();
+    if (error) throw new Error(error.message);
+    return data as ModeloGPS;
+}
+
 export async function getInventarioStock(): Promise<InventarioGPS[]> {
     const { data, error } = await supabase
         .from('gps_inventario')

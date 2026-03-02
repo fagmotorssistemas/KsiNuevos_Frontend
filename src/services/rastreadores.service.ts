@@ -12,6 +12,8 @@ import {
     subirComprobantePago
 } from './rastreadores/instalaciones.service';
 import {
+    createModelo,
+    createProveedor,
     getInventarioSims,
     getInventarioStock,
     getModelos,
@@ -45,6 +47,8 @@ export const rastreadoresService = {
     actualizarTipoPagoYPlazo,
     getModelos,
     getProveedores,
+    createProveedor,
+    createModelo,
     getInventarioStock,
     ingresarLoteGPS,
     validarStock,
