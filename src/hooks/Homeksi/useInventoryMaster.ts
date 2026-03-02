@@ -69,7 +69,8 @@ export function useInventoryMaster() {
     // Si todavía no hay datos, retornamos array vacío
     if (!rawCars) return [];
 
-    let result = rawCars;
+    // Excluir autos con precio 0 o menor (no mostrarlos en el catálogo)
+    let result = rawCars.filter((car) => (car.price ?? 0) > 0);
 
     // A. Aplicar Filtros
     result = filterBySearch(result, filters.searchQuery);
