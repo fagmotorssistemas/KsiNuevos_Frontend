@@ -31,6 +31,9 @@ export function InventarioTabs() {
     const [modelos, setModelos] = useState<ModeloGPS[]>([]);
     const [proveedores, setProveedores] = useState<{ id: string; nombre: string }[]>([]);
 
+    const [filtroModeloId, setFiltroModeloId] = useState<string>("");
+    const [filtroEstado, setFiltroEstado] = useState<EstadoConeccionGPS | "TODOS">("TODOS");
+
     const loadInventarioGPS = useCallback(async () => {
         const data = await rastreadoresService.getInventarioStock();
         setInventarioGPS(data);
@@ -104,6 +107,48 @@ export function InventarioTabs() {
         (acc, curr) => acc + (curr.modelo?.costo_referencia ?? curr.costo_compra ?? 0),
         0
     );
+
+    const modelosEnStock = useMemo(() => {
+        const map = new Map<string, { modelo: ModeloGPS; count: number }>();
+        for (const item of inventarioGPS) {
+            if (!item.modelo?.id) continue;
+            const existing = map.get(item.modelo.id);
+            if (existing) {
+                existing.count += 1;
+            } else {
+                map.set(item.modelo.id, { modelo: item.modelo, count: 1 });
+            }
+        }
+        return Array.from(map.values());
+    }, [inventarioGPS]);
+
+    const inventarioFiltradoPorModelo = useMemo(() => {
+        if (!filtroModeloId) return inventarioGPS;
+        return inventarioGPS.filter(item => item.modelo?.id === filtroModeloId);
+    }, [inventarioGPS, filtroModeloId]);
+
+    const resumenEstados = useMemo(() => {
+        let total = 0;
+        let online = 0;
+        let inactivo = 0;
+        let offline = 0;
+        for (const item of inventarioFiltradoPorModelo) {
+            total += 1;
+            const est = (item.estado_coneccion ?? "offline") as EstadoConeccionGPS;
+            if (est === "online") online += 1;
+            else if (est === "inactivo") inactivo += 1;
+            else offline += 1;
+        }
+        return { total, online, inactivo, offline };
+    }, [inventarioFiltradoPorModelo]);
+
+    const inventarioGPSFiltrado = useMemo(() => {
+        return inventarioFiltradoPorModelo.filter(item => {
+            const estadoItem = (item.estado_coneccion ?? "offline") as EstadoConeccionGPS;
+            const matchEstado = filtroEstado === "TODOS" || estadoItem === filtroEstado;
+            return matchEstado;
+        });
+    }, [inventarioFiltradoPorModelo, filtroEstado]);
 
     // ==========================================
     // 3. LÓGICA DE SIMS (Usando tu nuevo hook)
@@ -182,16 +227,66 @@ export function InventarioTabs() {
 
                     {/* Contenedor de la Tabla */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                        <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 justify-between items-center">
                             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">
                                 Stock Disponible de {activeTab}
                             </h3>
-                            <button 
-                                onClick={activeTab === 'GPS' ? loadInventarioGPS : loadSims} 
-                                className="p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-blue-600 transition-colors"
-                            >
-                                <RefreshCw size={14}/>
-                            </button>
+
+                            {activeTab === 'GPS' && (
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <select
+                                        value={filtroModeloId}
+                                        onChange={e => setFiltroModeloId(e.target.value)}
+                                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-black uppercase text-slate-600"
+                                    >
+                                        <option value="">
+                                            {`Todos los modelos (${totalStockGPS})`}
+                                        </option>
+                                        {modelosEnStock.map(({ modelo, count }) => (
+                                            <option key={modelo.id} value={modelo.id}>
+                                                {`${modelo.marca ?? "—"} (${count})`}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    <select
+                                        value={filtroEstado}
+                                        onChange={e => setFiltroEstado(e.target.value as any)}
+                                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-black uppercase text-slate-600"
+                                    >
+                                        <option value="TODOS">
+                                            {`Todos (${resumenEstados.total})`}
+                                        </option>
+                                        <option value="online">
+                                            {`Online (${resumenEstados.online})`}
+                                        </option>
+                                        <option value="inactivo">
+                                            {`Inactivo (${resumenEstados.inactivo})`}
+                                        </option>
+                                        <option value="offline">
+                                            {`Offline (${resumenEstados.offline})`}
+                                        </option>
+                                    </select>
+
+                                    <button 
+                                        onClick={loadInventarioGPS} 
+                                        className="p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-blue-600 transition-colors"
+                                        title="Actualizar"
+                                    >
+                                        <RefreshCw size={14}/>
+                                    </button>
+                                </div>
+                            )}
+
+                            {activeTab === 'SIMS' && (
+                                <button 
+                                    onClick={loadSims} 
+                                    className="p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-blue-600 transition-colors"
+                                    title="Actualizar"
+                                >
+                                    <RefreshCw size={14}/>
+                                </button>
+                            )}
                         </div>
                         
                         <div className="max-h-[500px] overflow-y-auto">
@@ -210,7 +305,7 @@ export function InventarioTabs() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {inventarioGPS.length > 0 ? inventarioGPS.map((item) => (
+                                        {inventarioGPSFiltrado.length > 0 ? inventarioGPSFiltrado.map((item) => (
                                             <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-5 py-3">
                                                     <div className="font-bold text-slate-700">

@@ -81,7 +81,9 @@ interface InventoryDetailModalProps {
 
 export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }: InventoryDetailModalProps) {
     const { supabase } = useAuth();
-    const isAdmin = currentUserRole?.toLowerCase() === 'admin'; // Solo admin puede editar y poner precio
+    const isAdmin = currentUserRole?.toLowerCase() === 'admin'; // Solo admin puede editar precio
+    const isMarketing = currentUserRole?.toLowerCase() === 'marketing';
+    const canEdit = isAdmin || isMarketing; // Admin edita todo; marketing edita todo excepto precio
     // Añadimos 'publications' a las pestañas
     const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos' | 'publications'>('general');
     const [isSaving, setIsSaving] = useState(false);
@@ -326,7 +328,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                 </InputGroup>
 
                                 <InputGroup label="Ubicación Actual">
-                                    {isAdmin ? (
+                                    {canEdit ? (
                                         <Select
                                             value={formData.location}
                                             onChange={(e) => handleChange('location', e.target.value)}
@@ -363,6 +365,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             />
                                         </div>
                                     ) : (
+                                        /* Precio solo lectura para marketing y otros roles (solo admin puede modificarlo) */
                                         <div className="h-10 px-3 flex items-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-mono font-medium text-slate-800">
                                             $ {Number(formData.price).toLocaleString('en-US', { maximumFractionDigits: 0 })}
                                         </div>
@@ -377,8 +380,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             className="pl-9"
                                             value={formData.mileage}
                                             onChange={(e) => handleChange('mileage', e.target.value)}
-                                            readOnly={!isAdmin}
-                                            disabled={!isAdmin}
+                                            readOnly={!canEdit}
+                                            disabled={!canEdit}
                                         />
                                     </div>
                                 </InputGroup>
@@ -390,8 +393,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         value={formData.color}
                                         onChange={(e) => handleChange('color', e.target.value)}
                                         placeholder="Ej: Rojo, Plata..."
-                                        readOnly={!isAdmin}
-                                        disabled={!isAdmin}
+                                        readOnly={!canEdit}
+                                        disabled={!canEdit}
                                     />
                                 </InputGroup>
                                 <InputGroup label="Año Modelo">
@@ -399,8 +402,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         type="number"
                                         value={formData.year}
                                         onChange={(e) => handleChange('year', e.target.value)}
-                                        readOnly={!isAdmin}
-                                        disabled={!isAdmin}
+                                        readOnly={!canEdit}
+                                        disabled={!canEdit}
                                     />
                                 </InputGroup>
                             </div>
@@ -411,8 +414,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     placeholder="Detalles sobre llaves, rayones, estado mecánico..."
                                     value={formData.description}
                                     onChange={(e) => handleChange('description', e.target.value)}
-                                    readOnly={!isAdmin}
-                                    disabled={!isAdmin}
+                                    readOnly={!canEdit}
+                                    disabled={!canEdit}
                                 />
                             </InputGroup>
                         </div>
@@ -425,8 +428,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             <div className="space-y-2">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Foto Principal</h3>
                                 <div 
-                                    onClick={() => isAdmin && mainInputRef.current?.click()}
-                                    className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden group ${isAdmin ? 'cursor-pointer hover:border-brand-400' : 'cursor-default opacity-90'}`}
+                                    onClick={() => canEdit && mainInputRef.current?.click()}
+                                    className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden group ${canEdit ? 'cursor-pointer hover:border-brand-400' : 'cursor-default opacity-90'}`}
                                 >
                                     {/* Mostramos la preview nueva O la URL existente */}
                                     {mainImagePreview || formData.img_main_url ? (
@@ -464,7 +467,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                                         Galería ({existingGallery.length + newGalleryFiles.length})
                                     </h3>
-                                    {isAdmin && (
+                                    {canEdit && (
                                         <button 
                                             onClick={() => galleryInputRef.current?.click()}
                                             className="text-xs text-brand-600 font-bold hover:underline flex items-center gap-1"
@@ -489,7 +492,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         <div key={`exist-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
                                             <img src={url} alt="Galeria" className="w-full h-full object-cover" />
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                                            {isAdmin && (
+                                            {canEdit && (
                                                 <button 
                                                     onClick={() => removeExistingGalleryImage(idx)}
                                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 transform hover:scale-110"
@@ -506,7 +509,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     {newGalleryPreviews.map((preview, idx) => (
                                         <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-brand-200 group">
                                             <img src={preview} alt="Nueva" className="w-full h-full object-cover" />
-                                            {isAdmin && (
+                                            {canEdit && (
                                                 <button 
                                                     onClick={() => removeNewGalleryImage(idx)}
                                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600"
@@ -518,8 +521,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         </div>
                                     ))}
 
-                                    {/* Botón "Agregar más" en la grilla (solo admin) */}
-                                    {isAdmin && (
+                                    {/* Botón "Agregar más" en la grilla (admin o marketing) */}
+                                    {canEdit && (
                                         <div 
                                             onClick={() => galleryInputRef.current?.click()}
                                             className="aspect-square rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-slate-50 text-slate-300 hover:text-brand-500 transition-colors"
@@ -542,13 +545,13 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     <h3 className="font-semibold text-purple-900">Vehículo en Patio (MK T PT)</h3>
                                     <p className="text-xs text-purple-600 mt-1">Activa esto si el auto está físicamente listo para fotos.</p>
                                 </div>
-                                <label className={`relative inline-flex items-center ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-80'}`}>
+                                <label className={`relative inline-flex items-center ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-80'}`}>
                                     <input
                                         type="checkbox"
                                         className="sr-only peer"
                                         checked={formData.marketing_in_patio}
                                         onChange={(e) => handleChange('marketing_in_patio', e.target.checked)}
-                                        disabled={!isAdmin}
+                                        disabled={!canEdit}
                                     />
                                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                                 </label>
@@ -564,8 +567,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_posts_count}
                                         onChange={(e) => handleChange('marketing_posts_count', e.target.value)}
-                                        readOnly={!isAdmin}
-                                        disabled={!isAdmin}
+                                        readOnly={!canEdit}
+                                        disabled={!canEdit}
                                     />
                                 </div>
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
@@ -576,8 +579,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_videos_count}
                                         onChange={(e) => handleChange('marketing_videos_count', e.target.value)}
-                                        readOnly={!isAdmin}
-                                        disabled={!isAdmin}
+                                        readOnly={!canEdit}
+                                        disabled={!canEdit}
                                     />
                                 </div>
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
@@ -588,8 +591,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_stories_count}
                                         onChange={(e) => handleChange('marketing_stories_count', e.target.value)}
-                                        readOnly={!isAdmin}
-                                        disabled={!isAdmin}
+                                        readOnly={!canEdit}
+                                        disabled={!canEdit}
                                     />
                                 </div>
                             </div>
@@ -605,8 +608,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     placeholder="https://facebook.com/...\nhttps://instagram.com/..."
                                     value={formData.publication_url}
                                     onChange={(e) => handleChange('publication_url', e.target.value)}
-                                    readOnly={!isAdmin}
-                                    disabled={!isAdmin}
+                                    readOnly={!canEdit}
+                                    disabled={!canEdit}
                                 />
                                 <p className="text-xs text-slate-500">
                                     Pega aquí los enlaces a las publicaciones en redes sociales o portales.
@@ -627,9 +630,9 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             onClick={onClose}
                             className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors"
                         >
-                            {isAdmin ? 'Cancelar' : 'Cerrar'}
+                            {canEdit ? 'Cancelar' : 'Cerrar'}
                         </button>
-                        {isAdmin && (
+                        {canEdit && (
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
