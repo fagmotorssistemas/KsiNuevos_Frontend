@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { FormIngresoGPS } from "./FormIngresoGPS";
-import { FormIngresoSIM } from "./FormIngresoSIM";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { InventarioGPS, type EstadoConeccionGPS, type ModeloGPS } from "@/types/rastreadores.types";
 
@@ -53,7 +52,7 @@ export function InventarioTabs() {
     }, [activeTab]);
 
     const [editingItem, setEditingItem] = useState<InventarioGPS | null>(null);
-    const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0, estado_coneccion: "offline" as EstadoConeccionGPS });
+    const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0, estado_coneccion: "offline" as EstadoConeccionGPS, sim_iccid: "", sim_imsi: "" });
     const [savingEdit, setSavingEdit] = useState(false);
 
     const modelosFiltradosEdicion = useMemo(() => {
@@ -65,11 +64,17 @@ export function InventarioTabs() {
     useEffect(() => {
         if (editingItem) {
             const precio = editingItem.costo_compra ?? editingItem.modelo?.costo_referencia ?? 0;
-            setEditForm({
+            setEditForm(prev => ({
+                ...prev,
                 modelo_id: editingItem.modelo?.id ?? "",
                 proveedor_id: editingItem.proveedor?.id ?? "",
                 costo_compra: precio,
-                estado_coneccion: (editingItem.estado_coneccion ?? "offline") as EstadoConeccionGPS
+                estado_coneccion: (editingItem.estado_coneccion ?? "offline") as EstadoConeccionGPS,
+                sim_iccid: "",
+                sim_imsi: ""
+            }));
+            rastreadoresService.getSimByGpsId(editingItem.id).then(sim => {
+                if (sim) setEditForm(prev => ({ ...prev, sim_iccid: sim.iccid, sim_imsi: sim.imsi ?? "" }));
             });
         }
     }, [editingItem]);
@@ -88,13 +93,19 @@ export function InventarioTabs() {
                 costo_compra: editForm.costo_compra,
                 estado_coneccion: editForm.estado_coneccion
             });
-            if (res.success) {
-                toast.success("Registro actualizado");
-                setEditingItem(null);
-                loadInventarioGPS();
-            } else {
+            if (!res.success) {
                 toast.error(res.error || "Error al guardar");
+                return;
             }
+            const simRes = await rastreadoresService.linkOrUpdateSimForGps(
+                editingItem.id,
+                editForm.sim_iccid.trim() || null,
+                editForm.sim_imsi.trim() || null
+            );
+            if (!simRes.success) toast.error(simRes.error || "Error al vincular SIM");
+            else toast.success("Registro actualizado");
+            setEditingItem(null);
+            loadInventarioGPS();
         } catch (e: any) {
             toast.error(e?.message || "Error al guardar");
         } finally {
@@ -183,13 +194,15 @@ export function InventarioTabs() {
                         <CreditCard size={16} /> Inventario SIMs
                     </button>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setIsCrearModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all active:scale-95"
-                >
-                    <Plus size={16} /> Crear
-                </button>
+                {activeTab === 'GPS' && (
+                    <button
+                        type="button"
+                        onClick={() => setIsCrearModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all active:scale-95"
+                    >
+                        <Plus size={16} /> Crear
+                    </button>
+                )}
             </div>
 
             {/* Contenido: solo KPIs y listado */}
@@ -402,7 +415,7 @@ export function InventarioTabs() {
                     >
                         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
                             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                                {activeTab === 'GPS' ? 'Ingreso de mercadería (GPS)' : 'Ingreso de mercadería (SIMs)'}
+                                Ingreso de mercadería (GPS)
                             </h3>
                             <button
                                 type="button"
@@ -413,22 +426,13 @@ export function InventarioTabs() {
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-5">
-                            {activeTab === 'GPS' ? (
-                                <FormIngresoGPS
-                                    embedded
-                                    onSuccess={() => {
-                                        loadInventarioGPS();
-                                        setIsCrearModalOpen(false);
-                                    }}
-                                />
-                            ) : (
-                                <FormIngresoSIM
-                                    onSuccess={() => {
-                                        loadSims();
-                                        setIsCrearModalOpen(false);
-                                    }}
-                                />
-                            )}
+                            <FormIngresoGPS
+                                embedded
+                                onSuccess={() => {
+                                    loadInventarioGPS();
+                                    setIsCrearModalOpen(false);
+                                }}
+                            />
                         </div>
                     </div>
                 </div>
@@ -515,6 +519,31 @@ export function InventarioTabs() {
                                     <option value="inactivo">Inactivo</option>
                                     <option value="offline">Offline</option>
                                 </select>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">SIM (opcional)</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">ICCID</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.sim_iccid}
+                                            onChange={e => setEditForm(prev => ({ ...prev, sim_iccid: e.target.value }))}
+                                            placeholder="8944474400003320009"
+                                            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">IMSI</label>
+                                        <input
+                                            type="text"
+                                            value={editForm.sim_imsi}
+                                            onChange={e => setEditForm(prev => ({ ...prev, sim_imsi: e.target.value }))}
+                                            placeholder="204080926651969"
+                                            className="w-full p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button

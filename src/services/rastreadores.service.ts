@@ -19,8 +19,10 @@ import {
     getInventarioStock,
     getModelos,
     getProveedores,
+    getSimByGpsId,
     ingresarLoteGPS,
     insertarSIM,
+    linkOrUpdateSimForGps,
     validarStock
 } from './rastreadores/inventario.service';
 import { registrarVentaExterna } from './rastreadores/ventas-externas.service';
@@ -53,6 +55,8 @@ export const rastreadoresService = {
     getInventarioStock,
     actualizarItemInventarioGPS,
     ingresarLoteGPS,
+    getSimByGpsId,
+    linkOrUpdateSimForGps,
     validarStock,
     registrarInstalacionDesdeStock,
     registrarVentaExterna,

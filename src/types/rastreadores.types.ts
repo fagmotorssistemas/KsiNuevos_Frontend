@@ -142,6 +142,9 @@ export interface IngresoGPSPayload {
     factura_compra: string;
     estado_coneccion?: EstadoConeccionGPS;
     serie?: string;
+    /** Opcional: vincular SIM al GPS (tabla gps_sims). Si hay varios IMEIs, se vincula al primero. */
+    iccid?: string;
+    imsi?: string;
 }
 
 // Añadir al final de tu archivo types/rastreadores.types.ts

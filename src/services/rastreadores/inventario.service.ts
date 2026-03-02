@@ -69,13 +69,24 @@ export async function ingresarLoteGPS(payloads: IngresoGPSPayload[]) {
         ...(p.estado_coneccion && { estado_coneccion: p.estado_coneccion })
     }));
 
-    const { data, error } = await supabase.from('gps_inventario').insert(datosLimpios).select();
+    const { data: inserted, error } = await supabase.from('gps_inventario').insert(datosLimpios).select();
 
     if (error) {
         if (error.code === '23505') return { success: false, error: 'Uno o mas IMEIs ya existen.' };
         return { success: false, error: error.message };
     }
-    return { success: true, count: data?.length };
+
+    const firstPayload = payloads[0];
+    if (firstPayload?.iccid?.trim() && inserted?.[0]?.id) {
+        const iccid = firstPayload.iccid.trim();
+        const imsi = firstPayload.imsi?.trim() || null;
+        await supabase.from('gps_sims').upsert(
+            { iccid, imsi, gps_id: inserted[0].id },
+            { onConflict: 'iccid' }
+        );
+    }
+
+    return { success: true, count: inserted?.length };
 }
 
 export type UpdateInventarioGPSPayload = {
@@ -130,6 +141,47 @@ export async function getInventarioSims(): Promise<InventarioSIM[]> {
     }
 
     return data as InventarioSIM[];
+}
+
+/** SIM vinculada a un GPS (tabla gps_sims: id, iccid, imsi, gps_id) */
+export interface GpsSimRow {
+    id: string;
+    iccid: string;
+    imsi: string | null;
+    gps_id: string | null;
+}
+
+export async function getSimByGpsId(gpsId: string): Promise<GpsSimRow | null> {
+    const { data, error } = await supabase
+        .from('gps_sims')
+        .select('id, iccid, imsi, gps_id')
+        .eq('gps_id', gpsId)
+        .maybeSingle();
+    if (error || !data) return null;
+    return data as GpsSimRow;
+}
+
+/** Vincular o actualizar SIM para un GPS. Si iccid vacío, desvincula. */
+export async function linkOrUpdateSimForGps(
+    gpsId: string,
+    iccid: string | null,
+    imsi: string | null
+): Promise<{ success: boolean; error?: string }> {
+    const current = await getSimByGpsId(gpsId);
+    if (current) {
+        const { error: unlink } = await supabase
+            .from('gps_sims')
+            .update({ gps_id: null })
+            .eq('id', current.id);
+        if (unlink) return { success: false, error: unlink.message };
+    }
+    if (!iccid?.trim()) return { success: true };
+    const { error } = await supabase.from('gps_sims').upsert(
+        { iccid: iccid.trim(), imsi: imsi?.trim() || null, gps_id: gpsId },
+        { onConflict: 'iccid' }
+    );
+    if (error) return { success: false, error: error.message };
+    return { success: true };
 }
 
 export async function insertarSIM(payload: IngresoSIMPayload): Promise<InventarioSIM> {

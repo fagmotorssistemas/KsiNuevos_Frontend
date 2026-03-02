@@ -28,7 +28,9 @@ export function FormIngresoGPS({ onSuccess, embedded }: FormIngresoGPSProps) {
         factura_compra: "",
         costo_compra: 0,
         estado_coneccion: "offline" as EstadoConeccionGPS,
-        imei_input: ""
+        imei_input: "",
+        iccid: "",
+        imsi: ""
     });
 
     // Vista CREAR (directo, sin "+Nuevo")
@@ -117,13 +119,15 @@ export function FormIngresoGPS({ onSuccess, embedded }: FormIngresoGPSProps) {
 
                 if (imeis.length === 0) return toast.error("Ingrese al menos un IMEI");
 
-                const lote = imeis.map(imei => ({
+                const lote = imeis.map((imei, index) => ({
                     imei: imei.toUpperCase(),
                     modelo_id: modeloId,
                     proveedor_id: proveedorId,
                     factura_compra: formData.factura_compra.toUpperCase(),
                     costo_compra: Number(costoRef),
-                    estado_coneccion: formData.estado_coneccion
+                    estado_coneccion: formData.estado_coneccion,
+                    ...(index === 0 && formData.iccid.trim() && { iccid: formData.iccid.trim() }),
+                    ...(index === 0 && formData.imsi.trim() && { imsi: formData.imsi.trim() })
                 }));
 
                 const res = await rastreadoresService.ingresarLoteGPS(lote);
@@ -265,6 +269,38 @@ export function FormIngresoGPS({ onSuccess, embedded }: FormIngresoGPSProps) {
                             <option value="inactivo">Inactivo</option>
                             <option value="offline">Offline</option>
                         </select>
+                    </div>
+                )}
+
+                {/* SIM opcional: algunos GPS ya vienen con chip */}
+                {modoIngreso === "SELECCIONAR" && (
+                    <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                            SIM (opcional)
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="min-w-0">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">ICCID</label>
+                                <input
+                                    type="text"
+                                    value={formData.iccid}
+                                    onChange={e => setFormData(prev => ({ ...prev, iccid: e.target.value }))}
+                                    placeholder="8944474400003320009"
+                                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div className="min-w-0">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">IMSI</label>
+                                <input
+                                    type="text"
+                                    value={formData.imsi}
+                                    onChange={e => setFormData(prev => ({ ...prev, imsi: e.target.value }))}
+                                    placeholder="204080926651969"
+                                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[9px] text-slate-400 mt-1">Si el GPS ya trae chip, vincula la SIM al primer IMEI del lote.</p>
                     </div>
                 )}
 

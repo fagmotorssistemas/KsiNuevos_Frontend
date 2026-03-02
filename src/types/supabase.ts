@@ -733,33 +733,35 @@ export type Database = {
       }
       gps_sims: {
         Row: {
-          costo_mensual: number | null
           created_at: string | null
-          estado: string | null
+          gps_id: string | null
           iccid: string
           id: string
-          numero: string | null
-          operadora: string | null
+          imsi: string | null
         }
         Insert: {
-          costo_mensual?: number | null
           created_at?: string | null
-          estado?: string | null
+          gps_id?: string | null
           iccid: string
           id?: string
-          numero?: string | null
-          operadora?: string | null
+          imsi?: string | null
         }
         Update: {
-          costo_mensual?: number | null
           created_at?: string | null
-          estado?: string | null
+          gps_id?: string | null
           iccid?: string
           id?: string
-          numero?: string | null
-          operadora?: string | null
+          imsi?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gps_sims_gps_id_fkey"
+            columns: ["gps_id"]
+            isOneToOne: false
+            referencedRelation: "gps_inventario"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       interactions: {
         Row: {
