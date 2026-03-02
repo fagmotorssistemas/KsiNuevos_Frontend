@@ -21,11 +21,12 @@ function BadgeEstado({ estado }: { estado?: EstadoConeccionGPS | null }) {
     );
 }
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
-import { RefreshCw, Box, CreditCard, Pencil, X } from "lucide-react";
+import { RefreshCw, Box, CreditCard, Pencil, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export function InventarioTabs() {
     const [activeTab, setActiveTab] = useState<'GPS' | 'SIMS'>('GPS');
+    const [isCrearModalOpen, setIsCrearModalOpen] = useState(false);
 
     const [inventarioGPS, setInventarioGPS] = useState<InventarioGPS[]>([]);
     const [modelos, setModelos] = useState<ModeloGPS[]>([]);
@@ -166,8 +167,9 @@ export function InventarioTabs() {
     return (
         <div className="space-y-6">
             
-            {/* Pestañas de Navegación */}
-            <div className="flex space-x-2 border-b border-slate-200 pb-4">
+            {/* Pestañas + botón Crear en esquina */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+                <div className="flex space-x-2">
                     <button 
                         onClick={() => setActiveTab('GPS')}
                         className={`px-5 py-2.5 text-xs font-bold uppercase rounded-xl transition-all flex items-center gap-2 ${activeTab === 'GPS' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
@@ -180,21 +182,18 @@ export function InventarioTabs() {
                     >
                         <CreditCard size={16} /> Inventario SIMs
                     </button>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setIsCrearModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all active:scale-95"
+                >
+                    <Plus size={16} /> Crear
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* COLUMNA IZQUIERDA: Formularios de Ingreso */}
-                <div className="lg:col-span-1 space-y-6 min-w-0 overflow-hidden">
-                    {activeTab === 'GPS' ? (
-                        <FormIngresoGPS onSuccess={loadInventarioGPS} />
-                    ) : (
-                        <FormIngresoSIM onSuccess={loadSims} />
-                    )}
-                </div>
-
-                {/* COLUMNA DERECHA: Listado de Stock y KPIs */}
-                <div className="lg:col-span-2 space-y-6">
+            {/* Contenido: solo KPIs y listado */}
+                <div className="w-full space-y-6">
                     
                     {/* KPIs Dinámicos */}
                     <div className="grid grid-cols-2 gap-4">
@@ -390,7 +389,50 @@ export function InventarioTabs() {
                         </div>
                     </div>
                 </div>
-            </div>
+
+            {/* Modal Crear / Ingreso (estilo overlay como referencia) */}
+            {isCrearModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setIsCrearModalOpen(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                                {activeTab === 'GPS' ? 'Ingreso de mercadería (GPS)' : 'Ingreso de mercadería (SIMs)'}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setIsCrearModalOpen(false)}
+                                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-5">
+                            {activeTab === 'GPS' ? (
+                                <FormIngresoGPS
+                                    embedded
+                                    onSuccess={() => {
+                                        loadInventarioGPS();
+                                        setIsCrearModalOpen(false);
+                                    }}
+                                />
+                            ) : (
+                                <FormIngresoSIM
+                                    onSuccess={() => {
+                                        loadSims();
+                                        setIsCrearModalOpen(false);
+                                    }}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Editar item GPS */}
             {editingItem && (

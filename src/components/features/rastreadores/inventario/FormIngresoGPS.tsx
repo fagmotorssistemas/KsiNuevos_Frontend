@@ -6,7 +6,13 @@ import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { ModeloGPS, ProveedorGPS, type EstadoConeccionGPS } from "@/types/rastreadores.types";
 
-export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
+interface FormIngresoGPSProps {
+    onSuccess: () => void;
+    /** En true no muestra la tarjeta ni el encabezado (para usar dentro de modal) */
+    embedded?: boolean;
+}
+
+export function FormIngresoGPS({ onSuccess, embedded }: FormIngresoGPSProps) {
     const [loading, setLoading] = useState(false);
     const [modoIngreso, setModoIngreso] = useState<"SELECCIONAR" | "CREAR">("SELECCIONAR");
     const [modoProveedorCrear, setModoProveedorCrear] = useState<"EXISTENTE" | "NUEVO">("EXISTENTE");
@@ -145,39 +151,17 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
         }
     };
 
-    return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 w-full max-w-full min-w-0 overflow-hidden border-l-4 border-l-blue-500">
-            {/* Encabezado alineado con "Stock disponible de GPS" */}
-            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3 min-w-0">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    <div className="p-1.5 sm:p-2 bg-blue-100 text-blue-600 rounded-xl shrink-0"><Package size={16} className="sm:w-[18px] sm:h-[18px]" /></div>
-                    <div className="min-w-0">
-                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider truncate">Ingreso de mercadería</h3>
-                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">Registro de dispositivos a bodega</p>
+    const formContent = (
+            <div className={embedded ? "p-0" : "p-4 sm:p-5"}>
+                {embedded && (
+                    <div className="flex items-center gap-2 border border-slate-200 rounded-xl p-1 w-fit mb-4">
+                        <button type="button" onClick={() => setModoIngreso("SELECCIONAR")} className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "SELECCIONAR" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Seleccionar</button>
+                        <button type="button" onClick={() => setModoIngreso("CREAR")} className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "CREAR" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-50"}`}>Crear</button>
                     </div>
-                </div>
-
-                <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => setModoIngreso("SELECCIONAR")}
-                        className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "SELECCIONAR" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}
-                    >
-                        Seleccionar
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setModoIngreso("CREAR")}
-                        className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "CREAR" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-50"}`}
-                    >
-                        Crear
-                    </button>
-                </div>
-            </div>
-
-            <div className="p-4 sm:p-5 min-w-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 min-w-0">
-                    <div className="col-span-2 sm:col-span-1 min-w-0">
+                )}
+                {/* Fila 1: Factura + Proveedor */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="min-w-0">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Nro. factura</label>
                         <input
                             type="text"
@@ -189,184 +173,147 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
                     </div>
 
                     {modoIngreso === "SELECCIONAR" ? (
-                        <>
-                            <div className="col-span-2 sm:col-span-1 min-w-0">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Proveedor</label>
-                                <select
-                                    value={formData.proveedor_id}
-                                    onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value, modelo_id: "" }))}
-                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                                >
+                        <div className="min-w-0">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Proveedor</label>
+                            <select
+                                value={formData.proveedor_id}
+                                onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value, modelo_id: "" }))}
+                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">-- Seleccione --</option>
+                                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </select>
+                        </div>
+                    ) : (
+                        <div className="min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Proveedor</label>
+                                <div className="flex rounded-lg border border-emerald-200 overflow-hidden text-[9px] font-black uppercase">
+                                    <button type="button" onClick={() => setModoProveedorCrear("EXISTENTE")} className={`px-2 py-1 ${modoProveedorCrear === "EXISTENTE" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}>Existente</button>
+                                    <button type="button" onClick={() => setModoProveedorCrear("NUEVO")} className={`px-2 py-1 ${modoProveedorCrear === "NUEVO" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}>Nuevo</button>
+                                </div>
+                            </div>
+                            {modoProveedorCrear === "EXISTENTE" ? (
+                                <select value={formData.proveedor_id} onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value }))} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500">
                                     <option value="">-- Seleccione --</option>
                                     {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                                 </select>
-                            </div>
+                            ) : (
+                                <input type="text" value={crearProveedorNombre} onChange={e => setCrearProveedorNombre(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Ej. Teltonika" />
+                            )}
+                        </div>
+                    )}
+                </div>
 
-                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                {/* Fila 2: Modelo + Precio ref. / Estado (o Modelo crear + Costo en CREAR) */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                    {modoIngreso === "SELECCIONAR" ? (
+                        <>
+                            <div className="min-w-0">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Modelo</label>
                                 <select
                                     value={formData.modelo_id}
                                     onChange={e => setFormData({ ...formData, modelo_id: e.target.value })}
                                     disabled={!formData.proveedor_id}
-                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    <option value="">{formData.proveedor_id ? "-- Seleccione --" : "Seleccione proveedor primero"}</option>
-                                    {modelosFiltrados.map((m) => (
-                                        <option key={m.id} value={m.id}>
-                                            {m.marca ?? "—"}
-                                        </option>
-                                    ))}
+                                    <option value="">{formData.proveedor_id ? "-- Seleccione --" : "Proveedor primero"}</option>
+                                    {modelosFiltrados.map((m) => <option key={m.id} value={m.id}>{m.marca ?? "—"}</option>)}
                                 </select>
-                                {formData.proveedor_id && modelosFiltrados.length === 0 && (
-                                    <p className="text-[9px] text-amber-600 font-bold mt-1">
-                                        No hay modelos asociados a este proveedor.
-                                    </p>
-                                )}
+                                {formData.proveedor_id && modelosFiltrados.length === 0 && <p className="text-[9px] text-amber-600 font-bold mt-1">Sin modelos para este proveedor.</p>}
+                            </div>
+                            <div className="min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Precio ref.</label>
+                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 min-w-0">
+                                    {formData.modelo_id ? (
+                                        <span className="text-sm font-mono font-black text-slate-800 truncate">
+                                            {(() => {
+                                                const mod = modelos.find(m => m.id === formData.modelo_id);
+                                                return mod?.costo_referencia != null ? `$${mod.costo_referencia}` : "—";
+                                            })()}
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-slate-400">Seleccione modelo</span>
+                                    )}
+                                </div>
                             </div>
                         </>
                     ) : (
                         <>
-                            <div className="col-span-2 sm:col-span-1 min-w-0 space-y-1.5">
-                                <div className="flex items-center justify-between gap-2">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Proveedor</label>
-                                    <div className="flex rounded-lg border border-emerald-200 overflow-hidden text-[9px] font-black uppercase">
-                                        <button
-                                            type="button"
-                                            onClick={() => setModoProveedorCrear("EXISTENTE")}
-                                            className={`px-2 py-1 ${modoProveedorCrear === "EXISTENTE" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}
-                                        >
-                                            Existente
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setModoProveedorCrear("NUEVO")}
-                                            className={`px-2 py-1 ${modoProveedorCrear === "NUEVO" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700"}`}
-                                        >
-                                            Nuevo
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {modoProveedorCrear === "EXISTENTE" ? (
-                                    <select
-                                        value={formData.proveedor_id}
-                                        onChange={e => setFormData(prev => ({ ...prev, proveedor_id: e.target.value }))}
-                                        className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
-                                    >
-                                        <option value="">-- Seleccione --</option>
-                                        {proveedores.map(p => (
-                                            <option key={p.id} value={p.id}>{p.nombre}</option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        value={crearProveedorNombre}
-                                        onChange={e => setCrearProveedorNombre(e.target.value)}
-                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        placeholder="Ej. Teltonika"
-                                    />
-                                )}
-                            </div>
-
-                            <div className="col-span-2 sm:col-span-1 min-w-0">
+                            <div className="min-w-0">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Modelo (crear)</label>
-                                <input
-                                    type="text"
-                                    value={crearModeloNombre}
-                                    onChange={e => setCrearModeloNombre(e.target.value)}
-                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    placeholder="Ej. FMC130"
-                                />
+                                <input type="text" value={crearModeloNombre} onChange={e => setCrearModeloNombre(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Ej. FMC130" />
+                            </div>
+                            <div className="min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Costo ref. ($)</label>
+                                <input type="number" value={crearCostoRef || ""} onChange={e => setCrearCostoRef(parseFloat(e.target.value) || 0)} placeholder="0" min={0} step={0.01} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500" />
                             </div>
                         </>
-                    )}
-
-                    {/* Precio ref. y Estado solo aplican cuando se está ingresando mercadería (SELECCIONAR) */}
-                    {modoIngreso === "SELECCIONAR" && (
-                        <>
-                            <div className="col-span-2 sm:col-span-1 min-w-0">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Precio ref.</label>
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 w-full min-w-0 overflow-hidden">
-                                    {formData.modelo_id ? (
-                                        <>
-                                            <span className="text-sm sm:text-base font-mono font-black text-slate-800 min-w-0 truncate">
-                                                {(() => {
-                                                    const mod = modelos.find(m => m.id === formData.modelo_id);
-                                                    return mod?.costo_referencia != null ? `$${mod.costo_referencia}` : "—";
-                                                })()}
-                                            </span>
-                                            <span className="text-[9px] text-slate-500 uppercase font-bold shrink-0">gps_modelos</span>
-                                        </>
-                                    ) : (
-                                        <span className="text-xs sm:text-sm text-slate-400">Seleccione modelo</span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="col-span-2 sm:col-span-1 min-w-0">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Estado</label>
-                                <select
-                                    value={formData.estado_coneccion}
-                                    onChange={e => setFormData(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
-                                    className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="online">Online</option>
-                                    <option value="inactivo">Inactivo</option>
-                                    <option value="offline">Offline</option>
-                                </select>
-                            </div>
-                        </>
-                    )}
-
-                    {modoIngreso === "CREAR" && (
-                        <div className="col-span-2 sm:col-span-1 min-w-0">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Costo ref. ($)</label>
-                            <input
-                                type="number"
-                                value={crearCostoRef || ""}
-                                onChange={e => setCrearCostoRef(parseFloat(e.target.value) || 0)}
-                                placeholder="0"
-                                min={0}
-                                step={0.01}
-                                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
-                            />
-                        </div>
                     )}
                 </div>
 
-                {/* Lista de IMEIs solo en modo SELECCIONAR */}
+                {/* Fila 3: Estado (solo SELECCIONAR) */}
                 {modoIngreso === "SELECCIONAR" && (
-                    <>
-                        <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-slate-100 min-w-0">
-                            <div className="flex flex-wrap justify-between items-center gap-1 mb-1">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lista de IMEIs (Escanear o Pegar)</label>
-                                <span className="text-[9px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded shrink-0">Soporta múltiples líneas</span>
-                            </div>
-                            <textarea 
-                                rows={4}
-                                value={formData.imei_input}
-                                onChange={e => setFormData({...formData, imei_input: e.target.value})}
-                                className="w-full min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                                placeholder="865432040001234&#10;865432040001235&#10;..."
-                            />
-                            <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                                <AlertCircle size={10} className="shrink-0" />
-                                Los IMEIs duplicados no se guardarán.
-                            </p>
-                        </div>
-                    </>
+                    <div className="mb-4 max-w-48">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Estado</label>
+                        <select
+                            value={formData.estado_coneccion}
+                            onChange={e => setFormData(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="online">Online</option>
+                            <option value="inactivo">Inactivo</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                    </div>
+                )}
+
+                {/* Lista de IMEIs (solo SELECCIONAR) */}
+                {modoIngreso === "SELECCIONAR" && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Lista de IMEIs (escanear o pegar)</label>
+                        <textarea
+                            rows={3}
+                            value={formData.imei_input}
+                            onChange={e => setFormData({ ...formData, imei_input: e.target.value })}
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none resize-y"
+                            placeholder="865432040001234&#10;865432040001235 ..."
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                            <AlertCircle size={10} className="shrink-0" />
+                            Múltiples líneas o comas. Duplicados no se guardan.
+                        </p>
+                    </div>
                 )}
 
                 <button
                     onClick={handleSubmit}
                     disabled={loading}
-                    className="w-full mt-4 sm:mt-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                     {loading ? "Guardando..." : <><Save size={16} /> {modoIngreso === "SELECCIONAR" ? "Guardar ingreso" : "Guardar catálogo"}</>}
                 </button>
             </div>
+    );
 
+    if (embedded) return formContent;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 w-full max-w-xl overflow-hidden border-l-4 border-l-blue-500">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="p-1.5 sm:p-2 bg-blue-100 text-blue-600 rounded-xl shrink-0"><Package size={16} className="sm:w-[18px] sm:h-[18px]" /></div>
+                    <div className="min-w-0">
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider truncate">Ingreso de mercadería</h3>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">Registro de dispositivos a bodega</p>
+                    </div>
+                </div>
+                <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 shrink-0">
+                    <button type="button" onClick={() => setModoIngreso("SELECCIONAR")} className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "SELECCIONAR" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Seleccionar</button>
+                    <button type="button" onClick={() => setModoIngreso("CREAR")} className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${modoIngreso === "CREAR" ? "bg-emerald-600 text-white" : "text-emerald-700 hover:bg-emerald-50"}`}>Crear</button>
+                </div>
             </div>
+            {formContent}
+        </div>
     );
 }
