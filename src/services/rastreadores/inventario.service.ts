@@ -74,6 +74,31 @@ export async function ingresarLoteGPS(payloads: IngresoGPSPayload[]) {
     return { success: true, count: data?.length };
 }
 
+export type UpdateInventarioGPSPayload = {
+    modelo_id?: string | null;
+    proveedor_id?: string | null;
+    costo_compra?: number;
+    factura_compra?: string | null;
+};
+
+export async function actualizarItemInventarioGPS(
+    id: string,
+    payload: UpdateInventarioGPSPayload
+): Promise<{ success: boolean; error?: string }> {
+    const { error } = await supabase
+        .from('gps_inventario')
+        .update({
+            ...(payload.modelo_id !== undefined && { modelo_id: payload.modelo_id }),
+            ...(payload.proveedor_id !== undefined && { proveedor_id: payload.proveedor_id }),
+            ...(payload.costo_compra !== undefined && { costo_compra: payload.costo_compra }),
+            ...(payload.factura_compra !== undefined && { factura_compra: payload.factura_compra?.trim() || null })
+        })
+        .eq('id', id);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+}
+
 export async function validarStock(imei: string) {
     const { data, error } = await supabase
         .from('gps_inventario')

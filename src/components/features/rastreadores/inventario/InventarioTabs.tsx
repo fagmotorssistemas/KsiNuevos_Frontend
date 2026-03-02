@@ -1,28 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FormIngresoGPS } from "./FormIngresoGPS";
-import { FormIngresoSIM } from "./FormIngresoSIM"; // Asegúrate de tener este componente creado
+import { FormIngresoSIM } from "./FormIngresoSIM";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { InventarioGPS } from "@/types/rastreadores.types";
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
-import { RefreshCw, Box, CreditCard } from "lucide-react";
+import { RefreshCw, Box, CreditCard, Pencil, X } from "lucide-react";
+import { toast } from "sonner";
 
 export function InventarioTabs() {
-    // 1. Estado de Navegación
     const [activeTab, setActiveTab] = useState<'GPS' | 'SIMS'>('GPS');
-    
-    // ==========================================
-    // 2. LÓGICA DE GPS
-    // ==========================================
+
     const [inventarioGPS, setInventarioGPS] = useState<InventarioGPS[]>([]);
-    
-    const loadInventarioGPS = async () => {
+    const [modelos, setModelos] = useState<{ id: string; nombre: string; marca: string }[]>([]);
+    const [proveedores, setProveedores] = useState<{ id: string; nombre: string }[]>([]);
+
+    const loadInventarioGPS = useCallback(async () => {
         const data = await rastreadoresService.getInventarioStock();
         setInventarioGPS(data);
-    };
+    }, []);
 
-    useEffect(() => { loadInventarioGPS(); }, []);
+    useEffect(() => { loadInventarioGPS(); }, [loadInventarioGPS]);
+
+    useEffect(() => {
+        if (activeTab === 'GPS') {
+            Promise.all([rastreadoresService.getModelos(), rastreadoresService.getProveedores()])
+                .then(([m, p]) => {
+                    setModelos(m);
+                    setProveedores(p);
+                });
+        }
+    }, [activeTab]);
+
+    const [editingItem, setEditingItem] = useState<InventarioGPS | null>(null);
+    const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0 });
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    useEffect(() => {
+        if (editingItem) {
+            setEditForm({
+                modelo_id: editingItem.modelo?.id ?? "",
+                proveedor_id: editingItem.proveedor?.id ?? "",
+                costo_compra: editingItem.costo_compra ?? 0
+            });
+        }
+    }, [editingItem]);
+
+    const handleGuardarEdicion = async () => {
+        if (!editingItem) return;
+        if (!editForm.modelo_id || !editForm.proveedor_id) {
+            toast.error("Seleccione modelo y proveedor");
+            return;
+        }
+        setSavingEdit(true);
+        try {
+            const res = await rastreadoresService.actualizarItemInventarioGPS(editingItem.id, {
+                modelo_id: editForm.modelo_id,
+                proveedor_id: editForm.proveedor_id,
+                costo_compra: editForm.costo_compra
+            });
+            if (res.success) {
+                toast.success("Registro actualizado");
+                setEditingItem(null);
+                loadInventarioGPS();
+            } else {
+                toast.error(res.error || "Error al guardar");
+            }
+        } catch (e: any) {
+            toast.error(e?.message || "Error al guardar");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
 
     const totalStockGPS = inventarioGPS.length;
     const valorInventarioGPS = inventarioGPS.reduce((acc, curr) => acc + curr.costo_compra, 0);
@@ -127,28 +177,39 @@ export function InventarioTabs() {
                                             <th className="px-5 py-3">IMEI</th>
                                             <th className="px-5 py-3">Proveedor</th>
                                             <th className="px-5 py-3 text-right">Costo</th>
+                                            <th className="px-5 py-3 w-20 text-center">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {inventarioGPS.length > 0 ? inventarioGPS.map((item) => (
                                             <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-5 py-3">
-                                                    <div className="font-bold text-slate-700">{item.modelo.nombre}</div>
-                                                    <div className="text-[10px] text-slate-400">{item.modelo.marca}</div>
+                                                    <div className="font-bold text-slate-700">{item.modelo?.nombre ?? '—'}</div>
+                                                    <div className="text-[10px] text-slate-400">{item.modelo?.marca ?? ''}</div>
                                                 </td>
                                                 <td className="px-5 py-3 font-mono font-medium text-slate-600 tracking-wider text-xs">
                                                     {item.imei}
                                                 </td>
                                                 <td className="px-5 py-3 text-xs font-medium text-slate-500">
-                                                    {item.proveedor.nombre}
+                                                    {item.proveedor?.nombre ?? '—'}
                                                 </td>
                                                 <td className="px-5 py-3 text-right font-mono font-bold text-slate-700">
                                                     ${item.costo_compra}
                                                 </td>
+                                                <td className="px-5 py-3 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditingItem(item)}
+                                                        className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                        title="Editar"
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                </td>
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan={4} className="p-8 text-center text-slate-400 text-xs font-bold uppercase">
+                                                <td colSpan={5} className="p-8 text-center text-slate-400 text-xs font-bold uppercase">
                                                     Bodega de GPS Vacía
                                                 </td>
                                             </tr>
@@ -201,6 +262,93 @@ export function InventarioTabs() {
                     </div>
                 </div>
             </div>
+
+            {/* Modal Editar item GPS */}
+            {editingItem && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setEditingItem(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/80">
+                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">Editar registro</h4>
+                            <button
+                                type="button"
+                                onClick={() => setEditingItem(null)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">IMEI</label>
+                                <div className="p-3 bg-slate-100 rounded-xl text-sm font-mono font-bold text-slate-600">
+                                    {editingItem.imei}
+                                </div>
+                                <p className="text-[9px] text-slate-400 mt-1">No editable</p>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Modelo</label>
+                                <select
+                                    value={editForm.modelo_id}
+                                    onChange={e => setEditForm(prev => ({ ...prev, modelo_id: e.target.value }))}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Seleccione --</option>
+                                    {modelos.map(m => (
+                                        <option key={m.id} value={m.id}>{m.nombre} ({m.marca})</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Proveedor</label>
+                                <select
+                                    value={editForm.proveedor_id}
+                                    onChange={e => setEditForm(prev => ({ ...prev, proveedor_id: e.target.value }))}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">-- Seleccione --</option>
+                                    {proveedores.map(p => (
+                                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Costo ($)</label>
+                                <input
+                                    type="number"
+                                    value={editForm.costo_compra || ""}
+                                    onChange={e => setEditForm(prev => ({ ...prev, costo_compra: parseFloat(e.target.value) || 0 }))}
+                                    min={0}
+                                    step={0.01}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleGuardarEdicion}
+                                    disabled={savingEdit}
+                                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                >
+                                    {savingEdit ? "Guardando..." : "Guardar"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingItem(null)}
+                                    className="px-4 py-3 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold uppercase transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
