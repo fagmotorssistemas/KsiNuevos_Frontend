@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Save, Plus, Package, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
-import { ModeloGPS, ProveedorGPS } from "@/types/rastreadores.types";
+import { ModeloGPS, ProveedorGPS, type EstadoConeccionGPS } from "@/types/rastreadores.types";
 
 export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
     const [loading, setLoading] = useState(false);
@@ -19,6 +19,7 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
         proveedor_id: "",
         factura_compra: "",
         costo_compra: 0,
+        estado_coneccion: "offline" as EstadoConeccionGPS,
         imei_input: ""
     });
 
@@ -116,13 +117,18 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
 
             if (imeis.length === 0) return toast.error("Ingrese al menos un IMEI");
 
-            // Crear array de payloads
+            // Costo según modelo (gps_modelos.costo_referencia); el form ya lo autocompleta
+            const costo = formData.modelo_id
+                ? (modelos.find(m => m.id === formData.modelo_id)?.costo_referencia ?? formData.costo_compra)
+                : formData.costo_compra;
+
             const lote = imeis.map(imei => ({
                 imei: imei.toUpperCase(),
                 modelo_id: formData.modelo_id,
                 proveedor_id: formData.proveedor_id,
                 factura_compra: formData.factura_compra.toUpperCase(),
-                costo_compra: formData.costo_compra
+                costo_compra: Number(costo),
+                estado_coneccion: formData.estado_coneccion
             }));
 
             const res = await rastreadoresService.ingresarLoteGPS(lote);
@@ -144,83 +150,101 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
     };
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 min-w-0">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Package size={20}/></div>
-                <div>
-                    <h3 className="font-bold text-slate-800 uppercase">Ingreso de Mercadería</h3>
-                    <p className="text-xs text-slate-500 font-medium">Registro de dispositivos físicos a bodega</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 min-w-0 overflow-hidden border-l-4 border-l-blue-500">
+            {/* Encabezado alineado con "Stock disponible de GPS" */}
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><Package size={18} /></div>
+                    <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Ingreso de mercadería</h3>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">Registro de dispositivos a bodega</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5 min-w-0">
-                {/* Factura (Agrupador) */}
-                <div className="col-span-2 md:col-span-1 min-w-0">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Nro. Factura Proveedor</label>
-                    <input 
-                        type="text" 
-                        value={formData.factura_compra}
-                        onChange={e => setFormData({...formData, factura_compra: e.target.value})}
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="FAC-001..."
-                    />
-                </div>
-
-                <div className="col-span-2 md:col-span-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Proveedor</label>
-                        <button
-                            type="button"
-                            onClick={() => setShowNewProveedor(true)}
-                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
-                        >
-                            <Plus size={12} /> Nuevo
-                        </button>
+            <div className="p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 min-w-0">
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Nro. factura</label>
+                        <input
+                            type="text"
+                            value={formData.factura_compra}
+                            onChange={e => setFormData({ ...formData, factura_compra: e.target.value })}
+                            className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 uppercase focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="FAC-001..."
+                        />
                     </div>
-                    <select
-                        value={formData.proveedor_id}
-                        onChange={e => setFormData({ ...formData, proveedor_id: e.target.value })}
-                        className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">-- Seleccione --</option>
-                        {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                </div>
 
-                {/* Datos del Equipo */}
-                <div className="col-span-2 md:col-span-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Modelo</label>
-                        <button
-                            type="button"
-                            onClick={() => setShowNewModelo(true)}
-                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Proveedor</label>
+                            <button type="button" onClick={() => setShowNewProveedor(true)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0">
+                                <Plus size={12} /> Nuevo
+                            </button>
+                        </div>
+                        <select
+                            value={formData.proveedor_id}
+                            onChange={e => setFormData({ ...formData, proveedor_id: e.target.value })}
+                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            <Plus size={12} /> Nuevo modelo
-                        </button>
+                            <option value="">-- Seleccione --</option>
+                            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
                     </div>
-                    <select
-                        value={formData.modelo_id}
-                        onChange={e => setFormData({ ...formData, modelo_id: e.target.value })}
-                        className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">-- Seleccione --</option>
-                        {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.marca})</option>)}
-                    </select>
+
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">Modelo</label>
+                            <button type="button" onClick={() => setShowNewModelo(true)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0">
+                                <Plus size={12} /> Nuevo modelo
+                            </button>
+                        </div>
+                        <select
+                            value={formData.modelo_id}
+                            onChange={e => setFormData({ ...formData, modelo_id: e.target.value })}
+                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Seleccione --</option>
+                            {modelos.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.marca})</option>)}
+                        </select>
+                    </div>
+
+                    {/* Precio ref. según modelo - bloque claro */}
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Precio ref.</label>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                            {formData.modelo_id ? (
+                                <>
+                                    <span className="text-lg font-mono font-black text-slate-800">
+                                        {(() => {
+                                            const mod = modelos.find(m => m.id === formData.modelo_id);
+                                            return mod?.costo_referencia != null ? `$${mod.costo_referencia}` : "—";
+                                        })()}
+                                    </span>
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold">gps_modelos</span>
+                                </>
+                            ) : (
+                                <span className="text-sm text-slate-400">Seleccione modelo</span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="col-span-2 md:col-span-1 min-w-0">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Estado</label>
+                        <select
+                            value={formData.estado_coneccion}
+                            onChange={e => setFormData(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
+                            className="w-full min-w-0 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="online">Online</option>
+                            <option value="inactivo">Inactivo</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div className="col-span-2 md:col-span-1 min-w-0">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1 block">Costo Unitario ($)</label>
-                    <input 
-                        type="number" 
-                        value={formData.costo_compra}
-                        onChange={e => setFormData({...formData, costo_compra: parseFloat(e.target.value) || 0})}
-                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 uppercase outline-none"
-                    />
-                </div>
-
-                {/* Entrada Masiva de IMEIs */}
-                <div className="col-span-2">
+                {/* Lista de IMEIs */}
+                <div className="mt-5 pt-5 border-t border-slate-100">
                     <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lista de IMEIs (Escanear o Pegar)</label>
                         <span className="text-[9px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">Soporta múltiples líneas</span>
@@ -237,15 +261,15 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
                         Los IMEIs duplicados no se guardarán.
                     </p>
                 </div>
-            </div>
 
-            <button 
-                onClick={handleSubmit} 
-                disabled={loading}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
-            >
-                {loading ? "Guardando..." : <><Save size={16} /> Guardar Ingreso</>}
-            </button>
+                <button
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="w-full mt-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                    {loading ? "Guardando..." : <><Save size={16} /> Guardar ingreso</>}
+                </button>
+            </div>
 
             {/* Overlay: Nueva tarjeta proveedor */}
             {showNewProveedor && (
@@ -375,6 +399,6 @@ export function FormIngresoGPS({ onSuccess }: { onSuccess: () => void }) {
                     </div>
                 </div>
             )}
-        </div>
+            </div>
     );
 }

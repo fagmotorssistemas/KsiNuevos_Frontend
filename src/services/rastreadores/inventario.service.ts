@@ -60,9 +60,12 @@ export async function getInventarioStock(): Promise<InventarioGPS[]> {
 
 export async function ingresarLoteGPS(payloads: IngresoGPSPayload[]) {
     const datosLimpios = payloads.map(p => ({
-        ...p,
         imei: p.imei.trim().toUpperCase(),
-        factura_compra: p.factura_compra.trim().toUpperCase()
+        modelo_id: p.modelo_id,
+        proveedor_id: p.proveedor_id,
+        costo_compra: Number(p.costo_compra),
+        factura_compra: p.factura_compra.trim().toUpperCase(),
+        ...(p.estado_coneccion && { estado_coneccion: p.estado_coneccion })
     }));
 
     const { data, error } = await supabase.from('gps_inventario').insert(datosLimpios).select();
@@ -79,6 +82,7 @@ export type UpdateInventarioGPSPayload = {
     proveedor_id?: string | null;
     costo_compra?: number;
     factura_compra?: string | null;
+    estado_coneccion?: string | null;
 };
 
 export async function actualizarItemInventarioGPS(
@@ -91,7 +95,8 @@ export async function actualizarItemInventarioGPS(
             ...(payload.modelo_id !== undefined && { modelo_id: payload.modelo_id }),
             ...(payload.proveedor_id !== undefined && { proveedor_id: payload.proveedor_id }),
             ...(payload.costo_compra !== undefined && { costo_compra: payload.costo_compra }),
-            ...(payload.factura_compra !== undefined && { factura_compra: payload.factura_compra?.trim() || null })
+            ...(payload.factura_compra !== undefined && { factura_compra: payload.factura_compra?.trim() || null }),
+            ...(payload.estado_coneccion !== undefined && { estado_coneccion: payload.estado_coneccion || null })
         })
         .eq('id', id);
 

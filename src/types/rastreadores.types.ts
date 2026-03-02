@@ -117,6 +117,9 @@ export interface ModeloGPS {
     costo_referencia: number;
 }
 
+/** Estado de conexión del dispositivo en inventario (individual por unidad) */
+export type EstadoConeccionGPS = 'online' | 'inactivo' | 'offline';
+
 export interface InventarioGPS {
     id: string;
     imei: string;
@@ -124,6 +127,8 @@ export interface InventarioGPS {
     proveedor: ProveedorGPS;
     costo_compra: number;
     estado: 'STOCK' | 'VENDIDO' | 'RMA' | 'BAJA' | 'INSTALADO';
+    /** Estado de conexión: online, inactivo, offline */
+    estado_coneccion?: EstadoConeccionGPS | null;
     fecha_compra: string;
 }
 
@@ -133,6 +138,7 @@ export interface IngresoGPSPayload {
     proveedor_id: string;
     costo_compra: number;
     factura_compra: string;
+    estado_coneccion?: EstadoConeccionGPS;
     serie?: string;
 }
 

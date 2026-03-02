@@ -4,7 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 import { FormIngresoGPS } from "./FormIngresoGPS";
 import { FormIngresoSIM } from "./FormIngresoSIM";
 import { rastreadoresService } from "@/services/rastreadores.service";
-import { InventarioGPS } from "@/types/rastreadores.types";
+import { InventarioGPS, type EstadoConeccionGPS, type ModeloGPS } from "@/types/rastreadores.types";
+
+function BadgeEstado({ estado }: { estado?: EstadoConeccionGPS | null }) {
+    const v = estado ?? "offline";
+    const classes = {
+        online: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        inactivo: "bg-amber-100 text-amber-800 border-amber-200",
+        offline: "bg-red-100 text-red-800 border-red-200"
+    };
+    const labels = { online: "Online", inactivo: "Inactivo", offline: "Offline" };
+    return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${classes[v as keyof typeof classes] ?? classes.offline}`}>
+            {labels[v as keyof typeof labels] ?? v}
+        </span>
+    );
+}
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
 import { RefreshCw, Box, CreditCard, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +28,7 @@ export function InventarioTabs() {
     const [activeTab, setActiveTab] = useState<'GPS' | 'SIMS'>('GPS');
 
     const [inventarioGPS, setInventarioGPS] = useState<InventarioGPS[]>([]);
-    const [modelos, setModelos] = useState<{ id: string; nombre: string; marca: string }[]>([]);
+    const [modelos, setModelos] = useState<ModeloGPS[]>([]);
     const [proveedores, setProveedores] = useState<{ id: string; nombre: string }[]>([]);
 
     const loadInventarioGPS = useCallback(async () => {
@@ -34,15 +49,17 @@ export function InventarioTabs() {
     }, [activeTab]);
 
     const [editingItem, setEditingItem] = useState<InventarioGPS | null>(null);
-    const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0 });
+    const [editForm, setEditForm] = useState({ modelo_id: "", proveedor_id: "", costo_compra: 0, estado_coneccion: "offline" as EstadoConeccionGPS });
     const [savingEdit, setSavingEdit] = useState(false);
 
     useEffect(() => {
         if (editingItem) {
+            const precio = editingItem.costo_compra ?? editingItem.modelo?.costo_referencia ?? 0;
             setEditForm({
                 modelo_id: editingItem.modelo?.id ?? "",
                 proveedor_id: editingItem.proveedor?.id ?? "",
-                costo_compra: editingItem.costo_compra ?? 0
+                costo_compra: precio,
+                estado_coneccion: (editingItem.estado_coneccion ?? "offline") as EstadoConeccionGPS
             });
         }
     }, [editingItem]);
@@ -58,7 +75,8 @@ export function InventarioTabs() {
             const res = await rastreadoresService.actualizarItemInventarioGPS(editingItem.id, {
                 modelo_id: editForm.modelo_id,
                 proveedor_id: editForm.proveedor_id,
-                costo_compra: editForm.costo_compra
+                costo_compra: editForm.costo_compra,
+                estado_coneccion: editForm.estado_coneccion
             });
             if (res.success) {
                 toast.success("Registro actualizado");
@@ -75,7 +93,11 @@ export function InventarioTabs() {
     };
 
     const totalStockGPS = inventarioGPS.length;
-    const valorInventarioGPS = inventarioGPS.reduce((acc, curr) => acc + curr.costo_compra, 0);
+    // Precio: si tiene costo_compra en inventario lo usamos, si no el del modelo
+    const valorInventarioGPS = inventarioGPS.reduce(
+        (acc, curr) => acc + (curr.modelo?.costo_referencia ?? curr.costo_compra ?? 0),
+        0
+    );
 
     // ==========================================
     // 3. LÓGICA DE SIMS (Usando tu nuevo hook)
@@ -176,7 +198,8 @@ export function InventarioTabs() {
                                             <th className="px-5 py-3">Modelo</th>
                                             <th className="px-5 py-3">IMEI</th>
                                             <th className="px-5 py-3">Proveedor</th>
-                                            <th className="px-5 py-3 text-right">Costo</th>
+                                            <th className="px-5 py-3 text-center">Estado</th>
+                                            <th className="px-5 py-3 text-right">Precio ref.</th>
                                             <th className="px-5 py-3 w-20 text-center">Acciones</th>
                                         </tr>
                                     </thead>
@@ -193,8 +216,12 @@ export function InventarioTabs() {
                                                 <td className="px-5 py-3 text-xs font-medium text-slate-500">
                                                     {item.proveedor?.nombre ?? '—'}
                                                 </td>
+                                                <td className="px-5 py-3 text-center">
+                                                    <BadgeEstado estado={item.estado_coneccion} />
+                                                </td>
                                                 <td className="px-5 py-3 text-right font-mono font-bold text-slate-700">
-                                                    ${item.costo_compra}
+                                                    {/* Precio ref. desde gps_modelos.costo_referencia */}
+                                                    {item.modelo?.costo_referencia != null ? `$${item.modelo.costo_referencia}` : (item.costo_compra != null ? `$${item.costo_compra}` : '—')}
                                                 </td>
                                                 <td className="px-5 py-3 text-center">
                                                     <button
@@ -209,7 +236,7 @@ export function InventarioTabs() {
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan={5} className="p-8 text-center text-slate-400 text-xs font-bold uppercase">
+                                                <td colSpan={6} className="p-8 text-center text-slate-400 text-xs font-bold uppercase">
                                                     Bodega de GPS Vacía
                                                 </td>
                                             </tr>
@@ -318,15 +345,29 @@ export function InventarioTabs() {
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Costo ($)</label>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Precio ($)</label>
                                 <input
                                     type="number"
                                     value={editForm.costo_compra || ""}
                                     onChange={e => setEditForm(prev => ({ ...prev, costo_compra: parseFloat(e.target.value) || 0 }))}
                                     min={0}
                                     step={0.01}
+                                    placeholder="Ref. modelo"
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
                                 />
+                                <p className="text-[9px] text-slate-400 mt-1">Ref. modelo: ${modelos.find(m => m.id === editForm.modelo_id)?.costo_referencia ?? "—"}</p>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Estado</label>
+                                <select
+                                    value={editForm.estado_coneccion}
+                                    onChange={e => setEditForm(prev => ({ ...prev, estado_coneccion: e.target.value as EstadoConeccionGPS }))}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="online">Online</option>
+                                    <option value="inactivo">Inactivo</option>
+                                    <option value="offline">Offline</option>
+                                </select>
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button

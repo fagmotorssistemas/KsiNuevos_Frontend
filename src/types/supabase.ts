@@ -626,6 +626,7 @@ export type Database = {
           costo_compra: number
           created_at: string | null
           estado: string | null
+          estado_coneccion: string | null
           factura_compra: string | null
           fecha_compra: string | null
           id: string
@@ -639,6 +640,7 @@ export type Database = {
           costo_compra: number
           created_at?: string | null
           estado?: string | null
+          estado_coneccion?: string | null
           factura_compra?: string | null
           fecha_compra?: string | null
           id?: string
@@ -652,6 +654,7 @@ export type Database = {
           costo_compra?: number
           created_at?: string | null
           estado?: string | null
+          estado_coneccion?: string | null
           factura_compra?: string | null
           fecha_compra?: string | null
           id?: string
