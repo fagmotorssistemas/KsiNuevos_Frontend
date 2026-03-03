@@ -8,12 +8,11 @@ interface Props {
     onSuccess: () => void;
 }
 
+/** Formulario alineado con gps_sims: iccid (obligatorio), imsi (opcional). */
 export function FormIngresoSIM({ onSuccess }: Props) {
     const [formData, setFormData] = useState<IngresoSIMPayload>({
         iccid: '',
-        numero: '',
-        operadora: '',
-        costo_mensual: 0
+        imsi: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,8 +22,7 @@ export function FormIngresoSIM({ onSuccess }: Props) {
         try {
             await rastreadoresService.insertarSIM(formData);
             onSuccess();
-            // Limpiar formulario
-            setFormData({ iccid: '', numero: '', operadora: '', costo_mensual: 0 });
+            setFormData({ iccid: '', imsi: '' });
         } catch (error) {
             console.error(error);
         } finally {
@@ -37,50 +35,29 @@ export function FormIngresoSIM({ onSuccess }: Props) {
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-2">
                 Ingreso de Nueva SIM
             </h3>
-            
+
             <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase">ICCID *</label>
-                <input 
-                    type="text" 
-                    required 
+                <input
+                    type="text"
+                    required
                     className="w-full mt-1 p-2 border border-slate-200 rounded-lg text-sm"
                     value={formData.iccid}
-                    onChange={(e) => setFormData({...formData, iccid: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, iccid: e.target.value })}
                 />
             </div>
             <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Número *</label>
-                <input 
-                    type="text" 
-                    required 
+                <label className="text-[10px] font-bold text-slate-400 uppercase">IMSI (opcional)</label>
+                <input
+                    type="text"
                     className="w-full mt-1 p-2 border border-slate-200 rounded-lg text-sm"
-                    value={formData.numero}
-                    onChange={(e) => setFormData({...formData, numero: e.target.value})}
+                    value={formData.imsi ?? ''}
+                    onChange={(e) => setFormData({ ...formData, imsi: e.target.value || undefined })}
                 />
             </div>
-            <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Operadora *</label>
-                <input 
-                    type="text" 
-                    required 
-                    className="w-full mt-1 p-2 border border-slate-200 rounded-lg text-sm"
-                    value={formData.operadora}
-                    onChange={(e) => setFormData({...formData, operadora: e.target.value})}
-                />
-            </div>
-            <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase">Costo Mensual *</label>
-                <input 
-                    type="number" 
-                    required 
-                    className="w-full mt-1 p-2 border border-slate-200 rounded-lg text-sm"
-                    value={formData.costo_mensual}
-                    onChange={(e) => setFormData({...formData, costo_mensual: Number(e.target.value)})}
-                />
-            </div>
-            
-            <button 
-                type="submit" 
+
+            <button
+                type="submit"
                 disabled={isSubmitting}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold uppercase rounded-xl transition-colors disabled:opacity-50"
             >

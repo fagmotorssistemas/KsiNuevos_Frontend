@@ -5,8 +5,8 @@ import {
     Smartphone, Loader2, Save, Paperclip, 
     FileText, Image as ImageIcon, X, Trash2, Plus, ArrowLeft 
 } from "lucide-react";
-// CAMBIO: Usamos el servicio específico de rastreadores
 import { rastreadoresService } from "@/services/rastreadores.service";
+import { dispositivosService } from "@/services/dispositivos.service";
 import { toast } from "sonner";
 
 interface GPSFormProps {
@@ -104,10 +104,9 @@ export function GPSForm({
                 evidencias: urlsFinales
             };
 
-            // CAMBIO: Usar rastreadoresService
-            const res = isEditing 
-                ? await rastreadoresService.actualizar(initialData.id, payload)
-                : await rastreadoresService.registrar(payload);
+            const res = isEditing
+                ? await dispositivosService.actualizarRastreador(initialData.id, payload)
+                : await dispositivosService.registrarRastreador(payload);
 
             if (res.success) {
                 toast.success(isEditing ? "GPS Actualizado" : "GPS Vinculado");
