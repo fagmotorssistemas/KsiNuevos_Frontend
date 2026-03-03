@@ -69,7 +69,8 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 costo_instalacion,
                 fecha_entrega,
                 asesor_id,
-                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca)),
+                observacion,
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
                 gps_instaladores:gps_instaladores(*)
             `)
             .in('cliente_id', clienteIds)
@@ -83,7 +84,11 @@ export async function getGPSPorCliente(identificacionCliente: string) {
         return (data || []).map((v: any) => {
             const gps = v.gps_inventario;
             const modeloGps = gps?.modelo;
-            const modeloNombre = Array.isArray(modeloGps) ? modeloGps[0]?.marca : modeloGps?.marca;
+            const modeloRaw = Array.isArray(modeloGps) ? modeloGps[0] : modeloGps;
+            const modeloNombre = modeloRaw?.marca ?? gps?.serie ?? null;
+            // Proveedor viene de la relación del modelo: gps_modelos.provedor_id → gps_proveedores
+            const prov = modeloRaw?.gps_proveedores ?? modeloRaw?.proveedor;
+            const proveedorObj = Array.isArray(prov) ? prov[0] : prov;
             return {
                 id: gps?.id ?? v.gps_id,
                 venta_id: v.id,
@@ -95,12 +100,14 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 asesor_id: v.asesor_id ?? null,
                 imei: gps?.imei,
                 estado: gps?.estado,
-                modelo: modeloNombre ?? gps?.serie ?? null,
+                modelo: modeloNombre,
                 costo_compra: gps?.costo_compra,
                 instalador_id: v.instalador_id,
                 costo_instalacion: v.costo_instalacion,
                 gps_instaladores: v.gps_instaladores,
-                gps_sims: null
+                gps_sims: null,
+                proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
+                observacion: v.observacion ?? null
             };
         });
     } catch (err) {

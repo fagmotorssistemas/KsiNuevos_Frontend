@@ -74,6 +74,10 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                             <span className="block text-base font-bold text-slate-900">{gps.modelo || '—'}</span>
                                         </div>
                                         <div>
+                                            <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Proveedor</span>
+                                            <span className="block text-base font-semibold text-slate-800">{gps.proveedor?.nombre ?? '—'}</span>
+                                        </div>
+                                        <div>
                                             <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Costo compra</span>
                                             <span className="block text-base font-semibold text-slate-800">${Number(gps.costo_compra || 0).toLocaleString('es-EC')}</span>
                                         </div>
@@ -99,6 +103,12 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                                 {gps.created_at ? new Date(gps.created_at).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                                             </span>
                                         </div>
+                                        {(gps.observacion != null && gps.observacion !== '') && (
+                                            <div className="sm:col-span-2">
+                                                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Observación</span>
+                                                <span className="block text-sm font-medium text-slate-700">{gps.observacion}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-2 shrink-0 sm:items-end">
