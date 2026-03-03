@@ -2,27 +2,41 @@ import { limpiarTexto } from '@/utils/rastreo-format';
 import { supabase } from './supabaseClient';
 
 /**
- * Obtiene el/los GPS vinculado(s) a una venta especifica
- * Incluye los datos de SIM e Instalador relacionados
- * @param notaVenta - Numero de venta (ej: "1000001234" o "EXT-1234567-1708700000")
+ * Obtiene ventas (y sus GPS) por nota_venta. Fuente: ventas_rastreador + gps_inventario.
  */
 export async function getGPSPorVenta(notaVenta: string) {
     try {
         const { data, error } = await supabase
-            .from('dispositivos_rastreo')
+            .from('ventas_rastreador')
             .select(`
-                *,
-                gps_sims(*),
-                gps_instaladores(*)
+                id,
+                nota_venta,
+                precio_total,
+                created_at,
+                gps_id,
+                instalador_id,
+                costo_instalacion,
+                gps_inventario:gps_inventario(*)
             `)
-            .eq('nota_venta', notaVenta);
+            .eq('nota_venta', limpiarTexto(notaVenta));
 
         if (error) {
             console.error("Error obteniendo GPS por venta:", error);
             return [];
         }
 
-        return data || [];
+        return (data || []).map((v: any) => ({
+            id: v.gps_inventario?.id ?? v.gps_id,
+            nota_venta: v.nota_venta,
+            precio_venta: v.precio_total,
+            created_at: v.created_at,
+            imei: v.gps_inventario?.imei,
+            estado: v.gps_inventario?.estado,
+            costo_compra: v.gps_inventario?.costo_compra,
+            instalador_id: v.instalador_id,
+            costo_instalacion: v.costo_instalacion,
+            gps_inventario: v.gps_inventario
+        }));
     } catch (err) {
         console.error("Error critico en getGPSPorVenta:", err);
         return [];
@@ -30,20 +44,35 @@ export async function getGPSPorVenta(notaVenta: string) {
 }
 
 /**
- * Obtiene el GPS vinculado a un cliente especifico
- * Incluye los datos de SIM e Instalador relacionados
- * Util para ver si un cliente tiene GPS asociado
+ * Obtiene ventas del cliente externo por identificación. Fuente: ventas_rastreador (cliente_id → clientes_externos) + gps_inventario.
  */
 export async function getGPSPorCliente(identificacionCliente: string) {
     try {
+        const iden = limpiarTexto(identificacionCliente);
+        const { data: clientes } = await supabase
+            .from('clientes_externos')
+            .select('id')
+            .eq('identificacion', iden);
+
+        if (!clientes?.length) return [];
+
+        const clienteIds = clientes.map((c: { id: string }) => c.id);
         const { data, error } = await supabase
-            .from('dispositivos_rastreo')
+            .from('ventas_rastreador')
             .select(`
-                *,
-                gps_sims(*),
-                gps_instaladores(*)
+                id,
+                nota_venta,
+                precio_total,
+                created_at,
+                gps_id,
+                instalador_id,
+                costo_instalacion,
+                fecha_entrega,
+                asesor_id,
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca)),
+                gps_instaladores:gps_instaladores(*)
             `)
-            .eq('identificacion_cliente', limpiarTexto(identificacionCliente))
+            .in('cliente_id', clienteIds)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -51,7 +80,29 @@ export async function getGPSPorCliente(identificacionCliente: string) {
             return [];
         }
 
-        return data || [];
+        return (data || []).map((v: any) => {
+            const gps = v.gps_inventario;
+            const modeloGps = gps?.modelo;
+            const modeloNombre = Array.isArray(modeloGps) ? modeloGps[0]?.marca : modeloGps?.marca;
+            return {
+                id: gps?.id ?? v.gps_id,
+                venta_id: v.id,
+                nota_venta: v.nota_venta,
+                precio_venta: v.precio_total,
+                precio_total: v.precio_total,
+                created_at: v.created_at,
+                fecha_entrega: v.fecha_entrega ?? null,
+                asesor_id: v.asesor_id ?? null,
+                imei: gps?.imei,
+                estado: gps?.estado,
+                modelo: modeloNombre ?? gps?.serie ?? null,
+                costo_compra: gps?.costo_compra,
+                instalador_id: v.instalador_id,
+                costo_instalacion: v.costo_instalacion,
+                gps_instaladores: v.gps_instaladores,
+                gps_sims: null
+            };
+        });
     } catch (err) {
         console.error("Error critico en getGPSPorCliente:", err);
         return [];
@@ -59,17 +110,14 @@ export async function getGPSPorCliente(identificacionCliente: string) {
 }
 
 /**
- * Actualiza la vinculacion de un GPS a una venta
- * Se usa cuando un GPS se asigna a una venta especifica
+ * Actualiza nota_venta de una venta por gps_id (ventas_rastreador).
  */
 export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string) {
     try {
         const { data, error } = await supabase
-            .from('dispositivos_rastreo')
-            .update({
-                nota_venta: notaVenta
-            })
-            .eq('id', gpsId)
+            .from('ventas_rastreador')
+            .update({ nota_venta: limpiarTexto(notaVenta) })
+            .eq('gps_id', gpsId)
             .select()
             .single();
 
@@ -77,7 +125,6 @@ export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string)
             console.error("Error actualizando vinculacion GPS:", error);
             throw error;
         }
-
         return { success: true, data };
     } catch (err) {
         console.error("Error critico en actualizarVinculacionGPS:", err);
@@ -86,45 +133,53 @@ export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string)
 }
 
 /**
- * Obtiene una lista de ventas con sus GPS vinculados
- * Incluye: Cliente, Venta, GPS comprado, SIM e Instalador
+ * Lista ventas con GPS. Fuente: ventas_rastreador + clientes_externos + gps_inventario.
  */
 export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' = 'TODOS') {
     try {
-        const esExterna = origen === 'EXTERNO' ? true : origen === 'AUTO' ? false : null;
         let query = supabase
-            .from('dispositivos_rastreo')
+            .from('ventas_rastreador')
             .select(`
                 id,
                 nota_venta,
-                identificacion_cliente,
-                imei,
-                modelo,
-                precio_venta,
-                costo_instalacion,
+                precio_total,
                 created_at,
+                gps_id,
+                costo_instalacion,
                 es_venta_externa,
-                estado,
-                sim_id,
                 instalador_id,
                 cliente_externo:clientes_externos(*),
-                gps_sims(*),
-                gps_instaladores(*)
+                gps_inventario:gps_inventario(*),
+                gps_instaladores:gps_instaladores(*)
             `)
             .order('created_at', { ascending: false });
 
-        if (esExterna !== null) {
-            query = query.eq('es_venta_externa', esExterna);
-        }
+        if (origen === 'EXTERNO') query = query.eq('es_venta_externa', true);
+        if (origen === 'AUTO') query = query.eq('es_venta_externa', false);
 
         const { data, error } = await query;
-
         if (error) {
             console.error("Error obteniendo ventas con GPS:", error);
             return [];
         }
 
-        return data || [];
+        return (data || []).map((v: any) => ({
+            id: v.gps_inventario?.id ?? v.gps_id,
+            nota_venta: v.nota_venta,
+            identificacion_cliente: v.cliente_externo?.identificacion,
+            imei: v.gps_inventario?.imei,
+            modelo: v.gps_inventario?.serie,
+            precio_venta: v.precio_total,
+            costo_instalacion: v.costo_instalacion,
+            created_at: v.created_at,
+            es_venta_externa: v.es_venta_externa,
+            estado: v.gps_inventario?.estado,
+            sim_id: null,
+            instalador_id: v.instalador_id,
+            cliente_externo: v.cliente_externo,
+            gps_sims: null,
+            gps_instaladores: v.gps_instaladores
+        }));
     } catch (err) {
         console.error("Error critico en obtenerVentasConGPS:", err);
         return [];
@@ -132,16 +187,13 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
 }
 
 /**
- * Actualiza el estado de un GPS
- * Estados: PENDIENTE_INSTALACION, INSTALADO, ACTIVO, SUSPENDIDO, RETIRADO
+ * Actualiza estado del GPS en gps_inventario (ya no en dispositivos_rastreo).
  */
 export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string) {
     try {
         const { data, error } = await supabase
-            .from('dispositivos_rastreo')
-            .update({
-                estado: nuevoEstado
-            })
+            .from('gps_inventario')
+            .update({ estado: nuevoEstado })
             .eq('id', gpsId)
             .select()
             .single();
@@ -150,7 +202,6 @@ export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string) {
             console.error("Error actualizando estado GPS:", error);
             throw error;
         }
-
         return { success: true, data };
     } catch (err) {
         console.error("Error critico en actualizarEstadoGPS:", err);

@@ -37,11 +37,13 @@ export interface ContratoGPS {
     clienteFinalTelefono?: string | null;
 }
 
+/** Datos para clientes_externos (BD: nombre_completo, identificacion, telefono, email, direccion). Placa/marca/modelo van en vehiculos. */
 export interface ClienteExternoPayload {
     nombre: string;
     identificacion: string;
     telefono: string;
     email: string;
+    direccion?: string | null;
     placa: string;
     marca: string;
     modelo: string;
@@ -147,22 +149,22 @@ export interface IngresoGPSPayload {
     imsi?: string;
 }
 
-// Añadir al final de tu archivo types/rastreadores.types.ts
+/** Alineado con gps_sims (id, iccid, created_at, gps_id, imsi). estado se deriva: gps_id null = STOCK, sino ACTIVA. */
 export interface InventarioSIM {
     id: string;
     iccid: string;
-    numero: string | null;
-    operadora: string | null;
-    estado: 'STOCK' | 'ACTIVA' | 'SUSPENDIDA' | 'BAJA'; // Ajusta según tus estados reales
-    costo_mensual: number | null;
     created_at: string;
+    gps_id?: string | null;
+    imsi?: string | null;
+    estado: 'STOCK' | 'ACTIVA' | 'SUSPENDIDA' | 'BAJA';
+    numero?: string | null;
+    operadora?: string | null;
+    costo_mensual?: number | null;
 }
 
 export interface IngresoSIMPayload {
     iccid: string;
-    numero?: string;
-    operadora?: string;
-    costo_mensual?: number;
+    imsi?: string;
 }
 
 // Añadir en types/rastreadores.types.ts
@@ -221,7 +223,8 @@ export type PagoRastreadorFormInfo = PagoRastreadorInfo & {
 };
 
 export interface VentaRastreadorPayload {
-    dispositivo_id: string;
+    /** ID del GPS en gps_inventario (ventas_rastreador.gps_id) */
+    gps_id: string;
     entorno: 'CON_VEHICULO' | 'SIN_VEHICULO';
     tipo_pago: TipoPagoEnum;
     precio_total: number;           // Precio del GPS
@@ -245,4 +248,21 @@ export interface CuotaRastreadorPayload {
     numero_cuota: number;
     valor: number;
     fecha_vencimiento: string;
+}
+
+/** Payload de pago para venta externa: se guarda en ventas_rastreador + cuotas_rastreador (sin gps_id, lo resuelve el servicio) */
+export interface PagoVentaExternaPayload {
+    tipo_pago: TipoPagoEnum;
+    precio_total: number;
+    abono_inicial?: number;
+    total_financiado?: number;
+    numero_cuotas?: number;
+    metodo_pago?: MetodoPagoRastreadorEnum | string;
+    url_comprobante_pago?: string | null;
+    fecha_entrega?: string | null;
+    asesor_id?: string | null;
+    observacion?: string | null;
+    instalador_id?: string | null;
+    costo_instalacion?: number | null;
+    nota_venta?: string | null;
 }

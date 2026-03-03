@@ -33,17 +33,16 @@ function esCredito(tipoPago: string | null | undefined, plazoCredito?: number | 
 }
 
 /**
- * Fuentes de datos para la Cartera (alineadas con la lista principal):
+ * Fuentes de datos para la Cartera (todo desde ventas_rastreador + Oracle):
  * 1. Supabase ventas_rastreador: ventas con tipo CONTADO/CRÉDITO y cuotas.
- * 2. Supabase dispositivos_rastreo con precio_venta (tipo como en PagoRastreadorExternoModule: crédito si tipo_pago CREDITO o plazo_credito > 0).
- * 3. Backend (Oracle): lista de contratos AUTO con totalRastreador (misma fuente que RastreoList).
+ * 2. Backend (Oracle): lista de contratos AUTO con totalRastreador (misma fuente que RastreoList).
  */
 export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]> {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
     try {
-        // 1) Ventas ya registradas en Supabase (ventas_rastreador)
+        // 1) Ventas ya registradas en Supabase (ventas_rastreador: gps_id -> gps_inventario, cliente_id -> clientes_externos)
         const { data: ventas, error: ventasError } = await supabase
             .from('ventas_rastreador')
             .select(`
@@ -53,31 +52,17 @@ export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]>
                 total_financiado,
                 numero_cuotas,
                 created_at,
-                dispositivo_id,
-                dispositivos_rastreo(
-                    nota_venta,
-                    identificacion_cliente,
-                    cliente_nombre,
-                    nombre_concesionaria,
-                    modelo,
-                    imei
-                )
+                nota_venta,
+                gps_id,
+                cliente_id,
+                cliente_externo:clientes_externos(nombre_completo, identificacion),
+                gps_inventario(imei)
             `)
             .order('created_at', { ascending: false });
 
         if (ventasError) throw ventasError;
 
-        // 2) Dispositivos vendidos en Supabase que NO tienen fila en ventas_rastreador (clasificación como PagoRastreadorExternoModule: crédito si tipo_pago CREDITO o plazo_credito > 0)
-        const { data: dispositivosSinVenta, error: dispError } = await supabase
-            .from('dispositivos_rastreo')
-            .select('id, nota_venta, identificacion_cliente, cliente_nombre, nombre_concesionaria, modelo, imei, precio_venta, tipo_pago, plazo_credito, created_at')
-            .not('precio_venta', 'is', null)
-            .gt('precio_venta', 0)
-            .order('created_at', { ascending: false });
-
-        if (dispError) throw dispError;
-
-        // 3) Lista del backend (Oracle) — misma fuente que RastreoList
+        // 2) Lista del backend (Oracle) — misma fuente que RastreoList
         let contratosOracle: Awaited<ReturnType<typeof getListaContratosGPS>> = [];
         try {
             contratosOracle = await getListaContratosGPS();
@@ -85,19 +70,18 @@ export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]>
             console.warn('Cartera: no se pudo cargar lista Oracle:', e);
         }
 
-        const dispositivoIdsConVenta = new Set((ventas ?? []).map((v: any) => v.dispositivo_id));
         const resultados: ItemCarteraRastreador[] = [];
 
         // --- Procesar ventas_rastreador (fuente 1) ---
         for (const v of ventas ?? []) {
-            const rawDisp = (v as any).dispositivos_rastreo ?? (v as any).dispositivo;
-            const disp = Array.isArray(rawDisp) ? rawDisp[0] : rawDisp;
-            const nota_venta = disp?.nota_venta ?? null;
-            const identificacion_cliente = disp?.identificacion_cliente ?? null;
-            const cliente_nombre = disp?.cliente_nombre ?? null;
-            const nombre_concesionaria = disp?.nombre_concesionaria ?? null;
-            const modelo = disp?.modelo ?? null;
-            const imei = disp?.imei ?? null;
+            const clienteExterno = Array.isArray((v as any).cliente_externo) ? (v as any).cliente_externo[0] : (v as any).cliente_externo;
+            const gpsInv = Array.isArray((v as any).gps_inventario) ? (v as any).gps_inventario[0] : (v as any).gps_inventario;
+            const nota_venta = (v as any).nota_venta ?? null;
+            const identificacion_cliente = clienteExterno?.identificacion ?? null;
+            const cliente_nombre = clienteExterno?.nombre_completo ?? null;
+            const nombre_concesionaria = null;
+            const modelo = null;
+            const imei = gpsInv?.imei ?? null;
 
             if (esCredito(v.tipo_pago) && v.id) {
                 const { data: cuotas, error: cuotasError } = await supabase
@@ -185,37 +169,7 @@ export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]>
             }
         }
 
-        // --- Dispositivos con precio_venta sin registro en ventas_rastreador (fuente 2). Crédito = tipo_pago CREDITO o plazo_credito > 0 (como PagoRastreadorExternoModule) ---
-        for (const d of dispositivosSinVenta ?? []) {
-            if (dispositivoIdsConVenta.has(d.id)) continue;
-            const precio = Number(d.precio_venta) || 0;
-            if (precio <= 0) continue;
-            const plazoNum = d.plazo_credito != null ? Number(d.plazo_credito) : 0;
-            const tipoPago = esCredito(d.tipo_pago, d.plazo_credito) ? 'CREDITO' : 'CONTADO';
-            const numeroCuotas = tipoPago === 'CREDITO' && plazoNum > 0 ? plazoNum : null;
-            resultados.push({
-                id: `disp-${d.id}`,
-                tipo_pago: tipoPago,
-                precio_total: precio,
-                total_financiado: tipoPago === 'CREDITO' ? precio : null,
-                numero_cuotas: numeroCuotas,
-                created_at: d.created_at,
-                nota_venta: d.nota_venta ?? null,
-                identificacion_cliente: d.identificacion_cliente ?? null,
-                cliente_nombre: d.cliente_nombre ?? null,
-                nombre_concesionaria: d.nombre_concesionaria ?? null,
-                modelo: d.modelo ?? null,
-                imei: d.imei ?? null,
-                proxima_cuota_fecha: null,
-                proxima_cuota_valor: null,
-                dias_para_cobro: null,
-                total_por_cobrar: tipoPago === 'CREDITO' ? precio : 0,
-                cuotas_pendientes: numeroCuotas ?? 0,
-                ingreso_registrado: tipoPago === 'CONTADO' ? false : null
-            });
-        }
-
-        // --- Ventas Oracle (AUTO) — misma lista que RastreoList (fuente 3) ---
+        // --- Ventas Oracle (AUTO) — misma lista que RastreoList (fuente 2) ---
         const autos = contratosOracle.filter((c) => c.origen === 'AUTO');
         for (const c of autos) {
             if (!c.totalRastreador || c.totalRastreador <= 0) continue;

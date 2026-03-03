@@ -27,15 +27,18 @@ export async function getKpisFinancieros() {
 
         const itemsVendidos = carteraItems.length;
 
-        // 3. COSTOS (EGRESOS): tomamos costo de equipos vendidos desde dispositivos_rastreo
-        const { data: ventasData, error: ventasError } = await supabase
-            .from('dispositivos_rastreo')
-            .select('costo_compra');
+        // 3. COSTOS (EGRESOS): costo de equipos vendidos desde gps_inventario vinculados por ventas_rastreador
+        const { data: ventasConGps, error: ventasError } = await supabase
+            .from('ventas_rastreador')
+            .select('gps_inventario(costo_compra)');
 
         if (ventasError) throw ventasError;
 
         const costosTotales =
-            ventasData?.reduce((acc, item) => acc + (Number(item.costo_compra) || 0), 0) || 0;
+            (ventasConGps ?? []).reduce((acc: number, item: any) => {
+                const gps = Array.isArray(item.gps_inventario) ? item.gps_inventario[0] : item.gps_inventario;
+                return acc + (Number(gps?.costo_compra) || 0);
+            }, 0) || 0;
 
         // 4. UTILIDAD Y MARGEN
         const utilidadBruta = ventasTotales - costosTotales;

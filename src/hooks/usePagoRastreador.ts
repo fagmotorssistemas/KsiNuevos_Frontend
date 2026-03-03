@@ -58,7 +58,7 @@ export function usePagoRastreador() {
      * Registra una venta de rastreador (CONTADO o CRÉDITO) y sus cuotas
      */
     const registrarVentaRastreador = async (
-        dispositivo_id: string,
+        gps_id: string,
         payload: VentaRastreadorPayload,
         cuotasData?: Array<{ valor: number; fecha_vencimiento: string }>
     ) => {
@@ -67,11 +67,12 @@ export function usePagoRastreador() {
             // Mapeo al enum de la DB: entorno_venta_enum es 'KSI_NUEVOS' | 'EXTERNO'
             const entornoDb = payload.entorno === 'SIN_VEHICULO' ? 'EXTERNO' : 'KSI_NUEVOS';
 
-            // 1. Insert en ventas_rastreador (incluye metodo_pago y url_comprobante_pago si existen columnas)
+            // 1. Insert en ventas_rastreador (columnas según BD: gps_id, fecha_entrega, etc.)
+            const gpsId = payload.gps_id ?? gps_id;
             const { data: ventaData, error: ventaError } = await supabase
                 .from('ventas_rastreador')
                 .insert({
-                    dispositivo_id: String(payload.dispositivo_id),
+                    gps_id: String(gpsId),
                     entorno: entornoDb,
                     tipo_pago: payload.tipo_pago,
                     precio_total: Number(payload.precio_total),

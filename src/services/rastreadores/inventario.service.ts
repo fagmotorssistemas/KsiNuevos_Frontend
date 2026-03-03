@@ -128,11 +128,11 @@ export async function validarStock(imei: string) {
     return { found: true, status: 'STOCK', data };
 }
 
+/** gps_sims solo tiene: id, iccid, created_at, gps_id, imsi (no existe columna estado) */
 export async function getInventarioSims(): Promise<InventarioSIM[]> {
     const { data, error } = await supabase
         .from('gps_sims')
-        .select('*')
-        .eq('estado', 'STOCK')
+        .select('id, iccid, created_at, gps_id, imsi')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -140,7 +140,14 @@ export async function getInventarioSims(): Promise<InventarioSIM[]> {
         throw new Error(error.message);
     }
 
-    return data as InventarioSIM[];
+    return (data || []).map((row: { id: string; iccid: string; created_at: string | null; gps_id: string | null; imsi: string | null }) => ({
+        id: row.id,
+        iccid: row.iccid,
+        created_at: row.created_at ?? '',
+        gps_id: row.gps_id,
+        imsi: row.imsi,
+        estado: row.gps_id ? 'ACTIVA' : 'STOCK'
+    })) as InventarioSIM[];
 }
 
 /** SIM vinculada a un GPS (tabla gps_sims: id, iccid, imsi, gps_id) */
@@ -184,15 +191,13 @@ export async function linkOrUpdateSimForGps(
     return { success: true };
 }
 
+/** gps_sims: solo iccid, imsi (gps_id null = disponible) */
 export async function insertarSIM(payload: IngresoSIMPayload): Promise<InventarioSIM> {
     const { data, error } = await supabase
         .from('gps_sims')
         .insert([{
-            iccid: payload.iccid,
-            numero: payload.numero || null,
-            operadora: payload.operadora || null,
-            costo_mensual: payload.costo_mensual || null,
-            estado: 'STOCK'
+            iccid: payload.iccid.trim(),
+            imsi: payload.imsi?.trim() || null
         }])
         .select()
         .single();
@@ -202,5 +207,13 @@ export async function insertarSIM(payload: IngresoSIMPayload): Promise<Inventari
         throw new Error(error.message);
     }
 
-    return data as InventarioSIM;
+    const row = data as { id: string; iccid: string; created_at: string | null; gps_id: string | null; imsi: string | null };
+    return {
+        id: row.id,
+        iccid: row.iccid,
+        created_at: row.created_at ?? '',
+        gps_id: row.gps_id,
+        imsi: row.imsi,
+        estado: 'STOCK'
+    } as InventarioSIM;
 }

@@ -165,45 +165,45 @@ export function ClienteInfo({
                             </div>
                         </div>
                     ) : (
-                        // Cliente auto (Oracle o externo persona)
-                        <div className="space-y-4">
-                        <div className="flex items-center gap-6">
-                            <div className="bg-slate-100 border-2 border-slate-200 px-4 py-3 rounded-xl text-center shadow-sm">
-                                <span className="block text-[9px] font-black text-slate-400 uppercase leading-none mb-1">PLACA</span>
+                        // Cliente auto (Oracle o externo persona) — tipografía legible, estilo orden de trabajo
+                        <div className="space-y-5">
+                        <div className="flex flex-wrap items-center gap-6">
+                            <div className="bg-slate-100 border-2 border-slate-200 px-5 py-4 rounded-xl text-center shadow-sm">
+                                <span className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">Placa</span>
                                 <span className="block text-2xl font-black text-slate-900 font-mono leading-none">{seleccionado?.placa}</span>
                             </div>
-                            <div>
+                            <div className="flex-1 min-w-0">
+                                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Nombre del cliente</span>
                                 <h4 className="text-lg font-black text-slate-900 uppercase">{seleccionado?.cliente}</h4>
-                                <p className="text-xs font-bold text-slate-500 uppercase flex gap-2">
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-slate-600">
                                     <span>RUC: {seleccionado?.ruc}</span>
-                                    <span>•</span>
+                                    <span aria-hidden>·</span>
                                     <span>{seleccionado?.marca} {seleccionado?.modelo}</span>
-                                </p>
-                                <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold uppercase rounded-md border border-rose-100">
-                                    <span className="opacity-70">Nota Venta:</span>
+                                </div>
+                                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 text-sm font-bold uppercase rounded-lg border border-rose-100">
+                                    <span>Nota venta:</span>
                                     <span className="font-mono">{seleccionado?.notaVenta}</span>
                                 </div>
                             </div>
                         </div>
-                        {/* Fecha de entrega y asesor (vinculación a auto) */}
-                        <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                    <Calendar size={12} /> Fecha de entrega
+                        <div className="pt-5 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <Calendar size={16} /> Fecha de entrega
                                 </label>
                                 <input
                                     type="date"
-                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
                                     value={fechaEntrega}
                                     onChange={e => onFechaEntregaChange?.(e.target.value)}
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                    <UserCheck size={12} /> Asesor que vendió
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <UserCheck size={16} /> Asesor que vendió
                                 </label>
                                 <select
-                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
+                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"
                                     value={asesorId ?? ""}
                                     onChange={e => onAsesorIdChange?.(e.target.value || null)}
                                     disabled={asesoresLoading}

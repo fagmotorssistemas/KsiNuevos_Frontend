@@ -3,11 +3,9 @@ import { getDetalleContratoGPS, getListaContratosGPS } from './rastreadores/cont
 import { getCarteraRastreadores } from './rastreadores/cartera-rastreadores.service';
 import { getKpisFinancieros } from './rastreadores/financiero.service';
 import {
-    actualizar,
     actualizarTipoPagoYPlazo,
+    crearGpsEnInventario,
     obtenerPorContrato,
-    registrar,
-    registrarInstalacionDesdeStock,
     subirEvidencias,
     subirComprobantePago
 } from './rastreadores/instalaciones.service';
@@ -45,9 +43,8 @@ export const rastreadoresService = {
     subirEvidencias,
     subirComprobantePago,
     obtenerPorContrato,
-    registrar,
-    actualizar,
     actualizarTipoPagoYPlazo,
+    crearGpsEnInventario,
     getModelos,
     getProveedores,
     createProveedor,
@@ -58,7 +55,6 @@ export const rastreadoresService = {
     getSimByGpsId,
     linkOrUpdateSimForGps,
     validarStock,
-    registrarInstalacionDesdeStock,
     registrarVentaExterna,
     getCarteraRastreadores,
     getKpisFinancieros,

@@ -76,19 +76,12 @@ export const dispositivosService = {
   async registrarRastreador(payload: RegistroGPSPayload) {
     try {
       const { data, error } = await supabase
-        .from('dispositivos_rastreo')
-        .insert([{ 
-          identificacion_cliente: payload.identificacion_cliente.trim(),
-          nota_venta: payload.nota_venta.trim(),
+        .from('gps_inventario')
+        .insert([{
           imei: payload.imei.trim().toUpperCase(),
-          modelo: payload.modelo.trim(),
-          tipo_dispositivo: payload.tipo_dispositivo.trim(),
           costo_compra: payload.costo_compra,
-          precio_venta: payload.precio_venta,
-          proveedor: payload.proveedor.trim(),
-          pagado: payload.pagado,
-          metodo_pago: payload.metodo_pago.trim(),
-          evidencias: payload.evidencias || [] 
+          estado: 'VENDIDO',
+          ubicacion: `CLIENTE: ${payload.identificacion_cliente.trim()}`
         }])
         .select();
 
@@ -102,11 +95,11 @@ export const dispositivosService = {
 
   async obtenerRastreadoresPorNota(notaVenta: string) {
     const { data, error } = await supabase
-        .from('dispositivos_rastreo')
-        .select('*')
+        .from('ventas_rastreador')
+        .select('*, gps_inventario(*), cliente_externo:clientes_externos(*)')
         .eq('nota_venta', notaVenta.trim());
     if (error) throw error;
-    return data;
+    return data ?? [];
   },
 
   // ==========================================
@@ -150,20 +143,16 @@ export const dispositivosService = {
   // 3. ACTUALIZACIÓN (UPDATE) - NUEVO
   // ==========================================
 
-  async actualizarRastreador(id: number, payload: Partial<RegistroGPSPayload>) {
+  async actualizarRastreador(id: string | number, payload: Partial<RegistroGPSPayload>) {
     try {
-      // Preparamos el objeto para actualizar, limpiando strings si vienen
-      const updateData: any = { ...payload };
-      if (payload.imei) updateData.imei = payload.imei.trim().toUpperCase();
-      if (payload.modelo) updateData.modelo = payload.modelo.trim();
-      if (payload.tipo_dispositivo) updateData.tipo_dispositivo = payload.tipo_dispositivo.trim();
-      if (payload.proveedor) updateData.proveedor = payload.proveedor.trim();
-      if (payload.metodo_pago) updateData.metodo_pago = payload.metodo_pago.trim();
+      const updateData: Record<string, unknown> = {};
+      if (payload.imei != null) updateData.imei = payload.imei.trim().toUpperCase();
+      if (payload.costo_compra != null) updateData.costo_compra = payload.costo_compra;
 
       const { data, error } = await supabase
-        .from('dispositivos_rastreo')
+        .from('gps_inventario')
         .update(updateData)
-        .eq('id', id)
+        .eq('id', String(id))
         .select();
 
       if (error) throw error;

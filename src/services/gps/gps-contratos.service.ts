@@ -22,12 +22,18 @@ export const gpsContratosService = {
                 return { data: [] };
             });
 
-        // 2. Petición Supabase (Clientes Externos)
+        // 2. Petición Supabase: ventas externas (ventas_rastreador + clientes_externos + vehiculos)
         const dbPromise = supabase
-            .from('dispositivos_rastreo')
+            .from('ventas_rastreador')
             .select(`
-                *,
-                cliente_externo:clientes_externos(*)
+                id,
+                nota_venta,
+                precio_total,
+                created_at,
+                cliente_id,
+                concesionaria_id,
+                cliente_externo:clientes_externos(nombre_completo, identificacion),
+                vehiculo:vehiculos(placa, marca, modelo, anio, color)
             `)
             .eq('es_venta_externa', true)
             .order('created_at', { ascending: false });
@@ -60,24 +66,27 @@ export const gpsContratosService = {
             );
         }
 
-        // C. Procesamos Clientes Externos (Supabase)
-        // ------------------------------------------
-        const listaExternos: ContratoGPS[] = (dbResponse.data || []).map((item: any) => ({
-            ccoCodigo: item.id,
-            notaVenta: item.nota_venta || 'VENTA-DIRECTA',
-            nroContrato: 'S/N', // Campo obligatorio
-            cliente: item.cliente_externo?.nombre_completo || 'Cliente Externo',
-            ruc: item.identificacion_cliente,
-            placa: item.cliente_externo?.placa_vehiculo || 'S/N', 
-            marca: item.cliente_externo?.marca || 'EXTERNO', 
-            modelo: item.modelo || '',
-            color: item.cliente_externo?.color || '',
-            anio: item.cliente_externo?.anio || '',
-            totalRastreador: item.precio_venta || 0,
-            fechaInstalacion: item.created_at,
-            origen: 'EXTERNO',
-            clienteExternoId: item.cliente_externo_id
-        }));
+        // C. Procesamos ventas externas (ventas_rastreador). Placa/marca/modelo desde vehiculos.
+        const listaExternos: ContratoGPS[] = (dbResponse.data || []).map((item: any) => {
+            const veh = Array.isArray(item.vehiculo) ? item.vehiculo[0] : item.vehiculo;
+            const cliente = Array.isArray(item.cliente_externo) ? item.cliente_externo[0] : item.cliente_externo;
+            return {
+                ccoCodigo: item.id,
+                notaVenta: item.nota_venta || 'VENTA-DIRECTA',
+                nroContrato: 'S/N',
+                cliente: cliente?.nombre_completo || 'Cliente Externo',
+                ruc: cliente?.identificacion ?? '',
+                placa: veh?.placa ?? 'S/N',
+                marca: veh?.marca ?? 'EXTERNO',
+                modelo: veh?.modelo ?? '',
+                color: veh?.color ?? '',
+                anio: veh?.anio ?? '',
+                totalRastreador: item.precio_total || 0,
+                fechaInstalacion: item.created_at,
+                origen: 'EXTERNO',
+                clienteExternoId: item.cliente_id
+            };
+        });
 
         // D. Retornamos la lista combinada
         return [...listaExternos, ...listaAutos];

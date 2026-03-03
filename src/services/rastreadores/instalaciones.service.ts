@@ -18,10 +18,8 @@ export async function subirEvidencias(files: File[]): Promise<string[]> {
     }
 }
 
-/** Bucket en Supabase para comprobantes de pago de rastreadores (vinculados a ventas_rastreador.url_comprobante_pago) */
 const BUCKET_COMPROBANTE_RASTREADOR = 'comprobante_deposito_sky';
 
-/** Sube un comprobante de pago del rastreador al bucket comprobante_deposito_sky. La URL se guarda en ventas_rastreador.url_comprobante_pago (vinculada al cliente por dispositivo_id). */
 export async function subirComprobantePago(file: File): Promise<string> {
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
     const fileName = `rastreador/${Date.now()}_${safeName}`;
@@ -34,73 +32,48 @@ export async function subirComprobantePago(file: File): Promise<string> {
     return data.publicUrl;
 }
 
+/** Obtiene ventas por nota_venta (fuente: ventas_rastreador, ya no dispositivos_rastreo). */
 export async function obtenerPorContrato(notaVenta: string) {
     const { data, error } = await supabase
-        .from('dispositivos_rastreo')
-        .select('*')
+        .from('ventas_rastreador')
+        .select(`
+            *,
+            cliente_externo:clientes_externos(*),
+            gps_inventario(*)
+        `)
         .eq('nota_venta', limpiarTexto(notaVenta));
-    return error ? [] : data;
+    return error ? [] : data ?? [];
 }
 
-export async function registrar(payload: RegistroGPSPayload) {
-    const cleanPayload = {
-        ...payload,
-        nota_venta: limpiarTexto(payload.nota_venta),
-        identificacion_cliente: limpiarTexto(payload.identificacion_cliente),
-        imei: limpiarTexto(payload.imei).toUpperCase()
-    };
-    const { data, error } = await supabase.from('dispositivos_rastreo').insert([cleanPayload]).select();
-    return { success: !error, error: error?.message, data };
+/** Crea un registro en gps_inventario (para venta sin ítem de stock) y devuelve el id. */
+export async function crearGpsEnInventario(payload: { imei: string; costo_compra: number }): Promise<{ id: string } | null> {
+    const imei = limpiarTexto(payload.imei).toUpperCase();
+    const { data, error } = await supabase
+        .from('gps_inventario')
+        .insert({
+            imei,
+            costo_compra: Number(payload.costo_compra),
+            estado: 'VENDIDO',
+            ubicacion: 'CLIENTE'
+        })
+        .select('id')
+        .single();
+    if (error || !data) return null;
+    return { id: data.id };
 }
 
-export async function actualizar(id: number, payload: Partial<RegistroGPSPayload>) {
-    const { data, error } = await supabase.from('dispositivos_rastreo').update(payload).eq('id', id).select();
-    return { success: !error, error: error?.message, data };
-}
-
-/** Actualiza tipo de pago y plazo en el dispositivo (misma lógica que PagoRastreadorExternoModule) para que la cartera clasifique bien contado/crédito. */
+/** Actualiza tipo_pago y numero_cuotas en ventas_rastreador por gps_id. */
 export async function actualizarTipoPagoYPlazo(
-    dispositivoId: string,
+    gpsId: string,
     tipo_pago: 'CONTADO' | 'CREDITO',
-    plazo_credito: number | null
+    numero_cuotas: number | null
 ) {
     const { error } = await supabase
-        .from('dispositivos_rastreo')
+        .from('ventas_rastreador')
         .update({
             tipo_pago,
-            plazo_credito: plazo_credito ?? null
+            numero_cuotas: numero_cuotas ?? null
         })
-        .eq('id', dispositivoId);
+        .eq('gps_id', gpsId);
     return { success: !error, error: error?.message };
-}
-
-export async function registrarInstalacionDesdeStock(payload: RegistroGPSPayload, inventarioId: string) {
-    const cleanPayload = {
-        ...payload,
-        nota_venta: payload.nota_venta ? limpiarTexto(payload.nota_venta) : `SIN-NOTA-${Date.now()}`,
-        identificacion_cliente: limpiarTexto(payload.identificacion_cliente),
-        imei: limpiarTexto(payload.imei).toUpperCase()
-    };
-
-    // 1. Insertar Instalacion
-    const { data: installData, error: installError } = await supabase
-        .from('dispositivos_rastreo')
-        .insert([cleanPayload])
-        .select()
-        .single();
-
-    if (installError) return { success: false, error: installError.message };
-
-    // 2. Dar de baja en inventario
-    const { error: stockError } = await supabase
-        .from('gps_inventario')
-        .update({
-            estado: 'VENDIDO',
-            ubicacion: `CLIENTE: ${cleanPayload.identificacion_cliente}`
-        })
-        .eq('id', inventarioId);
-
-    if (stockError) console.error("Error stock update:", stockError);
-
-    return { success: true, data: installData };
 }

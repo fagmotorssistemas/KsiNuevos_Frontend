@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { ContratoGPS, RegistroGPSPayload, PagoRastreadorInfo, TipoPagoEnum, MetodoPagoRastreadorEnum, ConcesionariaPayload, ClienteFinalPayload } from "@/types/rastreadores.types";
-import { rastreadoresService } from "@/services/rastreadores.service";
+import { rastreadoresService, supabase } from "@/services/rastreadores.service";
 import { walletService } from "@/services/wallet.service";
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
 import { useInstaladores } from "@/hooks/useInstaladores";
@@ -26,6 +26,9 @@ interface LinkGPSFormProps {
     seleccionado: ContratoGPS | null;
     onCancel: () => void;
     onSuccess: () => void;
+    /** Valores iniciales al abrir desde vista historial (fecha/asesor ya llenados) */
+    initialFechaEntrega?: string;
+    initialAsesorId?: string | null;
 }
 
 interface NuevoClienteState {
@@ -40,7 +43,7 @@ interface NuevoClienteState {
     color: string;
 }
 
-export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormProps) {
+export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEntrega, initialAsesorId }: LinkGPSFormProps) {
     const isExternal = !seleccionado;
 
     const { sims } = useInventarioSIM();
@@ -80,9 +83,13 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
     const [clienteFinal, setClienteFinal] = useState<ClienteFinalPayload>(emptyClienteFinal);
 
     // Fecha de entrega, asesor y observación (ventas_rastreador)
-    const [fechaEntrega, setFechaEntrega] = useState("");
-    const [asesorId, setAsesorId] = useState<string | null>(null);
+    const [fechaEntrega, setFechaEntrega] = useState(initialFechaEntrega ?? "");
+    const [asesorId, setAsesorId] = useState<string | null>(initialAsesorId ?? null);
     const [observacion, setObservacion] = useState("");
+    useEffect(() => {
+        if (initialFechaEntrega !== undefined) setFechaEntrega(initialFechaEntrega);
+        if (initialAsesorId !== undefined) setAsesorId(initialAsesorId);
+    }, [initialFechaEntrega, initialAsesorId]);
 
     const [form, setForm] = useState({
         imei: '',
@@ -256,79 +263,110 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                           clienteFinal: clienteFinal.nombre || clienteFinal.identificacion ? clienteFinal : undefined
                       }
                     : undefined;
+
+                let urlComprobante: string | null = null;
+                if (comprobantePagoRastreadorFile) {
+                    urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
+                }
+                const precioTotal = form.precioVenta;
+                const totalFinanciado = pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined;
+                const pagoPayload = pagoRastreador ? {
+                    tipo_pago: pagoRastreador.tipo_pago,
+                    precio_total: precioTotal,
+                    abono_inicial: pagoRastreador.abono_inicial ?? 0,
+                    total_financiado: totalFinanciado,
+                    numero_cuotas: pagoRastreador.numero_cuotas_credito ?? undefined,
+                    metodo_pago: pagoRastreador.metodo_pago_medio ?? metodoPagoRastreador,
+                    url_comprobante_pago: urlComprobante,
+                    fecha_entrega: fechaEntrega || null,
+                    asesor_id: asesorId || null,
+                    observacion: observacion.trim() || null,
+                    instalador_id: form.instalador_id || null,
+                    costo_instalacion: form.costo_instalacion || null,
+                    nota_venta: notaVentaGenerada
+                } : undefined;
+
                 res = await rastreadoresService.registrarVentaExterna(
                     clientePayload,
                     { ...gpsPayload, nota_venta: notaVentaGenerada },
                     stockItem?.id || null,
-                    opciones
+                    opciones,
+                    pagoPayload
                 );
             } else {
+                let gpsIdParaVenta: string;
                 if (stockItem) {
-                    res = await rastreadoresService.registrarInstalacionDesdeStock(gpsPayload, stockItem.id);
+                    gpsIdParaVenta = stockItem.id;
                 } else {
-                    res = await rastreadoresService.registrar(gpsPayload);
+                    const gpsCreado = await rastreadoresService.crearGpsEnInventario({
+                        imei: form.imei,
+                        costo_compra: form.costo
+                    });
+                    if (!gpsCreado) {
+                        toast.error("No se pudo crear el registro del GPS en inventario");
+                        setFormLoading(false);
+                        return;
+                    }
+                    gpsIdParaVenta = gpsCreado.id;
                 }
+
+                if (stockItem) {
+                    await supabase
+                        .from('gps_inventario')
+                        .update({
+                            estado: 'VENDIDO',
+                            ubicacion: `CLIENTE: ${identificacionCliente}`
+                        })
+                        .eq('id', stockItem.id);
+                }
+
+                const precioTotal = seleccionado!.totalRastreador;
+                let urlComprobante: string | null = null;
+                if (comprobantePagoRastreadorFile) {
+                    urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
+                }
+                const totalFinanciado = pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined;
+                let cuotasData: Array<{ valor: number; fecha_vencimiento: string }> | undefined;
+                if (pagoRastreador?.tipo_pago === TipoPagoEnum.CREDITO && pagoRastreador.numero_cuotas_credito && pagoRastreador.numero_cuotas_credito > 0 && pagoRastreador.valor_rastreador_mensual > 0) {
+                    const hoy = new Date();
+                    const fechasVencimiento: string[] = [];
+                    for (let i = 1; i <= pagoRastreador.numero_cuotas_credito; i++) {
+                        const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, hoy.getDate());
+                        fechasVencimiento.push(d.toISOString().slice(0, 10));
+                    }
+                    cuotasData = generarCuotasRastreador(pagoRastreador.valor_rastreador_mensual, fechasVencimiento);
+                }
+                try {
+                    await registrarVentaRastreador(
+                        gpsIdParaVenta,
+                        {
+                            gps_id: gpsIdParaVenta,
+                            entorno: 'CON_VEHICULO',
+                            tipo_pago: pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO,
+                            precio_total: precioTotal,
+                            numero_cuotas: pagoRastreador?.numero_cuotas_credito ?? undefined,
+                            abono_inicial: pagoRastreador?.abono_inicial ?? 0,
+                            total_financiado: totalFinanciado,
+                            metodo_pago: pagoRastreador?.metodo_pago_medio ?? metodoPagoRastreador,
+                            url_comprobante_pago: urlComprobante ?? undefined,
+                            fecha_entrega: fechaEntrega || null,
+                            asesor_id: asesorId || null,
+                            observacion: observacion.trim() || null
+                        },
+                        cuotasData
+                    );
+                    await rastreadoresService.actualizarTipoPagoYPlazo(
+                        gpsIdParaVenta,
+                        pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO,
+                        pagoRastreador?.numero_cuotas_credito ?? null
+                    );
+                } catch (pagoError) {
+                    console.error("Error registrando pago del rastreador:", pagoError);
+                }
+                res = { success: true, data: { gps_id: gpsIdParaVenta } };
             }
 
             if (res.success) {
-                const data = 'data' in res ? res.data : null;
-                const dispositivoData = data ? (Array.isArray(data) ? data[0] : data) : null;
-                const dispositivo_id = dispositivoData?.id;
-
-                // Registrar pago del rastreador (AUTO o Venta a tercero) → ventas_rastreador + cuotas_rastreador si es crédito
-                if (pagoRastreador && dispositivo_id) {
-                    try {
-                        const precioTotal = isExternal ? form.precioVenta : seleccionado!.totalRastreador;
-                        const totalFinanciado = isExternal
-                            ? form.precioVenta - (pagoRastreador.abono_inicial ?? 0)
-                            : undefined;
-
-                        let urlComprobante: string | null = null;
-                        if (comprobantePagoRastreadorFile) {
-                            urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
-                        }
-
-                        let cuotasData: Array<{ valor: number; fecha_vencimiento: string }> | undefined;
-                        if (pagoRastreador.tipo_pago === TipoPagoEnum.CREDITO && pagoRastreador.numero_cuotas_credito && pagoRastreador.numero_cuotas_credito > 0 && pagoRastreador.valor_rastreador_mensual > 0) {
-                            const hoy = new Date();
-                            const fechasVencimiento: string[] = [];
-                            for (let i = 1; i <= pagoRastreador.numero_cuotas_credito; i++) {
-                                const d = new Date(hoy.getFullYear(), hoy.getMonth() + i, hoy.getDate());
-                                fechasVencimiento.push(d.toISOString().slice(0, 10));
-                            }
-                            cuotasData = generarCuotasRastreador(pagoRastreador.valor_rastreador_mensual, fechasVencimiento);
-                        }
-
-                        await registrarVentaRastreador(
-                            String(dispositivo_id),
-                            {
-                                dispositivo_id: String(dispositivo_id),
-                                entorno: isExternal ? 'SIN_VEHICULO' : 'CON_VEHICULO',
-                                tipo_pago: pagoRastreador.tipo_pago,
-                                precio_total: precioTotal,
-                                numero_cuotas: pagoRastreador.numero_cuotas_credito ?? undefined,
-                                abono_inicial: pagoRastreador.abono_inicial ?? 0,
-                                total_financiado: totalFinanciado,
-                                metodo_pago: pagoRastreador.metodo_pago_medio ?? metodoPagoRastreador,
-                                url_comprobante_pago: urlComprobante,
-                                fecha_entrega: fechaEntrega || null,
-                                asesor_id: asesorId || null,
-                                observacion: observacion.trim() || null
-                            },
-                            cuotasData
-                        );
-                        // Sincronizar tipo_pago y plazo en el dispositivo para que la cartera clasifique igual que PagoRastreadorExternoModule
-                        await rastreadoresService.actualizarTipoPagoYPlazo(
-                            String(dispositivo_id),
-                            pagoRastreador.tipo_pago,
-                            pagoRastreador.numero_cuotas_credito ?? null
-                        );
-                    } catch (pagoError) {
-                        console.error("Error registrando pago del rastreador:", pagoError);
-                        // No bloqueamos el éxito si falla el registro de pago
-                    }
-                }
-
                 toast.success(isExternal ? "Venta Externa Registrada" : "Vinculación Exitosa");
                 onSuccess();
             } else {

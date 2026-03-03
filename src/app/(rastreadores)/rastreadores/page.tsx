@@ -1,30 +1,37 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BarChart3 } from "lucide-react";
 import { toast } from "sonner"; 
 
 // Servicios y Tipos
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { ContratoGPS } from "@/types/rastreadores.types";
 
-// Componentes (Asegúrate que las rutas sean correctas según tu proyecto)
+// Componentes
 import { RastreadoresSidebar } from "@/components/layout/rastreadores-sidebar";
 import { RastreoList } from "@/components/features/rastreadores/dashboard/RastreoList";
 import { LinkGPSForm } from "@/components/features/rastreadores/instalacion/LinkGPSForm";
+import { VistaHistorialCliente } from "@/components/features/rastreadores/instalacion/VistaHistorialCliente";
 import { InventarioTabs } from "@/components/features/rastreadores/inventario/InventarioTabs";
 import { FinancieroView } from "@/components/features/rastreadores/financiero/FinancieroView";
 import { CarteraRastreadoresView } from "@/components/features/rastreadores/cartera/CarteraRastreadoresView";
 import { InstaladoresView } from "@/components/features/rastreadores/instalador/InstaladoresView";
-// Definimos el tipo de vista localmente si no lo exporta el sidebar
+import { useAsesores } from "@/hooks/useAsesores";
+
 type RastreoView = 'DASHBOARD' | 'INVENTARIO' | 'INSTALACION' | 'FORMULARIO' | 'FINANCIERO';
 
 export default function RastreoPage() {
-    // Estados
     const [vista, setVista] = useState<RastreoView>('DASHBOARD');
     const [loadingData, setLoadingData] = useState(true);
     const [contratos, setContratos] = useState<ContratoGPS[]>([]);
     const [seleccionado, setSeleccionado] = useState<ContratoGPS | null>(null);
+    /** Si true, se muestra el formulario "Nuevo dispositivo"; si false, solo historial del cliente */
+    const [showNuevoDispositivoForm, setShowNuevoDispositivoForm] = useState(false);
+    const [historialCliente, setHistorialCliente] = useState<any[]>([]);
+    const [loadingHistorial, setLoadingHistorial] = useState(false);
+    const [fechaEntrega, setFechaEntrega] = useState("");
+    const [asesorId, setAsesorId] = useState<string | null>(null);
+    const { asesores, isLoading: asesoresLoading } = useAsesores();
 
     // Carga de Datos
     const cargarContratos = async () => {
@@ -44,9 +51,10 @@ export default function RastreoPage() {
 
     // --- HANDLERS CLAVE ---
 
-    // 1. Gestionar un auto existente (Concesionaria)
+    // 1. Gestionar un auto existente → primero vista solo historial
     const handleGestionarAuto = (item: ContratoGPS) => {
         setSeleccionado(item);
+        setShowNuevoDispositivoForm(false);
         setVista('FORMULARIO');
     };
 
@@ -59,10 +67,33 @@ export default function RastreoPage() {
     // 3. Volver al listado
     const handleVolver = () => {
         setSeleccionado(null);
+        setShowNuevoDispositivoForm(false);
         setVista('DASHBOARD');
-        cargarContratos(); // Recargamos para ver los cambios
+        cargarContratos();
     };
-    
+
+    // Cargar historial del cliente cuando estamos en vista formulario con cliente seleccionado (solo historial)
+    useEffect(() => {
+        if (vista !== 'FORMULARIO' || !seleccionado?.ruc || showNuevoDispositivoForm) {
+            setHistorialCliente([]);
+            setFechaEntrega('');
+            setAsesorId(null);
+            return;
+        }
+        setLoadingHistorial(true);
+        rastreadoresService.getGPSPorCliente(seleccionado.ruc)
+            .then((gps) => {
+                setHistorialCliente(gps || []);
+                const primeraVenta = gps?.[0];
+                if (primeraVenta) {
+                    setFechaEntrega(primeraVenta.fecha_entrega ?? '');
+                    setAsesorId(primeraVenta.asesor_id ?? null);
+                }
+            })
+            .catch(() => setHistorialCliente([]))
+            .finally(() => setLoadingHistorial(false));
+    }, [vista, seleccionado?.ruc, showNuevoDispositivoForm]);
+
     return (
         <div className="flex min-h-screen bg-slate-50">
             {/* Si tu sidebar usa Links, este componente es visual. 
@@ -82,13 +113,41 @@ export default function RastreoPage() {
                         />
                     )}
 
-                    {/* VISTA 2: FORMULARIO DE INSTALACIÓN/VENTA */}
-                    {vista === 'FORMULARIO' && (
-                        // Notar que quitamos el "&& seleccionado" para permitir que abra con null
-                        <LinkGPSForm 
-                            seleccionado={seleccionado} 
-                            onCancel={handleVolver} 
-                            onSuccess={handleVolver} 
+                    {/* VISTA 2: FORMULARIO — Nueva venta externa (sin cliente) → form directo */}
+                    {vista === 'FORMULARIO' && !seleccionado && (
+                        <LinkGPSForm
+                            seleccionado={null}
+                            onCancel={handleVolver}
+                            onSuccess={handleVolver}
+                        />
+                    )}
+
+                    {/* VISTA 2b: Cliente seleccionado — orden de trabajo (historial + Nuevo dispositivo) */}
+                    {vista === 'FORMULARIO' && seleccionado && !showNuevoDispositivoForm && (
+                        <VistaHistorialCliente
+                            seleccionado={seleccionado}
+                            historialCliente={historialCliente}
+                            loadingHistorial={loadingHistorial}
+                            fechaEntrega={fechaEntrega}
+                            onFechaEntregaChange={setFechaEntrega}
+                            asesorId={asesorId}
+                            onAsesorIdChange={setAsesorId}
+                            asesores={asesores}
+                            asesoresLoading={asesoresLoading}
+                            onVolver={handleVolver}
+                            onNuevoDispositivo={() => setShowNuevoDispositivoForm(true)}
+                            onHistorialUpdate={(gps) => setHistorialCliente(prev => prev.map(p => p.id === gps.id ? gps : p))}
+                        />
+                    )}
+
+                    {/* VISTA 2c: Formulario "Nuevo dispositivo" (después de clic en + Nuevo dispositivo) */}
+                    {vista === 'FORMULARIO' && seleccionado && showNuevoDispositivoForm && (
+                        <LinkGPSForm
+                            seleccionado={seleccionado}
+                            onCancel={() => setShowNuevoDispositivoForm(false)}
+                            onSuccess={handleVolver}
+                            initialFechaEntrega={fechaEntrega}
+                            initialAsesorId={asesorId}
                         />
                     )}
 

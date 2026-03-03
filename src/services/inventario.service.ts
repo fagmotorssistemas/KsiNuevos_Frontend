@@ -92,14 +92,13 @@ export const inventarioService = {
     
     /**
      * Obtiene datos completos del vehículo + Rastreador vinculado
-     * Une información de inventoryoracle + dispositivos_rastreo
+     * Fuente: inventoryoracle + ventas_rastreador (por nota_venta)
      */
     async getVehiculoConRastreador(placa: string) {
         const supabase = createClient();
         const placaUpper = placa.toUpperCase();
 
         try {
-            // 1. Obtener datos del vehículo desde Supabase
             const { data: vehiculo, error: vehiculoError } = await supabase
                 .from('inventoryoracle')
                 .select('*')
@@ -111,18 +110,16 @@ export const inventarioService = {
                 return null;
             }
 
-            // 2. Obtener rastreador vinculado (si existe)
-            const { data: rastreador, error: rastreadorError } = await supabase
-                .from('dispositivos_rastreo')
-                .select('*')
+            const { data: venta, error: rastreadorError } = await supabase
+                .from('ventas_rastreador')
+                .select('*, gps_inventario(*)')
                 .eq('nota_venta', vehiculo.oracle_id || '')
                 .maybeSingle();
 
-            // 3. Fusionar datos
             return {
                 vehiculo,
-                rastreador: rastreador || null,
-                vinculado: !!rastreador
+                rastreador: venta ?? null,
+                vinculado: !!venta
             };
         } catch (error) {
             console.error("Error en getVehiculoConRastreador:", error);
@@ -150,19 +147,18 @@ export const inventarioService = {
                 return [];
             }
 
-            // 2. Para cada vehículo, obtener rastreador si existe
             const resultados = await Promise.all(
                 (vehiculos || []).map(async (v) => {
-                    const { data: rastreador } = await supabase
-                        .from('dispositivos_rastreo')
-                        .select('*')
+                    const { data: venta } = await supabase
+                        .from('ventas_rastreador')
+                        .select('*, gps_inventario(*)')
                         .eq('nota_venta', v.oracle_id || '')
                         .maybeSingle();
 
                     return {
                         vehiculo: v,
-                        rastreador: rastreador || null,
-                        vinculado: !!rastreador
+                        rastreador: venta ?? null,
+                        vinculado: !!venta
                     };
                 })
             );
@@ -175,19 +171,15 @@ export const inventarioService = {
     },
 
     /**
-     * Vincula un rastreador GPS existente a un vehículo
-     * Actualiza el campo nota_venta en dispositivos_rastreo
+     * Vincula un rastreador (venta) a un vehículo. Actualiza nota_venta en ventas_rastreador.
      */
     async vincularRastreadorAVehiculo(placaVehiculo: string, rastreadorId: string, oracleId: string) {
         const supabase = createClient();
 
         try {
             const { data, error } = await supabase
-                .from('dispositivos_rastreo')
-                .update({
-                    nota_venta: oracleId,
-                    updated_at: new Date().toISOString()
-                })
+                .from('ventas_rastreador')
+                .update({ nota_venta: oracleId })
                 .eq('id', rastreadorId)
                 .select()
                 .single();
@@ -212,11 +204,8 @@ export const inventarioService = {
 
         try {
             const { data, error } = await supabase
-                .from('dispositivos_rastreo')
-                .update({
-                    nota_venta: `SIN-VINCULO-${Date.now()}`,
-                    updated_at: new Date().toISOString()
-                })
+                .from('ventas_rastreador')
+                .update({ nota_venta: `SIN-VINCULO-${Date.now()}` })
                 .eq('id', rastreadorId)
                 .select()
                 .single();
@@ -241,10 +230,9 @@ export const inventarioService = {
         const supabase = createClient();
 
         try {
-            // 1. Obtener todos los rastreadores activos
             const { data: rastreadores, error: gpsError } = await supabase
-                .from('dispositivos_rastreo')
-                .select('*')
+                .from('ventas_rastreador')
+                .select('*, gps_inventario(*)')
                 .eq('es_venta_externa', false)
                 .order('created_at', { ascending: false });
 

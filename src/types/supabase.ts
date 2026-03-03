@@ -73,45 +73,30 @@ export type Database = {
       }
       clientes_externos: {
         Row: {
-          anio: string | null
-          color: string | null
           created_at: string | null
           direccion: string | null
           email: string | null
           id: string
           identificacion: string
-          marca: string | null
-          modelo: string | null
           nombre_completo: string
-          placa_vehiculo: string | null
           telefono: string | null
         }
         Insert: {
-          anio?: string | null
-          color?: string | null
           created_at?: string | null
           direccion?: string | null
           email?: string | null
           id?: string
           identificacion: string
-          marca?: string | null
-          modelo?: string | null
           nombre_completo: string
-          placa_vehiculo?: string | null
           telefono?: string | null
         }
         Update: {
-          anio?: string | null
-          color?: string | null
           created_at?: string | null
           direccion?: string | null
           email?: string | null
           id?: string
           identificacion?: string
-          marca?: string | null
-          modelo?: string | null
           nombre_completo?: string
-          placa_vehiculo?: string | null
           telefono?: string | null
         }
         Relationships: []
@@ -481,17 +466,13 @@ export type Database = {
           fecha_nota_venta: string | null
           id: string
           identificacion_cliente: string
-          imei: string
           instalador: string | null
           instalador_id: string | null
-          metodo_pago: string | null
-          modelo: string | null
           nombre_concesionaria: string | null
           nota_venta: string | null
           pagado: boolean | null
           plazo_credito: number | null
           precio_venta: number | null
-          proveedor: string | null
           registrado_por: string | null
           sim_id: string | null
           tipo_dispositivo: string | null
@@ -514,17 +495,13 @@ export type Database = {
           fecha_nota_venta?: string | null
           id?: string
           identificacion_cliente: string
-          imei: string
           instalador?: string | null
           instalador_id?: string | null
-          metodo_pago?: string | null
-          modelo?: string | null
           nombre_concesionaria?: string | null
           nota_venta?: string | null
           pagado?: boolean | null
           plazo_credito?: number | null
           precio_venta?: number | null
-          proveedor?: string | null
           registrado_por?: string | null
           sim_id?: string | null
           tipo_dispositivo?: string | null
@@ -547,17 +524,13 @@ export type Database = {
           fecha_nota_venta?: string | null
           id?: string
           identificacion_cliente?: string
-          imei?: string
           instalador?: string | null
           instalador_id?: string | null
-          metodo_pago?: string | null
-          modelo?: string | null
           nombre_concesionaria?: string | null
           nota_venta?: string | null
           pagado?: boolean | null
           plazo_credito?: number | null
           precio_venta?: number | null
-          proveedor?: string | null
           registrado_por?: string | null
           sim_id?: string | null
           tipo_dispositivo?: string | null
@@ -2480,67 +2453,160 @@ export type Database = {
           },
         ]
       }
+      vehiculos: {
+        Row: {
+          anio: string | null
+          cliente_id: string
+          color: string | null
+          created_at: string | null
+          id: string
+          marca: string | null
+          modelo: string | null
+          placa: string
+        }
+        Insert: {
+          anio?: string | null
+          cliente_id: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          placa: string
+        }
+        Update: {
+          anio?: string | null
+          cliente_id?: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          placa?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehiculos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes_externos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ventas_rastreador: {
         Row: {
           abono_inicial: number | null
           asesor_id: string | null
+          cliente_id: string | null
+          concesionaria_id: string | null
+          costo_instalacion: number | null
           created_at: string | null
-          dispositivo_id: string
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
-          "fecha_de entrega": string | null
+          es_venta_externa: boolean | null
+          fecha_entrega: string | null
+          fecha_instalacion: string | null
+          gps_id: string | null
           id: string
+          instalador_id: string | null
           metodo_pago:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          nota_venta: string | null
           numero_cuotas: number | null
           observacion: string | null
           precio_total: number
           tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado: number | null
           url_comprobante_pago: string | null
+          vehiculo_id: string | null
         }
         Insert: {
           abono_inicial?: number | null
           asesor_id?: string | null
+          cliente_id?: string | null
+          concesionaria_id?: string | null
+          costo_instalacion?: number | null
           created_at?: string | null
-          dispositivo_id: string
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
-          "fecha_de entrega"?: string | null
+          es_venta_externa?: boolean | null
+          fecha_entrega?: string | null
+          fecha_instalacion?: string | null
+          gps_id?: string | null
           id?: string
+          instalador_id?: string | null
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          nota_venta?: string | null
           numero_cuotas?: number | null
           observacion?: string | null
           precio_total: number
           tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado?: number | null
           url_comprobante_pago?: string | null
+          vehiculo_id?: string | null
         }
         Update: {
           abono_inicial?: number | null
           asesor_id?: string | null
+          cliente_id?: string | null
+          concesionaria_id?: string | null
+          costo_instalacion?: number | null
           created_at?: string | null
-          dispositivo_id?: string
           entorno?: Database["public"]["Enums"]["entorno_venta_enum"]
-          "fecha_de entrega"?: string | null
+          es_venta_externa?: boolean | null
+          fecha_entrega?: string | null
+          fecha_instalacion?: string | null
+          gps_id?: string | null
           id?: string
+          instalador_id?: string | null
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          nota_venta?: string | null
           numero_cuotas?: number | null
           observacion?: string | null
           precio_total?: number
           tipo_pago?: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado?: number | null
           url_comprobante_pago?: string | null
+          vehiculo_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_venta_dispositivo"
-            columns: ["dispositivo_id"]
+            foreignKeyName: "fk_venta_cliente"
+            columns: ["cliente_id"]
             isOneToOne: false
-            referencedRelation: "dispositivos_rastreo"
+            referencedRelation: "clientes_externos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_venta_concesionaria"
+            columns: ["concesionaria_id"]
+            isOneToOne: false
+            referencedRelation: "concesionarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_venta_gps"
+            columns: ["gps_id"]
+            isOneToOne: true
+            referencedRelation: "gps_inventario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_venta_instalador"
+            columns: ["instalador_id"]
+            isOneToOne: false
+            referencedRelation: "gps_instaladores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_venta_vehiculo"
+            columns: ["vehiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vehiculos"
             referencedColumns: ["id"]
           },
           {
