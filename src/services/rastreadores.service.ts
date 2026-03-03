@@ -28,6 +28,7 @@ import {
     actualizarEstadoGPS,
     actualizarVinculacionGPS,
     getGPSPorCliente,
+    getGPSPorClienteId,
     getGPSPorVenta,
     obtenerVentasConGPS
 } from './rastreadores/vinculacion.service';
@@ -62,6 +63,7 @@ export const rastreadoresService = {
     insertarSIM,
     getGPSPorVenta,
     getGPSPorCliente,
+    getGPSPorClienteId,
     actualizarVinculacionGPS,
     obtenerVentasConGPS,
     actualizarEstadoGPS

@@ -330,13 +330,14 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 }
 
                 if (stockItem) {
-                    await supabase
+                    const { error: updateError } = await supabase
                         .from('gps_inventario')
-                        .update({
-                            estado: 'VENDIDO',
-                            ubicacion: `CLIENTE: ${identificacionCliente}`
-                        })
+                        .update({ estado: 'VENDIDO' })
                         .eq('id', stockItem.id);
+                    if (updateError) {
+                        console.error('Error actualizando estado GPS a VENDIDO:', updateError);
+                        toast.error('Venta registrada pero no se pudo actualizar estado del dispositivo en bodega.');
+                    }
                 }
 
                 const precioTotal = seleccionado!.totalRastreador;

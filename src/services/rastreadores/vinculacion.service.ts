@@ -2,10 +2,14 @@ import { limpiarTexto } from '@/utils/rastreo-format';
 import { supabase } from './supabaseClient';
 
 /**
- * Obtiene ventas (y sus GPS) por nota_venta. Fuente: ventas_rastreador + gps_inventario.
+ * Obtiene ventas (y sus GPS) por nota_venta. Misma forma que getGPSPorCliente para HistorialGPS.
+ * Fuente: ventas_rastreador + gps_inventario (contratos AUTO/Oracle).
  */
 export async function getGPSPorVenta(notaVenta: string) {
     try {
+        const nota = limpiarTexto(notaVenta);
+        if (!nota) return [];
+
         const { data, error } = await supabase
             .from('ventas_rastreador')
             .select(`
@@ -16,31 +20,93 @@ export async function getGPSPorVenta(notaVenta: string) {
                 gps_id,
                 instalador_id,
                 costo_instalacion,
-                gps_inventario:gps_inventario(*)
+                fecha_entrega,
+                asesor_id,
+                observacion,
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
+                gps_instaladores:gps_instaladores(*)
             `)
-            .eq('nota_venta', limpiarTexto(notaVenta));
+            .eq('nota_venta', nota)
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error obteniendo GPS por venta:", error);
             return [];
         }
-
-        return (data || []).map((v: any) => ({
-            id: v.gps_inventario?.id ?? v.gps_id,
-            nota_venta: v.nota_venta,
-            precio_venta: v.precio_total,
-            created_at: v.created_at,
-            imei: v.gps_inventario?.imei,
-            estado: v.gps_inventario?.estado,
-            costo_compra: v.gps_inventario?.costo_compra,
-            instalador_id: v.instalador_id,
-            costo_instalacion: v.costo_instalacion,
-            gps_inventario: v.gps_inventario
-        }));
+        return mapVentasToHistorial(data || []);
     } catch (err) {
         console.error("Error critico en getGPSPorVenta:", err);
         return [];
     }
+}
+
+/**
+ * Obtiene ventas del cliente externo por cliente_id (relación directa). No depende de cédula/RUC.
+ * Usar para venta externa cuando tenemos clienteExternoId.
+ */
+export async function getGPSPorClienteId(clienteId: string) {
+    try {
+        const id = limpiarTexto(clienteId);
+        if (!id) return [];
+        const { data, error } = await supabase
+            .from('ventas_rastreador')
+            .select(`
+                id,
+                nota_venta,
+                precio_total,
+                created_at,
+                gps_id,
+                instalador_id,
+                costo_instalacion,
+                fecha_entrega,
+                asesor_id,
+                observacion,
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
+                gps_instaladores:gps_instaladores(*)
+            `)
+            .eq('cliente_id', id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error obteniendo GPS por cliente_id:", error);
+            return [];
+        }
+        return mapVentasToHistorial(data || []);
+    } catch (err) {
+        console.error("Error critico en getGPSPorClienteId:", err);
+        return [];
+    }
+}
+
+function mapVentasToHistorial(data: any[]) {
+    return data.map((v: any) => {
+        const gps = v.gps_inventario;
+        const modeloGps = gps?.modelo;
+        const modeloRaw = Array.isArray(modeloGps) ? modeloGps[0] : modeloGps;
+        const modeloNombre = modeloRaw?.marca ?? gps?.serie ?? null;
+        const prov = modeloRaw?.gps_proveedores ?? modeloRaw?.proveedor;
+        const proveedorObj = Array.isArray(prov) ? prov[0] : prov;
+        return {
+            id: gps?.id ?? v.gps_id,
+            venta_id: v.id,
+            nota_venta: v.nota_venta,
+            precio_venta: v.precio_total,
+            precio_total: v.precio_total,
+            created_at: v.created_at,
+            fecha_entrega: v.fecha_entrega ?? null,
+            asesor_id: v.asesor_id ?? null,
+            imei: gps?.imei,
+            estado: gps?.estado,
+            modelo: modeloNombre,
+            costo_compra: gps?.costo_compra,
+            instalador_id: v.instalador_id,
+            costo_instalacion: v.costo_instalacion,
+            gps_instaladores: v.gps_instaladores,
+            gps_sims: null,
+            proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
+            observacion: v.observacion ?? null
+        };
+    });
 }
 
 /**
@@ -80,36 +146,7 @@ export async function getGPSPorCliente(identificacionCliente: string) {
             console.error("Error obteniendo GPS por cliente:", error);
             return [];
         }
-
-        return (data || []).map((v: any) => {
-            const gps = v.gps_inventario;
-            const modeloGps = gps?.modelo;
-            const modeloRaw = Array.isArray(modeloGps) ? modeloGps[0] : modeloGps;
-            const modeloNombre = modeloRaw?.marca ?? gps?.serie ?? null;
-            // Proveedor viene de la relación del modelo: gps_modelos.provedor_id → gps_proveedores
-            const prov = modeloRaw?.gps_proveedores ?? modeloRaw?.proveedor;
-            const proveedorObj = Array.isArray(prov) ? prov[0] : prov;
-            return {
-                id: gps?.id ?? v.gps_id,
-                venta_id: v.id,
-                nota_venta: v.nota_venta,
-                precio_venta: v.precio_total,
-                precio_total: v.precio_total,
-                created_at: v.created_at,
-                fecha_entrega: v.fecha_entrega ?? null,
-                asesor_id: v.asesor_id ?? null,
-                imei: gps?.imei,
-                estado: gps?.estado,
-                modelo: modeloNombre,
-                costo_compra: gps?.costo_compra,
-                instalador_id: v.instalador_id,
-                costo_instalacion: v.costo_instalacion,
-                gps_instaladores: v.gps_instaladores,
-                gps_sims: null,
-                proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
-                observacion: v.observacion ?? null
-            };
-        });
+        return mapVentasToHistorial(data || []);
     } catch (err) {
         console.error("Error critico en getGPSPorCliente:", err);
         return [];

@@ -90,10 +90,7 @@ export async function registrarVentaExterna(
         if (stockId) {
             const { error: stockError } = await supabase
                 .from('gps_inventario')
-                .update({
-                    estado: 'VENDIDO',
-                    ubicacion: `CLIENTE: ${identificacionLimpia}`
-                })
+                .update({ estado: 'VENDIDO' })
                 .eq('id', stockId);
             if (stockError) return { success: false, error: stockError.message };
             return { success: true, data: { gps_id: stockId, cliente_id: clienteData.id } };
@@ -135,8 +132,7 @@ export async function registrarVentaExterna(
                 .insert({
                     imei: limpiarTexto(gpsPayload.imei).toUpperCase(),
                     costo_compra: Number(gpsPayload.costo_compra),
-                    estado: 'VENDIDO',
-                    ubicacion: `CLIENTE: ${identificacionLimpia}`
+                    estado: 'VENDIDO'
                 })
                 .select('id')
                 .single();
@@ -251,13 +247,11 @@ async function crearVentaRastreadorCompleta(params: CrearVentaCompletaParams) {
     }
 
     if (actualizarStockId) {
-        await supabase
+        const { error: stockErr } = await supabase
             .from('gps_inventario')
-            .update({
-                estado: 'VENDIDO',
-                ubicacion: `CLIENTE: ${params.identificacion_cliente}`
-            })
+            .update({ estado: 'VENDIDO' })
             .eq('id', actualizarStockId);
+        if (stockErr) return { success: false, error: stockErr.message };
     }
 
     return { success: true, data: { id: ventaData.id, gps_id, cliente_id } };

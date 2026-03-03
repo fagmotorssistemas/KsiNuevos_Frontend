@@ -53,8 +53,7 @@ export async function crearGpsEnInventario(payload: { imei: string; costo_compra
         .insert({
             imei,
             costo_compra: Number(payload.costo_compra),
-            estado: 'VENDIDO',
-            ubicacion: 'CLIENTE'
+            estado: 'VENDIDO'
         })
         .select('id')
         .single();

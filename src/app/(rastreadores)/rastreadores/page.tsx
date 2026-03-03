@@ -72,27 +72,66 @@ export default function RastreoPage() {
         cargarContratos();
     };
 
-    // Cargar historial del cliente cuando estamos en vista formulario con cliente seleccionado (solo historial)
+    // Cargar historial: venta EXTERNA por cliente_id (no depende de cédula) o por ruc; AUTO por nota_venta
     useEffect(() => {
-        if (vista !== 'FORMULARIO' || !seleccionado?.ruc || showNuevoDispositivoForm) {
+        if (vista !== 'FORMULARIO' || !seleccionado || showNuevoDispositivoForm) {
             setHistorialCliente([]);
             setFechaEntrega('');
             setAsesorId(null);
             return;
         }
-        setLoadingHistorial(true);
-        rastreadoresService.getGPSPorCliente(seleccionado.ruc)
-            .then((gps) => {
-                setHistorialCliente(gps || []);
-                const primeraVenta = gps?.[0];
-                if (primeraVenta) {
-                    setFechaEntrega(primeraVenta.fecha_entrega ?? '');
-                    setAsesorId(primeraVenta.asesor_id ?? null);
-                }
-            })
-            .catch(() => setHistorialCliente([]))
-            .finally(() => setLoadingHistorial(false));
-    }, [vista, seleccionado?.ruc, showNuevoDispositivoForm]);
+        const esExterno = seleccionado.origen === 'EXTERNO';
+        const esAuto = seleccionado.origen === 'AUTO';
+        // Venta externa: priorizar cliente_id (relación cliente-venta) para que funcione aunque no tenga cédula
+        if (esExterno && seleccionado.clienteExternoId) {
+            setLoadingHistorial(true);
+            rastreadoresService.getGPSPorClienteId(seleccionado.clienteExternoId)
+                .then((gps) => {
+                    setHistorialCliente(gps || []);
+                    const primeraVenta = gps?.[0];
+                    if (primeraVenta) {
+                        setFechaEntrega(primeraVenta.fecha_entrega ?? '');
+                        setAsesorId(primeraVenta.asesor_id ?? null);
+                    }
+                })
+                .catch(() => setHistorialCliente([]))
+                .finally(() => setLoadingHistorial(false));
+            return;
+        }
+        if (esExterno && seleccionado.ruc?.trim()) {
+            setLoadingHistorial(true);
+            rastreadoresService.getGPSPorCliente(seleccionado.ruc)
+                .then((gps) => {
+                    setHistorialCliente(gps || []);
+                    const primeraVenta = gps?.[0];
+                    if (primeraVenta) {
+                        setFechaEntrega(primeraVenta.fecha_entrega ?? '');
+                        setAsesorId(primeraVenta.asesor_id ?? null);
+                    }
+                })
+                .catch(() => setHistorialCliente([]))
+                .finally(() => setLoadingHistorial(false));
+            return;
+        }
+        if (esAuto && seleccionado.notaVenta?.trim()) {
+            setLoadingHistorial(true);
+            rastreadoresService.getGPSPorVenta(seleccionado.notaVenta)
+                .then((gps) => {
+                    setHistorialCliente(gps || []);
+                    const primeraVenta = gps?.[0];
+                    if (primeraVenta) {
+                        setFechaEntrega(primeraVenta.fecha_entrega ?? '');
+                        setAsesorId(primeraVenta.asesor_id ?? null);
+                    }
+                })
+                .catch(() => setHistorialCliente([]))
+                .finally(() => setLoadingHistorial(false));
+            return;
+        }
+        setHistorialCliente([]);
+        setFechaEntrega('');
+        setAsesorId(null);
+    }, [vista, seleccionado, showNuevoDispositivoForm]);
 
     return (
         <div className="flex min-h-screen bg-slate-50">
