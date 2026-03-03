@@ -107,13 +107,23 @@ export async function registrarVentaExterna(
         direccion: limpiarTexto(cliente.direccion) ?? null
     };
 
-    const { data: existingCliente, error: existingError } = await supabase
-        .from('clientes_externos')
-        .select('id')
-        .eq('identificacion', identificacionLimpia)
-        .maybeSingle();
+    // Si la identificación está vacía, es "000" o muy corta, NO buscar cliente existente:
+    // siempre crear uno nuevo para no unir ventas de personas distintas bajo el mismo cliente.
+    const identificacionNoConfiable =
+        identificacionLimpia.length === 0 ||
+        /^0+$/.test(identificacionLimpia) ||
+        identificacionLimpia.length < 6;
 
-    if (existingError) return { success: false, error: existingError.message };
+    let existingCliente: { id: string } | null = null;
+    if (!identificacionNoConfiable) {
+        const { data, error: existingError } = await supabase
+            .from('clientes_externos')
+            .select('id')
+            .eq('identificacion', identificacionLimpia)
+            .maybeSingle();
+        if (existingError) return { success: false, error: existingError.message };
+        existingCliente = data;
+    }
 
     const { data: clienteInserted, error: clienteError } = existingCliente?.id
         ? await supabase.from('clientes_externos').update(clientePayload).eq('id', existingCliente.id).select().single()
@@ -157,10 +167,7 @@ export async function registrarVentaExterna(
     if (stockId) {
         const { error: stockError } = await supabase
             .from('gps_inventario')
-            .update({
-                estado: 'VENDIDO',
-                ubicacion: `CLIENTE: ${identificacionLimpia}`
-            })
+            .update({ estado: 'VENDIDO' })
             .eq('id', stockId);
         if (stockError) return { success: false, error: stockError.message };
     }
