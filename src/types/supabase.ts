@@ -448,125 +448,6 @@ export type Database = {
           },
         ]
       }
-      dispositivos_rastreo: {
-        Row: {
-          cliente_externo_id: string | null
-          cliente_final_identificacion: string | null
-          cliente_final_nombre: string | null
-          cliente_final_telefono: string | null
-          cliente_nombre: string | null
-          concesionaria_id: string | null
-          costo_compra: number | null
-          costo_instalacion: number | null
-          created_at: string | null
-          es_concesionaria: boolean | null
-          es_venta_externa: boolean | null
-          estado: Database["public"]["Enums"]["estado_dispositivo_enum"]
-          evidencias: string[] | null
-          fecha_nota_venta: string | null
-          id: string
-          identificacion_cliente: string
-          instalador: string | null
-          instalador_id: string | null
-          nombre_concesionaria: string | null
-          nota_venta: string | null
-          pagado: boolean | null
-          plazo_credito: number | null
-          precio_venta: number | null
-          registrado_por: string | null
-          sim_id: string | null
-          tipo_dispositivo: string | null
-          tipo_pago: string | null
-        }
-        Insert: {
-          cliente_externo_id?: string | null
-          cliente_final_identificacion?: string | null
-          cliente_final_nombre?: string | null
-          cliente_final_telefono?: string | null
-          cliente_nombre?: string | null
-          concesionaria_id?: string | null
-          costo_compra?: number | null
-          costo_instalacion?: number | null
-          created_at?: string | null
-          es_concesionaria?: boolean | null
-          es_venta_externa?: boolean | null
-          estado?: Database["public"]["Enums"]["estado_dispositivo_enum"]
-          evidencias?: string[] | null
-          fecha_nota_venta?: string | null
-          id?: string
-          identificacion_cliente: string
-          instalador?: string | null
-          instalador_id?: string | null
-          nombre_concesionaria?: string | null
-          nota_venta?: string | null
-          pagado?: boolean | null
-          plazo_credito?: number | null
-          precio_venta?: number | null
-          registrado_por?: string | null
-          sim_id?: string | null
-          tipo_dispositivo?: string | null
-          tipo_pago?: string | null
-        }
-        Update: {
-          cliente_externo_id?: string | null
-          cliente_final_identificacion?: string | null
-          cliente_final_nombre?: string | null
-          cliente_final_telefono?: string | null
-          cliente_nombre?: string | null
-          concesionaria_id?: string | null
-          costo_compra?: number | null
-          costo_instalacion?: number | null
-          created_at?: string | null
-          es_concesionaria?: boolean | null
-          es_venta_externa?: boolean | null
-          estado?: Database["public"]["Enums"]["estado_dispositivo_enum"]
-          evidencias?: string[] | null
-          fecha_nota_venta?: string | null
-          id?: string
-          identificacion_cliente?: string
-          instalador?: string | null
-          instalador_id?: string | null
-          nombre_concesionaria?: string | null
-          nota_venta?: string | null
-          pagado?: boolean | null
-          plazo_credito?: number | null
-          precio_venta?: number | null
-          registrado_por?: string | null
-          sim_id?: string | null
-          tipo_dispositivo?: string | null
-          tipo_pago?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "dispositivos_rastreo_cliente_externo_id_fkey"
-            columns: ["cliente_externo_id"]
-            isOneToOne: false
-            referencedRelation: "clientes_externos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispositivos_rastreo_instalador_id_fkey"
-            columns: ["instalador_id"]
-            isOneToOne: false
-            referencedRelation: "gps_instaladores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dispositivos_rastreo_sim_id_fkey"
-            columns: ["sim_id"]
-            isOneToOne: false
-            referencedRelation: "gps_sims"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_dispositivo_concesionaria"
-            columns: ["concesionaria_id"]
-            isOneToOne: false
-            referencedRelation: "concesionarias"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       gps_instaladores: {
         Row: {
           activo: boolean
@@ -607,7 +488,6 @@ export type Database = {
           modelo_id: string | null
           proveedor_id: string | null
           serie: string | null
-          ubicacion: string | null
         }
         Insert: {
           costo_compra: number
@@ -621,7 +501,6 @@ export type Database = {
           modelo_id?: string | null
           proveedor_id?: string | null
           serie?: string | null
-          ubicacion?: string | null
         }
         Update: {
           costo_compra?: number
@@ -635,7 +514,6 @@ export type Database = {
           modelo_id?: string | null
           proveedor_id?: string | null
           serie?: string | null
-          ubicacion?: string | null
         }
         Relationships: [
           {
@@ -2463,6 +2341,7 @@ export type Database = {
           marca: string | null
           modelo: string | null
           placa: string
+          trasmision: string | null
         }
         Insert: {
           anio?: string | null
@@ -2473,6 +2352,7 @@ export type Database = {
           marca?: string | null
           modelo?: string | null
           placa: string
+          trasmision?: string | null
         }
         Update: {
           anio?: string | null
@@ -2483,6 +2363,7 @@ export type Database = {
           marca?: string | null
           modelo?: string | null
           placa?: string
+          trasmision?: string | null
         }
         Relationships: [
           {

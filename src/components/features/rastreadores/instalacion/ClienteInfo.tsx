@@ -338,7 +338,7 @@ export function ClienteInfo({
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3">Datos personales</p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Identificación (RUC/Cédula)</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Identificación (RUC/Cédula) <span className="text-slate-400 font-normal normal-case">(opcional)</span></label>
                                             <input
                                                 type="text"
                                                 className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500 focus:border-rose-300 outline-none transition-colors"

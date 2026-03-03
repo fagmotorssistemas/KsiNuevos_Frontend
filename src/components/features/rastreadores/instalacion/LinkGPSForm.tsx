@@ -108,18 +108,37 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
     const [archivosNuevos, setArchivosNuevos] = useState<File[]>([]);
     const [evidenciasGuardadas, setEvidenciasGuardadas] = useState<string[]>([]);
 
-    // Cargar historial GPS
+    // Cargar historial GPS solo cuando hay identificación con al menos un dígito (no buscar si está vacío)
     useEffect(() => {
         const cargarHistorial = async () => {
-            if (!seleccionado && !newClient.identificacion) return;
-
+            if (seleccionado) {
+                const iden = (seleccionado.ruc || "").trim();
+                if (!iden) {
+                    setHistorialGps([]);
+                    return;
+                }
+                setLoadingHistorial(true);
+                try {
+                    const gps = await rastreadoresService.getGPSPorCliente(iden);
+                    setHistorialGps(gps || []);
+                } catch (err) {
+                    console.error("Error cargando historial GPS:", err);
+                    setHistorialGps([]);
+                } finally {
+                    setLoadingHistorial(false);
+                }
+                return;
+            }
+            // Modo nuevo cliente: solo buscar si ingresó algo (al menos un carácter no blanco)
+            const iden = (newClient.identificacion || "").trim();
+            if (iden.length === 0) {
+                setHistorialGps([]);
+                return;
+            }
             setLoadingHistorial(true);
             try {
-                const identificacion = seleccionado?.ruc || newClient.identificacion;
-                if (identificacion) {
-                    const gps = await rastreadoresService.getGPSPorCliente(identificacion);
-                    setHistorialGps(gps || []);
-                }
+                const gps = await rastreadoresService.getGPSPorCliente(iden);
+                setHistorialGps(gps || []);
             } catch (err) {
                 console.error("Error cargando historial GPS:", err);
                 setHistorialGps([]);
@@ -192,8 +211,8 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
 
         if (isExternal) {
             if (tipoCompradorExterno === "PERSONA") {
-                if (!newClient.nombre || !newClient.identificacion || !newClient.placa) {
-                    return toast.error("Complete nombre, identificación y placa del cliente");
+                if (!newClient.nombre?.trim() || !newClient.placa?.trim()) {
+                    return toast.error("Complete nombre y placa del cliente");
                 }
             } else {
                 const tieneConcesionaria = concesionariaId || (concesionariaForm.nombre?.trim() && concesionariaForm.ruc?.trim());
