@@ -9,7 +9,7 @@ export interface Asesor {
 }
 
 /**
- * Lista de asesores (profiles con rol vendedor o admin) para selector "Asesor que vendió".
+ * Lista de asesores (profiles con rol vendedor, admin o finanzas) para selector "Asesor que vendió".
  */
 export function useAsesores() {
     const { supabase } = useAuth();
@@ -23,7 +23,7 @@ export function useAsesores() {
                     .from("profiles")
                     .select("id, full_name")
                     .eq("status", "activo")
-                    .in("role", ["vendedor", "admin"])
+                    .in("role", ["vendedor", "admin", "finanzas"])
                     .order("full_name");
 
                 if (error) {
