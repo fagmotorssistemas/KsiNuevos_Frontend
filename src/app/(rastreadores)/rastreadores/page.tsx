@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BarChart3, Wrench } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { toast } from "sonner"; 
 
 // Servicios y Tipos
@@ -112,10 +112,7 @@ export default function RastreoPage() {
                     )}
                     {/* VISTA 4: Instaladores */}
                     {vista === 'INSTALACION' && (
-                        <div className="flex flex-col items-center justify-center h-[60vh] text-center opacity-50">
-                            <div className="p-6 bg-slate-100 rounded-full mb-4">
-                                <Wrench size={48} className="text-slate-400"/>
-                            </div>
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <InstaladoresView />
                         </div>
                     )}

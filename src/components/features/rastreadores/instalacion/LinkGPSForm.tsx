@@ -410,18 +410,6 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                     />
                 )}
 
-                {/* ✨ Solo en Nueva Venta a Tercero: contado/crédito, meses, método de pago y comprobante */}
-                {isExternal && (
-                    <PagoRastreadorExternoModule
-                        totalRastreador={form.precioVenta}
-                        onPagoChange={setPagoRastreador}
-                        metodoPago={metodoPagoRastreador}
-                        comprobanteFile={comprobantePagoRastreadorFile}
-                        onMetodoPagoChange={setMetodoPagoRastreador}
-                        onComprobantePagoChange={setComprobantePagoRastreadorFile}
-                    />
-                )}
-
                 {/* Dispositivo e instalación */}
                 <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative">
                     <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2 border-l-4 border-l-[#E11D48]">
@@ -492,14 +480,25 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                             />
                         </div>
                     </div>
-
-                    <div className="p-6 bg-slate-50 border-t border-slate-200">
+                    
+                </div>
+                {/* ✨ Solo en Nueva Venta a Tercero: contado/crédito, meses, método de pago y comprobante */}
+                {isExternal && (
+                    <PagoRastreadorExternoModule
+                        totalRastreador={form.precioVenta}
+                        onPagoChange={setPagoRastreador}
+                        metodoPago={metodoPagoRastreador}
+                        comprobanteFile={comprobantePagoRastreadorFile}
+                        onMetodoPagoChange={setMetodoPagoRastreador}
+                        onComprobantePagoChange={setComprobantePagoRastreadorFile}
+                    />
+                )}
+                <div className="p-6 bg-slate-50 border-t border-slate-200">
                         <button onClick={handleGuardar} disabled={formLoading} className="w-full py-4 bg-[#E11D48] hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
                             {formLoading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                             {isExternal ? 'REGISTRAR VENTA Y VINCULAR' : 'CONFIRMAR VINCULACIÓN'}
                         </button>
                     </div>
-                </div>
             </div>
         </div>
     );

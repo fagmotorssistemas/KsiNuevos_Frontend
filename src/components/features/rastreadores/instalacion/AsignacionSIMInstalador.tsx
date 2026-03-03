@@ -33,29 +33,6 @@ export function AsignacionSIMInstalador({
 }: AsignacionSIMInstaladorProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-            {/* Selección de SIM */}
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <Smartphone size={12} /> Tarjeta SIM
-                </label>
-                <select
-                    value={simId}
-                    onChange={e => onSimChange(e.target.value)}
-                    className="w-full p-3 rounded-xl text-sm font-bold outline-none border bg-slate-50 text-slate-900 border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-rose-300"
-                >
-                    <option value="">Sin SIM asignada</option>
-                    {sims.filter(s => s.estado === 'STOCK').map(sim => (
-                        <option key={sim.id} value={sim.id}>
-                            {sim.numero || sim.iccid} - {sim.operadora} (${sim.costo_mensual}/mes)
-                        </option>
-                    ))}
-                </select>
-                {simId && (
-                    <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                        <CheckCircle2 size={10} /> SIM seleccionada
-                    </p>
-                )}
-            </div>
 
             {/* Selección de Instalador y Costo */}
             <div className="grid grid-cols-3 gap-3">
