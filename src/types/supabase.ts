@@ -2493,6 +2493,7 @@ export type Database = {
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
           numero_cuotas: number | null
+          observacion: string | null
           precio_total: number
           tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado: number | null
@@ -2510,6 +2511,7 @@ export type Database = {
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
           numero_cuotas?: number | null
+          observacion?: string | null
           precio_total: number
           tipo_pago: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado?: number | null
@@ -2527,6 +2529,7 @@ export type Database = {
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
           numero_cuotas?: number | null
+          observacion?: string | null
           precio_total?: number
           tipo_pago?: Database["public"]["Enums"]["tipo_pago_enum"]
           total_financiado?: number | null

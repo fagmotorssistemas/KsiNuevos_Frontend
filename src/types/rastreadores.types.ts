@@ -236,6 +236,8 @@ export interface VentaRastreadorPayload {
     fecha_entrega?: string | null;
     /** ID del asesor que vendió (profiles con rol vendedor o admin) */
     asesor_id?: string | null;
+    /** Observación de la venta/instalación (ej: SE INSTALA SIN NOVEDAD, vehículo, placas, notas) */
+    observacion?: string | null;
 }
 
 export interface CuotaRastreadorPayload {

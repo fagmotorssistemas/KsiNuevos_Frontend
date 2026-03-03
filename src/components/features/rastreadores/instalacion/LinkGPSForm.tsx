@@ -79,9 +79,10 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
     const [concesionariaForm, setConcesionariaForm] = useState<ConcesionariaPayload>(emptyConcesionariaForm);
     const [clienteFinal, setClienteFinal] = useState<ClienteFinalPayload>(emptyClienteFinal);
 
-    // Fecha de entrega y asesor que vendió (ventas_rastreador)
+    // Fecha de entrega, asesor y observación (ventas_rastreador)
     const [fechaEntrega, setFechaEntrega] = useState("");
     const [asesorId, setAsesorId] = useState<string | null>(null);
+    const [observacion, setObservacion] = useState("");
 
     const [form, setForm] = useState({
         imei: '',
@@ -311,7 +312,8 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                                 metodo_pago: pagoRastreador.metodo_pago_medio ?? metodoPagoRastreador,
                                 url_comprobante_pago: urlComprobante,
                                 fecha_entrega: fechaEntrega || null,
-                                asesor_id: asesorId || null
+                                asesor_id: asesorId || null,
+                                observacion: observacion.trim() || null
                             },
                             cuotasData
                         );
@@ -475,6 +477,20 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess }: LinkGPSFormPr
                             onRemoveGuardada={(idx) => setEvidenciasGuardadas(p => p.filter((_, i) => i !== idx))}
                             onRemoveNueva={(idx) => setArchivosNuevos(p => p.filter((_, i) => i !== idx))}
                         />
+
+                        {/* Observación (ventas_rastreador.observacion) */}
+                        <div>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">
+                                Observación
+                            </label>
+                            <textarea
+                                value={observacion}
+                                onChange={(e) => setObservacion(e.target.value)}
+                                placeholder="Ej: Se instaló sin novedad."
+                                rows={3}
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-[#E11D48]/30 focus:border-[#E11D48] outline-none resize-y"
+                            />
+                        </div>
                     </div>
 
                     <div className="p-6 bg-slate-50 border-t border-slate-200">
