@@ -373,18 +373,14 @@ export function InventarioTabs() {
                                                     {item.modelo?.costo_referencia != null ? `$${item.modelo.costo_referencia}` : (item.costo_compra != null ? `$${item.costo_compra}` : '—')}
                                                 </td>
                                                 <td className="px-5 py-3 text-center">
-                                                    {item.estado === 'STOCK' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setEditingItem(item)}
-                                                            className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                            title="Editar"
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-slate-300 text-xs">—</span>
-                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditingItem(item)}
+                                                        className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                        title="Editar"
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         )) : (
