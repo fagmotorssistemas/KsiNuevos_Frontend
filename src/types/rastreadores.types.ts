@@ -241,6 +241,8 @@ export interface VentaRastreadorPayload {
     asesor_id?: string | null;
     /** Observación de la venta/instalación (ej: SE INSTALA SIN NOVEDAD, vehículo, placas, notas) */
     observacion?: string | null;
+    /** Nota de venta del contrato (Oracle/KSI Nuevos), para identificar historial por ventas_rastreador.nota_venta */
+    nota_venta?: string | null;
 }
 
 export interface CuotaRastreadorPayload {
