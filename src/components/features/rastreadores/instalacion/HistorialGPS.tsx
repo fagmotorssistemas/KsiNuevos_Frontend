@@ -85,11 +85,17 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                             <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Precio venta</span>
                                             <span className="block text-base font-semibold text-slate-800">${Number(gps.precio_venta || 0).toLocaleString('es-EC')}</span>
                                         </div>
-                                        {gps.sim_id && gps.gps_sims && (
-                                            <div className="sm:col-span-2">
-                                                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Chip / SIM</span>
-                                                <span className="block text-sm font-semibold text-slate-700">{gps.gps_sims.numero || gps.gps_sims.iccid}</span>
-                                            </div>
+                                        {gps.gps_sims && (
+                                            <>
+                                                <div>
+                                                    <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">ICCID</span>
+                                                    <span className="block text-sm font-mono font-semibold text-slate-800">{gps.gps_sims.iccid ?? '—'}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">IMSI</span>
+                                                    <span className="block text-sm font-mono font-semibold text-slate-800">{gps.gps_sims.imsi ?? '—'}</span>
+                                                </div>
+                                            </>
                                         )}
                                         {gps.instalador_id && gps.gps_instaladores && (
                                             <div className="sm:col-span-2">

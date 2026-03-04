@@ -23,7 +23,7 @@ export async function getGPSPorVenta(notaVenta: string) {
                 fecha_entrega,
                 asesor_id,
                 observacion,
-                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
             .eq('nota_venta', nota)
@@ -61,7 +61,7 @@ export async function getGPSPorClienteId(clienteId: string) {
                 fecha_entrega,
                 asesor_id,
                 observacion,
-                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
             .eq('cliente_id', id)
@@ -86,6 +86,8 @@ function mapVentasToHistorial(data: any[]) {
         const modeloNombre = modeloRaw?.marca ?? gps?.serie ?? null;
         const prov = modeloRaw?.gps_proveedores ?? modeloRaw?.proveedor;
         const proveedorObj = Array.isArray(prov) ? prov[0] : prov;
+        const sims = gps?.gps_sims;
+        const sim = Array.isArray(sims) ? sims[0] : sims;
         return {
             id: gps?.id ?? v.gps_id,
             venta_id: v.id,
@@ -102,7 +104,7 @@ function mapVentasToHistorial(data: any[]) {
             instalador_id: v.instalador_id,
             costo_instalacion: v.costo_instalacion,
             gps_instaladores: v.gps_instaladores,
-            gps_sims: null,
+            gps_sims: sim ? { iccid: sim.iccid, imsi: sim.imsi ?? null } : null,
             proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
             observacion: v.observacion ?? null
         };
@@ -136,7 +138,7 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 fecha_entrega,
                 asesor_id,
                 observacion,
-                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre))),
+                gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
             .in('cliente_id', clienteIds)
