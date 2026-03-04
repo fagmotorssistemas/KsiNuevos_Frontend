@@ -26,7 +26,8 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
                 cliente_id,
                 concesionaria_id,
                 cliente_externo:clientes_externos(nombre_completo, identificacion),
-                vehiculo:vehiculos(placa, marca, modelo, anio, color)
+                vehiculo:vehiculos(placa, marca, modelo, anio, color),
+                concesionaria:concesionarias(nombre)
             `)
             .eq('es_venta_externa', true)
             .order('created_at', { ascending: false });
@@ -63,6 +64,8 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
         const listaExternos: ContratoGPS[] = (dbResponse.data || []).map((item: any) => {
             const veh = Array.isArray(item.vehiculo) ? item.vehiculo[0] : item.vehiculo;
             const cliente = Array.isArray(item.cliente_externo) ? item.cliente_externo[0] : item.cliente_externo;
+            const conc = Array.isArray(item.concesionaria) ? item.concesionaria[0] : item.concesionaria;
+            const nombreConc = conc?.nombre ?? cliente?.nombre_completo ?? null;
             return {
                 ccoCodigo: item.id,
                 notaVenta: item.nota_venta || 'VENTA-DIRECTA',
@@ -79,7 +82,7 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
                 origen: 'EXTERNO',
                 clienteExternoId: item.cliente_id,
                 esConcesionaria: !!item.concesionaria_id,
-                nombreConcesionaria: null,
+                nombreConcesionaria: nombreConc,
                 clienteFinalNombre: null,
                 clienteFinalIdentificacion: null,
                 clienteFinalTelefono: null

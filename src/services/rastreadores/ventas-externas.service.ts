@@ -54,49 +54,42 @@ export async function registrarVentaExterna(
         if (!concesionariaId || !nombreConcesionaria) return { success: false, error: 'Faltan datos de la concesionaria' };
 
         identificacionLimpia = rucConcesionaria;
-        // Solo datos de la concesionaria en clientes_externos (no mezclar con cliente final ni vehículo)
-        const clientePayload: Record<string, unknown> = {
-            identificacion: identificacionLimpia,
-            nombre_completo: nombreConcesionaria,
-            telefono: null,
-            email: null,
-            direccion: null
-        };
+        // La concesionaria solo está en tabla concesionarias. ventas_rastreador lleva concesionaria_id.
+        // cliente_id en ventas_rastreador = solo el cliente final (clientes_externos), si se registró.
+        let clienteFinalId: string | null = null;
 
-        const { data: existingCliente } = await supabase
-            .from('clientes_externos')
-            .select('id')
-            .eq('identificacion', identificacionLimpia)
-            .maybeSingle();
-
-        const { data: clienteInserted, error: clienteError } = existingCliente?.id
-            ? await supabase.from('clientes_externos').update(clientePayload).eq('id', existingCliente.id).select().single()
-            : await supabase.from('clientes_externos').insert([clientePayload]).select().single();
-
-        if (clienteError || !clienteInserted) return { success: false, error: clienteError?.message ?? 'Error al guardar cliente externo' };
-        clienteData = clienteInserted;
-
-        // Cliente final (a quién venderá la concesionaria): guardar en clientes_externos si hay datos
         const cf = opciones?.clienteFinal;
         if (cf && (limpiarTexto(cf.nombre) || limpiarTexto(cf.identificacion))) {
             const nombreCf = limpiarTexto(cf.nombre) || 'Cliente final';
             const idenCf = limpiarTexto(cf.identificacion) || `CF-${Date.now()}`;
-            await supabase.from('clientes_externos').insert([{
+            const { data: cfInserted, error: cfError } = await supabase.from('clientes_externos').insert([{
                 nombre_completo: nombreCf,
                 identificacion: idenCf,
                 telefono: limpiarTexto(cf.telefono) || null,
                 email: null,
                 direccion: null
-            }]);
+            }]).select('id').single();
+            if (!cfError && cfInserted) clienteFinalId = cfInserted.id;
         }
 
-        // Vehículo (placa, marca, modelo del formulario): guardar en vehiculos vinculado a la concesionaria
-        const vehiculo_id = await crearVehiculoSiAplica(clienteData.id, cliente);
+        // Vehículo: guardar en vehiculos. Si hay cliente final, se vincula a él; si no, se crea un cliente mínimo solo para el vehículo
+        let idParaVehiculo: string | null = clienteFinalId;
+        if (!idParaVehiculo && (limpiarTexto(cliente.placa) && limpiarTexto(cliente.placa) !== 'N/A')) {
+            const { data: concCliente, error: concErr } = await supabase.from('clientes_externos').insert([{
+                nombre_completo: `Concesionaria ${nombreConcesionaria}`,
+                identificacion: `CONC-${concesionariaId}-${Date.now()}`,
+                telefono: null,
+                email: null,
+                direccion: null
+            }]).select('id').single();
+            if (!concErr && concCliente) idParaVehiculo = concCliente.id;
+        }
+        const vehiculo_id = idParaVehiculo ? await crearVehiculoSiAplica(idParaVehiculo, cliente) : null;
 
         if (pagoPayload && stockId) {
             return await crearVentaRastreadorCompleta({
                 gps_id: stockId,
-                cliente_id: clienteData.id,
+                cliente_id: clienteFinalId ?? undefined,
                 vehiculo_id: vehiculo_id ?? undefined,
                 concesionaria_id: concesionariaId,
                 identificacion_cliente: identificacionLimpia,
@@ -112,9 +105,9 @@ export async function registrarVentaExterna(
                 .update({ estado: 'VENDIDO' })
                 .eq('id', stockId);
             if (stockError) return { success: false, error: stockError.message };
-            return { success: true, data: { gps_id: stockId, cliente_id: clienteData.id } };
+            return { success: true, data: { gps_id: stockId, cliente_id: clienteFinalId } };
         }
-        return { success: true, data: { cliente_id: clienteData.id } };
+        return { success: true, data: { cliente_id: clienteFinalId } };
     }
 
     identificacionLimpia = limpiarTexto(cliente.identificacion);
@@ -214,7 +207,7 @@ async function crearVehiculoSiAplica(cliente_id: string, cliente: ClienteExterno
 
 interface CrearVentaCompletaParams {
     gps_id: string;
-    cliente_id: string;
+    cliente_id?: string | null;
     vehiculo_id?: string;
     concesionaria_id?: string | null;
     identificacion_cliente: string;
@@ -231,7 +224,7 @@ async function crearVentaRastreadorCompleta(params: CrearVentaCompletaParams) {
         .from('ventas_rastreador')
         .insert({
             gps_id,
-            cliente_id,
+            cliente_id: cliente_id ?? null,
             vehiculo_id: vehiculo_id ?? null,
             concesionaria_id: concesionaria_id ?? null,
             entorno: 'EXTERNO',
