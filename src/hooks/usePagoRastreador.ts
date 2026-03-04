@@ -84,7 +84,9 @@ export function usePagoRastreador() {
                     ...(payload.fecha_entrega != null && payload.fecha_entrega !== '' && { fecha_entrega: payload.fecha_entrega }),
                     ...(payload.asesor_id != null && payload.asesor_id !== '' && { asesor_id: payload.asesor_id }),
                     ...(payload.observacion != null && payload.observacion !== '' && { observacion: payload.observacion.trim() }),
-                    ...(payload.nota_venta != null && payload.nota_venta !== '' && { nota_venta: payload.nota_venta.trim() })
+                    ...(payload.nota_venta != null && payload.nota_venta !== '' && { nota_venta: payload.nota_venta.trim() }),
+                    ...(payload.instalador_id != null && payload.instalador_id !== '' && { instalador_id: payload.instalador_id }),
+                    ...(payload.costo_instalacion != null && { costo_instalacion: Number(payload.costo_instalacion) })
                 })
                 .select()
                 .single();

@@ -369,9 +369,12 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                             total_financiado: totalFinanciado,
                             metodo_pago: pagoRastreador?.metodo_pago_medio ?? metodoPagoRastreador,
                             url_comprobante_pago: urlComprobante ?? undefined,
-                            fecha_entrega: fechaEntrega || null,
-                            asesor_id: asesorId || null,
-                            observacion: observacion.trim() || null
+                            fecha_entrega: fechaEntrega?.trim() || null,
+                            asesor_id: asesorId?.trim() || null,
+                            observacion: observacion.trim() || null,
+                            nota_venta: notaVentaGenerada?.trim() || null,
+                            instalador_id: form.instalador_id?.trim() || null,
+                            costo_instalacion: form.costo_instalacion != null && form.costo_instalacion > 0 ? form.costo_instalacion : null
                         },
                         cuotasData
                     );

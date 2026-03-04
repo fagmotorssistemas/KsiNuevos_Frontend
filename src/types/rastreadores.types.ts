@@ -243,6 +243,10 @@ export interface VentaRastreadorPayload {
     observacion?: string | null;
     /** Nota de venta del contrato (Oracle/KSI Nuevos), para identificar historial por ventas_rastreador.nota_venta */
     nota_venta?: string | null;
+    /** ID del instalador (ventas_rastreador.instalador_id) */
+    instalador_id?: string | null;
+    /** Costo de instalación (ventas_rastreador.costo_instalacion) */
+    costo_instalacion?: number | null;
 }
 
 export interface CuotaRastreadorPayload {
