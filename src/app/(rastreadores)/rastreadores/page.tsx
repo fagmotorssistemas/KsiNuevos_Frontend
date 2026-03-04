@@ -74,12 +74,14 @@ export default function RastreoPage() {
 
     // Cargar historial: venta EXTERNA por cliente_id (no depende de cédula) o por ruc; AUTO por nota_venta
     useEffect(() => {
-        if (vista !== 'FORMULARIO' || !seleccionado || showNuevoDispositivoForm) {
+        if (vista !== 'FORMULARIO' || !seleccionado) {
             setHistorialCliente([]);
             setFechaEntrega('');
             setAsesorId(null);
             return;
         }
+        // Al abrir "Nuevo dispositivo" no resetear fecha/asesor para que LinkGPSForm los reciba como iniciales
+        if (showNuevoDispositivoForm) return;
         const esExterno = seleccionado.origen === 'EXTERNO';
         const esAuto = seleccionado.origen === 'AUTO';
         // Venta externa: priorizar cliente_id (relación cliente-venta) para que funcione aunque no tenga cédula
