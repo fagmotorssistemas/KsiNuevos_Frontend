@@ -83,7 +83,8 @@ export function usePagoRastreador() {
                     ...(payload.url_comprobante_pago != null && payload.url_comprobante_pago !== '' && { url_comprobante_pago: payload.url_comprobante_pago }),
                     ...(payload.fecha_entrega != null && payload.fecha_entrega !== '' && { fecha_entrega: payload.fecha_entrega }),
                     ...(payload.asesor_id != null && payload.asesor_id !== '' && { asesor_id: payload.asesor_id }),
-                    ...(payload.observacion != null && payload.observacion !== '' && { observacion: payload.observacion.trim() })
+                    ...(payload.observacion != null && payload.observacion !== '' && { observacion: payload.observacion.trim() }),
+                    ...(payload.nota_venta != null && payload.nota_venta !== '' && { nota_venta: payload.nota_venta.trim() })
                 })
                 .select()
                 .single();
