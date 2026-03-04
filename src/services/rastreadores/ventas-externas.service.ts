@@ -54,12 +54,13 @@ export async function registrarVentaExterna(
         if (!concesionariaId || !nombreConcesionaria) return { success: false, error: 'Faltan datos de la concesionaria' };
 
         identificacionLimpia = rucConcesionaria;
+        // Solo datos de la concesionaria en clientes_externos (no mezclar con cliente final ni vehículo)
         const clientePayload: Record<string, unknown> = {
             identificacion: identificacionLimpia,
             nombre_completo: nombreConcesionaria,
-            telefono: limpiarTexto(cliente.telefono) || null,
-            email: limpiarTexto(cliente.email) || null,
-            direccion: limpiarTexto(cliente.direccion) ?? null
+            telefono: null,
+            email: null,
+            direccion: null
         };
 
         const { data: existingCliente } = await supabase
@@ -75,10 +76,28 @@ export async function registrarVentaExterna(
         if (clienteError || !clienteInserted) return { success: false, error: clienteError?.message ?? 'Error al guardar cliente externo' };
         clienteData = clienteInserted;
 
+        // Cliente final (a quién venderá la concesionaria): guardar en clientes_externos si hay datos
+        const cf = opciones?.clienteFinal;
+        if (cf && (limpiarTexto(cf.nombre) || limpiarTexto(cf.identificacion))) {
+            const nombreCf = limpiarTexto(cf.nombre) || 'Cliente final';
+            const idenCf = limpiarTexto(cf.identificacion) || `CF-${Date.now()}`;
+            await supabase.from('clientes_externos').insert([{
+                nombre_completo: nombreCf,
+                identificacion: idenCf,
+                telefono: limpiarTexto(cf.telefono) || null,
+                email: null,
+                direccion: null
+            }]);
+        }
+
+        // Vehículo (placa, marca, modelo del formulario): guardar en vehiculos vinculado a la concesionaria
+        const vehiculo_id = await crearVehiculoSiAplica(clienteData.id, cliente);
+
         if (pagoPayload && stockId) {
             return await crearVentaRastreadorCompleta({
                 gps_id: stockId,
                 cliente_id: clienteData.id,
+                vehiculo_id: vehiculo_id ?? undefined,
                 concesionaria_id: concesionariaId,
                 identificacion_cliente: identificacionLimpia,
                 nota_venta: gpsPayload.nota_venta || `EXT-CONC-${Date.now()}`,
