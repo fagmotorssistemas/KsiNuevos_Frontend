@@ -77,7 +77,7 @@ export type Database = {
           direccion: string | null
           email: string | null
           id: string
-          identificacion: string
+          identificacion: string | null
           nombre_completo: string
           telefono: string | null
         }
@@ -86,7 +86,7 @@ export type Database = {
           direccion?: string | null
           email?: string | null
           id?: string
-          identificacion: string
+          identificacion?: string | null
           nombre_completo: string
           telefono?: string | null
         }
@@ -95,7 +95,7 @@ export type Database = {
           direccion?: string | null
           email?: string | null
           id?: string
-          identificacion?: string
+          identificacion?: string | null
           nombre_completo?: string
           telefono?: string | null
         }
@@ -1320,6 +1320,7 @@ export type Database = {
           is_dealer: boolean | null
           last_updated: string | null
           location: Database["public"]["Enums"]["scraper_car_location"] | null
+          pic: string | null
           seller_name: string | null
           total_listings: number | null
         }
@@ -1331,6 +1332,7 @@ export type Database = {
           is_dealer?: boolean | null
           last_updated?: string | null
           location?: Database["public"]["Enums"]["scraper_car_location"] | null
+          pic?: string | null
           seller_name?: string | null
           total_listings?: number | null
         }
@@ -1342,6 +1344,7 @@ export type Database = {
           is_dealer?: boolean | null
           last_updated?: string | null
           location?: Database["public"]["Enums"]["scraper_car_location"] | null
+          pic?: string | null
           seller_name?: string | null
           total_listings?: number | null
         }
