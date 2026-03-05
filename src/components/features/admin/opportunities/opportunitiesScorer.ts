@@ -132,6 +132,7 @@ export interface ScoredVehicle extends VehicleWithSeller {
     parsedBodyType: 'SUV' | 'Pick-up' | 'Sedán' | 'Hatchback' | 'Coupé' | 'Van' | 'Camión' | null;
     parsedEngineCC: number | null;
     parsedCabina: 'una_cabina' | 'doble_cabina' | null;
+    image_analysis?: any;
 }
 
 export interface TopOpportunitiesResult {
