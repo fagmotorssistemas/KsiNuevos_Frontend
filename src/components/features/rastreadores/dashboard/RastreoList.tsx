@@ -138,14 +138,15 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                 <th className="px-6 py-4">Origen</th>
                                 <th className="px-6 py-4">Cliente / Nota</th>
                                 <th className="px-6 py-4">Vehículo</th>
-                                <th className="px-6 py-4">GPS Vinculado</th>
+                                <th className="px-6 py-4">Instalación</th>
+                                <th className="px-6 py-4">Conexión</th>
                                 <th className="px-6 py-4 text-right">Valor Venta</th>
                                 <th className="px-6 py-4 text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
                             ) : filteredData.length > 0 ? (
                                 filteredData.map((item) => {
                                     const gpsVinculado = gpsMap.get(item.notaVenta);
@@ -170,35 +171,41 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                             </td>
                                             <td className="px-6 py-4">
                                                 {gpsVinculado ? (
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {/* Estado del dispositivo (Pendiente / Instalado / Activo...) */}
-                                                        {(() => {
-                                                            const estado = gpsVinculado.estado || 'PENDIENTE_INSTALACION';
-                                                            const config = ESTADO_CONFIG[estado as keyof typeof ESTADO_CONFIG] || ESTADO_CONFIG['PENDIENTE_INSTALACION'];
-                                                            const IconoEstado = config.icon;
-                                                            return (
-                                                                <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black border w-fit ${config.color}`}>
-                                                                    <div className={`p-1 rounded ${config.bgIcon}`}>
-                                                                        <IconoEstado size={10} />
-                                                                    </div>
-                                                                    {config.label}
+                                                    // Estado del dispositivo (Pendiente / Instalado / Activo...)
+                                                    (() => {
+                                                        const estado = gpsVinculado.estado || 'PENDIENTE_INSTALACION';
+                                                        const config = ESTADO_CONFIG[estado as keyof typeof ESTADO_CONFIG] || ESTADO_CONFIG['PENDIENTE_INSTALACION'];
+                                                        const IconoEstado = config.icon;
+                                                        return (
+                                                            <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black border w-fit ${config.color}`}>
+                                                                <div className={`p-1 rounded ${config.bgIcon}`}>
+                                                                    <IconoEstado size={10} />
                                                                 </div>
-                                                            );
-                                                        })()}
-                                                        {/* Conexión: Online / Inactivo / Offline */}
-                                                        {(() => {
-                                                            const conexion = (gpsVinculado.estado_coneccion ?? 'offline') as keyof typeof CONEXION_CONFIG;
-                                                            const conf = CONEXION_CONFIG[conexion] ?? CONEXION_CONFIG.offline;
-                                                            return (
-                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border w-fit ${conf.color}`}>
-                                                                    {conf.label}
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                    </div>
+                                                                {config.label}
+                                                            </div>
+                                                        );
+                                                    })()
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-yellow-50 text-yellow-700 text-[10px] font-black border border-yellow-100">
                                                         <Smartphone size={12}/> Sin GPS
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {gpsVinculado ? (
+                                                    // Conexión: Online / Inactivo / Offline
+                                                    (() => {
+                                                        const conexion = (gpsVinculado.estado_coneccion ?? 'offline') as keyof typeof CONEXION_CONFIG;
+                                                        const conf = CONEXION_CONFIG[conexion] ?? CONEXION_CONFIG.offline;
+                                                        return (
+                                                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase border w-fit ${conf.color}`}>
+                                                                {conf.label}
+                                                            </span>
+                                                        );
+                                                    })()
+                                                ) : (
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold uppercase border w-fit ${CONEXION_CONFIG.inactivo.color}`}>
+                                                        {CONEXION_CONFIG.inactivo.label}
                                                     </span>
                                                 )}
                                             </td>
@@ -214,7 +221,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                     );
                                 })
                             ) : (
-                                <tr><td colSpan={6} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
+                                <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
                             )}
                         </tbody>
                     </table>
