@@ -61,10 +61,8 @@ export const segurosService = {
         const detallesCrudos = await Promise.all(promesasDetalle);
 
         // 3. Mapear y Filtrar
-        // VALOR TOTAL: viene de la API legacy (contratos/detalle). Es la suma de:
-        //   - totSeguroTrans → valor del seguro (parseado como valSeguro)
-        //   - totRastreador  → valor del rastreador (parseado como valRastreo)
-        //   total = valSeguro + valRastreo (valor total de la venta: seguro + rastreador)
+        // VALOR TOTAL en esta pantalla = solo valor del seguro (totSeguroTrans / valSeguro).
+        // valores.seguro = seguro, valores.rastreo = rastreador; total = solo seguro para coherencia en vista de seguros.
         const segurosProcesados: SeguroVehicular[] = detallesCrudos
             .filter(item => item !== null)
             .map(raw => {
@@ -95,7 +93,7 @@ export const segurosService = {
                     valores: {
                         seguro: valSeguro,
                         rastreo: valRastreo,
-                        total: valSeguro + valRastreo
+                        total: valSeguro  // Solo valor del seguro (pantalla de seguros vehiculares)
                     },
                     
                     estado: valSeguro > 0 ? 'ACTIVO' : 'PENDIENTE'
