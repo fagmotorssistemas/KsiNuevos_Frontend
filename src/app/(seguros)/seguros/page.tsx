@@ -1,34 +1,39 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
     ShieldCheck, Loader2, Save, ArrowLeft, 
-    Paperclip, FileText, Image as ImageIcon, Trash2, Plus, 
-    AlertCircle, Search
+    Paperclip, FileText, Image as ImageIcon, Trash2, Plus, RefreshCw
 } from "lucide-react";
-import { toast } from "sonner"; // O tu librería de notificaciones favorita
 
-// Imports de tu lógica de negocio
 import { segurosService, SeguroPayload } from "@/services/seguros.service";
 import { SeguroVehicular } from "@/types/seguros.types";
 import { useInstallationStatus } from "@/hooks/useInstallationStatus";
+import { useSegurosCartera } from "@/hooks/useSegurosCartera";
 import { formatDinero } from "@/utils/format";
 import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
+import { SegurosCarteraTable } from "@/components/features/seguros/SegurosCarteraTable";
 
 // Listas estáticas para el formulario
 const BROKERS = ["TECNISEGUROS", "AON", "NOVA", "ASESORES DE SEGUROS", "DIRECTO"];
 const ASEGURADORAS = ["CHUBB SEGUROS", "SWEADEN", "MAPFRE", "ECUASUIZA", "LATINA"];
 const PLANES = ["TODO RIESGO (1 AÑO)", "TODO RIESGO (2 AÑO)", "PÉRDIDA TOTAL"];
 
-export default function SegurosPage() {
-    // ==========================================
-    // ESTADOS GLOBALES
-    // ==========================================
+function SegurosPageContent() {
+    const searchParams = useSearchParams();
     const [vista, setVista] = useState<'LISTA' | 'FORMULARIO'>('LISTA');
-    const [loadingData, setLoadingData] = useState(true);
-    const [seguros, setSeguros] = useState<SeguroVehicular[]>([]);
-    
-    // Datos seleccionados para el formulario
+    const [filtroTipo, setFiltroTipo] = useState<'TODOS' | 'CREDITO' | 'CONTADO'>('TODOS');
+    const {
+        seguros,
+        loading: loadingData,
+        enrichedData,
+        cargar: cargarSeguros,
+        creditos,
+        contados,
+        conAlertaRenovacion,
+    } = useSegurosCartera();
+
     const [seleccionado, setSeleccionado] = useState<{
         notaId: string;
         ruc: string;
@@ -37,31 +42,26 @@ export default function SegurosPage() {
         precio: number;
     } | null>(null);
 
-    // ==========================================
-    // LÓGICA DE LISTA (DASHBOARD)
-    // ==========================================
-    const cargarSeguros = async () => {
-        setLoadingData(true);
-        try {
-            const data = await segurosService.obtenerSeguros();
-            setSeguros(data);
-        } catch (error) {
-            console.error(error);
-            // toast.error("Error cargando lista");
-        } finally {
-            setLoadingData(false);
-        }
-    };
-
-    useEffect(() => {
-        cargarSeguros();
-    }, []);
-
-    // Totales KPI
     const totalCantidad = seguros.length;
     const totalRecaudado = seguros.reduce((acc, item) => acc + item.valores.total, 0);
 
-    // Handler para abrir formulario
+    // Abrir formulario si se llegó con ?nota=XXX (ej. desde Cartera de Clientes)
+    useEffect(() => {
+        const nota = searchParams.get("nota");
+        if (!nota || loadingData || seguros.length === 0) return;
+        const item = seguros.find((s) => s.referencia === nota);
+        if (item) {
+            setSeleccionado({
+                notaId: item.referencia,
+                ruc: item.cliente.identificacion,
+                cliente: item.cliente.nombre,
+                fecha: item.fechaEmision,
+                precio: item.valores.seguro,
+            });
+            setVista("FORMULARIO");
+        }
+    }, [searchParams, loadingData, seguros]);
+
     const handleGestionar = (item: SeguroVehicular) => {
         setSeleccionado({
             notaId: item.referencia,
@@ -199,10 +199,20 @@ export default function SegurosPage() {
                     {/* --- VISTA: LISTA (DASHBOARD) --- */}
                     {vista === 'LISTA' && (
                         <div className="space-y-8 animate-in fade-in duration-300">
-                            {/* Header */}
-                            <div className="flex flex-col gap-1">
-                                <h1 className="text-2xl font-bold text-gray-900">Seguros Vehiculares</h1>
-                                <p className="text-sm text-gray-500">Panel de control de pólizas emitidas</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="flex flex-col gap-1">
+                                    <h1 className="text-2xl font-bold text-gray-900">Seguros Vehiculares</h1>
+                                    <p className="text-sm text-gray-500">Panel de control de pólizas emitidas (seguro 1 año)</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={cargarSeguros}
+                                    disabled={loadingData}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-60"
+                                >
+                                    <RefreshCw size={18} className={loadingData ? "animate-spin" : ""} />
+                                    Actualizar
+                                </button>
                             </div>
 
                             {/* KPIs */}
@@ -223,65 +233,18 @@ export default function SegurosPage() {
                                 </div>
                             </div>
 
-                            {/* Tabla */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                                    <h3 className="font-semibold text-gray-700">Detalle de Ventas</h3>
-                                    <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                                        {seguros.length} registros
-                                    </span>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm whitespace-nowrap">
-                                        <thead className="bg-gray-50 text-gray-500 font-medium text-xs uppercase tracking-wider">
-                                            <tr>
-                                                <th className="px-6 py-3">Nota / Fecha</th>
-                                                <th className="px-6 py-3">Cliente</th>
-                                                <th className="px-6 py-3">Vehículo</th>
-                                                <th className="px-6 py-3 text-right">Valor Total</th>
-                                                <th className="px-6 py-3 text-center">Gestión</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {loadingData ? (
-                                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">Cargando datos...</td></tr>
-                                            ) : seguros.length > 0 ? (
-                                                seguros.map((item) => (
-                                                    <tr key={item.id} className="group hover:bg-slate-50 transition-colors">
-                                                        <td className="px-6 py-4">
-                                                            <div className="font-bold text-gray-900">{item.referencia}</div>
-                                                            <div className="text-xs text-gray-400 mt-0.5 font-mono">{item.fechaEmision.split('T')[0]}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="font-medium text-gray-900 max-w-[200px] truncate" title={item.cliente.nombre}>{item.cliente.nombre}</div>
-                                                            <div className="text-xs text-gray-500">{item.cliente.identificacion}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="text-gray-700 font-medium">{item.bienAsegurado.descripcion}</div>
-                                                            <div className="inline-flex items-center gap-2 mt-1">
-                                                                <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 border uppercase tracking-wider font-bold">{item.bienAsegurado.placa}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">{formatDinero(item.valores.total)}</span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center">
-                                                            <button 
-                                                                onClick={() => handleGestionar(item)}
-                                                                className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-200 active:scale-95"
-                                                            >
-                                                                <ShieldCheck size={14} /> Gestionar
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            ) : (
-                                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No se encontraron registros</td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                            <SegurosCarteraTable
+                                seguros={seguros}
+                                enrichedData={enrichedData}
+                                loading={loadingData}
+                                creditos={creditos}
+                                contados={contados}
+                                conAlertaRenovacion={conAlertaRenovacion}
+                                filtroTipo={filtroTipo}
+                                setFiltroTipo={setFiltroTipo}
+                                onGestionar={handleGestionar}
+                                showRefresh={false}
+                            />
                         </div>
                     )}
 
@@ -419,5 +382,17 @@ export default function SegurosPage() {
                 </main>
             </div>
         </div>
+    );
+}
+
+export default function SegurosPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen bg-gray-50 items-center justify-center">
+                <Loader2 className="animate-spin text-emerald-600" size={32} />
+            </div>
+        }>
+            <SegurosPageContent />
+        </Suspense>
     );
 }
