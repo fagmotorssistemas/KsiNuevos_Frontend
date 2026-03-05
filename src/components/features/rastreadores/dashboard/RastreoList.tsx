@@ -14,6 +14,12 @@ const ESTADO_CONFIG = {
     'RETIRADO': { color: 'bg-red-50 text-red-700 border-red-100', icon: Trash2, label: 'Retirado', bgIcon: 'bg-red-100' }
 } as const;
 
+const CONEXION_CONFIG = {
+    online: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Online' },
+    inactivo: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'Inactivo' },
+    offline: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Offline' }
+} as const;
+
 interface RastreoListProps {
     data: ContratoGPS[];
     loading: boolean;
@@ -164,25 +170,31 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                                             </td>
                                             <td className="px-6 py-4">
                                                 {gpsVinculado ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-full">
-                
-                                                            {/* Estado del dispositivo */}
-                                                            {(() => {
-                                                                const estado = gpsVinculado.estado || 'PENDIENTE_INSTALACION';
-                                                                const config = ESTADO_CONFIG[estado as keyof typeof ESTADO_CONFIG] || ESTADO_CONFIG['PENDIENTE_INSTALACION'];
-                                                                const IconoEstado = config.icon;
-                                                                
-                                                                return (
-                                                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black border ${config.color}`}>
-                                                                        <div className={`p-1 rounded ${config.bgIcon}`}>
-                                                                            <IconoEstado size={10} />
-                                                                        </div>
-                                                                        {config.label}
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {/* Estado del dispositivo (Pendiente / Instalado / Activo...) */}
+                                                        {(() => {
+                                                            const estado = gpsVinculado.estado || 'PENDIENTE_INSTALACION';
+                                                            const config = ESTADO_CONFIG[estado as keyof typeof ESTADO_CONFIG] || ESTADO_CONFIG['PENDIENTE_INSTALACION'];
+                                                            const IconoEstado = config.icon;
+                                                            return (
+                                                                <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black border w-fit ${config.color}`}>
+                                                                    <div className={`p-1 rounded ${config.bgIcon}`}>
+                                                                        <IconoEstado size={10} />
                                                                     </div>
-                                                                );
-                                                            })()}
-                                                        </div>
+                                                                    {config.label}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                        {/* Conexión: Online / Inactivo / Offline */}
+                                                        {(() => {
+                                                            const conexion = (gpsVinculado.estado_coneccion ?? 'offline') as keyof typeof CONEXION_CONFIG;
+                                                            const conf = CONEXION_CONFIG[conexion] ?? CONEXION_CONFIG.offline;
+                                                            return (
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border w-fit ${conf.color}`}>
+                                                                    {conf.label}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-yellow-50 text-yellow-700 text-[10px] font-black border border-yellow-100">

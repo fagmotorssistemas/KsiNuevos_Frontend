@@ -209,23 +209,28 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
             return [];
         }
 
-        return (data || []).map((v: any) => ({
-            id: v.gps_inventario?.id ?? v.gps_id,
-            nota_venta: v.nota_venta,
-            identificacion_cliente: v.cliente_externo?.identificacion,
-            imei: v.gps_inventario?.imei,
-            modelo: v.gps_inventario?.serie,
-            precio_venta: v.precio_total,
-            costo_instalacion: v.costo_instalacion,
-            created_at: v.created_at,
-            es_venta_externa: v.es_venta_externa,
-            estado: v.gps_inventario?.estado,
-            sim_id: null,
-            instalador_id: v.instalador_id,
-            cliente_externo: v.cliente_externo,
-            gps_sims: null,
-            gps_instaladores: v.gps_instaladores
-        }));
+        const gpsInv = (v: any) => Array.isArray(v.gps_inventario) ? v.gps_inventario[0] : v.gps_inventario;
+        return (data || []).map((v: any) => {
+            const gps = gpsInv(v);
+            return {
+                id: gps?.id ?? v.gps_id,
+                nota_venta: v.nota_venta,
+                identificacion_cliente: v.cliente_externo?.identificacion,
+                imei: gps?.imei,
+                modelo: gps?.serie,
+                precio_venta: v.precio_total,
+                costo_instalacion: v.costo_instalacion,
+                created_at: v.created_at,
+                es_venta_externa: v.es_venta_externa,
+                estado: gps?.estado,
+                estado_coneccion: gps?.estado_coneccion ?? 'offline',
+                sim_id: null,
+                instalador_id: v.instalador_id,
+                cliente_externo: v.cliente_externo,
+                gps_sims: null,
+                gps_instaladores: v.gps_instaladores
+            };
+        });
     } catch (err) {
         console.error("Error critico en obtenerVentasConGPS:", err);
         return [];
