@@ -287,6 +287,10 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 if (comprobantePagoRastreadorFile) {
                     urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
                 }
+                
+                // Combinar el comprobante de pago y las evidencias en un solo string separado por comas
+                const todasLasUrls = [urlComprobante, ...urlsFinales].filter(Boolean).join(',') || null;
+
                 const precioTotal = form.precioVenta;
                 const totalFinanciado = pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined;
                 const pagoPayload = pagoRastreador ? {
@@ -296,7 +300,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                     total_financiado: totalFinanciado,
                     numero_cuotas: pagoRastreador.numero_cuotas_credito ?? undefined,
                     metodo_pago: pagoRastreador.metodo_pago_medio ?? metodoPagoRastreador,
-                    url_comprobante_pago: urlComprobante,
+                    url_comprobante_pago: todasLasUrls,
                     fecha_entrega: fechaEntrega || null,
                     asesor_id: asesorId || null,
                     observacion: observacion.trim() || null,
@@ -345,6 +349,10 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 if (comprobantePagoRastreadorFile) {
                     urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
                 }
+
+                // Combinar el comprobante de pago y las evidencias en un solo string separado por comas
+                const todasLasUrls = [urlComprobante, ...urlsFinales].filter(Boolean).join(',') || undefined;
+
                 const totalFinanciado = pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined;
                 let cuotasData: Array<{ valor: number; fecha_vencimiento: string }> | undefined;
                 if (pagoRastreador?.tipo_pago === TipoPagoEnum.CREDITO && pagoRastreador.numero_cuotas_credito && pagoRastreador.numero_cuotas_credito > 0 && pagoRastreador.valor_rastreador_mensual > 0) {
@@ -368,7 +376,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                             abono_inicial: pagoRastreador?.abono_inicial ?? 0,
                             total_financiado: totalFinanciado,
                             metodo_pago: pagoRastreador?.metodo_pago_medio ?? metodoPagoRastreador,
-                            url_comprobante_pago: urlComprobante ?? undefined,
+                            url_comprobante_pago: todasLasUrls,
                             fecha_entrega: fechaEntrega?.trim() || null,
                             asesor_id: asesorId?.trim() || null,
                             observacion: observacion.trim() || null,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, History, Smartphone } from "lucide-react";
+import { Loader2, History, Smartphone, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
 
@@ -23,6 +23,8 @@ interface HistorialGPSProps {
 export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }: HistorialGPSProps) {
     const [estadosSeleccionados, setEstadosSeleccionados] = useState<{ [key: string]: string }>({});
     const [guardandoGPSId, setGuardandoGPSId] = useState<string | null>(null);
+    const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIAS' }>({});
+    const [uploadingGPSId, setUploadingGPSId] = useState<string | null>(null);
 
     const handleActualizarEstado = async (gpsId: string) => {
         const nuevoEstado = estadosSeleccionados[gpsId];
@@ -45,6 +47,37 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
         }
     };
 
+    const handleUploadEvidencias = async (gps: any, files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        
+        if (!gps.venta_id) {
+            toast.error("No se puede adjuntar: falta ID de venta.");
+            return;
+        }
+
+        setUploadingGPSId(gps.id);
+        const toastId = toast.loading("Subiendo evidencias...");
+        try {
+            const nuevasUrls = await rastreadoresService.subirEvidencias(Array.from(files));
+            if (nuevasUrls.length > 0) {
+                const res = await rastreadoresService.agregarEvidenciasVenta(gps.venta_id, gps.url_comprobante_pago, nuevasUrls);
+                if (res.success) {
+                    toast.success("Evidencias subidas correctamente", { id: toastId });
+                    onHistorialUpdate({ ...gps, url_comprobante_pago: res.data.url_comprobante_pago });
+                } else {
+                    toast.error(res.error || "Error al guardar en base de datos", { id: toastId });
+                }
+            } else {
+                toast.error("No se pudo subir ninguna evidencia", { id: toastId });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Error al subir archivos. Revisa la conexión o el tamaño del archivo.", { id: toastId });
+        } finally {
+            setUploadingGPSId(null);
+        }
+    };
+
     const content = (
         <>
             {!asCard && (
@@ -56,19 +89,43 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
             <div className="space-y-4">
                 {historialgps.map((gps) => {
                     const estadoActual = estadosSeleccionados[gps.id] || gps.estado || 'PENDIENTE_INSTALACION';
+                    const activeTab = tabs[gps.id] || 'DATOS';
+
+                    const urlsEvidencias = gps.url_comprobante_pago ? gps.url_comprobante_pago.split(',').filter(Boolean) : [];
 
                     return (
                         <div key={gps.id} className="p-5 bg-slate-50/80 border-2 border-slate-200 rounded-2xl hover:border-slate-300 transition-colors">
+                            {/* TABS */}
+                            <div className="flex gap-2 mb-4 border-b border-slate-200 pb-2">
+                                <button
+                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'DATOS' }))}
+                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'DATOS' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                                >
+                                    Datos del Dispositivo
+                                </button>
+                                <button
+                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIAS' }))}
+                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIAS' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                                >
+                                    Evidencias / Pago ({urlsEvidencias.length})
+                                </button>
+                            </div>
+
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                 <div className="flex gap-4 flex-1 min-w-0">
-                                    <div className="p-3 bg-white rounded-xl border border-slate-200 shrink-0 self-start">
-                                        <Smartphone size={22} className="text-slate-600" />
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 flex-1 min-w-0">
-                                        <div>
-                                            <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">IMEI</span>
-                                            <span className="block text-base font-bold text-slate-900 font-mono">{gps.imei}</span>
+                                    {activeTab === 'DATOS' && (
+                                        <div className="p-3 bg-white rounded-xl border border-slate-200 shrink-0 self-start">
+                                            <Smartphone size={22} className="text-slate-600" />
                                         </div>
+                                    )}
+                                    
+                                    {/* CONTENIDO TAB DATOS */}
+                                    {activeTab === 'DATOS' && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 flex-1 min-w-0">
+                                            <div>
+                                                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">IMEI</span>
+                                                <span className="block text-base font-bold text-slate-900 font-mono">{gps.imei}</span>
+                                            </div>
                                         <div>
                                             <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Modelo dispositivo</span>
                                             <span className="block text-base font-bold text-slate-900">{gps.modelo || '—'}</span>
@@ -116,30 +173,82 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                             </div>
                                         )}
                                     </div>
+                                    )}
+
+                                    {/* CONTENIDO TAB EVIDENCIAS */}
+                                    {activeTab === 'EVIDENCIAS' && (
+                                        <div className="flex-1 min-w-0 flex flex-col gap-4">
+                                            <div className="flex gap-3 flex-wrap">
+                                                {urlsEvidencias.map((url: string, idx: number) => {
+                                                    const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)/i);
+                                                    return (
+                                                        <a
+                                                            key={idx}
+                                                            href={url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="group relative block overflow-hidden rounded-xl border border-slate-200 w-24 h-24 sm:w-32 sm:h-32 hover:border-slate-400 transition-colors bg-white shadow-sm"
+                                                        >
+                                                            {isImage ? (
+                                                                <img src={url} alt={`Evidencia ${idx + 1}`} className="object-cover w-full h-full" />
+                                                            ) : (
+                                                                <div className="flex items-center justify-center w-full h-full bg-slate-50 text-slate-400 group-hover:text-blue-500 transition-colors">
+                                                                    <span className="text-xs font-bold uppercase">Ver PDF</span>
+                                                                </div>
+                                                            )}
+                                                        </a>
+                                                    );
+                                                })}
+                                                
+                                                {/* BOTÓN ADJUNTAR (CAJONCITO CON +) */}
+                                                <label className="relative flex flex-col items-center justify-center w-24 h-24 sm:w-32 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer bg-slate-50 group">
+                                                    {uploadingGPSId === gps.id ? (
+                                                        <Loader2 className="animate-spin text-emerald-500 mb-2" size={24} />
+                                                    ) : (
+                                                        <Plus className="text-slate-400 group-hover:text-emerald-500 mb-2" size={24} />
+                                                    )}
+                                                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-emerald-600 uppercase text-center px-2">
+                                                        {uploadingGPSId === gps.id ? 'Subiendo...' : 'Adjuntar Evidencias'}
+                                                    </span>
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        accept="image/*,application/pdf"
+                                                        className="hidden" 
+                                                        onChange={(e) => handleUploadEvidencias(gps, e.target.files)}
+                                                        disabled={uploadingGPSId === gps.id}
+                                                    />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+
                                 </div>
-                                <div className="flex flex-col gap-2 shrink-0 sm:items-end">
-                                    <div className="flex gap-2 flex-wrap">
-                                        <select
-                                            value={estadoActual}
-                                            onChange={e => setEstadosSeleccionados({ ...estadosSeleccionados, [gps.id]: e.target.value })}
-                                            className="text-sm font-bold px-3 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
-                                        >
-                                            {ESTADOS_GPS.map(estado => (
-                                                <option key={estado.value} value={estado.value}>
-                                                    {estado.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleActualizarEstado(gps.id)}
-                                            disabled={guardandoGPSId === gps.id}
-                                            className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold uppercase disabled:opacity-50 transition-all"
-                                        >
-                                            {guardandoGPSId === gps.id ? <Loader2 className="animate-spin" size={16} /> : 'Guardar estado'}
-                                        </button>
+                                {activeTab === 'DATOS' && (
+                                    <div className="flex flex-col gap-2 shrink-0 sm:items-end">
+                                        <div className="flex gap-2 flex-wrap">
+                                            <select
+                                                value={estadoActual}
+                                                onChange={e => setEstadosSeleccionados({ ...estadosSeleccionados, [gps.id]: e.target.value })}
+                                                className="text-sm font-bold px-3 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                                            >
+                                                {ESTADOS_GPS.map(estado => (
+                                                    <option key={estado.value} value={estado.value}>
+                                                        {estado.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleActualizarEstado(gps.id)}
+                                                disabled={guardandoGPSId === gps.id}
+                                                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold uppercase disabled:opacity-50 transition-all"
+                                            >
+                                                {guardandoGPSId === gps.id ? <Loader2 className="animate-spin" size={16} /> : 'Guardar estado'}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     );

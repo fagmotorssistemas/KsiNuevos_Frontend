@@ -31,7 +31,8 @@ import {
     getGPSPorCliente,
     getGPSPorClienteId,
     getGPSPorVenta,
-    obtenerVentasConGPS
+    obtenerVentasConGPS,
+    agregarEvidenciasVenta
 } from './rastreadores/vinculacion.service';
 
 export { supabase } from './rastreadores/supabaseClient';
@@ -68,5 +69,6 @@ export const rastreadoresService = {
     getGPSPorClienteId,
     actualizarVinculacionGPS,
     obtenerVentasConGPS,
-    actualizarEstadoGPS
+    actualizarEstadoGPS,
+    agregarEvidenciasVenta
 };

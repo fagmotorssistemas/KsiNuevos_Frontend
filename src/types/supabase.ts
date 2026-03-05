@@ -1321,6 +1321,8 @@ export type Database = {
           last_updated: string | null
           location: Database["public"]["Enums"]["scraper_car_location"] | null
           pic: string | null
+          rating: number | null
+          rating_count: number | null
           seller_name: string | null
           total_listings: number | null
         }
@@ -1333,6 +1335,8 @@ export type Database = {
           last_updated?: string | null
           location?: Database["public"]["Enums"]["scraper_car_location"] | null
           pic?: string | null
+          rating?: number | null
+          rating_count?: number | null
           seller_name?: string | null
           total_listings?: number | null
         }
@@ -1345,6 +1349,8 @@ export type Database = {
           last_updated?: string | null
           location?: Database["public"]["Enums"]["scraper_car_location"] | null
           pic?: string | null
+          rating?: number | null
+          rating_count?: number | null
           seller_name?: string | null
           total_listings?: number | null
         }
@@ -1410,7 +1416,6 @@ export type Database = {
           description: string | null
           extras: string[] | null
           id: string
-          image_analysis: Json | null
           image_url: string | null
           is_sold: boolean
           listing_image_urls: string[] | null
@@ -1436,7 +1441,6 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
-          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -1462,7 +1466,6 @@ export type Database = {
           description?: string | null
           extras?: string[] | null
           id?: string
-          image_analysis?: Json | null
           image_url?: string | null
           is_sold?: boolean
           listing_image_urls?: string[] | null
@@ -2336,7 +2339,7 @@ export type Database = {
       }
       vehiculos: {
         Row: {
-          anio: string | null
+          anio: number | null
           cliente_id: string
           color: string | null
           created_at: string | null
@@ -2344,10 +2347,9 @@ export type Database = {
           marca: string | null
           modelo: string | null
           placa: string
-          trasmision: string | null
         }
         Insert: {
-          anio?: string | null
+          anio?: number | null
           cliente_id: string
           color?: string | null
           created_at?: string | null
@@ -2355,10 +2357,9 @@ export type Database = {
           marca?: string | null
           modelo?: string | null
           placa: string
-          trasmision?: string | null
         }
         Update: {
-          anio?: string | null
+          anio?: number | null
           cliente_id?: string
           color?: string | null
           created_at?: string | null
@@ -2366,7 +2367,6 @@ export type Database = {
           marca?: string | null
           modelo?: string | null
           placa?: string
-          trasmision?: string | null
         }
         Relationships: [
           {

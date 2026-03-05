@@ -7,14 +7,21 @@ export async function subirEvidencias(files: File[]): Promise<string[]> {
         const uploadPromises = files.map(async (file) => {
             const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
             const fileName = `gps/${Date.now()}_${safeName}`;
-            const { error } = await supabase.storage.from('evidencias').upload(fileName, file);
-            if (error) throw error;
-            const { data } = supabase.storage.from('evidencias').getPublicUrl(fileName);
+            const { error } = await supabase.storage.from('evidencia_rastreador').upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+            if (error) {
+                console.error("Error en Supabase upload:", error);
+                throw error;
+            }
+            const { data } = supabase.storage.from('evidencia_rastreador').getPublicUrl(fileName);
             return data.publicUrl;
         });
         return await Promise.all(uploadPromises);
     } catch (e) {
-        return [];
+        console.error("Error subiendo evidencias:", e);
+        throw e;
     }
 }
 
