@@ -125,9 +125,14 @@ export function SegurosSidebar() {
                     )}
 
                     {menuItems.map((item) => {
-                        // Lógica simple de activo (puedes ajustarla según necesites subrutas)
-                        const isActive = pathname.startsWith(item.href);
-                        
+                        // Solo un ítem activo: Dashboard (/seguros) solo si la ruta es exactamente /seguros; el resto si coincide o es subruta
+                        const path = pathname.replace(/\/$/, '') || '/';
+                        const href = item.href.replace(/\/$/, '') || '/';
+                        const isActive =
+                            href === '/seguros'
+                                ? path === '/seguros'
+                                : path === href || path.startsWith(href + '/');
+
                         return (
                             <Link
                                 key={item.href}
