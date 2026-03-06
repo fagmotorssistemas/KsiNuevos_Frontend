@@ -71,6 +71,57 @@ export type Database = {
           },
         ]
       }
+      aseguradoras: {
+        Row: {
+          activa: boolean | null
+          contacto_email: string | null
+          contacto_nombre: string | null
+          contacto_telefono: string | null
+          created_at: string | null
+          direccion: string | null
+          email: string | null
+          id: string
+          nombre: string
+          observaciones: string | null
+          porcentaje_base_seguro: number | null
+          ruc: string | null
+          telefono: string | null
+          trabaja_con_gps: boolean | null
+        }
+        Insert: {
+          activa?: boolean | null
+          contacto_email?: string | null
+          contacto_nombre?: string | null
+          contacto_telefono?: string | null
+          created_at?: string | null
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre: string
+          observaciones?: string | null
+          porcentaje_base_seguro?: number | null
+          ruc?: string | null
+          telefono?: string | null
+          trabaja_con_gps?: boolean | null
+        }
+        Update: {
+          activa?: boolean | null
+          contacto_email?: string | null
+          contacto_nombre?: string | null
+          contacto_telefono?: string | null
+          created_at?: string | null
+          direccion?: string | null
+          email?: string | null
+          id?: string
+          nombre?: string
+          observaciones?: string | null
+          porcentaje_base_seguro?: number | null
+          ruc?: string | null
+          telefono?: string | null
+          trabaja_con_gps?: boolean | null
+        }
+        Relationships: []
+      }
       clientes_externos: {
         Row: {
           created_at: string | null
