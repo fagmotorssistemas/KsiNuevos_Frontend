@@ -8,7 +8,8 @@ Copia y pega el SQL en el **SQL Editor** de tu proyecto Supabase y ejecuta en el
 
 1. **aseguradoras** (sin dependencias)
 2. **seguros_contratos** (pólizas del formulario Dashboard / Gestionar)
-3. **seguros_polizas** (compras a aseguradora + reventa al cliente; depende de `aseguradoras`)
+3. **seguros_polizas** (compras + reventa; depende de `aseguradoras`)
+4. **Renovaciones** (opcional): columnas en `seguros_contratos` y/o tabla `seguros_renovaciones`
 
 ---
 
@@ -122,12 +123,50 @@ create index if not exists idx_seguros_polizas_vendido on seguros_polizas(vendid
 
 ---
 
+## 4. Renovaciones (opcional)
+
+La página **Renovaciones** (`/seguros/renovaciones`) lista contratos próximos a vencer (≤ 60 días) y permite buscar cualquier contrato para renovar. Al hacer clic en "Renovar" se abre el formulario de Gestionar para emitir el 2º año.
+
+Si quieres guardar en base de datos que una póliza es renovación de otra y su vigencia:
+
+**Opción A – Añadir columnas a `seguros_contratos`**
+
+```sql
+alter table seguros_contratos
+  add column if not exists vigencia_desde date,
+  add column if not exists vigencia_hasta date,
+  add column if not exists renovado_de_nota text;
+```
+
+**Opción B – Tabla de historial de renovaciones**
+
+```sql
+create table if not exists seguros_renovaciones (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  nota_venta_anterior text not null,
+  cliente_identificacion text,
+  fecha_renovacion date not null default current_date,
+  vigencia_desde date,
+  vigencia_hasta date,
+  nota_venta_nueva text,
+  observaciones text
+);
+create index if not exists idx_seguros_renovaciones_nota_anterior on seguros_renovaciones(nota_venta_anterior);
+```
+
+La app de Renovaciones funciona con o sin estas estructuras.
+
+---
+
 ## Resumen
 
 | Tabla               | Uso en la app                                                                 |
 |---------------------|-------------------------------------------------------------------------------|
 | **aseguradoras**    | Catálogo en `/seguros/aseguradoras` y selector en Compras.                    |
 | **seguros_contratos** | Pólizas del formulario “Gestionar” (Dashboard seguros).                     |
-| **seguros_polizas** | Compras a aseguradora y reventa al cliente (`/seguros/compras`, `/seguros/ventas`). |
+| **seguros_polizas** | Compras y reventa (`/seguros/compras`, `/seguros/ventas`). |
+| Columnas en seguros_contratos | Opcional: vigencia_desde, vigencia_hasta, renovado_de_nota. |
+| **seguros_renovaciones** | Opcional: historial de renovaciones. |
 
-Si ya tienes alguna tabla creada, puedes ejecutar solo los bloques que falten. `create table if not exists` evita errores si la tabla ya existe.
+Si ya tienes alguna tabla creada, ejecuta solo los bloques que falten. Usa `add column if not exists` y `create table if not exists` para evitar errores.
