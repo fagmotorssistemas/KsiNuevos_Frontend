@@ -8,6 +8,9 @@ export type VehicleWithSeller = Database['public']['Tables']['scraper_vehicles']
     seller: Database['public']['Tables']['scraper_sellers']['Row'] | null;
 };
 
+/** Tracción extraída del texto del vehículo (title, description, characteristics). */
+export type VehicleTraction = '4x4' | 'AWD' | '4WD' | 'FWD' | 'RWD' | null;
+
 export interface VehicleFilters {
     brand?: string;
     model?: string;
@@ -17,14 +20,32 @@ export interface VehicleFilters {
     dateRange?: 'today' | 'yesterday' | 'week' | 'month' | 'all';
     regionFilter?: 'all' | 'coast' | 'sierra';
     searchTerm?: string;
+    /** Filtro por tracción: 'all' | '4x4' (4x4/AWD/4WD) | '4x2' (FWD/RWD). Solo aplica si hay datos en el listado. */
+    traction?: string;
     sortBy?: string;
     page?: number;
     itemsPerPage?: number;
 }
 
+/** Extrae la tracción del texto del vehículo (title, description, characteristics). */
+export function getVehicleTraction(vehicle: { title?: string | null; description?: string | null; characteristics?: string[] | null }): VehicleTraction {
+    const text = [
+        vehicle.title,
+        vehicle.description,
+        ...(vehicle.characteristics ?? []),
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (!text) return null;
+    if (/\b4x4\b/.test(text)) return '4x4';
+    if (/\bawd\b/.test(text)) return 'AWD';
+    if (/\b4wd\b/.test(text)) return '4WD';
+    if (/\bfwd\b/.test(text)) return 'FWD';
+    if (/\brwd\b/.test(text)) return 'RWD';
+    return null;
+}
+
 const SIERRA_CITIES = [
     'quito', 'cuenca', 'ambato', 'riobamba', 'loja', 'ibarra',
-    'tulcán', 'latacunga', 'guaranda', 'azogues', 'cañar'
+    'tulcán', 'latacunga', 'guaranda', 'azogues', 'cañar', "chordeleg"
 ];
 
 const COAST_CITIES = [
@@ -47,12 +68,14 @@ export const scraperService = {
             dateRange = 'all',
             regionFilter = 'all',
             searchTerm,
+            traction,
             sortBy = 'created_at_desc',
             page = 1,
             itemsPerPage = 20
         } = filters;
 
         const hasSearchTerm = searchTerm && searchTerm.trim() !== '';
+        const hasTractionFilter = traction && traction !== 'all';
 
         // Construir query base
         let query = supabase
@@ -141,9 +164,8 @@ export const scraperService = {
                 query = query.order('created_at', { ascending: false });
         }
 
-        // PAGINACIÓN: Si hay búsqueda de texto, necesitamos traer TODOS los datos
-        // porque el filtro se aplica en el cliente
-        if (!hasSearchTerm) {
+        // PAGINACIÓN: Si hay búsqueda de texto o filtro por tracción, se aplica en el cliente
+        if (!hasSearchTerm && !hasTractionFilter) {
             const from = (page - 1) * itemsPerPage;
             const to = from + itemsPerPage - 1;
             query = query.range(from, to);
@@ -157,6 +179,18 @@ export const scraperService = {
         }
 
         let filteredData = (data || []) as VehicleWithSeller[];
+
+        // FILTRO: Tracción (en cliente, por título/descripción/características)
+        if (hasTractionFilter) {
+            const tractionVal = traction!;
+            filteredData = filteredData.filter(v => {
+                const vTraction = getVehicleTraction(v);
+                if (!vTraction) return false;
+                if (tractionVal === '4x4') return vTraction === '4x4' || vTraction === 'AWD' || vTraction === '4WD';
+                if (tractionVal === '4x2') return vTraction === 'FWD' || vTraction === 'RWD';
+                return true;
+            });
+        }
 
         // FILTRO: Búsqueda por texto (en cliente)
         if (hasSearchTerm) {
@@ -173,13 +207,13 @@ export const scraperService = {
 
                 return searchableText.includes(searchLower);
             });
+        }
 
-            // Aplicar paginación manual después del filtro de búsqueda
+        if (hasSearchTerm || hasTractionFilter) {
             const totalFiltered = filteredData.length;
             const from = (page - 1) * itemsPerPage;
             const to = from + itemsPerPage;
             filteredData = filteredData.slice(from, to);
-
             return {
                 data: filteredData,
                 totalCount: totalFiltered

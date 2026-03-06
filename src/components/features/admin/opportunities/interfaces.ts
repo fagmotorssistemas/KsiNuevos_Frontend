@@ -82,7 +82,11 @@ export interface OpportunitiesCenterViewProps {
     selectedDateRange: string;
     regionFilter: 'all' | 'coast' | 'sierra';
     searchTerm: string;
+    selectedTraction: string;
     sortBy: string;
+
+    /** Mostrar filtro de tracción solo cuando hay vehículos con tracción detectable. */
+    showTractionFilter?: boolean;
 
     availableBrands: string[];
     availableModels: string[];
@@ -103,6 +107,7 @@ export interface OpportunitiesCenterViewProps {
     onDateRangeChange: (value: string) => void;
     onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
     onSearchTermChange: (value: string) => void;
+    onTractionChange: (value: string) => void;
     onSortChange: (value: string) => void;
     onClearFilters: () => void;
 }
@@ -151,6 +156,7 @@ export interface OpportunitiesViewProps {
         dateRange?: string;
         regionFilter?: 'all' | 'coast' | 'sierra';
         searchTerm?: string;
+        traction?: string;
         sortBy?: string;
     };
     filterOptions: {

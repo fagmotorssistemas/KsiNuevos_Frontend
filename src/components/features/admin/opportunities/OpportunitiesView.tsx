@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getVehicleTraction } from "@/services/scraper.service";
 import { OpportunitiesCenterView } from "./OpportunitiesCenterView";
 import { OpportunitiesTableView } from "./OpportunitiesTableView";
 import { Pagination } from "@/shared/components/Pagination";
@@ -32,6 +33,7 @@ export function OpportunitiesView({
         vehicleFilters.dateRange !== 'all' ||
         vehicleFilters.regionFilter !== 'all' ||
         vehicleFilters.searchTerm !== '' ||
+        vehicleFilters.traction !== 'all' ||
         vehicleFilters.sortBy !== 'created_at_desc',
         [vehicleFilters]
     );
@@ -65,6 +67,8 @@ export function OpportunitiesView({
                     selectedDateRange={vehicleFilters.dateRange || 'all'}
                     regionFilter={vehicleFilters.regionFilter || 'all'}
                     searchTerm={vehicleFilters.searchTerm || ''}
+                    selectedTraction={vehicleFilters.traction || 'all'}
+                    showTractionFilter={vehicles.some(v => getVehicleTraction(v) !== null)}
                     sortBy={vehicleFilters.sortBy || 'created_at_desc'}
 
                     // Opciones disponibles
@@ -82,6 +86,7 @@ export function OpportunitiesView({
                     onDateRangeChange={(value) => updateFilter('dateRange', value)}
                     onRegionFilterChange={(value) => updateFilter('regionFilter', value)}
                     onSearchTermChange={(value) => updateFilter('searchTerm', value)}
+                    onTractionChange={(value) => updateFilter('traction', value)}
                     onSortChange={(value) => updateFilter('sortBy', value)}
                     onClearFilters={clearFilters}
 

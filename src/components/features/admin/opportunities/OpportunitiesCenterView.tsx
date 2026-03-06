@@ -36,15 +36,18 @@ const SORT_OPTIONS = [
     { value: "price_desc", label: "Precio: mayor a menor" },
 ];
 
+const TRACTION_OPTIONS = ["4x4", "4x2"];
+
 export const OpportunitiesCenterView = ({
     onScraperComplete,
     vehicles,
     selectedBrand, selectedModel, selectedYear,
-    selectedCity, selectedDateRange, regionFilter, searchTerm, sortBy,
+    selectedCity, selectedDateRange, regionFilter, searchTerm, selectedTraction, sortBy,
+    showTractionFilter = false,
     availableBrands, availableModels, availableYears, availableCities, priceStatistics,
     onBrandChange, onModelChange, onYearChange,
     onCityChange, onDateRangeChange, onRegionFilterChange,
-    onSearchTermChange, onSortChange, onClearFilters,
+    onSearchTermChange, onTractionChange, onSortChange, onClearFilters,
 }: OpportunitiesCenterViewProps) => {
 
     const [isWebhookLoading, setIsWebhookLoading] = useState(false);
@@ -63,6 +66,7 @@ export const OpportunitiesCenterView = ({
     const [showYearModal, setShowYearModal] = useState(false);
     const [showCityModal, setShowCityModal] = useState(false);
     const [showDateModal, setShowDateModal] = useState(false);
+    const [showTractionModal, setShowTractionModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
     const [showComparisonPanel, setShowComparisonPanel] = useState(false);
 
@@ -82,10 +86,12 @@ export const OpportunitiesCenterView = ({
     const hasActiveFilters = useMemo(() =>
         selectedBrand !== "all" || selectedModel !== "all" ||
         selectedYear !== "all" || selectedDateRange !== "all" || selectedCity !== "all" ||
-        sortBy !== "created_at_desc" || searchTerm !== "" || regionFilter !== "all",
+        selectedTraction !== "all" || sortBy !== "created_at_desc" || searchTerm !== "" || regionFilter !== "all",
         [selectedBrand, selectedModel, selectedYear, selectedDateRange,
-            selectedCity, sortBy, searchTerm, regionFilter]
+            selectedCity, selectedTraction, sortBy, searchTerm, regionFilter]
     );
+
+    const getTractionLabel = (v: string) => v === "all" ? "Todas" : v;
 
     // Contadores informativos
     const brandFilteredCount = vehicles.filter(v => v.brand === selectedBrand).length;
@@ -129,7 +135,7 @@ export const OpportunitiesCenterView = ({
         try {
             const response = await scraperService.scrapMarketplace(searchValue);
             clearInterval(interval);
-            if (!response || response.status !== "done") throw new Error(response?.message ?? "Error inesperado");
+            if (!response || response.status !== "done") throw new Error(response?.message ?? "Estamos extrayendo los vehiculos, espere un momento");
             setProgress(100);
             setTimeout(() => {
                 const r = response.resumen;
@@ -223,14 +229,13 @@ export const OpportunitiesCenterView = ({
                             <span className="truncate">Mejores Oportunidades</span>
                         </button>
 
-                        {/* <button
+                        <button
                             onClick={() => setShowScannerModal(true)}
-                            disabled={isWebhookLoading || isBulkScraping}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Zap className="h-4 w-4" />
                             <span>Escanear</span>
-                        </button> */}
+                        </button>
                         {/* <button
                             onClick={handleBulkScrapByBrands}
                             disabled={isWebhookLoading || isBulkScraping}
@@ -312,7 +317,7 @@ export const OpportunitiesCenterView = ({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <FilterButton
                             label={selectedBrand === "all" ? "Marca" : `${selectedBrand} (${brandFilteredCount})`}
                             active={selectedBrand !== "all"} hasSelection={selectedBrand !== "all"}
@@ -339,6 +344,15 @@ export const OpportunitiesCenterView = ({
                             active={selectedDateRange !== "all"} hasSelection={selectedDateRange !== "all"}
                             icon={Filter} onClick={() => setShowDateModal(true)}
                         />
+                        {showTractionFilter && (
+                            <FilterButton
+                                label={selectedTraction === "all" ? "Tracción" : getTractionLabel(selectedTraction)}
+                                active={selectedTraction !== "all"}
+                                hasSelection={selectedTraction !== "all"}
+                                icon={Layers}
+                                onClick={() => setShowTractionModal(true)}
+                            />
+                        )}
                     </div>
                 </div>
             </div>
@@ -373,6 +387,22 @@ export const OpportunitiesCenterView = ({
                 options={DATE_RANGE_OPTIONS} selectedValue={getDateRangeLabel(selectedDateRange)}
                 onSelect={handleDateRangeChange} searchPlaceholder="Buscar rango..."
                 allLabel="Cualquier Fecha" showAllOption={true} />
+
+            {showTractionFilter && (
+                <FilterModal
+                    isOpen={showTractionModal}
+                    onClose={() => setShowTractionModal(false)}
+                    title="Tracción"
+                    description="Filtra por tipo de tracción (4x4 o 4x2)"
+                    icon={<Layers className="h-6 w-6 text-white" />}
+                    options={TRACTION_OPTIONS}
+                    selectedValue={selectedTraction === "all" ? "all" : selectedTraction}
+                    onSelect={value => onTractionChange(value === "all" ? "all" : value)}
+                    searchPlaceholder="Buscar..."
+                    allLabel="Todas"
+                    showAllOption={true}
+                />
+            )}
 
             <FilterModal isOpen={showSortModal} onClose={() => setShowSortModal(false)}
                 title="Ordenar Resultados" description="Selecciona cómo quieres ordenar los vehículos"
@@ -415,7 +445,7 @@ export const OpportunitiesCenterView = ({
                                     />
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto">
-                                    <button disabled={isWebhookLoading} onClick={() => setShowCarPicker(true)}
+                                    <button disabled={false} onClick={() => setShowCarPicker(true)}
                                         className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm flex-shrink-0 disabled:opacity-50" title="Abrir Catálogo">
                                         <Car className="h-5 w-5" />
                                     </button>

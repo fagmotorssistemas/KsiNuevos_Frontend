@@ -38,6 +38,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
     dateRange: 'all',
     regionFilter: 'all',
     searchTerm: '',
+    traction: 'all',
     sortBy: 'created_at_desc',
     page: 1,
     itemsPerPage: ITEMS_PER_PAGE
@@ -116,6 +117,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
         dateRange: vehicleFilters.dateRange !== 'all' ? vehicleFilters.dateRange as any : 'all',
         regionFilter: vehicleFilters.regionFilter,
         searchTerm: vehicleFilters.searchTerm,
+        traction: vehicleFilters.traction !== 'all' ? vehicleFilters.traction : undefined,
         sortBy: vehicleFilters.sortBy,
         page: currentPage,
         itemsPerPage: ITEMS_PER_PAGE
@@ -237,7 +239,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
     if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
     setVehicleFilters({
       brand: 'all', model: 'all', motor: 'all', year: 'all', city: 'all',
-      dateRange: 'all', regionFilter: 'all', searchTerm: '',
+      dateRange: 'all', regionFilter: 'all', searchTerm: '', traction: 'all',
       sortBy: 'created_at_desc', page: 1, itemsPerPage: ITEMS_PER_PAGE
     });
     setCurrentPage(1);

@@ -27,6 +27,7 @@ import {
     Hash,
     Building2,
     User as UserIcon,
+    Star,
 } from "lucide-react";
 import type { VehicleImageAnalysis } from "@/types/vehicleImageAnalysis";
 import { useState, useEffect, useMemo } from "react";
@@ -176,132 +177,6 @@ function MotorEditableField({
 
 const DateFormatterInstance = new DateFormatter(new TextFormatter());
 
-// ─── Modal pequeño: Análisis de imágenes ────────────────────────────────────
-
-function AnalysisRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex items-center justify-between gap-2 py-1.5 border-b border-zinc-100 last:border-0">
-            <span className="text-[11px] font-semibold text-zinc-500">{label}</span>
-            <span className="text-xs font-bold text-zinc-800 text-right">{value}</span>
-        </div>
-    );
-}
-
-function ImageAnalysisModal({ analysis, onClose }: { analysis: VehicleImageAnalysis; onClose: () => void }) {
-    const cabinaLabels: Record<string, string> = {
-        una_cabina: "Una cabina",
-        doble_cabina: "Doble cabina",
-        no_aplica: "No aplica",
-    };
-    const vendedorLabels: Record<string, string> = {
-        concesionaria: "Concesionaria",
-        particular: "Particular",
-        indeterminado: "Indeterminado",
-    };
-    const boolLabel = (v: boolean | null) => (v === true ? "Sí" : v === false ? "No" : "—");
-
-    return (
-        <div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm animate-in h-[100vh] fade-in duration-200"
-            onClick={onClose}
-        >
-            <div
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white w-full max-w-lg max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-            >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                    <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
-                        <ScanSearch className="h-4 w-4 text-zinc-500" />
-                        Análisis por imágenes
-                    </h3>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-700 transition-colors"
-                        aria-label="Cerrar"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
-                    <div className="grid grid-cols-2 gap-2">
-                        {analysis.cabina && (
-                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
-                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Cabina</p>
-                                <p className="text-xs font-semibold text-zinc-800 mt-0.5">{cabinaLabels[analysis.cabina] ?? analysis.cabina}</p>
-                            </div>
-                        )}
-                        {analysis.marca_coincide_con_titulo !== null && analysis.marca_coincide_con_titulo !== undefined && (
-                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
-                                <p className="text-[9px] font-bold text-zinc-400 uppercase">Marca correcta</p>
-                                <p className="text-xs font-semibold text-zinc-800 mt-0.5">{analysis.marca_coincide_con_titulo ? "Si" : "No segura"}</p>
-                            </div>
-                        )}
-                        {analysis.placa_matricula && (
-                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5 col-span-2">
-                                <Hash className="h-3.5 w-3.5 text-zinc-400" />
-                                <div>
-                                    <p className="text-[9px] font-bold text-zinc-400 uppercase">Placa</p>
-                                    <p className="text-xs font-bold text-zinc-800 mt-0.5">{analysis.placa_matricula}</p>
-                                </div>
-                            </div>
-                        )}
-                        {analysis.tipo_vendedor && (
-                            <div className="bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100 flex items-center gap-1.5 col-span-2">
-                                {analysis.tipo_vendedor === "concesionaria" ? <Building2 className="h-3.5 w-3.5 text-zinc-400" /> : <UserIcon className="h-3.5 w-3.5 text-zinc-400" />}
-                                <div>
-                                    <p className="text-[9px] font-bold text-zinc-400 uppercase">Vendedor</p>
-                                    <p className="text-xs font-semibold text-zinc-800 mt-0.5">{vendedorLabels[analysis.tipo_vendedor] ?? analysis.tipo_vendedor}</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    {analysis.exterior && (
-                        <div className="border border-zinc-200 rounded-xl overflow-hidden">
-                            <div className="px-3 py-2 bg-zinc-100 border-b border-zinc-200 flex items-center gap-2">
-                                <CarFront className="h-3.5 w-3.5 text-zinc-500" />
-                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Exterior</span>
-                            </div>
-                            <div className="p-3 space-y-0 text-[11px]">
-                                <AnalysisRow label="Golpes/abolladuras/rayones" value={boolLabel(analysis.exterior.golpes_abolladuras_raspones)} />
-                                <AnalysisRow label="Diferencias tono paneles" value={boolLabel(analysis.exterior.diferencias_tono_paneles)} />
-                                <AnalysisRow label="Desalineación puertas/capó/maletero" value={boolLabel(analysis.exterior.desalineacion_puertas_capot_maletero)} />
-                                <AnalysisRow label="Oxidación visible" value={boolLabel(analysis.exterior.oxidacion_visible)} />
-                                <AnalysisRow label="Faros opacos/rotos" value={boolLabel(analysis.exterior.faros_opacos_o_rotos)} />
-                                <AnalysisRow label="Llantas desgaste irregular" value={boolLabel(analysis.exterior.llantas_desgaste_irregular)} />
-                                {analysis.exterior.llantas_vida_util && <AnalysisRow label="Vida útil llantas" value={analysis.exterior.llantas_vida_util} />}
-                                {analysis.exterior.notas && <div className="pt-2 mt-2 border-t border-zinc-100 text-zinc-500 text-xs">{analysis.exterior.notas}</div>}
-                            </div>
-                        </div>
-                    )}
-                    {analysis.interior && (
-                        <div className="border border-zinc-200 rounded-xl overflow-hidden">
-                            <div className="px-3 py-2 bg-zinc-100 border-b border-zinc-200 flex items-center gap-2">
-                                <LayoutDashboard className="h-3.5 w-3.5 text-zinc-500" />
-                                <span className="text-[10px] font-bold text-zinc-600 uppercase">Interior</span>
-                            </div>
-                            <div className="p-3 space-y-0 text-[11px]">
-                                {analysis.interior.desgaste_volante_palanca_pedales && <AnalysisRow label="Desgaste volante/palanca/pedales" value={analysis.interior.desgaste_volante_palanca_pedales} />}
-                                <AnalysisRow label="Asientos rotos/gastados" value={boolLabel(analysis.interior.asientos_rotos_o_gastados)} />
-                                <AnalysisRow label="Humedad/inundación" value={boolLabel(analysis.interior.senales_humedad_inundacion)} />
-                                {analysis.interior.luces_warning_tablero && analysis.interior.luces_warning_tablero.length > 0 && (
-                                    <AnalysisRow label="Luces warning tablero" value={analysis.interior.luces_warning_tablero.join(", ")} />
-                                )}
-                                {analysis.interior.notas && <div className="pt-2 mt-2 border-t border-zinc-100 text-zinc-500 text-xs">{analysis.interior.notas}</div>}
-                            </div>
-                        </div>
-                    )}
-                    {analysis.resumen && (
-                        <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                            <p className="text-[10px] font-bold text-zinc-500 uppercase mb-1">Resumen</p>
-                            <p className="text-xs text-zinc-700 leading-relaxed">{analysis.resumen}</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export function OpportunitiesTableView({
     vehicles,
     isLoading,
@@ -313,7 +188,6 @@ export function OpportunitiesTableView({
     const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithSeller | null>(null);
     const [vehicleStats, setVehicleStats] = useState<PriceStatistics | null>(null);
     const [loadingStats, setLoadingStats] = useState(false);
-    const [analysisModalData, setAnalysisModalData] = useState<VehicleImageAnalysis | null>(null);
 
     // ACTUALIZADO: Función para guardar motor con recarga de datos
     const handleSaveMotor = async (vehicleId: string, motor: string) => {
@@ -642,294 +516,315 @@ export function OpportunitiesTableView({
             {
                 selectedVehicle && (
                     <div
-                        className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-950/70 backdrop-blur-sm animate-in h-[100vh] fade-in duration-300"
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-6 bg-zinc-900/60 backdrop-blur-md animate-in h-[100vh] fade-in duration-300"
                         onClick={() => setSelectedVehicle(null)}
                     >
                         <div
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white w-full max-w-7xl h-[90vh] lg:h-[85vh] rounded-[32px] shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 slide-in-from-bottom-8"
+                            className="bg-white w-full max-w-7xl h-[90vh] lg:h-[85vh] rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-[0.98] slide-in-from-bottom-4 transition-all"
                         >
-                            {/* LADO IZQUIERDO: Carousel */}
+                            {/* LADO IZQUIERDO: Carousel (Asumiendo que ocupa el 50% o el espacio necesario) */}
                             <OpportunitiesCarousel vehicle={selectedVehicle} />
 
                             {/* LADO DERECHO: Información */}
                             <div className="flex-1 flex flex-col h-full bg-white relative">
 
                                 {/* Header Fijo */}
-                                <div className="p-6 lg:p-8 pb-5 border-b border-zinc-100 flex flex-col gap-4 bg-gradient-to-b from-white to-zinc-50/30 z-10">
+                                <div className="p-6 lg:px-8 lg:pt-8 lg:pb-6 border-b border-zinc-100 flex flex-col gap-5 bg-white z-10 sticky top-0">
                                     <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <span className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-xs font-bold uppercase tracking-wider shadow-sm">
+                                        <div className="flex-1 space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                <span className="px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700 text-xs font-semibold uppercase tracking-wider">
                                                     {selectedVehicle.year}
                                                 </span>
-                                                <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 uppercase tracking-wider bg-white px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm">
-                                                    <Clock className="h-3.5 w-3.5" />
+                                                <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 bg-zinc-50 px-2.5 py-1 rounded-md">
+                                                    <Clock className="h-3.5 w-3.5 text-zinc-400" />
                                                     {DateFormatterInstance.formatRelativeTime(selectedVehicle.publication_date)}
                                                 </div>
                                                 <PriceBadge type={getPriceBadge(selectedVehicle)} />
                                                 <SoldBadge isSold={selectedVehicle.is_sold} />
                                             </div>
-                                            <h2 className="text-3xl lg:text-4xl font-black text-zinc-900 tracking-tight leading-none mb-2">
-                                                {selectedVehicle.brand?.toUpperCase()}{" "}
-                                                <span className="text-zinc-400">{selectedVehicle.model?.toUpperCase()}</span>
-                                            </h2>
-                                            <p className="text-zinc-500 text-sm font-medium line-clamp-2 max-w-2xl">{selectedVehicle.title}</p>
+
+                                            <div>
+                                                <h2 className="text-3xl lg:text-4xl font-extrabold text-zinc-900 tracking-tight leading-none mb-1">
+                                                    {selectedVehicle.brand?.toUpperCase()}{" "}
+                                                    <span className="text-zinc-400 font-medium">{selectedVehicle.model?.toUpperCase()}</span>
+                                                </h2>
+                                                <p className="text-zinc-500 text-sm font-normal line-clamp-1 max-w-xl">
+                                                    {selectedVehicle.title}
+                                                </p>
+                                            </div>
                                         </div>
-                                        {/* {selectedVehicle.image_analysis && (
-                                            <button
-                                                onClick={() => setAnalysisModalData(selectedVehicle.image_analysis as unknown as VehicleImageAnalysis)}
-                                                className="p-3 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-700 border border-violet-200 transition-colors flex items-center gap-2 transition-all"
-                                            >
-                                                <ScanSearch className="h-5 w-5" />
-                                            </button>
-                                        )} */}
 
                                         <button
                                             onClick={() => setSelectedVehicle(null)}
-                                            className="p-3 rounded-xl bg-zinc-100 hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-all border border-zinc-200 hover:border-red-200 shadow-sm"
+                                            className="p-2.5 rounded-full bg-zinc-50 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 transition-colors border border-transparent hover:border-zinc-200"
+                                            aria-label="Cerrar"
                                         >
                                             <X className="h-5 w-5" />
                                         </button>
                                     </div>
 
-                                    {/* Price Statistics Bar */}
-                                    {vehicleStats && !loadingStats && (
-                                        <>
+                                    {/* {vehicleStats && !loadingStats && (
+                                        <div className="mt-2">
                                             {vehicleStats.min_price === vehicleStats.max_price ? (
-                                                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center gap-3 text-center">
-                                                    <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                                                    <p className="text-sm font-medium text-slate-500">
-                                                        Unidad única detectada: No hay suficientes carros para promediar un precio.
-                                                    </p>
+                                                <div className="px-4 py-3 bg-zinc-50 rounded-xl flex items-center justify-center gap-2 text-center text-sm text-zinc-500">
+                                                    <AlertCircle className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+                                                    <span>Unidad única en el mercado actual. Promedio no disponible.</span>
                                                 </div>
                                             ) : (
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <div className="p-1 bg-blue-100 rounded-md">
-                                                                <DollarSign className="h-3 w-3 text-blue-600" />
-                                                            </div>
-                                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Precio Sugerido</span>
-                                                        </div>
-                                                        <div className="text-xl font-black text-blue-700">
+                                                <div className="flex items-center justify-between p-1 bg-zinc-50 rounded-2xl border border-zinc-100">
+                                                    <div className="flex-1 p-3 text-center">
+                                                        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block mb-1">Valor Sugerido</span>
+                                                        <div className="text-lg font-bold text-zinc-900">
                                                             ${vehicleStats.median_price ? Number(vehicleStats.median_price).toLocaleString() : 'N/A'}
                                                         </div>
                                                     </div>
-
-                                                    <div className="p-3 bg-green-50 border border-green-100 rounded-xl">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <div className="p-1 bg-green-100 rounded-md">
-                                                                <TrendingDown className="h-3 w-3 text-green-600" />
+                                                    <div className="w-px h-8 bg-zinc-200"></div>
+                                                    <div className="flex-1 flex justify-center items-center gap-6 p-3">
+                                                        <div className="text-left">
+                                                            <div className="flex items-center gap-1 mb-1">
+                                                                <TrendingDown className="h-3 w-3 text-emerald-500" />
+                                                                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Mínimo</span>
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">Más Barato</span>
-                                                        </div>
-                                                        <div className="text-xl font-black text-green-700">
-                                                            ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <div className="p-1 bg-red-100 rounded-md">
-                                                                <TrendingUp className="h-3 w-3 text-red-600" />
+                                                            <div className="text-sm font-semibold text-zinc-700">
+                                                                ${vehicleStats.min_price ? Number(vehicleStats.min_price).toLocaleString() : 'N/A'}
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Más Caro</span>
                                                         </div>
-                                                        <div className="text-xl font-black text-red-700">
-                                                            ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
+                                                        <div className="text-left">
+                                                            <div className="flex items-center gap-1 mb-1">
+                                                                <TrendingUp className="h-3 w-3 text-rose-500" />
+                                                                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Máximo</span>
+                                                            </div>
+                                                            <div className="text-sm font-semibold text-zinc-700">
+                                                                ${vehicleStats.max_price ? Number(vehicleStats.max_price).toLocaleString() : 'N/A'}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             )}
-                                        </>
-                                    )}
+                                        </div>
+                                    )} */}
 
-                                    {loadingStats && (
-                                        <div className="p-4 bg-zinc-50 border border-zinc-100 rounded-xl">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin"></div>
-                                                <span className="text-xs text-zinc-500 font-semibold">Cargando estadísticas de mercado...</span>
-                                            </div>
+                                    {/* {loadingStats && (
+                                        <div className="mt-2 px-4 py-3 bg-zinc-50 rounded-xl flex items-center gap-3">
+                                            <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div>
+                                            <span className="text-sm text-zinc-500">Analizando mercado...</span>
                                         </div>
                                     )}
 
                                     {!loadingStats && !vehicleStats && getPriceStatisticsForVehicle && (
-                                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-1.5 bg-amber-100 rounded-md">
-                                                    <TrendingUp className="h-4 w-4 text-amber-600" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="text-xs text-amber-700 font-semibold">
-                                                        No hay estadísticas disponibles para este modelo
-                                                    </p>
-                                                    <p className="text-[10px] text-amber-600 mt-0.5">
-                                                        {selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year}
-                                                    </p>
-                                                </div>
-                                            </div>
+                                        <div className="mt-2 px-4 py-3 bg-zinc-50 rounded-xl flex items-center gap-2 text-sm text-zinc-500">
+                                            <TrendingUp className="h-4 w-4 text-zinc-400" />
+                                            <span>Sin datos suficientes para este modelo.</span>
                                         </div>
-                                    )}
+                                    )} */}
                                 </div>
 
                                 {/* Cuerpo Scrollable */}
-                                <div className="flex-1 overflow-y-auto p-6 lg:p-8 pt-6 space-y-6 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto p-6 lg:px-8 space-y-8 custom-scrollbar bg-zinc-50/30">
 
-                                    {/* A. Precio y CTA */}
-                                    <div className="flex flex-col sm:flex-row items-end justify-between gap-4 p-6 bg-gradient-to-br from-zinc-50 via-white to-zinc-50/50 rounded-2xl border border-zinc-200 shadow-sm">
+                                    {/* A. Precio y CTA - Destacado */}
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-1">
                                         <div>
-                                            <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                                <TagIcon className="h-3.5 w-3.5" />
+                                            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
                                                 Precio de Venta
                                             </div>
                                             <div className="text-5xl lg:text-6xl font-black text-zinc-900 tracking-tighter">
                                                 ${selectedVehicle.price ? selectedVehicle.price.toLocaleString() : '---'}
                                             </div>
                                         </div>
-                                        <div className="flex gap-2 w-full sm:w-auto">
-                                            {selectedVehicle.url && (
-                                                <a
-                                                    href={selectedVehicle.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className={`flex-1 sm:flex-none px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${selectedVehicle.is_sold
-                                                        ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed'
-                                                        : 'bg-zinc-900 hover:bg-red-600 text-white shadow-zinc-900/10 hover:shadow-red-600/20 hover:scale-[1.02] active:scale-[0.98]'
-                                                        }`}
-                                                    {...(selectedVehicle.is_sold && {
-                                                        onClick: (e) => e.preventDefault(),
-                                                    })}
-                                                >
-                                                    {selectedVehicle.is_sold ? 'No disponible' : 'Ver en marketplace'}
-                                                    <ChevronRight className="h-5 w-5" />
-                                                </a>
-                                            )}
-                                        </div>
+
+                                        {selectedVehicle.url && (
+                                            <a
+                                                href={selectedVehicle.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className={`w-full sm:w-auto px-8 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${selectedVehicle.is_sold
+                                                    ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                                                    : 'bg-zinc-900 hover:bg-black text-white shadow-[0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.15)] hover:-translate-y-0.5 active:translate-y-0'
+                                                    }`}
+                                                {...(selectedVehicle.is_sold && {
+                                                    onClick: (e) => e.preventDefault(),
+                                                })}
+                                            >
+                                                {selectedVehicle.is_sold ? 'No disponible' : 'Ver en marketplace'}
+                                                <ChevronRight className="h-5 w-5" />
+                                            </a>
+                                        )}
                                     </div>
 
                                     {/* B. Grid de Cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                                        {/* Card: Estado */}
-                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                    <History className="h-4 w-4 text-zinc-500" />
-                                                </div>
-                                                Estado
-                                            </h3>
-                                            <ul className="space-y-4">
-                                                <li className="flex justify-between items-center text-sm pb-3 border-b border-zinc-100">
-                                                    <span className="text-zinc-500 font-semibold">Condición</span>
-                                                    <span className="font-bold text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">{displayTextCondition(selectedVehicle.condition || 'Usado')}</span>
-                                                </li>
-                                                <li className="flex justify-between items-center text-sm pb-3 border-zinc-100">
-                                                    <span className="text-zinc-500 font-semibold">Ubicación</span>
-                                                    <span className="font-bold text-zinc-900 capitalize flex items-center gap-1.5">
-                                                        <MapPin className="h-3.5 w-3.5 text-zinc-400" />
-                                                        {selectedVehicle.location || 'N/A'}
-                                                    </span>
-                                                </li>
-                                            </ul>
-                                        </div>
+                                        {/* Card: Vendedor */}
+                                        {selectedVehicle.seller && (
+                                            <div className="p-5 bg-white border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-50 border border-zinc-100 flex-shrink-0 flex items-center justify-center">
+                                                        {selectedVehicle.seller.pic ? (
+                                                            <img
+                                                                src={selectedVehicle.seller.pic}
+                                                                alt={selectedVehicle.seller.seller_name || "Vendedor"}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <UserIcon className="h-5 w-5 text-zinc-400" />
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest mb-0.5">Vendedor</h3>
+                                                        <p className="font-semibold text-zinc-900 truncate text-sm">
+                                                            {selectedVehicle.seller.seller_name || "Usuario Anónimo"}
+                                                        </p>
+                                                        {selectedVehicle.seller.rating != null && (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                {/* Contenedor de las 5 estrellas */}
+                                                                <div className="flex items-center gap-0.5">
+                                                                    {[1, 2, 3, 4, 5].map((star) => {
+                                                                        const rating = Number(selectedVehicle.seller?.rating);
+                                                                        const isFull = rating >= star;
+                                                                        const isHalf = !isFull && rating >= star - 0.9;
 
-                                        {/* Card: Specs */}
-                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                    <Gauge className="h-4 w-4 text-zinc-500" />
+                                                                        return (
+                                                                            <div key={star} className="relative">
+                                                                                <Star
+                                                                                    className={`h-3.5 w-3.5 ${isFull ? 'fill-amber-400 text-amber-400' : 'fill-zinc-200 text-zinc-200'}`}
+                                                                                />
+                                                                                {isHalf && (
+                                                                                    <div className="absolute top-0 left-0 overflow-hidden w-[50%]">
+                                                                                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                {/* Textos de calificación y cantidad */}
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs font-bold text-zinc-700">
+                                                                        {Number(selectedVehicle.seller.rating).toFixed(1)}
+                                                                    </span>
+                                                                    <span className="text-xs font-medium text-zinc-500">
+                                                                        ({Number(selectedVehicle.seller.rating_count)})
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                Especificaciones
-                                            </h3>
-                                            <div className="mb-5 pb-4 border-b border-zinc-100 flex justify-between items-center">
-                                                <span className="text-sm text-zinc-500 font-semibold">Kilometraje</span>
-                                                <span className="text-xl font-black text-zinc-900 bg-zinc-50 px-3 py-1.5 rounded-lg">
-                                                    {selectedVehicle.mileage ? selectedVehicle.mileage.toLocaleString() + ' km' : 'N/A'}
+                                            </div>
+                                        )}
+
+                                        {/* Card: Estado y Ubicación */}
+                                        <div className="p-5 bg-white border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-colors flex flex-col justify-center gap-3">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2 text-zinc-500">
+                                                    <History className="h-4 w-4" />
+                                                    <span className="text-sm font-medium">Condición</span>
+                                                </div>
+                                                <span className="text-sm font-semibold text-zinc-900">{displayTextCondition(selectedVehicle.condition || 'Usado')}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2 text-zinc-500">
+                                                    <MapPin className="h-4 w-4" />
+                                                    <span className="text-sm font-medium">Ubicación</span>
+                                                </div>
+                                                <span className="text-sm font-semibold text-zinc-900 capitalize truncate max-w-[120px] text-right">
+                                                    {selectedVehicle.location || 'N/A'}
                                                 </span>
                                             </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {selectedVehicle.characteristics && selectedVehicle.characteristics.length > 0 ? (
-                                                    selectedVehicle.characteristics.slice(0, 4).map((char, i) => (
-                                                        <span key={i} className="text-xs font-bold px-3 py-1.5 bg-zinc-50 text-zinc-700 rounded-lg border border-zinc-200 hover:bg-zinc-100 transition-colors">
-                                                            {char}
-                                                        </span>
-                                                    ))
-                                                ) : <span className="text-xs text-zinc-400 italic">Sin datos disponibles</span>}
+                                        </div>
+
+                                        {/* Card: Especificaciones */}
+                                        <div className="p-5 bg-white border border-zinc-100 rounded-2xl md:col-span-2">
+                                            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <Gauge className="h-4 w-4" />
+                                                Especificaciones
+                                            </h3>
+
+                                            <div className="flex flex-col sm:flex-row gap-6">
+                                                {/* Kilometraje destacado */}
+                                                <div className="flex-shrink-0">
+                                                    <span className="block text-xs text-zinc-500 mb-1">Kilometraje</span>
+                                                    <span className="text-2xl font-bold text-zinc-900">
+                                                        {selectedVehicle.mileage ? `${selectedVehicle.mileage.toLocaleString()} km` : 'N/A'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Etiquetas */}
+                                                <div className="flex-1 flex flex-wrap gap-2 items-center">
+                                                    {selectedVehicle.characteristics && selectedVehicle.characteristics.length > 0 ? (
+                                                        selectedVehicle.characteristics.slice(0, 5).map((char, i) => (
+                                                            <span key={i} className="text-xs font-medium px-3 py-1.5 bg-zinc-50 text-zinc-600 rounded-lg">
+                                                                {char}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-sm text-zinc-400">Sin características especificadas</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Card: Registro */}
-                                        <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-shadow">
-                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                                                <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                    <DatabaseIcon className="h-4 w-4 text-zinc-500" />
-                                                </div>
-                                                Línea de tiempo
+                                        {/* Card: Registro (Simplificado) */}
+                                        <div className="p-5 bg-white border border-zinc-100 rounded-2xl">
+                                            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <DatabaseIcon className="h-4 w-4" />
+                                                Registro
                                             </h3>
-                                            <ul className="space-y-4">
-                                                <TimelineBadge
-                                                    label="Publicado"
-                                                    value={formatAbsoluteDate(selectedVehicle.publication_date)}
-                                                    icon={Eye}
-                                                />
-                                                <TimelineBadge
-                                                    label="Añadido al sistema"
-                                                    value={formatAbsoluteDate(selectedVehicle.created_at)}
-                                                    icon={DatabaseIcon}
-                                                    accent
-                                                />
-                                            </ul>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-zinc-500">Publicación</span>
+                                                    <span className="font-medium text-zinc-900">{formatAbsoluteDate(selectedVehicle.publication_date)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-zinc-500">Ingreso</span>
+                                                    <span className="font-medium text-zinc-900">{formatAbsoluteDate(selectedVehicle.created_at)}</span>
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        {/* Card: Extras */}
-                                        <div className="p-6 bg-zinc-900 rounded-2xl shadow-lg shadow-zinc-900/20 text-white hover:shadow-xl hover:shadow-zinc-900/30 transition-shadow">
-                                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                <div className="p-1.5 bg-zinc-800 rounded-lg">
-                                                    <Sparkles className="h-4 w-4 text-red-400" />
-                                                </div>
-                                                Extras Destacados
+                                        {/* Card: Extras (Diseño menos agresivo que el negro anterior) */}
+                                        <div className="p-5 bg-zinc-900 rounded-2xl">
+                                            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <Sparkles className="h-4 w-4 text-zinc-300" />
+                                                Extras
                                             </h3>
                                             {selectedVehicle.extras && selectedVehicle.extras.length > 0 ? (
-                                                <div className="flex flex-wrap gap-3">
+                                                <div className="flex flex-wrap gap-2">
                                                     {selectedVehicle.extras.map((extra, i) => (
-                                                        <div key={i} className="flex items-center gap-2 text-sm font-semibold text-zinc-100 bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700">
-                                                            <TagIcon className="h-3.5 w-3.5 text-red-400" />
+                                                        <span key={i} className="text-xs font-medium text-zinc-300 bg-zinc-800 px-2.5 py-1 rounded-md">
                                                             {extra}
-                                                        </div>
+                                                        </span>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-sm text-zinc-400 italic">No se especifican extras adicionales.</p>
+                                                <p className="text-sm text-zinc-500">No hay extras listados.</p>
                                             )}
                                         </div>
+
                                     </div>
 
                                     {/* C. Descripción */}
-                                    <div className="pt-2 border-t border-zinc-100">
-                                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <div className="p-1.5 bg-zinc-100 rounded-lg">
-                                                <FileText className="h-4 w-4 text-zinc-500" />
-                                            </div>
-                                            Nota del Vendedor
-                                        </h3>
-                                        <div className="p-5 bg-zinc-50/50 rounded-xl border border-zinc-100">
+                                    {selectedVehicle.description && (
+                                        <div className="pt-4">
+                                            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                <FileText className="h-4 w-4" />
+                                                Descripción del Vendedor
+                                            </h3>
                                             <p className="text-zinc-600 text-sm leading-relaxed whitespace-pre-wrap">
-                                                {selectedVehicle.description || "Sin descripción detallada disponible."}
+                                                {selectedVehicle.description}
                                             </p>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div >
                 )
             }
-
-            {/* Modal pequeño: análisis de imágenes */}
-            {analysisModalData && (
-                <ImageAnalysisModal analysis={analysisModalData} onClose={() => setAnalysisModalData(null)} />
-            )}
         </>
     );
 }
