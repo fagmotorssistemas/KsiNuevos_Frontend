@@ -8,16 +8,17 @@ import {
 } from "lucide-react";
 
 import { segurosService, SeguroPayload } from "@/services/seguros.service";
+import { aseguradorasService } from "@/services/aseguradoras.service";
 import { SeguroVehicular } from "@/types/seguros.types";
+import type { Aseguradora } from "@/types/aseguradoras.types";
 import { useInstallationStatus } from "@/hooks/useInstallationStatus";
 import { useSegurosCartera } from "@/hooks/useSegurosCartera";
 import { formatDinero } from "@/utils/format";
 import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { SegurosCarteraTable } from "@/components/features/seguros/SegurosCarteraTable";
 
-// Listas estáticas para el formulario
+// Listas estáticas para el formulario (aseguradoras se cargan desde Supabase)
 const BROKERS = ["TECNISEGUROS", "AON", "NOVA", "ASESORES DE SEGUROS", "DIRECTO"];
-const ASEGURADORAS = ["CHUBB SEGUROS", "SWEADEN", "MAPFRE", "ECUASUIZA", "LATINA"];
 const PLANES = ["TODO RIESGO (1 AÑO)", "TODO RIESGO (2 AÑO)", "PÉRDIDA TOTAL"];
 
 function SegurosPageContent() {
@@ -42,8 +43,15 @@ function SegurosPageContent() {
         precio: number;
     } | null>(null);
 
+    const [aseguradorasList, setAseguradorasList] = useState<Aseguradora[]>([]);
+
     const totalCantidad = seguros.length;
     const totalRecaudado = seguros.reduce((acc, item) => acc + item.valores.total, 0);
+
+    // Cargar aseguradoras desde Supabase para el selector del formulario
+    useEffect(() => {
+        aseguradorasService.listarActivas().then(setAseguradorasList).catch(() => setAseguradorasList([]));
+    }, []);
 
     // Abrir formulario si se llegó con ?nota=XXX (ej. desde Cartera de Clientes)
     useEffect(() => {
@@ -312,7 +320,7 @@ function SegurosPageContent() {
                                                 className="w-full p-3 bg-slate-50 border border-transparent rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all uppercase"
                                             >
                                                 <option value="">-- Seleccionar --</option>
-                                                {ASEGURADORAS.map(a => <option key={a} value={a}>{a}</option>)}
+                                                {aseguradorasList.map(a => <option key={a.id} value={a.nombre}>{a.nombre}</option>)}
                                             </select>
                                         </div>
                                         <div className="space-y-2 md:col-span-2">

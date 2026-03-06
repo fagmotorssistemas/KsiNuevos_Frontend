@@ -1193,6 +1193,7 @@ export type Database = {
           sent_2d: boolean
           sent_30d: boolean
           sent_7d: boolean
+          stop: boolean | null
         }
         Insert: {
           id?: number
@@ -1217,6 +1218,7 @@ export type Database = {
           sent_2d?: boolean
           sent_30d?: boolean
           sent_7d?: boolean
+          stop?: boolean | null
         }
         Update: {
           id?: number
@@ -1241,6 +1243,7 @@ export type Database = {
           sent_2d?: boolean
           sent_30d?: boolean
           sent_7d?: boolean
+          stop?: boolean | null
         }
         Relationships: [
           {
@@ -1547,6 +1550,7 @@ export type Database = {
       seguros_contratos: {
         Row: {
           aseguradora: string
+          aseguradora_id: number | null
           broker: string
           costo_seguro: number | null
           created_at: string | null
@@ -1560,6 +1564,7 @@ export type Database = {
         }
         Insert: {
           aseguradora: string
+          aseguradora_id?: number | null
           broker: string
           costo_seguro?: number | null
           created_at?: string | null
@@ -1573,6 +1578,7 @@ export type Database = {
         }
         Update: {
           aseguradora?: string
+          aseguradora_id?: number | null
           broker?: string
           costo_seguro?: number | null
           created_at?: string | null
@@ -1585,6 +1591,104 @@ export type Database = {
           tipo_seguro?: string | null
         }
         Relationships: []
+      }
+      seguros_polizas: {
+        Row: {
+          activo: boolean | null
+          aseguradora_id: string | null
+          broker: string | null
+          cliente_email: string | null
+          cliente_identificacion: string | null
+          cliente_nombre: string | null
+          cliente_telefono: string | null
+          costo_compra: number
+          created_at: string | null
+          evidencias: string[] | null
+          factura_aseguradora: string | null
+          fecha_compra: string | null
+          fecha_venta: string | null
+          id: string
+          nota_venta: string | null
+          numero_certificado: string | null
+          observaciones_compra: string | null
+          observaciones_venta: string | null
+          plan_tipo: string | null
+          precio_venta: number
+          referencia: string | null
+          updated_at: string | null
+          vehiculo_descripcion: string | null
+          vehiculo_placa: string | null
+          vendido: boolean | null
+          vigencia_desde: string | null
+          vigencia_hasta: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          aseguradora_id?: string | null
+          broker?: string | null
+          cliente_email?: string | null
+          cliente_identificacion?: string | null
+          cliente_nombre?: string | null
+          cliente_telefono?: string | null
+          costo_compra?: number
+          created_at?: string | null
+          evidencias?: string[] | null
+          factura_aseguradora?: string | null
+          fecha_compra?: string | null
+          fecha_venta?: string | null
+          id?: string
+          nota_venta?: string | null
+          numero_certificado?: string | null
+          observaciones_compra?: string | null
+          observaciones_venta?: string | null
+          plan_tipo?: string | null
+          precio_venta?: number
+          referencia?: string | null
+          updated_at?: string | null
+          vehiculo_descripcion?: string | null
+          vehiculo_placa?: string | null
+          vendido?: boolean | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          aseguradora_id?: string | null
+          broker?: string | null
+          cliente_email?: string | null
+          cliente_identificacion?: string | null
+          cliente_nombre?: string | null
+          cliente_telefono?: string | null
+          costo_compra?: number
+          created_at?: string | null
+          evidencias?: string[] | null
+          factura_aseguradora?: string | null
+          fecha_compra?: string | null
+          fecha_venta?: string | null
+          id?: string
+          nota_venta?: string | null
+          numero_certificado?: string | null
+          observaciones_compra?: string | null
+          observaciones_venta?: string | null
+          plan_tipo?: string | null
+          precio_venta?: number
+          referencia?: string | null
+          updated_at?: string | null
+          vehiculo_descripcion?: string | null
+          vehiculo_placa?: string | null
+          vendido?: boolean | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seguros_polizas_aseguradora_id_fkey"
+            columns: ["aseguradora_id"]
+            isOneToOne: false
+            referencedRelation: "aseguradoras"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       showroom_visits: {
         Row: {

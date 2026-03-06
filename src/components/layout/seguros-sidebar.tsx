@@ -8,25 +8,25 @@ import { useAuth } from '@/hooks/useAuth';
 import {
     ShieldCheck,
     LayoutDashboard,
-    FileCheck,      // Para Pólizas
-    Users,          // Para Clientes
-    Calculator,     // Para Cotizaciones
-    AlertTriangle,  // Para Siniestros
-    Banknote,       // Para Pagos/Primas
-    RefreshCw,      // Para Renovaciones
-    BarChart3,      // Para Reportes
-    CarFront,       // Para Vehículos
+    Users,
+    Banknote,
+    RefreshCw,
+    BarChart3,
     Menu,
     X,
     ChevronLeft,
     ChevronRight,
-    Briefcase       // Para Aseguradoras/Convenios
+    Briefcase,
+    ShoppingCart,
+    Store,
 } from 'lucide-react';
 
 // Definición de los items del menú para Seguros
 const menuItems = [
     { name: 'Dashboard', href: '/seguros', icon: LayoutDashboard },
     { name: 'Cartera de Clientes', href: '/seguros/clientes', icon: Users },
+    { name: 'Compras a aseguradoras', href: '/seguros/compras', icon: ShoppingCart },
+    { name: 'Reventa de seguros', href: '/seguros/ventas', icon: Store },
     { name: 'Pagos y Primas', href: '/seguros/pagos', icon: Banknote },
     { name: 'Renovaciones', href: '/seguros/renovaciones', icon: RefreshCw },
     { name: 'Aseguradoras', href: '/seguros/aseguradoras', icon: Briefcase },
