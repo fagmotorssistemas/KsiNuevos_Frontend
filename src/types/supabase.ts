@@ -1560,7 +1560,10 @@ export type Database = {
           nota_venta: string
           precio_venta: number | null
           registrado_por: string | null
+          renovado_de_nota: string | null
           tipo_seguro: string | null
+          vigencia_desde: string | null
+          vigencia_hasta: string | null
         }
         Insert: {
           aseguradora: string
@@ -1574,7 +1577,10 @@ export type Database = {
           nota_venta: string
           precio_venta?: number | null
           registrado_por?: string | null
+          renovado_de_nota?: string | null
           tipo_seguro?: string | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
         }
         Update: {
           aseguradora?: string
@@ -1588,7 +1594,10 @@ export type Database = {
           nota_venta?: string
           precio_venta?: number | null
           registrado_por?: string | null
+          renovado_de_nota?: string | null
           tipo_seguro?: string | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
         }
         Relationships: []
       }
@@ -1689,6 +1698,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seguros_renovaciones: {
+        Row: {
+          cliente_identificacion: string | null
+          created_at: string | null
+          fecha_renovacion: string
+          id: string
+          nota_venta_anterior: string
+          nota_venta_nueva: string | null
+          observaciones: string | null
+          vigencia_desde: string | null
+          vigencia_hasta: string | null
+        }
+        Insert: {
+          cliente_identificacion?: string | null
+          created_at?: string | null
+          fecha_renovacion?: string
+          id?: string
+          nota_venta_anterior: string
+          nota_venta_nueva?: string | null
+          observaciones?: string | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
+        }
+        Update: {
+          cliente_identificacion?: string | null
+          created_at?: string | null
+          fecha_renovacion?: string
+          id?: string
+          nota_venta_anterior?: string
+          nota_venta_nueva?: string | null
+          observaciones?: string | null
+          vigencia_desde?: string | null
+          vigencia_hasta?: string | null
+        }
+        Relationships: []
       }
       showroom_visits: {
         Row: {
