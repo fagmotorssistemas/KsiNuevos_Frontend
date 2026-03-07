@@ -67,11 +67,17 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
         return () => clearInterval(intervalo);
     }, []);
 
+    const searchLower = searchTerm.trim().toLowerCase();
     const filteredData = data.filter(c => {
-        const matchesSearch =
-            c.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.ruc.includes(searchTerm) ||
-            c.placa.toLowerCase().includes(searchTerm.toLowerCase());
+        const gps = gpsMap.get(c.notaVenta);
+        const matchesSearch = searchLower === "" ||
+            c.cliente.toLowerCase().includes(searchLower) ||
+            c.ruc.includes(searchTerm.trim()) ||
+            c.placa.toLowerCase().includes(searchLower) ||
+            (gps && (
+                (gps.imei && String(gps.imei).toLowerCase().includes(searchLower)) ||
+                (gps.modelo && String(gps.modelo).toLowerCase().includes(searchLower))
+            ));
         let matchesOrigen = true;
         if (filtroOrigen === 'AUTO') matchesOrigen = c.origen === 'AUTO';
         else if (filtroOrigen === 'EXTERNO') matchesOrigen = c.origen === 'EXTERNO';
@@ -122,7 +128,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                 <input 
                     type="text" 
-                    placeholder="Buscar cliente, placa o RUC..."
+                    placeholder="Buscar cliente, placa, RUC, dispositivo o IMEI..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-shadow focus:shadow-md"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Wallet, RefreshCw, Calendar, DollarSign, FileText } from "lucide-react";
+import { Wallet, RefreshCw, Calendar, DollarSign, FileText, Search } from "lucide-react";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { walletService } from "@/services/wallet.service";
 import type { ItemCarteraRastreador } from "@/services/rastreadores/cartera-rastreadores.service";
@@ -33,6 +33,7 @@ export function CarteraRastreadoresView() {
         montoPorCobrarRastreador: number;
     }>>(new Map());
     const [filtroTipo, setFiltroTipo] = useState<'TODOS' | 'CREDITO' | 'CONTADO'>('TODOS');
+    const [searchTerm, setSearchTerm] = useState("");
 
     const load = async () => {
         setLoading(true);
@@ -140,6 +141,19 @@ export function CarteraRastreadoresView() {
     const creditos = items.filter((i) => i.nota_venta && i.nota_venta.trim() !== "" && enrichedData.has(i.id));
     const contados = items.filter((i) => !i.nota_venta || i.nota_venta.trim() === "" || !enrichedData.has(i.id));
 
+    // Buscar por nombre, nota de venta o IMEI (no por modelo/marca)
+    const searchLower = searchTerm.trim().toLowerCase();
+    const filteredItems = searchLower === ""
+        ? items
+        : items.filter((row) => {
+            const nombre = (row.nombre_concesionaria || row.cliente_nombre || row.identificacion_cliente || "").toLowerCase();
+            const nota = (row.nota_venta || "").toLowerCase();
+            const imei = (row.imei || "").toLowerCase();
+            return nombre.includes(searchLower) || nota.includes(searchLower) || imei.includes(searchLower);
+          });
+    const creditosFiltered = filteredItems.filter((i) => i.nota_venta && i.nota_venta.trim() !== "" && enrichedData.has(i.id));
+    const contadosFiltered = filteredItems.filter((i) => !i.nota_venta || i.nota_venta.trim() === "" || !enrichedData.has(i.id));
+
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -164,42 +178,54 @@ export function CarteraRastreadoresView() {
             </div>
 
             {!loading && items.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="inline-flex rounded-full bg-slate-100 p-1">
-                        {[
-                            { id: 'TODOS' as const, label: 'Todos' },
-                            { id: 'CREDITO' as const, label: 'Crédito' },
-                            { id: 'CONTADO' as const, label: 'Contado' },
-                        ].map((opt) => {
-                            const isActive = filtroTipo === opt.id;
-                            return (
-                                <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => setFiltroTipo(opt.id)}
-                                    className={[
-                                        "px-4 py-1.5 text-xs font-bold uppercase tracking-wide rounded-full transition-all",
-                                        isActive
-                                            ? "bg-white text-slate-900 shadow-sm"
-                                            : "text-slate-500 hover:text-slate-900",
-                                    ].join(" ")}
-                                >
-                                    {opt.label}
-                                </button>
-                            );
-                        })}
+                <>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nombre, nota de venta o IMEI..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-300"
+                        />
                     </div>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100">
-                            <Calendar size={11} />
-                            <strong className="font-black">{creditos.length}</strong> a crédito
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            <DollarSign size={11} />
-                            <strong className="font-black">{contados.length}</strong> al contado
-                        </span>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="inline-flex rounded-full bg-slate-100 p-1">
+                            {[
+                                { id: 'TODOS' as const, label: 'Todos' },
+                                { id: 'CREDITO' as const, label: 'Crédito' },
+                                { id: 'CONTADO' as const, label: 'Contado' },
+                            ].map((opt) => {
+                                const isActive = filtroTipo === opt.id;
+                                return (
+                                    <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setFiltroTipo(opt.id)}
+                                        className={[
+                                            "px-4 py-1.5 text-xs font-bold uppercase tracking-wide rounded-full transition-all",
+                                            isActive
+                                                ? "bg-white text-slate-900 shadow-sm"
+                                                : "text-slate-500 hover:text-slate-900",
+                                        ].join(" ")}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100">
+                                <Calendar size={11} />
+                                <strong className="font-black">{searchTerm.trim() ? creditosFiltered.length : creditos.length}</strong> a crédito
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                <DollarSign size={11} />
+                                <strong className="font-black">{searchTerm.trim() ? contadosFiltered.length : contados.length}</strong> al contado
+                            </span>
+                        </div>
                     </div>
-                </div>
+                </>
             )}
 
             {loading ? (
@@ -231,7 +257,7 @@ export function CarteraRastreadoresView() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((row) => {
+                                {filteredItems.map((row) => {
                                     // Es CRÉDITO solo si tiene nota_venta Y se encontró el documento en cartera
                                     const esCredito = row.nota_venta && row.nota_venta.trim() !== "" && enrichedData.has(row.id);
 
@@ -409,15 +435,20 @@ export function CarteraRastreadoresView() {
 
                     <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                         <span>
-                            <strong className="text-slate-700">{creditos.length}</strong> a crédito (cuenta por cobrar)
+                            <strong className="text-slate-700">{searchTerm.trim() ? creditosFiltered.length : creditos.length}</strong> a crédito (cuenta por cobrar)
                             <span className="mx-2">·</span>
-                            <strong className="text-slate-700">{contados.length}</strong> al contado
+                            <strong className="text-slate-700">{searchTerm.trim() ? contadosFiltered.length : contados.length}</strong> al contado
+                            {searchTerm.trim() && (
+                                <span className="ml-2 text-slate-400">
+                                    (filtrado: {filteredItems.length} de {items.length})
+                                </span>
+                            )}
                         </span>
                         <span>
                             Total GPS por cobrar:{" "}
                             <strong className="text-rose-600">
                                 ${formatMoney(
-                                    creditos.reduce((sum, item) => {
+                                    (searchTerm.trim() ? creditosFiltered : creditos).reduce((sum, item) => {
                                         const data = enrichedData.get(item.id);
                                         return sum + (data?.montoPorCobrarRastreador ?? 0);
                                     }, 0)
