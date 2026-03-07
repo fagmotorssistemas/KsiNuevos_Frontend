@@ -40,13 +40,33 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
         const resumenApi = apiResponse.data || [];
 
         if (resumenApi.length > 0) {
-            // Recorremos el resumen para buscar el detalle completo de cada uno
-            // (Necesario porque el listado no trae totRastreador ni datos del vehiculo completos)
+            // Recorremos el resumen: detalle completo cuando la API responde; si no, fila mínima desde el listado
+            // (Así se muestran todas las notas de venta del cliente, como en "Notas de venta")
             const promesasDetalle = resumenApi.map(async (item: any) => {
                 try {
                     const id = item.ccoCodigo || item.CCO_CODIGO;
                     if (!id) return null;
-                    return await getDetalleContratoGPS(id);
+                    const detalle = await getDetalleContratoGPS(id);
+                    if (detalle) return detalle;
+                    // Detalle falló o API no devolvió: armar ContratoGPS mínimo desde el ítem del listado
+                    const notaVenta = limpiarTexto(item.notaVenta || item.NOTA_VENTA || item.nota_venta) || '';
+                    const cliente = limpiarTexto(item.clienteNombre || item.CLIENTE || item.cliente || item.facturaNombre || item.cfac_nombre) || 'Cliente';
+                    const ruc = limpiarTexto(item.clienteId || item.facturaRuc || item.cfac_ced_ruc) || '';
+                    return {
+                        ccoCodigo: String(id),
+                        notaVenta,
+                        nroContrato: item.nroContrato || item.NRO_CONTRATO || 'S/N',
+                        cliente,
+                        ruc,
+                        placa: limpiarTexto(item.placa || item.PLACA) || 'S/N',
+                        marca: limpiarTexto(item.marca || item.MARCA) || '',
+                        modelo: limpiarTexto(item.modelo || item.MODELO) || '',
+                        color: limpiarTexto(item.color || item.COLOR) || '',
+                        anio: limpiarTexto(item.anio || item.ANIO) || '',
+                        totalRastreador: parseMonedaGPS(item.totRastreador ?? item.tot_rastreador ?? 0),
+                        fechaInstalacion: limpiarTexto(item.fechaVenta || item.fechaCiudad || item.textoFecha) || '',
+                        origen: 'AUTO' as const
+                    } satisfies ContratoGPS;
                 } catch (e) {
                     return null;
                 }
@@ -54,10 +74,8 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
 
             const resultadosDetalle = await Promise.all(promesasDetalle);
 
-            // Filtramos nulos y ventas sin valor de rastreo
-            listaAutos = resultadosDetalle.filter((item): item is ContratoGPS =>
-                item !== null && item.totalRastreador > 0
-            );
+            // Mostrar todas las filas (incl. totalRastreador 0) para que se vean todas las notas de venta del cliente
+            listaAutos = resultadosDetalle.filter((item): item is ContratoGPS => item !== null);
         }
 
         // C. Procesamos ventas externas (ventas_rastreador). Placa/marca/modelo desde vehiculos si existe.
