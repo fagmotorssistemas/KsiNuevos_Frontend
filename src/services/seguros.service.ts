@@ -11,17 +11,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- CONFIGURACIÓN API LEGACY ---
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
 
-// --- INTERFACES PARA ESCRITURA (SUPABASE) ---
-export interface SeguroPayload {
-    identificacion_cliente: string;
-    nota_venta: string;
-    broker: string;
-    aseguradora: string;
-    tipo_seguro: string;
-    costo_seguro: number;
-    precio_venta: number;
-    evidencias?: string[];
-}
+import type { SeguroPayload } from "@/types/seguros.types";
+export type { SeguroPayload } from "@/types/seguros.types";
 
 export const segurosService = {
 
@@ -109,21 +100,24 @@ export const segurosService = {
     // ============================================================
 
     /**
-     * Verifica si ya existe una póliza registrada para una nota de venta específica.
-     * Útil para decidir si mostrar el formulario en modo "Crear" o "Editar".
+     * Obtiene la póliza registrada en seguros_polizas para una nota de venta (venta/emitida).
+     * Incluye nombres de aseguradora y broker por join.
      */
     async obtenerPolizaRegistrada(notaVenta: string) {
         const { data, error } = await supabase
-            .from('seguros_contratos')
-            .select('*')
+            .from('seguros_polizas')
+            .select('*, aseguradora:aseguradoras(nombre), broker:brokers(nombre)')
             .eq('nota_venta', notaVenta.trim())
+            .eq('vendido', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
         
         if (error) {
             console.error("Supabase Error (obtenerPoliza):", error);
             throw error;
         }
-        return data; // Retorna el objeto si existe, o null si no.
+        return data;
     },
 
     /**
@@ -166,21 +160,32 @@ export const segurosService = {
     },
 
     /**
-     * Crea un nuevo registro en la tabla 'seguros_contratos'.
+     * Crea un registro en seguros_polizas (venta/emisión o renovación = otra compra).
      */
     async crearPoliza(payload: SeguroPayload) {
         try {
+            const hoy = new Date().toISOString().split('T')[0];
+            const vigenciaHasta = payload.vigencia_hasta ?? (() => {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() + 1);
+                return d.toISOString().split('T')[0];
+            })();
             const { data, error } = await supabase
-                .from('seguros_contratos')
+                .from('seguros_polizas')
                 .insert([{ 
-                    identificacion_cliente: payload.identificacion_cliente.trim(),
                     nota_venta: payload.nota_venta.trim(),
-                    broker: payload.broker.trim(),
-                    aseguradora: payload.aseguradora.trim(),
-                    tipo_seguro: payload.tipo_seguro.trim(),
-                    costo_seguro: payload.costo_seguro,
-                    precio_venta: payload.precio_venta,
-                    evidencias: payload.evidencias || [] 
+                    aseguradora_id: payload.aseguradora_id || null,
+                    broker_id: payload.broker_id || null,
+                    plan_tipo: payload.plan_tipo?.trim() || null,
+                    costo_compra: payload.costo_compra ?? 0,
+                    precio_venta: payload.precio_venta ?? 0,
+                    fecha_venta: payload.fecha_venta ?? hoy,
+                    vigencia_desde: payload.vigencia_desde ?? hoy,
+                    vigencia_hasta: vigenciaHasta,
+                    evidencias: payload.evidencias ?? [],
+                    observaciones_venta: payload.observaciones_venta?.trim() || null,
+                    vendido: true,
+                    activo: true,
                 }])
                 .select()
                 .single();
@@ -194,20 +199,21 @@ export const segurosService = {
     },
 
     /**
-     * Actualiza un registro existente en 'seguros_contratos'.
+     * Actualiza un registro existente en seguros_polizas (id = uuid).
      */
-    async actualizarPoliza(id: number, payload: Partial<SeguroPayload>) {
+    async actualizarPoliza(id: string, payload: Partial<SeguroPayload>) {
         try {
-            // Construimos objeto de actualización dinámico para no borrar datos accidentalmente
-            const updateData: any = {};
-            if (payload.broker) updateData.broker = payload.broker.trim();
-            if (payload.aseguradora) updateData.aseguradora = payload.aseguradora.trim();
-            if (payload.tipo_seguro) updateData.tipo_seguro = payload.tipo_seguro.trim();
-            if (payload.costo_seguro !== undefined) updateData.costo_seguro = payload.costo_seguro;
+            const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+            if (payload.aseguradora_id !== undefined) updateData.aseguradora_id = payload.aseguradora_id || null;
+            if (payload.broker_id !== undefined) updateData.broker_id = payload.broker_id || null;
+            if (payload.plan_tipo !== undefined) updateData.plan_tipo = payload.plan_tipo?.trim() || null;
+            if (payload.costo_compra !== undefined) updateData.costo_compra = payload.costo_compra;
+            if (payload.precio_venta !== undefined) updateData.precio_venta = payload.precio_venta;
             if (payload.evidencias) updateData.evidencias = payload.evidencias;
+            if (payload.observaciones_venta !== undefined) updateData.observaciones_venta = payload.observaciones_venta?.trim() || null;
 
             const { data, error } = await supabase
-                .from('seguros_contratos')
+                .from('seguros_polizas')
                 .update(updateData)
                 .eq('id', id)
                 .select()

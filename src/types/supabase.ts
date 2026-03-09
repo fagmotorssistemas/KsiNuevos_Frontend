@@ -74,9 +74,6 @@ export type Database = {
       aseguradoras: {
         Row: {
           activa: boolean | null
-          contacto_email: string | null
-          contacto_nombre: string | null
-          contacto_telefono: string | null
           created_at: string | null
           direccion: string | null
           email: string | null
@@ -90,9 +87,6 @@ export type Database = {
         }
         Insert: {
           activa?: boolean | null
-          contacto_email?: string | null
-          contacto_nombre?: string | null
-          contacto_telefono?: string | null
           created_at?: string | null
           direccion?: string | null
           email?: string | null
@@ -106,9 +100,6 @@ export type Database = {
         }
         Update: {
           activa?: boolean | null
-          contacto_email?: string | null
-          contacto_nombre?: string | null
-          contacto_telefono?: string | null
           created_at?: string | null
           direccion?: string | null
           email?: string | null
@@ -119,6 +110,39 @@ export type Database = {
           ruc?: string | null
           telefono?: string | null
           trabaja_con_gps?: boolean | null
+        }
+        Relationships: []
+      }
+      brokers: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          email: string | null
+          empresa: string | null
+          id: string
+          nombre: string
+          porcentaje_comision: number | null
+          telefono: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          empresa?: string | null
+          id?: string
+          nombre: string
+          porcentaje_comision?: number | null
+          telefono?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          empresa?: string | null
+          id?: string
+          nombre?: string
+          porcentaje_comision?: number | null
+          telefono?: string | null
         }
         Relationships: []
       }
@@ -1547,69 +1571,11 @@ export type Database = {
           },
         ]
       }
-      seguros_contratos: {
-        Row: {
-          aseguradora: string
-          aseguradora_id: number | null
-          broker: string
-          costo_seguro: number | null
-          created_at: string | null
-          evidencias: string[] | null
-          id: string
-          identificacion_cliente: string
-          nota_venta: string
-          precio_venta: number | null
-          registrado_por: string | null
-          renovado_de_nota: string | null
-          tipo_seguro: string | null
-          vigencia_desde: string | null
-          vigencia_hasta: string | null
-        }
-        Insert: {
-          aseguradora: string
-          aseguradora_id?: number | null
-          broker: string
-          costo_seguro?: number | null
-          created_at?: string | null
-          evidencias?: string[] | null
-          id?: string
-          identificacion_cliente: string
-          nota_venta: string
-          precio_venta?: number | null
-          registrado_por?: string | null
-          renovado_de_nota?: string | null
-          tipo_seguro?: string | null
-          vigencia_desde?: string | null
-          vigencia_hasta?: string | null
-        }
-        Update: {
-          aseguradora?: string
-          aseguradora_id?: number | null
-          broker?: string
-          costo_seguro?: number | null
-          created_at?: string | null
-          evidencias?: string[] | null
-          id?: string
-          identificacion_cliente?: string
-          nota_venta?: string
-          precio_venta?: number | null
-          registrado_por?: string | null
-          renovado_de_nota?: string | null
-          tipo_seguro?: string | null
-          vigencia_desde?: string | null
-          vigencia_hasta?: string | null
-        }
-        Relationships: []
-      }
       seguros_polizas: {
         Row: {
           activo: boolean | null
           aseguradora_id: string | null
-          broker: string | null
-          cliente_email: string | null
-          cliente_identificacion: string | null
-          cliente_nombre: string | null
-          cliente_telefono: string | null
+          broker_id: string | null
           costo_compra: number
           created_at: string | null
           evidencias: string[] | null
@@ -1625,8 +1591,6 @@ export type Database = {
           precio_venta: number
           referencia: string | null
           updated_at: string | null
-          vehiculo_descripcion: string | null
-          vehiculo_placa: string | null
           vendido: boolean | null
           vigencia_desde: string | null
           vigencia_hasta: string | null
@@ -1634,11 +1598,7 @@ export type Database = {
         Insert: {
           activo?: boolean | null
           aseguradora_id?: string | null
-          broker?: string | null
-          cliente_email?: string | null
-          cliente_identificacion?: string | null
-          cliente_nombre?: string | null
-          cliente_telefono?: string | null
+          broker_id?: string | null
           costo_compra?: number
           created_at?: string | null
           evidencias?: string[] | null
@@ -1654,8 +1614,6 @@ export type Database = {
           precio_venta?: number
           referencia?: string | null
           updated_at?: string | null
-          vehiculo_descripcion?: string | null
-          vehiculo_placa?: string | null
           vendido?: boolean | null
           vigencia_desde?: string | null
           vigencia_hasta?: string | null
@@ -1663,11 +1621,7 @@ export type Database = {
         Update: {
           activo?: boolean | null
           aseguradora_id?: string | null
-          broker?: string | null
-          cliente_email?: string | null
-          cliente_identificacion?: string | null
-          cliente_nombre?: string | null
-          cliente_telefono?: string | null
+          broker_id?: string | null
           costo_compra?: number
           created_at?: string | null
           evidencias?: string[] | null
@@ -1683,8 +1637,6 @@ export type Database = {
           precio_venta?: number
           referencia?: string | null
           updated_at?: string | null
-          vehiculo_descripcion?: string | null
-          vehiculo_placa?: string | null
           vendido?: boolean | null
           vigencia_desde?: string | null
           vigencia_hasta?: string | null
@@ -1697,43 +1649,14 @@ export type Database = {
             referencedRelation: "aseguradoras"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "seguros_polizas_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
         ]
-      }
-      seguros_renovaciones: {
-        Row: {
-          cliente_identificacion: string | null
-          created_at: string | null
-          fecha_renovacion: string
-          id: string
-          nota_venta_anterior: string
-          nota_venta_nueva: string | null
-          observaciones: string | null
-          vigencia_desde: string | null
-          vigencia_hasta: string | null
-        }
-        Insert: {
-          cliente_identificacion?: string | null
-          created_at?: string | null
-          fecha_renovacion?: string
-          id?: string
-          nota_venta_anterior: string
-          nota_venta_nueva?: string | null
-          observaciones?: string | null
-          vigencia_desde?: string | null
-          vigencia_hasta?: string | null
-        }
-        Update: {
-          cliente_identificacion?: string | null
-          created_at?: string | null
-          fecha_renovacion?: string
-          id?: string
-          nota_venta_anterior?: string
-          nota_venta_nueva?: string | null
-          observaciones?: string | null
-          vigencia_desde?: string | null
-          vigencia_hasta?: string | null
-        }
-        Relationships: []
       }
       showroom_visits: {
         Row: {
@@ -2312,6 +2235,9 @@ export type Database = {
           cuenta_id: string
           descripcion: string | null
           fecha_transaccion: string | null
+          forma_pago:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
           id: string
           monto: number
           orden_id: string | null
@@ -2323,6 +2249,9 @@ export type Database = {
           cuenta_id: string
           descripcion?: string | null
           fecha_transaccion?: string | null
+          forma_pago?:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
           id?: string
           monto: number
           orden_id?: string | null
@@ -2334,6 +2263,9 @@ export type Database = {
           cuenta_id?: string
           descripcion?: string | null
           fecha_transaccion?: string | null
+          forma_pago?:
+            | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
+            | null
           id?: string
           monto?: number
           orden_id?: string | null

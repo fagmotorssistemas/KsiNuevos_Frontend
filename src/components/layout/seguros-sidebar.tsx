@@ -10,12 +10,12 @@ import {
     LayoutDashboard,
     Users,
     RefreshCw,
-    BarChart3,
     Menu,
     X,
     ChevronLeft,
     ChevronRight,
     Briefcase,
+    Handshake,
     ShoppingCart,
     Store,
 } from 'lucide-react';
@@ -28,7 +28,7 @@ const menuItems = [
     { name: 'Reventa de seguros', href: '/seguros/ventas', icon: Store },
     { name: 'Renovaciones', href: '/seguros/renovaciones', icon: RefreshCw },
     { name: 'Aseguradoras', href: '/seguros/aseguradoras', icon: Briefcase },
-    { name: 'Reportes', href: '/seguros/reportes', icon: BarChart3 },
+    { name: 'Brokers', href: '/seguros/brokers', icon: Handshake },
 ];
 
 export function SegurosSidebar() {

@@ -1,16 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Users, RefreshCw } from "lucide-react";
 import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { useSegurosCartera } from "@/hooks/useSegurosCartera";
 import { SegurosCarteraTable } from "@/components/features/seguros/SegurosCarteraTable";
+import { SegurosPolizaForm } from "@/components/features/seguros/SegurosPolizaForm";
+import { SegurosGestionModal } from "@/components/features/seguros/SegurosGestionModal";
 import type { SeguroVehicular } from "@/types/seguros.types";
 
 export default function SegurosClientesPage() {
-  const router = useRouter();
   const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "CREDITO" | "CONTADO">("TODOS");
+  const [selectedItem, setSelectedItem] = useState<SeguroVehicular | null>(null);
+  const [seleccionado, setSeleccionado] = useState<{
+    notaId: string;
+    ruc: string;
+    cliente: string;
+    fecha: string;
+    precio: number;
+  } | null>(null);
   const {
     seguros,
     loading,
@@ -22,8 +30,19 @@ export default function SegurosClientesPage() {
   } = useSegurosCartera();
 
   const handleGestionar = (item: SeguroVehicular) => {
-    // Ir a dashboard de seguros y abrir formulario de esta nota
-    router.push(`/seguros?nota=${encodeURIComponent(item.referencia)}`);
+    setSelectedItem(item);
+  };
+
+  const handleEditarDesdeModal = () => {
+    if (!selectedItem) return;
+    setSeleccionado({
+      notaId: selectedItem.referencia,
+      ruc: selectedItem.cliente.identificacion,
+      cliente: selectedItem.cliente.nombre,
+      fecha: selectedItem.fechaEmision,
+      precio: selectedItem.valores.seguro,
+    });
+    setSelectedItem(null);
   };
 
   return (
@@ -54,19 +73,37 @@ export default function SegurosClientesPage() {
                 </button>
               </div>
 
-              <SegurosCarteraTable
-                seguros={seguros}
-                enrichedData={enrichedData}
-                loading={loading}
-                creditos={creditos}
-                contados={contados}
-                conAlertaRenovacion={conAlertaRenovacion}
-                filtroTipo={filtroTipo}
-                setFiltroTipo={setFiltroTipo}
-                onGestionar={handleGestionar}
-                showVencimientoColumns={true}
-                showRefresh={false}
-              />
+              {seleccionado ? (
+                <SegurosPolizaForm
+                  seleccionado={seleccionado}
+                  onClose={() => setSeleccionado(null)}
+                  onSuccess={() => cargar()}
+                  backLabel="Volver a la cartera"
+                />
+              ) : (
+                <>
+                  <SegurosCarteraTable
+                    seguros={seguros}
+                    enrichedData={enrichedData}
+                    loading={loading}
+                    creditos={creditos}
+                    contados={contados}
+                    conAlertaRenovacion={conAlertaRenovacion}
+                    filtroTipo={filtroTipo}
+                    setFiltroTipo={setFiltroTipo}
+                    onGestionar={handleGestionar}
+                    showVencimientoColumns={true}
+                    showRefresh={false}
+                  />
+                  {selectedItem && (
+                    <SegurosGestionModal
+                      item={selectedItem}
+                      onClose={() => setSelectedItem(null)}
+                      onEditar={handleEditarDesdeModal}
+                    />
+                  )}
+                </>
+              )}
             </div>
           </div>
         </main>

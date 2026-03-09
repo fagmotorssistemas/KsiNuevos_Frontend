@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { RefreshCw, Search, ShieldCheck, AlertTriangle } from "lucide-react";
 import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { useSegurosCartera } from "@/hooks/useSegurosCartera";
+import { SegurosPolizaForm } from "@/components/features/seguros/SegurosPolizaForm";
 import type { SeguroVehicular } from "@/types/seguros.types";
 import { formatDinero } from "@/utils/format";
 
@@ -18,9 +18,15 @@ function formatFecha(s: string | null): string {
 }
 
 export default function SegurosRenovacionesPage() {
-  const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
   const [soloProximosVencer, setSoloProximosVencer] = useState(true);
+  const [seleccionado, setSeleccionado] = useState<{
+    notaId: string;
+    ruc: string;
+    cliente: string;
+    fecha: string;
+    precio: number;
+  } | null>(null);
 
   const {
     seguros,
@@ -45,7 +51,13 @@ export default function SegurosRenovacionesPage() {
   }, [listaBase, busqueda]);
 
   const handleRenovar = (item: SeguroVehicular) => {
-    router.push(`/seguros?nota=${encodeURIComponent(item.referencia)}`);
+    setSeleccionado({
+      notaId: item.referencia,
+      ruc: item.cliente.identificacion,
+      cliente: item.cliente.nombre,
+      fecha: item.fechaEmision,
+      precio: item.valores.seguro,
+    });
   };
 
   return (
@@ -54,60 +66,69 @@ export default function SegurosRenovacionesPage() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <main className="flex-1 overflow-y-auto p-6 md:p-8">
           <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                  <RefreshCw size={26} className="text-emerald-600" />
-                  Renovaciones
-                </h1>
-                <p className="text-sm text-slate-500 mt-1">
-                  Pólizas próximas a vencer (2º año) o busque cualquier contrato para renovar sin esperar.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={cargar}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-60"
-              >
-                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-                Actualizar
-              </button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={soloProximosVencer}
-                  onChange={() => setSoloProximosVencer(true)}
-                  className="text-emerald-600 focus:ring-emerald-500"
-                />
-                Solo próximos a vencer (≤ 60 días)
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={!soloProximosVencer}
-                  onChange={() => setSoloProximosVencer(false)}
-                  className="text-emerald-600 focus:ring-emerald-500"
-                />
-                Todos los contratos (buscar y renovar cuando quiera)
-              </label>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por cliente, nota de venta o placa..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+            {seleccionado ? (
+              <SegurosPolizaForm
+                seleccionado={seleccionado}
+                onClose={() => setSeleccionado(null)}
+                onSuccess={() => cargar()}
+                backLabel="Volver a renovaciones"
               />
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                      <RefreshCw size={26} className="text-emerald-600" />
+                      Renovaciones
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Pólizas próximas a vencer (2º año) o busque cualquier contrato para renovar sin esperar.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cargar}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-60"
+                  >
+                    <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                    Actualizar
+                  </button>
+                </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={soloProximosVencer}
+                      onChange={() => setSoloProximosVencer(true)}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Solo próximos a vencer (≤ 60 días)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={!soloProximosVencer}
+                      onChange={() => setSoloProximosVencer(false)}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Todos los contratos (buscar y renovar cuando quiera)
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por cliente, nota de venta o placa..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               {loading ? (
                 <div className="py-16 text-center text-slate-400">
                   <RefreshCw size={32} className="animate-spin mx-auto mb-3 opacity-60" />
@@ -199,6 +220,8 @@ export default function SegurosRenovacionesPage() {
                 </div>
               )}
             </div>
+              </>
+            )}
           </div>
         </main>
       </div>

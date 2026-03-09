@@ -20,15 +20,15 @@ export interface RegistroGPSPayload {
   evidencias?: string[]; // Array de URLs
 }
 
+/** Alineado con seguros_polizas (aseguradora_id, broker_id) */
 export interface RegistroSeguroPayload {
-  identificacion_cliente: string;
   nota_venta: string;
-  broker: string;
-  aseguradora: string;
-  tipo_seguro: string;
-  costo_seguro: number;
+  aseguradora_id: string;
+  broker_id: string;
+  plan_tipo: string;
+  costo_compra: number;
   precio_venta: number;
-  evidencias?: string[]; // Array de URLs
+  evidencias?: string[];
 }
 
 export const dispositivosService = {
@@ -108,17 +108,24 @@ export const dispositivosService = {
 
   async registrarSeguro(payload: RegistroSeguroPayload) {
     try {
+      const hoy = new Date().toISOString().split('T')[0];
+      const vigenciaHasta = new Date();
+      vigenciaHasta.setFullYear(vigenciaHasta.getFullYear() + 1);
       const { data, error } = await supabase
-        .from('seguros_contratos')
-        .insert([{ 
-          identificacion_cliente: payload.identificacion_cliente.trim(),
+        .from('seguros_polizas')
+        .insert([{
           nota_venta: payload.nota_venta.trim(),
-          broker: payload.broker.trim(),
-          aseguradora: payload.aseguradora.trim(),
-          tipo_seguro: payload.tipo_seguro.trim(),
-          costo_seguro: payload.costo_seguro,
-          precio_venta: payload.precio_venta,
-          evidencias: payload.evidencias || [] 
+          aseguradora_id: payload.aseguradora_id || null,
+          broker_id: payload.broker_id || null,
+          plan_tipo: payload.plan_tipo?.trim() || null,
+          costo_compra: payload.costo_compra ?? 0,
+          precio_venta: payload.precio_venta ?? 0,
+          fecha_venta: hoy,
+          vigencia_desde: hoy,
+          vigencia_hasta: vigenciaHasta.toISOString().split('T')[0],
+          evidencias: payload.evidencias ?? [],
+          vendido: true,
+          activo: true,
         }])
         .select();
 
@@ -132,11 +139,13 @@ export const dispositivosService = {
 
   async obtenerSegurosPorNota(notaVenta: string) {
     const { data, error } = await supabase
-        .from('seguros_contratos')
-        .select('*')
-        .eq('nota_venta', notaVenta.trim());
+      .from('seguros_polizas')
+      .select('*, aseguradora:aseguradoras(nombre), broker:brokers(nombre)')
+      .eq('nota_venta', notaVenta.trim())
+      .eq('vendido', true)
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data;
+    return data ?? [];
   },
 
   // ==========================================
@@ -163,15 +172,18 @@ export const dispositivosService = {
     }
   },
 
-  async actualizarSeguro(id: number, payload: Partial<RegistroSeguroPayload>) {
+  async actualizarSeguro(id: string, payload: Partial<RegistroSeguroPayload>) {
     try {
-      const updateData: any = { ...payload };
-      if (payload.broker) updateData.broker = payload.broker.trim();
-      if (payload.aseguradora) updateData.aseguradora = payload.aseguradora.trim();
-      if (payload.tipo_seguro) updateData.tipo_seguro = payload.tipo_seguro.trim();
+      const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (payload.aseguradora_id !== undefined) updateData.aseguradora_id = payload.aseguradora_id || null;
+      if (payload.broker_id !== undefined) updateData.broker_id = payload.broker_id || null;
+      if (payload.plan_tipo !== undefined) updateData.plan_tipo = payload.plan_tipo?.trim() || null;
+      if (payload.costo_compra !== undefined) updateData.costo_compra = payload.costo_compra;
+      if (payload.precio_venta !== undefined) updateData.precio_venta = payload.precio_venta;
+      if (payload.evidencias) updateData.evidencias = payload.evidencias;
 
       const { data, error } = await supabase
-        .from('seguros_contratos')
+        .from('seguros_polizas')
         .update(updateData)
         .eq('id', id)
         .select();

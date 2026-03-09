@@ -378,9 +378,9 @@ function SuccessCard({
                         </>
                     ) : (
                         <>
-                            <Row label="Aseguradora" value={data.aseguradora} />
-                            <Row label="Broker" value={data.broker} />
-                            <Row label="Plan" value={data.tipo_seguro} />
+                            <Row label="Aseguradora" value={typeof data.aseguradora === "object" && data.aseguradora?.nombre ? data.aseguradora.nombre : (data.aseguradora ?? "—")} />
+                            <Row label="Broker" value={typeof data.broker === "object" && data.broker?.nombre ? data.broker.nombre : (data.broker ?? "—")} />
+                            <Row label="Plan" value={data.plan_tipo ?? data.tipo_seguro ?? "—"} />
                         </>
                     )}
                 </div>

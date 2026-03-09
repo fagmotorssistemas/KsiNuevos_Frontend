@@ -6,25 +6,20 @@ import {
     Paperclip, FileText, Image as ImageIcon, X, Trash2, Plus, ArrowLeft 
 } from "lucide-react";
 import { dispositivosService } from "@/services/dispositivos.service";
+import { aseguradorasService } from "@/services/aseguradoras.service";
+import { brokersService } from "@/services/brokers.service";
+import type { Aseguradora } from "@/types/aseguradoras.types";
+import type { Broker } from "@/types/brokers.types";
 import { toast } from "sonner";
 
 interface InsuranceFormProps {
     contratoId: string;
     facturaRuc: string;
     precioVenta: number;
-    initialData?: any; // Objeto simple, no array
+    initialData?: any; // seguros_polizas row (id, broker_id, aseguradora_id, plan_tipo, costo_compra, evidencias, broker?, aseguradora?)
     onSuccess?: () => void;
-    onCancel?: () => void; // Función para cancelar edición
+    onCancel?: () => void;
 }
-
-// LISTAS MAESTRAS
-const BROKERS_LIST = [
-    "TECNISEGUROS", "AON", "NOVA", "ASESORES DE SEGUROS", "M&M", "DIRECTO (SIN BROKER)"
-];
-
-const ASEGURADORAS_LIST = [
-    "CHUBB SEGUROS", "SWEADEN", "MAPFRE", "ECUASUIZA", "LATINA SEGUROS", "SEGUROS SUCRE"
-];
 
 const TIPOS_POLIZA = [
     "TODO RIESGO (1 AÑO)", "TODO RIESGO (2 AÑOS)", "PÉRDIDA TOTAL", "RESPONSABILIDAD CIVIL"
@@ -40,31 +35,33 @@ export function InsuranceForm({
 }: InsuranceFormProps) {
     const isEditing = !!initialData;
     const [loading, setLoading] = useState(false);
-    
-    // Estado del formulario
+    const [aseguradorasList, setAseguradorasList] = useState<Aseguradora[]>([]);
+    const [brokersList, setBrokersList] = useState<Broker[]>([]);
+
     const [form, setForm] = useState({
-        broker: '',
-        aseguradora: '',
+        broker_id: '',
+        aseguradora_id: '',
         tipoSeguro: '',
         costo: 0
     });
 
-    // Estado para múltiples archivos
     const [archivos, setArchivos] = useState<File[]>([]);
-    const [oldEvidencias, setOldEvidencias] = useState<string[]>([]); // URLs ya guardadas
+    const [oldEvidencias, setOldEvidencias] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Cargar datos si estamos editando
+    useEffect(() => {
+        aseguradorasService.listarActivas().then(setAseguradorasList).catch(() => setAseguradorasList([]));
+        brokersService.listarActivos().then(setBrokersList).catch(() => setBrokersList([]));
+    }, []);
+
     useEffect(() => {
         if (initialData) {
             setForm({
-                broker: initialData.broker || '',
-                aseguradora: initialData.aseguradora || '',
-                tipoSeguro: initialData.tipo_seguro || '',
-                costo: initialData.costo_seguro || 0
+                broker_id: initialData.broker_id ?? '',
+                aseguradora_id: initialData.aseguradora_id ?? '',
+                tipoSeguro: initialData.plan_tipo ?? '',
+                costo: initialData.costo_compra ?? 0
             });
-
-            // Recuperar evidencias (Soporte Legacy string vs Nuevo Array)
             if (Array.isArray(initialData.evidencias)) {
                 setOldEvidencias(initialData.evidencias);
             } else if (initialData.evidencia_url) {
@@ -92,54 +89,42 @@ export function InsuranceForm({
     };
 
     const handleSave = async () => {
-        if (!form.broker || !form.aseguradora) return toast.error("Complete los campos obligatorios");
-        
+        if (!form.broker_id || !form.aseguradora_id) return toast.error("Complete los campos obligatorios");
+
         setLoading(true);
         try {
-            // Combinar evidencias viejas + nuevas subidas
             let urlsEvidenciaFinales = [...oldEvidencias];
-
-            // 1. Subir Nuevos Archivos
             if (archivos.length > 0) {
                 const nuevasUrls = await dispositivosService.subirEvidencias(archivos, 'seguros');
-                if (nuevasUrls.length > 0) {
-                    urlsEvidenciaFinales = [...urlsEvidenciaFinales, ...nuevasUrls];
-                } else {
-                    toast.warning("Error subiendo algunos archivos, se guardará con lo disponible.");
-                }
+                if (nuevasUrls.length > 0) urlsEvidenciaFinales = [...urlsEvidenciaFinales, ...nuevasUrls];
+                else toast.warning("Error subiendo algunos archivos, se guardará con lo disponible.");
             }
 
             const payload = {
-                identificacion_cliente: facturaRuc,
                 nota_venta: contratoId,
-                broker: form.broker,
-                aseguradora: form.aseguradora,
-                tipo_seguro: form.tipoSeguro,
-                costo_seguro: form.costo,
+                aseguradora_id: form.aseguradora_id,
+                broker_id: form.broker_id,
+                plan_tipo: form.tipoSeguro,
+                costo_compra: form.costo,
                 precio_venta: precioVenta,
                 evidencias: urlsEvidenciaFinales
             };
 
-            // 2. Guardar (Crear o Actualizar)
             let res;
             if (isEditing) {
-                res = await dispositivosService.actualizarSeguro(initialData.id, payload);
+                res = await dispositivosService.actualizarSeguro(String(initialData.id), payload);
             } else {
                 res = await dispositivosService.registrarSeguro(payload);
             }
 
             if (res.success) {
                 toast.success(isEditing ? "Póliza Actualizada" : "Póliza Registrada");
-                
-                // Reset si es creación, o mantener si es edición (opcional, aquí reseteamos para limpiar)
                 if (!isEditing) {
-                    setForm({ broker: '', aseguradora: '', tipoSeguro: '', costo: 0 });
+                    setForm({ broker_id: '', aseguradora_id: '', tipoSeguro: '', costo: 0 });
                     setArchivos([]);
                     setOldEvidencias([]);
                 }
-                
                 if (onSuccess) onSuccess();
-
             } else {
                 toast.error(res.error || "Error al procesar la solicitud");
             }
@@ -191,13 +176,15 @@ export function InsuranceForm({
                     <div className="group">
                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1.5 block">Broker</label>
                         <div className="relative">
-                            <select 
-                                value={form.broker}
-                                onChange={(e) => setForm({...form, broker: e.target.value})}
+                            <select
+                                value={form.broker_id}
+                                onChange={(e) => setForm({ ...form, broker_id: e.target.value })}
                                 className="w-full bg-slate-50 border border-transparent text-slate-900 text-sm font-bold rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white block p-3.5 outline-none appearance-none transition-all uppercase cursor-pointer"
                             >
                                 <option value="">Seleccionar Broker...</option>
-                                {BROKERS_LIST.map(b => <option key={b} value={b}>{b}</option>)}
+                                {brokersList.map((b) => (
+                                    <option key={b.id} value={b.id}>{b.nombre}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -205,13 +192,15 @@ export function InsuranceForm({
                     <div className="group">
                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1.5 block">Aseguradora</label>
                         <div className="relative">
-                            <select 
-                                value={form.aseguradora}
-                                onChange={(e) => setForm({...form, aseguradora: e.target.value})}
+                            <select
+                                value={form.aseguradora_id}
+                                onChange={(e) => setForm({ ...form, aseguradora_id: e.target.value })}
                                 className="w-full bg-slate-50 border border-transparent text-slate-900 text-sm font-bold rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white block p-3.5 outline-none appearance-none transition-all uppercase cursor-pointer"
                             >
                                 <option value="">Seleccionar Aseguradora...</option>
-                                {ASEGURADORAS_LIST.map(a => <option key={a} value={a}>{a}</option>)}
+                                {aseguradorasList.map((a) => (
+                                    <option key={a.id} value={a.id}>{a.nombre}</option>
+                                ))}
                             </select>
                         </div>
                     </div>

@@ -47,23 +47,21 @@ export const aseguradorasService = {
   },
 
   async crear(payload: AseguradoraInsert): Promise<{ data: Aseguradora | null; error: Error | null }> {
+    // No enviamos contacto_* ni porcentaje/config para evitar validaciones del backend; la tabla usa NULL/defaults.
     const insert: Record<string, unknown> = {
       nombre: payload.nombre.trim(),
       ruc: payload.ruc?.trim() || null,
       telefono: payload.telefono?.trim() || null,
       email: payload.email?.trim() || null,
       direccion: payload.direccion?.trim() || null,
-      contacto_nombre: payload.contacto_nombre?.trim() || null,
-      contacto_telefono: payload.contacto_telefono?.trim() || null,
-      contacto_email: payload.contacto_email?.trim() || null,
       porcentaje_base_seguro: payload.porcentaje_base_seguro ?? null,
-      trabaja_con_gps: payload.trabaja_con_gps ?? false,
-      activa: payload.activa ?? true,
+      trabaja_con_gps: Boolean(payload.trabaja_con_gps ?? false),
+      activa: Boolean(payload.activa ?? true),
       observaciones: payload.observaciones?.trim() || null,
     };
     const { data, error } = await supabase
       .from(TABLE)
-      .insert(insert)
+      .insert([insert])
       .select()
       .single();
     if (error) return { data: null, error: error as unknown as Error };
@@ -77,9 +75,7 @@ export const aseguradorasService = {
     if (payload.telefono !== undefined) update.telefono = payload.telefono?.trim() || null;
     if (payload.email !== undefined) update.email = payload.email?.trim() || null;
     if (payload.direccion !== undefined) update.direccion = payload.direccion?.trim() || null;
-    if (payload.contacto_nombre !== undefined) update.contacto_nombre = payload.contacto_nombre?.trim() || null;
-    if (payload.contacto_telefono !== undefined) update.contacto_telefono = payload.contacto_telefono?.trim() || null;
-    if (payload.contacto_email !== undefined) update.contacto_email = payload.contacto_email?.trim() || null;
+    // No actualizamos contacto_* (se eliminaron del formulario; evitamos validación "debe ser email").
     if (payload.porcentaje_base_seguro !== undefined) update.porcentaje_base_seguro = payload.porcentaje_base_seguro;
     if (payload.trabaja_con_gps !== undefined) update.trabaja_con_gps = payload.trabaja_con_gps;
     if (payload.activa !== undefined) update.activa = payload.activa;
