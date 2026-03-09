@@ -18,6 +18,9 @@ const getEcuadorRange = (dateStr: string) => {
     };
 };
 
+// Tokens de búsqueda (sin espacios) para evitar que el filtro se rompa; "kia st" → ["kia", "st"]
+const searchTokens = (search: string) => search.trim().split(/\s+/).filter(Boolean);
+
 // --- FETCH PRINCIPAL (GRID & CONTADORES) ---
 export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: number, filters: LeadsFilters) => {
     try {
@@ -36,9 +39,48 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .order('updated_at', { ascending: false })
             .range(from, to);
 
-        // 2. Aplicar Filtros a la Query Principal
+        // 2. Aplicar Filtros a la Query Principal (nombre, teléfono, vehículo marca/modelo)
+        let searchMatchIds: number[] = [];
         if (filters.search) {
-            query = query.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+            const tokens = searchTokens(filters.search);
+            if (tokens.length > 0) {
+                // Vehículo: lead_ids con brand o model que contengan TODOS los tokens (kia + st → Kia Stonic)
+                const tokenLeadIds = await Promise.all(
+                    tokens.map((token) =>
+                        supabase
+                            .from('interested_cars')
+                            .select('lead_id')
+                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`)
+                            .then((r: { data: { lead_id: number }[] | null }) => (r.data ?? []).map((x) => x.lead_id))
+                    )
+                ) as number[][];
+                const vehicleSets = tokenLeadIds.map((ids) => new Set(ids));
+                const vehicleMatchLeadIds = vehicleSets.length === 1
+                    ? [...vehicleSets[0]]
+                    : [...vehicleSets[0]].filter((id) => vehicleSets.every((set) => set.has(id)));
+
+                // Nombre: leads donde name contiene TODOS los tokens (AND)
+                let nameIds: number[] = [];
+                let qName = supabase.from('leads').select('id').neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+                for (const t of tokens) qName = qName.ilike('name', `%${t}%`);
+                const { data: nameData } = await qName;
+                nameIds = ((nameData as { id: number }[] | null) ?? []).map((r) => r.id);
+
+                // Teléfono: leads donde phone contiene TODOS los tokens (AND)
+                let phoneIds: number[] = [];
+                let qPhone = supabase.from('leads').select('id').neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+                for (const t of tokens) qPhone = qPhone.ilike('phone', `%${t}%`);
+                const { data: phoneData } = await qPhone;
+                phoneIds = ((phoneData as { id: number }[] | null) ?? []).map((r) => r.id);
+
+                searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds])];
+                if (searchMatchIds.length > 0) {
+                    query = query.in('id', searchMatchIds);
+                } else {
+                    // Ningún lead coincide → forzar resultado vacío
+                    query = query.eq('id', -1);
+                }
+            }
         }
         if (filters.status && filters.status !== 'all') {
             query = query.eq('status', filters.status);
@@ -83,7 +125,11 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .neq('resume', '');        // Que no esté vacío
 
         // Re-aplicamos los mismos filtros para que el porcentaje sea sobre lo que el usuario ve
-        if (filters.search) respondedQuery = respondedQuery.or(`name.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+        if (filters.search && searchMatchIds.length > 0) {
+            respondedQuery = respondedQuery.in('id', searchMatchIds);
+        } else if (filters.search && searchMatchIds.length === 0) {
+            respondedQuery = respondedQuery.eq('id', -1);
+        }
         if (filters.status && filters.status !== 'all') respondedQuery = respondedQuery.eq('status', filters.status);
         if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
