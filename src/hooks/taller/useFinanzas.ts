@@ -154,6 +154,7 @@ export function useFinanzas() {
                     tipo: formData.tipo,
                     monto: formData.monto,
                     descripcion: formData.descripcion,
+                    forma_pago: formData.forma_pago || null,
                     comprobante_url: comprobanteUrl,
                     registrado_por: profile.id
                 }]);

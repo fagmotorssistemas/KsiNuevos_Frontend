@@ -26,6 +26,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
     const [descripcion, setDescripcion] = useState('');
     const [cuentaId, setCuentaId] = useState('');
     const [ordenId, setOrdenId] = useState('');
+    const [formaPago, setFormaPago] = useState<'EFECTIVO' | 'TRANSFERENCIA' | 'DEPOSITO' | 'CHEQUE'>('EFECTIVO');
     const [file, setFile] = useState<File | null>(null);
 
     const [ordenesRecientes, setOrdenesRecientes] = useState<OrdenOption[]>([]);
@@ -172,6 +173,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
             setFile(null);
             setOrdenId('');
             setTipo('ingreso');
+            setFormaPago('EFECTIVO');
         }
     }, [isOpen]);
 
@@ -194,7 +196,8 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
             monto: parseFloat(monto),
             descripcion,
             cuenta_id: cuentaId,
-            orden_id: ordenId || null
+            orden_id: ordenId || null,
+            forma_pago: formaPago
         }, file);
 
         setIsLoading(false);
@@ -280,6 +283,22 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    {/* Forma de Pago */}
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Forma de pago</label>
+                        <select
+                            required
+                            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                            value={formaPago}
+                            onChange={(e) => setFormaPago(e.target.value as typeof formaPago)}
+                        >
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="TRANSFERENCIA">Transferencia</option>
+                            <option value="DEPOSITO">Depósito</option>
+                            <option value="CHEQUE">Cheque</option>
+                        </select>
                     </div>
 
                     <div>

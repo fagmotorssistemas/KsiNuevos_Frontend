@@ -2242,6 +2242,7 @@ export type Database = {
           monto: number
           orden_id: string | null
           registrado_por: string | null
+          forma_pago: Database["public"]["Enums"]["metodo_pago_rastreador_enum"] | null
           tipo: Database["public"]["Enums"]["taller_tipo_transaccion"]
         }
         Insert: {
@@ -2256,6 +2257,7 @@ export type Database = {
           monto: number
           orden_id?: string | null
           registrado_por?: string | null
+          forma_pago?: Database["public"]["Enums"]["metodo_pago_rastreador_enum"] | null
           tipo: Database["public"]["Enums"]["taller_tipo_transaccion"]
         }
         Update: {
@@ -2270,6 +2272,7 @@ export type Database = {
           monto?: number
           orden_id?: string | null
           registrado_por?: string | null
+          forma_pago?: Database["public"]["Enums"]["metodo_pago_rastreador_enum"] | null
           tipo?: Database["public"]["Enums"]["taller_tipo_transaccion"]
         }
         Relationships: [

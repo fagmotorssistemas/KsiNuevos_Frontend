@@ -81,6 +81,7 @@ export interface TransaccionFinanciera {
     monto: number;
     descripcion: string;
     fecha_transaccion: string;
+    forma_pago?: string | null;
     comprobante_url?: string;
     cuenta_id: string;
     orden_id?: string;
@@ -201,6 +202,7 @@ export interface CuentaPorCobrar {
         tipo: string;
         fecha_transaccion: string;
         descripcion: string;
+        forma_pago?: string | null;
     }[];
     consumos_materiales?: {
         id: string;
