@@ -102,7 +102,7 @@ export function TransactionTable({ transacciones }: TransactionTableProps) {
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[11px] tracking-wider">
                         <tr>
                             <th className="px-6 py-4">Tipo / Fecha</th>
-                            <th className="px-6 py-4">Descripción</th>
+                            <th className="px-6 py-4">Descripción / Forma de pago</th>
                             <th className="px-6 py-4">Cuenta</th>
                             <th className="px-6 py-4 text-right">Monto</th>
                             <th className="px-6 py-4 text-center">Recibo</th>
@@ -129,6 +129,11 @@ export function TransactionTable({ transacciones }: TransactionTableProps) {
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-slate-800 font-medium text-sm">{tx.descripcion}</p>
+                                            {tx.forma_pago && (
+                                                <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-700">
+                                                    {tx.forma_pago.toLowerCase()}
+                                                </span>
+                                            )}
                                             {tx.orden && (
                                                 <button 
                                                     onClick={() => setOrdenModal(tx.orden!)}

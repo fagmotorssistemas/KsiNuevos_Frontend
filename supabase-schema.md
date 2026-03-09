@@ -17,19 +17,42 @@ CREATE TABLE public.appointments (
   CONSTRAINT appointments_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id),
   CONSTRAINT appointments_responsible_id_fkey FOREIGN KEY (responsible_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.aseguradoras (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre text NOT NULL,
+  ruc text,
+  telefono text,
+  email text,
+  direccion text,
+  contacto_nombre text,
+  contacto_telefono text,
+  contacto_email text,
+  porcentaje_base_seguro numeric,
+  trabaja_con_gps boolean DEFAULT false,
+  activa boolean DEFAULT true,
+  observaciones text,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT aseguradoras_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.brokers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre text NOT NULL,
+  telefono text,
+  email text,
+  empresa text,
+  porcentaje_comision numeric,
+  activo boolean DEFAULT true,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT brokers_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.clientes_externos (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre_completo text NOT NULL,
-  identificacion text NOT NULL UNIQUE,
+  identificacion text,
   telefono text,
   email text,
   direccion text,
   created_at timestamp without time zone DEFAULT now(),
-  placa_vehiculo text,
-  marca text,
-  modelo text,
-  anio text,
-  color text,
   CONSTRAINT clientes_externos_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.clientespb (
@@ -44,6 +67,16 @@ CREATE TABLE public.clientespb (
   observaciones_legales text,
   color_etiqueta text DEFAULT '#ffffff'::text,
   CONSTRAINT clientespb_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.concesionarias (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre text NOT NULL,
+  ruc text NOT NULL,
+  direccion text,
+  telefono text,
+  email text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT concesionarias_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.contratospb (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -82,6 +115,17 @@ CREATE TABLE public.credit_proformas (
   CONSTRAINT credit_proformas_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES public.inventory(id),
   CONSTRAINT credit_proformas_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.cuotas_rastreador (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  venta_id uuid NOT NULL,
+  numero_cuota integer NOT NULL,
+  valor numeric NOT NULL,
+  fecha_vencimiento date NOT NULL,
+  estado USER-DEFINED NOT NULL DEFAULT 'PENDIENTE'::estado_cuota_enum,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cuotas_rastreador_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_cuota_venta FOREIGN KEY (venta_id) REFERENCES public.ventas_rastreador(id)
+);
 CREATE TABLE public.cuotaspb (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -117,40 +161,6 @@ CREATE TABLE public.datos_solicitados_clientes (
   CONSTRAINT datos_solicitados_clientes_pkey PRIMARY KEY (id),
   CONSTRAINT fk_lead FOREIGN KEY (lead_id) REFERENCES public.leads(id)
 );
-CREATE TABLE public.dispositivos_rastreo (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  created_at timestamp with time zone DEFAULT now(),
-  identificacion_cliente text NOT NULL,
-  nota_venta text,
-  imei text NOT NULL UNIQUE,
-  modelo text,
-  tipo_dispositivo text,
-  costo_compra numeric DEFAULT 0,
-  precio_venta numeric DEFAULT 0,
-  registrado_por uuid,
-  proveedor text,
-  pagado boolean DEFAULT false,
-  metodo_pago text,
-  evidencias ARRAY,
-  cliente_externo_id uuid,
-  es_venta_externa boolean DEFAULT false,
-  cliente_nombre text,
-  instalador text,
-  costo_instalacion numeric DEFAULT 0,
-  fecha_nota_venta date,
-  tipo_pago text DEFAULT 'CONTADO'::text,
-  plazo_credito integer DEFAULT 0,
-  es_concesionaria boolean DEFAULT false,
-  nombre_concesionaria text,
-  sim_id uuid,
-  estado USER-DEFINED NOT NULL DEFAULT 'PENDIENTE_INSTALACION'::estado_dispositivo_enum,
-  instalador_id uuid,
-  CONSTRAINT dispositivos_rastreo_pkey PRIMARY KEY (id),
-  CONSTRAINT dispositivos_rastreo_registrado_por_fkey FOREIGN KEY (registrado_por) REFERENCES auth.users(id),
-  CONSTRAINT dispositivos_rastreo_cliente_externo_id_fkey FOREIGN KEY (cliente_externo_id) REFERENCES public.clientes_externos(id),
-  CONSTRAINT dispositivos_rastreo_sim_id_fkey FOREIGN KEY (sim_id) REFERENCES public.gps_sims(id),
-  CONSTRAINT dispositivos_rastreo_instalador_id_fkey FOREIGN KEY (instalador_id) REFERENCES public.gps_instaladores(id)
-);
 CREATE TABLE public.gps_instaladores (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre text NOT NULL,
@@ -170,18 +180,19 @@ CREATE TABLE public.gps_inventario (
   factura_compra text,
   fecha_compra date DEFAULT now(),
   estado text DEFAULT 'STOCK'::text CHECK (estado = ANY (ARRAY['STOCK'::text, 'VENDIDO'::text, 'RMA'::text, 'BAJA'::text, 'INSTALADO'::text])),
-  ubicacion text DEFAULT 'BODEGA_CENTRAL'::text,
   created_at timestamp without time zone DEFAULT now(),
+  estado_coneccion text CHECK (estado_coneccion IS NULL OR (estado_coneccion = ANY (ARRAY['online'::text, 'inactivo'::text, 'offline'::text]))),
   CONSTRAINT gps_inventario_pkey PRIMARY KEY (id),
   CONSTRAINT gps_inventario_modelo_id_fkey FOREIGN KEY (modelo_id) REFERENCES public.gps_modelos(id),
   CONSTRAINT gps_inventario_proveedor_id_fkey FOREIGN KEY (proveedor_id) REFERENCES public.gps_proveedores(id)
 );
 CREATE TABLE public.gps_modelos (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  nombre text NOT NULL,
   marca text DEFAULT 'TELTONIKA'::text,
   costo_referencia numeric DEFAULT 0,
-  CONSTRAINT gps_modelos_pkey PRIMARY KEY (id)
+  provedor_id uuid,
+  CONSTRAINT gps_modelos_pkey PRIMARY KEY (id),
+  CONSTRAINT gps_modelos_provedor_id_fkey FOREIGN KEY (provedor_id) REFERENCES public.gps_proveedores(id)
 );
 CREATE TABLE public.gps_proveedores (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -193,12 +204,11 @@ CREATE TABLE public.gps_proveedores (
 CREATE TABLE public.gps_sims (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   iccid text NOT NULL UNIQUE,
-  numero text,
-  operadora text,
-  costo_mensual numeric DEFAULT 0,
-  estado text DEFAULT 'STOCK'::text CHECK (estado = ANY (ARRAY['STOCK'::text, 'ACTIVO'::text, 'BAJA'::text])),
   created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT gps_sims_pkey PRIMARY KEY (id)
+  gps_id uuid,
+  imsi text,
+  CONSTRAINT gps_sims_pkey PRIMARY KEY (id),
+  CONSTRAINT gps_sims_gps_id_fkey FOREIGN KEY (gps_id) REFERENCES public.gps_inventario(id)
 );
 CREATE TABLE public.interactions (
   id bigint NOT NULL DEFAULT nextval('interactions_id_seq'::regclass),
@@ -375,6 +385,7 @@ CREATE TABLE public.lead_recovery (
   response_7d_text text,
   response_15d_text text,
   response_30d_text text,
+  stop boolean,
   CONSTRAINT lead_recovery_pkey PRIMARY KEY (id),
   CONSTRAINT lead_recovery_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id)
 );
@@ -424,6 +435,9 @@ CREATE TABLE public.scraper_sellers (
   total_listings integer DEFAULT 0,
   last_updated timestamp with time zone DEFAULT now(),
   fb_seller_id text NOT NULL UNIQUE,
+  pic text,
+  rating real,
+  rating_count smallint,
   CONSTRAINT scraper_sellers_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.scraper_vehicle_price_statistics (
@@ -482,8 +496,57 @@ CREATE TABLE public.seguros_contratos (
   precio_venta numeric DEFAULT 0,
   registrado_por uuid,
   evidencias ARRAY,
+  aseguradora_id bigint,
+  vigencia_desde date,
+  vigencia_hasta date,
+  renovado_de_nota text,
   CONSTRAINT seguros_contratos_pkey PRIMARY KEY (id),
   CONSTRAINT seguros_contratos_registrado_por_fkey FOREIGN KEY (registrado_por) REFERENCES auth.users(id)
+);
+CREATE TABLE public.seguros_polizas (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  referencia text,
+  numero_certificado text,
+  aseguradora_id uuid,
+  fecha_compra date,
+  costo_compra numeric NOT NULL DEFAULT 0,
+  factura_aseguradora text,
+  vigencia_desde date,
+  vigencia_hasta date,
+  plan_tipo text,
+  observaciones_compra text,
+  cliente_nombre text,
+  cliente_identificacion text,
+  cliente_telefono text,
+  cliente_email text,
+  vehiculo_descripcion text,
+  vehiculo_placa text,
+  fecha_venta date,
+  precio_venta numeric NOT NULL DEFAULT 0,
+  nota_venta text,
+  broker text,
+  evidencias ARRAY DEFAULT '{}'::text[],
+  observaciones_venta text,
+  vendido boolean DEFAULT false,
+  activo boolean DEFAULT true,
+  broker_id uuid,
+  CONSTRAINT seguros_polizas_pkey PRIMARY KEY (id),
+  CONSTRAINT seguros_polizas_aseguradora_id_fkey FOREIGN KEY (aseguradora_id) REFERENCES public.aseguradoras(id),
+  CONSTRAINT seguros_polizas_broker_id_fkey FOREIGN KEY (broker_id) REFERENCES public.brokers(id)
+);
+CREATE TABLE public.seguros_renovaciones (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone DEFAULT now(),
+  nota_venta_anterior text NOT NULL,
+  cliente_identificacion text,
+  fecha_renovacion date NOT NULL DEFAULT CURRENT_DATE,
+  vigencia_desde date,
+  vigencia_hasta date,
+  nota_venta_nueva text,
+  observaciones text,
+  CONSTRAINT seguros_renovaciones_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.showroom_visits (
   id bigint NOT NULL DEFAULT nextval('showroom_visits_id_seq'::regclass),
@@ -547,12 +610,10 @@ CREATE TABLE public.taller_detalles_orden (
   precio_unitario numeric DEFAULT 0,
   cantidad numeric DEFAULT 1,
   total numeric DEFAULT (precio_unitario * cantidad),
-  mecanico_asignado_id uuid,
   estado_trabajo text DEFAULT 'pendiente'::text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT taller_detalles_orden_pkey PRIMARY KEY (id),
-  CONSTRAINT taller_detalles_orden_fkey FOREIGN KEY (orden_id) REFERENCES public.taller_ordenes(id),
-  CONSTRAINT taller_detalles_mecanico_fkey FOREIGN KEY (mecanico_asignado_id) REFERENCES public.profiles(id)
+  CONSTRAINT taller_detalles_orden_fkey FOREIGN KEY (orden_id) REFERENCES public.taller_ordenes(id)
 );
 CREATE TABLE public.taller_gastos_fijos (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -622,6 +683,7 @@ CREATE TABLE public.taller_ordenes (
   factura_url text,
   estado_contable text DEFAULT 'pendiente'::text CHECK (estado_contable = ANY (ARRAY['pendiente'::text, 'facturado'::text, 'anulado'::text, 'pagado'::text])),
   total_final_cliente numeric DEFAULT 0,
+  fotos_salida_urls ARRAY DEFAULT '{}'::text[],
   CONSTRAINT taller_ordenes_pkey PRIMARY KEY (id),
   CONSTRAINT taller_ordenes_cliente_fkey FOREIGN KEY (cliente_id) REFERENCES public.taller_clientes(id)
 );
@@ -722,6 +784,49 @@ CREATE TABLE public.vehicle_requests (
   CONSTRAINT vehicle_requests_pkey PRIMARY KEY (id),
   CONSTRAINT vehicle_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.profiles(id),
   CONSTRAINT vehicle_requests_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.leads(id)
+);
+CREATE TABLE public.vehiculos (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  cliente_id uuid NOT NULL,
+  placa text NOT NULL,
+  marca text,
+  modelo text,
+  created_at timestamp without time zone DEFAULT now(),
+  anio bigint,
+  color text,
+  CONSTRAINT vehiculos_pkey PRIMARY KEY (id),
+  CONSTRAINT vehiculos_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes_externos(id)
+);
+CREATE TABLE public.ventas_rastreador (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  entorno USER-DEFINED NOT NULL,
+  tipo_pago USER-DEFINED NOT NULL,
+  precio_total numeric NOT NULL,
+  abono_inicial numeric DEFAULT 0,
+  total_financiado numeric,
+  numero_cuotas integer,
+  created_at timestamp with time zone DEFAULT now(),
+  metodo_pago USER-DEFINED,
+  url_comprobante_pago text,
+  fecha_entrega date,
+  asesor_id uuid,
+  observacion text,
+  gps_id uuid UNIQUE,
+  cliente_id uuid,
+  vehiculo_id uuid,
+  concesionaria_id uuid,
+  nota_venta text,
+  es_venta_externa boolean DEFAULT false,
+  instalador_id uuid,
+  fecha_instalacion date,
+  costo_instalacion numeric,
+  CONSTRAINT ventas_rastreador_pkey PRIMARY KEY (id),
+  CONSTRAINT ventas_rastreador_asesor_id_fkey FOREIGN KEY (asesor_id) REFERENCES public.profiles(id),
+  CONSTRAINT fk_venta_gps FOREIGN KEY (gps_id) REFERENCES public.gps_inventario(id),
+  CONSTRAINT fk_venta_cliente FOREIGN KEY (cliente_id) REFERENCES public.clientes_externos(id),
+  CONSTRAINT fk_venta_vehiculo FOREIGN KEY (vehiculo_id) REFERENCES public.vehiculos(id),
+  CONSTRAINT fk_venta_concesionaria FOREIGN KEY (concesionaria_id) REFERENCES public.concesionarias(id),
+  CONSTRAINT fk_venta_instalador FOREIGN KEY (instalador_id) REFERENCES public.gps_instaladores(id)
 );
 CREATE TABLE public.web_appointments (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
