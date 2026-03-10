@@ -57,7 +57,10 @@ export function AccountingSidebar() {
         displayedItems = menuItems.filter(item => 
             ['/inventario', '/contracts'].includes(item.href)
         );
-    } 
+    } else if (profile?.role === 'abogado') {
+        // Abogado solo ve y accede a Cartera (/wallet).
+        displayedItems = menuItems.filter(item => item.href === '/wallet');
+    }
     // Admin y otros roles ven todo (displayedItems = menuItems)
 
     return (

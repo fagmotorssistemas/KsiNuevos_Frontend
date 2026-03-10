@@ -67,7 +67,10 @@ export const LoginForm = () => {
             router.push('/inventario') // A Finanzas
             break
           case 'contable':
-            router.push('/wallet') // A Finanzas
+            router.push('/wallet') // A Cartera
+            break
+          case 'abogado':
+            router.push('/wallet') // Solo acceso a Cartera
             break
 
           default:
