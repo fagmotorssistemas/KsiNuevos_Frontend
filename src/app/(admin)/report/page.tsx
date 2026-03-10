@@ -27,9 +27,8 @@ import {
     LucideIcon,
     Handshake,
 } from "lucide-react";
-import { useScraperData } from "@/hooks/useScraperData";
-import { OpportunitiesView } from "@/components/features/admin/opportunities/OpportunitiesView";
 import { useEffect } from "react";
+import Link from "next/link";
 
 // --- INTERFACES ---
 
@@ -230,7 +229,7 @@ function StatCard({ icon: Icon, label, value, color, bg }: StatCardProps) {
 
 export default function AdminDashboardPage() {
     const { profile, isLoading: isAuthLoading } = useAuth();
-    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles' | 'testimonials' | 'opportunities'>('sellers');
+    const [activeTab, setActiveTab] = useState<'sellers' | 'vehicles' | 'testimonials'>('sellers');
     const [inventoryStatus, setInventoryStatus] = useState<string>('disponible');
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
@@ -251,34 +250,9 @@ export default function AdminDashboardPage() {
         reloadVehicles
     } = useVehicleStats(dateFilter, customDate, inventoryStatus);
 
-    const {
-        vehicles,
-        sellers,
-        stats,
-        isLoading: isScraperLoading,
-        filters,
-        refreshAll,
-        priceStatistics,
-        getPriceStatisticsForVehicle,
-        pagination,
-        goToPage,
-        nextPage,
-        prevPage,
-        vehicleFilters,
-        filterOptions,
-        updateFilter,
-        updateBrand,
-        clearFilters,
-    } = useScraperData();
-
     const handleReload = async () => {
         await reloadSellers();
         await reloadVehicles();
-        await refreshAll();
-    };
-
-    const handleScraperRefresh = async () => {
-        await refreshAll();
     };
 
     const grandTotals = useMemo(() => sellerStats.reduce((acc, curr) => ({
@@ -313,8 +287,8 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* Toolbar solo visible si NO estamos en testimonios u oportunidades */}
-            {activeTab !== 'testimonials' && activeTab !== 'opportunities' && (
+            {/* Toolbar solo visible si NO estamos en testimonios */}
+            {activeTab !== 'testimonials' && (
                 <div className="sticky top-0 z-20 backdrop-blur-md bg-white/80 rounded-xl shadow-sm border border-slate-200/60">
                     <AdminToolbar
                         currentFilter={dateFilter}
@@ -340,10 +314,6 @@ export default function AdminDashboardPage() {
                     <button onClick={() => setActiveTab('testimonials')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'testimonials' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
                         <MessageCircle className="h-4 w-4" />
                         Testimonios
-                    </button>
-                    <button onClick={() => setActiveTab('opportunities')} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'opportunities' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
-                        <Handshake className="h-4 w-4" />
-                        Oportunidades
                     </button>
                     <button onClick={() => setIsHistoryOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 rounded-md transition-colors shadow-sm">
                         <FileText className="h-4 w-4" />
@@ -419,29 +389,8 @@ export default function AdminDashboardPage() {
                         statusFilter={inventoryStatus}
                         onStatusFilterChange={setInventoryStatus}
                     />
-                ) : activeTab === 'testimonials' ? (
-                    <TestimonialsView />
                 ) : (
-                    <OpportunitiesView
-                        vehicles={vehicles}
-                        sellers={sellers}
-                        isLoading={isScraperLoading}
-                        stats={stats}
-                        locationFilter={filters.location ?? undefined}
-                        statusFilter={filters.status}
-                        onScraperComplete={handleScraperRefresh}
-                        priceStatistics={priceStatistics}
-                        getPriceStatisticsForVehicle={getPriceStatisticsForVehicle}
-                        goToPage={goToPage}
-                        nextPage={nextPage}
-                        prevPage={prevPage}
-                        pagination={pagination}
-                        vehicleFilters={vehicleFilters}
-                        filterOptions={filterOptions}
-                        updateFilter={updateFilter}
-                        updateBrand={updateBrand}
-                        clearFilters={clearFilters}
-                    />
+                    <TestimonialsView />
                 )}
             </div>
         </div>

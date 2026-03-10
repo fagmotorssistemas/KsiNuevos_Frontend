@@ -73,6 +73,8 @@ export interface OpportunitiesWizardSelectionProps {
 export interface OpportunitiesCenterViewProps {
     onScraperComplete?: () => void;
     isLoading?: boolean;
+    /** Si true, no se muestra el bloque de Explorador (Escanear, Mejores Oportunidades, etc.). Útil para vista "Todo". */
+    hideExplorerActions?: boolean;
     vehicles: VehicleWithSeller[];
 
     selectedBrand: string;

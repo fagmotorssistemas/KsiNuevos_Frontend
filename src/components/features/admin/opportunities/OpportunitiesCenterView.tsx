@@ -40,6 +40,7 @@ const TRACTION_OPTIONS = ["4x4", "4x2"];
 
 export const OpportunitiesCenterView = ({
     onScraperComplete,
+    hideExplorerActions = false,
     vehicles,
     selectedBrand, selectedModel, selectedYear,
     selectedCity, selectedDateRange, regionFilter, searchTerm, selectedTraction, sortBy,
@@ -199,67 +200,58 @@ export const OpportunitiesCenterView = ({
     // ── RENDER ─────────────────────────────────────────────────────────────
     return (
         <>
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mb-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mb-3 md:mb-4">
 
-                {/* ZONA 1: CABECERA Y ACCIONES GLOBALES */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-6 py-5 border-b border-slate-100 bg-white">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                            <DatabaseZap className="h-5 w-5 text-red-600" />
-                            Explorador de Marketplace
-                        </h2>
+                {/* ZONA 1: CABECERA Y ACCIONES GLOBALES (oculta en vista "Todo") */}
+                {!hideExplorerActions && (
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-6 py-5 border-b border-slate-100 bg-white">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <DatabaseZap className="h-5 w-5 text-red-600" />
+                                Explorador de Marketplace
+                            </h2>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+                            <button
+                                onClick={() => onScraperComplete?.()}
+                                disabled={isWebhookLoading || isBulkScraping}
+                                className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${(isWebhookLoading || isBulkScraping) ? 'cursor-not-allowed opacity-50' : ''}`}
+                                title="Actualizar datos"
+                            >
+                                <RefreshCcw className={`h-5 w-5 ${(isWebhookLoading || isBulkScraping) ? 'animate-spin' : ''}`} />
+                            </button>
+
+                            <button
+                                onClick={() => setShowComparisonPanel(true)}
+                                className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-95"
+                            >
+                                <Trophy className="h-4 w-4 text-amber-500 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300" />
+                                <span className="truncate">Mejores Oportunidades</span>
+                            </button>
+
+                            <button
+                                onClick={() => setShowScannerModal(true)}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Zap className="h-4 w-4" />
+                                <span>Escanear</span>
+                            </button>
+                        </div>
+
+                        {showComparisonPanel && (
+                            <OpportunitiesModal onClose={() => setShowComparisonPanel(false)}>
+                                <VehicleComparisonPanel
+                                    priceStatistics={priceStatistics}
+                                    limit={6}
+                                />
+                            </OpportunitiesModal>
+                        )}
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
-                        <button
-                            onClick={() => onScraperComplete?.()}
-                            disabled={isWebhookLoading || isBulkScraping}
-                            className={`flex items-center justify-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm ${(isWebhookLoading || isBulkScraping) ? 'cursor-not-allowed opacity-50' : ''}`}
-                            title="Actualizar datos"
-                        >
-                            <RefreshCcw className={`h-5 w-5 ${(isWebhookLoading || isBulkScraping) ? 'animate-spin' : ''}`} />
-                        </button>
-
-                        {/* ── Botón de Oportunidades Mejorado ── */}
-                        <button
-                            onClick={() => setShowComparisonPanel(true)}
-                            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800 text-sm font-bold rounded-xl transition-all shadow-sm active:scale-95"
-                        >
-                            <Trophy className="h-4 w-4 text-amber-500 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300" />
-                            <span className="truncate">Mejores Oportunidades</span>
-                        </button>
-
-                        <button
-                            onClick={() => setShowScannerModal(true)}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Zap className="h-4 w-4" />
-                            <span>Escanear</span>
-                        </button>
-                        {/* <button
-                            onClick={handleBulkScrapByBrands}
-                            disabled={isWebhookLoading || isBulkScraping}
-                            title={`Escaneo por las ${Object.keys(ECUADOR_CAR_DATA).length} marcas (sin abrir modal)`}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-slate-200/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Layers className="h-4 w-4" />
-                            <span>Escanear todas las marcas</span>
-                        </button> */}
-                    </div>
-
-                    {/* ── Modal ── */}
-                    {showComparisonPanel && (
-                        <OpportunitiesModal onClose={() => setShowComparisonPanel(false)}>
-                            <VehicleComparisonPanel
-                                priceStatistics={priceStatistics}
-                                limit={6}
-                            />
-                        </OpportunitiesModal>
-                    )}
-                </div>
+                )}
 
                 {/* ZONA 2: BÚSQUEDA, REGIÓN Y ORDEN (Navegación principal) */}
-                <div className="flex flex-col lg:flex-row gap-4 px-6 py-4 border-b border-slate-100 bg-slate-50/50 items-center">
+                    <div className="flex flex-col lg:flex-row gap-3 md:gap-4 px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-slate-50/50 items-center">
 
                     {/* Buscador amplio */}
                     <div className="w-full lg:flex-1 relative group">
@@ -267,14 +259,14 @@ export const OpportunitiesCenterView = ({
                         <input
                             type="text"
                             placeholder="Buscar por nombre, versión, características..."
-                            className="w-full h-11 pl-11 pr-4 text-sm bg-white border border-slate-200 rounded-xl focus:border-red-400 focus:ring-4 focus:ring-red-100 outline-none transition-all shadow-sm placeholder:text-slate-400"
+                            className="w-full h-10 md:h-11 pl-11 pr-4 text-sm bg-white border border-slate-200 rounded-xl focus:border-red-400 focus:ring-4 focus:ring-red-100 outline-none transition-all shadow-sm placeholder:text-slate-400"
                             value={searchTerm}
                             onChange={e => onSearchTermChange(e.target.value)}
                         />
                     </div>
 
                     {/* Controles secundarios (Región + Orden) */}
-                    <div className="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-3">
+                    <div className="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-2.5 md:gap-3">
                         {/* Selector de Región estilo Switch */}
                         <div className="w-full sm:w-auto flex bg-slate-200/50 p-1 rounded-xl">
                             <button
@@ -303,8 +295,8 @@ export const OpportunitiesCenterView = ({
                 </div>
 
                 {/* ZONA 3: FILTROS ESPECÍFICOS */}
-                <div className="px-6 py-5 bg-white">
-                    <div className="flex justify-between items-center mb-4">
+                <div className="px-4 md:px-6 py-4 md:py-5 bg-white">
+                    <div className="flex justify-between items-center mb-3 md:mb-4">
                         <h3 className="text-sm font-bold text-slate-800">Filtros Avanzados</h3>
                         {hasActiveFilters && (
                             <button

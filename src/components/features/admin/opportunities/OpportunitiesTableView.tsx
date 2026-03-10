@@ -139,7 +139,7 @@ function MotorEditableField({
                     onChange={(e) => setMotorValue(e.target.value)}
                     placeholder="Ej: 2.0l turbo diesel"
                     className="text-sm px-2 py-1 border border-zinc-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none w-full"
-                    autoFocus
+                    autoFocus={isEditing}
                     disabled={isSaving}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') handleSave();
@@ -402,7 +402,7 @@ export function OpportunitiesTableView({
                                     {/* Columna Marca/Modelo */}
                                     <td className="py-5 px-6">
                                         <div className="flex flex-col gap-1">
-                                            <div className="font-black text-zinc-900 text-lg leading-tight group-hover:text-red-600 transition-colors">
+                                            <div className="font-black text-zinc-900 text-base md:text-lg leading-tight group-hover:text-red-600 transition-colors">
                                                 {vehicle.brand?.toUpperCase()}
                                             </div>
                                             <div className="text-zinc-400 font-bold text-sm">
@@ -456,7 +456,7 @@ export function OpportunitiesTableView({
                                     {/* Columna Precio */}
                                     <td className="py-5 px-6">
                                         <div className="flex flex-col items-end gap-1.5">
-                                            <div className="font-black text-zinc-900 tracking-tight text-2xl">
+                                            <div className="font-black text-zinc-900 tracking-tight text-xl md:text-2xl">
                                                 ${vehicle.price ? vehicle.price.toLocaleString() : 'N/A'}
                                             </div>
                                             <PriceBadge type={getPriceBadge(vehicle)} />
@@ -625,12 +625,12 @@ export function OpportunitiesTableView({
                                 <div className="flex-1 overflow-y-auto p-6 lg:px-8 space-y-8 custom-scrollbar bg-zinc-50/30">
 
                                     {/* A. Precio y CTA - Destacado */}
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-1">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-1">
                                         <div>
                                             <div className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
                                                 Precio de Venta
                                             </div>
-                                            <div className="text-5xl lg:text-6xl font-black text-zinc-900 tracking-tighter">
+                                            <div className="text-4xl md:text-5xl lg:text-6xl font-black text-zinc-900 tracking-tighter">
                                                 ${selectedVehicle.price ? selectedVehicle.price.toLocaleString() : '---'}
                                             </div>
                                         </div>

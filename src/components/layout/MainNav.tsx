@@ -44,11 +44,15 @@ if (profile?.role === "finanzas") {
 
 
 
-    // Admin y Marketing ven la sección de reportes
+    // Admin y Marketing ven la sección de reportes y Scraper
     if (profile?.role === "admin" || profile?.role === "marketing") {
       navItems.push({
+        href: "/scraper",
+        label: "Scraper",
+      });
+      navItems.push({
         href: "/report",
-        label: "Monitoreo", // Simplificado, sirve para ambos
+        label: "Monitoreo",
       });
     }
   }
