@@ -23,6 +23,11 @@ if (profile?.role === "finanzas") {
   navItems = [
     { href: "/wallet", label: "Contabilidad" },
   ];
+} else if (profile?.role === "abogado") {
+  navItems = [
+    { href: "/wallet", label: "Cartera" },
+  ];
+  
 } else {
   navItems = [
     { href: "/leads", label: "Ventas" },
