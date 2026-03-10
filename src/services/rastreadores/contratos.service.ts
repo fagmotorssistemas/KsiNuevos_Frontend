@@ -74,8 +74,8 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
 
             const resultadosDetalle = await Promise.all(promesasDetalle);
 
-            // Mostrar todas las filas (incl. totalRastreador 0) para que se vean todas las notas de venta del cliente
-            listaAutos = resultadosDetalle.filter((item): item is ContratoGPS => item !== null);
+            // Solo filas con valor de rastreador > 0 (clientes que compraron GPS); excluir notas Oracle sin rastreador
+            listaAutos = resultadosDetalle.filter((item): item is ContratoGPS => item !== null && (item.totalRastreador ?? 0) > 0);
         }
 
         // C. Procesamos ventas externas (ventas_rastreador). Placa/marca/modelo desde vehiculos si existe.
@@ -107,8 +107,9 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
             };
         });
 
-        // D. Retornamos la lista combinada
-        return [...listaExternos, ...listaAutos];
+        // D. Retornamos solo contratos con valor de GPS > 0 (no mostrar notas sin rastreador)
+        const combinada = [...listaExternos, ...listaAutos];
+        return combinada.filter((c) => (c.totalRastreador ?? 0) > 0);
 
     } catch (error) {
         console.error("❌ Error critico unificando listas:", error);

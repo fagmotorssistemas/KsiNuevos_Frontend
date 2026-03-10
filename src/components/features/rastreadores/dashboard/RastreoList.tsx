@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2 } from "lucide-react"; // <--- Importamos iconos de estado
+import { useState, useEffect, useRef } from "react";
+import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2, ChevronDown } from "lucide-react";
 import { ContratoGPS } from "@/types/rastreadores.types";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { RastreoStats } from "./RastreoStats";
@@ -29,11 +29,30 @@ interface RastreoListProps {
 
 type FiltroOrigen = 'TODOS' | 'AUTO' | 'EXTERNO' | 'EXTERNO_CLIENTE' | 'EXTERNO_CONCESIONARIA';
 
+const EXTERNO_OPCIONES: { id: FiltroOrigen; label: string; icon: typeof User }[] = [
+    { id: 'EXTERNO', label: 'Todos externos', icon: Users },
+    { id: 'EXTERNO_CLIENTE', label: 'Solo cliente', icon: User },
+    { id: 'EXTERNO_CONCESIONARIA', label: 'Solo concesionaria', icon: Store },
+];
+
 export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoListProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>('TODOS');
-    const [gpsMap, setGpsMap] = useState<Map<string, any>>(new Map()); // Mapea notaVenta -> GPS
-    const [refreshKey, setRefreshKey] = useState(0); // Trigger para refrescar
+    const [externosOpen, setExternosOpen] = useState(false);
+    const externosRef = useRef<HTMLDivElement>(null);
+    const [gpsMap, setGpsMap] = useState<Map<string, any>>(new Map());
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // Cerrar dropdown al hacer clic fuera
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (externosRef.current && !externosRef.current.contains(e.target as Node)) setExternosOpen(false);
+        }
+        if (externosOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }
+    }, [externosOpen]);
 
     // Función para recargar el mapa de GPS
     const cargarGPS = async () => {
@@ -87,6 +106,8 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
     });
 
     const totalRecaudado = filteredData.reduce((acc, curr) => acc + curr.totalRastreador, 0);
+    const esExterno = filtroOrigen === 'EXTERNO' || filtroOrigen === 'EXTERNO_CLIENTE' || filtroOrigen === 'EXTERNO_CONCESIONARIA';
+    const labelExternos = EXTERNO_OPCIONES.find(o => o.id === filtroOrigen)?.label ?? 'Externos';
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
@@ -110,13 +131,43 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
                         <Plus size={16} /> Nueva Venta
                     </button>
 
-                    {/* FILTROS (TABS): Todos · K-si · Externos (todos / solo cliente / solo concesionaria) */}
+                    {/* Filtros: Todos · K-si · Externos (dropdown: todos / cliente / concesionaria) */}
                     <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap items-center gap-0.5 font-bold text-xs uppercase shadow-inner">
                         <button type="button" onClick={() => setFiltroOrigen('TODOS')} className={`px-3 py-2 rounded-lg transition-all ${filtroOrigen === 'TODOS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Todos</button>
                         <button type="button" onClick={() => setFiltroOrigen('AUTO')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'AUTO' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Building2 size={12}/> K-si</button>
-                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Users size={12}/> Ext</button>
-                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO_CLIENTE')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO_CLIENTE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><User size={12}/> Cliente</button>
-                        <button type="button" onClick={() => setFiltroOrigen('EXTERNO_CONCESIONARIA')} className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1 ${filtroOrigen === 'EXTERNO_CONCESIONARIA' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Store size={12}/> Conc.</button>
+                        <div className="relative" ref={externosRef}>
+                            <button
+                                type="button"
+                                onClick={() => setExternosOpen((o) => !o)}
+                                className={`px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 ${esExterno ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <Users size={12} />
+                                <span className="normal-case">{labelExternos}</span>
+                                <ChevronDown size={14} className={`transition-transform ${externosOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {externosOpen && (
+                                <div className="absolute top-full left-0 mt-1 py-1 min-w-[180px] bg-white rounded-xl border border-slate-200 shadow-lg z-50">
+                                    {EXTERNO_OPCIONES.map((opt) => {
+                                        const Icon = opt.icon;
+                                        const active = filtroOrigen === opt.id;
+                                        return (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setFiltroOrigen(opt.id);
+                                                    setExternosOpen(false);
+                                                }}
+                                                className={`w-full px-4 py-2.5 text-left flex items-center gap-2 rounded-lg text-xs font-bold transition-colors ${active ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700 hover:bg-slate-50'}`}
+                                            >
+                                                <Icon size={14} />
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
