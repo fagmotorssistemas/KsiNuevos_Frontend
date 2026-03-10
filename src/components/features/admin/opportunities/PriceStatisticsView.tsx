@@ -19,6 +19,15 @@ interface PriceStatisticsViewProps {
     isLoading?: boolean;
 }
 
+// 1. Agregamos una interfaz para tipar correctamente las estadísticas agrupadas
+interface BrandStat {
+    brand: string;
+    totalModels: number;
+    avgPrice: number;
+    minPrice: number;
+    maxPrice: number;
+}
+
 export function PriceStatisticsView({ priceStatistics, isLoading }: PriceStatisticsViewProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
@@ -32,42 +41,39 @@ export function PriceStatisticsView({ priceStatistics, isLoading }: PriceStatist
         return Array.from(brands).sort();
     }, [priceStatistics]);
 
-    const filteredStats = useMemo(() => {
+    // 2. Tipamos explícitamente el return y eliminamos el código muerto del "if"
+    const filteredStats = useMemo((): BrandStat[] => {
         if (selectedBrand) {
-            return priceStatistics
-                .filter(
-                    (stat) =>
-                        stat.brand === selectedBrand &&
-                        (stat.model?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-                )
-                .sort((a, b) => (a.model || "").localeCompare(b.model || ""));
-        } else {
-            return availableBrands
-                .filter((brand) => brand.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map((brand) => {
-                    const stats = priceStatistics.filter((s) => s.brand === brand);
-                    const totalModels = new Set(stats.map((s) => s.model)).size;
-                    const avgPrice =
-                        stats.length > 0
-                            ? stats.reduce(
-                                  (sum, s) => sum + Number(s.median_price || s.avg_price || 0),
-                                  0
-                              ) / stats.length
-                            : 0;
-                    const minPrice = Math.min(
-                        ...stats.map((s) => Number(s.min_price || 0)).filter((p) => p > 0)
-                    );
-                    const maxPrice = Math.max(...stats.map((s) => Number(s.max_price || 0)));
-
-                    return {
-                        brand,
-                        totalModels,
-                        avgPrice,
-                        minPrice,
-                        maxPrice,
-                    };
-                });
+            // Cuando hay una marca seleccionada, la UI usa modelYearStats en lugar de filteredStats.
+            // Retornamos un arreglo vacío para mantener la consistencia del tipo.
+            return [];
         }
+
+        return availableBrands
+            .filter((brand) => brand.toLowerCase().includes(searchTerm.toLowerCase()))
+            .map((brand) => {
+                const stats = priceStatistics.filter((s) => s.brand === brand);
+                const totalModels = new Set(stats.map((s) => s.model)).size;
+                const avgPrice =
+                    stats.length > 0
+                        ? stats.reduce(
+                              (sum, s) => sum + Number(s.median_price || s.avg_price || 0),
+                              0
+                          ) / stats.length
+                        : 0;
+                const minPrice = Math.min(
+                    ...stats.map((s) => Number(s.min_price || 0)).filter((p) => p > 0)
+                );
+                const maxPrice = Math.max(...stats.map((s) => Number(s.max_price || 0)));
+
+                return {
+                    brand,
+                    totalModels,
+                    avgPrice,
+                    minPrice,
+                    maxPrice,
+                };
+            });
     }, [priceStatistics, selectedBrand, searchTerm, availableBrands]);
 
     const modelYearStats = useMemo(() => {
@@ -152,7 +158,8 @@ export function PriceStatisticsView({ priceStatistics, isLoading }: PriceStatist
             <div className="min-h-[400px]">
                 {!selectedBrand ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                        {filteredStats.map((brand: { brand: string; totalModels: number; avgPrice: number; minPrice: number; maxPrice: number }) => (
+                        {/* 3. El map ya no requiere un tipado manual en línea porque TypeScript sabe que es BrandStat[] */}
+                        {filteredStats.map((brand) => (
                             <button
                                 key={brand.brand}
                                 onClick={() => {
