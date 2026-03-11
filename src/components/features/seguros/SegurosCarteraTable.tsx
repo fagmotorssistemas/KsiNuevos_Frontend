@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, DollarSign, FileText, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Calendar, DollarSign, FileText, ShieldCheck, AlertTriangle, Store } from "lucide-react";
 import { formatDinero } from "@/utils/format";
 import type { SeguroVehicular } from "@/types/seguros.types";
 import type { SeguroEnriquecido } from "@/hooks/useSegurosCartera";
@@ -28,6 +28,8 @@ interface SegurosCarteraTableProps {
   filtroTipo: "TODOS" | "CREDITO" | "CONTADO";
   setFiltroTipo: (t: "TODOS" | "CREDITO" | "CONTADO") => void;
   onGestionar: (item: SeguroVehicular) => void;
+  /** Opcional: para "Vender a particular" desde Cartera; si se pasa, se muestra botón Vender por fila */
+  onVender?: (item: SeguroVehicular) => void;
   /** Si false (Dashboard), se ocultan Financiamiento seguro, Próx. venc., Días para venc., Alerta. En Cartera de Clientes pasar true. */
   showVencimientoColumns?: boolean;
   showRefresh?: boolean;
@@ -45,6 +47,7 @@ export function SegurosCarteraTable({
   filtroTipo,
   setFiltroTipo,
   onGestionar,
+  onVender,
   showVencimientoColumns = false,
   showRefresh,
   onRefresh,
@@ -263,13 +266,25 @@ export function SegurosCarteraTable({
                       </>
                     )}
                     <td className="px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => onGestionar(row)}
-                        className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-emerald-700 transition-all shadow-sm active:scale-95"
-                      >
-                        <ShieldCheck size={14} /> Gestionar
-                      </button>
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onGestionar(row)}
+                          className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-emerald-700 transition-all shadow-sm active:scale-95"
+                        >
+                          <ShieldCheck size={14} /> Gestionar
+                        </button>
+                        {onVender && (
+                          <button
+                            type="button"
+                            onClick={() => onVender(row)}
+                            className="inline-flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-slate-800 transition-all shadow-sm active:scale-95"
+                            title="Registrar venta a este cliente (particular)"
+                          >
+                            <Store size={14} /> Vender
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

@@ -13,7 +13,14 @@ export interface ContratoResumen {
 export interface CuotaAdicional {
     monto: number;
     letras: string;
-    fecha?: string; 
+    fecha?: string;
+}
+
+// Pagos en cheque (lista que viene del backend)
+export interface PagoCheque {
+    monto: number;
+    letras: string;
+    fecha?: string;
 }
 
 export interface ContratoDetalle {
@@ -88,7 +95,8 @@ export interface ContratoDetalle {
     montoCuotaAdicional: number; 
     letrasCuotaAdicional: string;
     // SE AGREGA LA LISTA QUE VIENE DEL BACKEND
-    listaCuotasAdicionales: CuotaAdicional[]; 
+    listaCuotasAdicionales: CuotaAdicional[];
+    listaPagosCheque: PagoCheque[];
 }
 
 export interface CuotaAmortizacion {

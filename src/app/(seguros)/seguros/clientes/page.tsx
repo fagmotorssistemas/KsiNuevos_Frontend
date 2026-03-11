@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Users, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Users, RefreshCw, Store } from "lucide-react";
 import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { useSegurosCartera } from "@/hooks/useSegurosCartera";
 import { SegurosCarteraTable } from "@/components/features/seguros/SegurosCarteraTable";
@@ -62,15 +63,24 @@ export default function SegurosClientesPage() {
                     Seguros vehiculares por cliente (1 año). Crédito, contado y alertas de renovación 2º año.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={cargar}
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-60"
-                >
-                  <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-                  Actualizar
-                </button>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/seguros/ventas"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition-all shadow-sm"
+                  >
+                    <Store size={18} />
+                    Vender a particular
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={cargar}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-60"
+                  >
+                    <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                    Actualizar
+                  </button>
+                </div>
               </div>
 
               {seleccionado ? (
@@ -92,6 +102,7 @@ export default function SegurosClientesPage() {
                     filtroTipo={filtroTipo}
                     setFiltroTipo={setFiltroTipo}
                     onGestionar={handleGestionar}
+                    onVender={(item) => window.location.assign(`/seguros/ventas?nota=${encodeURIComponent(item.referencia || "")}`)}
                     showVencimientoColumns={true}
                     showRefresh={false}
                   />

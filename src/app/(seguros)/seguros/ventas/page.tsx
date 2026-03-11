@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Store,
   Plus,
@@ -35,7 +36,9 @@ function formatDate(s: string | null): string {
   }
 }
 
-export default function SegurosVentasPage() {
+function SegurosVentasPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [list, setList] = useState<SeguroPoliza[]>([]);
   const [comprasDisponibles, setComprasDisponibles] = useState<SeguroPoliza[]>([]);
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([]);
@@ -97,6 +100,17 @@ export default function SegurosVentasPage() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Abrir modal con nota preseleccionada cuando se llega desde Cartera (Vender a particular)
+  useEffect(() => {
+    if (loading) return;
+    const nota = searchParams.get("nota");
+    if (nota?.trim()) {
+      setNotaSeleccionadaModal(nota.trim());
+      setModalOpen(true);
+      router.replace("/seguros/ventas", { scroll: false });
+    }
+  }, [loading, searchParams, router]);
 
   // Al seleccionar contrato/nota (misma lista que Cartera), rellenar cliente y vehículo
   useEffect(() => {
@@ -446,5 +460,20 @@ export default function SegurosVentasPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SegurosVentasPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen bg-slate-50">
+        <SegurosSidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 size={32} className="animate-spin text-emerald-600" />
+        </div>
+      </div>
+    }>
+      <SegurosVentasPageContent />
+    </Suspense>
   );
 }

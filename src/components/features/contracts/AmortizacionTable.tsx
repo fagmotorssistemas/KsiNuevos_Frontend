@@ -42,7 +42,8 @@ export function AmortizacionTable({
         }
     }, [contratoId]);
 
-    const total = totalCuotas || cuotas.length;
+    // Total según las cuotas que realmente vienen (ej. 24 cuotas → "de 24", no "de 36")
+    const total = cuotas.length > 0 ? cuotas.length : totalCuotas;
     const tieneAdicionales = cuotasAdicionales.length > 0;
 
     if (loading) {

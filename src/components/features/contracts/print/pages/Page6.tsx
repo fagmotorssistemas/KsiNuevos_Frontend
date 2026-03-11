@@ -12,7 +12,8 @@ interface PageProps {
 export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
     // --- LÓGICA DE VISIBILIDAD ---
     const tieneAdicionales = data.listaCuotasAdicionales && data.listaCuotasAdicionales.length > 0;
-    const debeMostrarPagina = hasAmortization || tieneAdicionales;
+    const tienePagosCheque = data.listaPagosCheque && data.listaPagosCheque.length > 0;
+    const debeMostrarPagina = hasAmortization || tieneAdicionales || tienePagosCheque;
 
     if (!debeMostrarPagina) return null;
 
@@ -32,11 +33,16 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
         return `${dia}/${mes}/${anio}`;
     };
 
-    // --- PREPARACIÓN DE DATOS PARA LA TABLA ---
-    const cuotasParaTabla = data.listaCuotasAdicionales?.map(cuota => ({
+    // --- PREPARACIÓN: cuotas adicionales + pagos cheque en la MISMA tabla (Cuota Adicional 1, 2, 3...) ---
+    const adicionales = (data.listaCuotasAdicionales || []).map(cuota => ({
         monto: cuota.monto,
-        fecha: formatDateHeader(data.fechaVenta) 
-    })) || [];
+        fecha: formatDateHeader(data.fechaVenta) || formatDateHeader(data.fechaVentaFull) || ''
+    }));
+    const cheques = (data.listaPagosCheque || []).map(pc => ({
+        monto: pc.monto,
+        fecha: pc.fecha ? formatDateHeader(pc.fecha) : (formatDateHeader(data.fechaVentaFull) || formatDateHeader(data.fechaVenta) || '')
+    }));
+    const cuotasParaTabla = [...adicionales, ...cheques];
 
     return (
         <ContractPageLayout pageNumber={6}>
@@ -119,9 +125,7 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
                     </div>
                 </div>
 
-                {/* --- TABLA DE AMORTIZACIÓN --- */}
-                {/* Ajustamos el margen inferior para dar aire antes de las firmas, 
-                    pero sin forzar posiciones */}
+                {/* --- TABLA DE AMORTIZACIÓN (incluye Cuota Adicional 1, 2, 3... con cuotas + cheques) --- */}
                 <div className="mb-8 print:mb-8">
                     <AmortizacionTable 
                         contratoId={data.ccoCodigo} 

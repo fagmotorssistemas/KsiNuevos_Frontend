@@ -1,5 +1,5 @@
 // src/services/contratos.service.ts
-import { ContratoResumen, ContratoDetalle, CuotaAmortizacion, CuotaAdicional } from "@/types/contratos.types";
+import { ContratoResumen, ContratoDetalle, CuotaAmortizacion, CuotaAdicional, PagoCheque } from "@/types/contratos.types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
 
@@ -104,7 +104,12 @@ const adaptarDetalle = (data: any): ContratoDetalle => {
         listaCuotasAdicionales: (data.listaCuotasAdicionales || []).map((ca: any): CuotaAdicional => ({
             monto: Number(ca.monto || 0),
             letras: ca.letras || '',
-            fecha: ca.fecha || '' // Se puede omitir si Page6 usa la fecha de venta
+            fecha: ca.fecha || ''
+        })),
+        listaPagosCheque: (data.listaPagosCheque || []).map((pc: any): PagoCheque => ({
+            monto: Number(pc.monto || 0),
+            letras: pc.letras || '',
+            fecha: pc.fecha || ''
         }))
     };
 };

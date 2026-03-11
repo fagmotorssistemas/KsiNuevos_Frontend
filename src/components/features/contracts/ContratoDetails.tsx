@@ -326,12 +326,18 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                         </div>
                     )}
 
-                    {/* SECCIÓN 6: AMORTIZACIÓN */}
+                    {/* SECCIÓN 6: AMORTIZACIÓN (cuotas adicionales + pagos cheque en la misma tabla) */}
                     <div className="pt-2 border-t border-slate-200">
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 mb-4">
                             <Briefcase className="h-3 w-3" /> Tabla de Amortización
                         </h3>
-                        <AmortizacionTable contratoId={contrato.ccoCodigo} />
+                        <AmortizacionTable
+                            contratoId={contrato.ccoCodigo}
+                            cuotasAdicionales={[
+                                ...(contrato.listaCuotasAdicionales || []).map(c => ({ monto: c.monto, fecha: c.fecha || '' })),
+                                ...(contrato.listaPagosCheque || []).map(pc => ({ monto: pc.monto, fecha: pc.fecha || '' }))
+                            ]}
+                        />
                     </div>
 
                 </div>
