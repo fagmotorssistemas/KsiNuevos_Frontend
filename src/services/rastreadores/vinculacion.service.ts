@@ -24,6 +24,7 @@ export async function getGPSPorVenta(notaVenta: string) {
                 asesor_id,
                 observacion,
                 url_comprobante_pago,
+                url_evidencia_gps,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -63,6 +64,7 @@ export async function getGPSPorClienteId(clienteId: string) {
                 asesor_id,
                 observacion,
                 url_comprobante_pago,
+                url_evidencia_gps,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -109,9 +111,42 @@ function mapVentasToHistorial(data: any[]) {
             gps_sims: sim ? { iccid: sim.iccid, imsi: sim.imsi ?? null } : null,
             proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
             observacion: v.observacion ?? null,
-            url_comprobante_pago: v.url_comprobante_pago ?? null
+            url_comprobante_pago: v.url_comprobante_pago ?? null,
+            url_evidencia_gps: v.url_evidencia_gps ?? null
         };
     });
+}
+
+/** Tipo de evidencia: comprobante de pago o evidencia de instalación del rastreador */
+export type TipoEvidenciaVenta = 'comprobante_pago' | 'evidencia_gps';
+
+/**
+ * Agrega nuevas URLs de evidencia a una venta (comprobante de pago o evidencia GPS).
+ */
+export async function agregarEvidenciasVenta(
+    ventaId: string,
+    urlsActuales: string | null,
+    nuevasUrls: string[],
+    tipo: TipoEvidenciaVenta = 'comprobante_pago'
+) {
+    try {
+        const urlsPrevias = urlsActuales ? urlsActuales.split(',').filter(Boolean) : [];
+        const todasLasUrls = [...urlsPrevias, ...nuevasUrls].join(',');
+        const columna = tipo === 'evidencia_gps' ? 'url_evidencia_gps' : 'url_comprobante_pago';
+
+        const { data, error } = await supabase
+            .from('ventas_rastreador')
+            .update({ [columna]: todasLasUrls || null })
+            .eq('id', ventaId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return { success: true, data };
+    } catch (error: any) {
+        console.error("Error agregando evidencias a venta:", error);
+        return { success: false, error: error.message };
+    }
 }
 
 /**
@@ -142,6 +177,7 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 asesor_id,
                 observacion,
                 url_comprobante_pago,
+                url_evidencia_gps,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -179,29 +215,6 @@ export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string)
     } catch (err) {
         console.error("Error critico en actualizarVinculacionGPS:", err);
         return { success: false, error: err };
-    }
-}
-
-/**
- * Agrega nuevas URLs de evidencia a una venta existente.
- */
-export async function agregarEvidenciasVenta(ventaId: string, urlsActuales: string | null, nuevasUrls: string[]) {
-    try {
-        const urlsPrevias = urlsActuales ? urlsActuales.split(',').filter(Boolean) : [];
-        const todasLasUrls = [...urlsPrevias, ...nuevasUrls].join(',');
-
-        const { data, error } = await supabase
-            .from('ventas_rastreador')
-            .update({ url_comprobante_pago: todasLasUrls || null })
-            .eq('id', ventaId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return { success: true, data };
-    } catch (error: any) {
-        console.error("Error agregando evidencias a venta:", error);
-        return { success: false, error: error.message };
     }
 }
 

@@ -25,7 +25,7 @@ export interface SeguroPoliza {
   fecha_venta: string | null;
   precio_venta: number;
   nota_venta: string | null;
-  broker: string | null;
+  broker_id: string | null;
   evidencias: string[];
   observaciones_venta: string | null;
 
@@ -53,7 +53,7 @@ export interface SeguroPolizaInsert {
   fecha_venta?: string | null;
   precio_venta?: number;
   nota_venta?: string | null;
-  broker?: string | null;
+  broker_id?: string | null;
   evidencias?: string[];
   observaciones_venta?: string | null;
   vendido?: boolean;

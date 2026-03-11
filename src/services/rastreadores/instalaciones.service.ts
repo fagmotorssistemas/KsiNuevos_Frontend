@@ -27,6 +27,30 @@ export async function subirEvidencias(files: File[]): Promise<string[]> {
 
 const BUCKET_COMPROBANTE_RASTREADOR = 'comprobante_deposito_sky';
 
+/** Bucket para evidencias de rastreador y forma de pago (HistorialGPS) */
+const BUCKET_EVIDENCIA_FORMA_PAGO_RASTREADOR = 'evidencia_formadepago_rastreador';
+
+/** Sube archivos al bucket evidencia_formadepago_rastreador (evidencia instalación + comprobante pago). */
+export async function subirEvidenciasRastreadorBucket(files: File[]): Promise<string[]> {
+    try {
+        const uploadPromises = files.map(async (file) => {
+            const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+            const fileName = `gps/${Date.now()}_${safeName}`;
+            const { error } = await supabase.storage.from(BUCKET_EVIDENCIA_FORMA_PAGO_RASTREADOR).upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+            if (error) throw error;
+            const { data } = supabase.storage.from(BUCKET_EVIDENCIA_FORMA_PAGO_RASTREADOR).getPublicUrl(fileName);
+            return data.publicUrl;
+        });
+        return await Promise.all(uploadPromises);
+    } catch (e) {
+        console.error("Error subiendo evidencias (evidencia_formadepago_rastreador):", e);
+        throw e;
+    }
+}
+
 export async function subirComprobantePago(file: File): Promise<string> {
     const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
     const fileName = `rastreador/${Date.now()}_${safeName}`;

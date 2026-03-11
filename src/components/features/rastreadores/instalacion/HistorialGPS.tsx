@@ -23,7 +23,7 @@ interface HistorialGPSProps {
 export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }: HistorialGPSProps) {
     const [estadosSeleccionados, setEstadosSeleccionados] = useState<{ [key: string]: string }>({});
     const [guardandoGPSId, setGuardandoGPSId] = useState<string | null>(null);
-    const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIAS' }>({});
+    const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIA_RASTREADOR' | 'EVIDENCIA_PAGO' }>({});
     const [uploadingGPSId, setUploadingGPSId] = useState<string | null>(null);
 
     const handleActualizarEstado = async (gpsId: string) => {
@@ -47,9 +47,12 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
         }
     };
 
-    const handleUploadEvidencias = async (gps: any, files: FileList | null) => {
+    const handleUploadEvidencias = async (
+        gps: any,
+        files: FileList | null,
+        tipo: 'evidencia_gps' | 'comprobante_pago'
+    ) => {
         if (!files || files.length === 0) return;
-        
         if (!gps.venta_id) {
             toast.error("No se puede adjuntar: falta ID de venta.");
             return;
@@ -58,12 +61,26 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
         setUploadingGPSId(gps.id);
         const toastId = toast.loading("Subiendo evidencias...");
         try {
-            const nuevasUrls = await rastreadoresService.subirEvidencias(Array.from(files));
+            // Evidencia rastreador → bucket evidencia_rastreador; Forma de pago → bucket evidencia_formadepago_rastreador
+            const nuevasUrls = tipo === 'evidencia_gps'
+                ? await rastreadoresService.subirEvidencias(Array.from(files))
+                : await rastreadoresService.subirEvidenciasRastreadorBucket(Array.from(files));
             if (nuevasUrls.length > 0) {
-                const res = await rastreadoresService.agregarEvidenciasVenta(gps.venta_id, gps.url_comprobante_pago, nuevasUrls);
+                const urlsActuales = tipo === 'evidencia_gps' ? gps.url_evidencia_gps : gps.url_comprobante_pago;
+                const res = await rastreadoresService.agregarEvidenciasVenta(
+                    gps.venta_id,
+                    urlsActuales,
+                    nuevasUrls,
+                    tipo
+                );
                 if (res.success) {
                     toast.success("Evidencias subidas correctamente", { id: toastId });
-                    onHistorialUpdate({ ...gps, url_comprobante_pago: res.data.url_comprobante_pago });
+                    const data = res.data as { url_evidencia_gps?: string | null; url_comprobante_pago?: string | null };
+                    onHistorialUpdate({
+                        ...gps,
+                        url_evidencia_gps: tipo === 'evidencia_gps' ? (data.url_evidencia_gps ?? gps.url_evidencia_gps) : gps.url_evidencia_gps,
+                        url_comprobante_pago: tipo === 'comprobante_pago' ? (data.url_comprobante_pago ?? gps.url_comprobante_pago) : gps.url_comprobante_pago,
+                    });
                 } else {
                     toast.error(res.error || "Error al guardar en base de datos", { id: toastId });
                 }
@@ -91,12 +108,13 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                     const estadoActual = estadosSeleccionados[gps.id] || gps.estado || 'PENDIENTE_INSTALACION';
                     const activeTab = tabs[gps.id] || 'DATOS';
 
-                    const urlsEvidencias = gps.url_comprobante_pago ? gps.url_comprobante_pago.split(',').filter(Boolean) : [];
+                    const urlsEvidenciaRastreador = gps.url_evidencia_gps ? gps.url_evidencia_gps.split(',').filter(Boolean) : [];
+                    const urlsComprobantePago = gps.url_comprobante_pago ? gps.url_comprobante_pago.split(',').filter(Boolean) : [];
 
                     return (
                         <div key={gps.id} className="p-5 bg-slate-50/80 border-2 border-slate-200 rounded-2xl hover:border-slate-300 transition-colors">
                             {/* TABS */}
-                            <div className="flex gap-2 mb-4 border-b border-slate-200 pb-2">
+                            <div className="flex gap-2 mb-4 border-b border-slate-200 pb-2 flex-wrap">
                                 <button
                                     onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'DATOS' }))}
                                     className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'DATOS' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
@@ -104,10 +122,16 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                     Datos del Dispositivo
                                 </button>
                                 <button
-                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIAS' }))}
-                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIAS' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIA_RASTREADOR' }))}
+                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIA_RASTREADOR' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
                                 >
-                                    Evidencias / Pago ({urlsEvidencias.length})
+                                    Evidencia rastreador ({urlsEvidenciaRastreador.length})
+                                </button>
+                                <button
+                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIA_PAGO' }))}
+                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIA_PAGO' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                                >
+                                    Forma de pago ({urlsComprobantePago.length})
                                 </button>
                             </div>
 
@@ -175,22 +199,17 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                     </div>
                                     )}
 
-                                    {/* CONTENIDO TAB EVIDENCIAS */}
-                                    {activeTab === 'EVIDENCIAS' && (
+                                    {/* CONTENIDO TAB EVIDENCIA RASTREADOR (colocar rastreador) */}
+                                    {activeTab === 'EVIDENCIA_RASTREADOR' && (
                                         <div className="flex-1 min-w-0 flex flex-col gap-4">
+                                            <p className="text-xs text-slate-500 mb-1">Fotos o PDF de la instalación del rastreador.</p>
                                             <div className="flex gap-3 flex-wrap">
-                                                {urlsEvidencias.map((url: string, idx: number) => {
+                                                {urlsEvidenciaRastreador.map((url: string, idx: number) => {
                                                     const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)/i);
                                                     return (
-                                                        <a
-                                                            key={idx}
-                                                            href={url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="group relative block overflow-hidden rounded-xl border border-slate-200 w-24 h-24 sm:w-32 sm:h-32 hover:border-slate-400 transition-colors bg-white shadow-sm"
-                                                        >
+                                                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="group relative block overflow-hidden rounded-xl border border-slate-200 w-24 h-24 sm:w-32 sm:h-32 hover:border-slate-400 transition-colors bg-white shadow-sm">
                                                             {isImage ? (
-                                                                <img src={url} alt={`Evidencia ${idx + 1}`} className="object-cover w-full h-full" />
+                                                                <img src={url} alt={`Evidencia rastreador ${idx + 1}`} className="object-cover w-full h-full" />
                                                             ) : (
                                                                 <div className="flex items-center justify-center w-full h-full bg-slate-50 text-slate-400 group-hover:text-blue-500 transition-colors">
                                                                     <span className="text-xs font-bold uppercase">Ver PDF</span>
@@ -199,8 +218,6 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                                         </a>
                                                     );
                                                 })}
-                                                
-                                                {/* BOTÓN ADJUNTAR (CAJONCITO CON +) */}
                                                 <label className="relative flex flex-col items-center justify-center w-24 h-24 sm:w-32 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer bg-slate-50 group">
                                                     {uploadingGPSId === gps.id ? (
                                                         <Loader2 className="animate-spin text-emerald-500 mb-2" size={24} />
@@ -208,16 +225,43 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                                         <Plus className="text-slate-400 group-hover:text-emerald-500 mb-2" size={24} />
                                                     )}
                                                     <span className="text-[10px] font-bold text-slate-500 group-hover:text-emerald-600 uppercase text-center px-2">
-                                                        {uploadingGPSId === gps.id ? 'Subiendo...' : 'Adjuntar Evidencias'}
+                                                        {uploadingGPSId === gps.id ? 'Subiendo...' : 'Adjuntar evidencias'}
                                                     </span>
-                                                    <input 
-                                                        type="file" 
-                                                        multiple 
-                                                        accept="image/*,application/pdf"
-                                                        className="hidden" 
-                                                        onChange={(e) => handleUploadEvidencias(gps, e.target.files)}
-                                                        disabled={uploadingGPSId === gps.id}
-                                                    />
+                                                    <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => { handleUploadEvidencias(gps, e.target.files, 'evidencia_gps'); e.target.value = ''; }} disabled={uploadingGPSId === gps.id} />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* CONTENIDO TAB FORMA DE PAGO (comprobante) */}
+                                    {activeTab === 'EVIDENCIA_PAGO' && (
+                                        <div className="flex-1 min-w-0 flex flex-col gap-4">
+                                            <p className="text-xs text-slate-500 mb-1">Comprobante de pago (transferencia, depósito, cheque).</p>
+                                            <div className="flex gap-3 flex-wrap">
+                                                {urlsComprobantePago.map((url: string, idx: number) => {
+                                                    const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)/i);
+                                                    return (
+                                                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="group relative block overflow-hidden rounded-xl border border-slate-200 w-24 h-24 sm:w-32 sm:h-32 hover:border-slate-400 transition-colors bg-white shadow-sm">
+                                                            {isImage ? (
+                                                                <img src={url} alt={`Comprobante ${idx + 1}`} className="object-cover w-full h-full" />
+                                                            ) : (
+                                                                <div className="flex items-center justify-center w-full h-full bg-slate-50 text-slate-400 group-hover:text-blue-500 transition-colors">
+                                                                    <span className="text-xs font-bold uppercase">Ver PDF</span>
+                                                                </div>
+                                                            )}
+                                                        </a>
+                                                    );
+                                                })}
+                                                <label className="relative flex flex-col items-center justify-center w-24 h-24 sm:w-32 sm:h-32 border-2 border-dashed border-slate-300 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer bg-slate-50 group">
+                                                    {uploadingGPSId === gps.id ? (
+                                                        <Loader2 className="animate-spin text-emerald-500 mb-2" size={24} />
+                                                    ) : (
+                                                        <Plus className="text-slate-400 group-hover:text-emerald-500 mb-2" size={24} />
+                                                    )}
+                                                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-emerald-600 uppercase text-center px-2">
+                                                        {uploadingGPSId === gps.id ? 'Subiendo...' : 'Adjuntar comprobante'}
+                                                    </span>
+                                                    <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => { handleUploadEvidencias(gps, e.target.files, 'comprobante_pago'); e.target.value = ''; }} disabled={uploadingGPSId === gps.id} />
                                                 </label>
                                             </div>
                                         </div>
