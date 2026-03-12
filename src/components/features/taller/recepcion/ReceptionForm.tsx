@@ -23,6 +23,7 @@ import {
     UserCircle,
     Users
 } from "lucide-react";
+import { toast } from "sonner";
 import { useRecepcion } from "@/hooks/taller/useRecepcion";
 import { ChecklistGroup } from "./ChecklistInspection";
 
@@ -175,11 +176,15 @@ export function ReceptionForm() {
         const placaTrim = vehiculo.placa.trim();
         const observacionesTrim = observaciones.trim();
         if (!placaTrim) {
-            alert("La placa del vehículo es obligatoria.");
+            toast.error("La placa del vehículo es obligatoria.", {
+                description: "Verifica y completa la placa antes de generar la orden de ingreso.",
+            });
             return;
         }
         if (!observacionesTrim) {
-            alert("Las observaciones / trabajo solicitado por el cliente son obligatorias.");
+            toast.error("Faltan las observaciones del trabajo.", {
+                description: "Describe el trabajo solicitado por el cliente antes de continuar.",
+            });
             return;
         }
         const payload = {

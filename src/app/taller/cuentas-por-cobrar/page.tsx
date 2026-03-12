@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
 import { useFinanzas } from "@/hooks/taller/useFinanzas";
 import { CuentasPorCobrar } from "@/components/features/taller/finanzas/CuentasPorCobrar";
 import { TransactionModal } from "@/components/features/taller/finanzas/TransactionModal";
@@ -64,16 +63,9 @@ export default function CuentasPorCobrarPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Cuentas por Cobrar</h1>
                     <p className="text-slate-500 mt-1 text-sm">
-                        Cartera de clientes y órdenes con saldo pendiente. Registre cobros y marque como pagado.
+                        Cartera de clientes y órdenes con saldo pendiente. Use el botón &quot;Cobrar&quot; de cada orden para registrar pagos.
                     </p>
                 </div>
-                <button
-                    onClick={() => openTransactionModal()}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 transition-all"
-                >
-                    <Plus className="h-4 w-4" />
-                    Registrar Movimiento
-                </button>
             </div>
 
             <CuentasPorCobrar

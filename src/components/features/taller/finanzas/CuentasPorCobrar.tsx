@@ -12,10 +12,21 @@ interface Props {
 export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarPresupuesto }: Props) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [filtroPresupuesto, setFiltroPresupuesto] = useState<"TODOS" | "SIN" | "CON">("TODOS");
+    const [filtroCliente, setFiltroCliente] = useState<"TODOS" | "FAG" | "AUTOMEKANO">("TODOS");
 
     const filteredCuentas = cuentas.filter((c) => {
-        if (filtroPresupuesto === "SIN") return c.presupuesto <= 0;
-        if (filtroPresupuesto === "CON") return c.presupuesto > 0;
+        // Filtro por presupuesto
+        if (filtroPresupuesto === "SIN" && c.presupuesto > 0) return false;
+        if (filtroPresupuesto === "CON" && c.presupuesto <= 0) return false;
+
+        // Filtro por cliente frecuente
+        const nombre = c.cliente?.nombre_completo?.toUpperCase() || "";
+        if (filtroCliente === "FAG") {
+            return nombre === "FABIAN LEONARDO AGUIRRE MARQUEZ";
+        }
+        if (filtroCliente === "AUTOMEKANO") {
+            return nombre === "AUTOMEKANO";
+        }
         return true;
     });
 
@@ -36,45 +47,88 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarP
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Filtros por Presupuesto */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtro de cartera</p>
-                    <p className="text-[11px] text-slate-400">Visualiza órdenes sin presupuesto o con presupuesto asignado.</p>
+            {/* Filtros */}
+            <div className="flex flex-col gap-3">
+                {/* Filtro por presupuesto */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtro de cartera</p>
+                        <p className="text-[11px] text-slate-400">Visualiza órdenes sin presupuesto o con presupuesto asignado.</p>
+                    </div>
+                    <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
+                        <button
+                            type="button"
+                            onClick={() => setFiltroPresupuesto("TODOS")}
+                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroPresupuesto === "TODOS"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            Todos
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFiltroPresupuesto("SIN")}
+                            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "SIN"
+                                ? "bg-white text-amber-700 shadow-sm border border-amber-200/70"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            <ArrowUpRight className="h-3 w-3" />
+                            Sin presupuesto
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFiltroPresupuesto("CON")}
+                            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "CON"
+                                ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            <DollarSign className="h-3 w-3" />
+                            Con presupuesto
+                        </button>
+                    </div>
                 </div>
-                <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
-                    <button
-                        type="button"
-                        onClick={() => setFiltroPresupuesto("TODOS")}
-                        className={`px-3 py-1.5 rounded-xl transition-all ${filtroPresupuesto === "TODOS"
-                            ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
-                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                            }`}
-                    >
-                        Todos
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setFiltroPresupuesto("SIN")}
-                        className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "SIN"
-                            ? "bg-white text-amber-700 shadow-sm border border-amber-200/70"
-                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                            }`}
-                    >
-                        <ArrowUpRight className="h-3 w-3" />
-                        Sin presupuesto
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setFiltroPresupuesto("CON")}
-                        className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "CON"
-                            ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
-                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                            }`}
-                    >
-                        <DollarSign className="h-3 w-3" />
-                        Con presupuesto
-                    </button>
+
+                {/* Filtro por cliente frecuente */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtrar por cliente</p>
+                        <p className="text-[11px] text-slate-400">Enfócate en clientes frecuentes o ver todos.</p>
+                    </div>
+                    <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
+                        <button
+                            type="button"
+                            onClick={() => setFiltroCliente("TODOS")}
+                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "TODOS"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            Todos
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFiltroCliente("FAG")}
+                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "FAG"
+                                ? "bg-white text-blue-700 shadow-sm border border-blue-200/70"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            Fabian Aguirre
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFiltroCliente("AUTOMEKANO")}
+                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "AUTOMEKANO"
+                                ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                }`}
+                        >
+                            Automekano
+                        </button>
+                    </div>
                 </div>
             </div>
 

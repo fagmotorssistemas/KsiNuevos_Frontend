@@ -311,8 +311,12 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
                                         <User className="h-3 w-3" /> Cliente
                                     </h3>
-                                    <p className="font-bold text-slate-800 text-lg">{orden.cliente?.nombre_completo}</p>
-                                    <p className="text-slate-500">{orden.cliente?.telefono}</p>
+                                    <p className="font-bold text-slate-800 text-lg">
+                                        {orden.cliente?.nombre_completo || "Cliente general"}
+                                    </p>
+                                    <p className="text-slate-500">
+                                        {orden.cliente?.telefono || "Sin teléfono registrado"}
+                                    </p>
                                 </div>
                                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
