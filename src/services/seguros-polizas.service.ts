@@ -28,7 +28,7 @@ function toDb(obj: SeguroPolizaInsert | SeguroPolizaUpdate): Record<string, unkn
   if (obj.fecha_venta !== undefined) r.fecha_venta = obj.fecha_venta || null;
   if (obj.precio_venta !== undefined) r.precio_venta = obj.precio_venta;
   if (obj.nota_venta !== undefined) r.nota_venta = obj.nota_venta?.trim() || null;
-  if (obj.broker !== undefined) r.broker = obj.broker?.trim() || null;
+  if (obj.broker_id !== undefined) r.broker_id = obj.broker_id?.trim() || null;
   if (obj.evidencias !== undefined) r.evidencias = obj.evidencias ?? [];
   if (obj.observaciones_venta !== undefined) r.observaciones_venta = obj.observaciones_venta?.trim() || null;
   if (obj.vendido !== undefined) r.vendido = obj.vendido;

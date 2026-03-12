@@ -7,6 +7,7 @@ import {
     crearGpsEnInventario,
     obtenerPorContrato,
     subirEvidencias,
+    subirEvidenciasRastreadorBucket,
     subirComprobantePago
 } from './rastreadores/instalaciones.service';
 import {
@@ -44,6 +45,7 @@ export const rastreadoresService = {
     crearOActualizarConcesionaria,
     getConcesionariaByRuc,
     subirEvidencias,
+    subirEvidenciasRastreadorBucket,
     subirComprobantePago,
     obtenerPorContrato,
     actualizarTipoPagoYPlazo,

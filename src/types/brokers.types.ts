@@ -7,7 +7,7 @@ export interface Broker {
   email: string | null;
   empresa: string | null;
   porcentaje_comision: number | null;
-  activo: boolean;
+  activo: boolean | null;
   created_at: string | null;
 }
 

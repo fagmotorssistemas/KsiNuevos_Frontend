@@ -69,7 +69,7 @@ export default function BrokersPage() {
       email: row.email ?? "",
       empresa: row.empresa ?? "",
       porcentaje_comision: row.porcentaje_comision,
-      activo: row.activo,
+      activo: row.activo ?? true,
     });
     setModalOpen(true);
   };

@@ -19,13 +19,13 @@ import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { segurosPolizasService } from "@/services/seguros-polizas.service";
 import { segurosService } from "@/services/seguros.service";
 import { aseguradorasService } from "@/services/aseguradoras.service";
+import { brokersService } from "@/services/brokers.service";
 import type { SeguroPoliza, SeguroPolizaUpdate } from "@/types/seguros-polizas.types";
 import type { Aseguradora } from "@/types/aseguradoras.types";
+import type { Broker } from "@/types/brokers.types";
 import type { SeguroVehicular } from "@/types/seguros.types";
 import { toast } from "sonner";
 import { formatDinero } from "@/utils/format";
-
-const BROKERS = ["TECNISEGUROS", "AON", "NOVA", "ASESORES DE SEGUROS", "DIRECTO"];
 
 function formatDate(s: string | null): string {
   if (!s) return "—";
@@ -42,9 +42,12 @@ function SegurosVentasPageContent() {
   const [list, setList] = useState<SeguroPoliza[]>([]);
   const [comprasDisponibles, setComprasDisponibles] = useState<SeguroPoliza[]>([]);
   const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>([]);
+  const [brokersList, setBrokersList] = useState<Broker[]>([]);
   const [segurosCartera, setSegurosCartera] = useState<SeguroVehicular[]>([]);
   const [datosPorNota, setDatosPorNota] = useState<Map<string, { cliente: string; identificacion: string; vehiculo: string; placa: string }>>(new Map());
   const [notaSeleccionadaModal, setNotaSeleccionadaModal] = useState("");
+  /** 'particular' = cliente que NO es de Ksi Nuevos (datos manuales). 'cartera' = cliente ya en cartera (se elige contrato/nota) */
+  const [tipoClienteVenta, setTipoClienteVenta] = useState<"particular" | "cartera">("particular");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,22 +63,24 @@ function SegurosVentasPageContent() {
     fecha_venta: "",
     precio_venta: 0,
     nota_venta: "",
-    broker: "",
+    broker_id: "",
     observaciones_venta: "",
   });
 
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [ventas, compras, aseg, cartera] = await Promise.all([
+      const [ventas, compras, aseg, brokers, cartera] = await Promise.all([
         segurosPolizasService.listarVentas(),
         segurosPolizasService.listarCompras(true),
         aseguradorasService.listarActivas(),
+        brokersService.listarActivos(),
         segurosService.obtenerSeguros(),
       ]);
       setList(ventas);
       setComprasDisponibles(compras);
       setAseguradoras(aseg);
+      setBrokersList(brokers ?? []);
       setSegurosCartera(cartera);
       const map = new Map<string, { cliente: string; identificacion: string; vehiculo: string; placa: string }>();
       cartera.forEach((s) => {
@@ -101,20 +106,26 @@ function SegurosVentasPageContent() {
     cargar();
   }, [cargar]);
 
-  // Abrir modal con nota preseleccionada cuando se llega desde Cartera (Vender a particular)
+  // Cargar brokers siempre (aunque falle algo en cargar), para que el select tenga opciones
+  useEffect(() => {
+    brokersService.listarActivos().then(setBrokersList).catch(() => setBrokersList([]));
+  }, []);
+
+  // Abrir modal con nota preseleccionada cuando se llega con ?nota= (cliente de cartera)
   useEffect(() => {
     if (loading) return;
     const nota = searchParams.get("nota");
     if (nota?.trim()) {
+      setTipoClienteVenta("cartera");
       setNotaSeleccionadaModal(nota.trim());
       setModalOpen(true);
       router.replace("/seguros/ventas", { scroll: false });
     }
   }, [loading, searchParams, router]);
 
-  // Al seleccionar contrato/nota (misma lista que Cartera), rellenar cliente y vehículo
+  // Al seleccionar contrato/nota (cliente de cartera), rellenar cliente y vehículo
   useEffect(() => {
-    if (editing || !modalOpen || !notaSeleccionadaModal.trim()) return;
+    if (editing || !modalOpen || tipoClienteVenta !== "cartera" || !notaSeleccionadaModal.trim()) return;
     const nota = notaSeleccionadaModal.trim();
     const datos = datosPorNota.get(nota);
     if (datos) {
@@ -129,12 +140,13 @@ function SegurosVentasPageContent() {
     } else {
       setForm((f) => ({ ...f, nota_venta: nota }));
     }
-  }, [notaSeleccionadaModal, modalOpen, datosPorNota, editing]);
+  }, [notaSeleccionadaModal, modalOpen, datosPorNota, editing, tipoClienteVenta]);
 
   const openCreate = () => {
     setEditing(null);
     setPolizaId("");
     setNotaSeleccionadaModal("");
+    setTipoClienteVenta("particular");
     setForm({
       cliente_nombre: "",
       cliente_identificacion: "",
@@ -145,7 +157,7 @@ function SegurosVentasPageContent() {
       fecha_venta: new Date().toISOString().slice(0, 10),
       precio_venta: 0,
       nota_venta: "",
-      broker: "",
+      broker_id: "",
       observaciones_venta: "",
     });
     setModalOpen(true);
@@ -166,7 +178,7 @@ function SegurosVentasPageContent() {
       fecha_venta: row.fecha_venta ? row.fecha_venta.slice(0, 10) : "",
       precio_venta: row.precio_venta ?? 0,
       nota_venta: row.nota_venta ?? "",
-      broker: row.broker ?? "",
+      broker_id: row.broker_id ?? "",
       observaciones_venta: row.observaciones_venta ?? "",
     });
     setModalOpen(true);
@@ -177,6 +189,7 @@ function SegurosVentasPageContent() {
     setEditing(null);
     setPolizaId("");
     setNotaSeleccionadaModal("");
+    setTipoClienteVenta("particular");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -202,7 +215,7 @@ function SegurosVentasPageContent() {
         fecha_venta: form.fecha_venta.trim() || null,
         precio_venta: form.precio_venta,
         nota_venta: form.nota_venta.trim() || null,
-        broker: form.broker.trim() || null,
+        broker_id: form.broker_id.trim() || null,
         observaciones_venta: form.observaciones_venta.trim() || null,
         vendido: true,
       };
@@ -387,37 +400,89 @@ function SegurosVentasPageContent() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Contrato / Nota de venta (igual que en Cartera)</label>
-                    <select value={notaSeleccionadaModal} onChange={(e) => setNotaSeleccionadaModal(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none">
-                      <option value="">— Seleccionar contrato para llenar cliente y vehículo —</option>
-                      {segurosCartera.map((s) => (
-                        <option key={s.id} value={s.referencia}>
-                          {s.referencia} — {s.cliente?.nombre ?? "Sin nombre"}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                    <p className="text-xs font-bold text-slate-600 mb-2">¿A quién vendes?</p>
+                    <div className="flex flex-wrap gap-3">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="tipoCliente" checked={tipoClienteVenta === "particular"} onChange={() => setTipoClienteVenta("particular")} className="text-emerald-600 focus:ring-emerald-500" />
+                        <span className="text-sm font-medium text-slate-800">Cliente particular</span>
+                        <span className="text-xs text-slate-500">(no es de Ksi Nuevos, datos manuales)</span>
+                      </label>
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="tipoCliente" checked={tipoClienteVenta === "cartera"} onChange={() => setTipoClienteVenta("cartera")} className="text-emerald-600 focus:ring-emerald-500" />
+                        <span className="text-sm font-medium text-slate-800">Cliente de cartera</span>
+                        <span className="text-xs text-slate-500">(ya está en Ksi Nuevos)</span>
+                      </label>
+                    </div>
                   </div>
+                  {tipoClienteVenta === "cartera" && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Contrato / Nota de venta (cliente de cartera)</label>
+                      <select value={notaSeleccionadaModal} onChange={(e) => setNotaSeleccionadaModal(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none">
+                        <option value="">— Seleccionar contrato —</option>
+                        {segurosCartera.map((s) => (
+                          <option key={s.id} value={s.referencia}>
+                            {s.referencia} — {s.cliente?.nombre ?? "Sin nombre"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </>
               )}
               <div>
-                <label className="flex items-center gap-1 text-xs font-bold text-slate-500 mb-1"><User size={12} /> Cliente</label>
-                <input type="text" value={form.cliente_nombre} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 bg-slate-50 cursor-not-allowed" placeholder="Nombre completo (se llena al elegir compra)" />
+                <label className="flex items-center gap-1 text-xs font-bold text-slate-500 mb-1"><User size={12} /> Nombre completo</label>
+                <input
+                  type="text"
+                  value={form.cliente_nombre}
+                  onChange={tipoClienteVenta === "particular" && !editing ? (e) => setForm((f) => ({ ...f, cliente_nombre: e.target.value })) : undefined}
+                  readOnly={!editing && tipoClienteVenta === "cartera"}
+                  className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 ${!editing && tipoClienteVenta === "cartera" ? "bg-slate-50 cursor-not-allowed" : ""}`}
+                  placeholder={tipoClienteVenta === "particular" ? "Nombre del cliente particular" : "Se llena al elegir contrato"}
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">RUC / CI</label>
-                  <input type="text" value={form.cliente_identificacion} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-mono bg-slate-50 cursor-not-allowed" />
+                  <input
+                    type="text"
+                    value={form.cliente_identificacion}
+                    onChange={tipoClienteVenta === "particular" && !editing ? (e) => setForm((f) => ({ ...f, cliente_identificacion: e.target.value })) : undefined}
+                    readOnly={!editing && tipoClienteVenta === "cartera"}
+                    className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-mono ${!editing && tipoClienteVenta === "cartera" ? "bg-slate-50 cursor-not-allowed" : ""}`}
+                    placeholder="RUC o cédula"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Teléfono</label>
-                  <input type="text" value={form.cliente_telefono} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 bg-slate-50 cursor-not-allowed" />
+                  <input
+                    type="text"
+                    value={form.cliente_telefono}
+                    onChange={tipoClienteVenta === "particular" && !editing ? (e) => setForm((f) => ({ ...f, cliente_telefono: e.target.value })) : undefined}
+                    readOnly={!editing && tipoClienteVenta === "cartera"}
+                    className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 ${!editing && tipoClienteVenta === "cartera" ? "bg-slate-50 cursor-not-allowed" : ""}`}
+                    placeholder="Teléfono"
+                  />
                 </div>
               </div>
               <div>
                 <label className="flex items-center gap-1 text-xs font-bold text-slate-500 mb-1"><Car size={12} /> Vehículo</label>
-                <input type="text" value={form.vehiculo_descripcion} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 bg-slate-50 cursor-not-allowed mb-2" placeholder="Marca, modelo (se llena al elegir compra)" />
-                <input type="text" value={form.vehiculo_placa} readOnly className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-mono bg-slate-50 cursor-not-allowed" placeholder="Placa" />
+                <input
+                  type="text"
+                  value={form.vehiculo_descripcion}
+                  onChange={tipoClienteVenta === "particular" && !editing ? (e) => setForm((f) => ({ ...f, vehiculo_descripcion: e.target.value })) : undefined}
+                  readOnly={!editing && tipoClienteVenta === "cartera"}
+                  className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 mb-2 ${!editing && tipoClienteVenta === "cartera" ? "bg-slate-50 cursor-not-allowed" : ""}`}
+                  placeholder={tipoClienteVenta === "particular" ? "Marca, modelo" : "Se llena al elegir contrato"}
+                />
+                <input
+                  type="text"
+                  value={form.vehiculo_placa}
+                  onChange={tipoClienteVenta === "particular" && !editing ? (e) => setForm((f) => ({ ...f, vehiculo_placa: e.target.value })) : undefined}
+                  readOnly={!editing && tipoClienteVenta === "cartera"}
+                  className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 font-mono ${!editing && tipoClienteVenta === "cartera" ? "bg-slate-50 cursor-not-allowed" : ""}`}
+                  placeholder="Placa"
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -436,10 +501,10 @@ function SegurosVentasPageContent() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">Broker</label>
-                  <select value={form.broker} onChange={(e) => setForm((f) => ({ ...f, broker: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none">
+                  <select value={form.broker_id} onChange={(e) => setForm((f) => ({ ...f, broker_id: e.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none">
                     <option value="">—</option>
-                    {BROKERS.map((b) => (
-                      <option key={b} value={b}>{b}</option>
+                    {brokersList.map((b) => (
+                      <option key={b.id} value={b.id}>{b.nombre}</option>
                     ))}
                   </select>
                 </div>

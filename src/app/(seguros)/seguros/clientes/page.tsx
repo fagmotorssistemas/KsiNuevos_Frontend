@@ -102,7 +102,6 @@ export default function SegurosClientesPage() {
                     filtroTipo={filtroTipo}
                     setFiltroTipo={setFiltroTipo}
                     onGestionar={handleGestionar}
-                    onVender={(item) => window.location.assign(`/seguros/ventas?nota=${encodeURIComponent(item.referencia || "")}`)}
                     showVencimientoColumns={true}
                     showRefresh={false}
                   />

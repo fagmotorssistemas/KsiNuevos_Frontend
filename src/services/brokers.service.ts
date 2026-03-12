@@ -24,7 +24,7 @@ export const brokersService = {
     const { data, error } = await supabase
       .from(TABLE)
       .select("*")
-      .eq("activo", true)
+      .or("activo.eq.true,activo.is.null")
       .order("nombre", { ascending: true });
     if (error) {
       console.error("brokersService.listarActivos:", error);
