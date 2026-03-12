@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, CalendarClock, Search, Camera, ImagePlus } from "lucide-react";
+import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, CalendarClock, Search, Camera, ImagePlus, Save } from "lucide-react";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
 import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo } from "@/types/taller";
 import { useInventario } from "@/hooks/taller/useInventario";
@@ -21,6 +21,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
         fetchDetallesOrden, agregarDetalle, eliminarDetalle,
         fetchServiciosCatalogo,
         actualizarEstadoContable,
+        actualizarObservacionesIngreso,
         uploadFotoSalida,
         actualizarFotosSalida
     } = useOrdenes();
@@ -51,6 +52,9 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const [uploadingFoto, setUploadingFoto] = useState(false);
     const inputFotosRef = useRef<HTMLInputElement>(null);
 
+    const [localObservaciones, setLocalObservaciones] = useState("");
+    const [savingObservaciones, setSavingObservaciones] = useState(false);
+
     const serviciosFiltrados = useMemo(() => {
         const q = descServicio.trim().toLowerCase();
         if (!q) return catalogo.slice(0, 12);
@@ -66,6 +70,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
             setLocalEstadoContable(orden.estado_contable || 'pendiente');
             setShowEntregaConfirm(false);
             setFotosSalida(orden.fotos_salida_urls ?? []);
+            setLocalObservaciones(orden.observaciones_ingreso ?? "");
         }
     }, [orden, isOpen]);
 
@@ -341,9 +346,30 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
                             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Observaciones de Ingreso</h3>
-                                <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    {orden.observaciones_ingreso || "Ninguna observación registrada."}
-                                </p>
+                                <textarea
+                                    value={localObservaciones}
+                                    onChange={(e) => setLocalObservaciones(e.target.value)}
+                                    placeholder="Trabajo solicitado, notas del cliente al ingreso..."
+                                    rows={4}
+                                    className="w-full px-4 py-3 rounded-lg border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-700 leading-relaxed resize-y min-h-[100px]"
+                                />
+                                <div className="mt-2 flex justify-end">
+                                    <button
+                                        type="button"
+                                        disabled={savingObservaciones}
+                                        onClick={async () => {
+                                            if (!orden) return;
+                                            setSavingObservaciones(true);
+                                            const result = await actualizarObservacionesIngreso(orden.id, localObservaciones);
+                                            setSavingObservaciones(false);
+                                            if (!result.success) alert("Error al guardar: " + result.error);
+                                        }}
+                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                                    >
+                                        {savingObservaciones ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                        {savingObservaciones ? "Guardando..." : "Guardar"}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">

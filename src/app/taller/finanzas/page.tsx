@@ -9,6 +9,9 @@ import { TransactionModal } from "@/components/features/taller/finanzas/Transact
 import { CreateAccountModal } from "@/components/features/taller/finanzas/CreateAccountModal";
 import { GastosManager } from "@/components/features/taller/finanzas/GastosManager";
 import { CuentasPorCobrar } from "@/components/features/taller/finanzas/CuentasPorCobrar";
+import { useOrdenes } from "@/hooks/taller/useOrdenes";
+import { WorkOrderModal } from "@/components/features/taller/trabajos/WorkOrderModal";
+import type { OrdenTrabajo } from "@/types/taller";
 
 type TabType = 'todo' | 'obligaciones' | 'cobrar';
 
@@ -23,6 +26,8 @@ export default function FinanzasPage() {
         marcarOrdenComoPagada,
         refresh 
     } = useFinanzas();
+
+    const { ordenes, actualizarEstado, fetchOrdenById } = useOrdenes();
     
     const [activeTab, setActiveTab] = useState<TabType>('todo');
 
@@ -32,10 +37,29 @@ export default function FinanzasPage() {
     const [modalDefaultOrdenId, setModalDefaultOrdenId] = useState<string | undefined>();
     const [modalDefaultTipo, setModalDefaultTipo] = useState<string | undefined>();
 
+    const [selectedOrden, setSelectedOrden] = useState<OrdenTrabajo | null>(null);
+    const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
+
     const openTransactionModal = (ordenId?: string, tipo: string = 'ingreso') => {
         setModalDefaultOrdenId(ordenId);
         setModalDefaultTipo(tipo);
         setIsTransactionModalOpen(true);
+    };
+
+    const handleOpenPresupuesto = async (ordenId: string) => {
+        let orden = ordenes.find(o => o.id === ordenId) ?? null;
+        if (!orden) {
+            orden = await fetchOrdenById(ordenId);
+        }
+        setSelectedOrden(orden);
+        if (orden) {
+            setIsWorkOrderModalOpen(true);
+        }
+    };
+
+    const handleCloseWorkOrderModal = () => {
+        setIsWorkOrderModalOpen(false);
+        void refresh();
     };
 
     if (isLoading && cuentas.length === 0) {
@@ -118,6 +142,7 @@ export default function FinanzasPage() {
                         cuentas={cuentasPorCobrar}
                         onCobrar={(ordenId) => openTransactionModal(ordenId, 'ingreso')}
                         onMarcarPagado={marcarOrdenComoPagada}
+                        onAsignarPresupuesto={handleOpenPresupuesto}
                     />
                 </div>
             )}
@@ -135,6 +160,17 @@ export default function FinanzasPage() {
                 isOpen={isAccountModalOpen}
                 onClose={() => setIsAccountModalOpen(false)}
                 onSave={crearCuenta}
+            />
+
+            <WorkOrderModal
+                orden={selectedOrden}
+                isOpen={isWorkOrderModalOpen}
+                onClose={handleCloseWorkOrderModal}
+                onStatusChange={async (id, status) => {
+                    await actualizarEstado(id, status);
+                    void refresh();
+                }}
+                onPrint={() => {}}
             />
         </div>
     );

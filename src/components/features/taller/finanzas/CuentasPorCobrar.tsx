@@ -6,12 +6,21 @@ interface Props {
     cuentas: CuentaPorCobrar[];
     onCobrar: (ordenId: string) => void;
     onMarcarPagado: (ordenId: string) => void;
+    onAsignarPresupuesto?: (ordenId: string) => void;
 }
 
-export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
-    // Calculamos el total global adeudado
-    const totalDeuda = cuentas.reduce((acc, c) => acc + c.saldo_pendiente, 0);
+export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarPresupuesto }: Props) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [filtroPresupuesto, setFiltroPresupuesto] = useState<"TODOS" | "SIN" | "CON">("TODOS");
+
+    const filteredCuentas = cuentas.filter((c) => {
+        if (filtroPresupuesto === "SIN") return c.presupuesto <= 0;
+        if (filtroPresupuesto === "CON") return c.presupuesto > 0;
+        return true;
+    });
+
+    // Calculamos el total global adeudado sobre el conjunto filtrado
+    const totalDeuda = filteredCuentas.reduce((acc, c) => acc + c.saldo_pendiente, 0);
 
     if (cuentas.length === 0) {
         return (
@@ -27,6 +36,48 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Filtros por Presupuesto */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtro de cartera</p>
+                    <p className="text-[11px] text-slate-400">Visualiza órdenes sin presupuesto o con presupuesto asignado.</p>
+                </div>
+                <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
+                    <button
+                        type="button"
+                        onClick={() => setFiltroPresupuesto("TODOS")}
+                        className={`px-3 py-1.5 rounded-xl transition-all ${filtroPresupuesto === "TODOS"
+                            ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                            }`}
+                    >
+                        Todos
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setFiltroPresupuesto("SIN")}
+                        className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "SIN"
+                            ? "bg-white text-amber-700 shadow-sm border border-amber-200/70"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                            }`}
+                    >
+                        <ArrowUpRight className="h-3 w-3" />
+                        Sin presupuesto
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setFiltroPresupuesto("CON")}
+                        className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "CON"
+                            ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                            }`}
+                    >
+                        <DollarSign className="h-3 w-3" />
+                        Con presupuesto
+                    </button>
+                </div>
+            </div>
+
             {/* Tarjeta de Resumen Global Minimalista */}
             <div className="bg-white border border-slate-200 p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -45,7 +96,17 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
 
             {/* Grid de Deudores */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-5">
-                {cuentas.map(c => {
+                {filteredCuentas.length === 0 && (
+                    <div className="md:col-span-2">
+                        <div className="text-center py-10 px-4 border border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                            <p className="text-sm font-medium text-slate-500">
+                                No hay órdenes que coincidan con el filtro seleccionado.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {filteredCuentas.map(c => {
                     const coberturaCompleta = c.total_pagado >= c.presupuesto && c.presupuesto > 0;
 
                     return (
@@ -67,9 +128,16 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado }: Props) {
                                         )}
                                     </div>
                                 </div>
-                                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
-                                    {c.estado_contable}
-                                </span>
+                                {c.presupuesto <= 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onAsignarPresupuesto?.(c.id)}
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-wider hover:bg-amber-100 hover:border-amber-300 transition-colors shrink-0"
+                                    >
+                                        <ArrowUpRight className="h-3 w-3" />
+                                        Sin presupuesto asignado
+                                    </button>
+                                )}
                             </div>
 
                             {/* Balance de la Orden */}

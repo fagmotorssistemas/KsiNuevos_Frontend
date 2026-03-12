@@ -426,7 +426,7 @@ export function ReceptionForm() {
                                 type="number"
                                 className="w-30 px-3 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold"
                                 value={vehiculo.anio}
-                                onChange={(e) => setVehiculo({ ...vehiculo, anio: parseInt(e.target.value) })}
+                                onChange={(e) => setVehiculo({ ...vehiculo, anio: e.target.value })}
                             />
                             <input
                                 type="text"

@@ -25,6 +25,20 @@ export function useOrdenes() {
         setIsLoading(false);
     }, [supabase]);
 
+    /** Obtener una orden por ID (incluye entregados). Útil desde Cuentas por Cobrar. */
+    const fetchOrdenById = useCallback(async (ordenId: string): Promise<OrdenTrabajo | null> => {
+        const { data, error } = await supabase
+            .from('taller_ordenes')
+            .select(`
+                *,
+                cliente:taller_clientes(*)
+            `)
+            .eq('id', ordenId)
+            .single();
+        if (error || !data) return null;
+        return data as unknown as OrdenTrabajo;
+    }, [supabase]);
+
     // Cambiar estado (Mover en el Kanban o Modal)
     const actualizarEstado = async (id: string, nuevoEstado: string) => {
         const isEntregado = nuevoEstado === 'entregado';
@@ -68,6 +82,17 @@ export function useOrdenes() {
             .eq('id', id);
             
         return { success: !error, error: error?.message };
+    };
+
+    /** Actualizar observaciones de ingreso de una orden */
+    const actualizarObservacionesIngreso = async (ordenId: string, texto: string): Promise<{ success: boolean; error?: string }> => {
+        const { error } = await supabase
+            .from('taller_ordenes')
+            .update({ observaciones_ingreso: texto.trim() || null })
+            .eq('id', ordenId);
+        if (error) return { success: false, error: error.message };
+        setOrdenes(prev => prev.map(o => o.id === ordenId ? { ...o, observaciones_ingreso: texto.trim() || undefined } as OrdenTrabajo : o));
+        return { success: true };
     };
 
     // Registrar Consumo (Materiales)
@@ -181,9 +206,11 @@ export function useOrdenes() {
         isLoading,
         actualizarEstado,
         actualizarEstadoContable,
+        actualizarObservacionesIngreso,
         registrarConsumo,
         fetchConsumosOrden,
         fetchDetallesOrden,
+        fetchOrdenById,
         agregarDetalle,
         eliminarDetalle,
         fetchServiciosCatalogo,

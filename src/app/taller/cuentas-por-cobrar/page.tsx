@@ -5,6 +5,9 @@ import { Plus } from "lucide-react";
 import { useFinanzas } from "@/hooks/taller/useFinanzas";
 import { CuentasPorCobrar } from "@/components/features/taller/finanzas/CuentasPorCobrar";
 import { TransactionModal } from "@/components/features/taller/finanzas/TransactionModal";
+import { useOrdenes } from "@/hooks/taller/useOrdenes";
+import { WorkOrderModal } from "@/components/features/taller/trabajos/WorkOrderModal";
+import type { OrdenTrabajo } from "@/types/taller";
 
 export default function CuentasPorCobrarPage() {
     const {
@@ -13,16 +16,38 @@ export default function CuentasPorCobrarPage() {
         isLoading,
         registrarTransaccion,
         marcarOrdenComoPagada,
+        refresh,
     } = useFinanzas();
+
+    const { ordenes, actualizarEstado, fetchOrdenById } = useOrdenes();
 
     const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
     const [modalDefaultOrdenId, setModalDefaultOrdenId] = useState<string | undefined>();
     const [modalDefaultTipo, setModalDefaultTipo] = useState<string>("ingreso");
 
+    const [selectedOrden, setSelectedOrden] = useState<OrdenTrabajo | null>(null);
+    const [isWorkOrderModalOpen, setIsWorkOrderModalOpen] = useState(false);
+
     const openTransactionModal = (ordenId?: string, tipo: string = "ingreso") => {
         setModalDefaultOrdenId(ordenId);
         setModalDefaultTipo(tipo);
         setIsTransactionModalOpen(true);
+    };
+
+    const handleOpenPresupuesto = async (ordenId: string) => {
+        let orden = ordenes.find(o => o.id === ordenId) ?? null;
+        if (!orden) {
+            orden = await fetchOrdenById(ordenId);
+        }
+        setSelectedOrden(orden);
+        if (orden) {
+            setIsWorkOrderModalOpen(true);
+        }
+    };
+
+    const handleCloseWorkOrderModal = () => {
+        setIsWorkOrderModalOpen(false);
+        void refresh();
     };
 
     if (isLoading && cuentasPorCobrar.length === 0) {
@@ -55,6 +80,18 @@ export default function CuentasPorCobrarPage() {
                 cuentas={cuentasPorCobrar}
                 onCobrar={(ordenId) => openTransactionModal(ordenId, "ingreso")}
                 onMarcarPagado={marcarOrdenComoPagada}
+                onAsignarPresupuesto={handleOpenPresupuesto}
+            />
+
+            <WorkOrderModal
+                orden={selectedOrden}
+                isOpen={isWorkOrderModalOpen}
+                onClose={handleCloseWorkOrderModal}
+                onStatusChange={async (id, status) => {
+                    await actualizarEstado(id, status);
+                    void refresh();
+                }}
+                onPrint={() => { }}
             />
 
             <TransactionModal
