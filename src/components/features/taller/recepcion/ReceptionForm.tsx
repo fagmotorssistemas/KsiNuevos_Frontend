@@ -123,7 +123,7 @@ export function ReceptionForm() {
         placa: '',
         marca: '',
         modelo: '',
-        anio: new Date().getFullYear(),
+        anio: '',
         color: '',
         vin: '',
         kilometraje: 0,
@@ -192,12 +192,13 @@ export function ReceptionForm() {
             vehiculo_placa: placaTrim,
             vehiculo_marca: vehiculo.marca,
             vehiculo_modelo: vehiculo.modelo,
-            vehiculo_anio: vehiculo.anio,
+            vehiculo_anio: vehiculo.anio ? parseInt(vehiculo.anio as any, 10) : null,
             vehiculo_color: vehiculo.color,
             vehiculo_vin: vehiculo.vin,
             kilometraje: vehiculo.kilometraje,
             nivel_gasolina: vehiculo.nivel_gasolina,
-            fecha_ingreso: vehiculo.fecha_ingreso ? new Date(vehiculo.fecha_ingreso).toISOString() : null,
+            // Si el usuario no llena fecha_ingreso, dejamos que la BD use DEFAULT now()
+            fecha_ingreso: vehiculo.fecha_ingreso ? new Date(vehiculo.fecha_ingreso).toISOString() : undefined,
             fecha_promesa_entrega: vehiculo.fecha_promesa ? new Date(vehiculo.fecha_promesa).toISOString() : null,
             checklist,
             inventario,
@@ -385,20 +386,6 @@ export function ReceptionForm() {
                     </div>
 
                     <div className="col-span-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">VIN / Chasis</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                className="w-full pl-4 pr-10 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-semibold uppercase"
-                                placeholder="17 DÍGITOS..."
-                                value={vehiculo.vin}
-                                onChange={(e) => setVehiculo({ ...vehiculo, vin: e.target.value.toUpperCase() })}
-                            />
-                            <Fingerprint className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                        </div>
-                    </div>
-
-                    <div className="col-span-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Marca</label>
                         <input
                             type="text"
@@ -416,6 +403,20 @@ export function ReceptionForm() {
                             value={vehiculo.modelo}
                             onChange={(e) => setVehiculo({ ...vehiculo, modelo: e.target.value })}
                         />
+                    </div>
+
+                    <div className="col-span-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">VIN / Chasis</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                className="w-full pl-4 pr-10 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-mono font-semibold uppercase"
+                                placeholder="17 DÍGITOS..."
+                                value={vehiculo.vin}
+                                onChange={(e) => setVehiculo({ ...vehiculo, vin: e.target.value.toUpperCase() })}
+                            />
+                            <Fingerprint className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                        </div>
                     </div>
 
                     <div className="col-span-1">
@@ -441,13 +442,27 @@ export function ReceptionForm() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                             <CalendarClock className="h-3 w-3" /> Fecha de ingreso
                         </label>
-                        <input
-                            type="date"
-                            className="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
-                            value={vehiculo.fecha_ingreso}
-                            onChange={(e) => setVehiculo({ ...vehiculo, fecha_ingreso: e.target.value })}
-                            title="Opcional. Vacío = fecha y hora actual. Útil para cargar registros con fecha pasada."
-                        />
+                        <div className="flex gap-2">
+                            <input
+                                type="date"
+                                className="flex-1 px-4 py-3.5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-amber-500 outline-none transition-all font-semibold text-slate-700"
+                                value={vehiculo.fecha_ingreso}
+                                onChange={(e) => setVehiculo({ ...vehiculo, fecha_ingreso: e.target.value })}
+                                title="Opcional. Vacío = fecha y hora actual. Útil para cargar registros con fecha pasada."
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setVehiculo({
+                                        ...vehiculo,
+                                        fecha_ingreso: new Date().toISOString().slice(0, 10)
+                                    })
+                                }
+                                className="px-3 py-2 rounded-2xl border-2 border-amber-500 text-amber-700 text-xs font-black uppercase tracking-widest bg-amber-50 hover:bg-amber-100 transition-colors"
+                            >
+                                Hoy
+                            </button>
+                        </div>
                         <p className="text-[10px] text-slate-400 mt-1">Dejar vacío = fecha actual. Para registros viejos, elige la fecha.</p>
                     </div>
 
