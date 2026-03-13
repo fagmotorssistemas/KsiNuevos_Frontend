@@ -21,6 +21,15 @@ import {
 import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
 
+/** Del historial kardex obtiene el precio al que se vendió (NOTA DE ENTREGA o último egreso). Mismo dato que el $ en el modal. */
+function getPrecioVentaFromHistorial(historial: MovimientoKardex[]): number | null {
+    if (!historial?.length) return null;
+    const notaEntrega = historial.find(m => m.tipoTransaccion?.toUpperCase().includes("NOTA DE ENTREGA"));
+    if (notaEntrega != null) return notaEntrega.total;
+    const egresos = historial.filter(m => !m.esIngreso);
+    return egresos.length ? egresos[egresos.length - 1].total : null;
+}
+
 interface InventarioTableProps {
     vehiculos: VehiculoInventario[];
 }
@@ -48,6 +57,34 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     useEffect(() => {
         setVehiculos(initialVehiculos);
         setCurrentPage(1); // Resetear a página 1 cuando cambian los datos
+    }, [initialVehiculos]);
+
+    // --- Cargar "Vendido en" desde la misma API que el modal (getDetalleVehiculo → historial)
+    useEffect(() => {
+        const vendidos = initialVehiculos.filter(v => v.stock === 0);
+        if (vendidos.length === 0) return;
+        const CONCURRENCY = 5;
+        (async () => {
+            const byPlaca: Record<string, number> = {};
+            for (let i = 0; i < vendidos.length; i += CONCURRENCY) {
+                const batch = vendidos.slice(i, i + CONCURRENCY);
+                const results = await Promise.all(
+                    batch.map(async (v) => {
+                        try {
+                            const data = await inventarioService.getDetalleVehiculo(v.placa);
+                            const precio = getPrecioVentaFromHistorial(data.historialMovimientos || []);
+                            return { placa: v.placa, precio };
+                        } catch {
+                            return { placa: v.placa, precio: null };
+                        }
+                    })
+                );
+                results.forEach(({ placa, precio }) => { if (precio != null) byPlaca[placa] = precio; });
+            }
+            if (Object.keys(byPlaca).length > 0) {
+                setVehiculos(prev => prev.map(v => ({ ...v, precioVenta: v.precioVenta ?? byPlaca[v.placa] ?? null })));
+            }
+        })();
     }, [initialVehiculos]);
 
     // --- LÓGICA DE EDICIÓN (SUPABASE) ---
@@ -105,7 +142,13 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
             try {
                 setLoadingHistorial(true);
                 const data = await inventarioService.getDetalleVehiculo(selectedVehiculo.placa);
-                setHistorial(data.historialMovimientos || []);
+                const movimientos = data.historialMovimientos || [];
+                setHistorial(movimientos);
+                // Mismo dato que el $ del modal: pasarlo a la columna "Vendido en" de la tabla
+                const precioVenta = getPrecioVentaFromHistorial(movimientos);
+                if (precioVenta != null) {
+                    setVehiculos(prev => prev.map(v => v.placa === selectedVehiculo.placa ? { ...v, precioVenta } : v));
+                }
             } catch (error) {
                 console.error("Error cargando historial", error);
             } finally {
@@ -153,6 +196,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                             <th className="px-4 py-3 font-semibold">Placa / ID</th>
                             <th className="px-4 py-3 font-semibold">Año / Color</th>
                             <th className="px-4 py-3 font-semibold">Precio</th>
+                            <th className="px-4 py-3 font-semibold">Vendido en</th>
                             <th className="px-4 py-3 font-semibold">Kilometraje</th>
                             <th className="px-4 py-3 font-semibold text-center">Estado</th>
                             <th className="px-4 py-3 font-semibold text-right">Acciones</th>
@@ -183,12 +227,19 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                                         <div className="text-xs text-slate-400 capitalize">{v.color?.toLowerCase()}</div>
                                     </td>
                                     
-                                    {/* COLUMNA PRECIO (Corregida) */}
+                                    {/* COLUMNA PRECIO (precio fijo/lista) */}
                                     <td className="px-4 py-3 font-medium text-emerald-600">
-                                        ${v.price?.toLocaleString()}
+                                        ${v.price != null ? v.price.toLocaleString() : ''}
                                     </td>
 
-                                    {/* COLUMNA KILOMETRAJE (Corregida) */}
+                                    {/* COLUMNA VENDIDO EN (precio al que se vendió, desde kardex) */}
+                                    <td className="px-4 py-3 font-medium text-slate-700">
+                                        ${v.precioVenta != null
+                                            ? `${v.precioVenta.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                            : ''}
+                                    </td>
+
+                                    {/* COLUMNA KILOMETRAJE */}
                                     <td className="px-4 py-3 text-slate-600">
                                         {v.mileage?.toLocaleString()} km
                                     </td>
@@ -229,7 +280,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                                     No se encontraron vehículos.
                                 </td>
                             </tr>
