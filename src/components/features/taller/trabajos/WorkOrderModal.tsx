@@ -396,7 +396,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                         </button>
                                     ))}
                                 </div>
-                            </div>
+                            </div> 
 
                         </div>
                     )}
