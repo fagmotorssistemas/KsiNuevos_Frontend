@@ -334,8 +334,8 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                         <AmortizacionTable
                             contratoId={contrato.ccoCodigo}
                             cuotasAdicionales={[
-                                ...(contrato.listaCuotasAdicionales || []).map(c => ({ monto: c.monto, fecha: c.fecha || '' })),
-                                ...(contrato.listaPagosCheque || []).map(pc => ({ monto: pc.monto, fecha: pc.fecha || '' }))
+                                ...(contrato.listaCuotasAdicionales || []).map(c => ({ monto: c.monto, fecha: c.fechaVencimiento || '' })),
+                                ...(contrato.listaPagosCheque || []).map(pc => ({ monto: pc.monto, fecha: pc.fechaVencimiento || '' }))
                             ]}
                         />
                     </div>

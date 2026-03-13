@@ -59,6 +59,27 @@ export async function getInventarioStock(): Promise<InventarioGPS[]> {
     })) as InventarioGPS[];
 }
 
+export async function buscarInventarioPorImei(imeiParcial: string): Promise<InventarioGPS[]> {
+    const term = imeiParcial.trim();
+    if (!term) return [];
+
+    const { data, error } = await supabase
+        .from('gps_inventario')
+        .select(`*, modelo:gps_modelos(*), proveedor:gps_proveedores(*)`)
+        .ilike('imei', `${term.toUpperCase()}%`)
+        .order('estado', { ascending: true })
+        .order('imei', { ascending: true })
+        .limit(10);
+
+    if (error || !data) return [];
+
+    return (data as any[]).map(item => ({
+        ...item,
+        modelo: Array.isArray(item.modelo) ? item.modelo[0] : item.modelo,
+        proveedor: Array.isArray(item.proveedor) ? item.proveedor[0] : item.proveedor
+    })) as InventarioGPS[];
+}
+
 /** Inventario completo: todos los GPS (stock + vendidos) para listado con filtro. */
 export async function getInventarioCompleto(): Promise<InventarioGPS[]> {
     const { data, error } = await supabase

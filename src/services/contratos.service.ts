@@ -100,16 +100,18 @@ const adaptarDetalle = (data: any): ContratoDetalle => {
         montoCuotaAdicional: Number(data.montoCuotaAdicional || 0),
         letrasCuotaAdicional: data.letrasCuotaAdicional || '',
         
-        // MAPEAMOS LA LISTA DEL BACKEND AL FORMATO DEL FRONTEND
+        // MAPEAMOS LA LISTA DEL BACKEND AL FORMATO DEL FRONTEND (4 campos por ítem)
         listaCuotasAdicionales: (data.listaCuotasAdicionales || []).map((ca: any): CuotaAdicional => ({
             monto: Number(ca.monto || 0),
             letras: ca.letras || '',
-            fecha: ca.fecha || ''
+            fechaVencimiento: ca.fechaVencimiento ?? '',
+            ccoRecibo: ca.ccoRecibo ?? ''
         })),
         listaPagosCheque: (data.listaPagosCheque || []).map((pc: any): PagoCheque => ({
             monto: Number(pc.monto || 0),
             letras: pc.letras || '',
-            fecha: pc.fecha || ''
+            fechaVencimiento: pc.fechaVencimiento ?? '',
+            ccoRecibo: pc.ccoRecibo ?? ''
         }))
     };
 };

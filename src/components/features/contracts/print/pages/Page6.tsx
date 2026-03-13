@@ -33,14 +33,14 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
         return `${dia}/${mes}/${anio}`;
     };
 
-    // --- PREPARACIÓN: cuotas adicionales + pagos cheque en la MISMA tabla (Cuota Adicional 1, 2, 3...) ---
+    // --- PREPARACIÓN: cuotas adicionales + pagos cheque en la MISMA tabla (fechaVencimiento del backend, DD/MM/YYYY) ---
     const adicionales = (data.listaCuotasAdicionales || []).map(cuota => ({
         monto: cuota.monto,
-        fecha: formatDateHeader(data.fechaVenta) || formatDateHeader(data.fechaVentaFull) || ''
+        fecha: cuota.fechaVencimiento?.trim() || formatDateHeader(data.fechaVenta) || formatDateHeader(data.fechaVentaFull) || '–'
     }));
     const cheques = (data.listaPagosCheque || []).map(pc => ({
         monto: pc.monto,
-        fecha: pc.fecha ? formatDateHeader(pc.fecha) : (formatDateHeader(data.fechaVentaFull) || formatDateHeader(data.fechaVenta) || '')
+        fecha: pc.fechaVencimiento?.trim() || formatDateHeader(data.fechaVentaFull) || formatDateHeader(data.fechaVenta) || '–'
     }));
     const cuotasParaTabla = [...adicionales, ...cheques];
 
