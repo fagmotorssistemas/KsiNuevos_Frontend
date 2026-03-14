@@ -6,6 +6,11 @@ import { rastreadoresService } from "@/services/rastreadores.service";
 import { walletService } from "@/services/wallet.service";
 import type { ItemCarteraRastreador } from "@/services/rastreadores/cartera-rastreadores.service";
 
+interface CarteraRastreadoresViewProps {
+    /** Si se pasa (vendedor), solo se muestran ventas con ventas_rastreador.asesor_id = asesorIdFiltro */
+    asesorIdFiltro?: string | null;
+}
+
 function formatFecha(f: string | null): string {
     if (!f) return "—";
     try {
@@ -19,7 +24,7 @@ function formatMoney(n: number): string {
     return new Intl.NumberFormat("es-EC", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
-export function CarteraRastreadoresView() {
+export function CarteraRastreadoresView({ asesorIdFiltro }: CarteraRastreadoresViewProps) {
     const [loading, setLoading] = useState(true);
     const [items, setItems] = useState<ItemCarteraRastreador[]>([]);
     const [enrichedData, setEnrichedData] = useState<Map<string, { 
@@ -38,7 +43,7 @@ export function CarteraRastreadoresView() {
     const load = async () => {
         setLoading(true);
         try {
-            const data = await rastreadoresService.getCarteraRastreadores();
+            const data = await rastreadoresService.getCarteraRastreadores(asesorIdFiltro);
             setItems(data);
         } catch (e) {
             console.error(e);
@@ -49,7 +54,7 @@ export function CarteraRastreadoresView() {
 
     useEffect(() => {
         load();
-    }, []);
+    }, [asesorIdFiltro]);
 
     // ✨ Enriquecer datos con cuota mensual y plazo desde cartera
     useEffect(() => {
