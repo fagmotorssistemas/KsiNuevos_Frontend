@@ -15,7 +15,6 @@ export default function PagosPage() {
 
     // Estado del Wizard (Simplificado: Selección -> Resultados)
     const [isSelectionMode, setIsSelectionMode] = useState(true);
-    const [showManualFilters, setShowManualFilters] = useState(false);
 
     // Estado de Filtros
     const [filters, setFilters] = useState<PagosFilterState>({
@@ -37,7 +36,6 @@ export default function PagosPage() {
         setFilters({ searchTerm: '', category: 'ALL' });
         setDatePreset('ALL');
         setIsSelectionMode(true);
-        setShowManualFilters(false);
     };
 
     // --- LÓGICA DE FILTRADO ---
@@ -225,12 +223,10 @@ export default function PagosPage() {
                 {/* BARRA DE FECHAS (NUEVA UBICACIÓN) */}
                 <PagosDateTabs current={datePreset} onChange={setDatePreset} />
 
-                {/* FILTROS MANUALES (OCULTOS POR DEFECTO) */}
+                {/* FILTROS MANUALES (SIEMPRE VISIBLES) */}
                 <PagosFilters
                     filters={filters}
                     onChange={setFilters}
-                    isVisible={showManualFilters}
-                    onToggle={() => setShowManualFilters(!showManualFilters)}
                 />
 
                 {/* 1. Dashboard de Métricas */}

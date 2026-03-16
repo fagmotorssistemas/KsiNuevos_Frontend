@@ -15,7 +15,6 @@ export default function CobrosPage() {
 
     // Estado del Wizard (Solo 2 pasos ahora: SELECCION -> RESULTADOS)
     const [isSelectionMode, setIsSelectionMode] = useState(true);
-    const [showManualFilters, setShowManualFilters] = useState(false);
 
     // Estado de Filtros
     const [filters, setFilters] = useState<CobrosFilterState>({
@@ -37,7 +36,6 @@ export default function CobrosPage() {
         setFilters({ searchTerm: '', paymentType: 'ALL' });
         setDatePreset('ALL');
         setIsSelectionMode(true);
-        setShowManualFilters(false);
     };
 
     // Lógica de Filtrado y Recálculo
@@ -204,12 +202,10 @@ export default function CobrosPage() {
                 {/* BARRA DE FECHAS (NUEVA UBICACIÓN) */}
                 <CobrosDateTabs current={datePreset} onChange={setDatePreset} />
 
-                {/* FILTROS AVANZADOS (OCULTOS POR DEFECTO) */}
+                {/* FILTROS AVANZADOS (SIEMPRE VISIBLES) */}
                 <CobrosFilters 
                     filters={filters} 
                     onChange={setFilters} 
-                    isVisible={showManualFilters}
-                    onToggle={() => setShowManualFilters(!showManualFilters)}
                 />
 
                 {/* 1. KPIs */}
