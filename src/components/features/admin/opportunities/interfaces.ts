@@ -7,7 +7,6 @@ import type { ScoredVehicle } from "./opportunitiesScorer";
 // Shared database row aliases
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 export type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +80,7 @@ export interface OpportunitiesCenterViewProps {
     selectedModel: string;
     selectedYear: string;
     selectedCity: string;
+    selectedTrim: string;
     selectedDateRange: string;
     regionFilter: 'all' | 'coast' | 'sierra';
     searchTerm: string;
@@ -94,6 +94,7 @@ export interface OpportunitiesCenterViewProps {
     availableModels: string[];
     availableYears: string[];
     availableCities: string[];
+    availableTrims: string[];
 
     totalCount: number;
     enPatio: number;
@@ -106,6 +107,7 @@ export interface OpportunitiesCenterViewProps {
     onMotorChange: (value: string) => void;
     onYearChange: (value: string) => void;
     onCityChange: (value: string) => void;
+    onTrimChange: (value: string) => void;
     onDateRangeChange: (value: string) => void;
     onRegionFilterChange: (value: 'all' | 'coast' | 'sierra') => void;
     onSearchTermChange: (value: string) => void;
@@ -132,7 +134,6 @@ export interface OpportunitiesViewProps {
     goToPage: (page: number) => void;
     nextPage: () => void;
     prevPage: () => void;
-    sellers: ScraperSeller[];
     isLoading: boolean;
     statusFilter?: string;
     locationFilter?: string;
@@ -153,6 +154,7 @@ export interface OpportunitiesViewProps {
         brand?: string;
         model?: string;
         motor?: string;
+        trim?: string;
         year?: string;
         city?: string;
         dateRange?: string;
@@ -167,6 +169,7 @@ export interface OpportunitiesViewProps {
         motors: string[];
         years: string[];
         cities: string[];
+        trims: string[];
     };
     updateFilter: (key: string, value: any) => void;
     updateBrand: (brand: string) => void;

@@ -3,7 +3,6 @@ import { Database } from '@/types/supabase';
 import { scraperService, VehicleWithSeller, VehicleFilters } from '@/services/scraper.service';
 import { createClient } from '@/lib/supabase/client';
 
-type ScraperSeller = Database['public']['Tables']['scraper_sellers']['Row'];
 type ScraperCarStatus = Database['public']['Enums']['scraper_car_status'];
 type PriceStatistics = Database['public']['Tables']['scraper_vehicle_price_statistics']['Row'];
 type ScraperVehicle = Database['public']['Tables']['scraper_vehicles']['Row'];
@@ -19,7 +18,6 @@ const ITEMS_PER_PAGE = 20;
 
 export function useScraperData(initialFilters?: FilterOptions) {
   const [allVehicles, setAllVehicles] = useState<VehicleWithSeller[]>([]);
-  const [sellers, setSellers] = useState<ScraperSeller[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState<FilterOptions>(initialFilters || {});
   const [topOpportunities, setTopOpportunities] = useState<VehicleWithSeller[]>([]);
@@ -33,6 +31,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
     brand: 'all',
     model: 'all',
     motor: 'all',
+    trim: 'all',
     year: 'all',
     city: 'all',       // <-- ciudad del anuncio (scraper_vehicles.location)
     dateRange: 'all',
@@ -69,12 +68,14 @@ export function useScraperData(initialFilters?: FilterOptions) {
     motors: string[];
     years: string[];
     cities: string[];
+    trims: string[];
   }>({
     brands: [],
     models: [],
     motors: [],
     years: [],
-    cities: []
+    cities: [],
+    trims: []
   });
 
   const supabase = useMemo(() => createClient(), []);
@@ -86,7 +87,8 @@ export function useScraperData(initialFilters?: FilterOptions) {
     motor: string,
     year: string,
     city: string,
-    regionFilter: 'all' | 'coast' | 'sierra' = 'all'
+    regionFilter: 'all' | 'coast' | 'sierra' = 'all',
+    trim: string = 'all'
   ) => {
     try {
       const options = await scraperService.getCascadingFilterOptions({
@@ -95,6 +97,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
         motor: motor !== 'all' ? motor : undefined,
         year: year !== 'all' ? year : undefined,
         city: city !== 'all' ? city : undefined,
+        trim: trim !== 'all' ? trim : undefined,
         regionFilter,
       });
       setFilterOptions(options);
@@ -114,6 +117,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
         year: vehicleFilters.year !== 'all' ? vehicleFilters.year : undefined,
         // "city" se mapea a "location" que es el campo real en la DB
         location: vehicleFilters.city !== 'all' ? vehicleFilters.city : undefined,
+        trim: vehicleFilters.trim !== 'all' ? vehicleFilters.trim : undefined,
         dateRange: vehicleFilters.dateRange !== 'all' ? vehicleFilters.dateRange as any : 'all',
         regionFilter: vehicleFilters.regionFilter,
         searchTerm: vehicleFilters.searchTerm,
@@ -138,18 +142,6 @@ export function useScraperData(initialFilters?: FilterOptions) {
     await loadCascadingOptions('all', 'all', 'all', 'all', 'all', 'all');
   }, [loadCascadingOptions]);
 
-  const loadSellers = useCallback(async () => {
-    try {
-      const data = filters.isDealer
-        ? await scraperService.getDealers()
-        : await scraperService.getSellers();
-      setSellers(data);
-    } catch (error) {
-      console.error("Error al cargar vendedores:", error);
-      setSellers([]);
-    }
-  }, [filters.isDealer]);
-
   const loadPriceStatistics = useCallback(async () => {
     try {
       const data = await scraperService.getPriceStatistics();
@@ -159,15 +151,6 @@ export function useScraperData(initialFilters?: FilterOptions) {
       setPriceStatistics([]);
     }
   }, []);
-
-  const getSellerWithVehicles = async (sellerId: string) => {
-    try {
-      return await scraperService.getSellerWithVehicles(sellerId);
-    } catch (error) {
-      console.error("Error al obtener vendedor con vehículos:", error);
-      throw error;
-    }
-  };
 
   const getPriceStatisticsForVehicle = async (brand: string, model: string, year?: string) => {
     try {
@@ -211,14 +194,15 @@ export function useScraperData(initialFilters?: FilterOptions) {
     } else {
       setVehicleFilters(prev => {
         const next = { ...prev, [key]: value };
-        if (['brand', 'model', 'motor', 'year', 'city', 'regionFilter'].includes(key)) {
+        if (['brand', 'model', 'motor', 'trim', 'year', 'city', 'regionFilter'].includes(key)) {
           loadCascadingOptions(
             key === 'brand' ? value : next.brand ?? 'all',
             key === 'model' ? value : next.model ?? 'all',
             key === 'motor' ? value : next.motor ?? 'all',
             key === 'year' ? value : next.year ?? 'all',
             key === 'city' ? value : next.city ?? 'all',
-            (key === 'regionFilter' ? value : next.regionFilter ?? 'all') as 'all' | 'coast' | 'sierra'
+            (key === 'regionFilter' ? value : next.regionFilter ?? 'all') as 'all' | 'coast' | 'sierra',
+            (key === 'trim' ? value : (next as { trim?: string }).trim ?? 'all')
           );
         }
         return next;
@@ -229,7 +213,7 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const updateBrand = useCallback((brand: string) => {
     setVehicleFilters(prev => {
-      loadCascadingOptions(brand, 'all', 'all', 'all', prev.city ?? 'all', prev.regionFilter ?? 'all');
+      loadCascadingOptions(brand, 'all', 'all', 'all', prev.city ?? 'all', prev.regionFilter ?? 'all', prev.trim ?? 'all');
       return { ...prev, brand, model: 'all' };
     });
     setCurrentPage(1);
@@ -238,12 +222,12 @@ export function useScraperData(initialFilters?: FilterOptions) {
   const clearFilters = useCallback(() => {
     if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
     setVehicleFilters({
-      brand: 'all', model: 'all', motor: 'all', year: 'all', city: 'all',
+      brand: 'all', model: 'all', motor: 'all', trim: 'all', year: 'all', city: 'all',
       dateRange: 'all', regionFilter: 'all', searchTerm: '', traction: 'all',
       sortBy: 'created_at_desc', page: 1, itemsPerPage: ITEMS_PER_PAGE
     });
     setCurrentPage(1);
-    loadCascadingOptions('all', 'all', 'all', 'all', 'all', 'all');
+    loadCascadingOptions('all', 'all', 'all', 'all', 'all', 'all', 'all');
   }, [loadCascadingOptions]);
 
   const applyFilters = useCallback((newFilters: FilterOptions) => {
@@ -253,10 +237,11 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
-      loadVehiclesWithFilters(), loadSellers(),
-      loadPriceStatistics(), loadFilterOptions()
+      loadVehiclesWithFilters(),
+      loadPriceStatistics(),
+      loadFilterOptions()
     ]);
-  }, [loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadFilterOptions]);
+  }, [loadVehiclesWithFilters, loadPriceStatistics, loadFilterOptions]);
 
   const stats = useMemo(() => ({
     total: totalCount,
@@ -264,9 +249,10 @@ export function useScraperData(initialFilters?: FilterOptions) {
     usados: allVehicles.filter(v => v.condition === 'USED').length,
     usados_bueno: allVehicles.filter(v => v.condition === 'PC_USED_GOOD').length,
     usados_como_nuevo: allVehicles.filter(v => v.condition === 'PC_USED_LIKE_NEW').length,
-    enPatio: allVehicles.filter(v => v.seller?.location === 'patio').length,
-    enTaller: allVehicles.filter(v => v.seller?.location === 'taller').length,
-    enCliente: allVehicles.filter(v => v.seller?.location === 'cliente').length,
+    // Ya no se utiliza la tabla scraper_sellers; estos contadores se basan solo en vehicle.location si se usa para patio/taller/cliente.
+    enPatio: allVehicles.filter(v => v.location === 'patio').length,
+    enTaller: allVehicles.filter(v => v.location === 'taller').length,
+    enCliente: allVehicles.filter(v => v.location === 'cliente').length,
   }), [allVehicles, totalCount]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -290,7 +276,6 @@ export function useScraperData(initialFilters?: FilterOptions) {
 
   useEffect(() => { loadFilterOptions(); }, [loadFilterOptions]);
   useEffect(() => { loadVehiclesWithFilters(); }, [loadVehiclesWithFilters]);
-  useEffect(() => { loadSellers(); }, [loadSellers]);
   useEffect(() => { loadPriceStatistics(); }, [loadPriceStatistics]);
 
   useEffect(() => {
@@ -304,14 +289,10 @@ export function useScraperData(initialFilters?: FilterOptions) {
           vehicleFilters.motor ?? 'all',
           vehicleFilters.year ?? 'all',
           vehicleFilters.city ?? 'all',
-          vehicleFilters.regionFilter ?? 'all'
+          vehicleFilters.regionFilter ?? 'all',
+          (vehicleFilters as { trim?: string }).trim ?? 'all'
         );
       })
-      .subscribe();
-
-    const sellersChannel = supabase
-      .channel('scraper_sellers_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'scraper_sellers' }, () => { loadSellers(); })
       .subscribe();
 
     const statsChannel = supabase
@@ -322,19 +303,18 @@ export function useScraperData(initialFilters?: FilterOptions) {
     return () => {
       if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
       supabase.removeChannel(vehiclesChannel);
-      supabase.removeChannel(sellersChannel);
       supabase.removeChannel(statsChannel);
     };
-  }, [supabase, loadVehiclesWithFilters, loadSellers, loadPriceStatistics, loadCascadingOptions, vehicleFilters]);
+  }, [supabase, loadVehiclesWithFilters, loadPriceStatistics, loadCascadingOptions, vehicleFilters]);
 
   return {
-    vehicles: allVehicles, allVehicles, sellers, isLoading, filters, stats,
+    vehicles: allVehicles, allVehicles, isLoading, filters, stats,
     priceStatistics, pagination, goToPage, nextPage, prevPage,
     vehicleFilters: { ...vehicleFilters, searchTerm: searchInput },
     filterOptions, updateFilter, updateBrand, clearFilters,
-    getSellerWithVehicles, getPriceStatisticsForVehicle,
+    getPriceStatisticsForVehicle,
     getPriceStatisticsByBrand, getPriceStatisticsByModel, getAllBrandsWithStats,
     applyFilters, refresh: loadVehiclesWithFilters,
-    refreshSellers: loadSellers, refreshPriceStatistics: loadPriceStatistics, refreshAll
+    refreshPriceStatistics: loadPriceStatistics, refreshAll
   };
 }

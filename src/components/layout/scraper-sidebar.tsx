@@ -13,13 +13,14 @@ import {
     Search,
     Handshake,
     LayoutGrid,
+    ClipboardList,
 } from 'lucide-react';
 
 const menuItems = [
     { name: 'Todo', href: '/scraper/todo', icon: LayoutGrid },
     { name: 'Búsqueda manual', href: '/scraper/busqueda-manual', icon: Search },
+    { name: 'Pedidos', href: '/scraper/pedidos', icon: ClipboardList },
     { name: 'Mejores oportunidades', href: '/scraper/oportunidades', icon: Handshake },
-
 ];
 
 export function ScraperSidebar() {

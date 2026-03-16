@@ -43,11 +43,11 @@ export const OpportunitiesCenterView = ({
     hideExplorerActions = false,
     vehicles,
     selectedBrand, selectedModel, selectedYear,
-    selectedCity, selectedDateRange, regionFilter, searchTerm, selectedTraction, sortBy,
+    selectedCity, selectedTrim, selectedDateRange, regionFilter, searchTerm, selectedTraction, sortBy,
     showTractionFilter = false,
-    availableBrands, availableModels, availableYears, availableCities, priceStatistics,
+    availableBrands, availableModels, availableYears, availableCities, availableTrims, priceStatistics,
     onBrandChange, onModelChange, onYearChange,
-    onCityChange, onDateRangeChange, onRegionFilterChange,
+    onCityChange, onTrimChange, onDateRangeChange, onRegionFilterChange,
     onSearchTermChange, onTractionChange, onSortChange, onClearFilters,
 }: OpportunitiesCenterViewProps) => {
 
@@ -66,6 +66,7 @@ export const OpportunitiesCenterView = ({
     const [showMotorModal, setShowMotorModal] = useState(false);
     const [showYearModal, setShowYearModal] = useState(false);
     const [showCityModal, setShowCityModal] = useState(false);
+    const [showTrimModal, setShowTrimModal] = useState(false);
     const [showDateModal, setShowDateModal] = useState(false);
     const [showTractionModal, setShowTractionModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
@@ -86,10 +87,10 @@ export const OpportunitiesCenterView = ({
 
     const hasActiveFilters = useMemo(() =>
         selectedBrand !== "all" || selectedModel !== "all" ||
-        selectedYear !== "all" || selectedDateRange !== "all" || selectedCity !== "all" ||
+        selectedYear !== "all" || selectedDateRange !== "all" || selectedCity !== "all" || selectedTrim !== "all" ||
         selectedTraction !== "all" || sortBy !== "created_at_desc" || searchTerm !== "" || regionFilter !== "all",
         [selectedBrand, selectedModel, selectedYear, selectedDateRange,
-            selectedCity, selectedTraction, sortBy, searchTerm, regionFilter]
+            selectedCity, selectedTrim, selectedTraction, sortBy, searchTerm, regionFilter]
     );
 
     const getTractionLabel = (v: string) => v === "all" ? "Todas" : v;
@@ -258,7 +259,7 @@ export const OpportunitiesCenterView = ({
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-red-500 transition-colors" />
                         <input
                             type="text"
-                            placeholder="Buscar por nombre, versión, características..."
+                            placeholder="Buscar por nombre, versión, variante (Raptor, Platinum...) o características..."
                             className="w-full h-10 md:h-11 pl-11 pr-4 text-sm bg-white border border-slate-200 rounded-xl focus:border-red-400 focus:ring-4 focus:ring-red-100 outline-none transition-all shadow-sm placeholder:text-slate-400"
                             value={searchTerm}
                             onChange={e => onSearchTermChange(e.target.value)}
@@ -332,6 +333,11 @@ export const OpportunitiesCenterView = ({
                             icon={MapPinned} onClick={() => setShowCityModal(true)}
                         />
                         <FilterButton
+                            label={selectedTrim === "all" ? "Variante" : selectedTrim}
+                            active={selectedTrim !== "all"} hasSelection={selectedTrim !== "all"}
+                            icon={Sparkles} onClick={() => setShowTrimModal(true)}
+                        />
+                        <FilterButton
                             label={getDateRangeLabel(selectedDateRange) === "Cualquier Fecha" ? "Fecha Pub." : getDateRangeLabel(selectedDateRange)}
                             active={selectedDateRange !== "all"} hasSelection={selectedDateRange !== "all"}
                             icon={Filter} onClick={() => setShowDateModal(true)}
@@ -372,6 +378,12 @@ export const OpportunitiesCenterView = ({
                 icon={<MapPinned className="h-6 w-6 text-white" />}
                 options={availableCities} selectedValue={selectedCity} onSelect={onCityChange}
                 searchPlaceholder="Buscar ciudad..." allLabel="Todas las Ciudades" />
+
+            <FilterModal isOpen={showTrimModal} onClose={() => setShowTrimModal(false)}
+                title="Variante / Trim" description="Filtra por variante (ej. Raptor, Platinum, XLT)"
+                icon={<Sparkles className="h-6 w-6 text-white" />}
+                options={availableTrims} selectedValue={selectedTrim} onSelect={onTrimChange}
+                searchPlaceholder="Buscar variante..." allLabel="Todas las variantes" />
 
             <FilterModal isOpen={showDateModal} onClose={() => setShowDateModal(false)}
                 title="Filtrar por Fecha" description="Selecciona el rango de publicación"

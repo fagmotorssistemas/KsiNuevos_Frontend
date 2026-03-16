@@ -190,17 +190,6 @@ export class OpportunityScorer {
         return highResaleTrims.some(tr => t.includes(tr)) ? 5 : 0;
     }
 
-    private static calculateSellerBonus(vehicle: VehicleWithSeller): number {
-        const seller = vehicle.seller;
-        if (!seller) return 0;
-        let bonus = 1;
-        const listings = seller.total_listings ?? 0;
-        if (listings >= 50) bonus += 3;
-        else if (listings >= 10) bonus += 2;
-        if (seller.badges) bonus += 2;
-        return bonus;
-    }
-
     private static calculateTransparencyBonus(vehicle: VehicleWithSeller): number {
         let bonus = 0;
         const imgCount = vehicle.listing_image_urls?.length ?? 0;
@@ -224,7 +213,8 @@ export class OpportunityScorer {
             ...(vehicle.tags ?? []),
         ].filter(Boolean).join(' ');
 
-        const parsedTrim = extractTrim(rawText);
+        // Priorizar trim de BD (extraído por IA en n8n); si no hay, derivar del texto
+        const parsedTrim = vehicle.trim ?? extractTrim(rawText);
         const parsedFuelType = extractFuelType(rawText);
         const parsedTraction = extractTraction(rawText);
         const parsedBodyType = extractBodyType(rawText);
@@ -240,7 +230,7 @@ export class OpportunityScorer {
         const motorBonus = this.calculateMotorBonus(parsedEngineCC, vehicle.motor);
         const transmissionBonus = this.calculateTransmissionBonus(vehicle.transmission);
         const trimBonus = this.calculateTrimBonus(parsedTrim);
-        const sellerBonus = this.calculateSellerBonus(vehicle);
+        const sellerBonus = 0; // Ya no se usa información de vendedor; el bonus por vendedor se elimina.
         const transparencyBonus = this.calculateTransparencyBonus(vehicle);
 
         const weightedScore =

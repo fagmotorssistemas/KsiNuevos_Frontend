@@ -1471,10 +1471,12 @@ export type Database = {
           motor: string | null
           price: number | null
           publication_date: string
+          region: string | null
           seller_id: string
           tags: string[] | null
           title: string | null
           transmission: string | null
+          trim: string | null
           updated_at: string | null
           url: string
           year: string | null
@@ -1496,10 +1498,12 @@ export type Database = {
           motor?: string | null
           price?: number | null
           publication_date: string
+          region?: string | null
           seller_id: string
           tags?: string[] | null
           title?: string | null
           transmission?: string | null
+          trim?: string | null
           updated_at?: string | null
           url: string
           year?: string | null
@@ -1521,10 +1525,12 @@ export type Database = {
           motor?: string | null
           price?: number | null
           publication_date?: string
+          region?: string | null
           seller_id?: string
           tags?: string[] | null
           title?: string | null
           transmission?: string | null
+          trim?: string | null
           updated_at?: string | null
           url?: string
           year?: string | null

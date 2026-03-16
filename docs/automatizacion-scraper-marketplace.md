@@ -44,7 +44,7 @@ Workflow de n8n: **Scraper - Merge Listings con DB (fb_seller_id + url)**. Tres 
 
 1. **Trigger FrontEnd** (webhook POST `buscar-producto-marketplace`) recibe el body con `searchValue`.
 2. **Convert string to Encode URI**: arma las URLs de búsqueda de Marketplace Cuenca (por término y por categoría) y devuelve `urls`.
-3. **Scrap data by enconde uri**: llama a Apify `nautical_odyssey~marketplace-scraper` (run-sync-get-dataset-items) con `urls`, `count: 60`, `untilDate` 7 días atrás, `maxPagesPerUrl: 3`, `getListingDetails: true`.
+3. **Scrap data by enconde uri**: llama a Apify `nautical_odyssey~marketplace-scraper` (run-sync-get-dataset-items) con `urls`, `count: 60`, `untilDate` 7 días atrás, `maxPagesPerUrl: 3`, `getListingDetails: true`. **No se envían cookies de Facebook**: el scraper corre sin sesión para evitar errores "Cookies are no longer valid" y reducir costos; los datos de vendedor (nombre, foto, rating) pueden no estar disponibles y la app no los muestra.
 4. **Check if any data exists**: toma los ítems devueltos por Apify (o por el otro branch si viene de pedidos/horario).
 5. **Filter cars by price**: mantiene solo listings con precio entre **3.000** y **200.000** (USD).
 6. **If**: si no hay ítems tras el filtro, responde con resumen en cero y termina.
