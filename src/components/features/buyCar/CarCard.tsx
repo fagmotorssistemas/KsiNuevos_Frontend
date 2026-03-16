@@ -9,6 +9,11 @@ interface CarCardProps {
 }
 
 export const CarCard = ({ car }: CarCardProps) => {
+  // Si no hay imagen principal, no mostramos la tarjeta
+  if (!car.img_main_url) {
+    return null;
+  }
+
   return (
     <Link 
       href={`/autos/${car.id}`}
@@ -17,18 +22,11 @@ export const CarCard = ({ car }: CarCardProps) => {
       
       {/* Imagen con contenedor centrado para el icono */}
       <div className="relative aspect-[16/10] overflow-hidden bg-neutral-100 flex items-center justify-center">
-        {car.img_main_url ? (
-          <img
-            src={car.img_main_url}
-            alt={`${car.brand} ${car.model}`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-          />
-        ) : (
-          <div className="flex flex-col items-center text-neutral-300">
-            <Car size={64} strokeWidth={1} />
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] mt-2">Sin Foto</span>
-          </div>
-        )}
+        <img
+          src={car.img_main_url}
+          alt={`${car.brand} ${car.model}`}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+        />
 
         <div className="absolute top-3 left-3 flex flex-col gap-2">
             <KsBadge variant="glass">Disponible</KsBadge>
