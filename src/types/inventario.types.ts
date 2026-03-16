@@ -13,8 +13,10 @@ export interface VehiculoInventario {
     placa: string;
     tipo: string;
     color: string;
-    price?: number; 
+    price?: number;       // Precio fijo/lista del vehículo
     mileage?: number;
+    /** Precio al que se vendió (cuando stock === 0). Viene del kardex/historial. */
+    precioVenta?: number;
     
     // Ficha Técnica
     motor: string;

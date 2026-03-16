@@ -37,14 +37,13 @@ if (profile?.role === "finanzas") {
     // Admin
     if (profile?.role === "admin") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
-      
-      // IMPORTANTE: Usamos la ruta nueva que vino de GitHub para no romper nada
-      navItems.push({ href: "/taller/dashboard", label: "Taller" }); 
+      navItems.push({ href: "/taller/dashboard", label: "Taller" });
+    }
 
-      // --- RESTAURAMOS TUS BOTONES ---
+    // Admin y Vendedores: Seguros y Rastreadores
+    if (profile?.role === "admin" || profile?.role === "vendedor") {
       navItems.push({ href: "/rastreadores", label: "Rastreadores" });
-      navItems.push({ href: "/seguros", label: "Seguros" });
-      // -------------------------------
+      //navItems.push({ href: "/seguros", label: "Seguros" });
     }
 
 

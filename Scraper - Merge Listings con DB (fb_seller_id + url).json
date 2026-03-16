@@ -202,7 +202,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.apify.com/v2/actor-tasks/nautical_odyssey~marketplace-scraper/run-sync-get-dataset-items?token=apify_api_PHAr6NaRBliD0CeOcdkXe2mi8Plxj23eTz9J",
+        "url": "https://api.apify.com/v2/actor-tasks/nautical_odyssey~marketplace-scraper/run-sync-get-dataset-items?token={{ $env.APIFY_API_TOKEN }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"getAllListingPhotos\": false,\n  \"getListingDetails\": true,\n  \"strictFiltering\": true,\n  \"count\": 60,\n  \"untilDate\": \"{{ $now.minus({days: 7}).toFormat('yyyy-MM-dd') }}\",\n  \"maxPagesPerUrl\": 3,\n  \"urls\": {{ JSON.stringify($json.urls) }}\n}",

@@ -36,14 +36,15 @@ function esCredito(tipoPago: string | null | undefined, plazoCredito?: number | 
  * Fuentes de datos para la Cartera (todo desde ventas_rastreador + Oracle):
  * 1. Supabase ventas_rastreador: ventas con tipo CONTADO/CRÉDITO y cuotas.
  * 2. Backend (Oracle): lista de contratos AUTO con totalRastreador (misma fuente que RastreoList).
+ * @param asesorId Si se pasa (ej. rol vendedor), solo ventas con asesor_id = asesorId (las sin asesor, asesor_id null, solo las ve admin). Admin: no se pasa, sin filtro, ve todo.
  */
-export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]> {
+export async function getCarteraRastreadores(asesorId?: string | null): Promise<ItemCarteraRastreador[]> {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
     try {
         // 1) Ventas ya registradas en Supabase (ventas_rastreador: gps_id -> gps_inventario, cliente_id -> clientes_externos)
-        const { data: ventas, error: ventasError } = await supabase
+        let query = supabase
             .from('ventas_rastreador')
             .select(`
                 id,
@@ -60,12 +61,19 @@ export async function getCarteraRastreadores(): Promise<ItemCarteraRastreador[]>
             `)
             .order('created_at', { ascending: false });
 
+        // Vendedor: solo sus ventas; filas con asesor_id null no coinciden y solo las ve admin (sin filtro).
+        if (asesorId) {
+            query = query.eq('asesor_id', asesorId);
+        }
+
+        const { data: ventas, error: ventasError } = await query;
+
         if (ventasError) throw ventasError;
 
-        // 2) Lista del backend (Oracle) — misma fuente que RastreoList
+        // 2) Lista del backend (Oracle) — misma fuente que RastreoList; vendedor solo los suyos (nota en ventas_rastreador con asesor_id)
         let contratosOracle: Awaited<ReturnType<typeof getListaContratosGPS>> = [];
         try {
-            contratosOracle = await getListaContratosGPS();
+            contratosOracle = await getListaContratosGPS(asesorId);
         } catch (e) {
             console.warn('Cartera: no se pudo cargar lista Oracle:', e);
         }

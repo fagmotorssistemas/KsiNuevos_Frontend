@@ -1,7 +1,10 @@
 import { supabase } from './supabaseClient';
 import { getCarteraRastreadores } from './cartera-rastreadores.service';
 
-export async function getKpisFinancieros() {
+/**
+ * @param asesorId Si se pasa (vendedor), KPIs/costos solo sobre ventas con asesor_id = asesorId (sin asesor solo admin). Admin: no se pasa, sin filtro, ve todo.
+ */
+export async function getKpisFinancieros(asesorId?: string | null) {
     try {
         console.log("💰 Calculando Finanzas (coherentes con cartera)...");
 
@@ -18,7 +21,7 @@ export async function getKpisFinancieros() {
 
         // 2. BASE COMÚN: CARRERA DE RASTREADORES
         // Usamos exactamente los mismos datos que ve el usuario en CarteraRastreadoresView
-        const carteraItems = await getCarteraRastreadores();
+        const carteraItems = await getCarteraRastreadores(asesorId);
 
         const ventasTotales = carteraItems.reduce(
             (sum, item) => sum + (Number(item.precio_total) || 0),
@@ -27,10 +30,14 @@ export async function getKpisFinancieros() {
 
         const itemsVendidos = carteraItems.length;
 
-        // 3. COSTOS (EGRESOS): costo de equipos vendidos desde gps_inventario vinculados por ventas_rastreador
-        const { data: ventasConGps, error: ventasError } = await supabase
+        // 3. COSTOS (EGRESOS): ventas_rastreador; vendedor solo sus ventas (asesor_id null solo admin).
+        let ventasQuery = supabase
             .from('ventas_rastreador')
             .select('gps_inventario(costo_compra)');
+        if (asesorId) {
+            ventasQuery = ventasQuery.eq('asesor_id', asesorId);
+        }
+        const { data: ventasConGps, error: ventasError } = await ventasQuery;
 
         if (ventasError) throw ventasError;
 

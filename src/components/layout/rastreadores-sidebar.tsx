@@ -55,6 +55,13 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
         setIsMobileOpen(false);
     };
 
+    // Bodega & Stock y Cartera solo para admin; vendedores no los ven
+    const visibleMenuItems = menuItems.filter(
+        (item) =>
+            (item.id !== 'INVENTARIO' && item.id !== 'FINANCIERO') ||
+            profile?.role === 'admin'
+    );
+
     return (
         <>
             {/* --- HEADER MÓVIL --- */}
@@ -102,7 +109,7 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
                         </p>
                     )}
 
-                    {menuItems.map((item) => {
+                    {visibleMenuItems.map((item) => {
                         const isActive = currentView === item.id || (currentView === 'FORMULARIO' && item.id === 'DASHBOARD');
                         return (
                             <button

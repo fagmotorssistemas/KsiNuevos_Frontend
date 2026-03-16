@@ -2,12 +2,14 @@ import { ContratoGPS } from '@/types/rastreadores.types';
 import { limpiarTexto, parseMonedaGPS } from '@/utils/rastreo-format';
 import { API_URL, supabase } from './supabaseClient';
 
-export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
+/**
+ * Lista contratos GPS: Oracle (AUTO) + Supabase (EXTERNO).
+ * @param asesorId Si se pasa (vendedor): solo ve EXTERNO con asesor_id = él y AUTO solo si existe en ventas_rastreador con asesor_id = él (por nota_venta). Admin: no se pasa, ve todo.
+ */
+export async function getListaContratosGPS(asesorId?: string | null): Promise<ContratoGPS[]> {
     try {
-        // A. Iniciamos ambas peticiones en paralelo
-        // -----------------------------------------
-
-        // 1. Peticion API Oracle (Solo el listado base)
+        // A. Peticiones en paralelo
+        // ------------------------
         const apiListPromise = fetch(`${API_URL}/contratos/list`, { cache: 'no-store' })
             .then(res => res.ok ? res.json() : { data: [] })
             .catch(err => {
@@ -15,8 +17,7 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
                 return { data: [] };
             });
 
-        // 2. Peticion Supabase: ventas externas (ventas_rastreador + clientes_externos + vehiculos)
-        const dbPromise = supabase
+        let dbQuery = supabase
             .from('ventas_rastreador')
             .select(`
                 id,
@@ -32,7 +33,20 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
             .eq('es_venta_externa', true)
             .order('created_at', { ascending: false });
 
-        const [apiResponse, dbResponse] = await Promise.all([apiListPromise, dbPromise]);
+        if (asesorId) {
+            dbQuery = dbQuery.eq('asesor_id', asesorId);
+        }
+
+        // Vendedor: notas de venta que tienen asesor_id = él en Supabase (para filtrar Oracle: solo AUTO con esa nota asignada)
+        const notasAsesorPromise = asesorId
+            ? supabase.from('ventas_rastreador').select('nota_venta').eq('asesor_id', asesorId)
+            : Promise.resolve({ data: [] as { nota_venta: string | null }[] });
+
+        const [apiResponse, dbResponse, notasAsesorRes] = await Promise.all([
+            apiListPromise,
+            dbQuery,
+            notasAsesorPromise
+        ]);
 
         // B. Procesamos la API de Autos (RESTAURO LOGICA DE DETALLE)
         // -----------------------------------------------------------
@@ -76,10 +90,23 @@ export async function getListaContratosGPS(): Promise<ContratoGPS[]> {
 
             // Solo filas con valor de rastreador > 0 (clientes que compraron GPS); excluir notas Oracle sin rastreador
             listaAutos = resultadosDetalle.filter((item): item is ContratoGPS => item !== null && (item.totalRastreador ?? 0) > 0);
+
+            // Vendedor: Oracle solo si esa nota_venta está en Supabase con asesor_id = él (si no está asignada en BD, no la ve)
+            if (asesorId && notasAsesorRes.data?.length) {
+                const setNotasAsesor = new Set(
+                    (notasAsesorRes.data as { nota_venta: string | null }[])
+                        .map((r) => limpiarTexto(r.nota_venta))
+                        .filter(Boolean)
+                );
+                listaAutos = listaAutos.filter((c) => setNotasAsesor.has(limpiarTexto(c.notaVenta) ?? ''));
+            } else if (asesorId) {
+                // Vendedor pero sin ninguna venta en Supabase asignada a él → no ver ningún AUTO de Oracle
+                listaAutos = [];
+            }
         }
 
         // C. Procesamos ventas externas (ventas_rastreador). Placa/marca/modelo desde vehiculos si existe.
-        const listaExternos: ContratoGPS[] = (dbResponse.data || []).map((item: any) => {
+        const listaExternos: ContratoGPS[] = ((dbResponse as { data?: any[] }).data || []).map((item: any) => {
             const veh = Array.isArray(item.vehiculo) ? item.vehiculo[0] : item.vehiculo;
             const cliente = Array.isArray(item.cliente_externo) ? item.cliente_externo[0] : item.cliente_externo;
             const conc = Array.isArray(item.concesionaria) ? item.concesionaria[0] : item.concesionaria;

@@ -220,8 +220,9 @@ export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string)
 
 /**
  * Lista ventas con GPS. Fuente: ventas_rastreador + clientes_externos + gps_inventario.
+ * @param asesorId Si se pasa (vendedor), solo ventas con asesor_id = asesorId (sin asesor / null solo admin). Admin: no se pasa, sin filtro, ve todo.
  */
-export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' = 'TODOS') {
+export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' = 'TODOS', asesorId?: string | null) {
     try {
         let query = supabase
             .from('ventas_rastreador')
@@ -242,6 +243,8 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
 
         if (origen === 'EXTERNO') query = query.eq('es_venta_externa', true);
         if (origen === 'AUTO') query = query.eq('es_venta_externa', false);
+        // Vendedor: solo sus ventas; asesor_id null solo admin (sin filtro).
+        if (asesorId) query = query.eq('asesor_id', asesorId);
 
         const { data, error } = await query;
         if (error) {

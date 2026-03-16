@@ -12,8 +12,9 @@ import { MainNav } from './MainNav'
 import { UserNav } from './UserNav'
 
 export const Navbar = () => {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const showSegurosRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -92,6 +93,24 @@ export const Navbar = () => {
             >
                 Inventario
             </Link>
+            {showSegurosRastreadores && (
+              <>
+                <Link 
+                    href="/rastreadores" 
+                    className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                >
+                    Rastreadores
+                </Link>
+                {/*<Link 
+                    href="/seguros" 
+                    className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                >
+                    Seguros
+                </Link>*/}
+              </>
+            )}
           </div>
         </div>
       )}

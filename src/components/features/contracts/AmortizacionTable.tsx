@@ -85,7 +85,7 @@ export function AmortizacionTable({
                         {cuotasAdicionales.map((ca, idx) => (
                             <tr key={`ca-print-${idx}`} className="border-b border-gray-300 border-dotted">
                                 <td className="py-0.5 pl-1">Cuota Adicional {idx + 1}</td>
-                                <td className="py-0.5">{ca.fecha}</td>
+                                <td className="py-0.5">{ca.fecha ? ca.fecha : '–'}</td>
                                 <td className="py-0.5 text-right">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="py-0.5 text-right font-bold">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                                 <td className="py-0.5 text-right pr-1">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
@@ -139,7 +139,7 @@ export function AmortizacionTable({
                         {cuotasAdicionales.map((ca, idx) => (
                             <tr key={`web-ca-${idx}`} className="bg-blue-50/50">
                                 <td className="px-3 py-1.5 font-bold text-blue-700">Extra {idx + 1}</td>
-                                <td className="px-3 py-1.5 text-slate-600">{ca.fecha}</td>
+                                <td className="px-3 py-1.5 text-slate-600">{ca.fecha ? ca.fecha : '–'}</td>
                                 <td className="px-3 py-1.5 text-right font-mono text-slate-600">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                 <td className="px-3 py-1.5 text-right font-mono text-slate-600">0.00</td>
                                 <td className="px-3 py-1.5 text-right font-mono font-bold text-blue-600">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>

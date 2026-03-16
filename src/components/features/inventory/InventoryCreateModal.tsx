@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
+import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 
 // --- Componentes UI Locales ---
 const InputGroup = ({ label, required = false, children, subLabel }: { label: string; required?: boolean; children: React.ReactNode, subLabel?: string }) => (
@@ -98,54 +100,19 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
         setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
-    // 4. Función Auxiliar para Subir a Supabase
-    const uploadFileToSupabase = async (file: File): Promise<string> => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-        const filePath = `${fileName}`; // Guardamos en la raíz del bucket 'inventory' o usa una carpeta ej: `cars/${fileName}`
-
-        const { error: uploadError } = await supabase.storage
-            .from('inventory')
-            .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from('inventory').getPublicUrl(filePath);
-        return data.publicUrl;
-    };
-
-    // --- GUARDAR TODO ---
+    // --- GUARDAR TODO (insertar primero para obtener id, luego subir imágenes optimizadas) ---
     const handleCreate = async () => {
-        // Validación básica
         if (!formData.brand || !formData.model || !formData.price) {
             alert("Por favor completa Marca, Modelo y Precio.");
             return;
         }
 
         setIsSaving(true);
-        setUploadStatus("Iniciando carga...");
+        setUploadStatus("Guardando datos del vehículo...");
 
         try {
-            let mainImageUrl = null;
-            let galleryUrls: string[] = [];
-
-            // 1. Subir Imagen Principal (si existe)
-            if (mainImageFile) {
-                setUploadStatus("Subiendo imagen principal...");
-                mainImageUrl = await uploadFileToSupabase(mainImageFile);
-            }
-
-            // 2. Subir Galería (si existen)
-            if (galleryFiles.length > 0) {
-                setUploadStatus(`Subiendo galería (${galleryFiles.length} fotos)...`);
-                // Subimos todas en paralelo
-                galleryUrls = await Promise.all(galleryFiles.map(file => uploadFileToSupabase(file)));
-            }
-
-            setUploadStatus("Guardando datos del vehículo...");
-
-            // 3. Guardar en Base de Datos
-            const { error } = await supabase
+            // 1. Insertar en BD sin imágenes para obtener el id
+            const { data: inserted, error: insertError } = await supabase
                 .from('inventory')
                 .insert({
                     brand: formData.brand.toLowerCase(),
@@ -160,16 +127,72 @@ export function InventoryCreateModal({ onClose, onSuccess }: InventoryCreateModa
                     status: formData.status as any,
                     location: formData.location as any,
                     description: formData.description,
-                    
-                    // AQUÍ PONEMOS LAS URLs GENERADAS
-                    img_main_url: mainImageUrl,
-                    img_gallery_urls: galleryUrls.length > 0 ? galleryUrls : null,
-
+                    img_main_url: null,
+                    img_gallery_urls: null,
                     marketing_in_patio: false,
                     stock: 1
-                });
+                })
+                .select("id")
+                .single();
 
-            if (error) throw error;
+            if (insertError) throw insertError;
+            const vehicleId = inserted?.id;
+            if (!vehicleId) throw new Error("No se obtuvo el id del vehículo.");
+
+            let mainImageUrl: string | null = null;
+            let galleryUrls: string[] = [];
+
+            // 2. Subir imagen principal optimizada (WEBP + 400/800/1200)
+            if (mainImageFile) {
+                setUploadStatus("Subiendo imagen principal...");
+                try {
+                    const optimized = await compressAndConvertToWebP(mainImageFile, { generateResponsiveSizes: true });
+                    mainImageUrl = await uploadOptimizedMainImage(supabase, vehicleId, optimized);
+                } catch (bucketErr: any) {
+                    console.warn("Bucket vehicle-images no disponible, subiendo a inventory:", bucketErr);
+                    const opt = await compressAndConvertToWebP(mainImageFile, { generateResponsiveSizes: false });
+                    const path = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.webp`;
+                    const { error: upErr } = await supabase.storage.from("inventory").upload(path, opt.main);
+                    if (upErr) throw upErr;
+                    const { data } = supabase.storage.from("inventory").getPublicUrl(path);
+                    mainImageUrl = data.publicUrl;
+                }
+            }
+
+            // 3. Subir galería optimizada (WEBP)
+            if (galleryFiles.length > 0) {
+                setUploadStatus(`Subiendo galería (${galleryFiles.length} fotos)...`);
+                try {
+                    const compressed = await Promise.all(galleryFiles.map((f) => compressImageForUpload(f)));
+                    galleryUrls = await Promise.all(
+                        compressed.map((file, i) => uploadOptimizedGalleryImage(supabase, vehicleId, file, i))
+                    );
+                } catch (bucketErr: any) {
+                    console.warn("Bucket vehicle-images no disponible, subiendo a inventory:", bucketErr);
+                    galleryUrls = await Promise.all(
+                        galleryFiles.map(async (file) => {
+                            const c = await compressImageForUpload(file);
+                            const path = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.webp`;
+                            const { error } = await supabase.storage.from("inventory").upload(path, c);
+                            if (error) throw error;
+                            const { data } = supabase.storage.from("inventory").getPublicUrl(path);
+                            return data.publicUrl;
+                        })
+                    );
+                }
+            }
+
+            // 4. Actualizar el registro con las URLs de imágenes
+            if (mainImageUrl || galleryUrls.length > 0) {
+                setUploadStatus("Actualizando imágenes...");
+                await supabase
+                    .from("inventory")
+                    .update({
+                        img_main_url: mainImageUrl,
+                        img_gallery_urls: galleryUrls.length > 0 ? galleryUrls : null
+                    })
+                    .eq("id", vehicleId);
+            }
 
             onSuccess();
             onClose();

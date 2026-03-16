@@ -1,5 +1,6 @@
 import Image from 'next/image'; // 1. Agregamos el import de Image
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoginForm } from '@/components/features/auth/LoginForm';
 
@@ -23,8 +24,10 @@ export default function LoginPage() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Componente del Formulario */}
-        <LoginForm />
+        {/* useSearchParams() requiere Suspense en Next.js */}
+        <Suspense fallback={<div className="animate-pulse h-10 bg-neutral-100 rounded" />}>
+          <LoginForm />
+        </Suspense>
 
         {/* --- 2. BOTÓN DE OLVIDÉ CONTRASEÑA --- */}
         <div className="text-center">

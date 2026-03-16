@@ -34,15 +34,21 @@ export const inventarioService = {
             ]) || []
         );
 
-        // Fusionar los datos: Oracle + Supabase
+        // Fusionar: PRECIO y kilometraje solo de Supabase (editados por usuario). VENDIDO EN viene de la API (kardex).
         const listadoEnriquecido = oracleData.listado.map((vehiculo: any) => {
             const placaUpper = vehiculo.placa?.toUpperCase();
             const supabaseInfo = supabaseMap.get(placaUpper);
-            
+            const kmOracle = vehiculo.kilometraje ?? vehiculo.mileage ?? vehiculo.KILOMETRAJE;
+            const numKm = typeof kmOracle === 'number' ? kmOracle : (typeof kmOracle === 'string' && kmOracle !== '' ? Number(kmOracle) : NaN);
+            // API puede enviar "precio al que se vendió" con distintos nombres (mismo valor que en el modal de historial)
+            const vendidoEnRaw = vehiculo.precioVenta ?? vehiculo.vendidoEn ?? vehiculo.vendido_en ?? vehiculo.precio_venta ?? vehiculo.precio_venta_final;
+            const numVendidoEn = typeof vendidoEnRaw === 'number' ? vendidoEnRaw : (typeof vendidoEnRaw === 'string' && vendidoEnRaw !== '' ? Number(vendidoEnRaw) : NaN);
+
             return {
                 ...vehiculo,
-                price: supabaseInfo?.price || null,
-                mileage: supabaseInfo?.mileage || null
+                price: supabaseInfo?.price ?? null,
+                mileage: supabaseInfo?.mileage ?? (Number.isFinite(numKm) ? numKm : null),
+                precioVenta: Number.isFinite(numVendidoEn) ? numVendidoEn : null
             };
         });
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"; 
 
 // Servicios y Tipos
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { ContratoGPS } from "@/types/rastreadores.types";
+import { useAuth } from "@/hooks/useAuth";
 
 // Componentes
 import { RastreadoresSidebar } from "@/components/layout/rastreadores-sidebar";
@@ -21,6 +22,13 @@ import { useAsesores } from "@/hooks/useAsesores";
 type RastreoView = 'DASHBOARD' | 'INVENTARIO' | 'INSTALACION' | 'FORMULARIO' | 'FINANCIERO';
 
 export default function RastreoPage() {
+    const { user, profile } = useAuth();
+    /** Para vendedores: solo se muestran ventas donde ventas_rastreador.asesor_id = asesorIdFiltro */
+    const asesorIdFiltro = useMemo(() =>
+        profile?.role === 'vendedor' ? (user?.id ?? null) : null,
+        [profile?.role, user?.id]
+    );
+
     const [vista, setVista] = useState<RastreoView>('DASHBOARD');
     const [loadingData, setLoadingData] = useState(true);
     const [contratos, setContratos] = useState<ContratoGPS[]>([]);
@@ -33,11 +41,11 @@ export default function RastreoPage() {
     const [asesorId, setAsesorId] = useState<string | null>(null);
     const { asesores, isLoading: asesoresLoading } = useAsesores();
 
-    // Carga de Datos
+    // Carga de Datos (filtrada por asesor cuando es vendedor)
     const cargarContratos = async () => {
         setLoadingData(true);
         try {
-            const data = await rastreadoresService.getListaContratosGPS();
+            const data = await rastreadoresService.getListaContratosGPS(asesorIdFiltro);
             setContratos(data);
         } catch (error) {
             console.error(error);
@@ -47,7 +55,7 @@ export default function RastreoPage() {
         }
     };
 
-    useEffect(() => { cargarContratos(); }, []);
+    useEffect(() => { cargarContratos(); }, [asesorIdFiltro]);
 
     // --- HANDLERS CLAVE ---
 
@@ -150,7 +158,8 @@ export default function RastreoPage() {
                             data={contratos} 
                             loading={loadingData} 
                             onManage={handleGestionarAuto} 
-                            onNewExternal={handleNuevoExterno} // Conectamos el botón
+                            onNewExternal={handleNuevoExterno}
+                            asesorIdFiltro={asesorIdFiltro}
                         />
                     )}
 
@@ -206,8 +215,8 @@ export default function RastreoPage() {
                     {/* VISTA CARTERA: rentabilidad + listado crédito/contado */}
                     {vista === 'FINANCIERO' && (
                         <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-300">
-                            <FinancieroView />
-                            <CarteraRastreadoresView />
+                            <FinancieroView asesorIdFiltro={asesorIdFiltro} />
+                            <CarteraRastreadoresView asesorIdFiltro={asesorIdFiltro} />
                         </div>
                     )}
                     {/* VISTA 4: Instaladores */}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, History, Smartphone, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
+import { useAuth } from "@/hooks/useAuth";
 
 const ESTADOS_GPS = [
     { value: 'PENDIENTE_INSTALACION', label: 'Pendiente Instalación' },
@@ -21,6 +22,9 @@ interface HistorialGPSProps {
 }
 
 export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }: HistorialGPSProps) {
+    const { profile } = useAuth();
+    const isAdmin = profile?.role === "admin";
+
     const [estadosSeleccionados, setEstadosSeleccionados] = useState<{ [key: string]: string }>({});
     const [guardandoGPSId, setGuardandoGPSId] = useState<string | null>(null);
     const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIA_RASTREADOR' | 'EVIDENCIA_PAGO' }>({});
@@ -158,10 +162,12 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                             <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Proveedor</span>
                                             <span className="block text-base font-semibold text-slate-800">{gps.proveedor?.nombre ?? '—'}</span>
                                         </div>
-                                        <div>
-                                            <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Costo compra</span>
-                                            <span className="block text-base font-semibold text-slate-800">${Number(gps.costo_compra || 0).toLocaleString('es-EC')}</span>
-                                        </div>
+                                        {isAdmin && (
+                                            <div>
+                                                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Costo compra</span>
+                                                <span className="block text-base font-semibold text-slate-800">${Number(gps.costo_compra || 0).toLocaleString('es-EC')}</span>
+                                            </div>
+                                        )}
                                         <div>
                                             <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Precio venta</span>
                                             <span className="block text-base font-semibold text-slate-800">${Number(gps.precio_venta || 0).toLocaleString('es-EC')}</span>

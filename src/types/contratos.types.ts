@@ -9,18 +9,24 @@ export interface ContratoResumen {
     ccoEmpresa: number;
 }
 
-// Nueva interfaz para las cuotas extras
+// Nueva interfaz para las cuotas extras (tipo pago 10001350)
 export interface CuotaAdicional {
     monto: number;
     letras: string;
-    fecha?: string;
+    /** Fecha de vencimiento DD/MM/YYYY. Puede venir vacía "". */
+    fechaVencimiento: string;
+    /** Código del comprobante de recibo. Puede venir vacío "". */
+    ccoRecibo: string;
 }
 
-// Pagos en cheque (lista que viene del backend)
+// Pagos en cheque (tipo pago 10001347)
 export interface PagoCheque {
     monto: number;
     letras: string;
-    fecha?: string;
+    /** Fecha de vencimiento DD/MM/YYYY. Puede venir vacía "". */
+    fechaVencimiento: string;
+    /** Código del comprobante de recibo. Puede venir vacío "". */
+    ccoRecibo: string;
 }
 
 export interface ContratoDetalle {

@@ -98,7 +98,10 @@ export default function ContratosPage() {
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <button 
-                                                onClick={() => setSelectedContrato(c)}
+                                                onClick={() => {
+                                                    console.log('[Notas de venta] ccod_ (id contrato) del contrato seleccionado:', c.ccoCodigo);
+                                                    setSelectedContrato(c);
+                                                }}
                                                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-black hover:bg-gray-600 rounded-lg transition-colors"
                                             >
                                                 <Eye className="h-3.5 w-3.5" />

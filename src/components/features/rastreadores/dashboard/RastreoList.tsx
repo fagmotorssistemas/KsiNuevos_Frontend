@@ -24,7 +24,9 @@ interface RastreoListProps {
     data: ContratoGPS[];
     loading: boolean;
     onManage: (item: ContratoGPS) => void;
-    onNewExternal: () => void; // <--- NUEVA PROP
+    onNewExternal: () => void;
+    /** Si se pasa (vendedor), solo se cargan ventas con ventas_rastreador.asesor_id = asesorIdFiltro */
+    asesorIdFiltro?: string | null;
 }
 
 type FiltroOrigen = 'TODOS' | 'AUTO' | 'EXTERNO' | 'EXTERNO_CLIENTE' | 'EXTERNO_CONCESIONARIA';
@@ -35,7 +37,7 @@ const EXTERNO_OPCIONES: { id: FiltroOrigen; label: string; icon: typeof User }[]
     { id: 'EXTERNO_CONCESIONARIA', label: 'Solo concesionaria', icon: Store },
 ];
 
-export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoListProps) {
+export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFiltro }: RastreoListProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>('TODOS');
     const [externosOpen, setExternosOpen] = useState(false);
@@ -54,10 +56,10 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
         }
     }, [externosOpen]);
 
-    // Función para recargar el mapa de GPS
+    // Función para recargar el mapa de GPS (filtrado por asesor cuando es vendedor)
     const cargarGPS = async () => {
         try {
-            const ventasConGPS = await rastreadoresService.obtenerVentasConGPS('TODOS');
+            const ventasConGPS = await rastreadoresService.obtenerVentasConGPS('TODOS', asesorIdFiltro);
             const mapa = new Map();
             
             ventasConGPS.forEach(gps => {
@@ -72,10 +74,10 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
         }
     };
 
-    // Cargar GPSs vinculados al montar
+    // Cargar GPSs vinculados al montar (y cuando cambia el filtro por asesor)
     useEffect(() => {
         cargarGPS();
-    }, [data, refreshKey]); // Se refresca cuando data cambia o cuando refreshKey cambia
+    }, [data, refreshKey, asesorIdFiltro]);
 
     // Auto-refrescar cada 5 segundos para detectar cambios en tiempo real
     useEffect(() => {
@@ -84,7 +86,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal }: RastreoL
         }, 5000);
 
         return () => clearInterval(intervalo);
-    }, []);
+    }, [asesorIdFiltro]);
 
     const searchLower = searchTerm.trim().toLowerCase();
     const filteredData = data.filter(c => {

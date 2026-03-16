@@ -5,18 +5,23 @@ import { rastreadoresService } from "@/services/rastreadores.service";
 import { FinancialKPIs } from "./FinancialKPIs";
 import { RefreshCw } from "lucide-react";
 
-export function FinancieroView() {
+interface FinancieroViewProps {
+    /** Si se pasa (vendedor), KPIs solo sobre ventas con ventas_rastreador.asesor_id = asesorIdFiltro */
+    asesorIdFiltro?: string | null;
+}
+
+export function FinancieroView({ asesorIdFiltro }: FinancieroViewProps) {
     const [loading, setLoading] = useState(true);
     const [kpis, setKpis] = useState<any>(null);
 
     const loadData = async () => {
         setLoading(true);
-        const data = await rastreadoresService.getKpisFinancieros();
+        const data = await rastreadoresService.getKpisFinancieros(asesorIdFiltro);
         setKpis(data);
         setLoading(false);
     };
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => { loadData(); }, [asesorIdFiltro]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">

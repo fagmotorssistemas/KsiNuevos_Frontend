@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth' // Usamos tu hook
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -10,7 +10,9 @@ import { Spinner } from '@/components/ui/Spinner'
 
 export const LoginForm = () => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { supabase } = useAuth() // Instancia desde el contexto
+  const redirectTo = searchParams.get('redirect')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -53,6 +55,12 @@ export const LoginForm = () => {
 
         // 4. LÓGICA DE REDIRECCIONAMIENTO
         router.refresh() // Actualiza el Header para mostrar el avatar
+
+        // Si venían de una ruta protegida (redirect), llevarlos ahí si es segura
+        if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
+          router.push(redirectTo)
+          return
+        }
 
         switch (profile.role) {
           case 'cliente':
