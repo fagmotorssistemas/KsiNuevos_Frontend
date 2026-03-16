@@ -1,6 +1,7 @@
 import { Car, MapPin } from "lucide-react";
 import Link from "next/link";
 import type { Database } from "@/types/supabase";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 type InventoryCar = Database['public']['Tables']['inventory']['Row'];
 
@@ -23,10 +24,11 @@ export const VehicleCard = ({ car }: VehicleCardProps) => {
       {/* Contenedor de Imagen con fondo gris neutro y centrado para el icono */}
       <div className="h-48 bg-neutral-100 overflow-hidden relative flex items-center justify-center">
         {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt={`${car.brand} ${car.model}`} 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+          <OptimizedImage
+            src={imageUrl}
+            alt={`${car.brand} ${car.model}`}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            containerClassName="absolute inset-0"
           />
         ) : (
           <div className="flex flex-col items-center text-neutral-400">

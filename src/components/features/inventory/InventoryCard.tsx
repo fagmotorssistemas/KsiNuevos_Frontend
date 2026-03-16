@@ -7,6 +7,7 @@ import {
     Image as ImageIcon
 } from "lucide-react";
 import type { InventoryCar } from "../../../hooks/useInventory";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 interface InventoryCardProps {
     car: InventoryCar;
@@ -37,10 +38,11 @@ export function InventoryCard({ car, onEdit }: InventoryCardProps) {
             {/* 1. IMAGEN (Header) */}
             <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
                 {car.img_main_url ? (
-                    <img 
-                        src={car.img_main_url} 
+                    <OptimizedImage
+                        src={car.img_main_url}
                         alt={`${car.brand} ${car.model}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        containerClassName="absolute inset-0"
                     />
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-slate-300">

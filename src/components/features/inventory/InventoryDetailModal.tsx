@@ -8,6 +8,9 @@ import {
 
 import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "../../../hooks/useInventory";
+import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
+import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 // Componentes UI Locales
 const InputGroup = ({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
@@ -129,19 +132,16 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
     // --- MANEJO DE ARCHIVOS ---
 
-    const uploadFileToSupabase = async (file: File): Promise<string> => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-        const filePath = `${fileName}`; 
-        
-        const { error: uploadError } = await supabase.storage
-            .from('inventory')
-            .upload(filePath, file);
+    /** Subida optimizada: imagen principal con versiones 400/800/1200 a vehicle-images/{vehicleId}/ */
+    const uploadOptimizedMain = async (file: File): Promise<string> => {
+        const optimized = await compressAndConvertToWebP(file, { generateResponsiveSizes: true });
+        return uploadOptimizedMainImage(supabase, car.id, optimized);
+    };
 
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from('inventory').getPublicUrl(filePath);
-        return data.publicUrl;
+    /** Subida optimizada: galería WEBP a vehicle-images/{vehicleId}/gallery/ */
+    const uploadOptimizedGalleryFile = async (file: File, index: number): Promise<string> => {
+        const compressed = await compressImageForUpload(file);
+        return uploadOptimizedGalleryImage(supabase, car.id, compressed, index);
     };
 
     const handleMainImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,7 +156,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
         if (e.target.files) {
             const newFiles = Array.from(e.target.files);
             setNewGalleryFiles(prev => [...prev, ...newFiles]);
-            
             const newPreviews = newFiles.map(file => URL.createObjectURL(file));
             setNewGalleryPreviews(prev => [...prev, ...newPreviews]);
         }
@@ -182,17 +181,45 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
             let finalMainUrl = formData.img_main_url;
             let finalGalleryUrls = [...existingGallery]; // Empezamos con las que el usuario NO borró
 
-            // 1. Subir nueva foto principal si existe
+            // 1. Subir nueva foto principal (optimizada WEBP + srcset 400/800/1200)
             if (mainImageFile) {
                 setUploadStatus("Actualizando portada...");
-                finalMainUrl = await uploadFileToSupabase(mainImageFile);
+                try {
+                    finalMainUrl = await uploadOptimizedMain(mainImageFile);
+                } catch (bucketErr: any) {
+                    console.warn("Bucket vehicle-images no disponible, subiendo a inventory:", bucketErr);
+                    const opt = await compressAndConvertToWebP(mainImageFile, { generateResponsiveSizes: false });
+                    const fallbackPath = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.webp`;
+                    const { error: upErr } = await supabase.storage.from("inventory").upload(fallbackPath, opt.main);
+                    if (upErr) throw upErr;
+                    const { data } = supabase.storage.from("inventory").getPublicUrl(fallbackPath);
+                    finalMainUrl = data.publicUrl;
+                }
             }
 
-            // 2. Subir nuevas fotos de galería si existen
+            // 2. Subir nuevas fotos de galería (optimizadas WEBP)
             if (newGalleryFiles.length > 0) {
                 setUploadStatus(`Subiendo ${newGalleryFiles.length} fotos nuevas...`);
-                const uploadedUrls = await Promise.all(newGalleryFiles.map(file => uploadFileToSupabase(file)));
-                finalGalleryUrls = [...finalGalleryUrls, ...uploadedUrls];
+                try {
+                    const startIndex = finalGalleryUrls.length;
+                    const urls = await Promise.all(
+                        newGalleryFiles.map((file, i) => uploadOptimizedGalleryFile(file, startIndex + i))
+                    );
+                    finalGalleryUrls = [...finalGalleryUrls, ...urls];
+                } catch (bucketErr: any) {
+                    console.warn("Bucket vehicle-images no disponible, subiendo a inventory:", bucketErr);
+                    const uploadedUrls = await Promise.all(
+                        newGalleryFiles.map(async (file) => {
+                            const compressed = await compressImageForUpload(file);
+                            const path = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.webp`;
+                            const { error } = await supabase.storage.from("inventory").upload(path, compressed);
+                            if (error) throw error;
+                            const { data } = supabase.storage.from("inventory").getPublicUrl(path);
+                            return data.publicUrl;
+                        })
+                    );
+                    finalGalleryUrls = [...finalGalleryUrls, ...uploadedUrls];
+                }
             }
 
             setUploadStatus("Guardando cambios...");
@@ -431,14 +458,19 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     onClick={() => canEdit && mainInputRef.current?.click()}
                                     className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden group ${canEdit ? 'cursor-pointer hover:border-brand-400' : 'cursor-default opacity-90'}`}
                                 >
-                                    {/* Mostramos la preview nueva O la URL existente */}
+                                    {/* Mostramos la preview nueva O la URL existente (optimizada si es formato vehicle-images) */}
                                     {mainImagePreview || formData.img_main_url ? (
                                         <>
-                                            <img 
-                                                src={mainImagePreview || formData.img_main_url} 
-                                                alt="Principal" 
-                                                className="w-full h-full object-cover"
-                                            />
+                                            {mainImagePreview ? (
+                                                <img src={mainImagePreview} alt="Principal" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <OptimizedImage
+                                                    src={formData.img_main_url}
+                                                    alt="Principal"
+                                                    className="w-full h-full object-cover"
+                                                    loading="eager"
+                                                />
+                                            )}
                                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <p className="text-white text-sm font-medium flex items-center gap-2">
                                                     <UploadCloud className="w-5 h-5" /> Cambiar Portada
@@ -490,7 +522,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     {/* 1. Fotos Existentes */}
                                     {existingGallery.map((url, idx) => (
                                         <div key={`exist-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
-                                            <img src={url} alt="Galeria" className="w-full h-full object-cover" />
+                                            <OptimizedImage src={url} alt="Galeria" className="w-full h-full object-cover" />
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                                             {canEdit && (
                                                 <button 

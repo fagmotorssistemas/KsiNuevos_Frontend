@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 interface CarGalleryProps {
   mainImage: string | null;
@@ -6,18 +7,12 @@ interface CarGalleryProps {
 }
 
 export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
-  const [activeImage, setActiveImage] = useState(mainImage || "/placeholder.png");
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeImage, setActiveImage] = useState(mainImage || "");
 
   // Sincronizar props
   useEffect(() => {
     if (mainImage) setActiveImage(mainImage);
   }, [mainImage]);
-
-  // Al cambiar imagen, activamos modo carga
-  useEffect(() => {
-    setIsLoading(true);
-  }, [activeImage]);
 
   const allImages = useMemo(() => {
     const rawList = [mainImage, ...(galleryImages || [])];
@@ -28,31 +23,21 @@ export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
   return (
     <div className="flex flex-col gap-4">
       
-      {/* --- IMAGEN PRINCIPAL --- */}
-      <div className="w-full bg-neutral-100 rounded-3xl overflow-hidden border border-neutral-200 relative shadow-sm group">
-        
-        {/* 1. EL SKELETON (Solo el cuadrito gris) 
-            - Se muestra si isLoading es true.
-            - aspect-video: Le da forma rectangular automáticamente sin necesitar contenido.
-            - bg-gray-200 animate-pulse: El color gris y el efecto de latido.
-        */}
-        {isLoading && (
-          <div className="w-full aspect-video bg-gray-200 animate-pulse rounded-3xl" />
+      {/* --- IMAGEN PRINCIPAL (solo la foto, sin cuadro gris) --- */}
+      <div className="w-full rounded-3xl overflow-hidden border border-neutral-200 relative shadow-sm group bg-neutral-100">
+        {activeImage ? (
+          <OptimizedImage
+            src={activeImage}
+            alt="Vehículo"
+            loading="eager"
+            className="w-full h-auto object-contain transition-transform duration-700 ease-out group-hover:scale-105"
+            containerClassName="block"
+          />
+        ) : (
+          <div className="w-full aspect-video flex items-center justify-center text-neutral-400 text-sm">
+            Sin imagen
+          </div>
         )}
-
-        {/* 2. LA IMAGEN REAL 
-            - hidden: Si está cargando, la ocultamos TOTALMENTE (así no sale el texto "Vista 1").
-            - block: Cuando carga, la mostramos.
-        */}
-        <img 
-          src={activeImage} 
-          alt="Auto" 
-          onLoad={() => setIsLoading(false)}
-          className={`
-            w-full h-auto object-contain transition-transform duration-700 ease-out group-hover:scale-105
-            ${isLoading ? 'hidden' : 'block'} 
-          `}
-        />
       </div>
 
       {/* --- MINIATURAS --- */}
@@ -70,9 +55,10 @@ export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
               }
             `}
           >
-            <img 
-              src={img} 
-              alt="" // Alt vacío para que no salga texto en las miniaturas si fallan
+            <OptimizedImage
+              src={img}
+              alt=""
+              loading="lazy"
               className="w-full h-full object-cover"
             />
           </button>
