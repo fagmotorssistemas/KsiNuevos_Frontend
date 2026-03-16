@@ -46,9 +46,8 @@ export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
           <button
             key={`${img}-${idx}`}
             onClick={() => setActiveImage(img)}
-            // bg-gray-200 aquí asegura que si la miniatura tarda, se vea un cuadrito gris de fondo
             className={`
-              flex-shrink-0 w-24 h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 relative bg-gray-200
+              flex-shrink-0 w-24 h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 relative
               ${activeImage === img 
                 ? "border-red-600 ring-2 ring-red-100 scale-105 opacity-100 z-10 shadow-md" 
                 : "border-transparent opacity-60 hover:opacity-100 hover:border-neutral-300"
@@ -60,6 +59,7 @@ export const CarGallery = ({ mainImage, galleryImages }: CarGalleryProps) => {
               alt=""
               loading="lazy"
               className="w-full h-full object-cover"
+              containerClassName="absolute inset-0 w-full h-full"
             />
           </button>
         ))}
