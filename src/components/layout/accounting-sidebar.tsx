@@ -32,8 +32,6 @@ const menuItems = [
     { name: 'Cobros', href: '/cobros', icon: Wallet },
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
-    // Actualización GIT: Cambiaron '/insurance' por '/seguros'
-    { name: 'Seguros / Rastreador', href: '/seguros', icon: ShieldCheck }, 
     { name: 'Inventario', href: '/inventario', icon: Box },
     // Nuevo item de GIT
     { name: 'Contratos', href: '/contracts', icon: StickyNote }, 
