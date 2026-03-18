@@ -26,6 +26,7 @@ if (profile?.role === "finanzas") {
 } else if (profile?.role === "abogado") {
   navItems = [
     { href: "/wallet", label: "Cartera" },
+    { href: "/legal/cases", label: "Gestión Legal" },
   ];
   
 } else {

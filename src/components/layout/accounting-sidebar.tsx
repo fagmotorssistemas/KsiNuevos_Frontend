@@ -58,9 +58,9 @@ export function AccountingSidebar() {
             ['/inventario', '/contracts'].includes(item.href)
         );
     } else if (profile?.role === 'abogado') {
-        // Abogado solo ve Cartera y módulo de Gestión Legal.
+        // Abogado solo ve Cartera; Gestión Legal se muestra en el navbar superior.
         displayedItems = menuItems.filter(item =>
-            ['/wallet', '/legal/cases'].includes(item.href)
+            ['/wallet'].includes(item.href)
         );
     }
     // Admin y otros roles ven todo (displayedItems = menuItems)
