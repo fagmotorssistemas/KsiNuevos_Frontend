@@ -58,13 +58,16 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
   // Create mode state
   const [isCreating, setIsCreating] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [isAddingObservation, setIsAddingObservation] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [isChangingProcess, setIsChangingProcess] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isCompletingTask, setIsCompletingTask] = useState<string | null>(null);
 
   // Pestañas para la Bitácora de Gestiones
-  const [activeTab, setActiveTab] = useState<"todas" | "comunicaciones" | "tareas" | "sistema">("todas");
+  const [activeTab, setActiveTab] = useState<
+    "todas" | "comunicaciones" | "observaciones" | "tareas" | "sistema"
+  >("todas");
 
   // IDs de etapas del tipo de proceso ACTUAL.
   // Esto permite ocultar eventos heredados del proceso anterior.
@@ -86,9 +89,14 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
     switch (activeTab) {
       case "comunicaciones":
         return eventsByProcess.filter(e => 
-          ["llamada", "mensaje", "notificacion", "nota"].includes(e.tipo?.toLowerCase() || "") ||
+          ["llamada", "mensaje", "notificacion"].includes(e.tipo?.toLowerCase() || "") ||
           ["telefono", "whatsapp", "email", "presencial"].includes(e.canal?.toLowerCase() || "")
         );
+      case "observaciones":
+        return eventsByProcess.filter((e) => {
+          const t = (e.tipo?.toLowerCase() || "").trim();
+          return t === "nota" || t.includes("nota");
+        });
       case "tareas":
         return eventsByProcess.filter(e => 
           e.tipo?.toLowerCase().includes("tarea")
@@ -316,6 +324,13 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
             Añadir Gestión
           </button>
           <button
+            onClick={() => setIsAddingObservation(true)}
+            className="w-full h-11 rounded-xl bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            Añadir Observación
+          </button>
+          <button
             onClick={() => setIsChangingStatus(true)}
             className="w-full h-11 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
           >
@@ -338,6 +353,17 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
           onCancel={() => setIsAddingEvent(false)}
           onSuccess={() => {
             setIsAddingEvent(false);
+            fetchCase();
+          }}
+        />
+      ) : isAddingObservation ? (
+        <AddEventForm
+          caseId={c.id}
+          mode="observacion"
+          onCancel={() => setIsAddingObservation(false)}
+          onSuccess={() => {
+            setIsAddingObservation(false);
+            setActiveTab("observaciones");
             fetchCase();
           }}
         />
@@ -397,6 +423,19 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
               {activeTab === "comunicaciones" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-700"></div>}
             </button>
             <button
+              onClick={() => setActiveTab("observaciones")}
+              className={`flex items-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
+                activeTab === "observaciones"
+                  ? "text-indigo-700"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" /> Observaciones
+              {activeTab === "observaciones" && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-700"></div>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab("tareas")}
               className={`flex items-center gap-2 px-4 py-3 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${activeTab === "tareas" ? "text-amber-700" : "text-slate-500 hover:text-slate-700"}`}
             >
@@ -443,7 +482,10 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
                           e.tipo?.toLowerCase() === "sistema" || e.tipo?.toLowerCase() === "creacion" ? "text-slate-700" :
                           "text-blue-800"
                         }`}>
-                          {e.tipo?.replace('_', ' ') || "evento"}
+                          {activeTab === "observaciones" &&
+                          (e.tipo?.toLowerCase() || "").includes("nota")
+                            ? "Observación"
+                            : e.tipo?.replace('_', ' ') || "evento"}
                         </span>
                         {e.canal && (
                           <span className="text-[10px] font-bold text-slate-500 capitalize bg-white/60 px-2 py-0.5 rounded shadow-sm">

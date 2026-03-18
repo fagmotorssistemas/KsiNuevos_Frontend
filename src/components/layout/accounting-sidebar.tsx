@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -44,6 +44,11 @@ export function AccountingSidebar() {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
+    // Evita errores de hydration cuando `profile.role` llega después en el cliente.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
@@ -145,43 +150,44 @@ export function AccountingSidebar() {
                         </p>
                     )}
 
-                    {displayedItems.map((item) => {
-                        const isActive = pathname.startsWith(item.href);
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                onClick={() => setIsMobileOpen(false)}
-                                className={`
-                                    group flex items-center rounded-xl transition-all duration-200 relative
-                                    ${isCollapsed ? 'justify-center py-3 px-2' : 'justify-between px-4 py-3.5'}
-                                    ${isActive
-                                        ? 'bg-red-50 text-red-700 font-medium'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                    }
-                                `}
-                                title={isCollapsed ? item.name : ''}
-                            >
-                                <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-                                    <item.icon
-                                        size={20}
-                                        className={`transition-colors shrink-0 ${isActive ? 'text-red-600' : 'text-gray-400 group-hover:text-gray-600'}`}
-                                    />
-                                    <span className={`whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>
-                                        {item.name}
-                                    </span>
-                                </div>
+                    {mounted &&
+                        displayedItems.map((item) => {
+                            const isActive = pathname.startsWith(item.href);
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    onClick={() => setIsMobileOpen(false)}
+                                    className={`
+                                        group flex items-center rounded-xl transition-all duration-200 relative
+                                        ${isCollapsed ? 'justify-center py-3 px-2' : 'justify-between px-4 py-3.5'}
+                                        ${isActive
+                                            ? 'bg-red-50 text-red-700 font-medium'
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        }
+                                    `}
+                                    title={isCollapsed ? item.name : ''}
+                                >
+                                    <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+                                        <item.icon
+                                            size={20}
+                                            className={`transition-colors shrink-0 ${isActive ? 'text-red-600' : 'text-gray-400 group-hover:text-gray-600'}`}
+                                        />
+                                        <span className={`whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>
+                                            {item.name}
+                                        </span>
+                                    </div>
 
-                                {isActive && !isCollapsed && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-                                )}
+                                    {isActive && !isCollapsed && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
+                                    )}
 
-                                {isActive && isCollapsed && (
-                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-red-600" />
-                                )}
-                            </Link>
-                        );
-                    })}
+                                    {isActive && isCollapsed && (
+                                        <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-red-600" />
+                                    )}
+                                </Link>
+                            );
+                        })}
                 </nav>
             </aside>
         </>

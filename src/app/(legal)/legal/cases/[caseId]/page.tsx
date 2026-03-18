@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { legalCasesService } from "@/services/legalCases.service";
 import type { CaseFullPayload } from "@/types/legal.types";
+import { AddEventForm } from "@/components/features/accounting/wallet/AddEventForm";
 import {
   ArrowLeft,
   CalendarClock,
@@ -26,7 +27,8 @@ import {
   Activity,
   UserCircle,
   FolderOpen,
-  Folder
+  Folder,
+  Plus
 } from "lucide-react";
 
 const getCanalIcon = (canal: string | null | undefined) => {
@@ -45,9 +47,12 @@ export default function LegalCaseDetailPage() {
   const caseId = params.caseId;
   const [data, setData] = useState<CaseFullPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAddingObservation, setIsAddingObservation] = useState(false);
 
   // Filtros de navegación
-  const [activeTab, setActiveTab] = useState<"todas" | "comunicaciones" | "tareas" | "sistema">("todas");
+  const [activeTab, setActiveTab] = useState<"todas" | "comunicaciones" | "observaciones" | "tareas" | "sistema">(
+    "todas",
+  );
   const [selectedProcess, setSelectedProcess] = useState<string | null>(null);
 
   const load = async () => {
@@ -115,22 +120,33 @@ export default function LegalCaseDetailPage() {
     return new Set(etapasList.map((e) => e.id));
   }, [etapasList]);
 
+  // Determinar si el proceso seleccionado es el actual o uno histórico
+  const isCurrentProcess = selectedProcess === c?.tipo_proceso;
+
   // Filtrar eventos por proceso seleccionado + pestaña
   const filteredEvents = useMemo(() => {
     if (!data?.events || !selectedProcess) return [];
     
     // Primero filtrar eventos del proceso seleccionado (por etapa_id)
-    const eventsForProcess = data.events.filter((e) => 
-      e.etapa_id && currentProcessStageIds.has(e.etapa_id)
-    );
+    // Si el evento viene sin etapa_id, se muestra solo cuando se está viendo
+    // el proceso actual (normalmente son notas/observaciones del momento).
+    const eventsForProcess = data.events.filter((e) => {
+      if (!e.etapa_id) return isCurrentProcess;
+      return currentProcessStageIds.has(e.etapa_id);
+    });
 
     // Luego filtrar por Pestaña
     switch (activeTab) {
       case "comunicaciones":
         return eventsForProcess.filter(e => 
-          ["llamada", "mensaje", "notificacion", "nota"].includes(e.tipo?.toLowerCase() || "") ||
+          ["llamada", "mensaje", "notificacion"].includes(e.tipo?.toLowerCase() || "") ||
           ["telefono", "whatsapp", "email", "presencial"].includes(e.canal?.toLowerCase() || "")
         );
+      case "observaciones":
+        return eventsForProcess.filter(e => {
+          const t = (e.tipo?.toLowerCase() || "").trim();
+          return t === "nota" || t.includes("nota");
+        });
       case "tareas":
         return eventsForProcess.filter(e => e.tipo?.toLowerCase().includes("tarea"));
       case "sistema":
@@ -143,7 +159,7 @@ export default function LegalCaseDetailPage() {
       default:
         return eventsForProcess;
     }
-  }, [data?.events, activeTab, currentProcessStageIds, selectedProcess]);
+  }, [data?.events, activeTab, currentProcessStageIds, selectedProcess, isCurrentProcess]);
 
   const groupedEventsByDate = useMemo(() => {
     const map = new Map<string, typeof filteredEvents>();
@@ -155,9 +171,6 @@ export default function LegalCaseDetailPage() {
     }
     return Array.from(map.entries());
   }, [filteredEvents]);
-
-  // Determinar si el proceso seleccionado es el actual o uno histórico
-  const isCurrentProcess = selectedProcess === c?.tipo_proceso;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto pb-12">
@@ -401,9 +414,27 @@ export default function LegalCaseDetailPage() {
                       <p className="text-xs text-slate-500 mt-0.5">Ordenado por fecha para presentación y auditoría.</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm text-slate-600">
-                    {filteredEvents.length} eventos encontrados
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm text-slate-600">
+                      {filteredEvents.length} eventos encontrados
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isCurrentProcess) {
+                          alert("Solo puedes agregar observaciones en el proceso actual.");
+                          return;
+                        }
+                        setActiveTab("observaciones");
+                        setIsAddingObservation(true);
+                      }}
+                      className="h-9 px-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition text-xs font-bold shadow-sm inline-flex items-center gap-2"
+                      title="Agregar observación"
+                    >
+                      <Plus className="h-4 w-4" />
+                      + Observación
+                    </button>
+                  </div>
                 </div>
 
                 {/* Navegación de Pestañas de la Bitácora */}
@@ -423,6 +454,17 @@ export default function LegalCaseDetailPage() {
                     {activeTab === "comunicaciones" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-700"></div>}
                   </button>
                   <button
+                    onClick={() => setActiveTab("observaciones")}
+                    className={`flex items-center gap-2 px-6 py-4 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
+                      activeTab === "observaciones" ? "text-indigo-700" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <FileText className="h-4 w-4" /> Observaciones
+                    {activeTab === "observaciones" && (
+                      <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-700"></div>
+                    )}
+                  </button>
+                  <button
                     onClick={() => setActiveTab("tareas")}
                     className={`flex items-center gap-2 px-6 py-4 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${activeTab === "tareas" ? "text-amber-700" : "text-slate-500 hover:text-slate-700"}`}
                   >
@@ -439,10 +481,33 @@ export default function LegalCaseDetailPage() {
                 </div>
                 
                 <div className="p-8 space-y-6 bg-slate-50/30">
+                  {isAddingObservation && isCurrentProcess && (
+                    <div className="max-w-4xl mx-auto">
+                      <AddEventForm
+                        caseId={caseId}
+                        mode="observacion"
+                        onCancel={() => setIsAddingObservation(false)}
+                        onSuccess={() => {
+                          setIsAddingObservation(false);
+                          load();
+                        }}
+                      />
+                    </div>
+                  )}
                   {filteredEvents.length === 0 ? (
                     <div className="flex flex-col items-center justify-center text-slate-400 py-16">
                       <FileText className="h-12 w-12 opacity-20 mb-4" />
                       <p className="text-sm font-medium">No hay documentos para este filtro en el proceso {selectedProcess.replace('_', ' ')}.</p>
+                      {activeTab === "observaciones" && isCurrentProcess && !isAddingObservation && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingObservation(true)}
+                          className="mt-4 h-10 px-4 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition text-sm font-bold inline-flex items-center gap-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Agregar primera observación
+                        </button>
+                      )}
                     </div>
                   ) : (
                     groupedEventsByDate.map(([dateLabel, items]) => (
@@ -469,7 +534,10 @@ export default function LegalCaseDetailPage() {
                                     e.tipo?.toLowerCase() === "sistema" || e.tipo?.toLowerCase() === "creacion" ? "text-slate-700" :
                                     "text-blue-800"
                                   }`}>
-                                    {e.tipo?.replace('_', ' ') || "evento"}
+                                    {activeTab === "observaciones" &&
+                                    (e.tipo?.toLowerCase() || "").includes("nota")
+                                      ? "Observación"
+                                      : e.tipo?.replace('_', ' ') || "evento"}
                                   </span>
                                   {e.canal && (
                                     <span className="text-[10px] font-bold text-slate-500 capitalize bg-white/60 px-2 py-0.5 rounded shadow-sm">

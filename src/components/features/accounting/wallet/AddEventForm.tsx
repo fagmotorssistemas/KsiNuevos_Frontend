@@ -9,17 +9,23 @@ export function AddEventForm({
   caseId,
   onCancel,
   onSuccess,
+  mode = "default",
 }: {
   caseId: string;
   onCancel: () => void;
   onSuccess: () => void;
+  mode?: "default" | "observacion";
 }) {
   const [saving, setSaving] = useState(false);
-  const [tipo, setTipo] = useState("llamada");
-  const [canal, setCanal] = useState("telefono");
+  const isObservation = mode === "observacion";
+  const [tipo, setTipo] = useState(isObservation ? "nota" : "llamada");
+  const [canal, setCanal] = useState(isObservation ? "sistema" : "telefono");
   const [descripcion, setDescripcion] = useState("");
   const [detalle, setDetalle] = useState("");
   const [resultado, setResultado] = useState("");
+  const [noteColor, setNoteColor] = useState<
+    "amarillo" | "rosa" | "azul" | "verde" | "lila"
+  >("amarillo");
 
   const [updateAction, setUpdateAction] = useState(false);
   const [proximaAccion, setProximaAccion] = useState("");
@@ -96,20 +102,20 @@ export function AddEventForm({
 
   const onSubmit = async () => {
     if (!descripcion.trim()) {
-      alert("La descripción es obligatoria");
+      alert(isObservation ? "La observación es obligatoria" : "La descripción es obligatoria");
       return;
     }
     setSaving(true);
     try {
       await legalCasesService.registerEvent({
         case_id: caseId,
-        tipo,
-        canal,
+        tipo: isObservation ? "nota" : tipo,
+        canal: isObservation ? "sistema" : canal,
         descripcion,
         detalle: detalle.trim() ? detalle : null,
-        resultado: resultado.trim() ? resultado : null,
-        proxima_accion: updateAction ? proximaAccion : null,
-        fecha_proxima_accion: updateAction
+        resultado: isObservation ? null : (resultado.trim() ? resultado : null),
+        proxima_accion: updateAction && !isObservation ? proximaAccion : null,
+        fecha_proxima_accion: updateAction && !isObservation
           ? new Date(fechaProxima).toISOString()
           : null,
         documento_id: documentoUrl,
@@ -126,77 +132,179 @@ export function AddEventForm({
     }
   };
 
+  const noteThemes = {
+    amarillo: {
+      container: "bg-amber-50 border-amber-200",
+      badge: "bg-amber-200 text-amber-900 border-amber-300",
+      icon: "bg-amber-400 text-amber-950",
+      input: "border-amber-300 focus:border-amber-500 focus:ring-amber-100 bg-white/90",
+    },
+    rosa: {
+      container: "bg-rose-50 border-rose-200",
+      badge: "bg-rose-200 text-rose-900 border-rose-300",
+      icon: "bg-rose-400 text-rose-950",
+      input: "border-rose-300 focus:border-rose-500 focus:ring-rose-100 bg-white/90",
+    },
+    azul: {
+      container: "bg-sky-50 border-sky-200",
+      badge: "bg-sky-200 text-sky-900 border-sky-300",
+      icon: "bg-sky-400 text-sky-950",
+      input: "border-sky-300 focus:border-sky-500 focus:ring-sky-100 bg-white/90",
+    },
+    verde: {
+      container: "bg-emerald-50 border-emerald-200",
+      badge: "bg-emerald-200 text-emerald-900 border-emerald-300",
+      icon: "bg-emerald-400 text-emerald-950",
+      input: "border-emerald-300 focus:border-emerald-500 focus:ring-emerald-100 bg-white/90",
+    },
+    lila: {
+      container: "bg-violet-50 border-violet-200",
+      badge: "bg-violet-200 text-violet-900 border-violet-300",
+      icon: "bg-violet-400 text-violet-950",
+      input: "border-violet-300 focus:border-violet-500 focus:ring-violet-100 bg-white/90",
+    },
+  } as const;
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+    <div
+      className={`rounded-xl border shadow-sm p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-300 ${
+        isObservation
+          ? `${noteThemes[noteColor].container} border-2`
+          : "bg-white border-slate-200"
+      }`}
+    >
+      <div
+        className={`mb-6 flex items-center justify-between pb-4 ${
+          isObservation ? "border-b border-black/10" : "border-b border-slate-100"
+        }`}
+      >
         <div>
-          <h3 className="text-xl font-bold text-slate-900">
-            Registrar nueva gestión
+          <h3 className={`text-xl font-bold ${isObservation ? "text-slate-800" : "text-slate-900"}`}>
+            {isObservation ? "Nueva notita del caso" : "Registrar nueva gestión"}
           </h3>
-          <p className="text-sm text-slate-500 mt-1">
-            Se agregará al historial del caso
+          <p className={`text-sm mt-1 ${isObservation ? "text-slate-600" : "text-slate-500"}`}>
+            {isObservation
+              ? "Nota rápida interna (auditable) con estilo post-it"
+              : "Se agregará al historial del caso"}
           </p>
         </div>
-        <div className="h-12 w-12 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg">
+        <div
+          className={`h-12 w-12 rounded-2xl flex items-center justify-center shadow-lg rotate-3 ${
+            isObservation ? noteThemes[noteColor].icon : "bg-slate-900 text-white"
+          }`}
+        >
           <Plus className="h-6 w-6" />
         </div>
       </div>
 
+      {isObservation && (
+        <div className="mb-5 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Color de nota:
+            </span>
+            {[
+              { id: "amarillo", label: "Amarillo", cls: "bg-amber-300" },
+              { id: "rosa", label: "Rosa", cls: "bg-rose-300" },
+              { id: "azul", label: "Azul", cls: "bg-sky-300" },
+              { id: "verde", label: "Verde", cls: "bg-emerald-300" },
+              { id: "lila", label: "Lila", cls: "bg-violet-300" },
+            ].map((tone) => (
+              <button
+                key={tone.id}
+                type="button"
+                onClick={() => setNoteColor(tone.id as keyof typeof noteThemes)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold transition ${
+                  noteColor === tone.id
+                    ? `${noteThemes[noteColor].badge} ring-2 ring-white/70`
+                    : "bg-white/80 border-slate-200 text-slate-600 hover:bg-white"
+                }`}
+              >
+                <span className={`h-3 w-3 rounded-sm ${tone.cls}`}></span>
+                {tone.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Tipo de gestión
+        {!isObservation && (
+          <>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Tipo de gestión
+              </label>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value)}
+                className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
+              >
+                <option value="llamada">Llamada</option>
+                <option value="mensaje">Mensaje</option>
+                <option value="nota">Nota interna</option>
+                <option value="notificacion">Notificación</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Canal
+              </label>
+              <select
+                value={canal}
+                onChange={(e) => setCanal(e.target.value)}
+                className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
+              >
+                <option value="telefono">Teléfono</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
+                <option value="presencial">Presencial</option>
+                <option value="sistema">Sistema</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        <div className="md:col-span-2">
+          <label className={`text-xs font-bold uppercase tracking-wider ${isObservation ? "text-slate-600" : "text-slate-500"}`}>
+            {isObservation ? "Título de la nota (obligatorio)" : "Descripción (¿Qué se hizo?)"}
           </label>
-          <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="llamada">Llamada</option>
-            <option value="mensaje">Mensaje</option>
-            <option value="nota">Nota interna</option>
-            <option value="notificacion">Notificación</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Canal
-          </label>
-          <select
-            value={canal}
-            onChange={(e) => setCanal(e.target.value)}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="telefono">Teléfono</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="email">Email</option>
-            <option value="presencial">Presencial</option>
-            <option value="sistema">Sistema</option>
-          </select>
+          {isObservation ? (
+            <textarea
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Ej: Pendiente de documentos para continuar el caso."
+              rows={2}
+              className={`mt-1.5 w-full py-3 px-4 rounded-xl border outline-none focus:ring-4 text-sm font-medium transition-all resize-none ${noteThemes[noteColor].input}`}
+            />
+          ) : (
+            <input
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              placeholder="Ej: Llamada de cobro para cuota vencida"
+              className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all"
+            />
+          )}
         </div>
 
         <div className="md:col-span-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Descripción (¿Qué se hizo?)
-          </label>
-          <input
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Ej: Llamada de cobro para cuota vencida"
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Detalle (¿Qué se conversó/dijo?)
+          <label className={`text-xs font-bold uppercase tracking-wider ${isObservation ? "text-slate-600" : "text-slate-500"}`}>
+            {isObservation ? "Contenido de la nota (opcional)" : "Detalle (¿Qué se conversó/dijo?)"}
           </label>
           <textarea
             value={detalle}
             onChange={(e) => setDetalle(e.target.value)}
-            placeholder="Ej: El cliente indica que pagará el próximo viernes a primera hora..."
-            rows={3}
-            className="mt-1.5 w-full py-3 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all resize-none"
+            placeholder={
+              isObservation
+                ? "Escribe aquí la nota libre: ideas, recordatorios o contexto para el caso."
+                : "Ej: El cliente indica que pagará el próximo viernes a primera hora..."
+            }
+            rows={isObservation ? 5 : 3}
+            className={`mt-1.5 w-full py-3 px-4 rounded-xl border outline-none focus:ring-4 text-sm font-medium transition-all resize-none ${
+              isObservation
+                ? noteThemes[noteColor].input
+                : "border-slate-200 focus:border-slate-400 focus:ring-slate-100"
+            }`}
           />
         </div>
 
@@ -386,19 +494,22 @@ export function AddEventForm({
           )}
         </div>
 
-        <div className="md:col-span-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Resultado (opcional)
-          </label>
-          <input
-            value={resultado}
-            onChange={(e) => setResultado(e.target.value)}
-            placeholder="Ej: Promesa de pago"
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all"
-          />
-        </div>
+        {!isObservation && (
+          <div className="md:col-span-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Resultado (opcional)
+            </label>
+            <input
+              value={resultado}
+              onChange={(e) => setResultado(e.target.value)}
+              placeholder="Ej: Promesa de pago"
+              className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all"
+            />
+          </div>
+        )}
 
         {/* PROXIMA ACCION Opcional */}
+        {!isObservation && (
         <div className="md:col-span-2 mt-2 p-4 bg-slate-50 border border-slate-200 rounded-xl">
           <label className="flex items-center gap-2 cursor-pointer w-fit">
             <input
@@ -438,6 +549,7 @@ export function AddEventForm({
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="mt-8 flex justify-end gap-3">
@@ -458,7 +570,7 @@ export function AddEventForm({
           ) : (
             <Plus className="h-4 w-4" />
           )}
-          Registrar
+          {isObservation ? "Guardar observación" : "Registrar"}
         </button>
       </div>
     </div>
