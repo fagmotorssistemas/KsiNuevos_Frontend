@@ -1,3 +1,5 @@
+ "use client";
+
 import { 
     DollarSign, 
     AlertTriangle, 
@@ -7,6 +9,7 @@ import {
     Filter
 } from "lucide-react";
 import { KpiCartera } from "@/types/wallet.types";
+import { useAuth } from "@/hooks/useAuth";
 
 interface KpiDashboardProps {
     data: KpiCartera | null;
@@ -17,6 +20,10 @@ interface KpiDashboardProps {
 }
 
 export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: KpiDashboardProps) {
+    const { profile } = useAuth();
+    const role = (profile?.role || "").toLowerCase().trim();
+    const isAbogadoRole = role === "abogado" || role === "abogada";
+
     // Helper para formatear dinero
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -90,7 +97,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {cards.map((card, idx) => {
+            {(isAbogadoRole ? cards.filter(c => c.id !== 'all' && c.id !== 'aldia') : cards).map((card, idx) => {
                 // Verificamos si esta tarjeta es la que está activa actualmente
                 // Nota: card.id debe coincidir con los valores de filterMode ('all', 'vencidos', 'aldia')
                 const isActive = currentFilter === card.id;

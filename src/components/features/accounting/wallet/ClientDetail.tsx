@@ -21,6 +21,9 @@ import { BadgeWithIcon } from "@/components/ui/badges";
 import { ClientContactInfo } from "./ClientContactInfo";
 // Importamos el nuevo componente
 import { AmortizationTab } from "./AmortizationTab"; 
+import { LegalCasesTab } from "./LegalCasesTab";
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ClientDetailProps {
     clientId: number;
@@ -30,8 +33,11 @@ interface ClientDetailProps {
 export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const [data, setData] = useState<ClienteDetalleResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    // Agregamos 'amortization' a los tipos de tab
-    const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes' | 'amortization'>('docs');
+    // Agregamos 'amortization' y 'legal' a los tipos de tab
+    const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes' | 'amortization' | 'legal'>('docs');
+    const { profile } = useAuth();
+    const role = (profile?.role || "").toLowerCase().trim();
+    const isLegalRole = role === "admin" || role === "abogado" || role === "abogada";
 
     useEffect(() => {
         const loadDetail = async () => {
@@ -234,8 +240,21 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                     }`}
                 >
                     <History className="h-4 w-4" />
-                    Gestión ({data.notas.length})
+                    Gestión Sistema ({data.notas.length})
                 </button>
+                {isLegalRole && (
+                    <button
+                        onClick={() => setActiveTab('legal')}
+                        className={`pb-3 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap relative ${
+                            activeTab === 'legal' 
+                                ? 'text-red-600 border-b-2 border-red-600' 
+                                : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                    >
+                        <History className="h-4 w-4" />
+                        Gestión Legal
+                    </button>
+                )}
             </div>
 
             {/* CONTENIDO DE TABS */}
@@ -490,6 +509,24 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                             No hay gestiones registradas
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* TAB: GESTIÓN LEGAL (MÓDULO NUEVO) */}
+            {activeTab === 'legal' && isLegalRole && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                Gestión Legal de Cartera
+                            </p>
+                            <p className="text-sm text-slate-500 mt-1">
+                                Módulo de abogados y cobranza externa para el cliente actual.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <LegalCasesTab clientId={clientId} />
                 </div>
             )}
         </div>

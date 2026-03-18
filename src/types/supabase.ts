@@ -146,6 +146,243 @@ export type Database = {
         }
         Relationships: []
       }
+      case_events: {
+        Row: {
+          canal: string | null
+          case_id: string
+          descripcion: string | null
+          detalle: string | null
+          documento_id: string | null
+          etapa_id: string | null
+          fecha: string
+          id: string
+          imagenes_ids: string[] | null
+          resultado: string | null
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          canal?: string | null
+          case_id: string
+          descripcion?: string | null
+          detalle?: string | null
+          documento_id?: string | null
+          etapa_id?: string | null
+          fecha?: string
+          id?: string
+          imagenes_ids?: string[] | null
+          resultado?: string | null
+          tipo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          canal?: string | null
+          case_id?: string
+          descripcion?: string | null
+          detalle?: string | null
+          documento_id?: string | null
+          etapa_id?: string | null
+          fecha?: string
+          id?: string
+          imagenes_ids?: string[] | null
+          resultado?: string | null
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_events_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "proceso_etapas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_case_events_case"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_status_history: {
+        Row: {
+          case_id: string
+          estado_anterior: string | null
+          estado_nuevo: string | null
+          fecha: string | null
+          id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          case_id: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
+          fecha?: string | null
+          id?: string
+          usuario_id?: string | null
+        }
+        Update: {
+          case_id?: string
+          estado_anterior?: string | null
+          estado_nuevo?: string | null
+          fecha?: string | null
+          id?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_case_status_case"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_tasks: {
+        Row: {
+          case_id: string
+          completed_at: string | null
+          created_at: string | null
+          descripcion: string | null
+          estado: string | null
+          fecha_limite: string
+          id: string
+          tipo: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          case_id: string
+          completed_at?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          estado?: string | null
+          fecha_limite: string
+          id?: string
+          tipo?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          case_id?: string
+          completed_at?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          estado?: string | null
+          fecha_limite?: string
+          id?: string
+          tipo?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_case_tasks_case"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cases: {
+        Row: {
+          abogado_id: string | null
+          contactabilidad:
+            | Database["public"]["Enums"]["contactabilidad_enum"]
+            | null
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_caso_enum"]
+          estado_vehiculo:
+            | Database["public"]["Enums"]["estado_vehiculo_enum"]
+            | null
+          etapa_actual_id: string | null
+          fecha_inicio: string | null
+          fecha_proxima_accion: string | null
+          fecha_ultima_gestion: string | null
+          id: string
+          id_sistema: number
+          intencion_pago:
+            | Database["public"]["Enums"]["intencion_pago_enum"]
+            | null
+          monto_referencia: number | null
+          objetivo_caso:
+            | Database["public"]["Enums"]["objetivo_caso_enum"]
+            | null
+          prioridad: string | null
+          proxima_accion: string | null
+          riesgo: string | null
+          tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          abogado_id?: string | null
+          contactabilidad?:
+            | Database["public"]["Enums"]["contactabilidad_enum"]
+            | null
+          created_at?: string | null
+          estado: Database["public"]["Enums"]["estado_caso_enum"]
+          estado_vehiculo?:
+            | Database["public"]["Enums"]["estado_vehiculo_enum"]
+            | null
+          etapa_actual_id?: string | null
+          fecha_inicio?: string | null
+          fecha_proxima_accion?: string | null
+          fecha_ultima_gestion?: string | null
+          id?: string
+          id_sistema: number
+          intencion_pago?:
+            | Database["public"]["Enums"]["intencion_pago_enum"]
+            | null
+          monto_referencia?: number | null
+          objetivo_caso?:
+            | Database["public"]["Enums"]["objetivo_caso_enum"]
+            | null
+          prioridad?: string | null
+          proxima_accion?: string | null
+          riesgo?: string | null
+          tipo_proceso?: Database["public"]["Enums"]["tipo_proceso_enum"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          abogado_id?: string | null
+          contactabilidad?:
+            | Database["public"]["Enums"]["contactabilidad_enum"]
+            | null
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_caso_enum"]
+          estado_vehiculo?:
+            | Database["public"]["Enums"]["estado_vehiculo_enum"]
+            | null
+          etapa_actual_id?: string | null
+          fecha_inicio?: string | null
+          fecha_proxima_accion?: string | null
+          fecha_ultima_gestion?: string | null
+          id?: string
+          id_sistema?: number
+          intencion_pago?:
+            | Database["public"]["Enums"]["intencion_pago_enum"]
+            | null
+          monto_referencia?: number | null
+          objetivo_caso?:
+            | Database["public"]["Enums"]["objetivo_caso_enum"]
+            | null
+          prioridad?: string | null
+          proxima_accion?: string | null
+          riesgo?: string | null
+          tipo_proceso?: Database["public"]["Enums"]["tipo_proceso_enum"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cases_etapa_actual_id_fkey"
+            columns: ["etapa_actual_id"]
+            isOneToOne: false
+            referencedRelation: "proceso_etapas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes_externos: {
         Row: {
           created_at: string | null
@@ -1327,6 +1564,30 @@ export type Database = {
           },
         ]
       }
+      proceso_etapas: {
+        Row: {
+          created_at: string | null
+          id: string
+          nombre: string
+          orden: number
+          tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"]
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nombre: string
+          orden: number
+          tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"]
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nombre?: string
+          orden?: number
+          tipo_proceso?: Database["public"]["Enums"]["tipo_proceso_enum"]
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1471,13 +1732,15 @@ export type Database = {
           motor: string | null
           price: number | null
           publication_date: string
+          region: string | null
           seller_id: string
           tags: string[] | null
           title: string | null
           transmission: string | null
+          trim: string | null
           updated_at: string | null
           url: string
-          year: string | null
+          year: number | null
         }
         Insert: {
           brand: string
@@ -1496,13 +1759,15 @@ export type Database = {
           motor?: string | null
           price?: number | null
           publication_date: string
+          region?: string | null
           seller_id: string
           tags?: string[] | null
           title?: string | null
           transmission?: string | null
+          trim?: string | null
           updated_at?: string | null
           url: string
-          year?: string | null
+          year?: number | null
         }
         Update: {
           brand?: string
@@ -1521,13 +1786,15 @@ export type Database = {
           motor?: string | null
           price?: number | null
           publication_date?: string
+          region?: string | null
           seller_id?: string
           tags?: string[] | null
           title?: string | null
           transmission?: string | null
+          trim?: string | null
           updated_at?: string | null
           url?: string
-          year?: string | null
+          year?: number | null
         }
         Relationships: [
           {
@@ -2907,9 +3174,22 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      view_scraper_price_statistics: {
+        Row: {
+          average_price: number | null
+          brand: string | null
+          max_price: number | null
+          min_price: number | null
+          model: string | null
+          region: string | null
+          total_listings: number | null
+          trim: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      current_profile_role: { Args: never; Returns: string }
       get_leads_pager: {
         Args: {
           p_assigned: string
@@ -2954,7 +3234,9 @@ export type Database = {
         }[]
       }
       is_admin_or_marketing: { Args: never; Returns: boolean }
+      is_legal_staff: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
+      mark_overdue_case_tasks: { Args: never; Returns: number }
       match_inventory: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }
         Returns: {
@@ -2974,6 +3256,204 @@ export type Database = {
         }[]
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
+      rpc_cases_without_gestion: {
+        Args: { p_days: number }
+        Returns: {
+          abogado_id: string | null
+          contactabilidad:
+            | Database["public"]["Enums"]["contactabilidad_enum"]
+            | null
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_caso_enum"]
+          estado_vehiculo:
+            | Database["public"]["Enums"]["estado_vehiculo_enum"]
+            | null
+          etapa_actual_id: string | null
+          fecha_inicio: string | null
+          fecha_proxima_accion: string | null
+          fecha_ultima_gestion: string | null
+          id: string
+          id_sistema: number
+          intencion_pago:
+            | Database["public"]["Enums"]["intencion_pago_enum"]
+            | null
+          monto_referencia: number | null
+          objetivo_caso:
+            | Database["public"]["Enums"]["objetivo_caso_enum"]
+            | null
+          prioridad: string | null
+          proxima_accion: string | null
+          riesgo: string | null
+          tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"] | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cases"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      rpc_change_case_process:
+        | {
+            Args: {
+              p_case_id: string
+              p_event_descripcion?: string
+              p_tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"]
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_case_id: string
+              p_contactabilidad?: Database["public"]["Enums"]["contactabilidad_enum"]
+              p_estado_vehiculo: Database["public"]["Enums"]["estado_vehiculo_enum"]
+              p_event_descripcion?: string
+              p_fecha_proxima_accion?: string
+              p_intencion_pago?: Database["public"]["Enums"]["intencion_pago_enum"]
+              p_objetivo_caso: Database["public"]["Enums"]["objetivo_caso_enum"]
+              p_proxima_accion?: string
+              p_tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"]
+            }
+            Returns: undefined
+          }
+      rpc_change_case_status:
+        | {
+            Args: {
+              p_case_id: string
+              p_estado_nuevo: Database["public"]["Enums"]["estado_caso_enum"]
+              p_etapa_nueva_id?: string
+              p_event_descripcion: string
+              p_fecha_proxima_accion: string
+              p_proxima_accion: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_case_id: string
+              p_documento_id?: string
+              p_estado_nuevo: Database["public"]["Enums"]["estado_caso_enum"]
+              p_event_canal?: string
+              p_event_descripcion: string
+              p_event_detalle?: string
+              p_event_resultado?: string
+              p_event_tipo: string
+              p_fecha_proxima_accion: string
+              p_imagenes_ids?: string[]
+              p_proxima_accion: string
+            }
+            Returns: undefined
+          }
+      rpc_complete_case_task: {
+        Args: { p_event_descripcion?: string; p_task_id: string }
+        Returns: undefined
+      }
+      rpc_create_case: {
+        Args: {
+          p_abogado_id: string
+          p_contactabilidad?: Database["public"]["Enums"]["contactabilidad_enum"]
+          p_documento_id?: string
+          p_estado: Database["public"]["Enums"]["estado_caso_enum"]
+          p_estado_vehiculo?: Database["public"]["Enums"]["estado_vehiculo_enum"]
+          p_event_canal?: string
+          p_event_descripcion?: string
+          p_event_detalle?: string
+          p_event_resultado?: string
+          p_event_tipo?: string
+          p_fecha_proxima_accion: string
+          p_id_sistema: number
+          p_imagenes_ids?: string[]
+          p_intencion_pago?: Database["public"]["Enums"]["intencion_pago_enum"]
+          p_monto_referencia: number
+          p_objetivo_caso?: Database["public"]["Enums"]["objetivo_caso_enum"]
+          p_prioridad: string
+          p_proxima_accion: string
+          p_riesgo: string
+          p_tipo_proceso?: Database["public"]["Enums"]["tipo_proceso_enum"]
+        }
+        Returns: string
+      }
+      rpc_create_case_task: {
+        Args: {
+          p_case_id: string
+          p_descripcion: string
+          p_fecha_limite: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      rpc_get_case_full: { Args: { p_case_id: string }; Returns: Json }
+      rpc_get_cases_by_lawyer: { Args: never; Returns: Json }
+      rpc_get_cases_by_process_type: { Args: never; Returns: Json }
+      rpc_get_critical_cases: {
+        Args: never
+        Returns: {
+          abogado_id: string | null
+          contactabilidad:
+            | Database["public"]["Enums"]["contactabilidad_enum"]
+            | null
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_caso_enum"]
+          estado_vehiculo:
+            | Database["public"]["Enums"]["estado_vehiculo_enum"]
+            | null
+          etapa_actual_id: string | null
+          fecha_inicio: string | null
+          fecha_proxima_accion: string | null
+          fecha_ultima_gestion: string | null
+          id: string
+          id_sistema: number
+          intencion_pago:
+            | Database["public"]["Enums"]["intencion_pago_enum"]
+            | null
+          monto_referencia: number | null
+          objetivo_caso:
+            | Database["public"]["Enums"]["objetivo_caso_enum"]
+            | null
+          prioridad: string | null
+          proxima_accion: string | null
+          riesgo: string | null
+          tipo_proceso: Database["public"]["Enums"]["tipo_proceso_enum"] | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cases"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      rpc_register_case_event:
+        | {
+            Args: {
+              p_canal?: string
+              p_case_id: string
+              p_descripcion: string
+              p_detalle?: string
+              p_documento_id?: string
+              p_etapa_id?: string
+              p_imagenes_ids?: string[]
+              p_resultado?: string
+              p_tipo: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_canal?: string
+              p_case_id: string
+              p_descripcion: string
+              p_detalle?: string
+              p_documento_id?: string
+              p_fecha_proxima_accion?: string
+              p_imagenes_ids?: string[]
+              p_proxima_accion?: string
+              p_resultado?: string
+              p_tipo: string
+            }
+            Returns: string
+          }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       update_price_statistics: {
@@ -3000,6 +3480,7 @@ export type Database = {
         | "cancelada"
         | "reprogramada"
         | "no_asistio"
+      canal_enum: "telefono" | "whatsapp" | "email" | "presencial" | "sistema"
       car_location: "patio" | "taller" | "showroom" | "otro" | "conwilsonhernan"
       car_ownership: "propio" | "consignacion" | "intercambio"
       car_status:
@@ -3010,8 +3491,16 @@ export type Database = {
         | "mantenimiento"
         | "conwilsonhernan"
         | "consignacion"
+      contactabilidad_enum: "contactado" | "no_contesta" | "ilocalizable"
       credit_status: "aplica" | "no_aplica" | "pendiente" | "no_interesa"
       entorno_venta_enum: "KSI_NUEVOS" | "EXTERNO"
+      estado_caso_enum:
+        | "nuevo"
+        | "gestionando"
+        | "pre_judicial"
+        | "judicial"
+        | "cerrado"
+        | "castigado"
       estado_cuota_enum: "PENDIENTE" | "PAGADA"
       estado_dispositivo_enum:
         | "PENDIENTE_INSTALACION"
@@ -3019,6 +3508,13 @@ export type Database = {
         | "ACTIVO"
         | "SUSPENDIDO"
         | "RETIRADO"
+      estado_vehiculo_enum:
+        | "poder_cliente"
+        | "retenido"
+        | "abandonado"
+        | "taller"
+        | "recuperado"
+      intencion_pago_enum: "alta" | "media" | "baja" | "nula"
       interaction_type:
         | "llamada"
         | "whatsapp"
@@ -3048,6 +3544,11 @@ export type Database = {
         | "TRANSFERENCIA"
         | "DEPOSITO"
         | "CHEQUE"
+      objetivo_caso_enum:
+        | "recuperar_cartera"
+        | "retener_vehiculo"
+        | "renegociar"
+        | "recuperacion"
       request_priority: "baja" | "media" | "alta"
       request_status: "pendiente" | "aprobado" | "comprado" | "rechazado"
       scraper_car_location: "patio" | "taller" | "cliente"
@@ -3074,7 +3575,18 @@ export type Database = {
         | "nomina"
         | "obligaciones"
         | "otros"
+      tipo_evento_enum:
+        | "llamada"
+        | "mensaje"
+        | "nota"
+        | "notificacion"
+        | "sistema"
       tipo_pago_enum: "CONTADO" | "CREDITO"
+      tipo_proceso_enum:
+        | "extrajudicial"
+        | "demanda_ejecutiva"
+        | "mediacion"
+        | "judicial"
       user_role_enum:
         | "admin"
         | "vendedor"
@@ -3245,6 +3757,7 @@ export const Constants = {
         "reprogramada",
         "no_asistio",
       ],
+      canal_enum: ["telefono", "whatsapp", "email", "presencial", "sistema"],
       car_location: ["patio", "taller", "showroom", "otro", "conwilsonhernan"],
       car_ownership: ["propio", "consignacion", "intercambio"],
       car_status: [
@@ -3256,8 +3769,17 @@ export const Constants = {
         "conwilsonhernan",
         "consignacion",
       ],
+      contactabilidad_enum: ["contactado", "no_contesta", "ilocalizable"],
       credit_status: ["aplica", "no_aplica", "pendiente", "no_interesa"],
       entorno_venta_enum: ["KSI_NUEVOS", "EXTERNO"],
+      estado_caso_enum: [
+        "nuevo",
+        "gestionando",
+        "pre_judicial",
+        "judicial",
+        "cerrado",
+        "castigado",
+      ],
       estado_cuota_enum: ["PENDIENTE", "PAGADA"],
       estado_dispositivo_enum: [
         "PENDIENTE_INSTALACION",
@@ -3266,6 +3788,14 @@ export const Constants = {
         "SUSPENDIDO",
         "RETIRADO",
       ],
+      estado_vehiculo_enum: [
+        "poder_cliente",
+        "retenido",
+        "abandonado",
+        "taller",
+        "recuperado",
+      ],
+      intencion_pago_enum: ["alta", "media", "baja", "nula"],
       interaction_type: [
         "llamada",
         "whatsapp",
@@ -3299,6 +3829,12 @@ export const Constants = {
         "DEPOSITO",
         "CHEQUE",
       ],
+      objetivo_caso_enum: [
+        "recuperar_cartera",
+        "retener_vehiculo",
+        "renegociar",
+        "recuperacion",
+      ],
       request_priority: ["baja", "media", "alta"],
       request_status: ["pendiente", "aprobado", "comprado", "rechazado"],
       scraper_car_location: ["patio", "taller", "cliente"],
@@ -3328,7 +3864,20 @@ export const Constants = {
         "obligaciones",
         "otros",
       ],
+      tipo_evento_enum: [
+        "llamada",
+        "mensaje",
+        "nota",
+        "notificacion",
+        "sistema",
+      ],
       tipo_pago_enum: ["CONTADO", "CREDITO"],
+      tipo_proceso_enum: [
+        "extrajudicial",
+        "demanda_ejecutiva",
+        "mediacion",
+        "judicial",
+      ],
       user_role_enum: [
         "admin",
         "vendedor",

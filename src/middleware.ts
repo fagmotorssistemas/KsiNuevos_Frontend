@@ -34,6 +34,7 @@ const RUTAS_PROTEGIDAS_PREFIX = [
   '/scraper',
   '/rastreadores',
   '/report',
+  '/legal',
 ]
 
 function esRutaProtegida(pathname: string): boolean {
@@ -87,6 +88,15 @@ export async function middleware(request: NextRequest) {
 
   if (profile?.role === 'cliente') {
     return NextResponse.redirect(new URL('/home', request.url))
+  }
+
+  // Módulo legal: solo admin y abogado/abogada
+  if (pathname === '/legal' || pathname.startsWith('/legal/')) {
+    const role = (profile?.role || '').toLowerCase().trim()
+    const allowed = role === 'admin' || role === 'abogado' || role === 'abogada'
+    if (!allowed) {
+      return NextResponse.redirect(new URL('/home', request.url))
+    }
   }
 
   return response

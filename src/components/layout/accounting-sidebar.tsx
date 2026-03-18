@@ -34,7 +34,9 @@ const menuItems = [
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
     { name: 'Inventario', href: '/inventario', icon: Box },
     // Nuevo item de GIT
-    { name: 'Contratos', href: '/contracts', icon: StickyNote }, 
+    { name: 'Contratos', href: '/contracts', icon: StickyNote },
+    // Gestión legal de cartera (módulo legal)
+    { name: 'Gestión Legal', href: '/legal/cases', icon: ShieldCheck },
 ];
 
 export function AccountingSidebar() {
@@ -55,9 +57,11 @@ export function AccountingSidebar() {
         displayedItems = menuItems.filter(item => 
             ['/inventario', '/contracts'].includes(item.href)
         );
-    } else if (profile?.role === 'abogado') {
-        // Abogado solo ve y accede a Cartera (/wallet).
-        displayedItems = menuItems.filter(item => item.href === '/wallet');
+    } else if (profile?.role === 'abogado' || profile?.role === 'abogada') {
+        // Abogado solo ve Cartera y módulo de Gestión Legal.
+        displayedItems = menuItems.filter(item =>
+            ['/wallet', '/legal/cases'].includes(item.href)
+        );
     }
     // Admin y otros roles ven todo (displayedItems = menuItems)
 

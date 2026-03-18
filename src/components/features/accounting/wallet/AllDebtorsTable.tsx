@@ -1,3 +1,5 @@
+ "use client";
+
 import { 
     Users, 
     ArrowRight,
@@ -14,6 +16,7 @@ import {
 import { Table, TableCard } from "@/components/ui/table"; 
 import { ClienteDeudaSummary } from "@/types/wallet.types";
 import { ClientContactInfo } from "./ClientContactInfo";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AllDebtorsTableProps {
     debtors: ClienteDeudaSummary[];
@@ -25,6 +28,9 @@ interface AllDebtorsTableProps {
 }
 
 export function AllDebtorsTable({ debtors, onViewDetail, loading, filterMode, onFilterChange }: AllDebtorsTableProps) {
+    const { profile } = useAuth();
+    const role = (profile?.role || "").toLowerCase().trim();
+    const isAbogadoRole = role === "abogado" || role === "abogada";
 
     const formatMoney = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -49,6 +55,8 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading, filterMode, on
 
     // Lógica de filtrado
     const filteredDebtors = debtors.filter(d => {
+        // Para rol abogado/abogada, ocultamos completamente clientes "al día"
+        if (isAbogadoRole) return d.documentosVencidos > 0;
         if (filterMode === 'vencidos') return d.documentosVencidos > 0;
         if (filterMode === 'aldia') return d.documentosVencidos === 0;
         return true; // 'all'
@@ -99,17 +107,19 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading, filterMode, on
                         Vencidos
                     </button>
 
-                    <button
-                        onClick={() => onFilterChange('aldia')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                            filterMode === 'aldia'
-                                ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
-                                : "text-slate-500 hover:text-emerald-600 hover:bg-emerald-50/50"
-                        }`}
-                    >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Al día
-                    </button>
+                    {!isAbogadoRole && (
+                        <button
+                            onClick={() => onFilterChange('aldia')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                filterMode === 'aldia'
+                                    ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-200"
+                                    : "text-slate-500 hover:text-emerald-600 hover:bg-emerald-50/50"
+                            }`}
+                        >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Al día
+                        </button>
+                    )}
 
                     <div className="w-px h-4 bg-slate-300 mx-1 hidden sm:block"></div>
                     <span className="text-[10px] text-slate-400 font-mono px-2">
@@ -176,10 +186,14 @@ export function AllDebtorsTable({ debtors, onViewDetail, loading, filterMode, on
                                             Vencido ({debtor.documentosVencidos})
                                         </span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                            <CheckCircle2 className="h-3 w-3" />
-                                            Al día
-                                        </span>
+                                        isAbogadoRole ? (
+                                            <span className="text-xs text-slate-300 font-medium">—</span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                <CheckCircle2 className="h-3 w-3" />
+                                                Al día
+                                            </span>
+                                        )
                                     )}
                                 </Table.Cell>
 
