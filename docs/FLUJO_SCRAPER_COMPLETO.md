@@ -44,6 +44,7 @@ Todo lo que se describe abajo está alineado con eso.
 
 ### 2.5 “Map & tag listings” (nodo Code) — Corazón del enriquecimiento
 
+- **Filtro de URL:** Se descartan ítems sin `car.listingUrl` para no enviar nunca un listing con `url` null a la base de datos (evita el error de constraint en `scraper_vehicles`).
 - **Kilometraje:**  
   - Se usa primero el de la IA; si no hay, el del odómetro de Facebook.  
   - `parseMileage()` acepta número o texto con puntos/espacios y extrae el número (ej. “120.000 km” → 120000). Así se toleran formatos raros.
@@ -64,6 +65,7 @@ Todo lo que se describe abajo está alineado con eso.
 ### 2.6 “Vehicles Listings Data (Set)” — Payload hacia Supabase
 
 - Se arma el objeto que después se inserta/actualiza en `scraper_vehicles`.
+- **seller_id:** Se envía `null` (ya no se usa la tabla `scraper_sellers`).
 - **location (ciudad):**  
   `$json.mapped_data?.seller_location ?? $json.location_text?.text ?? ''`  
   Así no falla si falta `location_text`.
@@ -71,9 +73,28 @@ Todo lo que se describe abajo está alineado con eso.
 
 ### 2.7 Supabase
 
-- **scraper_vehicles:** Incluye columnas `trim` (text) y `region` (text), con índices para filtrar por región/trim.
-- **scraper_sellers:** Se guardan vendedores (patio/taller/cliente en `location` del seller).
+- **scraper_vehicles:** Incluye columnas `trim` (text) y `region` (text), con índices para filtrar por región/trim. La columna `seller_id` se envía en `null` (ya no se usa la tabla de vendedores).
 - **scraper_vehicle_price_statistics:** Medianas/precios por marca, modelo, año (por ahora sin trim ni región; es mejora futura).
+
+### 2.8 Nodos de vendedores (obsoletos — deshabilitados)
+
+La tabla **scraper_sellers** se eliminó; el scraper ya no guarda ni consulta vendedores. En el workflow siguen existiendo nodos que antes servían para eso; están **deshabilitados** para que no se ejecuten ni fallen. Si los ves en n8n, puedes dejarlos deshabilitados o borrarlos.
+
+| Nodo | Función que tenía | Por qué ya no sirve |
+|------|-------------------|----------------------|
+| **Sellers Data** | Armaba una fila por vendedor (fb_seller_id, nombre, location patio/taller/cliente, is_dealer, badges, foto, rating, etc.) a partir de Map & tag listings. | Esos datos iban a `scraper_sellers`, tabla eliminada. Además sin cookies ya no llegan bien nombre/foto/rating del vendedor. |
+| **Get sellers already con db** | Consultaba `scraper_sellers` por `fb_seller_id` para saber qué vendedores ya estaban en la DB. | La tabla no existe; la consulta fallaría. |
+| **Filter mapped data by existing sellers1** | Filtraba los ítems de Map & tag listings para quedarse solo con los cuyo vendedor ya estaba en DB; además normalizaba marca/modelo con el catálogo Ecuador. Su salida antes iba a Vehicles Listings Data. | Depende de Get sellers ya con db y de `mapped_data.seller_id` (quitado). La conexión a Vehicles Listings Data se eliminó; solo Map & tag alimenta ahora. |
+| **Get many rows** | Traía todos los registros de `scraper_sellers` para comparar con Sellers Data. | Tabla eliminada. |
+| **Code in JavaScript** | Filtraba Sellers Data para dejar solo vendedores nuevos (no presentes en Get many rows) y preparar los ítems para Create a row. | Depende de Get many rows y Sellers Data; todo el flujo de sellers está obsoleto. |
+| **HTTP Request** (junto a Create a row) | Descargaba la foto del vendedor (seller_pic) para guardarla. | Formaba parte del flujo de crear filas en scraper_sellers. |
+| **Create a row** | Insertaba un nuevo vendedor en `scraper_sellers`. | La tabla no existe. |
+| **All sellers** | Consultaba `scraper_sellers` (por listing_id / fb_seller_id). | Tabla eliminada. |
+| **All true sellers** | Consultaba `scraper_sellers` por `mapped_data.seller_id`. | Tabla eliminada. |
+| **Merge with seller pic** | Cruzaba listados con vendedores ya en DB y añadía seller_db_id y seller_pic al ítem. | Depende de All sellers / All true sellers. |
+| **Update a row** | Actualizaba rating y rating_count del vendedor en `scraper_sellers`. | Tabla eliminada. |
+
+Resumen: todo ese flujo servía para **mantener una tabla de vendedores** (patio/taller/cliente, foto, rating) y **filtrar o enriquecer listados** según si el vendedor ya existía. Al quitar la tabla y dejar de usar cookies, esos nodos ya no aportan; el flujo útil es **Map & tag listings → Vehicles Listings Data → Save Listings to DB** (y las ramas de imágenes).
 
 ---
 

@@ -17,11 +17,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Timeout 5 min: el scrape (Apify + OpenAI + DB) puede tardar mucho; 524 = timeout del proxy/origen
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
         const response = await fetch(N8N_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ searchValue }),
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const rawText = await response.text();
         if (!response.ok) {
@@ -46,9 +51,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(data);
     } catch (err) {
         console.error('[API Scraper] Error al llamar n8n:', err);
+        const isTimeout = err instanceof Error && err.name === 'AbortError';
         return NextResponse.json(
-            { status: 'error', message: err instanceof Error ? err.message : 'Error interno del proxy' },
-            { status: 500 }
+            {
+                status: 'error',
+                message: isTimeout
+                    ? 'El scrape tardó demasiado (timeout 5 min). n8n puede haber terminado bien; revisa el workflow en n8n.'
+                    : err instanceof Error ? err.message : 'Error interno del proxy',
+            },
+            { status: isTimeout ? 504 : 500 }
         );
     }
 }
