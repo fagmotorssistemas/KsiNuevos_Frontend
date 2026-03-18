@@ -28,6 +28,7 @@ export function OpportunitiesView({
         vehicleFilters.brand !== 'all' ||
         vehicleFilters.model !== 'all' ||
         vehicleFilters.motor !== 'all' ||
+        (vehicleFilters.trim && vehicleFilters.trim !== 'all') ||
         vehicleFilters.year !== 'all' ||
         vehicleFilters.city !== 'all' ||
         vehicleFilters.dateRange !== 'all' ||
@@ -64,6 +65,7 @@ export function OpportunitiesView({
                     selectedModel={vehicleFilters.model || 'all'}
                     selectedYear={vehicleFilters.year || 'all'}
                     selectedCity={vehicleFilters.city || 'all'}
+                    selectedTrim={vehicleFilters.trim || 'all'}
                     selectedDateRange={vehicleFilters.dateRange || 'all'}
                     regionFilter={vehicleFilters.regionFilter || 'all'}
                     searchTerm={vehicleFilters.searchTerm || ''}
@@ -76,6 +78,7 @@ export function OpportunitiesView({
                     availableModels={filterOptions.models}
                     availableYears={filterOptions.years}
                     availableCities={filterOptions.cities}
+                    availableTrims={filterOptions.trims ?? []}
 
                     // Callbacks
                     onBrandChange={updateBrand}
@@ -83,6 +86,7 @@ export function OpportunitiesView({
                     onMotorChange={(value) => updateFilter('motor', value)}
                     onYearChange={(value) => updateFilter('year', value)}
                     onCityChange={(value) => updateFilter('city', value)}
+                    onTrimChange={(value) => updateFilter('trim', value)}
                     onDateRangeChange={(value) => updateFilter('dateRange', value)}
                     onRegionFilterChange={(value) => updateFilter('regionFilter', value)}
                     onSearchTermChange={(value) => updateFilter('searchTerm', value)}
@@ -92,8 +96,8 @@ export function OpportunitiesView({
 
                     // Stats
                     totalCount={pagination.totalItems}
-                    enPatio={vehicles.filter(v => v.seller?.location === 'patio').length}
-                    enTaller={vehicles.filter(v => v.seller?.location === 'taller').length}
+                    enPatio={vehicles.filter(v => v.location === 'patio').length}
+                    enTaller={vehicles.filter(v => v.location === 'taller').length}
                 />
 
                 <Pagination

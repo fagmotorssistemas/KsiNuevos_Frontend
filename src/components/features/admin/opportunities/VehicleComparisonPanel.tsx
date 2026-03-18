@@ -91,8 +91,9 @@ function extractBodyType(v: VehicleWithSeller): string {
     return "";
 }
 
-function extractTrim(v: VehicleWithSeller): string {
-    const text = v.title?.toLowerCase() ?? "";
+function getTrimDisplay(v: VehicleWithSeller): string {
+    if (v.trim) return v.trim;
+    const text = [v.title, v.description, ...(v.characteristics ?? [])].filter(Boolean).join(" ").toLowerCase();
     const TRIM_PATTERNS = [
         /\b(full\s*equipo|full)\b/, /\b(touring|tourer)\b/, /\b(limited|ltz|ltz\+)\b/,
         /\b(platinum|premium|prestige|exclusive)\b/, /\b(sport|sport\+|s-line|m-sport|m sport)\b/,
@@ -103,7 +104,7 @@ function extractTrim(v: VehicleWithSeller): string {
     ];
     for (const pattern of TRIM_PATTERNS) {
         const match = text.match(pattern);
-        if (match) return match[1].trim().replace(/\s+/g, "-");
+        if (match) return (match[1] ?? match[0]).trim().replace(/\s+/g, "-");
     }
     return "";
 }
@@ -129,7 +130,7 @@ function getBaseKey(v: VehicleWithSeller): string {
 function getDetailedKey(v: VehicleWithSeller): string {
     return [
         getBaseKey(v),
-        extractTrim(v),
+        getTrimDisplay(v),
         extractFuelType(v),
         extractTraction(v),
         extractBodyType(v),

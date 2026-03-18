@@ -44,6 +44,7 @@ export default function ScraperTodoPage() {
             vehicleFilters.brand !== "all" ||
             vehicleFilters.model !== "all" ||
             vehicleFilters.motor !== "all" ||
+            (vehicleFilters as { trim?: string }).trim !== "all" ||
             vehicleFilters.year !== "all" ||
             vehicleFilters.city !== "all" ||
             vehicleFilters.dateRange !== "all" ||
@@ -71,6 +72,9 @@ export default function ScraperTodoPage() {
                 <p className="text-sm md:text-base text-slate-500 mt-1">
                     Todo lo scrapeado. Usa los filtros de arriba para marca, modelo, año, ciudad, fecha y orden.
                 </p>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 inline-block">
+                    Los datos actuales provienen de búsquedas en Cuenca. El filtro por región (costa/sierra) se enriquecerá cuando se agreguen más ciudades al scraping.
+                </p>
             </div>
 
             <OpportunitiesCenterView
@@ -83,6 +87,7 @@ export default function ScraperTodoPage() {
                 selectedModel={vehicleFilters.model || "all"}
                 selectedYear={vehicleFilters.year || "all"}
                 selectedCity={vehicleFilters.city || "all"}
+                selectedTrim={(vehicleFilters as { trim?: string }).trim || "all"}
                 selectedDateRange={vehicleFilters.dateRange || "all"}
                 regionFilter={vehicleFilters.regionFilter || "all"}
                 searchTerm={vehicleFilters.searchTerm || ""}
@@ -93,14 +98,16 @@ export default function ScraperTodoPage() {
                 availableModels={filterOptions.models}
                 availableYears={filterOptions.years}
                 availableCities={filterOptions.cities}
+                availableTrims={filterOptions.trims ?? []}
                 totalCount={pagination.totalItems}
-                enPatio={vehicles.filter((v) => v.seller?.location === "patio").length}
-                enTaller={vehicles.filter((v) => v.seller?.location === "taller").length}
+                enPatio={vehicles.filter((v) => v.location === "patio").length}
+                enTaller={vehicles.filter((v) => v.location === "taller").length}
                 onBrandChange={updateBrand}
                 onModelChange={(v) => updateFilter("model", v)}
                 onMotorChange={(v) => updateFilter("motor", v)}
                 onYearChange={(v) => updateFilter("year", v)}
                 onCityChange={(v) => updateFilter("city", v)}
+                onTrimChange={(v) => updateFilter("trim", v)}
                 onDateRangeChange={(v) => updateFilter("dateRange", v)}
                 onRegionFilterChange={(v) => updateFilter("regionFilter", v)}
                 onSearchTermChange={(v) => updateFilter("searchTerm", v)}

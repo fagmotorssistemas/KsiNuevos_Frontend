@@ -4,9 +4,8 @@ import type { VehicleImageAnalysis } from '@/types/vehicleImageAnalysis';
 
 const supabase = createClient();
 
-export type VehicleWithSeller = Database['public']['Tables']['scraper_vehicles']['Row'] & {
-    seller: Database['public']['Tables']['scraper_sellers']['Row'] | null;
-};
+// Alias conservado para compatibilidad; ya no incluye datos del vendedor ni relación con scraper_sellers.
+export type VehicleWithSeller = Database['public']['Tables']['scraper_vehicles']['Row'];
 
 /** Tracción extraída del texto del vehículo (title, description, characteristics). */
 export type VehicleTraction = '4x4' | 'AWD' | '4WD' | 'FWD' | 'RWD' | null;
@@ -15,6 +14,7 @@ export interface VehicleFilters {
     brand?: string;
     model?: string;
     motor?: string;
+    trim?: string;
     year?: string;
     location?: string;
     dateRange?: 'today' | 'yesterday' | 'week' | 'month' | 'all';
@@ -54,6 +54,33 @@ const COAST_CITIES = [
     "samborondón", "durán", "manabí", "santa elena", "salinas"
 ];
 
+/** Deriva región costa/sierra a partir del texto de ubicación del anuncio (ej. "Cuenca, Ecuador"). */
+export function getDerivedRegion(location: string | null | undefined): 'costa' | 'sierra' | null {
+    if (!location || typeof location !== 'string') return null;
+    const lower = location.toLowerCase().trim();
+    if (COAST_CITIES.some(c => lower.includes(c))) return 'costa';
+    if (SIERRA_CITIES.some(c => lower.includes(c))) return 'sierra';
+    return null;
+}
+
+/** Indicador de calidad del dato del listado: completo, falta motor, falta km, incompleto. */
+export function getDataQualityLabel(vehicle: {
+    motor?: string | null;
+    mileage?: number | null;
+    description?: string | null;
+    image_url?: string | null;
+    listing_image_urls?: string[] | null;
+}): 'completo' | 'falta_motor' | 'falta_km' | 'incompleto' {
+    const hasMotor = !!vehicle.motor?.trim();
+    const hasMileage = vehicle.mileage != null && vehicle.mileage > 0;
+    const hasDesc = !!vehicle.description?.trim();
+    const hasImages = !!vehicle.image_url || (vehicle.listing_image_urls?.length ?? 0) > 0;
+    if (hasMotor && hasMileage && (hasDesc || hasImages)) return 'completo';
+    if (!hasMotor) return 'falta_motor';
+    if (!hasMileage) return 'falta_km';
+    return 'incompleto';
+}
+
 export const scraperService = {
     async getVehiclesWithFilters(filters: VehicleFilters = {}): Promise<{
         data: VehicleWithSeller[];
@@ -63,6 +90,7 @@ export const scraperService = {
             brand,
             model,
             motor,
+            trim,
             year,
             location,
             dateRange = 'all',
@@ -80,10 +108,7 @@ export const scraperService = {
         // Construir query base
         let query = supabase
             .from('scraper_vehicles')
-            .select(`
-                *,
-                seller:scraper_sellers(*)
-            `, { count: 'exact' });
+            .select(`*`, { count: 'exact' });
 
         // FILTRO: Marca
         if (brand && brand !== 'all') {
@@ -100,6 +125,11 @@ export const scraperService = {
             query = query.eq('motor', motor);
         }
 
+        // FILTRO: Trim (variante desde BD)
+        if (trim && trim !== 'all') {
+            query = query.eq('trim', trim);
+        }
+
         // FILTRO: Año
         if (year && year !== 'all') {
             query = query.eq('year', year);
@@ -110,9 +140,11 @@ export const scraperService = {
             query = query.eq('location', location);
         }
 
-        if (regionFilter === 'sierra') {
-            const sierraConditions = SIERRA_CITIES.map(city => `location.ilike.%${city}%`).join(',');
-            query = query.or(sierraConditions);
+        // FILTRO: Región (columna region guarda 'costa'|'sierra'; UI usa 'coast'|'sierra')
+        if (regionFilter === 'coast') {
+            query = query.eq('region', 'costa');
+        } else if (regionFilter === 'sierra') {
+            query = query.eq('region', 'sierra');
         }
 
         // FILTRO: Rango de fechas
@@ -192,20 +224,17 @@ export const scraperService = {
             });
         }
 
-        // FILTRO: Búsqueda por texto (en cliente)
+        // FILTRO: Búsqueda por texto (en cliente). Normaliza acentos para que "Raptor" encuentre "Ráptor"
         if (hasSearchTerm) {
-            const searchLower = searchTerm!.toLowerCase();
+            const normalizeForSearch = (s: string) =>
+                s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+            const searchNorm = normalizeForSearch(searchTerm!);
             filteredData = filteredData.filter(v => {
-                const searchableText = `
-                    ${v.title || ''} 
-                    ${v.description || ''} 
-                    ${v.brand || ''} 
-                    ${v.model || ''} 
-                    ${v.characteristics?.join(' ') || ''}
-                    ${v.extras?.join(' ') || ''}
-                `.toLowerCase();
-
-                return searchableText.includes(searchLower);
+                const searchableText = normalizeForSearch(`
+                    ${v.title || ''} ${v.description || ''} ${v.brand || ''} ${v.model || ''} ${v.trim || ''}
+                    ${v.characteristics?.join(' ') || ''} ${v.extras?.join(' ') || ''}
+                `);
+                return searchableText.includes(searchNorm);
             });
         }
 
@@ -229,7 +258,7 @@ export const scraperService = {
     async getVehiclesForOpportunities(): Promise<VehicleWithSeller[]> {
         let query = supabase
             .from('scraper_vehicles')
-            .select(`*, seller:scraper_sellers(*)`)
+            .select(`*`)
             .not('year', 'is', null);
         for (const city of COAST_CITIES) {
             query = query.not('location', 'ilike', `%${city}%`);
@@ -247,10 +276,7 @@ export const scraperService = {
     async getVehicles(): Promise<VehicleWithSeller[]> {
         const { data, error } = await supabase
             .from('scraper_vehicles')
-            .select(`
-                *,
-                seller:scraper_sellers(*)
-            `)
+            .select(`*`)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -264,10 +290,7 @@ export const scraperService = {
     async getVehiclesByStatus(status: 'NUEVO' | 'DESCARTADO' | 'VENDIDO' | 'MANTENIMIENTO'): Promise<VehicleWithSeller[]> {
         const { data, error } = await supabase
             .from('scraper_vehicles')
-            .select(`
-                *,
-                seller:scraper_sellers(*)
-            `)
+            .select(`*`)
             .eq('status', status)
             .order('created_at', { ascending: false });
 
@@ -279,23 +302,7 @@ export const scraperService = {
         return data as VehicleWithSeller[];
     },
 
-    async getVehiclesByLocation(location: 'patio' | 'taller' | 'cliente'): Promise<VehicleWithSeller[]> {
-        const { data, error } = await supabase
-            .from('scraper_vehicles')
-            .select(`
-                *,
-                seller:scraper_sellers(*)
-            `)
-            .eq('location', location)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error al obtener vehículos por ubicación:', error);
-            return [];
-        }
-
-        return data as VehicleWithSeller[];
-    },
+    // Nota: ya no se filtra por datos del vendedor (scraper_sellers); solo por campos propios del vehículo.
 
     async updateVehicleStatus(id: string, status: 'NUEVO' | 'DESCARTADO' | 'VENDIDO' | 'MANTENIMIENTO') {
         const { error } = await supabase
@@ -417,6 +424,7 @@ export const scraperService = {
         motor?: string;
         year?: string;
         city?: string;
+        trim?: string;
         regionFilter?: 'all' | 'coast' | 'sierra';
     } = {}): Promise<{
         brands: string[];
@@ -424,19 +432,19 @@ export const scraperService = {
         motors: string[];
         years: string[];
         cities: string[];
+        trims: string[];
     }> {
-        const { brand, model, motor, year, city, regionFilter = 'all' } = filters;
-        const empty = { brands: [], models: [], motors: [], years: [], cities: [] };
+        const { brand, model, motor, year, city, trim, regionFilter = 'all' } = filters;
+        const empty = { brands: [], models: [], motors: [], years: [], cities: [], trims: [] };
 
-        // 1. Traer todos los vehículos con solo los campos necesarios
-        //    Aplicar región igual que getVehiclesWithFilters (ilike OR)
         let query = supabase
             .from('scraper_vehicles')
-            .select('brand, model, motor, year, location');
+            .select('brand, model, motor, year, location, trim');
 
-        if (regionFilter === 'sierra') {
-            const conditions = SIERRA_CITIES.map(c => `location.ilike.%${c}%`).join(',');
-            query = query.or(conditions);
+        if (regionFilter === 'coast') {
+            query = query.eq('region', 'costa');
+        } else if (regionFilter === 'sierra') {
+            query = query.eq('region', 'sierra');
         }
 
         const { data, error } = await query;
@@ -455,22 +463,19 @@ export const scraperService = {
         const motorsSet = new Set<string>();
         const yearsSet = new Set<string>();
         const citiesSet = new Set<string>();
+        const trimsSet = new Set<string>();
 
         data.forEach(v => {
-            // Marcas: sin restricción adicional (ya filtrado por región arriba)
             if (v.brand) brandsSet.add(v.brand);
 
-            // Modelos: solo de la marca seleccionada
             if (!brand || v.brand === brand) {
                 if (v.model) modelsSet.add(v.model);
             }
 
-            // Motores: solo de marca + modelo seleccionados
             if ((!brand || v.brand === brand) && (!model || v.model === model)) {
                 if (v.motor) motorsSet.add(v.motor);
             }
 
-            // Años: solo de marca + modelo + motor seleccionados
             if (
                 (!brand || v.brand === brand) &&
                 (!model || v.model === model) &&
@@ -479,7 +484,6 @@ export const scraperService = {
                 if (v.year) yearsSet.add(v.year);
             }
 
-            // Ciudades: solo de marca + modelo + motor + año seleccionados
             if (
                 (!brand || v.brand === brand) &&
                 (!model || v.model === model) &&
@@ -487,6 +491,15 @@ export const scraperService = {
                 (!year || v.year === year)
             ) {
                 if (v.location) citiesSet.add(v.location);
+            }
+
+            if (
+                (!brand || v.brand === brand) &&
+                (!model || v.model === model) &&
+                (!motor || v.motor === motor) &&
+                (!year || v.year === year)
+            ) {
+                if (v.trim) trimsSet.add(v.trim);
             }
         });
 
@@ -496,6 +509,7 @@ export const scraperService = {
             motors: Array.from(motorsSet).sort(),
             years: Array.from(yearsSet).sort((a, b) => Number(b) - Number(a)),
             cities: Array.from(citiesSet).sort(),
+            trims: Array.from(trimsSet).sort(),
         };
     },
 
@@ -517,69 +531,6 @@ export const scraperService = {
         });
 
         return Array.from(models).sort();
-    },
-
-    // ========== SELLERS ==========
-    async getSellers(): Promise<Database['public']['Tables']['scraper_sellers']['Row'][]> {
-        const { data, error } = await supabase
-            .from('scraper_sellers')
-            .select('*')
-            .order('last_updated', { ascending: false });
-
-        if (error) {
-            console.error('Error al obtener vendedores:', error);
-            return [];
-        }
-
-        return data;
-    },
-
-    async getDealers(): Promise<Database['public']['Tables']['scraper_sellers']['Row'][]> {
-        const { data, error } = await supabase
-            .from('scraper_sellers')
-            .select('*')
-            .eq('is_dealer', true)
-            .order('last_updated', { ascending: false });
-
-        if (error) {
-            console.error('Error al obtener dealers:', error);
-            return [];
-        }
-
-        return data;
-    },
-
-    async getSellerWithVehicles(sellerId: string) {
-        const { data, error } = await supabase
-            .from('scraper_sellers')
-            .select(`
-                *,
-                vehicles:scraper_vehicles(*)
-            `)
-            .eq('id', sellerId)
-            .single();
-
-        if (error) {
-            console.error('Error al obtener vendedor con vehículos:', error);
-            throw error;
-        }
-
-        return data;
-    },
-
-    async updateSellerTotalListings(sellerId: string, totalListings: number) {
-        const { error } = await supabase
-            .from('scraper_sellers')
-            .update({
-                total_listings: totalListings,
-                last_updated: new Date().toISOString()
-            })
-            .eq('id', sellerId);
-
-        if (error) {
-            console.error('Error al actualizar total de listings:', error);
-            throw error;
-        }
     },
 
     // ========== PRICE STATISTICS ==========
@@ -686,46 +637,101 @@ export const scraperService = {
         })).sort((a, b) => b.total_models - a.total_models);
     },
 
-    async scrapMarketplace(searchTerm: string) {
+    /**
+     * Construye el término de búsqueda para un pedido (ej. "Toyota Hilux 2020" o "Kia Sportage 2018 2022").
+     */
+    buildSearchTermForRequest(request: { brand: string; model: string; year_min?: number | null; year_max?: number | null }): string {
+        const { brand, model, year_min, year_max } = request;
+        let term = `${brand} ${model}`.trim();
+        if (year_min != null && year_max != null && year_min === year_max) {
+            term += ` ${year_min}`;
+        } else if (year_min != null && year_max != null) {
+            term += ` ${year_min} ${year_max}`;
+        } else if (year_min != null) {
+            term += ` ${year_min}`;
+        } else if (year_max != null) {
+            term += ` ${year_max}`;
+        }
+        return term;
+    },
+
+    /**
+     * Devuelve vehículos de scraper_vehicles que coinciden con el pedido (marca, modelo, año en rango).
+     * Sirve para "Ver opciones" y para mostrar resultados tras scrapear.
+     */
+    async getVehiclesMatchingRequest(request: { brand: string; model: string; year_min?: number | null; year_max?: number | null }): Promise<VehicleWithSeller[]> {
+        let query = supabase
+            .from('scraper_vehicles')
+            .select(`*`)
+            .eq('brand', request.brand)
+            .eq('model', request.model)
+            .order('created_at', { ascending: false });
+
+        if (request.year_min != null || request.year_max != null) {
+            if (request.year_min != null) {
+                query = query.gte('year', String(request.year_min));
+            }
+            if (request.year_max != null) {
+                query = query.lte('year', String(request.year_max));
+            }
+        }
+
+        const { data, error } = await query;
+        if (error) {
+            console.error('Error al obtener vehículos del pedido:', error);
+            return [];
+        }
+        return (data || []) as VehicleWithSeller[];
+    },
+
+    async scrapMarketplace(searchTerm: string): Promise<WebhookResponse | null> {
+        if (!searchTerm.trim()) {
+            console.warn('scrapMarketplace: término vacío');
+            return { status: 'error', message: 'El término de búsqueda no puede estar vacío.' };
+        }
+
+        // Proxy en nuestra API para evitar CORS (el navegador no puede llamar a n8n directamente).
+        const url = '/api/scraper/marketplace';
         try {
-            if (!searchTerm.trim()) return
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ searchValue: searchTerm.trim() }),
+            });
 
-            const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook-test/buscar-producto-marketplace',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        searchValue: searchTerm,
-                    }),
-                }
-            )
-
-
+            const rawText = await response.text();
             if (!response.ok) {
-                throw new Error('Error al ejecutar el webhook')
+                console.error('[Scraper] Webhook error:', response.status, response.statusText, rawText.slice(0, 500));
+                return {
+                    status: 'error',
+                    message: `El servidor respondió con ${response.status}. ${rawText.slice(0, 200) || response.statusText}`,
+                };
             }
 
-            const data = await response.json()
-            console.log('data', data)
-            return data as WebhookResponse
-        } catch (error) {
-            console.error('Error al scrapear:', error)
+            let data: unknown;
+            try {
+                data = JSON.parse(rawText);
+            } catch {
+                console.error('[Scraper] Respuesta no es JSON:', rawText.slice(0, 300));
+                return { status: 'error', message: 'La respuesta del servidor no es válida (no es JSON).' };
+            }
+
+            return data as WebhookResponse;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error('[Scraper] Error al scrapear:', err);
+            if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Load failed')) {
+                return { status: 'error', message: 'Error de red o CORS. ¿El servidor n8n está accesible desde este navegador?' };
+            }
+            return { status: 'error', message: `Error: ${message}` };
         }
     },
     async scrapAllBrands() {
         try {
-            const response = await fetch(
-                'https://n8n.ksinuevos.com/webhook-test/buscar-todas-las-marcas',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                }
-            )
+            const response = await fetch('/api/scraper/all-brands', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            })
 
 
             if (!response.ok) {

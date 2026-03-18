@@ -26,8 +26,6 @@ import {
     LayoutDashboard,
     Hash,
     Building2,
-    User as UserIcon,
-    Star,
 } from "lucide-react";
 import type { VehicleImageAnalysis } from "@/types/vehicleImageAnalysis";
 import { useState, useEffect, useMemo } from "react";
@@ -38,7 +36,8 @@ import { SoldBadge } from "./components/SoldBadge";
 import { MileageBadge } from "./components/MileageBadge";
 import { PriceBadge } from "./components/PriceBadge";
 import { TimelineBadge } from "./components/TimelineBadge";
-import { scraperService } from "@/services/scraper.service";
+import { scraperService, getDerivedRegion, getDataQualityLabel } from "@/services/scraper.service";
+import { extractTrim } from "./opportunitiesScorer";
 import type { PriceStatistics, OpportunitiesTableViewProps } from "./interfaces";
 
 function formatAbsoluteDate(dateString: string | null | undefined): string {
@@ -399,7 +398,7 @@ export function OpportunitiesTableView({
                                         </div>
                                     </td>
 
-                                    {/* Columna Marca/Modelo */}
+                                    {/* Columna Marca/Modelo/Variante */}
                                     <td className="py-5 px-6">
                                         <div className="flex flex-col gap-1">
                                             <div className="font-black text-zinc-900 text-base md:text-lg leading-tight group-hover:text-red-600 transition-colors">
@@ -408,6 +407,16 @@ export function OpportunitiesTableView({
                                             <div className="text-zinc-400 font-bold text-sm">
                                                 {vehicle.model?.toUpperCase()}
                                             </div>
+                                            {(() => {
+                                                const trim = vehicle.trim ?? extractTrim(
+                                                    [vehicle.title, vehicle.description, ...(vehicle.characteristics ?? [])].filter(Boolean).join(" ")
+                                                );
+                                                return trim ? (
+                                                    <span className="text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit" title={vehicle.trim ? "Variante desde BD" : "Variante detectada del texto"}>
+                                                        {trim}
+                                                    </span>
+                                                ) : null;
+                                            })()}
                                         </div>
                                     </td>
 
@@ -434,7 +443,7 @@ export function OpportunitiesTableView({
                                         </div>
                                     </td>
 
-                                    {/* Columna Detalles (Año + Kilometraje) */}
+                                    {/* Columna Detalles (Año + Kilometraje + calidad del dato) */}
                                     <td className="py-5 px-6">
                                         <div className="flex flex-col gap-2">
                                             <div className="flex items-center gap-2 text-zinc-700 font-bold text-sm">
@@ -450,6 +459,21 @@ export function OpportunitiesTableView({
                                                 <span>{vehicle.mileage ? `${vehicle.mileage.toLocaleString()}` : '---'}</span>
                                             </div>
                                             <MileageBadge type={getMileageBadge(vehicle)} />
+                                            {(() => {
+                                                const quality = getDataQualityLabel(vehicle);
+                                                const labels: Record<typeof quality, string> = { completo: 'Completo', falta_motor: 'Falta motor', falta_km: 'Falta km', incompleto: 'Incompleto' };
+                                                const styles: Record<typeof quality, string> = {
+                                                    completo: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                                    falta_motor: 'bg-amber-50 text-amber-700 border-amber-200',
+                                                    falta_km: 'bg-amber-50 text-amber-700 border-amber-200',
+                                                    incompleto: 'bg-zinc-100 text-zinc-600 border-zinc-200',
+                                                };
+                                                return (
+                                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border w-fit ${styles[quality]}`} title="Calidad del dato del listado">
+                                                        {labels[quality]}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                     </td>
 
@@ -463,13 +487,20 @@ export function OpportunitiesTableView({
                                         </div>
                                     </td>
 
-                                    {/* Columna Ubicación */}
+                                    {/* Columna Ubicación (ciudad + región derivada) */}
                                     <td className="py-5 px-6">
-                                        <div className="flex items-center gap-2 text-zinc-600 text-sm font-semibold">
-                                            <div className="p-1.5 bg-zinc-50 rounded-lg">
-                                                <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2 text-zinc-600 text-sm font-semibold">
+                                                <div className="p-1.5 bg-zinc-50 rounded-lg">
+                                                    <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+                                                </div>
+                                                <span className="capitalize">{vehicle.location || 'N/A'}</span>
                                             </div>
-                                            <span className="capitalize">{vehicle.location || 'N/A'}</span>
+                                            {(vehicle.region ?? getDerivedRegion(vehicle.location)) && (
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded w-fit ${(vehicle.region ?? getDerivedRegion(vehicle.location)) === 'costa' ? 'bg-sky-100 text-sky-700 border border-sky-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`} title={vehicle.region ? "Región desde BD" : "Región derivada de la ciudad"}>
+                                                    {(vehicle.region ?? getDerivedRegion(vehicle.location)) === 'costa' ? 'Costa' : 'Sierra'}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
 
@@ -657,66 +688,6 @@ export function OpportunitiesTableView({
                                     {/* B. Grid de Cards */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                                        {/* Card: Vendedor */}
-                                        {selectedVehicle.seller && (
-                                            <div className="p-5 bg-white border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-50 border border-zinc-100 flex-shrink-0 flex items-center justify-center">
-                                                        {selectedVehicle.seller.pic ? (
-                                                            <img
-                                                                src={selectedVehicle.seller.pic}
-                                                                alt={selectedVehicle.seller.seller_name || "Vendedor"}
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                        ) : (
-                                                            <UserIcon className="h-5 w-5 text-zinc-400" />
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <h3 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest mb-0.5">Vendedor</h3>
-                                                        <p className="font-semibold text-zinc-900 truncate text-sm">
-                                                            {selectedVehicle.seller.seller_name || "Usuario Anónimo"}
-                                                        </p>
-                                                        {selectedVehicle.seller.rating != null && (
-                                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                                {/* Contenedor de las 5 estrellas */}
-                                                                <div className="flex items-center gap-0.5">
-                                                                    {[1, 2, 3, 4, 5].map((star) => {
-                                                                        const rating = Number(selectedVehicle.seller?.rating);
-                                                                        const isFull = rating >= star;
-                                                                        const isHalf = !isFull && rating >= star - 0.9;
-
-                                                                        return (
-                                                                            <div key={star} className="relative">
-                                                                                <Star
-                                                                                    className={`h-3.5 w-3.5 ${isFull ? 'fill-amber-400 text-amber-400' : 'fill-zinc-200 text-zinc-200'}`}
-                                                                                />
-                                                                                {isHalf && (
-                                                                                    <div className="absolute top-0 left-0 overflow-hidden w-[50%]">
-                                                                                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-
-                                                                {/* Textos de calificación y cantidad */}
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs font-bold text-zinc-700">
-                                                                        {Number(selectedVehicle.seller.rating).toFixed(1)}
-                                                                    </span>
-                                                                    <span className="text-xs font-medium text-zinc-500">
-                                                                        ({Number(selectedVehicle.seller.rating_count)})
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
                                         {/* Card: Estado y Ubicación */}
                                         <div className="p-5 bg-white border border-zinc-100 rounded-2xl hover:border-zinc-200 transition-colors flex flex-col justify-center gap-3">
                                             <div className="flex justify-between items-center">
@@ -812,7 +783,7 @@ export function OpportunitiesTableView({
                                         <div className="pt-4">
                                             <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                                 <FileText className="h-4 w-4" />
-                                                Descripción del Vendedor
+                                                Descripción del anuncio
                                             </h3>
                                             <p className="text-zinc-600 text-sm leading-relaxed whitespace-pre-wrap">
                                                 {selectedVehicle.description}

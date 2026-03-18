@@ -19,7 +19,7 @@ import { VehicleWithSeller } from "@/services/scraper.service";
 import { VehicleViewType } from "./interfaces";
 import type { VehicleImageAnalysis } from "@/types/vehicleImageAnalysis";
 import { OpportunitiesCarousel } from "./OpportunitiesCarousel";
-import { ScoredVehicle } from "./opportunitiesScorer";
+import { ScoredVehicle, extractTrim } from "./opportunitiesScorer";
 
 // ─── CARD_CONFIG (sin cambios) ────────────────────────────────────────────────
 
@@ -379,6 +379,11 @@ function DiscardedMiniModal({ vehicle, avgPrice, onClose }: {
                         <p className="font-black text-zinc-900 text-base">
                             {vehicle.brand?.toUpperCase()} {vehicle.model?.toUpperCase()}
                         </p>
+                        {(() => {
+                            const parsed = "parsedTrim" in vehicle && vehicle.parsedTrim && typeof vehicle.parsedTrim === "string" ? vehicle.parsedTrim : null;
+                            const trim: string | null = vehicle.trim ?? parsed ?? extractTrim([vehicle.title, vehicle.description, ...(vehicle.characteristics ?? [])].filter(Boolean).join(" "));
+                            return trim ? <p className="text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit mt-1">Variante: {trim}</p> : null;
+                        })()}
                         <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">{vehicle.title}</p>
                     </div>
 
@@ -578,7 +583,9 @@ export function OpportunitiesVehiclePreviewModal({
                         {/* Título sobre el carousel (sólo en la parte inferior) */}
                         <div className="absolute bottom-4 left-5 right-5 z-10 pointer-events-none">
                             <h2 className="text-white font-black text-xl sm:text-2xl leading-tight drop-shadow-lg">
-                                {vehicle.brand?.toUpperCase()} {vehicle.model?.toUpperCase()} <span className="text-zinc-400 font-bold">{vehicle.year}</span>
+                                {vehicle.brand?.toUpperCase()} {vehicle.model?.toUpperCase()}
+                                {vehicle.parsedTrim ? <span className="text-amber-200 font-semibold"> {vehicle.parsedTrim}</span> : null}
+                                <span className="text-zinc-400 font-bold"> {vehicle.year}</span>
                             </h2>
                             <p className="text-zinc-300 text-sm font-medium line-clamp-1 mt-1 drop-shadow-md">
                                 {vehicle.title}
