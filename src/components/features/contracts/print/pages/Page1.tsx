@@ -25,6 +25,34 @@ export function Page1({ data }: PageProps) {
     const INTERMEDIARIO_RUC = "0102109808";
     const VENDEDOR_NOMBRE = data.apoderado && data.apoderado !== 'N/A' ? data.apoderado : "EL PROPIETARIO";
 
+    const formatDateLong = (dateStr?: string) => {
+        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        if (!dateStr) {
+            const today = new Date();
+            return `${today.getDate()} de ${months[today.getMonth()]} de ${today.getFullYear()}`;
+        }
+
+        // Evita desfase cuando llega formato YYYY-MM-DD sin hora
+        const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const year = Number(dateOnlyMatch[1]);
+            const monthIndex = Number(dateOnlyMatch[2]) - 1;
+            const day = Number(dateOnlyMatch[3]);
+            return `${day} de ${months[monthIndex]} de ${year}`;
+        }
+
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) return dateStr;
+        return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
+    };
+
+    const buildClosingDateText = () => {
+        const city = data.ciudadContrato || "Cuenca";
+        const longDate = formatDateLong(data.fechaVentaFull || data.fechaVenta);
+        return `Dado en ${city} en ${longDate}`;
+    };
+
     return (
         <ContractPageLayout pageNumber={1}>
             <div className="font-sans text-black max-w-full mx-auto leading-tight" style={{ fontSize: '11px' }}>
@@ -169,7 +197,7 @@ export function Page1({ data }: PageProps) {
                         solo acto de unidad.
                     </p>
                     <p>
-                        {data.textoFechaDado}
+                        {buildClosingDateText()}
                     </p>
                 </div>
 

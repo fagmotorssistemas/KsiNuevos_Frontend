@@ -39,11 +39,26 @@ export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProp
     };
 
     const formatDateLong = (dateStr?: string) => {
-        const d = dateStr ? new Date(dateStr) : new Date();
         const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-        // Ajustamos para evitar el desfase de zona horaria al leer solo fecha
-        const dia = d.getUTCDate(); 
-        return `${dia} de ${months[d.getUTCMonth()]} de ${d.getUTCFullYear()}`;
+
+        if (!dateStr) {
+            const today = new Date();
+            return `${today.getDate()} de ${months[today.getMonth()]} de ${today.getFullYear()}`;
+        }
+
+        // Evita desfases de zona horaria cuando llega "YYYY-MM-DD"
+        const dateOnlyMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateOnlyMatch) {
+            const year = Number(dateOnlyMatch[1]);
+            const monthIndex = Number(dateOnlyMatch[2]) - 1;
+            const day = Number(dateOnlyMatch[3]);
+            return `${day} de ${months[monthIndex]} de ${year}`;
+        }
+
+        const d = new Date(dateStr);
+        if (Number.isNaN(d.getTime())) return dateStr;
+
+        return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
     };
 
     const getPlazoSeguro = () => {
@@ -171,7 +186,9 @@ export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProp
                 </div>
 
                 <div className="pl-8 mb-12 text-[11px]">
-                    Dado en {data.ciudadContrato || "Cuenca"} en {formatDateLong(data.fechaVenta)}
+                    {data.textoFechaDado?.trim()
+                        ? data.textoFechaDado
+                        : `Dado en ${data.ciudadContrato || "Cuenca"} en ${formatDateLong(data.fechaVentaFull || data.fechaVenta)}`}
                 </div>
 
                 {/* --- FIRMAS --- */}
