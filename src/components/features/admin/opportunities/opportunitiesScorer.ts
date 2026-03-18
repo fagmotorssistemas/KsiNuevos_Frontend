@@ -306,7 +306,9 @@ export class OpportunityScorer {
         if (!vehicle.mileage || !vehicle.year) return 50;
 
         const currentYear = new Date().getFullYear();
-        const age = Math.max(0.5, currentYear - parseInt(vehicle.year));
+        const year = typeof vehicle.year === 'number' ? vehicle.year : parseInt(vehicle.year, 10);
+        if (Number.isNaN(year)) return 50;
+        const age = Math.max(0.5, currentYear - year);
         const kmPerYear = vehicle.mileage / age;
 
         if (kmPerYear < 5000) return 100;
@@ -341,7 +343,9 @@ export class OpportunityScorer {
     private static calculateMarketScore(vehicle: VehicleWithSeller): number {
         if (!vehicle.year || !vehicle.brand) return 50;
 
-        const age = new Date().getFullYear() - parseInt(vehicle.year);
+        const year = typeof vehicle.year === 'number' ? vehicle.year : parseInt(vehicle.year, 10);
+        if (Number.isNaN(year)) return 50;
+        const age = new Date().getFullYear() - year;
         const brand = vehicle.brand.toLowerCase();
 
         let ageScore = 50;

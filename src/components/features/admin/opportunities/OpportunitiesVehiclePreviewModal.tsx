@@ -695,7 +695,7 @@ export function OpportunitiesVehiclePreviewModal({
                                 </h3>
                                 <div className="space-y-3.5">
                                     <DetailRow label="Kilometraje" value={vehicle.mileage ? `${Number(vehicle.mileage).toLocaleString()} km` : 'N/A'} />
-                                    <DetailRow label="Año Modelo" value={vehicle.year || 'N/A'} />
+                                    <DetailRow label="Año Modelo" value={vehicle.year != null ? String(vehicle.year) : 'N/A'} />
                                     <DetailRow
                                         label="Combustible"
                                         value={vehicle.characteristics?.find(c => c.match(/gasolina|diesel|hibrido/i)) || vehicle.parsedFuelType || 'N/A'}

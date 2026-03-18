@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -18,7 +18,7 @@ type CaseListRow = {
   monto_referencia: number | null;
 };
 
-export default function LegalCasesPage() {
+function LegalCasesPageContent() {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<CaseListRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,6 +162,22 @@ export default function LegalCasesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LegalCasesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 text-sm text-slate-500">
+            Cargando casos…
+          </div>
+        </div>
+      }
+    >
+      <LegalCasesPageContent />
+    </Suspense>
   );
 }
 

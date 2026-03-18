@@ -57,7 +57,7 @@ export function AccountingSidebar() {
         displayedItems = menuItems.filter(item => 
             ['/inventario', '/contracts'].includes(item.href)
         );
-    } else if (profile?.role === 'abogado' || profile?.role === 'abogada') {
+    } else if (profile?.role === 'abogado') {
         // Abogado solo ve Cartera y módulo de Gestión Legal.
         displayedItems = menuItems.filter(item =>
             ['/wallet', '/legal/cases'].includes(item.href)

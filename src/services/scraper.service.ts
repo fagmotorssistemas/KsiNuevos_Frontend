@@ -132,7 +132,10 @@ export const scraperService = {
 
         // FILTRO: Año
         if (year && year !== 'all') {
-            query = query.eq('year', year);
+            const parsedYear = Number(year);
+            if (!Number.isNaN(parsedYear)) {
+                query = query.eq('year', parsedYear);
+            }
         }
 
         // FILTRO: Ciudad
@@ -403,7 +406,7 @@ export const scraperService = {
             if (vehicle.brand) brands.add(vehicle.brand);
             if (vehicle.model) models.add(vehicle.model);
             if (vehicle.motor) motors.add(vehicle.motor);
-            if (vehicle.year) years.add(vehicle.year);
+            if (vehicle.year != null) years.add(String(vehicle.year));
             if (vehicle.location) cities.add(vehicle.location);
         });
 
@@ -465,6 +468,8 @@ export const scraperService = {
         const citiesSet = new Set<string>();
         const trimsSet = new Set<string>();
 
+        const selectedYearNumber = year ? Number(year) : null;
+
         data.forEach(v => {
             if (v.brand) brandsSet.add(v.brand);
 
@@ -481,14 +486,14 @@ export const scraperService = {
                 (!model || v.model === model) &&
                 (!motor || v.motor === motor)
             ) {
-                if (v.year) yearsSet.add(v.year);
+                if (v.year != null) yearsSet.add(String(v.year));
             }
 
             if (
                 (!brand || v.brand === brand) &&
                 (!model || v.model === model) &&
                 (!motor || v.motor === motor) &&
-                (!year || v.year === year)
+                (selectedYearNumber == null || v.year === selectedYearNumber)
             ) {
                 if (v.location) citiesSet.add(v.location);
             }
@@ -497,7 +502,7 @@ export const scraperService = {
                 (!brand || v.brand === brand) &&
                 (!model || v.model === model) &&
                 (!motor || v.motor === motor) &&
-                (!year || v.year === year)
+                (selectedYearNumber == null || v.year === selectedYearNumber)
             ) {
                 if (v.trim) trimsSet.add(v.trim);
             }

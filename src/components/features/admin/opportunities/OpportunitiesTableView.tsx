@@ -283,10 +283,10 @@ export function OpportunitiesTableView({
     useEffect(() => {
         if (selectedVehicle && getPriceStatisticsForVehicle) {
             setLoadingStats(true);
+            // Temporal: omitimos `year` para evitar conflictos de tipo en build.
             getPriceStatisticsForVehicle(
                 selectedVehicle.brand || '',
-                selectedVehicle.model || '',
-                selectedVehicle.year || undefined
+                selectedVehicle.model || ''
             )
                 .then(stats => {
                     setVehicleStats(stats);

@@ -27,7 +27,7 @@ export const legalCasesService = {
     };
   }): Promise<string> {
     const supabase = createClient();
-    const { data, error } = await supabase.rpc('rpc_create_case', {
+    const { data, error } = await (supabase.rpc as any)('rpc_create_case', {
       p_id_sistema: input.id_sistema,
       p_estado: input.estado,
       p_prioridad: input.prioridad ?? null,
@@ -66,7 +66,7 @@ export const legalCasesService = {
     detalle?: string | null;
   }): Promise<string> {
     const supabase = createClient();
-    const { data, error } = await supabase.rpc('rpc_register_case_event', {
+    const { data, error } = await (supabase.rpc as any)('rpc_register_case_event', {
       p_case_id: input.case_id,
       p_tipo: input.tipo,
       p_descripcion: input.descripcion,
@@ -96,7 +96,7 @@ export const legalCasesService = {
     event_detalle?: string | null;
   }): Promise<void> {
     const supabase = createClient();
-    const { error } = await supabase.rpc('rpc_change_case_status', {
+    const { error } = await (supabase.rpc as any)('rpc_change_case_status', {
       p_case_id: input.case_id,
       p_estado_nuevo: input.estado_nuevo,
       p_event_tipo: input.event_tipo,
@@ -124,7 +124,7 @@ export const legalCasesService = {
     event_descripcion: string;
   }): Promise<void> {
     const supabase = createClient();
-    const { error } = await supabase.rpc('rpc_change_case_process', {
+    const { error } = await (supabase.rpc as any)('rpc_change_case_process', {
       p_case_id: input.case_id,
       p_tipo_proceso: input.tipo_proceso,
       p_objetivo_caso: input.objetivo_caso,
@@ -145,7 +145,7 @@ export const legalCasesService = {
     fecha_limite: string;
   }): Promise<string> {
     const supabase = createClient();
-    const { data, error } = await supabase.rpc('rpc_create_case_task', {
+    const { data, error } = await (supabase.rpc as any)('rpc_create_case_task', {
       p_case_id: input.case_id,
       p_tipo: input.tipo,
       p_descripcion: input.descripcion,
@@ -157,7 +157,7 @@ export const legalCasesService = {
 
   async completeTask(input: { task_id: string; event_descripcion?: string }): Promise<void> {
     const supabase = createClient();
-    const { error } = await supabase.rpc('rpc_complete_case_task', {
+    const { error } = await (supabase.rpc as any)('rpc_complete_case_task', {
       p_task_id: input.task_id,
       p_event_descripcion: input.event_descripcion ?? 'Tarea completada',
     });
