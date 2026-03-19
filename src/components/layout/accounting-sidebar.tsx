@@ -18,12 +18,14 @@ import {
     BanknoteArrowDown,
     Box,
     StickyNote, // Importamos el icono nuevo de GIT
+    HandCoins,
 } from 'lucide-react';
 
 // Definición de los items del menú (FUSIÓN: Usamos las rutas de GIT para evitar 404s)
 const menuItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Cartera', href: '/wallet', icon: Wallet },
+    { name: 'Cartera manual', href: '/cartera-manual', icon: HandCoins },
     { name: 'Personal', href: '/employee', icon: Users },
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
@@ -50,19 +52,22 @@ export function AccountingSidebar() {
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
 
+    const roleNorm = (profile?.role || '').toLowerCase().trim();
+    const isAbogadoStaff = roleNorm === 'abogado' || roleNorm === 'abogada';
+
     // --- LÓGICA DE FILTRADO FUSIONADA ---
     let displayedItems = menuItems;
 
     if (profile?.role === 'finanzas') {
         // En tu local solo tenías inventario, pero GIT trajo también contratos para finanzas.
         // Se incluyen ambos para respetar la actualización del equipo.
-        displayedItems = menuItems.filter(item => 
-            ['/inventario', '/contracts'].includes(item.href)
-        );
-    } else if (profile?.role === 'abogado') {
-        // Abogado solo ve Cartera; Gestión Legal se muestra en el navbar superior.
         displayedItems = menuItems.filter(item =>
-            ['/wallet'].includes(item.href)
+            ['/inventario', '/contracts', '/cartera-manual'].includes(item.href)
+        );
+    } else if (isAbogadoStaff) {
+        // Abogado/abogada: Cartera Oracle + Cartera manual; el resto del módulo legal va en navbar.
+        displayedItems = menuItems.filter(item =>
+            ['/wallet', '/cartera-manual'].includes(item.href)
         );
     }
     // Admin y otros roles ven todo (displayedItems = menuItems)

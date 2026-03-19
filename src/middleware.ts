@@ -18,6 +18,7 @@ const RUTAS_PROTEGIDAS_PREFIX = [
   '/tareas',
   '/requests',
   '/wallet',
+  '/cartera-manual',
   '/inventario',
   '/dashboard',
   '/treasury',

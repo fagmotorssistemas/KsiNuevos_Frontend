@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { legalCasesService } from "@/services/legalCases.service";
 import type { CaseFullPayload } from "@/types/legal.types";
 import { AddEventForm } from "@/components/features/accounting/wallet/AddEventForm";
@@ -45,9 +46,11 @@ const getCanalIcon = (canal: string | null | undefined) => {
 export default function LegalCaseDetailPage() {
   const params = useParams<{ caseId: string }>();
   const caseId = params.caseId;
+  const supabase = useMemo(() => createClient(), []);
   const [data, setData] = useState<CaseFullPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAddingObservation, setIsAddingObservation] = useState(false);
+  const [manualNombre, setManualNombre] = useState<string | null>(null);
 
   // Filtros de navegación
   const [activeTab, setActiveTab] = useState<"todas" | "comunicaciones" | "observaciones" | "tareas" | "sistema">(
@@ -79,6 +82,22 @@ export default function LegalCaseDetailPage() {
   }, [caseId]);
 
   const c = data?.case;
+
+  useEffect(() => {
+    const mid = c?.cartera_manual_id;
+    if (!mid) {
+      setManualNombre(null);
+      return;
+    }
+    (async () => {
+      const { data: row } = await supabase
+        .from("cartera_manual")
+        .select("nombre_completo")
+        .eq("id", mid)
+        .maybeSingle();
+      setManualNombre((row as { nombre_completo?: string } | null)?.nombre_completo ?? null);
+    })();
+  }, [c?.cartera_manual_id, supabase]);
 
   // Extraer procesos involucrados en este caso
   const procesosInvolucrados = useMemo(() => {
@@ -187,7 +206,13 @@ export default function LegalCaseDetailPage() {
           <div>
             <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">EXPEDIENTE LEGAL</div>
             <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              {c ? `Caso #${c.id_sistema}` : "Cargando..."}
+              {c
+                ? c.id_sistema != null
+                  ? `Caso #${c.id_sistema}`
+                  : manualNombre
+                    ? `Cartera manual · ${manualNombre}`
+                    : "Cartera manual"
+                : "Cargando..."}
             </h1>
           </div>
         </div>

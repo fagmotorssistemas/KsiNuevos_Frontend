@@ -9,7 +9,8 @@ import { walletService } from "@/services/wallet.service";
 
 type CaseListRow = {
   id: string;
-  id_sistema: number;
+  id_sistema: number | null;
+  cartera_manual_id: string | null;
   estado: string | null;
   prioridad: string | null;
   riesgo: string | null;
@@ -23,6 +24,7 @@ function LegalCasesPageContent() {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<CaseListRow[]>([]);
   const [clientNamesById, setClientNamesById] = useState<Record<number, string>>({});
+  const [manualNamesById, setManualNamesById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") || searchParams.get("id_sistema") || "");
@@ -32,7 +34,7 @@ function LegalCasesPageContent() {
     const { data, error } = await supabase
       .from("cases")
       .select(
-        "id,id_sistema,estado,prioridad,riesgo,proxima_accion,fecha_proxima_accion,fecha_ultima_gestion,monto_referencia"
+        "id,id_sistema,cartera_manual_id,estado,prioridad,riesgo,proxima_accion,fecha_proxima_accion,fecha_ultima_gestion,monto_referencia"
       )
       .order("updated_at", { ascending: false })
       .limit(200);
@@ -41,21 +43,26 @@ function LegalCasesPageContent() {
       console.error(error);
       setRows([]);
       setClientNamesById({});
+      setManualNamesById({});
     } else {
       const nextRows = ((data as any) ?? []) as CaseListRow[];
       setRows(nextRows);
 
-      // Traemos el nombre desde el directorio Oracle (Cartera) usando clienteId=id_sistema
-      // (Así relacionamos el #id_sistema con el nombre, como en tus tablas de cartera).
+      // Oracle: nombres vía cartera; manual: nombres vía cartera_manual
       try {
-        const ids = Array.from(new Set(nextRows.map((r) => r.id_sistema))).filter(Boolean);
+        const ids = Array.from(
+          new Set(
+            nextRows
+              .map((r) => r.id_sistema)
+              .filter((x): x is number => x != null && typeof x === "number"),
+          ),
+        );
         if (ids.length) {
           const debtors = await walletService.getAllDebtors(5000);
           const map: Record<number, string> = {};
           for (const d of debtors) {
             if (typeof d.clienteId === "number" && d.nombre) map[d.clienteId] = d.nombre;
           }
-          // Conservamos solo lo que necesitamos
           const filtered: Record<number, string> = {};
           for (const id of ids) {
             if (map[id]) filtered[id] = map[id];
@@ -64,9 +71,31 @@ function LegalCasesPageContent() {
         } else {
           setClientNamesById({});
         }
+
+        const manualIds = Array.from(
+          new Set(
+            nextRows
+              .map((r) => r.cartera_manual_id)
+              .filter((x): x is string => Boolean(x)),
+          ),
+        );
+        if (manualIds.length) {
+          const { data: manRows } = await supabase
+            .from("cartera_manual")
+            .select("id,nombre_completo")
+            .in("id", manualIds);
+          const mm: Record<string, string> = {};
+          for (const row of (manRows as { id: string; nombre_completo: string }[]) ?? []) {
+            mm[row.id] = row.nombre_completo;
+          }
+          setManualNamesById(mm);
+        } else {
+          setManualNamesById({});
+        }
       } catch (e) {
         console.error("Error cargando nombres de clientes:", e);
         setClientNamesById({});
+        setManualNamesById({});
       }
     }
     setLoading(false);
@@ -82,14 +111,21 @@ function LegalCasesPageContent() {
     if (!query) return rows;
     return rows.filter((r) => {
       const idSistema = String(r.id_sistema ?? "");
-      const nombre = clientNamesById[r.id_sistema] || "";
+      const nombreOracle =
+        r.id_sistema != null ? clientNamesById[r.id_sistema] || "" : "";
+      const nombreManual = r.cartera_manual_id
+        ? manualNamesById[r.cartera_manual_id] || ""
+        : "";
+      const nombre = nombreOracle || nombreManual;
+      const refManual = (r.cartera_manual_id || "").toLowerCase();
       return (
         idSistema.includes(query) ||
+        refManual.includes(query) ||
         (r.estado || "").toLowerCase().includes(query) ||
         nombre.toLowerCase().includes(query)
       );
     });
-  }, [rows, q, clientNamesById]);
+  }, [rows, q, clientNamesById, manualNamesById]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -97,7 +133,8 @@ function LegalCasesPageContent() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Casos legales</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Solo se guarda <span className="font-mono">id_sistema</span>. Datos del cliente viven en Oracle.
+            Oracle: <span className="font-mono">id_sistema</span>. Cartera manual: vínculo a{" "}
+            <span className="font-mono">cartera_manual</span>.
           </p>
         </div>
 
@@ -128,7 +165,7 @@ function LegalCasesPageContent() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por id_sistema o estado..."
+            placeholder="Buscar por id_sistema, nombre o estado..."
             className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-slate-200 text-sm"
           />
           <div className="text-[11px] text-slate-400 font-mono px-2">{filtered.length}</div>
@@ -162,23 +199,36 @@ function LegalCasesPageContent() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((c) => (
+                filtered.map((c) => {
+                  const isManual = Boolean(c.cartera_manual_id);
+                  const displayName =
+                    (c.id_sistema != null && clientNamesById[c.id_sistema]) ||
+                    (c.cartera_manual_id && manualNamesById[c.cartera_manual_id]) ||
+                    (isManual
+                      ? "Cartera manual"
+                      : `Cliente #${c.id_sistema ?? "—"}`);
+                  const initialsSource =
+                    displayName.length >= 2 ? displayName : isManual ? "CM" : "CL";
+                  const idLabel = isManual
+                    ? `CM·${(c.cartera_manual_id || "").slice(0, 8)}`
+                    : `#${c.id_sistema}`;
+                  return (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border border-slate-100">
-                          {(clientNamesById[c.id_sistema]?.substring(0, 2) || String(c.id_sistema).substring(0, 2)).toUpperCase()}
+                          {initialsSource.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="flex flex-col max-w-[220px]">
                           <span
                             className="font-semibold text-slate-900 line-clamp-1 text-sm"
-                            title={clientNamesById[c.id_sistema] || `Cliente #${c.id_sistema}`}
+                            title={displayName}
                           >
-                            {clientNamesById[c.id_sistema] || `Cliente #${c.id_sistema}`}
+                            {displayName}
                           </span>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-mono">
-                              #{c.id_sistema}
+                              {idLabel}
                             </span>
                           </div>
                         </div>
@@ -207,7 +257,8 @@ function LegalCasesPageContent() {
                       </Link>
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>

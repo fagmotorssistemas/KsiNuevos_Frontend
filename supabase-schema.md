@@ -907,3 +907,6 @@ CREATE TABLE public.web_testimonials (
   CONSTRAINT web_testimonials_inventory_reference_id_fkey FOREIGN KEY (inventory_reference_id) REFERENCES public.inventory(id),
   CONSTRAINT web_testimonials_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
+
+-- (Actualización 2026-03) Tabla cartera_manual + columna cases.cartera_manual_id: ver migración
+-- supabase/migrations/20260319100000_cartera_manual.sql

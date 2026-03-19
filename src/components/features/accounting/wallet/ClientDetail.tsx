@@ -526,7 +526,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                         </div>
                     </div>
                     
-                    <LegalCasesTab clientId={clientId} />
+                    <LegalCasesTab legalContext={{ type: "oracle", clientId }} />
                 </div>
             )}
         </div>

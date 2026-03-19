@@ -3,7 +3,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { legalCasesService } from "@/services/legalCases.service";
-import type { CaseFullPayload, LegalCaseRow } from "@/types/legal.types";
+import type {
+  CaseFullPayload,
+  LegalCaseContext,
+  LegalCaseRow,
+} from "@/types/legal.types";
 import {
   Plus,
   Loader2,
@@ -49,7 +53,14 @@ const getCanalIcon = (canal: string | null | undefined) => {
   }
 };
 
-export function LegalCasesTab({ clientId }: { clientId: number }) {
+export function LegalCasesTab({
+  legalContext,
+  defaultMontoReferenciaForNewCase,
+}: {
+  legalContext: LegalCaseContext;
+  /** Solo cartera manual: prellenar monto referencia al crear caso. */
+  defaultMontoReferenciaForNewCase?: number | null;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [caseRow, setCaseRow] = useState<LegalCaseRow | null>(null);
   const [data, setData] = useState<CaseFullPayload | null>(null);
@@ -115,11 +126,13 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
 
   const fetchCase = async () => {
     setLoading(true);
-    // Buscamos el caso por id_sistema
-    const { data: cases, error } = await supabase
-      .from("cases")
-      .select("*")
-      .eq("id_sistema", clientId)
+    let q = supabase.from("cases").select("*");
+    if (legalContext.type === "oracle") {
+      q = q.eq("id_sistema", legalContext.clientId);
+    } else {
+      q = q.eq("cartera_manual_id", legalContext.carteraManualId);
+    }
+    const { data: cases, error } = await q
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -161,7 +174,7 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
   useEffect(() => {
     fetchCase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [legalContext]);
 
   if (loading) {
     return (
@@ -181,7 +194,9 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
         <div>
           <h3 className="text-base font-bold text-slate-900">Sin caso legal</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Este cliente no tiene un caso de gestión legal abierto.
+            {legalContext.type === "oracle"
+              ? "Este cliente no tiene un caso de gestión legal abierto."
+              : "Esta obligación manual no tiene un caso legal abierto."}
           </p>
         </div>
         <button
@@ -198,7 +213,13 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
   if (isCreating) {
     return (
       <CreateCaseForm
-        clientId={clientId}
+        {...(legalContext.type === "oracle"
+          ? { source: "oracle" as const, clientId: legalContext.clientId }
+          : {
+              source: "manual" as const,
+              carteraManualId: legalContext.carteraManualId,
+              defaultMontoReferencia: defaultMontoReferenciaForNewCase ?? null,
+            })}
         onCancel={() => setIsCreating(false)}
         onSuccess={fetchCase}
       />
@@ -239,7 +260,16 @@ export function LegalCasesTab({ clientId }: { clientId: number }) {
                 </span>
               </div>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                Expediente #{c.id_sistema}
+                {legalContext.type === "oracle" ? (
+                  <>Expediente #{c.id_sistema}</>
+                ) : (
+                  <>
+                    Cartera manual · Ref.{" "}
+                    <span className="font-mono text-lg">
+                      {c.cartera_manual_id?.slice(0, 8)}…
+                    </span>
+                  </>
+                )}
               </h3>
             </div>
             

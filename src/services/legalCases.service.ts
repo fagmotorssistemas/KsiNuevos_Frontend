@@ -3,7 +3,8 @@ import type { CaseFullPayload } from '@/types/legal.types';
 
 export const legalCasesService = {
   async createCase(input: {
-    id_sistema: number;
+    id_sistema?: number | null;
+    cartera_manual_id?: string | null;
     estado: string;
     prioridad?: string | null;
     riesgo?: string | null;
@@ -28,7 +29,8 @@ export const legalCasesService = {
   }): Promise<string> {
     const supabase = createClient();
     const { data, error } = await (supabase.rpc as any)('rpc_create_case', {
-      p_id_sistema: input.id_sistema,
+      p_id_sistema: input.id_sistema ?? null,
+      p_cartera_manual_id: input.cartera_manual_id ?? null,
       p_estado: input.estado,
       p_prioridad: input.prioridad ?? null,
       p_riesgo: input.riesgo ?? null,

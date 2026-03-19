@@ -1,20 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, FileText, CalendarClock, FileUp, Image as ImageIcon, ExternalLink, X } from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 
-export function CreateCaseForm({
-  clientId,
-  onCancel,
-  onSuccess,
-}: {
-  clientId: number;
+type CreateCaseFormBaseProps = {
   onCancel: () => void;
   onSuccess: () => void;
-}) {
+};
+
+export type CreateCaseFormProps = CreateCaseFormBaseProps &
+  (
+    | { source: "oracle"; clientId: number }
+    | {
+        source: "manual";
+        carteraManualId: string;
+        defaultMontoReferencia?: number | null;
+      }
+  );
+
+export function CreateCaseForm(props: CreateCaseFormProps) {
+  const { onCancel, onSuccess, source } = props;
+  const storageFolder =
+    source === "oracle"
+      ? `oracle_${props.clientId}`
+      : `manual_${props.carteraManualId}`;
+  const uploadIdSuffix = storageFolder.replace(/[^a-zA-Z0-9_-]/g, "_");
+
   const [saving, setSaving] = useState(false);
   const [estado, setEstado] = useState("nuevo");
   const [prioridad, setPrioridad] = useState("media");
@@ -53,6 +67,17 @@ export function CreateCaseForm({
     { id: string; localUrl: string; url: string | null; uploading: boolean }[]
   >([]);
 
+  const defaultMontoManual =
+    source === "manual" ? props.defaultMontoReferencia : undefined;
+  const carteraIdManual =
+    source === "manual" ? props.carteraManualId : undefined;
+
+  useEffect(() => {
+    if (defaultMontoManual == null) return;
+    if (!Number.isFinite(Number(defaultMontoManual))) return;
+    setMonto(String(defaultMontoManual));
+  }, [carteraIdManual, defaultMontoManual]);
+
   const uploadToStorage = async (bucket: string, path: string, file: File) => {
     const supabase = createClient();
     const { error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -68,7 +93,7 @@ export function CreateCaseForm({
     setUploadingDoc(true);
     try {
       const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-      const path = `legal_cases/temp_${clientId}/documentos/${Date.now()}_${safeName}`;
+      const path = `legal_cases/temp_${storageFolder}/documentos/${Date.now()}_${safeName}`;
       const url = await uploadToStorage("cartera-documentos", path, file);
       setDocumentoUrl(url);
     } catch (e: any) {
@@ -95,7 +120,7 @@ export function CreateCaseForm({
 
       for (const { id, file } of entries) {
         const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-        const path = `legal_cases/temp_${clientId}/imagenes/${Date.now()}_${safeName}`;
+        const path = `legal_cases/temp_${storageFolder}/imagenes/${Date.now()}_${safeName}`;
         const url = await uploadToStorage("cartera-imagenes", path, file);
         setImagenes((prev) =>
           prev.map((img) => (img.id === id ? { ...img, url, uploading: false } : img)),
@@ -127,7 +152,8 @@ export function CreateCaseForm({
     try {
       const montoNum = monto.trim() ? Number(monto) : null;
       await legalCasesService.createCase({
-        id_sistema: clientId,
+        id_sistema: source === "oracle" ? props.clientId : null,
+        cartera_manual_id: source === "manual" ? props.carteraManualId : null,
         estado,
         prioridad,
         riesgo,
@@ -168,10 +194,22 @@ export function CreateCaseForm({
             Aperturar caso legal
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            Se vinculará automáticamente al ID Sistema:{" "}
-            <span className="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
-              {clientId}
-            </span>
+            {source === "oracle" ? (
+              <>
+                Se vinculará al ID Sistema (Oracle):{" "}
+                <span className="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                  {props.clientId}
+                </span>
+              </>
+            ) : (
+              <>
+                Caso ligado a{" "}
+                <span className="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                  cartera manual
+                </span>{" "}
+                (sin ID Oracle). Referencia: {props.carteraManualId.slice(0, 8)}…
+              </>
+            )}
           </p>
         </div>
         <div className="h-12 w-12 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg">
@@ -529,14 +567,14 @@ export function CreateCaseForm({
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <label
-                  htmlFor={`upload_doc_${clientId}`}
+                  htmlFor={`upload_doc_${uploadIdSuffix}`}
                   className="h-10 px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition text-sm font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <FileUp className="h-4 w-4" />
                   Seleccionar PDF
                 </label>
                 <input
-                  id={`upload_doc_${clientId}`}
+                  id={`upload_doc_${uploadIdSuffix}`}
                   type="file"
                   accept="application/pdf"
                   disabled={uploadingDoc}
@@ -593,14 +631,14 @@ export function CreateCaseForm({
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <label
-                  htmlFor={`upload_imgs_${clientId}`}
+                  htmlFor={`upload_imgs_${uploadIdSuffix}`}
                   className="h-10 px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition text-sm font-bold inline-flex items-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <ImageIcon className="h-4 w-4" />
                   Seleccionar imágenes
                 </label>
                 <input
-                  id={`upload_imgs_${clientId}`}
+                  id={`upload_imgs_${uploadIdSuffix}`}
                   type="file"
                   accept="image/*"
                   multiple

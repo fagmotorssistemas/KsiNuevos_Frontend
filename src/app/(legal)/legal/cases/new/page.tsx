@@ -75,6 +75,7 @@ export default function NewLegalCasePage() {
         </div>
       ) : (
         <CreateCaseForm
+          source="oracle"
           clientId={clientId}
           onCancel={() => setClientId(null)}
           onSuccess={() => router.replace("/legal/cases")}

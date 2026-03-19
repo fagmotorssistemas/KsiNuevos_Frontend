@@ -2,6 +2,11 @@ export type CaseEstado = string;
 export type CasePrioridad = string;
 export type CaseRiesgo = string;
 
+/** Origen del expediente para pantalla legal: Oracle (id numérico) o cartera manual (UUID). */
+export type LegalCaseContext =
+  | { type: "oracle"; clientId: number }
+  | { type: "manual"; carteraManualId: string };
+
 export interface ProcesoEtapaRow {
   id: string; // uuid
   tipo_proceso: string;
@@ -12,7 +17,8 @@ export interface ProcesoEtapaRow {
 
 export interface LegalCaseRow {
   id: string; // uuid
-  id_sistema: number;
+  id_sistema: number | null;
+  cartera_manual_id?: string | null;
   estado: CaseEstado | null;
   prioridad: CasePrioridad | null;
   riesgo: CaseRiesgo | null;

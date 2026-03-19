@@ -5,8 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 /**
- * Si el usuario tiene rol "abogado", solo puede estar en /wallet.
- * Cualquier otra ruta del módulo contabilidad lo redirige a /wallet.
+ * Abogado y abogada solo pueden /wallet y /cartera-manual dentro de contailidad.
+ * Cualquier otra ruta del módulo redirige a /wallet.
  */
 export function AccountingRoleGuard({ children }: { children: React.ReactNode }) {
   const { profile, isLoading } = useAuth();
@@ -15,9 +15,14 @@ export function AccountingRoleGuard({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (isLoading || !profile) return;
-    if (profile.role !== 'abogado') return;
+    const r = (profile.role || '').toLowerCase().trim();
+    if (r !== 'abogado' && r !== 'abogada') return;
 
-    const isOnWallet = pathname === '/wallet' || pathname.startsWith('/wallet/');
+    const isOnWallet =
+      pathname === '/wallet' ||
+      pathname.startsWith('/wallet/') ||
+      pathname === '/cartera-manual' ||
+      pathname.startsWith('/cartera-manual/');
     if (!isOnWallet) {
       router.replace('/wallet');
     }
