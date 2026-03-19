@@ -6,7 +6,9 @@ export const STATUS_OPTIONS = [
     { value: 'negociando', label: 'Negociando', color: 'bg-purple-50 text-purple-700 border-purple-200' },
     { value: 'ganado', label: 'Ganado', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { value: 'perdido', label: 'Perdido', color: 'bg-red-50 text-red-700 border-red-200' },
-    { value: 'en_proceso', label: 'En Proceso', color: 'bg-gray-50 text-gray-700 border-gray-200' }
+    { value: 'en_proceso', label: 'En Proceso', color: 'bg-gray-50 text-gray-700 border-gray-200' },
+    { value: 'datos_pedidos', label: 'Info. Faltante', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+    { value: 'asesoria_financiamiento', label: 'Asesoria Financiamiento', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
 
 ];
 

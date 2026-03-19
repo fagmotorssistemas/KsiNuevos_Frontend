@@ -7,7 +7,8 @@ import {
     Thermometer,
     Phone,
     MessageCircle,
-    User
+    User,
+    Landmark
 } from "lucide-react";
 
 import { PaginationPageMinimalCenter } from "@/components/ui/pagination";
@@ -58,7 +59,8 @@ export function LeadsList({
             case 'interesado': return { color: 'primary' as const, icon: HelpCircle };
             case 'contactado': return { color: 'primary' as const, icon: Phone };
             case 'en_proceso': return { color: 'gray' as const, icon: Clock, label: 'En Proceso' };
-            case 'datos_pedidos': return { color: 'gray' as const, icon: User, label: 'Datos Pedidos' };
+            case 'datos_pedidos': return { color: 'gray' as const, icon: User, label: 'Info. Faltante' };
+            case 'asesoria_financiamiento': return { color: 'primary' as const, icon: Landmark, label: 'Asesoria Financiamiento' };
             default: return { color: 'gray' as const, icon: HelpCircle };
         }
     };
@@ -138,6 +140,7 @@ export function LeadsList({
                 <Table.Body items={leads}>
                     {(item: LeadWithDetails) => {
                         const statusConfig = getStatusConfig(item.status);
+                        const statusLabel = statusConfig.label || item.status || 'Nuevo';
                         const primaryCar = item.interested_cars?.[0];
                         const responsableName = item.profiles?.full_name;
                         const lowerSource = String(item.source || '').toLowerCase();
@@ -195,7 +198,7 @@ export function LeadsList({
                                         iconLeading={statusConfig.icon}
                                         className="capitalize whitespace-nowrap"
                                     >
-                                        {item.status || 'Nuevo'}
+                                        {statusLabel}
                                     </BadgeWithIcon>
                                 </Table.Cell>
 

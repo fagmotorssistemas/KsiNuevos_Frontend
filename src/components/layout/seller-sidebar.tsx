@@ -78,7 +78,7 @@ export function SellerSidebar() {
                     bg-white border-r border-gray-200
                     flex flex-col transition-all duration-300 ease-in-out
                     ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-                    md:translate-x-0 md:flex
+                    md:translate-x-0 md:flex h-screen
                     /* Ancho: fijo en móvil, dinámico en escritorio */
                     w-72 ${isCollapsed ? 'md:w-20' : 'md:w-72'}
                 `}

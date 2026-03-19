@@ -7,7 +7,8 @@ import {
     Activity,
     User,
     MessageSquare,
-    ClipboardList // Icono para interacciones/gestión
+    ClipboardList, // Icono para interacciones/gestión
+    BellRing
 } from "lucide-react";
 
 import type { LeadsFilters } from "@/types/leads.types";
@@ -15,11 +16,15 @@ import type { LeadsFilters } from "@/types/leads.types";
 
 interface LeadsToolbarProps {
     filters: LeadsFilters;
-    onFilterChange: (key: keyof LeadsFilters, value: any) => void;
+    onFilterChange: (key: keyof LeadsFilters | Partial<LeadsFilters>, value?: any) => void;
     onReset: () => void;
     totalResults: number;
     respondedCount?: number;     // Métrica 1: De la lista actual
     interactionsCount?: number;  // Métrica 2: Trabajo realizado en fecha X
+    requestStats?: {
+        datosPedidos: { pendiente: number; en_proceso: number; resuelto: number; total: number };
+        asesoria: { pendiente: number; en_proceso: number; resuelto: number; total: number };
+    };
     currentUserRole?: string | null;
     sellers?: { id: string; full_name: string }[];
 }
@@ -66,6 +71,10 @@ export function LeadsToolbar({
     totalResults,
     respondedCount = 0,
     interactionsCount = 0,
+    requestStats = { 
+        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
+        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
+    },
     currentUserRole,
     sellers = []
 }: LeadsToolbarProps) {
@@ -79,6 +88,7 @@ export function LeadsToolbar({
         filters.dateRange !== 'all' ||
         filters.exactDate !== '' ||
         filters.search !== '' ||
+        (filters.requestStatus && filters.requestStatus !== 'all') ||
         (isAdmin && assignedToValue !== 'all');
 
     // Porcentaje para la métrica vieja
@@ -116,7 +126,7 @@ export function LeadsToolbar({
                 {/* 2. FILTROS */}
                 <div className="p-1 xl:p-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:flex gap-3 items-center">
 
-                    <div className="min-w-[150px]">
+                    <div className="min-w-[150px] relative">
                         <CustomSelect
                             icon={Activity}
                             value={filters.status}
@@ -130,8 +140,14 @@ export function LeadsToolbar({
                             <option value="ganado">✅ Ganado</option>
                             <option value="perdido">❌ Perdido</option>
                             <option value="en_proceso">⏳ En Proceso</option>
-                            <option value="datos_pedidos">📋 Datos Pedidos</option>
+                            <option value="datos_pedidos">📋 Info. Faltante</option>
+                            <option value="asesoria_financiamiento">🏦 Asesoria Financiamiento</option>
                         </CustomSelect>
+                        {filters.requestStatus && filters.requestStatus !== 'all' && (
+                            <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm capitalize z-10">
+                                {filters.requestStatus.replace('_', ' ')}
+                            </div>
+                        )}
                     </div>
 
                     <div className="min-w-[150px]">
@@ -247,6 +263,126 @@ export function LeadsToolbar({
                             {getInteractionLabel()}: <strong className="text-slate-900 text-sm">{interactionsCount}</strong> interacciones
                         </span>
                     </div>
+
+                    {(requestStats.datosPedidos.total > 0 || requestStats.asesoria.total > 0) && (
+                        <>
+                            {/* SEPARADOR */}
+                            <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
+
+                            {/* NOTIFICACIONES PENDIENTES CON POPOVER */}
+                            <div className="flex items-center gap-2">
+                                {requestStats.datosPedidos.total > 0 && (
+                                    <div className="relative group">
+                                        <button 
+                                            onClick={() => onFilterChange('status', 'datos_pedidos')}
+                                            className="flex items-center gap-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-md border border-purple-200 shadow-sm animate-in fade-in transition-colors cursor-pointer"
+                                            title="Ver Información Faltante"
+                                        >
+                                            {requestStats.datosPedidos.pendiente > 0 ? (
+                                                <BellRing className="h-3.5 w-3.5 animate-bounce text-purple-600" />
+                                            ) : (
+                                                <BellRing className="h-3.5 w-3.5 text-purple-400" />
+                                            )}
+                                            <span>
+                                                <strong className="font-bold">{requestStats.datosPedidos.pendiente}</strong> Info. Faltante
+                                            </span>
+                                        </button>
+                                        
+                                        {/* Popover Hover */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 shadow-xl rounded-lg p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 cursor-default">
+                                            <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-100 pb-1">Info. Faltante</h4>
+                                            <div className="space-y-1 text-xs">
+                                                <div 
+                                                    className="flex justify-between items-center text-orange-600 hover:bg-orange-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente' }); }}
+                                                >
+                                                    <span>Pendientes</span>
+                                                    <span className="font-bold bg-orange-100/50 px-1.5 rounded">{requestStats.datosPedidos.pendiente}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso' }); }}
+                                                >
+                                                    <span>En Proceso</span>
+                                                    <span className="font-bold bg-blue-100/50 px-1.5 rounded">{requestStats.datosPedidos.en_proceso}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-emerald-600 hover:bg-emerald-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto' }); }}
+                                                >
+                                                    <span>Resueltos</span>
+                                                    <span className="font-bold bg-emerald-100/50 px-1.5 rounded">{requestStats.datosPedidos.resuelto}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-slate-600 border-t border-slate-100 pt-1 mt-1 hover:bg-slate-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all' }); }}
+                                                >
+                                                    <span className="font-medium">Total</span>
+                                                    <span className="font-bold">{requestStats.datosPedidos.total}</span>
+                                                </div>
+                                            </div>
+                                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {requestStats.asesoria.total > 0 && (
+                                    <div className="relative group">
+                                        <button 
+                                            onClick={() => onFilterChange('status', 'asesoria_financiamiento')}
+                                            className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-sm animate-in fade-in transition-colors cursor-pointer"
+                                            title="Ver Asesorías"
+                                        >
+                                            {requestStats.asesoria.pendiente > 0 ? (
+                                                <BellRing className="h-3.5 w-3.5 animate-bounce text-emerald-600" />
+                                            ) : (
+                                                <BellRing className="h-3.5 w-3.5 text-emerald-400" />
+                                            )}
+                                            <span>
+                                                <strong className="font-bold">{requestStats.asesoria.pendiente}</strong> Asesorías
+                                            </span>
+                                        </button>
+
+                                        {/* Popover Hover */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 shadow-xl rounded-lg p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 cursor-default">
+                                            <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-100 pb-1">Asesorías Fin.</h4>
+                                            <div className="space-y-1 text-xs">
+                                                <div 
+                                                    className="flex justify-between items-center text-orange-600 hover:bg-orange-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'pendiente' }); }}
+                                                >
+                                                    <span>Pendientes</span>
+                                                    <span className="font-bold bg-orange-100/50 px-1.5 rounded">{requestStats.asesoria.pendiente}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'en_proceso' }); }}
+                                                >
+                                                    <span>En Proceso</span>
+                                                    <span className="font-bold bg-blue-100/50 px-1.5 rounded">{requestStats.asesoria.en_proceso}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-emerald-600 hover:bg-emerald-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'resuelto' }); }}
+                                                >
+                                                    <span>Resueltos</span>
+                                                    <span className="font-bold bg-emerald-100/50 px-1.5 rounded">{requestStats.asesoria.resuelto}</span>
+                                                </div>
+                                                <div 
+                                                    className="flex justify-between items-center text-slate-600 border-t border-slate-100 pt-1 mt-1 hover:bg-slate-50 p-1 rounded cursor-pointer transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'all' }); }}
+                                                >
+                                                    <span className="font-medium">Total</span>
+                                                    <span className="font-bold">{requestStats.asesoria.total}</span>
+                                                </div>
+                                            </div>
+                                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {hasActiveFilters && (

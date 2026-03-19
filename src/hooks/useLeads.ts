@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions } from "@/services/leads.service";
+import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchRequestStats } from "@/services/leads.service";
 import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 
@@ -15,6 +15,12 @@ export function useLeads() {
     const [totalCount, setTotalCount] = useState(0);
     const [respondedCount, setRespondedCount] = useState(0);
     const [interactionsCount, setInteractionsCount] = useState(0);
+    
+    // NOTIFICACIONES PENDIENTES
+    const [requestStats, setRequestStats] = useState({
+        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 },
+        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }
+    });
 
     // ESTADO UI
     const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +41,7 @@ export function useLeads() {
     // ------------------------------------------------
 
     const [filters, setFilters] = useState<LeadsFilters>({
-        search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all'
+        search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all'
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -43,7 +49,7 @@ export function useLeads() {
     const resetFilters = () => {
         setPage(1);
         setFilters({
-            search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all'
+            search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all'
         });
     };
 
@@ -54,15 +60,17 @@ export function useLeads() {
         else setIsRefetching(true);
 
         try {
-            const [leadsData, interactions] = await Promise.all([
+            const [leadsData, interactions, stats] = await Promise.all([
                 fetchLeadsAPI(supabase, page, rowsPerPage, filters),
-                fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate)
+                fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate),
+                fetchRequestStats(supabase, filters.assignedTo)
             ]);
 
             setLeads(leadsData.data);
             setTotalCount(leadsData.count);
             setRespondedCount(leadsData.respondedCount);
             setInteractionsCount(interactions);
+            setRequestStats(stats);
             
         } catch (error) {
             console.error("Error cargando leads:", error);
@@ -104,12 +112,19 @@ export function useLeads() {
         };
     }, [supabase, user, loadLeads]);
 
-    const updateFilter = (key: keyof LeadsFilters, value: any) => {
+    const updateFilter = (keyOrFilters: keyof LeadsFilters | Partial<LeadsFilters>, value?: any) => {
         setPage(1);
-        if (key === 'exactDate' && value !== '') {
-            setFilters(prev => ({ ...prev, exactDate: value, dateRange: 'all' }));
+        if (typeof keyOrFilters === 'object') {
+            setFilters(prev => ({ ...prev, ...keyOrFilters }));
         } else {
-            setFilters(prev => ({ ...prev, [key]: value }));
+            const key = keyOrFilters as keyof LeadsFilters;
+            if (key === 'exactDate' && value !== '') {
+                setFilters(prev => ({ ...prev, exactDate: value, dateRange: 'all' }));
+            } else if (key === 'status') {
+                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all' }));
+            } else {
+                setFilters(prev => ({ ...prev, [key]: value }));
+            }
         }
     };
 
@@ -118,6 +133,7 @@ export function useLeads() {
         totalCount,
         respondedCount,
         interactionsCount,
+        requestStats,
         page, setPage, rowsPerPage,
         isLoading,
         isRefetching,

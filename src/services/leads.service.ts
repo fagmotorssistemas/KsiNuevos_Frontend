@@ -39,6 +39,8 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .order('updated_at', { ascending: false })
             .range(from, to);
 
+        let idFilters: number[][] = [];
+
         // 2. Aplicar Filtros a la Query Principal (nombre, teléfono, vehículo marca/modelo)
         let searchMatchIds: number[] = [];
         if (filters.search) {
@@ -75,14 +77,49 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
 
                 searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds])];
                 if (searchMatchIds.length > 0) {
-                    query = query.in('id', searchMatchIds);
+                    idFilters.push(searchMatchIds);
                 } else {
-                    // Ningún lead coincide → forzar resultado vacío
-                    query = query.eq('id', -1);
+                    idFilters.push([-1]);
                 }
             }
         }
-        if (filters.status && filters.status !== 'all') {
+
+        // Sub-filtro de estado de requerimiento (datos pedidos o asesoria financiamiento)
+        if (filters.status === 'datos_pedidos' || filters.status === 'asesoria_financiamiento') {
+            const table = filters.status === 'datos_pedidos' ? 'datos_solicitados_clientes' : 'asesoria_financiamiento';
+            let reqQuery = supabase.from(table).select('lead_id');
+            
+            if (filters.requestStatus && filters.requestStatus !== 'all') {
+                reqQuery = reqQuery.eq('estado', filters.requestStatus);
+            }
+
+            const { data: reqData } = await reqQuery;
+            const reqIds: number[] = (reqData || []).map((r: any) => r.lead_id as number);
+            
+            if (reqIds.length > 0) {
+                idFilters.push([...new Set<number>(reqIds)]);
+            } else {
+                idFilters.push([-1]); // No records match this request status
+            }
+        }
+
+        // Intersect all idFilters
+        if (idFilters.length > 0) {
+            let finalIds = idFilters[0];
+            for (let i = 1; i < idFilters.length; i++) {
+                const set = new Set(idFilters[i]);
+                finalIds = finalIds.filter(id => set.has(id));
+            }
+            if (finalIds.length > 0) {
+                query = query.in('id', finalIds);
+                searchMatchIds = finalIds; // Update for respondedCount logic later
+            } else {
+                query = query.eq('id', -1);
+                searchMatchIds = [];
+            }
+        }
+
+        if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             query = query.eq('status', filters.status);
         }
         if (filters.temperature && filters.temperature !== 'all') {
@@ -125,12 +162,16 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .neq('resume', '');        // Que no esté vacío
 
         // Re-aplicamos los mismos filtros para que el porcentaje sea sobre lo que el usuario ve
-        if (filters.search && searchMatchIds.length > 0) {
-            respondedQuery = respondedQuery.in('id', searchMatchIds);
-        } else if (filters.search && searchMatchIds.length === 0) {
-            respondedQuery = respondedQuery.eq('id', -1);
+        if (idFilters.length > 0) {
+            if (searchMatchIds.length > 0) {
+                respondedQuery = respondedQuery.in('id', searchMatchIds);
+            } else {
+                respondedQuery = respondedQuery.eq('id', -1);
+            }
         }
-        if (filters.status && filters.status !== 'all') respondedQuery = respondedQuery.eq('status', filters.status);
+        if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
+            respondedQuery = respondedQuery.eq('status', filters.status);
+        }
         if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
         
@@ -200,5 +241,69 @@ export const fetchDailyInteractions = async (supabase: any, assignedTo: string, 
         return count || 0;
     } catch (error) {
         return 0;
+    }
+};
+
+// --- ALERTAS DE PENDIENTES ---
+export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
+    try {
+        let datosQuery = supabase
+            .from('datos_solicitados_clientes')
+            .select('estado, lead_id, leads!inner(assigned_to)')
+            .neq('leads.assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+
+        if (assignedTo && assignedTo !== 'all') {
+            datosQuery = datosQuery.eq('leads.assigned_to', assignedTo);
+        }
+
+        let asesoriaQuery = supabase
+            .from('asesoria_financiamiento')
+            .select('estado, lead_id, leads!inner(assigned_to)')
+            .neq('leads.assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+
+        if (assignedTo && assignedTo !== 'all') {
+            asesoriaQuery = asesoriaQuery.eq('leads.assigned_to', assignedTo);
+        }
+
+        const [datosRes, asesoriaRes] = await Promise.all([datosQuery, asesoriaQuery]);
+
+        // Función para contar LEADS ÚNICOS por estado
+        const processStats = (data: any[]) => {
+            const stats = { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 };
+            if (!data) return stats;
+
+            const leadsByState = {
+                pendiente: new Set(),
+                en_proceso: new Set(),
+                resuelto: new Set(),
+                all: new Set()
+            };
+
+            data.forEach(item => {
+                const est = item.estado || 'pendiente';
+                leadsByState.all.add(item.lead_id);
+                if (est === 'pendiente') leadsByState.pendiente.add(item.lead_id);
+                if (est === 'en_proceso') leadsByState.en_proceso.add(item.lead_id);
+                if (est === 'resuelto') leadsByState.resuelto.add(item.lead_id);
+            });
+
+            stats.pendiente = leadsByState.pendiente.size;
+            stats.en_proceso = leadsByState.en_proceso.size;
+            stats.resuelto = leadsByState.resuelto.size;
+            stats.total = leadsByState.all.size;
+
+            return stats;
+        };
+
+        return {
+            datosPedidos: processStats(datosRes.data),
+            asesoria: processStats(asesoriaRes.data)
+        };
+    } catch (error) {
+        console.error("Error fetching request stats:", error);
+        return { 
+            datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
+            asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
+        };
     }
 };

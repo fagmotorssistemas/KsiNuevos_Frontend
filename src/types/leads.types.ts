@@ -19,6 +19,7 @@ export type LeadsFilters = {
     dateRange: DateFilter;
     exactDate: string; 
     assignedTo: string | 'all';
+    requestStatus?: string | 'all';
 };
 
 // ID que siempre excluyes

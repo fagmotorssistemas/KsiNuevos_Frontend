@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_prompts: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: number
+          name: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: number
+          name: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           created_at: string | null
@@ -112,6 +133,44 @@ export type Database = {
           trabaja_con_gps?: boolean | null
         }
         Relationships: []
+      }
+      asesoria_financiamiento: {
+        Row: {
+          estado: Database["public"]["Enums"]["estado_financiamiento"] | null
+          fecha_resolucion: string | null
+          fecha_solicitud: string | null
+          id: number
+          lead_id: number
+          mensaje_completo: string | null
+          notas_vendedor: string | null
+        }
+        Insert: {
+          estado?: Database["public"]["Enums"]["estado_financiamiento"] | null
+          fecha_resolucion?: string | null
+          fecha_solicitud?: string | null
+          id?: number
+          lead_id: number
+          mensaje_completo?: string | null
+          notas_vendedor?: string | null
+        }
+        Update: {
+          estado?: Database["public"]["Enums"]["estado_financiamiento"] | null
+          fecha_resolucion?: string | null
+          fecha_solicitud?: string | null
+          id?: number
+          lead_id?: number
+          mensaje_completo?: string | null
+          notas_vendedor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_asesoria_financiamiento_lead"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       brokers: {
         Row: {
@@ -248,6 +307,7 @@ export type Database = {
           created_at: string | null
           descripcion: string | null
           estado: string | null
+          etapa_id: string | null
           fecha_limite: string
           id: string
           tipo: string | null
@@ -259,6 +319,7 @@ export type Database = {
           created_at?: string | null
           descripcion?: string | null
           estado?: string | null
+          etapa_id?: string | null
           fecha_limite: string
           id?: string
           tipo?: string | null
@@ -270,12 +331,20 @@ export type Database = {
           created_at?: string | null
           descripcion?: string | null
           estado?: string | null
+          etapa_id?: string | null
           fecha_limite?: string
           id?: string
           tipo?: string | null
           usuario_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "case_tasks_etapa_id_fkey"
+            columns: ["etapa_id"]
+            isOneToOne: false
+            referencedRelation: "proceso_etapas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fk_case_tasks_case"
             columns: ["case_id"]
@@ -1563,6 +1632,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      n8n_chat_histories: {
+        Row: {
+          id: number | null
+          message: Json | null
+          session_id: string | null
+        }
+        Insert: {
+          id?: number | null
+          message?: Json | null
+          session_id?: string | null
+        }
+        Update: {
+          id?: number | null
+          message?: Json | null
+          session_id?: string | null
+        }
+        Relationships: []
       }
       proceso_etapas: {
         Row: {
@@ -3508,6 +3595,7 @@ export type Database = {
         | "ACTIVO"
         | "SUSPENDIDO"
         | "RETIRADO"
+      estado_financiamiento: "pendiente" | "en_proceso" | "resuelto"
       estado_vehiculo_enum:
         | "poder_cliente"
         | "retenido"
@@ -3538,6 +3626,7 @@ export type Database = {
         | "perdido"
         | "en_proceso"
         | "datos_pedidos"
+        | "asesoria_financiamiento"
       lead_temperature: "frio" | "tibio" | "caliente"
       metodo_pago_rastreador_enum:
         | "EFECTIVO"
@@ -3788,6 +3877,7 @@ export const Constants = {
         "SUSPENDIDO",
         "RETIRADO",
       ],
+      estado_financiamiento: ["pendiente", "en_proceso", "resuelto"],
       estado_vehiculo_enum: [
         "poder_cliente",
         "retenido",
@@ -3821,6 +3911,7 @@ export const Constants = {
         "perdido",
         "en_proceso",
         "datos_pedidos",
+        "asesoria_financiamiento",
       ],
       lead_temperature: ["frio", "tibio", "caliente"],
       metodo_pago_rastreador_enum: [

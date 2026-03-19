@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity, BookAlert } from "lucide-react";
+import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity, BookAlert, Landmark } from "lucide-react";
 import type { LeadWithDetails } from "@/types/leads.types";
 
 // Importación de componentes divididos
@@ -11,13 +11,14 @@ import { LeadShowroomTab } from "./LeadShowroomTab";
 import { LeadRequestsTab } from "./LeadRequestsTab"; 
 import { LeadRecoveryTab } from "./LeadRecoveryTab";
 import { LeadDatosPedidosTab } from "./LeadDatosPedidosTab";
+import { LeadAsesoriaFinanciamientoTab } from "./LeadAsesoriaFinanciamientoTab";
 
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
 }
 
-type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos';
+type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos' | 'asesoria_financiamiento';
 
 export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>('history');
@@ -80,7 +81,13 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                                 active={activeTab === 'datos_pedidos'} 
                                 onClick={() => setActiveTab('datos_pedidos')}
                                 icon={BookAlert}
-                                label="Datos Pedidos"
+                                label="Info. Faltante"
+                            />
+                            <TabButton
+                                active={activeTab === 'asesoria_financiamiento'}
+                                onClick={() => setActiveTab('asesoria_financiamiento')}
+                                icon={Landmark}
+                                label="Asesoria Financ."
                             />
                         </div>
 
@@ -97,6 +104,7 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                             {activeTab === 'requests' && <LeadRequestsTab lead={lead} />}
                             {activeTab === 'recuperar' && <LeadRecoveryTab lead={lead} />}
                             {activeTab === 'datos_pedidos' && <LeadDatosPedidosTab leadId={lead.id} />}
+                            {activeTab === 'asesoria_financiamiento' && <LeadAsesoriaFinanciamientoTab leadId={lead.id} />}
                         </div>
                     </div>
                 </div>
