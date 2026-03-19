@@ -116,7 +116,7 @@ export function LeadsToolbar({
                     </div>
                     <input
                         type="text"
-                        placeholder="Buscar por nombre, teléfono, ID o vehículo..."
+                        placeholder="Buscar por nombre, teléfono, ID Kommo o vehículo..."
                         className="h-11 w-full rounded-xl border-none bg-transparent pl-11 pr-4 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:ring-0 focus:bg-slate-50/50 transition-all"
                         value={filters.search}
                         onChange={(e) => onFilterChange('search', e.target.value)}

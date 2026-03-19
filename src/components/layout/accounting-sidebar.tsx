@@ -17,7 +17,6 @@ import {
     ChevronRight,
     BanknoteArrowDown,
     Box,
-    ShieldCheck,
     StickyNote, // Importamos el icono nuevo de GIT
 } from 'lucide-react';
 
@@ -35,8 +34,6 @@ const menuItems = [
     { name: 'Inventario', href: '/inventario', icon: Box },
     // Nuevo item de GIT
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
-    // Gestión legal de cartera (módulo legal)
-    { name: 'Gestión Legal', href: '/legal/cases', icon: ShieldCheck },
 ];
 
 export function AccountingSidebar() {

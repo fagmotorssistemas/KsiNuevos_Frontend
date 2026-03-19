@@ -15,6 +15,7 @@ export const Navbar = () => {
   const { user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const showSegurosRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
+  const showLegal = profile?.role === 'admin' || profile?.role === 'abogado'
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -93,6 +94,15 @@ export const Navbar = () => {
             >
                 Inventario
             </Link>
+            {showLegal && (
+              <Link 
+                  href="/legal/cases" 
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Gestión Legal
+              </Link>
+            )}
             {showSegurosRastreadores && (
               <>
                 <Link 

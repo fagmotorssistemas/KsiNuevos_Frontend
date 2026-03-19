@@ -38,6 +38,7 @@ if (profile?.role === "finanzas") {
     // Admin
     if (profile?.role === "admin") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
+      navItems.push({ href: "/legal/cases", label: "Gestión Legal" });
       navItems.push({ href: "/taller/dashboard", label: "Taller" });
     }
 

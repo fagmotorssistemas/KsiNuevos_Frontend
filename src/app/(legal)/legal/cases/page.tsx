@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Search, Plus, RefreshCw } from "lucide-react";
+import { walletService } from "@/services/wallet.service";
 
 type CaseListRow = {
   id: string;
@@ -21,6 +22,7 @@ type CaseListRow = {
 function LegalCasesPageContent() {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<CaseListRow[]>([]);
+  const [clientNamesById, setClientNamesById] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get("q") || searchParams.get("id_sistema") || "");
@@ -38,8 +40,34 @@ function LegalCasesPageContent() {
     if (error) {
       console.error(error);
       setRows([]);
+      setClientNamesById({});
     } else {
-      setRows((data as any) ?? []);
+      const nextRows = ((data as any) ?? []) as CaseListRow[];
+      setRows(nextRows);
+
+      // Traemos el nombre desde el directorio Oracle (Cartera) usando clienteId=id_sistema
+      // (Así relacionamos el #id_sistema con el nombre, como en tus tablas de cartera).
+      try {
+        const ids = Array.from(new Set(nextRows.map((r) => r.id_sistema))).filter(Boolean);
+        if (ids.length) {
+          const debtors = await walletService.getAllDebtors(5000);
+          const map: Record<number, string> = {};
+          for (const d of debtors) {
+            if (typeof d.clienteId === "number" && d.nombre) map[d.clienteId] = d.nombre;
+          }
+          // Conservamos solo lo que necesitamos
+          const filtered: Record<number, string> = {};
+          for (const id of ids) {
+            if (map[id]) filtered[id] = map[id];
+          }
+          setClientNamesById(filtered);
+        } else {
+          setClientNamesById({});
+        }
+      } catch (e) {
+        console.error("Error cargando nombres de clientes:", e);
+        setClientNamesById({});
+      }
     }
     setLoading(false);
   };
@@ -54,9 +82,14 @@ function LegalCasesPageContent() {
     if (!query) return rows;
     return rows.filter((r) => {
       const idSistema = String(r.id_sistema ?? "");
-      return idSistema.includes(query) || (r.estado || "").toLowerCase().includes(query);
+      const nombre = clientNamesById[r.id_sistema] || "";
+      return (
+        idSistema.includes(query) ||
+        (r.estado || "").toLowerCase().includes(query) ||
+        nombre.toLowerCase().includes(query)
+      );
     });
-  }, [rows, q]);
+  }, [rows, q, clientNamesById]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -107,7 +140,7 @@ function LegalCasesPageContent() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr className="text-left text-xs font-semibold text-slate-600">
-                <th className="px-5 py-3">id_sistema</th>
+                <th className="px-5 py-3">Cliente / ID</th>
                 <th className="px-5 py-3">Estado</th>
                 <th className="px-5 py-3 hidden lg:table-cell">Próxima acción</th>
                 <th className="px-5 py-3 hidden md:table-cell">Fecha próxima</th>
@@ -131,7 +164,26 @@ function LegalCasesPageContent() {
               ) : (
                 filtered.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-mono text-slate-900">#{c.id_sistema}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border border-slate-100">
+                          {(clientNamesById[c.id_sistema]?.substring(0, 2) || String(c.id_sistema).substring(0, 2)).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col max-w-[220px]">
+                          <span
+                            className="font-semibold text-slate-900 line-clamp-1 text-sm"
+                            title={clientNamesById[c.id_sistema] || `Cliente #${c.id_sistema}`}
+                          >
+                            {clientNamesById[c.id_sistema] || `Cliente #${c.id_sistema}`}
+                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-mono">
+                              #{c.id_sistema}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-5 py-4 text-sm">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                         {c.estado || "—"}

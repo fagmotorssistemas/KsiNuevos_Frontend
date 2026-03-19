@@ -75,7 +75,18 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 const { data: phoneData } = await qPhone;
                 phoneIds = ((phoneData as { id: number }[] | null) ?? []).map((r) => r.id);
 
-                searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds])];
+                // ID Kommo: leads donde lead_id_kommo coincida exactamente
+                let kommoIds: number[] = [];
+                if (tokens.length === 1 && !isNaN(Number(tokens[0]))) {
+                    const { data: kommoData } = await supabase
+                        .from('leads')
+                        .select('id')
+                        .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
+                        .eq('lead_id_kommo', Number(tokens[0]));
+                    kommoIds = ((kommoData as { id: number }[] | null) ?? []).map((r) => r.id);
+                }
+
+                searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds, ...kommoIds])];
                 if (searchMatchIds.length > 0) {
                     idFilters.push(searchMatchIds);
                 } else {
