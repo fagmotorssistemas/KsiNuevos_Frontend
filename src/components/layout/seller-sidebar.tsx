@@ -17,8 +17,6 @@ import {
     ShoppingCart,   // Pedidos
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
-    MessagesSquare,
-    StickyNote, 
 } from 'lucide-react';
 
 // Definición de los items del menú de Ventas
@@ -30,8 +28,6 @@ const menuItems = [
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
-    { name: 'Mensajería', href: '/messaging', icon: MessagesSquare },
-   // { name: 'Contratos', href: '/contracts', icon: StickyNote },
 ];
 
 export function SellerSidebar() {
