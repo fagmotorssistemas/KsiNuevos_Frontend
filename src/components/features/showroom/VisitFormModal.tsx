@@ -15,7 +15,10 @@ import {
     Pencil,
     Phone,
     AlertCircle,
-    Car
+    Car,
+    Calendar,
+    Type,
+    AlignLeft
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem, ShowroomVisit } from "./constants";
@@ -39,7 +42,14 @@ interface VisitFormData {
     test_drive: boolean;
     credit_status: CreditStatus;
     observation: string;
+    /** Cita en tabla `appointments` (opcional) */
+    appointment_title: string;
+    appointment_start: string;
+    appointment_location: string;
+    appointment_notes: string;
 }
+
+type AppointmentInsertStatus = "pendiente" | "confirmada" | "completada" | "cancelada" | "reprogramada" | "no_asistio";
 
 export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit }: VisitFormModalProps) {
     const { supabase, user } = useAuth();
@@ -52,6 +62,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     const [searchTerm, setSearchTerm] = useState("");
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isManualVehicle, setIsManualVehicle] = useState(false); // Nuevo estado para el toggle
+    const [scheduleAgendaAppointment, setScheduleAgendaAppointment] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Estado del Formulario
@@ -65,15 +76,28 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         visit_end_time: '',
         test_drive: false,
         credit_status: 'pendiente' as CreditStatus,
-        observation: ''
+        observation: '',
+        appointment_title: '',
+        appointment_start: '',
+        appointment_location: '',
+        appointment_notes: ''
     });
 
     const isEditing = !!visitToEdit;
 
     // Limpiar errores al abrir/cerrar
     useEffect(() => {
-        if (!isOpen) setError(null);
+        if (!isOpen) {
+            setError(null);
+            setScheduleAgendaAppointment(false);
+        }
     }, [isOpen]);
+
+    const defaultAppointmentLocalDatetime = () => {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        return now.toISOString().slice(0, 16);
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -126,8 +150,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     visit_end_time: endTime,
                     test_drive: visitToEdit.test_drive || false,
                     credit_status: (visitToEdit.credit_status as CreditStatus) || 'pendiente',
-                    observation: visitToEdit.observation || ''
+                    observation: visitToEdit.observation || '',
+                    appointment_title: '',
+                    appointment_start: '',
+                    appointment_location: '',
+                    appointment_notes: ''
                 });
+                setScheduleAgendaAppointment(false);
 
                 if (visitToEdit.inventoryoracle) {
                     setSearchTerm(`${visitToEdit.inventoryoracle.brand} ${visitToEdit.inventoryoracle.model} (${visitToEdit.inventoryoracle.year})`);
@@ -150,10 +179,15 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     visit_end_time: '',
                     test_drive: false,
                     credit_status: 'pendiente',
-                    observation: ''
+                    observation: '',
+                    appointment_title: '',
+                    appointment_start: '',
+                    appointment_location: '',
+                    appointment_notes: ''
                 });
                 setSearchTerm("");
                 setIsManualVehicle(false);
+                setScheduleAgendaAppointment(false);
             }
         }
     }, [isOpen, visitToEdit, supabase]);
@@ -218,6 +252,21 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
             }
         }
 
+        if (scheduleAgendaAppointment) {
+            if (!formData.appointment_title.trim()) {
+                missingFields.push({ key: 'appointment_title', label: 'Asunto de la cita' });
+            }
+            if (!formData.appointment_start.trim()) {
+                missingFields.push({ key: 'appointment_start', label: 'Fecha y hora de la cita' });
+            }
+            if (!formData.appointment_location.trim()) {
+                missingFields.push({ key: 'appointment_location', label: 'Ubicación de la cita' });
+            }
+            if (!formData.appointment_notes.trim()) {
+                missingFields.push({ key: 'appointment_notes', label: 'Notas de la cita' });
+            }
+        }
+
         if (missingFields.length > 0) {
             if (missingFields.length > 3) {
                 setError("Por favor completa todos los campos obligatorios marcados en rojo.");
@@ -229,6 +278,15 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         }
 
         if (!user) return;
+
+        if (scheduleAgendaAppointment) {
+            const apptStart = new Date(formData.appointment_start);
+            if (isNaN(apptStart.getTime())) {
+                setError("La fecha y hora de la cita no son válidas.");
+                return;
+            }
+        }
+
         setIsSubmitting(true);
 
         // --- CORRECCIÓN DE ZONA HORARIA (FIX) ---
@@ -299,6 +357,28 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         }
 
         if (!dbError) {
+            if (scheduleAgendaAppointment && user) {
+                const startTime = new Date(formData.appointment_start);
+                const { error: apptError } = await supabase.from("appointments").insert({
+                    title: formData.appointment_title.trim(),
+                    lead_id: null,
+                    start_time: startTime.toISOString(),
+                    location: formData.appointment_location.trim(),
+                    notes: formData.appointment_notes.trim(),
+                    external_client_name: formData.client_name.trim(),
+                    responsible_id: user.id,
+                    status: "pendiente" as AppointmentInsertStatus,
+                });
+                if (apptError) {
+                    console.error(apptError);
+                    setError(
+                        "La visita se guardó correctamente, pero no se pudo crear la cita en la agenda. Revísala en Agenda o inténtalo de nuevo."
+                    );
+                    onSuccess();
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
             onSuccess();
             onClose();
         } else {
@@ -328,6 +408,14 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
         // Lógica especial para el campo de vehículo que depende del modo
         if (fieldName === 'inventoryoracle_id' && isManualVehicle) return '';
         if (fieldName === 'manual_vehicle' && !isManualVehicle) return '';
+
+        const appointmentKeys: (keyof VisitFormData)[] = [
+            'appointment_title',
+            'appointment_start',
+            'appointment_location',
+            'appointment_notes',
+        ];
+        if (appointmentKeys.includes(fieldName) && !scheduleAgendaAppointment) return '';
 
         return error && (!formData[fieldName] || formData[fieldName].toString().trim() === '')
             ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-500/10'
@@ -423,6 +511,155 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                             </div>
                         </div>
 
+                        {/* Cita en agenda (misma lógica que AppointmentModal) */}
+                        <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 p-6 rounded-2xl border border-indigo-100/80 space-y-5 shadow-sm">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-indigo-100/80">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="p-2 bg-indigo-100 rounded-lg text-indigo-800">
+                                        <Calendar className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-base font-bold text-slate-800">Agendar en la agenda</h4>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            Crea una cita en el calendario usando el mismo cliente de arriba.
+                                        </p>
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-3 cursor-pointer select-none shrink-0">
+                                    <span className={`text-sm font-semibold ${scheduleAgendaAppointment ? 'text-indigo-900' : 'text-slate-500'}`}>
+                                        Agendar cita
+                                    </span>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={scheduleAgendaAppointment}
+                                        onClick={() => {
+                                            setScheduleAgendaAppointment((prev) => {
+                                                const next = !prev;
+                                                if (next) {
+                                                    setFormData((f) => ({
+                                                        ...f,
+                                                        appointment_start: f.appointment_start || defaultAppointmentLocalDatetime(),
+                                                    }));
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                        className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                                            scheduleAgendaAppointment ? 'bg-indigo-600' : 'bg-slate-200'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow ring-0 transition ${
+                                                scheduleAgendaAppointment ? 'translate-x-6' : 'translate-x-0.5'
+                                            }`}
+                                        />
+                                    </button>
+                                </label>
+                            </div>
+
+                            {scheduleAgendaAppointment && (
+                                <div className="space-y-5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <div>
+                                        <InputLabel label="Asunto / Título" required />
+                                        <div className="relative">
+                                            <div className={iconContainerClass}>
+                                                <Type className="h-5 w-5" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className={`${inputClasses} ${getErrorClass('appointment_title')}`}
+                                                placeholder="Ej: Seguimiento showroom, prueba de manejo…"
+                                                value={formData.appointment_title}
+                                                onChange={(e) =>
+                                                    setFormData({ ...formData, appointment_title: e.target.value })
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
+                                                Cliente en la cita
+                                                <span className="text-slate-400 font-normal text-[11px] ml-2 font-medium">
+                                                    (mismo que arriba)
+                                                </span>
+                                            </label>
+                                            <div className="relative">
+                                                <div className={iconContainerClass}>
+                                                    <User className="h-5 w-5" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    className={`${inputClasses} bg-slate-100/80 text-slate-600 cursor-not-allowed`}
+                                                    value={formData.client_name}
+                                                    title="Se toma del nombre del cliente"
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 mt-1.5 ml-1">
+                                                Coincide con &quot;Nombre del Cliente&quot; en la primera sección.
+                                            </p>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <InputLabel label="Fecha y hora de inicio" required />
+                                            <div className="relative">
+                                                <div className={iconContainerClass}>
+                                                    <Calendar className="h-5 w-5 text-slate-500" />
+                                                </div>
+                                                <input
+                                                    type="datetime-local"
+                                                    className={`${inputClasses} ${getErrorClass('appointment_start')}`}
+                                                    value={formData.appointment_start}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, appointment_start: e.target.value })
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <InputLabel label="Ubicación" required />
+                                            <div className="relative">
+                                                <div className={iconContainerClass}>
+                                                    <MapPin className="h-5 w-5" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    className={`${inputClasses} ${getErrorClass('appointment_location')}`}
+                                                    placeholder="Showroom, dirección, videollamada…"
+                                                    value={formData.appointment_location}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, appointment_location: e.target.value })
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <InputLabel label="Notas de la cita" required />
+                                            <div className="relative">
+                                                <div className="absolute left-4 top-4 text-slate-400 pointer-events-none">
+                                                    <AlignLeft className="h-5 w-5" />
+                                                </div>
+                                                <textarea
+                                                    rows={3}
+                                                    className={`${inputClasses} h-auto py-3.5 resize-none leading-relaxed ${getErrorClass('appointment_notes')}`}
+                                                    placeholder="Detalles que deben verse en la agenda…"
+                                                    value={formData.appointment_notes}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, appointment_notes: e.target.value })
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="space-y-6">
                             {/* SECCIÓN VEHÍCULO MEJORADA */}
                             <div className="relative z-20">
@@ -439,7 +676,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                                 // Opcional: limpiar campos al cambiar
                                                 if (e.target.checked) {
                                                     setSearchTerm("");
-                                                    setFormData(prev => ({...prev, inventory_id: ''}));
+                                                    setFormData(prev => ({...prev, inventoryoracle_id: ''}));
                                                 } else {
                                                     setFormData(prev => ({...prev, manual_vehicle: ''}));
                                                 }
@@ -617,7 +854,13 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                         className={`w-full text-white font-bold text-base py-4 rounded-xl shadow-xl shadow-slate-900/10 transition-all flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed transform active:scale-[0.99] hover:translate-y-[-1px] ${isEditing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-900 hover:bg-slate-800'}`}
                     >
                         {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : isEditing ? <Pencil className="h-5 w-5" /> : <Save className="h-5 w-5" />}
-                        {isEditing ? 'Actualizar Visita' : 'Registrar Visita'}
+                        {isEditing
+                            ? scheduleAgendaAppointment
+                                ? 'Actualizar y agendar cita'
+                                : 'Actualizar Visita'
+                            : scheduleAgendaAppointment
+                              ? 'Registrar visita y cita'
+                              : 'Registrar Visita'}
                     </button>
                 </div>
             </div>

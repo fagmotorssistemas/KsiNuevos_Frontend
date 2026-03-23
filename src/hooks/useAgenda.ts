@@ -22,10 +22,122 @@ export type AppointmentWithDetails = AppointmentRow & {
 // CORRECCIÓN AQUÍ: Agregamos 'web_requests' para que coincida con la UI
 export type AgendaTab = 'pending' | 'history' | 'suggestions' | 'web_requests';
 
-export type DateFilterOption = 'all' | 'today' | 'tomorrow' | 'week' | 'fortnight' | 'month';
+export type DateFilterOption =
+    | 'all'
+    | 'today'
+    | 'tomorrow'
+    | 'week'
+    | 'fortnight'
+    | 'month'
+    | 'custom';
+
 export interface AgendaFilters {
     responsibleId: string | 'all';
     dateRange: DateFilterOption;
+    /** YYYY-MM-DD — solo aplica cuando `dateRange === 'custom'` */
+    customDate: string;
+}
+
+/** Límites del día en hora local (evita errores con UTC vs local). */
+function startOfLocalDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function endOfLocalDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+
+function addLocalDays(base: Date, days: number): Date {
+    const x = new Date(base.getTime());
+    x.setDate(x.getDate() + days);
+    return x;
+}
+
+/**
+ * Indica si la cita cae en el rango elegido (comparación en calendario local).
+ */
+function appointmentMatchesDateFilter(
+    startTimeIso: string,
+    dateRange: DateFilterOption,
+    customDate: string
+): boolean {
+    const appt = new Date(startTimeIso);
+    if (Number.isNaN(appt.getTime())) return false;
+
+    const today = new Date();
+
+    switch (dateRange) {
+        case 'all':
+            return true;
+        case 'today': {
+            const s = startOfLocalDay(today);
+            const e = endOfLocalDay(today);
+            return appt >= s && appt <= e;
+        }
+        case 'tomorrow': {
+            const t = addLocalDays(today, 1);
+            const s = startOfLocalDay(t);
+            const e = endOfLocalDay(t);
+            return appt >= s && appt <= e;
+        }
+        case 'week': {
+            // Próximos 7 días: hoy hasta el final del día (hoy + 6)
+            const end = endOfLocalDay(addLocalDays(today, 6));
+            return appt >= startOfLocalDay(today) && appt <= end;
+        }
+        case 'fortnight': {
+            const end = endOfLocalDay(addLocalDays(today, 14));
+            return appt >= startOfLocalDay(today) && appt <= end;
+        }
+        case 'month': {
+            const end = endOfLocalDay(addLocalDays(today, 29));
+            return appt >= startOfLocalDay(today) && appt <= end;
+        }
+        case 'custom': {
+            if (!customDate || !/^\d{4}-\d{2}-\d{2}$/.test(customDate)) return true;
+            const [y, m, d] = customDate.split('-').map(Number);
+            const day = new Date(y, m - 1, d);
+            if (Number.isNaN(day.getTime())) return true;
+            const s = startOfLocalDay(day);
+            const e = endOfLocalDay(day);
+            return appt >= s && appt <= e;
+        }
+        default:
+            return true;
+    }
+}
+
+/**
+ * Fecha/hora de referencia para filtrar sugerencias IA (alineado con BotSuggestionCard).
+ * Usa mediodía local en fechas solo-día para evitar desfaces UTC.
+ */
+function getSuggestionReferenceInstant(lead: BotSuggestionLead): Date | null {
+    if (lead.time_reference) {
+        const d = new Date(lead.time_reference);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    if (lead.day_detected) {
+        const raw = lead.day_detected.toString().trim();
+        const parts = raw.split(/[-/]/);
+        if (parts.length >= 3) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10);
+            const d = parseInt(parts[2], 10);
+            if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) {
+                const date = new Date(y, m - 1, d, 12, 0, 0, 0);
+                return Number.isNaN(date.getTime()) ? null : date;
+            }
+        }
+    }
+    if (lead.hour_detected) {
+        const t = new Date();
+        return new Date(t.getFullYear(), t.getMonth(), t.getDate(), 12, 0, 0, 0);
+    }
+    if (lead.created_at) {
+        const d = new Date(lead.created_at);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    return null;
 }
 
 export function useAgenda() {
@@ -40,7 +152,8 @@ export function useAgenda() {
     // Estado de Filtros (Solo Admin)
     const [filters, setFilters] = useState<AgendaFilters>({
         responsibleId: 'all',
-        dateRange: 'all'
+        dateRange: 'all',
+        customDate: '',
     });
 
     // Estados de UI
@@ -145,8 +258,20 @@ export function useAgenda() {
             filtered = filtered.filter(lead => lead.assigned_to === filters.responsibleId);
         }
 
+        if (filters.dateRange !== 'all') {
+            filtered = filtered.filter((lead) => {
+                const ref = getSuggestionReferenceInstant(lead);
+                if (!ref) return false;
+                return appointmentMatchesDateFilter(
+                    ref.toISOString(),
+                    filters.dateRange,
+                    filters.customDate
+                );
+            });
+        }
+
         return filtered;
-    }, [rawSuggestions, allAppointments, isAdmin, filters.responsibleId]);
+    }, [rawSuggestions, allAppointments, isAdmin, filters]);
 
 
     // B. Filtrado de Citas (Admin y Fechas)
@@ -158,30 +283,9 @@ export function useAgenda() {
         }
 
         if (filters.dateRange !== 'all') {
-            const now = new Date();
-            const todayStart = new Date(now.setHours(0,0,0,0));
-            const todayEnd = new Date(now.setHours(23,59,59,999));
-            
-            result = result.filter(a => {
-                const apptDate = new Date(a.start_time);
-                switch (filters.dateRange) {
-                    case 'today': return apptDate >= todayStart && apptDate <= todayEnd;
-                    case 'tomorrow':
-                        const tmrStart = new Date(todayStart); tmrStart.setDate(tmrStart.getDate() + 1);
-                        const tmrEnd = new Date(todayEnd); tmrEnd.setDate(tmrEnd.getDate() + 1);
-                        return apptDate >= tmrStart && apptDate <= tmrEnd;
-                    case 'week':
-                        const weekEnd = new Date(todayEnd); weekEnd.setDate(weekEnd.getDate() + 7);
-                        return apptDate >= todayStart && apptDate <= weekEnd;
-                    case 'fortnight':
-                        const fortnightEnd = new Date(todayEnd); fortnightEnd.setDate(fortnightEnd.getDate() + 15);
-                        return apptDate >= todayStart && apptDate <= fortnightEnd;
-                    case 'month':
-                        const monthEnd = new Date(todayEnd); monthEnd.setDate(monthEnd.getDate() + 30);
-                        return apptDate >= todayStart && apptDate <= monthEnd;
-                    default: return true;
-                }
-            });
+            result = result.filter((a) =>
+                appointmentMatchesDateFilter(a.start_time, filters.dateRange, filters.customDate)
+            );
         }
         return result;
     }, [allAppointments, filters, isAdmin]);

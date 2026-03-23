@@ -16,7 +16,12 @@ import {
     SortDesc
 } from "lucide-react";
 
-import { useAgenda, type AppointmentWithDetails, type DateFilterOption, type BotSuggestionLead } from "@/hooks/useAgenda";
+import {
+    useAgenda,
+    type AppointmentWithDetails,
+    type DateFilterOption,
+    type BotSuggestionLead,
+} from "@/hooks/useAgenda";
 import { useWebAppointments } from "@/hooks/useWebAppointments"; 
 import { WebAppointmentCard } from "@/components/features/agenda/WebAppointmentCard";
 import { WebAppointmentDetailModal } from "@/components/features/agenda/WebAppointmentDetailModal";
@@ -44,8 +49,8 @@ export default function AgendaPage() {
     const [historySubTab, setHistorySubTab] = useState<'leads' | 'web'>('leads');
 
     // Hooks de Lógica Principal
-    const { 
-        isLoading, 
+    const {
+        isLoading,
         isAdmin,
         agents,
         groupedPending, 
@@ -60,6 +65,26 @@ export default function AgendaPage() {
         actions: { markAsCompleted, cancelAppointment, discardSuggestion },
         refresh
     } = useAgenda();
+
+    const agendaFiltersActive =
+        filters.responsibleId !== 'all' || filters.dateRange !== 'all';
+
+    const dateFilterActive = filters.dateRange !== 'all';
+    const responsibleFilterActive = isAdmin && filters.responsibleId !== 'all';
+
+    const resetAgendaFilters = () =>
+        setFilters({ responsibleId: 'all', dateRange: 'all', customDate: '' });
+
+    const handleDateRangeChange = (value: DateFilterOption) => {
+        setFilters((prev) => {
+            if (value === 'custom') {
+                const n = new Date();
+                const ymd = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+                return { ...prev, dateRange: value, customDate: prev.customDate || ymd };
+            }
+            return { ...prev, dateRange: value, customDate: '' };
+        });
+    };
 
     // Hook de Citas Web actualizado con acciones de notas y asignación
     const {
@@ -188,52 +213,75 @@ export default function AgendaPage() {
                 </div>
             </div>
 
-            {/* FILTROS ADMIN */}
-            {isAdmin && activeTab !== 'web_requests' && (
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium mr-2">
+            {/* FILTROS: fecha para todos; responsable solo admin */}
+            {(activeTab === 'pending' || activeTab === 'history' || activeTab === 'suggestions') && (
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-4 items-start lg:items-end animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-medium lg:mr-2 lg:pb-2 shrink-0">
                         <Filter className="h-4 w-4" />
-                        Filtros Admin:
+                        {isAdmin ? 'Filtros Admin' : 'Filtros'}:
                     </div>
-                    <div className="flex-1 w-full md:w-auto">
-                        <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
-                        <div className="relative">
-                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <select
-                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer"
-                                value={filters.responsibleId}
-                                onChange={(e) => setFilters(prev => ({ ...prev, responsibleId: e.target.value }))}
-                            >
-                                <option value="all">Todos los Responsables</option>
-                                <option disabled>──────────</option>
-                                {agents.map(agent => (
-                                    <option key={agent.id} value={agent.id}>
-                                        {agent.full_name || 'Agente Sin Nombre'}
-                                    </option>
-                                ))}
-                            </select>
+
+                    {isAdmin && (
+                        <div className="flex-1 w-full lg:min-w-[220px]">
+                            <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
+                            <div className="relative">
+                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <select
+                                    className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer"
+                                    value={filters.responsibleId}
+                                    onChange={(e) =>
+                                        setFilters((prev) => ({ ...prev, responsibleId: e.target.value }))
+                                    }
+                                >
+                                    <option value="all">Todos los Responsables</option>
+                                    <option disabled>──────────</option>
+                                    {agents.map((agent) => (
+                                        <option key={agent.id} value={agent.id}>
+                                            {agent.full_name || 'Agente Sin Nombre'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex-1 w-full md:w-auto">
-                        <label className="text-xs text-slate-400 font-semibold block mb-1">Período de Tiempo</label>
+                    )}
+
+                    <div className="flex-1 w-full lg:min-w-[200px]">
+                        <label className="text-xs text-slate-400 font-semibold block mb-1">Período de tiempo</label>
                         <select
                             className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none cursor-pointer"
                             value={filters.dateRange}
-                            onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value as DateFilterOption }))}
+                            onChange={(e) => handleDateRangeChange(e.target.value as DateFilterOption)}
                         >
                             <option value="all">Todas las fechas</option>
                             <option disabled>──────────</option>
-                            <option value="today">Solo Hoy</option>
+                            <option value="today">Solo hoy</option>
                             <option value="tomorrow">Mañana</option>
                             <option value="week">Próximos 7 días</option>
                             <option value="fortnight">Próximos 15 días</option>
                             <option value="month">Próximos 30 días</option>
+                            <option value="custom">Una fecha…</option>
                         </select>
                     </div>
-                    {(filters.responsibleId !== 'all' || filters.dateRange !== 'all') && (
-                        <button 
-                            onClick={() => setFilters({ responsibleId: 'all', dateRange: 'all' })}
-                            className="mt-5 text-xs text-red-500 hover:text-red-700 font-medium underline"
+
+                    {filters.dateRange === 'custom' && (
+                        <div className="flex-1 w-full lg:min-w-[180px]">
+                            <label className="text-xs text-slate-400 font-semibold block mb-1">Elegir fecha</label>
+                            <input
+                                type="date"
+                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                value={filters.customDate}
+                                onChange={(e) =>
+                                    setFilters((prev) => ({ ...prev, customDate: e.target.value }))
+                                }
+                            />
+                        </div>
+                    )}
+
+                    {agendaFiltersActive && (
+                        <button
+                            type="button"
+                            onClick={resetAgendaFilters}
+                            className="text-xs text-red-500 hover:text-red-700 font-medium underline pb-2 lg:pb-0 shrink-0"
                         >
                             Limpiar filtros
                         </button>
@@ -320,11 +368,23 @@ export default function AgendaPage() {
                         )
                     ) : (
                         <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
-                             <div className="bg-green-50 p-4 rounded-full mb-4">
+                            <div className="bg-green-50 p-4 rounded-full mb-4">
                                 <CalendarCheck className="h-10 w-10 text-green-500" />
                             </div>
-                            <h3 className="text-lg font-medium text-slate-900">¡Estás al día!</h3>
-                            <p className="text-slate-500 max-w-sm mt-2">No hay eventos pendientes.</p>
+                            {agendaFiltersActive ? (
+                                <>
+                                    <h3 className="text-lg font-medium text-slate-900">No hay citas en este período</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">
+                                        No se encontraron eventos pendientes con los filtros actuales. Prueba otro rango
+                                        o limpia los filtros.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 className="text-lg font-medium text-slate-900">¡Estás al día!</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">No hay eventos pendientes.</p>
+                                </>
+                            )}
                         </div>
                     )
 
@@ -417,8 +477,29 @@ export default function AgendaPage() {
                             <div className="bg-indigo-50 p-4 rounded-full mb-4">
                                 <Sparkles className="h-10 w-10 text-indigo-400" />
                             </div>
-                            <h3 className="text-lg font-medium text-slate-900">Sin sugerencias</h3>
-                            <p className="text-slate-500 max-w-sm mt-2">El robot no ha detectado nuevas intenciones.</p>
+                            {dateFilterActive ? (
+                                <>
+                                    <h3 className="text-lg font-medium text-slate-900">Nada en este período</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">
+                                        No hay sugerencias cuya fecha detectada caiga en el rango elegido. Cambia el
+                                        filtro o limpia para ver todas.
+                                    </p>
+                                </>
+                            ) : responsibleFilterActive ? (
+                                <>
+                                    <h3 className="text-lg font-medium text-slate-900">Sin sugerencias para este responsable</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">
+                                        Prueba con otro vendedor o limpia los filtros.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 className="text-lg font-medium text-slate-900">Sin sugerencias</h3>
+                                    <p className="text-slate-500 max-w-sm mt-2">
+                                        El robot no ha detectado nuevas intenciones.
+                                    </p>
+                                </>
+                            )}
                         </div>
                     )
                 ) : (
@@ -452,7 +533,19 @@ export default function AgendaPage() {
                                 ) : (
                                     <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                                         <History className="h-8 w-8 text-slate-300 mb-3" />
-                                        <h3 className="text-md font-medium text-slate-900">Sin historial de leads</h3>
+                                        {agendaFiltersActive ? (
+                                            <>
+                                                <h3 className="text-md font-medium text-slate-900">
+                                                    No hay citas en este período
+                                                </h3>
+                                                <p className="text-slate-500 text-sm max-w-sm mt-2">
+                                                    No hay historial que coincida con los filtros. Cambia el período o
+                                                    limpia los filtros.
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <h3 className="text-md font-medium text-slate-900">Sin historial de leads</h3>
+                                        )}
                                     </div>
                                 )
                             ) : (
