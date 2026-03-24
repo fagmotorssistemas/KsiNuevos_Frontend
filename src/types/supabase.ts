@@ -205,6 +205,51 @@ export type Database = {
         }
         Relationships: []
       }
+      cartera_clientes: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          deuda: number
+          estado: string
+          etapa_cobranza: string | null
+          fecha_notificacion: string | null
+          fecha_vencimiento: string | null
+          id: number
+          nombre: string | null
+          notificado: boolean
+          telefono: string | null
+          updated_at: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          deuda?: number
+          estado?: string
+          etapa_cobranza?: string | null
+          fecha_notificacion?: string | null
+          fecha_vencimiento?: string | null
+          id?: number
+          nombre?: string | null
+          notificado?: boolean
+          telefono?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          deuda?: number
+          estado?: string
+          etapa_cobranza?: string | null
+          fecha_notificacion?: string | null
+          fecha_vencimiento?: string | null
+          id?: number
+          nombre?: string | null
+          notificado?: boolean
+          telefono?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cartera_manual: {
         Row: {
           activo: boolean
@@ -216,6 +261,10 @@ export type Database = {
           estado_operacion: string
           fecha_venta: string | null
           frecuencia_pago: string | null
+          garante_direccion: string | null
+          garante_identificacion: string | null
+          garante_nombre: string | null
+          garante_telefono: string | null
           id: string
           identificacion: string | null
           monto_original: number | null
@@ -244,6 +293,10 @@ export type Database = {
           estado_operacion?: string
           fecha_venta?: string | null
           frecuencia_pago?: string | null
+          garante_direccion?: string | null
+          garante_identificacion?: string | null
+          garante_nombre?: string | null
+          garante_telefono?: string | null
           id?: string
           identificacion?: string | null
           monto_original?: number | null
@@ -272,6 +325,10 @@ export type Database = {
           estado_operacion?: string
           fecha_venta?: string | null
           frecuencia_pago?: string | null
+          garante_direccion?: string | null
+          garante_identificacion?: string | null
+          garante_nombre?: string | null
+          garante_telefono?: string | null
           id?: string
           identificacion?: string | null
           monto_original?: number | null
@@ -294,6 +351,64 @@ export type Database = {
           {
             foreignKeyName: "cartera_manual_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cartera_manual_delete_requests: {
+        Row: {
+          cartera_manual_id: string
+          created_at: string
+          estado: string
+          id: string
+          motivo: string
+          requested_by: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          cartera_manual_id: string
+          created_at?: string
+          estado?: string
+          id?: string
+          motivo: string
+          requested_by: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          cartera_manual_id?: string
+          created_at?: string
+          estado?: string
+          id?: string
+          motivo?: string
+          requested_by?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartera_manual_delete_requests_cartera_manual_id_fkey"
+            columns: ["cartera_manual_id"]
+            isOneToOne: false
+            referencedRelation: "cartera_manual"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartera_manual_delete_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartera_manual_delete_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2175,6 +2290,71 @@ export type Database = {
             columns: ["salesperson_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_weekly_publication: {
+        Row: {
+          caption: string | null
+          caption_facebook: string | null
+          caption_instagram: string | null
+          created_at: string
+          error_message: string | null
+          facebook_permalink: string | null
+          facebook_post_id: string | null
+          id: string
+          instagram_media_id: string | null
+          instagram_permalink: string | null
+          slot: number
+          status: string
+          theme_id: string | null
+          updated_at: string
+          vehicle_id: string
+          year_week: string
+        }
+        Insert: {
+          caption?: string | null
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          slot: number
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+          vehicle_id: string
+          year_week: string
+        }
+        Update: {
+          caption?: string | null
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          slot?: number
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+          vehicle_id?: string
+          year_week?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_weekly_publication_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]

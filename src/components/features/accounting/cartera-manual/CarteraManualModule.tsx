@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Car,
@@ -20,9 +21,17 @@ import {
   DollarSign,
   TrendingDown,
   FileWarning,
+  Pencil,
+  Trash2,
+  ShieldCheck,
+  UserCheck,
 } from "lucide-react";
 import { carteraManualService } from "@/services/carteraManual.service";
-import type { CarteraManualEstado, CarteraManualRow } from "@/types/carteraManual.types";
+import type {
+  CarteraManualDeleteRequest,
+  CarteraManualEstado,
+  CarteraManualRow,
+} from "@/types/carteraManual.types";
 import { LegalCasesTab } from "@/components/features/accounting/wallet/LegalCasesTab";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +56,11 @@ function formatDate(d: string | null | undefined) {
   } catch {
     return d;
   }
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 const ESTADOS: { value: CarteraManualEstado; label: string }[] = [
@@ -83,6 +97,9 @@ export function CarteraManualModule() {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [listMode, setListMode] = useState<"risk" | "mora" | "all">("risk");
   const [showForm, setShowForm] = useState(false);
+  const [deleteRequests, setDeleteRequests] = useState<
+    (CarteraManualDeleteRequest & { cartera_manual: CarteraManualRow | null })[]
+  >([]);
 
   const handleMoraViewClick = () => {
     setListMode("mora");
@@ -92,15 +109,21 @@ export function CarteraManualModule() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await carteraManualService.listActive();
+      const [data, requests] = await Promise.all([
+        carteraManualService.listActive(),
+        role === "admin"
+          ? carteraManualService.listDeleteRequests("pendiente")
+          : Promise.resolve([]),
+      ]);
       setRows(data);
+      setDeleteRequests(requests);
     } catch (e) {
       console.error(e);
-      alert("No se pudo cargar cartera manual. ¿Aplicaste la migración SQL?");
+      toast.error("No se pudo cargar cartera manual. ¿Aplicaste la migración SQL?");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     load();
@@ -184,6 +207,8 @@ export function CarteraManualModule() {
     return (
       <CarteraManualDetail
         row={selected}
+        userId={user?.id}
+        role={role}
         onBack={() => {
           setSelectedId(null);
           load();
@@ -304,6 +329,13 @@ export function CarteraManualModule() {
       </div>
 
       <div className="space-y-8 animate-in fade-in duration-500">
+        {role === "admin" && (
+          <AdminDeleteRequestsPanel
+            requests={deleteRequests}
+            onResolved={load}
+            adminId={user?.id}
+          />
+        )}
         {/* KPIs estilo cartera */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading && rows.length === 0 ? (
@@ -591,14 +623,21 @@ export function CarteraManualModule() {
 
 function CarteraManualDetail({
   row,
+  userId,
+  role,
   onBack,
   isLegalRole,
 }: {
   row: CarteraManualRow;
+  userId: string | undefined;
+  role: string;
   onBack: () => void;
   isLegalRole: boolean;
 }) {
   const vencido = isMorosoManual(row);
+  const isAdmin = role === "admin";
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDeleteRequest, setShowDeleteRequest] = useState(false);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -635,6 +674,18 @@ function CarteraManualDetail({
                   )}
                   {row.telefono_2 && <span>{row.telefono_2}</span>}
                 </div>
+                {(row.garante_nombre || row.garante_identificacion) && (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    <p className="font-semibold uppercase tracking-wide text-slate-500">
+                      Garante
+                    </p>
+                    <p className="mt-1">{row.garante_nombre || "Sin nombre"}</p>
+                    {row.garante_identificacion && (
+                      <p>ID: {row.garante_identificacion}</p>
+                    )}
+                    {row.garante_telefono && <p>Tel: {row.garante_telefono}</p>}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-8 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -663,6 +714,51 @@ function CarteraManualDetail({
                 </div>
               </div>
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="inline-flex items-center gap-1"
+              onClick={() => setShowEdit(true)}
+            >
+              <Pencil className="h-4 w-4" />
+              Editar datos
+            </Button>
+            {!isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="inline-flex items-center gap-1 text-amber-700"
+                onClick={() => setShowDeleteRequest(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Solicitar eliminar
+              </Button>
+            )}
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="inline-flex items-center gap-1 text-red-700"
+                onClick={async () => {
+                  const ok = window.confirm(
+                    "Esto eliminará (inactivará) la obligación. ¿Continuar?",
+                  );
+                  if (!ok) return;
+                  try {
+                    await carteraManualService.softDelete(row.id);
+                    toast.success("Obligación eliminada correctamente.");
+                    onBack();
+                  } catch (error: unknown) {
+                    toast.error(getErrorMessage(error, "No se pudo eliminar."));
+                  }
+                }}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Eliminar (admin)
+              </Button>
+            )}
           </div>
         </div>
 
@@ -744,6 +840,293 @@ function CarteraManualDetail({
           />
         </div>
       )}
+      {showEdit && (
+        <CarteraManualEditModal
+          row={row}
+          onClose={() => setShowEdit(false)}
+          onSaved={async () => {
+            setShowEdit(false);
+            onBack();
+          }}
+        />
+      )}
+      {showDeleteRequest && (
+        <DeleteRequestModal
+          carteraId={row.id}
+          userId={userId}
+          onClose={() => setShowDeleteRequest(false)}
+          onSaved={async () => {
+            setShowDeleteRequest(false);
+            toast.success("Solicitud enviada al admin.");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteRequestModal({
+  carteraId,
+  userId,
+  onClose,
+  onSaved,
+}: {
+  carteraId: string;
+  userId: string | undefined;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold text-slate-900">
+          Solicitar eliminación
+        </h3>
+        <p className="text-sm text-slate-500">
+          Solo admin puede eliminar. Escribe la razón para enviar la solicitud.
+        </p>
+        <textarea
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[110px]"
+          placeholder="Ejemplo: el caso fue duplicado por error..."
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await carteraManualService.createDeleteRequest(
+                  carteraId,
+                  motivo,
+                  userId,
+                );
+                await onSaved();
+              } catch (error: unknown) {
+                toast.error(getErrorMessage(error, "No se pudo enviar la solicitud."));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "Enviando..." : "Enviar solicitud"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminDeleteRequestsPanel({
+  requests,
+  onResolved,
+  adminId,
+}: {
+  requests: (CarteraManualDeleteRequest & {
+    cartera_manual: CarteraManualRow | null;
+  })[];
+  onResolved: () => Promise<void>;
+  adminId: string | undefined;
+}) {
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  if (!requests.length) return null;
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-amber-600" />
+          Solicitudes de eliminación
+        </h3>
+        <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-xs font-semibold">
+          {requests.length} pendientes
+        </span>
+      </div>
+      <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+        {requests.map((r) => (
+        <div
+          key={r.id}
+          className="rounded-lg border border-slate-200 bg-slate-50/40 p-3 space-y-3"
+        >
+          <div>
+            <p className="text-sm font-semibold text-slate-900 leading-tight">
+              {r.cartera_manual?.nombre_completo || "Registro"}
+            </p>
+            <p className="text-xs text-slate-600 line-clamp-2 mt-1">
+              Motivo: <span className="font-medium text-slate-800">{r.motivo}</span>
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <textarea
+              className="flex-1 w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs min-h-[40px] bg-white resize-none"
+              placeholder="Nota de revisión (opcional)"
+              value={notes[r.id] || ""}
+              onChange={(e) =>
+                setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))
+              }
+            />
+            <div className="flex gap-2 shrink-0 w-full sm:w-auto justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={processingId === r.id}
+                onClick={async () => {
+                  setProcessingId(r.id);
+                  try {
+                    await carteraManualService.resolveDeleteRequest(
+                      r.id,
+                      false,
+                      adminId,
+                      notes[r.id],
+                    );
+                    toast.success("Solicitud rechazada.");
+                    await onResolved();
+                  } catch (error: unknown) {
+                    toast.error(getErrorMessage(error, "No se pudo rechazar."));
+                  } finally {
+                    setProcessingId(null);
+                  }
+                }}
+              >
+                Rechazar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={processingId === r.id}
+                onClick={async () => {
+                  const ok = window.confirm(
+                    "Si apruebas, la obligación quedará eliminada (inactiva).",
+                  );
+                  if (!ok) return;
+                  setProcessingId(r.id);
+                  try {
+                    await carteraManualService.resolveDeleteRequest(
+                      r.id,
+                      true,
+                      adminId,
+                      notes[r.id],
+                    );
+                    toast.success("Solicitud aprobada. Caso eliminado.");
+                    await onResolved();
+                  } catch (error: unknown) {
+                    toast.error(getErrorMessage(error, "No se pudo aprobar."));
+                  } finally {
+                    setProcessingId(null);
+                  }
+                }}
+              >
+                Aprobar y eliminar
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+      </div>
+    </section>
+  );
+}
+
+function CarteraManualEditModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: CarteraManualRow;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [nombre, setNombre] = useState(row.nombre_completo || "");
+  const [idn, setIdn] = useState(row.identificacion || "");
+  const [tel1, setTel1] = useState(row.telefono_1 || "");
+  const [tel2, setTel2] = useState(row.telefono_2 || "");
+  const [saldo, setSaldo] = useState(String(row.saldo_actual ?? 0));
+  const [garanteNombre, setGaranteNombre] = useState(row.garante_nombre || "");
+  const [garanteId, setGaranteId] = useState(row.garante_identificacion || "");
+  const [garanteTel, setGaranteTel] = useState(row.garante_telefono || "");
+  const [notas, setNotas] = useState(row.notas_internas || "");
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/60"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 space-y-3 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold text-slate-900">Editar obligación</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo" />
+          <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={idn} onChange={(e) => setIdn(e.target.value)} placeholder="Identificación" />
+          <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={tel1} onChange={(e) => setTel1(e.target.value)} placeholder="Teléfono 1" />
+          <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={tel2} onChange={(e) => setTel2(e.target.value)} placeholder="Teléfono 2" />
+          <input type="number" className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="Saldo actual" />
+        </div>
+        <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase">Datos del garante</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={garanteNombre} onChange={(e) => setGaranteNombre(e.target.value)} placeholder="Nombre garante" />
+            <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={garanteId} onChange={(e) => setGaranteId(e.target.value)} placeholder="Identificación garante" />
+            <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm sm:col-span-2" value={garanteTel} onChange={(e) => setGaranteTel(e.target.value)} placeholder="Teléfono garante" />
+          </div>
+        </div>
+        <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[90px]" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas" />
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={saving}
+            onClick={async () => {
+              const saldoN = Number(saldo);
+              if (!Number.isFinite(saldoN) || saldoN < 0) {
+                toast.error("Saldo inválido.");
+                return;
+              }
+              setSaving(true);
+              try {
+                await carteraManualService.update(row.id, {
+                  nombre_completo: nombre.trim(),
+                  identificacion: idn.trim() || null,
+                  telefono_1: tel1.trim() || null,
+                  telefono_2: tel2.trim() || null,
+                  saldo_actual: saldoN,
+                  garante_nombre: garanteNombre.trim() || null,
+                  garante_identificacion: garanteId.trim() || null,
+                  garante_telefono: garanteTel.trim() || null,
+                  notas_internas: notas.trim() || null,
+                });
+                await onSaved();
+              } catch (error: unknown) {
+                toast.error(getErrorMessage(error, "No se pudo actualizar."));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "Guardando..." : "Guardar cambios"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -770,6 +1153,10 @@ function CarteraManualCreateModal({
   }, []);
   const [nombre_completo, setNombreCompleto] = useState("");
   const [identificacion, setIdentificacion] = useState("");
+  const [garante_nombre, setGaranteNombre] = useState("");
+  const [garante_identificacion, setGaranteIdentificacion] = useState("");
+  const [garante_telefono, setGaranteTelefono] = useState("");
+  const [garante_direccion, setGaranteDireccion] = useState("");
   const [telefono_1, setTelefono1] = useState("");
   const [telefono_2, setTelefono2] = useState("");
   const [vehiculo_marca, setVehiculoMarca] = useState("");
@@ -804,6 +1191,10 @@ function CarteraManualCreateModal({
         {
           nombre_completo: nombre_completo.trim(),
           identificacion: identificacion.trim() || null,
+          garante_nombre: garante_nombre.trim() || null,
+          garante_identificacion: garante_identificacion.trim() || null,
+          garante_telefono: garante_telefono.trim() || null,
+          garante_direccion: garante_direccion.trim() || null,
           telefono_1: telefono_1.trim() || null,
           telefono_2: telefono_2.trim() || null,
           email: null,
@@ -834,9 +1225,9 @@ function CarteraManualCreateModal({
         userId,
       );
       await onSaved();
-    } catch (e: any) {
-      console.error(e);
-      alert(e?.message || "Error al guardar");
+    } catch (error: unknown) {
+      console.error(error);
+      toast.error(getErrorMessage(error, "Error al guardar"));
     } finally {
       setSaving(false);
     }
@@ -904,6 +1295,37 @@ function CarteraManualCreateModal({
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mt-1"
               value={saldo_actual}
               onChange={(e) => setSaldoActual(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase">
+            Datos del garante (opcional)
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={garante_nombre}
+              onChange={(e) => setGaranteNombre(e.target.value)}
+              placeholder="Nombre garante"
+            />
+            <input
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={garante_identificacion}
+              onChange={(e) => setGaranteIdentificacion(e.target.value)}
+              placeholder="ID garante"
+            />
+            <input
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={garante_telefono}
+              onChange={(e) => setGaranteTelefono(e.target.value)}
+              placeholder="Teléfono garante"
+            />
+            <input
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={garante_direccion}
+              onChange={(e) => setGaranteDireccion(e.target.value)}
+              placeholder="Dirección garante"
             />
           </div>
         </div>

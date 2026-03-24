@@ -11,6 +11,10 @@ export interface CarteraManualRow {
   id: string;
   nombre_completo: string;
   identificacion: string | null;
+  garante_nombre: string | null;
+  garante_identificacion: string | null;
+  garante_telefono: string | null;
+  garante_direccion: string | null;
   telefono_1: string | null;
   telefono_2: string | null;
   email: string | null;
@@ -45,3 +49,17 @@ export type CarteraManualCreatePayload = Omit<
 export type CarteraManualUpdate = Partial<
   Omit<CarteraManualRow, "id" | "created_at" | "created_by">
 >;
+
+export type DeleteRequestStatus = "pendiente" | "aprobada" | "rechazada";
+
+export interface CarteraManualDeleteRequest {
+  id: string;
+  cartera_manual_id: string;
+  motivo: string;
+  estado: DeleteRequestStatus;
+  requested_by: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
