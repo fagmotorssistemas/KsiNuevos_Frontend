@@ -7,8 +7,8 @@ import {
     X,
     Loader2,
     CheckSquare,
-    Square,
     Filter,
+    ArrowUpDown,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { InventoryCar } from "@/hooks/useInventory";
@@ -19,6 +19,104 @@ import {
 } from "./inventoryExportFields";
 
 export type ExportStatusFilter = "current" | "all" | "disponible" | "vendido" | "reservado" | "mantenimiento" | "devuelto" | "conwilsonhernan" | "consignacion";
+
+/** Cómo ordenar las filas al exportar o imprimir (agrupa lógicamente, p. ej. todas las Ford juntas). */
+export type ExportOrganizeBy =
+    | "as_list"
+    | "brand"
+    | "model"
+    | "year_desc"
+    | "year_asc"
+    | "status"
+    | "location"
+    | "price_asc"
+    | "price_desc";
+
+const ORGANIZE_OPTIONS: { value: ExportOrganizeBy; label: string; hint?: string }[] = [
+    { value: "as_list", label: "Como en la lista actual", hint: "Respeta el orden que ves en pantalla (o en datos sin reordenar)." },
+    { value: "brand", label: "Por marca (A-Z)", hint: "Agrupa por marca: Ford, Kia, Toyota… luego modelo y año." },
+    { value: "model", label: "Por modelo (A-Z)", hint: "Orden alfabético por modelo; empata por marca." },
+    { value: "year_desc", label: "Por año (más nuevo primero)" },
+    { value: "year_asc", label: "Por año (más antiguo primero)" },
+    { value: "status", label: "Por estado", hint: "Disponible, vendido, reservado… alfabético." },
+    { value: "location", label: "Por ubicación", hint: "Agrupa por local o sede." },
+    { value: "price_asc", label: "Por precio (menor → mayor)" },
+    { value: "price_desc", label: "Por precio (mayor → menor)" },
+];
+
+function cmpLocale(a: string | null | undefined, b: string | null | undefined): number {
+    return (a ?? "").localeCompare(b ?? "", "es", { sensitivity: "base", numeric: true });
+}
+
+function sortCarsForExport(cars: InventoryCar[], by: ExportOrganizeBy): InventoryCar[] {
+    const list = [...cars];
+    switch (by) {
+        case "as_list":
+            return list;
+        case "brand":
+            list.sort((a, b) => {
+                const cb = cmpLocale(a.brand, b.brand);
+                if (cb !== 0) return cb;
+                const cm = cmpLocale(a.model, b.model);
+                if (cm !== 0) return cm;
+                return (b.year ?? 0) - (a.year ?? 0);
+            });
+            return list;
+        case "model":
+            list.sort((a, b) => {
+                const cm = cmpLocale(a.model, b.model);
+                if (cm !== 0) return cm;
+                const cb = cmpLocale(a.brand, b.brand);
+                if (cb !== 0) return cb;
+                return (b.year ?? 0) - (a.year ?? 0);
+            });
+            return list;
+        case "year_desc":
+            list.sort((a, b) => {
+                const cy = (b.year ?? 0) - (a.year ?? 0);
+                if (cy !== 0) return cy;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        case "year_asc":
+            list.sort((a, b) => {
+                const cy = (a.year ?? 0) - (b.year ?? 0);
+                if (cy !== 0) return cy;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        case "status":
+            list.sort((a, b) => {
+                const cs = cmpLocale(String(a.status ?? ""), String(b.status ?? ""));
+                if (cs !== 0) return cs;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        case "location":
+            list.sort((a, b) => {
+                const cl = cmpLocale(String(a.location ?? ""), String(b.location ?? ""));
+                if (cl !== 0) return cl;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        case "price_asc":
+            list.sort((a, b) => {
+                const cp = (a.price ?? 0) - (b.price ?? 0);
+                if (cp !== 0) return cp;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        case "price_desc":
+            list.sort((a, b) => {
+                const cp = (b.price ?? 0) - (a.price ?? 0);
+                if (cp !== 0) return cp;
+                return cmpLocale(a.brand, b.brand) || cmpLocale(a.model, b.model);
+            });
+            return list;
+        default:
+            return list;
+    }
+}
 
 const STATUS_OPTIONS: { value: ExportStatusFilter; label: string }[] = [
     { value: "current", label: "Vista actual (filtros aplicados)" },
@@ -55,6 +153,7 @@ export function InventoryExportPrintModal({
         });
         return o;
     });
+    const [organizeBy, setOrganizeBy] = useState<ExportOrganizeBy>("as_list");
     const [isExporting, setIsExporting] = useState(false);
 
     const carsToExport = useMemo(() => {
@@ -62,6 +161,11 @@ export function InventoryExportPrintModal({
         if (statusFilter === "all") return fullInventory;
         return fullInventory.filter((c) => c.status === statusFilter);
     }, [statusFilter, allFilteredCars, fullInventory]);
+
+    const sortedCarsToExport = useMemo(
+        () => sortCarsForExport(carsToExport, organizeBy),
+        [carsToExport, organizeBy]
+    );
 
     const activeFields = useMemo(
         () => INVENTORY_EXPORT_FIELDS.filter((f) => selectedFields[f.id]),
@@ -91,7 +195,7 @@ export function InventoryExportPrintModal({
         }
         setIsExporting(true);
         try {
-            const rows = carsToExport.map((car) => {
+            const rows = sortedCarsToExport.map((car) => {
                 const row: Record<string, string | number> = {};
                 activeFields.forEach((f) => {
                     const val = f.getValue(car);
@@ -129,7 +233,7 @@ export function InventoryExportPrintModal({
                 return;
             }
             const headers = activeFields.map((f) => f.label).join("</th><th>");
-            const rowsHtml = carsToExport
+            const rowsHtml = sortedCarsToExport
                 .map(
                     (car) =>
                         "<tr>" +
@@ -161,7 +265,7 @@ export function InventoryExportPrintModal({
 </head>
 <body>
   <h1>Inventario de vehículos — ${new Date().toLocaleDateString("es-ES", { dateStyle: "long" })}</h1>
-  <p style="margin-bottom: 12px; color: #64748b;">${carsToExport.length} vehículo(s)</p>
+  <p style="margin-bottom: 12px; color: #64748b;">${sortedCarsToExport.length} vehículo(s)</p>
   <table>
     <thead><tr><th>${headers}</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
@@ -232,6 +336,28 @@ export function InventoryExportPrintModal({
                         </p>
                     </div>
 
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                            <ArrowUpDown className="h-4 w-4" />
+                            Organizar filas al exportar / imprimir
+                        </label>
+                        <select
+                            value={organizeBy}
+                            onChange={(e) => setOrganizeBy(e.target.value as ExportOrganizeBy)}
+                            className="w-full h-10 rounded-lg border border-slate-200 bg-slate-50/50 pl-3 pr-8 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                        >
+                            {ORGANIZE_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-slate-500">
+                            {ORGANIZE_OPTIONS.find((o) => o.value === organizeBy)?.hint ??
+                                "El Excel y la vista de impresión usarán este orden."}
+                        </p>
+                    </div>
+
                     {/* Campos a exportar/imprimir */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -287,7 +413,7 @@ export function InventoryExportPrintModal({
                     <div className="grid grid-cols-2 gap-3 pt-2">
                         <button
                             onClick={handleExportExcel}
-                            disabled={isExporting || carsToExport.length === 0}
+                            disabled={isExporting || sortedCarsToExport.length === 0}
                             className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium text-sm disabled:opacity-50"
                         >
                             {isExporting ? (
@@ -299,7 +425,7 @@ export function InventoryExportPrintModal({
                         </button>
                         <button
                             onClick={handlePrint}
-                            disabled={isExporting || carsToExport.length === 0}
+                            disabled={isExporting || sortedCarsToExport.length === 0}
                             className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium text-sm disabled:opacity-50"
                         >
                             {isExporting ? (
