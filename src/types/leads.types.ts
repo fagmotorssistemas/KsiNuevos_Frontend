@@ -20,6 +20,7 @@ export type LeadsFilters = {
     exactDate: string; 
     assignedTo: string | 'all';
     requestStatus?: string | 'all';
+    hasBudget?: boolean;
 };
 
 // ID que siempre excluyes

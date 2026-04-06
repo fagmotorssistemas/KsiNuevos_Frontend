@@ -32,7 +32,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .from('leads')
             .select(`
                 *,
-                interested_cars(*),
+                interested_cars(*, inventoryoracle(brand, model, year)),
                 profiles:assigned_to(full_name)
             `, { count: 'exact' })
             .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3') // EXCLUDED_ID
@@ -48,13 +48,23 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             if (tokens.length > 0) {
                 // Vehículo: lead_ids con brand o model que contengan TODOS los tokens (kia + st → Kia Stonic)
                 const tokenLeadIds = await Promise.all(
-                    tokens.map((token) =>
-                        supabase
+                    tokens.map(async (token) => {
+                        const { data: oldData } = await supabase
                             .from('interested_cars')
                             .select('lead_id')
-                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`)
-                            .then((r: { data: { lead_id: number }[] | null }) => (r.data ?? []).map((x) => x.lead_id))
-                    )
+                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`);
+                            
+                        const { data: newData } = await supabase
+                            .from('interested_cars')
+                            .select('lead_id, inventoryoracle!inner(brand, model)')
+                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`, { foreignTable: 'inventoryoracle' });
+
+                        const ids = new Set([
+                            ...(oldData || []).map((x: any) => x.lead_id),
+                            ...(newData || []).map((x: any) => x.lead_id)
+                        ]);
+                        return Array.from(ids);
+                    })
                 ) as number[][];
                 const vehicleSets = tokenLeadIds.map((ids) => new Set(ids));
                 const vehicleMatchLeadIds = vehicleSets.length === 1
@@ -112,6 +122,11 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             } else {
                 idFilters.push([-1]); // No records match this request status
             }
+        }
+
+        // Sub-filtro de presupuesto
+        if (filters.hasBudget) {
+            query = query.not('budget', 'is', null).gt('budget', 0);
         }
 
         // Intersect all idFilters
@@ -180,6 +195,9 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 respondedQuery = respondedQuery.eq('id', -1);
             }
         }
+        if (filters.hasBudget) {
+            respondedQuery = respondedQuery.not('budget', 'is', null).gt('budget', 0);
+        }
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
         }
@@ -211,7 +229,12 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         // 6. Mapeo de Datos
         const mappedData: LeadWithDetails[] = (data || []).map((item: any) => ({
             ...item,
-            interested_cars: item.interested_cars || [],
+            interested_cars: (item.interested_cars || []).map((c: any) => ({
+                ...c,
+                brand: c.inventoryoracle?.brand || c.brand,
+                model: c.inventoryoracle?.model || c.model,
+                year: c.inventoryoracle?.year || c.year,
+            })),
             profiles: item.profiles || { full_name: '' }
         }));
 
@@ -316,5 +339,28 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
             datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
             asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
         };
+    }
+};
+
+// --- ALERTAS DE PRESUPUESTO ---
+export const fetchBudgetStats = async (supabase: any, assignedTo: string) => {
+    try {
+        let query = supabase
+            .from('leads')
+            .select('id', { count: 'exact', head: true })
+            .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
+            .not('budget', 'is', null)
+            .gt('budget', 0); // Opcional: solo mayores a 0 si consideran 0 como sin presupuesto, o quitar si solo not null
+
+        if (assignedTo && assignedTo !== 'all') {
+            query = query.eq('assigned_to', assignedTo);
+        }
+
+        const { count, error } = await query;
+        if (error) return 0;
+        return count || 0;
+    } catch (error) {
+        console.error("Error fetching budget stats:", error);
+        return 0;
     }
 };

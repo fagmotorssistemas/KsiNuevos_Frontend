@@ -39,7 +39,7 @@ export function usePopularInventory(limit: number = 4) {
             // Ya no consultamos 'leads', sino directamente los autos que han interesado
             const { data: interestData, error: interestError } = await supabase
                 .from('interested_cars')
-                .select('vehicle_uid, brand, model');
+                .select('vehicle_uid, inventory_id, brand, model, inventoryoracle(brand, model)');
 
             if (interestError) throw interestError;
 
@@ -47,8 +47,15 @@ export function usePopularInventory(limit: number = 4) {
             const leadCounts: Record<string, number> = {};
 
             interestData?.forEach((item: any) => {
-                // Prioridad 1: Match por UID (UUID)
-                if (item.vehicle_uid) {
+                if (item.inventoryoracle) {
+                    item.brand = item.inventoryoracle.brand || item.brand;
+                    item.model = item.inventoryoracle.model || item.model;
+                }
+
+                // Prioridad 1: Match por UID (UUID) o Inventory ID
+                if (item.inventory_id) {
+                    leadCounts[item.inventory_id] = (leadCounts[item.inventory_id] || 0) + 1;
+                } else if (item.vehicle_uid) {
                     leadCounts[item.vehicle_uid] = (leadCounts[item.vehicle_uid] || 0) + 1;
                 } 
                 // Prioridad 2: Match inteligente por texto si no hay UID

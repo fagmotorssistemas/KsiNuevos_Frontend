@@ -185,7 +185,7 @@ export function useAgenda() {
                 *,
                 lead:leads (
                     *,
-                    interested_cars (*)
+                    interested_cars (*, inventoryoracle(brand, model, year))
                 ),
                 responsible:profiles!responsible_id (*) 
             `);
@@ -199,8 +199,19 @@ export function useAgenda() {
         if (error) {
             console.error("Error cargando agenda:", error.message || JSON.stringify(error));
         } else {
+            const mappedAppointments = (data || []).map((appt: any) => {
+                if (appt.lead && appt.lead.interested_cars) {
+                    appt.lead.interested_cars = appt.lead.interested_cars.map((c: any) => ({
+                        ...c,
+                        brand: c.inventoryoracle?.brand || c.brand,
+                        model: c.inventoryoracle?.model || c.model,
+                        year: c.inventoryoracle?.year || c.year,
+                    }));
+                }
+                return appt;
+            });
             // @ts-ignore
-            setAllAppointments((data || []) as AppointmentWithDetails[]);
+            setAllAppointments(mappedAppointments as AppointmentWithDetails[]);
         }
         
         setIsLoading(false);
@@ -214,7 +225,7 @@ export function useAgenda() {
             .from('leads')
             .select(`
                 *,
-                interested_cars (*)
+                interested_cars (*, inventoryoracle(brand, model, year))
             `)
             // Traemos leads que tengan AL MENOS un campo detectado
             .or('time_reference.not.is.null,day_detected.not.is.null,hour_detected.not.is.null');
@@ -228,8 +239,19 @@ export function useAgenda() {
         if (error) {
             console.error("Error cargando sugerencias:", error.message || error);
         } else {
+            const mappedSuggestions = (data || []).map((lead: any) => {
+                if (lead.interested_cars) {
+                    lead.interested_cars = lead.interested_cars.map((c: any) => ({
+                        ...c,
+                        brand: c.inventoryoracle?.brand || c.brand,
+                        model: c.inventoryoracle?.model || c.model,
+                        year: c.inventoryoracle?.year || c.year,
+                    }));
+                }
+                return lead;
+            });
             // @ts-ignore
-            setRawSuggestions((data || []) as BotSuggestionLead[]);
+            setRawSuggestions(mappedSuggestions as BotSuggestionLead[]);
         }
     }, [supabase, user, isAdmin]);
 

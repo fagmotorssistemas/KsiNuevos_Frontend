@@ -103,6 +103,15 @@ export const Navbar = () => {
                   Gestión Legal
               </Link>
             )}
+            {profile?.role === 'admin' && (
+              <Link 
+                  href="/templates" 
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Plantillas
+              </Link>
+            )}
             {showSegurosRastreadores && (
               <>
                 <Link 
@@ -112,13 +121,13 @@ export const Navbar = () => {
                 >
                     Rastreadores
                 </Link>
-                {/*<Link 
+                <Link 
                     href="/seguros" 
                     className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
                     onClick={() => setIsMobileMenuOpen(false)}
                 >
                     Seguros
-                </Link>*/}
+                </Link>
               </>
             )}
           </div>

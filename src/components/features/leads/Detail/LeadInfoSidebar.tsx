@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Edit3, Loader2, CheckCircle2, Car, DollarSign, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea, Input } from "./ui-components";
@@ -20,6 +20,40 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const [budget, setBudget] = useState(lead.budget?.toString() || "");
     const [wantsFinancing, setWantsFinancing] = useState(lead.financing || false);
     const [isSavingFinance, setIsSavingFinance] = useState(false);
+    const [localCars, setLocalCars] = useState(lead.interested_cars || []);
+
+    // NUEVO: Fetch para obtener los detalles del inventario si hay inventory_id
+    useEffect(() => {
+        const fetchInventoryData = async () => {
+            if (lead.interested_cars && lead.interested_cars.length > 0) {
+                const carsWithInventory = await Promise.all(
+                    lead.interested_cars.map(async (car: any) => {
+                        if (car.inventory_id) {
+                            const { data } = await (supabase as any)
+                                .from('inventoryoracle')
+                                .select('brand, model, year, exterior_color')
+                                .eq('id', car.inventory_id)
+                                .single();
+                            
+                            if (data) {
+                                return {
+                                    ...car,
+                                    brand: data.brand,
+                                    model: data.model,
+                                    year: data.year,
+                                    color_preference: data.exterior_color || car.color_preference
+                                };
+                            }
+                        }
+                        return car;
+                    })
+                );
+                setLocalCars(carsWithInventory);
+            }
+        };
+
+        fetchInventoryData();
+    }, [lead.interested_cars, supabase]);
 
     // Guardar Resumen
     const handleSaveResume = async () => {
@@ -45,6 +79,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
         
         setIsSavingFinance(false);
     };
+
 
     return (
         // CORRECCIÓN VISUAL: Quitamos "md:w-1/3" y usamos "w-full h-full"
@@ -79,9 +114,9 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
             {/* 3. VEHÍCULOS */}
             <div className="mb-8">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 block">Vehículos de Interés</label>
-                {lead.interested_cars && lead.interested_cars.length > 0 ? (
+                {localCars && localCars.length > 0 ? (
                     <div className="space-y-3">
-                        {lead.interested_cars.map((car) => (
+                        {localCars.map((car) => (
                             <div key={car.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
                                 <div className="p-2 bg-slate-100 rounded-lg">
                                     <Car className="h-4 w-4 text-slate-600" />

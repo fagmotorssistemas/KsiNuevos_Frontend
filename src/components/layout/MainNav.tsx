@@ -40,12 +40,13 @@ if (profile?.role === "finanzas") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
       navItems.push({ href: "/legal/cases", label: "Gestión Legal" });
       navItems.push({ href: "/taller/dashboard", label: "Taller" });
+      navItems.push({ href: "/templates", label: "Plantillas" });
     }
 
     // Admin y Vendedores: Seguros y Rastreadores
     if (profile?.role === "admin" || profile?.role === "vendedor") {
       navItems.push({ href: "/rastreadores", label: "Rastreadores" });
-      //navItems.push({ href: "/seguros", label: "Seguros" });
+      navItems.push({ href: "/seguros", label: "Seguros" });
     }
 
 

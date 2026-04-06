@@ -188,7 +188,9 @@ export function useVehicleStats(
                             brand,
                             model,
                             year,
-                            vehicle_uid
+                            vehicle_uid,
+                            inventory_id,
+                            inventoryoracle (brand, model, year)
                         )
                     `)
                     .gte('created_at', startISO)
@@ -228,13 +230,21 @@ export function useVehicleStats(
                 const cars = Array.isArray(lead.interested_cars) ? lead.interested_cars : [lead.interested_cars];
 
                 cars.forEach((c: any) => {
+                    if (c && c.inventoryoracle) {
+                        c.brand = c.inventoryoracle.brand || c.brand;
+                        c.model = c.inventoryoracle.model || c.model;
+                        c.year = c.inventoryoracle.year || c.year;
+                    }
+
                     if (!c || (!c.brand && !c.model)) return;
 
                     let matchedCarId: string | null = null;
                     
                     // --- NIVEL 1: Match Exacto por ID ---
                     // Verifica si el ID del lead existe en el nuevo inventario
-                    if (c.vehicle_uid && invStatsMap.has(c.vehicle_uid)) {
+                    if (c.inventory_id && invStatsMap.has(c.inventory_id)) {
+                        matchedCarId = c.inventory_id;
+                    } else if (c.vehicle_uid && invStatsMap.has(c.vehicle_uid)) {
                         matchedCarId = c.vehicle_uid;
                     } 
                     

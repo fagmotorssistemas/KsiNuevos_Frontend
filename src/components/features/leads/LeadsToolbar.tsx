@@ -21,6 +21,7 @@ interface LeadsToolbarProps {
     totalResults: number;
     respondedCount?: number;     // Métrica 1: De la lista actual
     interactionsCount?: number;  // Métrica 2: Trabajo realizado en fecha X
+    budgetCount?: number;        // Métrica 3: Leads con presupuesto
     requestStats?: {
         datosPedidos: { pendiente: number; en_proceso: number; resuelto: number; total: number };
         asesoria: { pendiente: number; en_proceso: number; resuelto: number; total: number };
@@ -71,6 +72,7 @@ export function LeadsToolbar({
     totalResults,
     respondedCount = 0,
     interactionsCount = 0,
+    budgetCount = 0,
     requestStats = { 
         datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
         asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
@@ -88,6 +90,7 @@ export function LeadsToolbar({
         filters.dateRange !== 'all' ||
         filters.exactDate !== '' ||
         filters.search !== '' ||
+        filters.hasBudget ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
         (isAdmin && assignedToValue !== 'all');
 
@@ -264,122 +267,214 @@ export function LeadsToolbar({
                         </span>
                     </div>
 
-                    {(requestStats.datosPedidos.total > 0 || requestStats.asesoria.total > 0) && (
+                    {(budgetCount > 0 || requestStats.datosPedidos.total > 0 || requestStats.asesoria.total > 0) && (
                         <>
                             {/* SEPARADOR */}
                             <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
 
-                            {/* NOTIFICACIONES PENDIENTES CON POPOVER */}
-                            <div className="flex items-center gap-2">
-                                {requestStats.datosPedidos.total > 0 && (
-                                    <div className="relative group">
-                                        <button 
-                                            onClick={() => onFilterChange('status', 'datos_pedidos')}
-                                            className="flex items-center gap-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-md border border-purple-200 shadow-sm animate-in fade-in transition-colors cursor-pointer"
-                                            title="Ver Información Faltante"
-                                        >
-                                            {requestStats.datosPedidos.pendiente > 0 ? (
-                                                <BellRing className="h-3.5 w-3.5 animate-bounce text-purple-600" />
-                                            ) : (
-                                                <BellRing className="h-3.5 w-3.5 text-purple-400" />
-                                            )}
-                                            <span>
-                                                <strong className="font-bold">{requestStats.datosPedidos.pendiente}</strong> Info. Faltante
-                                            </span>
-                                        </button>
-                                        
-                                        {/* Popover Hover */}
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 shadow-xl rounded-lg p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 cursor-default">
-                                            <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-100 pb-1">Info. Faltante</h4>
-                                            <div className="space-y-1 text-xs">
-                                                <div 
-                                                    className="flex justify-between items-center text-orange-600 hover:bg-orange-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente' }); }}
-                                                >
-                                                    <span>Pendientes</span>
-                                                    <span className="font-bold bg-orange-100/50 px-1.5 rounded">{requestStats.datosPedidos.pendiente}</span>
-                                                </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso' }); }}
-                                                >
-                                                    <span>En Proceso</span>
-                                                    <span className="font-bold bg-blue-100/50 px-1.5 rounded">{requestStats.datosPedidos.en_proceso}</span>
-                                                </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-emerald-600 hover:bg-emerald-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto' }); }}
-                                                >
-                                                    <span>Resueltos</span>
-                                                    <span className="font-bold bg-emerald-100/50 px-1.5 rounded">{requestStats.datosPedidos.resuelto}</span>
-                                                </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-slate-600 border-t border-slate-100 pt-1 mt-1 hover:bg-slate-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all' }); }}
-                                                >
-                                                    <span className="font-medium">Total</span>
-                                                    <span className="font-bold">{requestStats.datosPedidos.total}</span>
-                                                </div>
-                                            </div>
-                                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
-                                        </div>
+                            {/* DROPDOWN DE ALERTAS / FILTROS EXTRA */}
+                            <div className="relative group z-50">
+                                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm transition-colors cursor-pointer text-sm font-medium">
+                                    <div className="relative">
+                                        <BellRing className="h-4 w-4 text-brand-500 animate-pulse" />
+                                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 border border-white"></span>
                                     </div>
-                                )}
-                                
-                                {requestStats.asesoria.total > 0 && (
-                                    <div className="relative group">
-                                        <button 
-                                            onClick={() => onFilterChange('status', 'asesoria_financiamiento')}
-                                            className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 shadow-sm animate-in fade-in transition-colors cursor-pointer"
-                                            title="Ver Asesorías"
-                                        >
-                                            {requestStats.asesoria.pendiente > 0 ? (
-                                                <BellRing className="h-3.5 w-3.5 animate-bounce text-emerald-600" />
-                                            ) : (
-                                                <BellRing className="h-3.5 w-3.5 text-emerald-400" />
-                                            )}
-                                            <span>
-                                                <strong className="font-bold">{requestStats.asesoria.pendiente}</strong> Asesorías
-                                            </span>
-                                        </button>
+                                    <span>Alertas Rápidas</span>
+                                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 group-hover:rotate-180" />
+                                </button>
 
-                                        {/* Popover Hover */}
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white border border-slate-200 shadow-xl rounded-lg p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 cursor-default">
-                                            <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 border-b border-slate-100 pb-1">Asesorías Fin.</h4>
-                                            <div className="space-y-1 text-xs">
-                                                <div 
-                                                    className="flex justify-between items-center text-orange-600 hover:bg-orange-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'pendiente' }); }}
-                                                >
-                                                    <span>Pendientes</span>
-                                                    <span className="font-bold bg-orange-100/50 px-1.5 rounded">{requestStats.asesoria.pendiente}</span>
+                                {/* Menú Desplegable */}
+                                <div className="absolute left-0 sm:left-auto sm:right-0 top-[calc(100%+0.5rem)] w-72 bg-white border border-slate-200 shadow-xl rounded-xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 origin-top-right">
+                                    <h4 className="text-[10px] font-bold uppercase text-slate-400 mb-2 px-2 border-b border-slate-100 pb-1.5">
+                                        Filtros y Notificaciones
+                                    </h4>
+                                    
+                                    <div className="space-y-1.5">
+                                        {/* Presupuesto */}
+                                        {budgetCount > 0 && (
+                                            <button 
+                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all' })}
+                                                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
+                                                    filters.hasBudget 
+                                                    ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm' 
+                                                    : 'hover:bg-amber-50/50 text-slate-600 border-transparent hover:border-amber-100'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className={`p-1.5 rounded-md ${filters.hasBudget ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                        <Activity className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="font-semibold text-sm">Con Presupuesto</span>
                                                 </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-blue-600 hover:bg-blue-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'en_proceso' }); }}
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${filters.hasBudget ? 'bg-amber-200 text-amber-900' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {budgetCount}
+                                                </span>
+                                            </button>
+                                        )}
+
+                                        {/* Info Faltante */}
+                                        {requestStats.datosPedidos.total > 0 && (
+                                            <div className="flex flex-col gap-1">
+                                                <button 
+                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false })}
+                                                    className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
+                                                        filters.status === 'datos_pedidos'
+                                                        ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm'
+                                                        : 'hover:bg-purple-50/50 text-slate-600 border-transparent hover:border-purple-100'
+                                                    }`}
                                                 >
-                                                    <span>En Proceso</span>
-                                                    <span className="font-bold bg-blue-100/50 px-1.5 rounded">{requestStats.asesoria.en_proceso}</span>
-                                                </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-emerald-600 hover:bg-emerald-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'resuelto' }); }}
-                                                >
-                                                    <span>Resueltos</span>
-                                                    <span className="font-bold bg-emerald-100/50 px-1.5 rounded">{requestStats.asesoria.resuelto}</span>
-                                                </div>
-                                                <div 
-                                                    className="flex justify-between items-center text-slate-600 border-t border-slate-100 pt-1 mt-1 hover:bg-slate-50 p-1 rounded cursor-pointer transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'all' }); }}
-                                                >
-                                                    <span className="font-medium">Total</span>
-                                                    <span className="font-bold">{requestStats.asesoria.total}</span>
-                                                </div>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className={`p-1.5 rounded-md ${filters.status === 'datos_pedidos' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            <ClipboardList className="h-3.5 w-3.5" />
+                                                        </div>
+                                                        <span className="font-semibold text-sm">Info. Faltante</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {requestStats.datosPedidos.pendiente > 0 && filters.status !== 'datos_pedidos' && (
+                                                            <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" title="Pendientes">
+                                                                {requestStats.datosPedidos.pendiente} pend.
+                                                            </span>
+                                                        )}
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${filters.status === 'datos_pedidos' ? 'bg-purple-200 text-purple-900' : 'bg-slate-100 text-slate-600'}`}>
+                                                            {requestStats.datosPedidos.total}
+                                                        </span>
+                                                    </div>
+                                                </button>
+
+                                                {/* Sub-opciones de Info Faltante */}
+                                                {filters.status === 'datos_pedidos' && (
+                                                    <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'pendiente' 
+                                                                ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Pendientes</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.pendiente}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'en_proceso' 
+                                                                ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>En Proceso</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.en_proceso}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'resuelto' 
+                                                                ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Resueltos</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.resuelto}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                (filters.requestStatus === 'all' || !filters.requestStatus)
+                                                                ? 'bg-purple-100 text-purple-800 font-semibold border-purple-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Todos</span>
+                                                            <span className={`font-bold px-1.5 rounded ${(filters.requestStatus === 'all' || !filters.requestStatus) ? 'bg-purple-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.total}</span>
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
-                                        </div>
+                                        )}
+
+                                        {/* Asesorías */}
+                                        {requestStats.asesoria.total > 0 && (
+                                            <div className="flex flex-col gap-1">
+                                                <button 
+                                                    onClick={() => onFilterChange({ status: filters.status === 'asesoria_financiamiento' ? 'all' : 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false })}
+                                                    className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
+                                                        filters.status === 'asesoria_financiamiento'
+                                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm'
+                                                        : 'hover:bg-emerald-50/50 text-slate-600 border-transparent hover:border-emerald-100'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className={`p-1.5 rounded-md ${filters.status === 'asesoria_financiamiento' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            <User className="h-3.5 w-3.5" />
+                                                        </div>
+                                                        <span className="font-semibold text-sm">Asesorías Fin.</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {requestStats.asesoria.pendiente > 0 && filters.status !== 'asesoria_financiamiento' && (
+                                                            <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded border border-red-200" title="Pendientes">
+                                                                {requestStats.asesoria.pendiente} pend.
+                                                            </span>
+                                                        )}
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${filters.status === 'asesoria_financiamiento' ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-100 text-slate-600'}`}>
+                                                            {requestStats.asesoria.total}
+                                                        </span>
+                                                    </div>
+                                                </button>
+
+                                                {/* Sub-opciones de Asesorías */}
+                                                {filters.status === 'asesoria_financiamiento' && (
+                                                    <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'pendiente', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'pendiente' 
+                                                                ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Pendientes</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.pendiente}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'en_proceso', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'en_proceso' 
+                                                                ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>En Proceso</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.en_proceso}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'resuelto', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                filters.requestStatus === 'resuelto' 
+                                                                ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Resueltos</span>
+                                                            <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.resuelto}</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false }); }}
+                                                            className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
+                                                                (filters.requestStatus === 'all' || !filters.requestStatus)
+                                                                ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
+                                                                : 'text-slate-500 border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                            }`}
+                                                        >
+                                                            <span>Todos</span>
+                                                            <span className={`font-bold px-1.5 rounded ${(filters.requestStatus === 'all' || !filters.requestStatus) ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.total}</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </>
                     )}
