@@ -213,11 +213,14 @@ export type Database = {
           estado: string
           etapa_cobranza: string | null
           fecha_notificacion: string | null
+          fecha_ultimo_envio: string | null
           fecha_vencimiento: string | null
           id: number
           nombre: string | null
           notificado: boolean
+          proximo_envio_at: string | null
           telefono: string | null
+          ultima_etapa_enviada: string | null
           updated_at: string
         }
         Insert: {
@@ -227,11 +230,14 @@ export type Database = {
           estado?: string
           etapa_cobranza?: string | null
           fecha_notificacion?: string | null
+          fecha_ultimo_envio?: string | null
           fecha_vencimiento?: string | null
           id?: number
           nombre?: string | null
           notificado?: boolean
+          proximo_envio_at?: string | null
           telefono?: string | null
+          ultima_etapa_enviada?: string | null
           updated_at?: string
         }
         Update: {
@@ -241,11 +247,14 @@ export type Database = {
           estado?: string
           etapa_cobranza?: string | null
           fecha_notificacion?: string | null
+          fecha_ultimo_envio?: string | null
           fecha_vencimiento?: string | null
           id?: number
           nombre?: string | null
           notificado?: boolean
+          proximo_envio_at?: string | null
           telefono?: string | null
+          ultima_etapa_enviada?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1049,6 +1058,53 @@ export type Database = {
           },
         ]
       }
+      generated_artifacts: {
+        Row: {
+          car_image_url: string
+          created_at: string
+          id: string
+          kind: string
+          output_path: string | null
+          output_url: string | null
+          overlay_text: Json | null
+          price: string | null
+          template_id: string | null
+          title: string | null
+        }
+        Insert: {
+          car_image_url: string
+          created_at?: string
+          id?: string
+          kind?: string
+          output_path?: string | null
+          output_url?: string | null
+          overlay_text?: Json | null
+          price?: string | null
+          template_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          car_image_url?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          output_path?: string | null
+          output_url?: string | null
+          overlay_text?: Json | null
+          price?: string | null
+          template_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_artifacts_template_fk"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gps_instaladores: {
         Row: {
           activo: boolean
@@ -1262,40 +1318,28 @@ export type Database = {
       }
       interested_cars: {
         Row: {
-          brand: string
-          color_preference: string | null
           created_at: string | null
           id: number
+          inventory_id: string | null
           lead_id: number
-          model: string
-          notes: string | null
           updated_at: string | null
           vehicle_uid: string | null
-          year: number | null
         }
         Insert: {
-          brand: string
-          color_preference?: string | null
           created_at?: string | null
           id?: number
+          inventory_id?: string | null
           lead_id: number
-          model: string
-          notes?: string | null
           updated_at?: string | null
           vehicle_uid?: string | null
-          year?: number | null
         }
         Update: {
-          brand?: string
-          color_preference?: string | null
           created_at?: string | null
           id?: number
+          inventory_id?: string | null
           lead_id?: number
-          model?: string
-          notes?: string | null
           updated_at?: string | null
           vehicle_uid?: string | null
-          year?: number | null
         }
         Relationships: [
           {
@@ -1303,6 +1347,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interested_cars_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
@@ -1790,6 +1841,7 @@ export type Database = {
           mensajes_enviados: string[]
           name: string
           phone: string
+          presupuesto_cliente: string | null
           resume: string | null
           source: Database["public"]["Enums"]["acquisition_source"] | null
           status: Database["public"]["Enums"]["lead_status"] | null
@@ -1813,6 +1865,7 @@ export type Database = {
           mensajes_enviados?: string[]
           name: string
           phone?: string
+          presupuesto_cliente?: string | null
           resume?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
@@ -1836,6 +1889,7 @@ export type Database = {
           mensajes_enviados?: string[]
           name?: string
           phone?: string
+          presupuesto_cliente?: string | null
           resume?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
@@ -2972,6 +3026,39 @@ export type Database = {
           },
         ]
       }
+      templates: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       trade_in_cars: {
         Row: {
           brand: string
@@ -3258,6 +3345,56 @@ export type Database = {
             columns: ["asesor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_automation_jobs: {
+        Row: {
+          ai_generated_prompt: string | null
+          created_at: string | null
+          descript_project_id: string | null
+          descript_project_url: string | null
+          error_log: string | null
+          final_export_url: string | null
+          id: string
+          raw_video_url: string
+          status: string
+          updated_at: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          ai_generated_prompt?: string | null
+          created_at?: string | null
+          descript_project_id?: string | null
+          descript_project_url?: string | null
+          error_log?: string | null
+          final_export_url?: string | null
+          id?: string
+          raw_video_url: string
+          status?: string
+          updated_at?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          ai_generated_prompt?: string | null
+          created_at?: string | null
+          descript_project_id?: string | null
+          descript_project_url?: string | null
+          error_log?: string | null
+          final_export_url?: string | null
+          id?: string
+          raw_video_url?: string
+          status?: string
+          updated_at?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_automation_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]

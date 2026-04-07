@@ -17,8 +17,9 @@ import {
     ChevronRight,
     BanknoteArrowDown,
     Box,
-    StickyNote, // Importamos el icono nuevo de GIT
+    StickyNote,
     HandCoins,
+    Film,
 } from 'lucide-react';
 
 // Definición de los items del menú (FUSIÓN: Usamos las rutas de GIT para evitar 404s)
@@ -34,8 +35,8 @@ const menuItems = [
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
     { name: 'Inventario', href: '/inventario', icon: Box },
-    // Nuevo item de GIT
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
+    { name: 'Videos IA', href: '/dashboard/video-automation', icon: Film },
 ];
 
 export function AccountingSidebar() {
