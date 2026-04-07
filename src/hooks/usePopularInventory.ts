@@ -39,7 +39,7 @@ export function usePopularInventory(limit: number = 4) {
             // Ya no consultamos 'leads', sino directamente los autos que han interesado
             const { data: interestData, error: interestError } = await supabase
                 .from('interested_cars')
-                .select('vehicle_uid, inventory_id, brand, model, inventoryoracle(brand, model)');
+                .select('inventory_id, inventoryoracle(brand, model)');
 
             if (interestError) throw interestError;
 

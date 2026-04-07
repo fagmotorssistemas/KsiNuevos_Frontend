@@ -17,7 +17,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     // ELIMINADO: Estados de Test Drive (testDriveDone, isUpdatingTestDrive)
 
     // NUEVO: Estados Financieros Editables
-    const [budget, setBudget] = useState(lead.budget?.toString() || "");
+    const [budget, setBudget] = useState((lead as any).presupuesto_cliente?.toString() || "");
     const [wantsFinancing, setWantsFinancing] = useState(lead.financing || false);
     const [isSavingFinance, setIsSavingFinance] = useState(false);
     const [localCars, setLocalCars] = useState(lead.interested_cars || []);
@@ -73,7 +73,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
         const financingToSave = newFinancing !== undefined ? newFinancing : wantsFinancing;
 
         await supabase.from('leads').update({ 
-            budget: budgetToSave,
+            presupuesto_cliente: budgetToSave,
             financing: financingToSave
         }).eq('id', lead.id);
         

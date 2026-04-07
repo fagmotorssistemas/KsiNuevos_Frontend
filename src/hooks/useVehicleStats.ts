@@ -185,10 +185,6 @@ export function useVehicleStats(
                         created_at, 
                         updated_at,
                         interested_cars (
-                            brand,
-                            model,
-                            year,
-                            vehicle_uid,
                             inventory_id,
                             inventoryoracle (brand, model, year)
                         )

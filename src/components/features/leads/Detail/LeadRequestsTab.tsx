@@ -16,7 +16,7 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
     const [type, setType] = useState(""); // Nuevo campo
     const [yearMin, setYearMin] = useState("");
     const [yearMax, setYearMax] = useState("");
-    const [budgetMax, setBudgetMax] = useState(lead.budget?.toString() || "");
+    const [budgetMax, setBudgetMax] = useState((lead as any).presupuesto_cliente?.toString() || "");
     const [color, setColor] = useState("");
     const [notes, setNotes] = useState("");
     const [priority, setPriority] = useState("media");

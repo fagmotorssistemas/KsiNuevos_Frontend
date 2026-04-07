@@ -49,18 +49,12 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 // Vehículo: lead_ids con brand o model que contengan TODOS los tokens (kia + st → Kia Stonic)
                 const tokenLeadIds = await Promise.all(
                     tokens.map(async (token) => {
-                        const { data: oldData } = await supabase
-                            .from('interested_cars')
-                            .select('lead_id')
-                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`);
-                            
                         const { data: newData } = await supabase
                             .from('interested_cars')
                             .select('lead_id, inventoryoracle!inner(brand, model)')
                             .or(`brand.ilike.%${token}%,model.ilike.%${token}%`, { foreignTable: 'inventoryoracle' });
 
                         const ids = new Set([
-                            ...(oldData || []).map((x: any) => x.lead_id),
                             ...(newData || []).map((x: any) => x.lead_id)
                         ]);
                         return Array.from(ids);
@@ -126,7 +120,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
 
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
-            query = query.not('budget', 'is', null).gt('budget', 0);
+            query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
 
         // Intersect all idFilters
@@ -196,7 +190,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
         if (filters.hasBudget) {
-            respondedQuery = respondedQuery.not('budget', 'is', null).gt('budget', 0);
+            respondedQuery = respondedQuery.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
@@ -349,8 +343,8 @@ export const fetchBudgetStats = async (supabase: any, assignedTo: string) => {
             .from('leads')
             .select('id', { count: 'exact', head: true })
             .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
-            .not('budget', 'is', null)
-            .gt('budget', 0); // Opcional: solo mayores a 0 si consideran 0 como sin presupuesto, o quitar si solo not null
+            .not('presupuesto_cliente', 'is', null)
+            .gt('presupuesto_cliente', 0); // Opcional: solo mayores a 0 si consideran 0 como sin presupuesto, o quitar si solo not null
 
         if (assignedTo && assignedTo !== 'all') {
             query = query.eq('assigned_to', assignedTo);
