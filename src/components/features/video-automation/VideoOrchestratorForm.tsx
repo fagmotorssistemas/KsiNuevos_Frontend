@@ -261,7 +261,7 @@ export function VideoOrchestratorForm({ onJobCreated }: { onJobCreated?: () => v
                     )}
                     {v.price && (
                       <span className="block text-xs text-green-600 font-medium mt-0.5">
-                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(v.price)}
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(v.price)}
                       </span>
                     )}
                   </div>

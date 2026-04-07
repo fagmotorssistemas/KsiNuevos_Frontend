@@ -73,7 +73,7 @@ export function QAApprovalModal({
   const canApprove = job.status === 'ready_for_qa' || job.status === 'processing_descript'
   const formatPrice = (price: number | null) => {
     if (!price) return '—'
-    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0 }).format(price)
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(price)
   }
 
   return (

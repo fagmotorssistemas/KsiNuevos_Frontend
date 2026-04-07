@@ -100,7 +100,7 @@ export function VideoJobsDashboard({
   }
 
   const formatDate = (dateStr: string) => {
-    return new Intl.DateTimeFormat('es-MX', {
+    return new Intl.DateTimeFormat('es-EC', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -111,9 +111,9 @@ export function VideoJobsDashboard({
 
   const formatPrice = (price: number | null) => {
     if (!price) return '—'
-    return new Intl.NumberFormat('es-MX', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'MXN',
+      currency: 'USD',
       minimumFractionDigits: 0,
     }).format(price)
   }
