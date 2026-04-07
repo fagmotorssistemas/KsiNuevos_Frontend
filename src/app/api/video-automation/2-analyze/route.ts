@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { GoogleGenerativeAI, FileState } from '@google/generative-ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const maxDuration = 300
 
