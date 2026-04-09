@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { raw_video_url, vehicle_id } = body
+    const { raw_video_url, vehicle_id, target_duration_seconds } = body
 
     if (!raw_video_url || !vehicle_id) {
       return NextResponse.json(
@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const VALID_DURATIONS = [25, 40, 60]
+    const duration = VALID_DURATIONS.includes(Number(target_duration_seconds))
+      ? Number(target_duration_seconds)
+      : 40
 
     const { data: vehicle, error: vehicleError } = await supabase
       .from('inventoryoracle')
@@ -39,6 +44,7 @@ export async function POST(request: NextRequest) {
         vehicle_id,
         raw_video_url,
         status: 'analyzing_gemini',
+        target_duration_seconds: duration,
       })
       .select('id, status, created_at')
       .single()
@@ -54,6 +60,7 @@ export async function POST(request: NextRequest) {
       job_id: job.id,
       status: job.status,
       vehicle: `${vehicle.brand} ${vehicle.model} ${vehicle.year}`,
+      target_duration_seconds: duration,
       created_at: job.created_at,
     })
   } catch (err: unknown) {

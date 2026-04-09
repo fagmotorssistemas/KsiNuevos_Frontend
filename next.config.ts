@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
         destination: "/home",
         permanent: false,
       },
+      {
+        source: "/dashboard/video-automation",
+        destination: "/marketing/video-automation",
+        permanent: false,
+      },
     ];
   },
 };

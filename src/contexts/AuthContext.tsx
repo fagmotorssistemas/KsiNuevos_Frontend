@@ -46,31 +46,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [supabase])
 
-  // useEffect 2: Maneja la carga del PERFIL (lento)
+  // useEffect 2: Carga el perfil y suscribe cambios en tiempo real
   useEffect(() => {
-    // (¡CORRECCIÓN!) Ponemos setIsLoading(true) aquí
-    // Solo cargamos si el usuario CAMBIA
-    setIsLoading(true) 
-    
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('Error al obtener el perfil:', error)
-            setProfile(null)
-          } else {
-            setProfile(data)
-          }
-          setIsLoading(false)
-        })
-    } 
-    else {
+    setIsLoading(true)
+
+    if (!user) {
       setProfile(null)
       setIsLoading(false)
+      return
+    }
+
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error al obtener el perfil:', error)
+          setProfile(null)
+        } else {
+          setProfile(data)
+        }
+        setIsLoading(false)
+      })
+
+    // Suscripción en tiempo real: si el rol u otro campo del perfil cambia
+    // en la BD (ej. admin cambia el rol del usuario), el menú se actualiza al instante
+    const channel = supabase
+      .channel(`profile-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          setProfile(payload.new as Profile)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
     }
   }, [user, supabase])
 

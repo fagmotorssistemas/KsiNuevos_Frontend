@@ -15,7 +15,11 @@ export function MainNav({ className }: { className?: string }) {
   
   let navItems: NavItem[] = [];
 
-if (profile?.role === "finanzas") {
+if (profile?.role === "taller") {
+  navItems = [
+    { href: "/taller/dashboard", label: "Taller" },
+  ];
+} else if (profile?.role === "finanzas") {
   navItems = [
     { href: "/inventario", label: "Acceso Limitado" }, 
   ];
@@ -40,7 +44,11 @@ if (profile?.role === "finanzas") {
       navItems.push({ href: "/wallet", label: "Contabilidad" });
       navItems.push({ href: "/legal/cases", label: "Gestión Legal" });
       navItems.push({ href: "/taller/dashboard", label: "Taller" });
-      navItems.push({ href: "/templates", label: "Plantillas" });
+      navItems.push({ href: "/marketing", label: "Marketing" });
+    }
+
+    if (profile?.role === "marketing") {
+      navItems.push({ href: "/marketing", label: "Marketing" });
     }
 
     // Admin y Vendedores: Seguros y Rastreadores

@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         raw_video_url,
         status,
         vehicle_id,
+        target_duration_seconds,
         inventoryoracle!inner (
           brand,
           model,
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     const videoBuffer = await videoResponse.arrayBuffer()
     const videoBase64 = Buffer.from(videoBuffer).toString('base64')
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const priceFormatted = new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -110,23 +111,39 @@ export async function POST(request: NextRequest) {
       minimumFractionDigits: 0,
     }).format(vehicle.price || 0)
 
-    const prompt = `You are a master automotive video editor. Watch this raw video carefully and analyze every second of it. The car featured is a ${vehicle.brand} ${vehicle.model} ${vehicle.year}${vehicle.version ? ` ${vehicle.version}` : ''}${vehicle.color ? `, color ${vehicle.color}` : ''}${vehicle.transmission ? `, ${vehicle.transmission} transmission` : ''}${vehicle.fuel_type ? `, ${vehicle.fuel_type}` : ''}, priced at ${priceFormatted} with ${vehicle.mileage?.toLocaleString() || 0} km on the odometer.
+    const targetDuration: number = (job as unknown as { target_duration_seconds?: number }).target_duration_seconds ?? 40
 
-Write a comprehensive, highly detailed editing prompt for an automated Descript Underlord Agent. Be as specific and thorough as necessary — do not limit yourself in length. The prompt must include explicit instructions for each of the following areas:
+    const durationFormatted = targetDuration >= 60
+      ? `${Math.floor(targetDuration / 60)} minute${Math.floor(targetDuration / 60) > 1 ? 's' : ''}`
+      : `${targetDuration} seconds`
 
-1. CLEANUP: Remove every filler word (uh, um, like, you know, etc.), all long pauses longer than 0.5 seconds, and any repeated phrases. Cut any sections where the seller loses their train of thought.
+    const hookDuration = targetDuration <= 25 ? 2 : 3
+    const mainContentDuration = targetDuration - hookDuration - (targetDuration >= 40 ? 3 : 2)
 
-2. AUDIO ENHANCEMENT: Apply Studio Sound to the full audio track to eliminate background noise, normalize volume levels, and add warmth and clarity to the voice.
+    const toleranceLow = targetDuration - 5
+    const toleranceHigh = targetDuration + 5
 
-3. HOOK SELECTION: Identify the single most visually and emotionally engaging 3-second clip from the entire video — ideally a moment showing the car's best angle, a feature demonstration, or the seller's most enthusiastic moment. Place this clip as the very first thing viewers see (0:00–0:03) before the main content begins.
+    const prompt = `You are a master automotive video editor specializing in social media content for car dealerships. Watch this raw video carefully and analyze every second of it. The car featured is a ${vehicle.brand} ${vehicle.model} ${vehicle.year}${vehicle.version ? ` ${vehicle.version}` : ''}${vehicle.color ? `, color ${vehicle.color}` : ''}${vehicle.transmission ? `, ${vehicle.transmission} transmission` : ''}${vehicle.fuel_type ? `, ${vehicle.fuel_type}` : ''}, priced at ${priceFormatted} with ${vehicle.mileage?.toLocaleString() || 0} km on the odometer.
 
-4. CAPTIONS: Add dynamic, bold captions in Alex Hormozi style — large font, centered on screen, high contrast (yellow text with dark outline or shadow). The captions must follow the spoken audio word-for-word. Specifically highlight the following key data points visually whenever they are mentioned in the audio: the brand "${vehicle.brand}", model "${vehicle.model}", year ${vehicle.year}, and price ${priceFormatted}. These words should appear larger or in a different accent color when they appear in the captions.
+DURATION GOAL: Aim for approximately ${durationFormatted} (${targetDuration} seconds). The acceptable range is ${toleranceLow}–${toleranceHigh} seconds — do not sacrifice a great moment or create an awkward cut just to hit an exact number. Natural, clean editing comes first; hitting close to the target comes second. Structure the video as: Hook (${hookDuration}s) → Best highlights of the car and seller pitch (${mainContentDuration}s) → Call to action if mentioned (up to ${targetDuration >= 40 ? 3 : 2}s).
 
-5. PACING: Ensure the final cut feels energetic and fast-paced, appropriate for TikTok and Instagram Reels. Remove any dead air or slow-walking segments that add no value.
+Write a comprehensive, highly detailed editing prompt for an automated Descript Underlord Agent. Be as specific and thorough as necessary. The prompt must include explicit instructions for each of the following areas:
 
-6. STRUCTURE: The final video should follow this structure — Hook (3s) → Main highlights of the car → Call to action (if the seller mentions one at the end).
+1. DURATION & PACING: Aim for ${durationFormatted} total, acceptable range ${toleranceLow}–${toleranceHigh}s. Keep only the best, most engaging moments. Remove dead air, slow-walking segments, and repeated information. Every second must earn its place. The final cut should feel energetic and fast-paced, perfect for TikTok and Instagram Reels.
 
-Based on what you actually see and hear in the video, add any additional specific editing notes that would improve the final result for social media.`
+2. CLEANUP: Remove every filler word (uh, um, like, you know, etc.), all pauses longer than 0.5 seconds, and any repeated phrases. Cut any sections where the seller loses their train of thought or says something redundant.
+
+3. AUDIO ENHANCEMENT: Apply Studio Sound to the full audio track to eliminate background noise, normalize volume levels, and add professional warmth and clarity to the voice. If there is significant wind noise, crowd noise, or echo, make sure Studio Sound is applied aggressively.
+
+4. HOOK SELECTION: Identify the single most visually and emotionally engaging ${hookDuration}-second clip from the entire video — ideally the car's best angle, a feature demonstration, or the seller's most enthusiastic moment. Place it first (0:00–0:0${hookDuration}). The hook must instantly grab attention.
+
+5. TRANSITIONS: Between each cut, add a smooth and fast transition — preferably a quick crossfade (0.2–0.3 seconds) or a push/slide transition that feels dynamic without being distracting. Avoid hard jump cuts. The transitions should make the video feel polished and professional, not cheap. Choose the transition style that best fits the energy of each cut.
+
+6. SOUND EFFECTS & AUDIO ACCENTS: Add subtle but impactful sound effects to enhance the viewer experience. Suggestions: a short "whoosh" sound on each transition between clips, a brief "ding" or "pop" accent when a key text caption appears on screen (especially when the price ${priceFormatted} or the model "${vehicle.brand} ${vehicle.model}" is shown), and a low background music bed (upbeat, energetic, dealership-appropriate) if Descript's library has a suitable track. Keep the sound effects subtle — they should enhance, not overpower the seller's voice.
+
+7. CAPTIONS: Add dynamic, bold captions in Alex Hormozi style — large font, centered on screen, high contrast (yellow text with dark outline or shadow). Captions must follow the spoken audio word-for-word. Visually emphasize these key data points whenever mentioned: brand "${vehicle.brand}", model "${vehicle.model}", year ${vehicle.year}, and price ${priceFormatted} — make them pop with larger text or a different accent color.
+
+Based on what you actually see and hear in the video, add any additional specific cutting decisions or notes that would maximize the impact for social media.`
 
     const result = await model.generateContent([
       {

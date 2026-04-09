@@ -3360,6 +3360,7 @@ export type Database = {
           id: string
           raw_video_url: string
           status: string
+          target_duration_seconds: number
           updated_at: string | null
           vehicle_id: string
         }
@@ -3373,6 +3374,7 @@ export type Database = {
           id?: string
           raw_video_url: string
           status?: string
+          target_duration_seconds?: number
           updated_at?: string | null
           vehicle_id: string
         }
@@ -3386,6 +3388,7 @@ export type Database = {
           id?: string
           raw_video_url?: string
           status?: string
+          target_duration_seconds?: number
           updated_at?: string | null
           vehicle_id?: string
         }
@@ -4136,6 +4139,7 @@ export type Database = {
         | "finanzas"
         | "contable"
         | "abogado"
+        | "taller"
       vehicle_request_type:
         | "sedan"
         | "suv"
@@ -4429,6 +4433,7 @@ export const Constants = {
         "finanzas",
         "contable",
         "abogado",
+        "taller",
       ],
       vehicle_request_type: [
         "sedan",

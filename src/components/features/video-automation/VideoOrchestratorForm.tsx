@@ -13,6 +13,7 @@ import {
   Wand2,
   X,
   Car,
+  Timer,
 } from 'lucide-react'
 
 type Vehicle = {
@@ -24,6 +25,18 @@ type Vehicle = {
   color: string | null
   price: number | null
 }
+
+type DurationOption = {
+  seconds: number
+  label: string
+  sublabel: string
+}
+
+const DURATION_OPTIONS: DurationOption[] = [
+  { seconds: 25, label: '25 seg', sublabel: 'TikTok corto' },
+  { seconds: 40, label: '40 seg', sublabel: 'Reels estándar' },
+  { seconds: 60, label: '1 min', sublabel: 'Máximo alcance' },
+]
 
 type Step = 'idle' | 'uploading_storage' | 'registering' | 'analyzing' | 'descript' | 'done' | 'error'
 
@@ -51,6 +64,8 @@ export function VideoOrchestratorForm({ onJobCreated }: { onJobCreated?: () => v
 
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
+
+  const [targetDuration, setTargetDuration] = useState<number>(40)
 
   const [currentStep, setCurrentStep] = useState<Step>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -108,6 +123,7 @@ export function VideoOrchestratorForm({ onJobCreated }: { onJobCreated?: () => v
     setSelectedVehicle(null)
     setSearchTerm('')
     setVideoFile(null)
+    setTargetDuration(40)
     setCurrentStep('idle')
     setErrorMessage('')
     setAiPrompt('')
@@ -144,6 +160,7 @@ export function VideoOrchestratorForm({ onJobCreated }: { onJobCreated?: () => v
         body: JSON.stringify({
           raw_video_url: rawVideoUrl,
           vehicle_id: selectedVehicle.id,
+          target_duration_seconds: targetDuration,
         }),
       })
 
@@ -336,6 +353,48 @@ export function VideoOrchestratorForm({ onJobCreated }: { onJobCreated?: () => v
               </div>
             )}
           </div>
+        </div>
+
+        {/* Duration Selector */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-3">
+            <Timer className="w-4 h-4 inline mr-1.5 text-gray-400" />
+            Duración del video editado
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            {DURATION_OPTIONS.map((opt) => {
+              const isSelected = targetDuration === opt.seconds
+              return (
+                <button
+                  key={opt.seconds}
+                  type="button"
+                  onClick={() => !isProcessing && setTargetDuration(opt.seconds)}
+                  disabled={isProcessing}
+                  className={`
+                    flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all
+                    ${isSelected
+                      ? 'border-red-500 bg-red-50 text-red-700 shadow-sm shadow-red-100'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }
+                    ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  `}
+                >
+                  <span className={`text-lg font-bold ${isSelected ? 'text-red-600' : 'text-gray-800'}`}>
+                    {opt.label}
+                  </span>
+                  <span className={`text-xs mt-0.5 ${isSelected ? 'text-red-500' : 'text-gray-400'}`}>
+                    {opt.sublabel}
+                  </span>
+                  {isSelected && (
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            Gemini usará esta duración para indicarle a Descript cuánto debe durar el video final.
+          </p>
         </div>
 
         {/* Progress Pipeline */}

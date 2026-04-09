@@ -8,13 +8,19 @@ type LeadRow = Database['public']['Tables']['leads']['Row'];
 type CarRow = Database['public']['Tables']['interested_cars']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
+type CarRowWithVehicle = CarRow & {
+    brand?: string | null;
+    model?: string | null;
+    year?: number | string | null;
+};
+
 export type BotSuggestionLead = LeadRow & {
-    interested_cars: CarRow[];
+    interested_cars: CarRowWithVehicle[];
 };
 
 export type AppointmentWithDetails = AppointmentRow & {
     lead: (LeadRow & {
-        interested_cars: CarRow[];
+        interested_cars: CarRowWithVehicle[];
     }) | null; 
     responsible?: ProfileRow;
 };
