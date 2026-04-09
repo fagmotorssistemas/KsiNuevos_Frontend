@@ -1,7 +1,16 @@
 import type { Database } from "@/types/supabase";
 
+type CarRow = Database['public']['Tables']['interested_cars']['Row'];
+
+export type CarRowWithVehicle = CarRow & {
+    brand?: string | null;
+    model?: string | null;
+    year?: number | string | null;
+    color_preference?: string | null;
+};
+
 export type LeadWithDetails = Database['public']['Tables']['leads']['Row'] & {
-    interested_cars: Database['public']['Tables']['interested_cars']['Row'][];
+    interested_cars: CarRowWithVehicle[];
     profiles: { full_name: string } | null;
 };
 

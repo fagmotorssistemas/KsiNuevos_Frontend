@@ -1,18 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
+import type { CarRowWithVehicle } from "@/types/leads.types";
 
 // --- TIPOS ---
 type AppointmentRow = Database['public']['Tables']['appointments']['Row'];
 type LeadRow = Database['public']['Tables']['leads']['Row'];
-type CarRow = Database['public']['Tables']['interested_cars']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
-
-type CarRowWithVehicle = CarRow & {
-    brand?: string | null;
-    model?: string | null;
-    year?: number | string | null;
-};
 
 export type BotSuggestionLead = LeadRow & {
     interested_cars: CarRowWithVehicle[];

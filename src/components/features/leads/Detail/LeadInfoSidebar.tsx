@@ -69,7 +69,7 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const handleSaveFinance = async (newBudget?: string, newFinancing?: boolean) => {
         setIsSavingFinance(true);
         
-        const budgetToSave = newBudget !== undefined ? (parseFloat(newBudget) || 0) : (parseFloat(budget) || 0);
+        const budgetToSave = newBudget !== undefined ? String(parseFloat(newBudget) || 0) : String(parseFloat(budget) || 0);
         const financingToSave = newFinancing !== undefined ? newFinancing : wantsFinancing;
 
         await supabase.from('leads').update({ 
