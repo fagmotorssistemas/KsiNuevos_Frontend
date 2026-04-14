@@ -118,6 +118,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Módulo seguros (/seguros/*): solo admin
+  if (pathname === '/seguros' || pathname.startsWith('/seguros/')) {
+    const role = (profile?.role || '').toLowerCase().trim()
+    if (role !== 'admin') {
+      return NextResponse.redirect(new URL('/leads', request.url))
+    }
+  }
+
   return response
 }
 

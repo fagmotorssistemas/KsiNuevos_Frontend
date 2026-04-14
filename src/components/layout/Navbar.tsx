@@ -14,7 +14,8 @@ import { UserNav } from './UserNav'
 export const Navbar = () => {
   const { user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const showSegurosRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
+  const showRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
+  const showSeguros = profile?.role === 'admin'
   const showLegal = profile?.role === 'admin' || profile?.role === 'abogado'
 
   return (
@@ -112,23 +113,23 @@ export const Navbar = () => {
                   Plantillas
               </Link>
             )}
-            {showSegurosRastreadores && (
-              <>
-                <Link 
-                    href="/rastreadores" 
-                    className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                >
-                    Rastreadores
-                </Link>
-                <Link 
-                    href="/seguros" 
-                    className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                >
-                    Seguros
-                </Link>
-              </>
+            {showRastreadores && (
+              <Link 
+                  href="/rastreadores" 
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Rastreadores
+              </Link>
+            )}
+            {showSeguros && (
+              <Link 
+                  href="/seguros" 
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Seguros
+              </Link>
             )}
           </div>
         </div>

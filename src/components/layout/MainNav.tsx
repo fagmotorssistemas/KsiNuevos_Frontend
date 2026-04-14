@@ -51,9 +51,13 @@ if (profile?.role === "taller") {
       navItems.push({ href: "/marketing", label: "Marketing" });
     }
 
-    // Admin y Vendedores: Seguros y Rastreadores
+    // Admin y Vendedores: Rastreadores
     if (profile?.role === "admin" || profile?.role === "vendedor") {
       navItems.push({ href: "/rastreadores", label: "Rastreadores" });
+    }
+
+    // Solo admin: Seguros
+    if (profile?.role === "admin") {
       navItems.push({ href: "/seguros", label: "Seguros" });
     }
 
