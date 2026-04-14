@@ -18,6 +18,7 @@ export default function LeadsPage() {
         respondedCount,    // Métrica 1
         interactionsCount, // Métrica 2
         budgetCount,
+        tradeInLeadsCount,
         requestStats,
         isLoading, 
         sortDescriptor, 
@@ -80,6 +81,7 @@ export default function LeadsPage() {
                 respondedCount={respondedCount}
                 interactionsCount={interactionsCount}
                 budgetCount={budgetCount}
+                tradeInLeadsCount={tradeInLeadsCount}
                 requestStats={requestStats}
                 currentUserRole={profile?.role} 
                 sellers={sellers}               

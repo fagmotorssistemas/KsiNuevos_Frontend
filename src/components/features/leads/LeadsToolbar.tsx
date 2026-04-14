@@ -8,7 +8,8 @@ import {
     User,
     MessageSquare,
     ClipboardList, // Icono para interacciones/gestión
-    BellRing
+    BellRing,
+    ArrowLeftRight
 } from "lucide-react";
 
 import type { LeadsFilters } from "@/types/leads.types";
@@ -22,6 +23,7 @@ interface LeadsToolbarProps {
     respondedCount?: number;     // Métrica 1: De la lista actual
     interactionsCount?: number;  // Métrica 2: Trabajo realizado en fecha X
     budgetCount?: number;        // Métrica 3: Leads con presupuesto
+    tradeInLeadsCount?: number; // Leads con al menos un trade_in_cars
     requestStats?: {
         datosPedidos: { pendiente: number; en_proceso: number; resuelto: number; total: number };
         asesoria: { pendiente: number; en_proceso: number; resuelto: number; total: number };
@@ -73,6 +75,7 @@ export function LeadsToolbar({
     respondedCount = 0,
     interactionsCount = 0,
     budgetCount = 0,
+    tradeInLeadsCount = 0,
     requestStats = { 
         datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
         asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
@@ -91,6 +94,7 @@ export function LeadsToolbar({
         filters.exactDate !== '' ||
         filters.search !== '' ||
         filters.hasBudget ||
+        filters.hasTradeIn ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
         (isAdmin && assignedToValue !== 'all');
 
@@ -267,7 +271,7 @@ export function LeadsToolbar({
                         </span>
                     </div>
 
-                    {(budgetCount > 0 || requestStats.datosPedidos.total > 0 || requestStats.asesoria.total > 0) && (
+                    {(budgetCount > 0 || tradeInLeadsCount > 0 || requestStats.datosPedidos.total > 0 || requestStats.asesoria.total > 0) && (
                         <>
                             {/* SEPARADOR */}
                             <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
@@ -293,7 +297,8 @@ export function LeadsToolbar({
                                         {/* Presupuesto */}
                                         {budgetCount > 0 && (
                                             <button 
-                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all' })}
+                                                type="button"
+                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all', hasTradeIn: false })}
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                     filters.hasBudget 
                                                     ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm' 
@@ -312,11 +317,53 @@ export function LeadsToolbar({
                                             </button>
                                         )}
 
+                                        {tradeInLeadsCount > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onFilterChange({
+                                                        hasTradeIn: !filters.hasTradeIn,
+                                                        status: "all",
+                                                        requestStatus: "all",
+                                                        hasBudget: false,
+                                                    })
+                                                }
+                                                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
+                                                    filters.hasTradeIn
+                                                        ? "border-indigo-400 bg-indigo-100 text-indigo-950 shadow-md ring-2 ring-indigo-300/60"
+                                                        : "border-transparent text-slate-600 hover:border-indigo-100 hover:bg-indigo-50/60"
+                                                }`}
+                                                title="Filtrar leads con vehículo en intercambio o parte de pago"
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <div
+                                                        className={`p-1.5 rounded-md ${
+                                                            filters.hasTradeIn
+                                                                ? "bg-indigo-500 text-white shadow-sm"
+                                                                : "bg-slate-100 text-slate-500"
+                                                        }`}
+                                                    >
+                                                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span className="font-semibold text-sm">Intercambio / parte de pago</span>
+                                                </div>
+                                                <span
+                                                    className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                                        filters.hasTradeIn
+                                                            ? "bg-indigo-600 text-white shadow-sm"
+                                                            : "bg-slate-100 text-slate-600"
+                                                    }`}
+                                                >
+                                                    {tradeInLeadsCount}
+                                                </span>
+                                            </button>
+                                        )}
+
                                         {/* Info Faltante */}
                                         {requestStats.datosPedidos.total > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 <button 
-                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false })}
+                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false })}
                                                     className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                         filters.status === 'datos_pedidos'
                                                         ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm'
@@ -345,7 +392,7 @@ export function LeadsToolbar({
                                                 {filters.status === 'datos_pedidos' && (
                                                     <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'pendiente' 
                                                                 ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
@@ -356,7 +403,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.pendiente}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'en_proceso' 
                                                                 ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
@@ -367,7 +414,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.en_proceso}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'resuelto' 
                                                                 ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
@@ -378,7 +425,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.resuelto}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 (filters.requestStatus === 'all' || !filters.requestStatus)
                                                                 ? 'bg-purple-100 text-purple-800 font-semibold border-purple-200 shadow-sm' 
@@ -397,7 +444,7 @@ export function LeadsToolbar({
                                         {requestStats.asesoria.total > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 <button 
-                                                    onClick={() => onFilterChange({ status: filters.status === 'asesoria_financiamiento' ? 'all' : 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false })}
+                                                    onClick={() => onFilterChange({ status: filters.status === 'asesoria_financiamiento' ? 'all' : 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false, hasTradeIn: false })}
                                                     className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                         filters.status === 'asesoria_financiamiento'
                                                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm'
@@ -426,7 +473,7 @@ export function LeadsToolbar({
                                                 {filters.status === 'asesoria_financiamiento' && (
                                                     <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'pendiente', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'pendiente' 
                                                                 ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
@@ -437,7 +484,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.pendiente}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'en_proceso', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'en_proceso' 
                                                                 ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
@@ -448,7 +495,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.en_proceso}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'resuelto', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'resuelto' 
                                                                 ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
@@ -459,7 +506,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.asesoria.resuelto}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'asesoria_financiamiento', requestStatus: 'all', hasBudget: false, hasTradeIn: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 (filters.requestStatus === 'all' || !filters.requestStatus)
                                                                 ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 

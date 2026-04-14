@@ -211,7 +211,7 @@ export function LeadsList({
                                             <span className="text-xs text-slate-500">{primaryCar.year}</span>
                                         </div>
                                     ) : (
-                                        <span className="text-xs text-slate-400 italic">Sin auto definido</span>
+                                        <span className="text-xs text-slate-400 italic">Sin vehículo de interés</span>
                                     )}
                                 </Table.Cell>
 
