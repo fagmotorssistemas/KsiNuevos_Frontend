@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { VideoPlayer } from '@/components/videos-v2/VideoPlayer'
 import { PipelineStatus } from '@/components/videos-v2/PipelineStatus'
-import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
+import type { VideoJobV2 } from '@/lib/videos-v2/types'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600', icon: Clock },
@@ -67,9 +67,9 @@ export default function JobDetailPage() {
   const isProcessing = job && !['completed', 'failed'].includes(job.status)
 
   // Nuevo formato: secuencia de segmentos
-  const segmentAnalysis = job?.gemini_analysis && 'sequence' in (job.gemini_analysis as Record<string, unknown>)
-    ? job.gemini_analysis as GeminiSegmentAnalysisResult
-    : null
+  const gemini = job?.gemini_analysis
+  const segmentAnalysis =
+    gemini != null && 'sequence' in gemini ? gemini : null
 
   const currentStatusIdx = job ? (STATUS_ORDER[job.status] ?? 0) : 0
 
