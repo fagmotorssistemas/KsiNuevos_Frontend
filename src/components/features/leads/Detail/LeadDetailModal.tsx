@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, Calendar, MapPin, ShoppingBag, Activity, BookAlert, Landmark } from "lucide-react";
 import type { LeadWithDetails } from "@/types/leads.types";
 
@@ -16,12 +16,34 @@ import { LeadAsesoriaFinanciamientoTab } from "./LeadAsesoriaFinanciamientoTab";
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
+    entryMode?: "default" | "asesoria_financiamiento";
 }
 
 type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos' | 'asesoria_financiamiento';
 
-export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
+export function LeadDetailModal({ lead, onClose, entryMode = "default" }: LeadDetailModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>('history');
+
+    const visibleTabs: TabType[] = useMemo(() => {
+        if (entryMode === "asesoria_financiamiento") {
+            return ["history", "agenda", "asesoria_financiamiento"];
+        }
+        return ["history", "agenda", "showroom", "requests", "recuperar", "datos_pedidos", "asesoria_financiamiento"];
+    }, [entryMode]);
+
+    useEffect(() => {
+        // Si entramos desde el módulo de Asesorías, arrancamos directo en esa pestaña
+        if (entryMode === "asesoria_financiamiento") {
+            setActiveTab("asesoria_financiamiento");
+        }
+    }, [entryMode]);
+
+    useEffect(() => {
+        // Si por alguna razón el activeTab quedó en una pestaña no visible, lo corregimos
+        if (!visibleTabs.includes(activeTab)) {
+            setActiveTab(visibleTabs[0] ?? "history");
+        }
+    }, [activeTab, visibleTabs]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
@@ -47,48 +69,62 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                         
                         {/* Selector de Pestañas (Header de la columna derecha) */}
                         <div className="shrink-0 flex border-b border-slate-100 overflow-x-auto no-scrollbar bg-white z-10">
-                            <TabButton 
-                                active={activeTab === 'history'} 
-                                onClick={() => setActiveTab('history')} 
-                                icon={MessageCircle} 
-                                label="Historial" 
-                            />
-                            <TabButton 
-                                active={activeTab === 'agenda'} 
-                                onClick={() => setActiveTab('agenda')} 
-                                icon={Calendar} 
-                                label="Agenda" 
-                            />
-                            <TabButton 
-                                active={activeTab === 'showroom'} 
-                                onClick={() => setActiveTab('showroom')} 
-                                icon={MapPin} 
-                                label="Showroom" 
-                            />
-                            <TabButton 
-                                active={activeTab === 'requests'} 
-                                onClick={() => setActiveTab('requests')} 
-                                icon={ShoppingBag} 
-                                label="Pedidos" 
-                            />
-                            <TabButton 
-                                active={activeTab === 'recuperar'} 
-                                onClick={() => setActiveTab('recuperar')} 
-                                icon={Activity} 
-                                label="Recuperar" 
-                            />
-                            <TabButton 
-                                active={activeTab === 'datos_pedidos'} 
-                                onClick={() => setActiveTab('datos_pedidos')}
-                                icon={BookAlert}
-                                label="Info. Faltante"
-                            />
-                            <TabButton
-                                active={activeTab === 'asesoria_financiamiento'}
-                                onClick={() => setActiveTab('asesoria_financiamiento')}
-                                icon={Landmark}
-                                label="Asesoria Financ."
-                            />
+                            {visibleTabs.includes("history") && (
+                                <TabButton
+                                    active={activeTab === "history"}
+                                    onClick={() => setActiveTab("history")}
+                                    icon={MessageCircle}
+                                    label="Historial"
+                                />
+                            )}
+                            {visibleTabs.includes("agenda") && (
+                                <TabButton
+                                    active={activeTab === "agenda"}
+                                    onClick={() => setActiveTab("agenda")}
+                                    icon={Calendar}
+                                    label="Agenda"
+                                />
+                            )}
+                            {visibleTabs.includes("showroom") && (
+                                <TabButton
+                                    active={activeTab === "showroom"}
+                                    onClick={() => setActiveTab("showroom")}
+                                    icon={MapPin}
+                                    label="Showroom"
+                                />
+                            )}
+                            {visibleTabs.includes("requests") && (
+                                <TabButton
+                                    active={activeTab === "requests"}
+                                    onClick={() => setActiveTab("requests")}
+                                    icon={ShoppingBag}
+                                    label="Pedidos"
+                                />
+                            )}
+                            {visibleTabs.includes("recuperar") && (
+                                <TabButton
+                                    active={activeTab === "recuperar"}
+                                    onClick={() => setActiveTab("recuperar")}
+                                    icon={Activity}
+                                    label="Recuperar"
+                                />
+                            )}
+                            {visibleTabs.includes("datos_pedidos") && (
+                                <TabButton
+                                    active={activeTab === "datos_pedidos"}
+                                    onClick={() => setActiveTab("datos_pedidos")}
+                                    icon={BookAlert}
+                                    label="Info. Faltante"
+                                />
+                            )}
+                            {visibleTabs.includes("asesoria_financiamiento") && (
+                                <TabButton
+                                    active={activeTab === "asesoria_financiamiento"}
+                                    onClick={() => setActiveTab("asesoria_financiamiento")}
+                                    icon={Landmark}
+                                    label="Asesoria Financ."
+                                />
+                            )}
                         </div>
 
                         {/* --- CONTENIDO DE LA PESTAÑA ACTIVA --- */}
@@ -98,13 +134,13 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                             se expandan para llenar todo el espacio vertical disponible y activen sus propios scrollbars.
                         */}
                         <div className="flex-1 overflow-hidden relative flex flex-col h-full">
-                            {activeTab === 'history' && <LeadHistoryTab lead={lead} />}
-                            {activeTab === 'agenda' && <LeadAgendaTab lead={lead} />}
-                            {activeTab === 'showroom' && <LeadShowroomTab lead={lead} />}
-                            {activeTab === 'requests' && <LeadRequestsTab lead={lead} />}
-                            {activeTab === 'recuperar' && <LeadRecoveryTab lead={lead} />}
-                            {activeTab === 'datos_pedidos' && <LeadDatosPedidosTab leadId={lead.id} />}
-                            {activeTab === 'asesoria_financiamiento' && <LeadAsesoriaFinanciamientoTab leadId={lead.id} />}
+                            {activeTab === 'history' && visibleTabs.includes("history") && <LeadHistoryTab lead={lead} />}
+                            {activeTab === 'agenda' && visibleTabs.includes("agenda") && <LeadAgendaTab lead={lead} />}
+                            {activeTab === 'showroom' && visibleTabs.includes("showroom") && <LeadShowroomTab lead={lead} />}
+                            {activeTab === 'requests' && visibleTabs.includes("requests") && <LeadRequestsTab lead={lead} />}
+                            {activeTab === 'recuperar' && visibleTabs.includes("recuperar") && <LeadRecoveryTab lead={lead} />}
+                            {activeTab === 'datos_pedidos' && visibleTabs.includes("datos_pedidos") && <LeadDatosPedidosTab leadId={lead.id} />}
+                            {activeTab === 'asesoria_financiamiento' && visibleTabs.includes("asesoria_financiamiento") && <LeadAsesoriaFinanciamientoTab leadId={lead.id} />}
                         </div>
                     </div>
                 </div>

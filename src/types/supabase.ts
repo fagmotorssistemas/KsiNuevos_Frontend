@@ -172,6 +172,138 @@ export type Database = {
           },
         ]
       }
+      asesoria_financiamiento_evidencia: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          file_name: string | null
+          gestion_id: number
+          id: number
+          mime_type: string | null
+          size_bytes: number | null
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          gestion_id: number
+          id?: number
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_bucket?: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          gestion_id?: number
+          id?: number
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asesoria_financiamiento_evidencia_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asesoria_financiamiento_evidencia_gestion_id_fkey"
+            columns: ["gestion_id"]
+            isOneToOne: false
+            referencedRelation: "asesoria_financiamiento_gestion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asesoria_financiamiento_gestion: {
+        Row: {
+          aplica: boolean | null
+          asesor_contactado_nombre: string | null
+          asesor_contactado_telefono: string | null
+          asesoria_id: number
+          banco_deseado: string | null
+          cedula: string | null
+          created_at: string
+          created_by: string | null
+          garante_detalle: string | null
+          gestion_detalle: string | null
+          id: number
+          image_urls: string[]
+          monto_aprobable_max: number | null
+          motivo_no_aplica: string | null
+          pdf_urls: string[]
+          plazo_meses_max: number | null
+          requiere_garante: boolean
+          se_solicito_cedula: boolean
+          tipo: Database["public"]["Enums"]["tipo_gestion_financiamiento"]
+        }
+        Insert: {
+          aplica?: boolean | null
+          asesor_contactado_nombre?: string | null
+          asesor_contactado_telefono?: string | null
+          asesoria_id: number
+          banco_deseado?: string | null
+          cedula?: string | null
+          created_at?: string
+          created_by?: string | null
+          garante_detalle?: string | null
+          gestion_detalle?: string | null
+          id?: number
+          image_urls?: string[]
+          monto_aprobable_max?: number | null
+          motivo_no_aplica?: string | null
+          pdf_urls?: string[]
+          plazo_meses_max?: number | null
+          requiere_garante?: boolean
+          se_solicito_cedula?: boolean
+          tipo: Database["public"]["Enums"]["tipo_gestion_financiamiento"]
+        }
+        Update: {
+          aplica?: boolean | null
+          asesor_contactado_nombre?: string | null
+          asesor_contactado_telefono?: string | null
+          asesoria_id?: number
+          banco_deseado?: string | null
+          cedula?: string | null
+          created_at?: string
+          created_by?: string | null
+          garante_detalle?: string | null
+          gestion_detalle?: string | null
+          id?: number
+          image_urls?: string[]
+          monto_aprobable_max?: number | null
+          motivo_no_aplica?: string | null
+          pdf_urls?: string[]
+          plazo_meses_max?: number | null
+          requiere_garante?: boolean
+          se_solicito_cedula?: boolean
+          tipo?: Database["public"]["Enums"]["tipo_gestion_financiamiento"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asesoria_financiamiento_gestion_asesoria_id_fkey"
+            columns: ["asesoria_id"]
+            isOneToOne: false
+            referencedRelation: "asesoria_financiamiento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asesoria_financiamiento_gestion_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brokers: {
         Row: {
           activo: boolean | null
@@ -1907,6 +2039,36 @@ export type Database = {
           },
         ]
       }
+      music_tracks_v2: {
+        Row: {
+          created_at: string | null
+          duration_seconds: number | null
+          file_path: string
+          id: string
+          is_active: boolean | null
+          name: string
+          public_url: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_path: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          public_url: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_path?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          public_url?: string
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number | null
@@ -3402,6 +3564,72 @@ export type Database = {
           },
         ]
       }
+      video_jobs_v2: {
+        Row: {
+          adjusted_srt: string | null
+          assemblyai_transcript_id: string | null
+          created_at: string | null
+          creatomate_render_id: string | null
+          current_step: string | null
+          error_message: string | null
+          final_video_duration: number | null
+          final_video_url: string | null
+          flow_type: string
+          gemini_analysis: Json | null
+          id: string
+          music_track_url: string | null
+          progress_percentage: number | null
+          raw_video_paths: string[]
+          segment_map: Json | null
+          selected_clips: Json | null
+          srt_content: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          adjusted_srt?: string | null
+          assemblyai_transcript_id?: string | null
+          created_at?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          final_video_duration?: number | null
+          final_video_url?: string | null
+          flow_type: string
+          gemini_analysis?: Json | null
+          id?: string
+          music_track_url?: string | null
+          progress_percentage?: number | null
+          raw_video_paths: string[]
+          segment_map?: Json | null
+          selected_clips?: Json | null
+          srt_content?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          adjusted_srt?: string | null
+          assemblyai_transcript_id?: string | null
+          created_at?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          final_video_duration?: number | null
+          final_video_url?: string | null
+          flow_type?: string
+          gemini_analysis?: Json | null
+          id?: string
+          music_track_url?: string | null
+          progress_percentage?: number | null
+          raw_video_paths?: string[]
+          segment_map?: Json | null
+          selected_clips?: Json | null
+          srt_content?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       web_appointments: {
         Row: {
           appointment_date: string
@@ -4125,6 +4353,7 @@ export type Database = {
         | "nota"
         | "notificacion"
         | "sistema"
+      tipo_gestion_financiamiento: "llamada" | "mensaje" | "personal"
       tipo_pago_enum: "CONTADO" | "CREDITO"
       tipo_proceso_enum:
         | "extrajudicial"
@@ -4418,6 +4647,7 @@ export const Constants = {
         "notificacion",
         "sistema",
       ],
+      tipo_gestion_financiamiento: ["llamada", "mensaje", "personal"],
       tipo_pago_enum: ["CONTADO", "CREDITO"],
       tipo_proceso_enum: [
         "extrajudicial",

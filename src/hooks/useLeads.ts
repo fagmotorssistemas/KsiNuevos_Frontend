@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchRequestStats, fetchBudgetStats, fetchTradeInLeadsCount } from "@/services/leads.service";
 import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
@@ -6,6 +7,7 @@ import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 export function useLeads() {
     const { supabase, user, isLoading: isAuthLoading } = useAuth();
+    const searchParams = useSearchParams();
 
     // DATOS DE LEADS
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
@@ -48,6 +50,34 @@ export function useLeads() {
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
+    const didInitFromUrlRef = useRef(false);
+
+    useEffect(() => {
+        if (didInitFromUrlRef.current) return;
+        // Solo inicializamos cuando ya tenemos URL disponible (en App Router siempre lo está),
+        // y lo hacemos una sola vez para no pelear con el estado del usuario.
+        const status = searchParams.get("status");
+        const requestStatus = searchParams.get("requestStatus");
+        const assignedTo = searchParams.get("assignedTo");
+
+        if (!status && !requestStatus && !assignedTo) {
+            didInitFromUrlRef.current = true;
+            return;
+        }
+
+        didInitFromUrlRef.current = true;
+        setPage(1);
+        setFilters((prev) => ({
+            ...prev,
+            ...(status ? { status } : {}),
+            ...(requestStatus ? { requestStatus } : {}),
+            ...(assignedTo ? { assignedTo } : {}),
+            // Cuando venimos desde un acceso directo, aseguramos que no quede “pegado”
+            // un filtro incompatible con el estado.
+            hasBudget: false,
+            hasTradeIn: false,
+        }));
+    }, [searchParams]);
 
     const resetFilters = () => {
         setPage(1);
