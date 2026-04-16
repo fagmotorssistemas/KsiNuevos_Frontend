@@ -1907,6 +1907,36 @@ export type Database = {
           },
         ]
       }
+      music_tracks_v2: {
+        Row: {
+          created_at: string | null
+          duration_seconds: number | null
+          file_path: string
+          id: string
+          is_active: boolean | null
+          name: string
+          public_url: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_path: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          public_url: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_path?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          public_url?: string
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number | null
@@ -3401,6 +3431,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      video_jobs_v2: {
+        Row: {
+          assemblyai_transcript_id: string | null
+          created_at: string | null
+          creatomate_render_id: string | null
+          current_step: string | null
+          error_message: string | null
+          final_video_duration: number | null
+          final_video_url: string | null
+          flow_type: string
+          gemini_analysis: Json | null
+          id: string
+          music_track_url: string | null
+          progress_percentage: number | null
+          raw_video_paths: string[]
+          selected_clips: Json | null
+          srt_content: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          assemblyai_transcript_id?: string | null
+          created_at?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          final_video_duration?: number | null
+          final_video_url?: string | null
+          flow_type: string
+          gemini_analysis?: Json | null
+          id?: string
+          music_track_url?: string | null
+          progress_percentage?: number | null
+          raw_video_paths: string[]
+          selected_clips?: Json | null
+          srt_content?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          assemblyai_transcript_id?: string | null
+          created_at?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          error_message?: string | null
+          final_video_duration?: number | null
+          final_video_url?: string | null
+          flow_type?: string
+          gemini_analysis?: Json | null
+          id?: string
+          music_track_url?: string | null
+          progress_percentage?: number | null
+          raw_video_paths?: string[]
+          selected_clips?: Json | null
+          srt_content?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       web_appointments: {
         Row: {

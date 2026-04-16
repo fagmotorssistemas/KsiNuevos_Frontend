@@ -11,11 +11,13 @@ import {
     ChevronLeft,
     ChevronRight,
     Megaphone,
+    Sparkles,
 } from 'lucide-react';
 
 const menuItems = [
     { name: 'Inicio', href: '/marketing', icon: LayoutDashboard },
-    { name: 'Videos IA', href: '/marketing/video-automation', icon: Film },
+    { name: 'Videos IA (V1)', href: '/marketing/video-automation', icon: Film },
+    { name: 'Videos V2 ✨', href: '/marketing/videos-v2', icon: Sparkles },
 ];
 
 export function MarketingSidebar() {
