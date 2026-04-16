@@ -6,8 +6,9 @@
 
 import type { RawWord } from './assemblyai'
 
-// Pausa mínima entre palabras para considerar un separador de segmento
-const SILENCE_THRESHOLD_MS = 1500
+// Pausa mínima entre palabras para considerar un separador de segmento.
+// Bajamos el umbral para capturar micro-segmentos útiles (marca/modelo/año, CTA cortos).
+const SILENCE_THRESHOLD_MS = 900
 
 export interface Segment {
   segment_id: string   // "clipIndex_segmentNumber" e.g. "0_1"

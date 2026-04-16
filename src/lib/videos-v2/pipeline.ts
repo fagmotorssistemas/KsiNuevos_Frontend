@@ -1,17 +1,3 @@
-/**
- * Pipeline principal del Módulo V2.
- * Se ejecuta en el servidor de forma asíncrona (fire and forget).
- * El frontend hace polling al endpoint /api/videos-v2/job-status/[id].
- *
- * Flujo:
- *   1. [PARALELO] AssemblyAI transcribe + Google File API comprime/sube video
- *   2. segmenter.buildSegmentMap → mapa de segmentos de habla
- *   3. gemini.analyzeSegments → análisis visual + textual (o solo texto como fallback)
- *   4. cleanupGoogleFile → limpieza de archivo en Google
- *   5. segmenter.buildAdjustedSRT → SRT ajustado para Creatomate
- *   6. creatomate.renderSegmentsV2 → render con segmentos + SRT inyectado
- */
-
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType, VideoJobStatus } from './types'

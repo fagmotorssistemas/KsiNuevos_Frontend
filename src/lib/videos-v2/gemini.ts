@@ -49,6 +49,150 @@ function extractJsonObject(text: string): string {
 
 // ─── Validación de secuencia ─────────────────────────────────────────────────
 
+const CAR_BRANDS = [
+  'hyundai', 'kia', 'toyota', 'chevrolet', 'mazda', 'nissan', 'suzuki',
+  'ford', 'honda', 'mitsubishi', 'renault', 'volkswagen', 'vw'
+]
+
+function normalizeText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function isMistakeSegment(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  return /me equivoque|equivoc|otra vez|de nuevo/.test(t)
+}
+
+function isPresentationSegment(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
+  const hasYear = /\b(19|20)\d{2}\b/.test(t)
+  const hasModelLikeToken = /\b[hx]?\d{1,3}\b/.test(t) || /\b(prado|picanto|hilux|rio|elantra|accent)\b/.test(t)
+  return hasBrand || hasYear || hasModelLikeToken
+}
+
+function isEndCtaSegment(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  return /solo aqui|ksi nuevos|casi nuevos|comenta\b/.test(t)
+}
+
+function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
+  const lookup = new Map(allSegments.map((s) => [s.segment_id, s] as const))
+  const intro: SequenceItem[] = []
+  const middle: SequenceItem[] = []
+  const outro: SequenceItem[] = []
+
+  for (const item of sequence) {
+    const seg = lookup.get(item.segment_id)
+    if (!seg) {
+      middle.push(item)
+      continue
+    }
+    if (isEndCtaSegment(seg)) outro.push(item)
+    else if (isPresentationSegment(seg)) intro.push(item)
+    else middle.push(item)
+  }
+
+  return [...intro, ...middle, ...outro]
+}
+
+/** Normaliza texto para comparar si dos tomas dicen lo mismo (no confundir con solo repetir nombre de auto). */
+function normalizeForDedupe(text: string): string {
+  return normalizeText(text)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function wordCountNormalized(t: string): number {
+  return t.split(/\s+/).filter(Boolean).length
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  const dp = new Array<number>(n + 1)
+  for (let j = 0; j <= n; j++) dp[j] = j
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j]
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost)
+      prev = tmp
+    }
+  }
+  return dp[n]
+}
+
+function stringSimilarity(a: string, b: string): number {
+  if (!a && !b) return 1
+  if (!a || !b) return 0
+  const d = levenshtein(a, b)
+  return 1 - d / Math.max(a.length, b.length)
+}
+
+/**
+ * True si dos segmentos son la misma frase (tomas repetidas), p.ej. dos clips distintos diciendo "con amplio espacio".
+ * False si solo comparten nombre de modelo (presentación vs CTA distinto).
+ */
+function isSameUtterance(textA: string, textB: string): boolean {
+  const na = normalizeForDedupe(textA)
+  const nb = normalizeForDedupe(textB)
+  if (!na || !nb) return false
+  if (na === nb) return true
+
+  const ca = wordCountNormalized(na)
+  const cb = wordCountNormalized(nb)
+  const wcRatio = Math.min(ca, cb) / Math.max(ca, cb)
+  if (wcRatio < 0.65) return false
+
+  const sim = stringSimilarity(na, nb)
+  if (sim >= 0.94) return true
+  if (sim >= 0.88 && wcRatio >= 0.82) return true
+  if (sim >= 0.9 && wcRatio >= 0.72 && Math.abs(ca - cb) <= 2) return true
+  return false
+}
+
+function dedupeSequenceByUtterance(
+  sequence: SequenceItem[],
+  segmentLookup: Map<string, Segment>,
+  jobId: string
+): SequenceItem[] {
+  const kept: SequenceItem[] = []
+  const keptTexts: string[] = []
+
+  for (const item of sequence) {
+    const seg = segmentLookup.get(item.segment_id)
+    if (!seg) {
+      kept.push(item)
+      continue
+    }
+    const text = seg.text
+    if (keptTexts.some((t) => isSameUtterance(t, text))) {
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][Gemini] Dedupe: descartando ${item.segment_id} (misma frase que un clip ya elegido)`
+      )
+      continue
+    }
+    kept.push(item)
+    keptTexts.push(text)
+  }
+  return kept
+}
+
+function sequenceUtteranceTexts(sequence: SequenceItem[], segmentLookup: Map<string, Segment>): string[] {
+  return sequence
+    .map((item) => segmentLookup.get(item.segment_id)?.text)
+    .filter((t): t is string => !!t)
+}
+
 function validateSequence(
   raw: GeminiSegmentAnalysis,
   allSegments: Segment[],
@@ -59,92 +203,91 @@ function validateSequence(
     segmentLookup.set(s.segment_id, s)
   }
 
-  let { sequence } = raw
+  // 1) Limpiar duplicados y segmentos basura ("me equivoqué")
+  const usedIds = new Set<string>()
+  let sequence = raw.sequence
+    .filter((item) => {
+      if (usedIds.has(item.segment_id)) return false
+      usedIds.add(item.segment_id)
+      return true
+    })
+    .filter((item) => {
+      const seg = segmentLookup.get(item.segment_id)
+      return seg ? !isMistakeSegment(seg) : true
+    })
 
-  // Validación 3: ajustar trim_start/trim_end a los límites reales del segmento
+  // 2) Forzar cortes exactos al segmento para no romper palabras
   sequence = sequence.map((item) => {
     const seg = segmentLookup.get(item.segment_id)
     if (!seg) return item
-
-    let trimStart = item.trim_start
-    let trimEnd = item.trim_end
-
-    if (trimStart < seg.start_s) {
-      console.warn(`[VideoV2Pipeline][${jobId}][Gemini] trim_start ${trimStart} < seg.start ${seg.start_s} → ajustando`)
-      trimStart = seg.start_s
+    return {
+      ...item,
+      trim_start: seg.start_s,
+      trim_end: seg.end_s,
+      trim_duration: Number((seg.end_s - seg.start_s).toFixed(3)),
     }
-    if (trimEnd > seg.end_s) {
-      console.warn(`[VideoV2Pipeline][${jobId}][Gemini] trim_end ${trimEnd} > seg.end ${seg.end_s} → ajustando`)
-      trimEnd = seg.end_s
-    }
-
-    const trimDuration = Number((trimEnd - trimStart).toFixed(3))
-
-    return { ...item, trim_start: trimStart, trim_end: trimEnd, trim_duration: trimDuration }
   })
 
-  // Validación 4: eliminar segmentos < 2s (tolerancia bajo el mínimo del prompt de 3s)
+  // 3) Permitir micro-segmentos relevantes (solo descartar ultra-cortos)
   const before = sequence.length
-  sequence = sequence.filter((item) => {
-    if (item.trim_duration < 2) {
-      console.warn(`[VideoV2Pipeline][${jobId}][Gemini] Segmento ${item.segment_id} (${item.trim_duration}s) < 2s → eliminado`)
-      return false
-    }
-    return true
-  })
+  sequence = sequence.filter((item) => item.trim_duration >= 0.8)
   if (sequence.length < before) {
-    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos cortos`)
+    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.8s)`)
   }
 
-  // Recalcular total_duration
-  let totalDuration = sequence.reduce((sum, item) => sum + item.trim_duration, 0)
-  totalDuration = Number(totalDuration.toFixed(3))
+  // 4) Orden editorial duro: presentación primero, CTA/marca al final
+  sequence = enforceEditorialOrder(sequence, allSegments)
 
-  // Validación 1: muy corto → agregar segmentos no usados de mayor duración
-  if (totalDuration < 22) {
-    console.warn(`[VideoV2Pipeline][${jobId}][Gemini] total_duration ${totalDuration}s < 22s → buscando segmentos extra`)
+  // 4b) Misma frase en tomas distintas: conservar la primera en el orden actual, descartar el resto
+  sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
-    const usedIds = new Set(sequence.map((s) => s.segment_id))
-    const unused = allSegments
-      .filter((s) => !usedIds.has(s.segment_id) && s.duration_s >= 3)
+  // 5) Si quedó muy corto, agregar segmentos útiles no usados
+  let totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+  if (totalDuration < 20) {
+    const selected = new Set(sequence.map((s) => s.segment_id))
+    const candidates = allSegments
+      .filter((s) => !selected.has(s.segment_id) && !isMistakeSegment(s) && s.duration_s >= 0.8)
       .sort((a, b) => b.duration_s - a.duration_s)
 
-    for (const candidate of unused) {
-      if (totalDuration >= 25) break
-      const newItem: SequenceItem = {
-        segment_id: candidate.segment_id,
-        clip_index: candidate.clip_index,
-        trim_start: candidate.start_s,
-        trim_end: candidate.end_s,
-        trim_duration: candidate.duration_s,
+    for (const seg of candidates) {
+      if (totalDuration >= 24) break
+      const existingTexts = sequenceUtteranceTexts(sequence, segmentLookup)
+      if (existingTexts.some((t) => isSameUtterance(t, seg.text))) continue
+      sequence.push({
+        segment_id: seg.segment_id,
+        clip_index: seg.clip_index,
+        trim_start: seg.start_s,
+        trim_end: seg.end_s,
+        trim_duration: seg.duration_s,
         order: sequence.length + 1,
         reason: 'agregado automáticamente para alcanzar duración mínima',
-      }
-      sequence.push(newItem)
-      totalDuration += candidate.duration_s
+      })
+      totalDuration += seg.duration_s
     }
     totalDuration = Number(totalDuration.toFixed(3))
   }
 
-  // Validación 2: muy largo → recortar último segmento
-  if (totalDuration > 35) {
-    console.warn(`[VideoV2Pipeline][${jobId}][Gemini] total_duration ${totalDuration}s > 35s → recortando`)
-
-    const excess = totalDuration - 33
-    const last = sequence[sequence.length - 1]
-    last.trim_duration = Number((last.trim_duration - excess).toFixed(3))
-    last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
-
-    if (last.trim_duration < 2) {
-      sequence.pop()
+  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre
+  if (totalDuration > 35 && sequence.length > 0) {
+    for (let i = sequence.length - 1; i >= 0 && totalDuration > 33; i--) {
+      const seg = segmentLookup.get(sequence[i].segment_id)
+      if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
+        totalDuration -= sequence[i].trim_duration
+        sequence.splice(i, 1)
+      }
     }
+    totalDuration = Number(totalDuration.toFixed(3))
 
-    totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+    if (totalDuration > 35 && sequence.length > 0) {
+      const last = sequence[sequence.length - 1]
+      const excess = totalDuration - 33
+      last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
+      last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
+      totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+    }
   }
 
-  // Renumerar order
   sequence.forEach((item, i) => { item.order = i + 1 })
-
   return { sequence, total_duration: totalDuration, overall_strategy: raw.overall_strategy }
 }
 
@@ -163,8 +306,11 @@ ${formattedSegmentMap}
 REGLAS ABSOLUTAS DE CORTE:
 1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural del habla.
 2. Usa EXACTAMENTE los trim_start y trim_end que correspondan al inicio y fin del segmento (start_s y end_s del mapa). NO modifiques los timestamps a menos que el segmento sea demasiado largo y necesites usar solo una parte (en ese caso, corta en una pausa natural entre palabras).
-3. La duración total DEBE estar entre 25 y 32 segundos. Este es el sweet spot para Reels virales.
-4. Cada segmento individual DEBE durar mínimo 3 segundos para que sea cómodo de ver.
+3. La duración total DEBE estar entre 20 y 32 segundos. Este es el sweet spot para Reels virales.
+4. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
+5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
+6. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
+
 
 CRITERIOS DE SELECCIÓN VISUAL (en orden de prioridad):
 - GANCHO (primer segmento): Elige la toma más impactante visualmente + el texto más llamativo. Debe generar curiosidad o emoción en los primeros 2 segundos.
@@ -191,7 +337,10 @@ REGLAS ABSOLUTAS DE CORTE:
 1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural.
 2. Usa EXACTAMENTE los trim_start y trim_end del segmento (start_s y end_s del mapa). NO inventes timestamps.
 3. La duración total DEBE estar entre 25 y 32 segundos.
-4. Cada segmento individual DEBE durar mínimo 3 segundos.
+4. Puedes usar segmentos cortos si aportan valor (incluso alrededor de 1 segundo) siempre que no corten palabras.
+5. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
+6. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
+7. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
 
 CRITERIOS DE SELECCIÓN:
 - GANCHO (primer segmento): La frase más impactante, una pregunta, un precio, algo que detenga el scroll
