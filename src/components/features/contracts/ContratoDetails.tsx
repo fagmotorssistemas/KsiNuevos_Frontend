@@ -16,15 +16,18 @@ interface ContratoDetailsProps {
 export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDetailsProps) {
     const [contrato, setContrato] = useState<ContratoDetalle | null>(null);
     const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     useEffect(() => {
         const loadDetalle = async () => {
             try {
                 setLoading(true);
+                setErrorMsg(null);
                 const data = await contratosService.getDetalleContrato(contratoId);
                 setContrato(data);
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error cargando detalle", error);
+                setErrorMsg("El contrato no pudo ser cargado o no tiene el detalle completo en la base de datos.");
             } finally {
                 setLoading(false);
             }
@@ -42,6 +45,34 @@ export function ContratoDetails({ contratoId, initialData, onClose }: ContratoDe
                     <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
                     <p className="text-sm text-slate-600 font-medium">Cargando ficha completa...</p>
                     {initialData && <p className="text-xs text-slate-400">{initialData.nota} - {initialData.cliente}</p>}
+                </div>
+            </div>
+        );
+    }
+
+    if (errorMsg) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-3 shadow-xl max-w-sm w-full text-center">
+                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-2">
+                        <X className="h-6 w-6 text-red-600" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">Error al cargar ficha</h3>
+                    <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                        {errorMsg}
+                    </p>
+                    {initialData && (
+                        <p className="text-xs text-slate-400 mt-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                            <span className="font-mono">{initialData.nota}</span><br />
+                            {initialData.cliente}
+                        </p>
+                    )}
+                    <button 
+                        onClick={onClose}
+                        className="mt-4 px-6 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors w-full"
+                    >
+                        Cerrar
+                    </button>
                 </div>
             </div>
         );

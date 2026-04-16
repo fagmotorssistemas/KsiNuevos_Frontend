@@ -1,4 +1,4 @@
-import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
+import { EXCLUDED_ID, LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
 
 export const fetchSellersRequest = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('id, full_name').eq('status', 'activo').eq('role', 'vendedor').order('full_name');
@@ -20,6 +20,148 @@ const getEcuadorRange = (dateStr: string) => {
 
 // Tokens de búsqueda (sin espacios) para evitar que el filtro se rompa; "kia st" → ["kia", "st"]
 const searchTokens = (search: string) => search.trim().split(/\s+/).filter(Boolean);
+
+/** Una fila por id de trade_in_cars, orden estable */
+const dedupeTradeInRows = (rows: unknown[]): unknown[] => {
+    const m = new Map<number, unknown>();
+    for (const r of rows) {
+        const row = r as { id?: number };
+        if (row?.id != null) m.set(Number(row.id), r);
+    }
+    return [...m.values()];
+};
+
+/**
+ * Carga trade_in_cars para los leads de la página.
+ * 1) Por relación canónica trade_in_cars.lead_id = leads.id
+ * 2) Si no hay filas, intenta cuando en BD se guardó lead_id_kommo por error en lead_id
+ * (el embed en select a veces viene vacío por RLS o caché de relación en PostgREST).
+ */
+const parseLeadPk = (raw: unknown): number | null => {
+    if (raw == null) return null;
+    const n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+    if (!Number.isInteger(n) || n < 1) return null;
+    return n;
+};
+
+/** Consola del navegador: filtra por "trade_in_debug" */
+const TI = "[trade_in_debug]";
+
+const fetchTradeInCarsForLeadPage = async (supabase: any, rawLeads: any[]) => {
+    const tradeInByLeadPk = new Map<number, unknown[]>();
+
+    const leadPks = [
+        ...new Set(
+            rawLeads.map((r) => parseLeadPk(r?.id)).filter((n): n is number => n != null)
+        ),
+    ];
+
+    console.info(TI, "fetchLeadsAPI → tabla trade_in_cars", {
+        paso: "inicio",
+        leadsEnPagina: rawLeads.length,
+        leadIdsParaConsulta: leadPks,
+    });
+
+    if (leadPks.length === 0) {
+        console.warn(TI, "No hay lead.id válidos en esta página: NO se llama a trade_in_cars (revisa datos del listado)");
+    }
+
+    try {
+        if (leadPks.length > 0) {
+            console.info(TI, "Llamada Supabase: from('trade_in_cars').select('*').in('lead_id', …)", {
+                lead_id_in: leadPks,
+            });
+
+            const { data: byInternalId, error: err1 } = await supabase
+                .from("trade_in_cars")
+                .select("*")
+                .in("lead_id", leadPks);
+
+            if (err1) {
+                console.warn(TI, "Respuesta trade_in_cars (por leads.id): ERROR", {
+                    code: (err1 as { code?: string }).code,
+                    message: (err1 as { message?: string }).message,
+                    details: err1,
+                });
+                console.warn("[fetchLeadsAPI] trade_in_cars por leads.id:", err1.message || err1);
+            } else {
+                console.info(TI, "Respuesta trade_in_cars (por leads.id): OK", {
+                    filasDevueltas: (byInternalId || []).length,
+                    muestra: (byInternalId || []).slice(0, 3),
+                });
+                for (const row of byInternalId || []) {
+                    const lid = Number((row as { lead_id: number }).lead_id);
+                    if (!tradeInByLeadPk.has(lid)) tradeInByLeadPk.set(lid, []);
+                    tradeInByLeadPk.get(lid)!.push(row);
+                }
+            }
+        }
+
+        const needsKommoFallback = rawLeads.filter((r) => {
+            const pk = parseLeadPk(r?.id);
+            if (pk == null) return false;
+            const got = tradeInByLeadPk.get(pk);
+            return (!got || got.length === 0) && r.lead_id_kommo != null;
+        });
+
+        const kommoIds = [
+            ...new Set(
+                needsKommoFallback
+                    .map((r) => parseLeadPk(r.lead_id_kommo))
+                    .filter((n): n is number => n != null)
+            ),
+        ];
+        const pkSet = new Set(leadPks);
+        const kommoOnlyIds = kommoIds.filter((k) => !pkSet.has(k));
+
+        if (kommoOnlyIds.length > 0) {
+            console.info(TI, "Llamada Supabase fallback: trade_in_cars.in('lead_id', lead_id_kommo)", {
+                lead_id_in: kommoOnlyIds,
+            });
+
+            const { data: byKommoAsLeadId, error: err2 } = await supabase
+                .from("trade_in_cars")
+                .select("*")
+                .in("lead_id", kommoOnlyIds);
+
+            if (err2) {
+                console.warn(TI, "Respuesta trade_in_cars (fallback kommo): ERROR", err2);
+                console.warn("[fetchLeadsAPI] trade_in_cars fallback lead_id_kommo:", err2.message || err2);
+            } else {
+                console.info(TI, "Respuesta trade_in_cars (fallback kommo): OK", {
+                    filasDevueltas: (byKommoAsLeadId || []).length,
+                });
+                for (const row of byKommoAsLeadId || []) {
+                    const stored = Number((row as { lead_id: number }).lead_id);
+                    for (const lead of rawLeads) {
+                        if (parseLeadPk(lead.lead_id_kommo) !== stored) continue;
+                        const pk = parseLeadPk(lead.id);
+                        if (pk == null) continue;
+                        const existing = tradeInByLeadPk.get(pk);
+                        if (existing && existing.length > 0) continue;
+                        if (!tradeInByLeadPk.has(pk)) tradeInByLeadPk.set(pk, []);
+                        tradeInByLeadPk.get(pk)!.push(row);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn(TI, "Excepción al consultar trade_in_cars:", e);
+        console.warn("[fetchLeadsAPI] trade_in_cars (excepción, se omite):", e);
+    }
+
+    const resumen = Object.fromEntries(
+        [...tradeInByLeadPk.entries()].map(([id, rows]) => [id, (rows as unknown[]).length])
+    );
+    const totalFilas = [...tradeInByLeadPk.values()].reduce((acc, r) => acc + r.length, 0);
+    console.info(TI, "Resumen merge en fetchLeadsAPI", {
+        leadsConAlMenosUnTradeIn: tradeInByLeadPk.size,
+        totalFilasTradeIn: totalFilas,
+        porLeadId: resumen,
+    });
+
+    return tradeInByLeadPk;
+};
 
 // --- FETCH PRINCIPAL (GRID & CONTADORES) ---
 export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: number, filters: LeadsFilters) => {
@@ -118,6 +260,30 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
+        // Sub-filtro: leads con vehículo en intercambio (trade_in_cars)
+        if (filters.hasTradeIn) {
+            let tq = supabase
+                .from("trade_in_cars")
+                .select("lead_id, leads!inner(assigned_to)")
+                .neq("leads.assigned_to", EXCLUDED_ID);
+            if (filters.assignedTo && filters.assignedTo !== "all") {
+                tq = tq.eq("leads.assigned_to", filters.assignedTo);
+            }
+            const { data: trows, error: terr } = await tq;
+            if (terr) {
+                console.warn("fetchLeadsAPI hasTradeIn:", terr);
+                idFilters.push([-1]);
+            } else {
+                const tradeLeadIds: number[] = (trows || []).map((r: { lead_id: number }) => r.lead_id as number);
+                const tids = [...new Set<number>(tradeLeadIds)];
+                if (tids.length > 0) {
+                    idFilters.push(tids);
+                } else {
+                    idFilters.push([-1]);
+                }
+            }
+        }
+
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
@@ -172,6 +338,9 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         const { data, count, error } = await query;
         if (error) throw error;
 
+        const rawLeads = data || [];
+        const tradeInByLeadPk = await fetchTradeInCarsForLeadPage(supabase, rawLeads);
+
         // 5. Query Secundaria para "Respondidos" (Métrica 1)
         // CORRECCIÓN: Ahora contamos como respondido si 'resume' NO es nulo y NO está vacío.
         let respondedQuery = supabase
@@ -221,16 +390,21 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         const { count: respondedCount } = await respondedQuery;
 
         // 6. Mapeo de Datos
-        const mappedData: LeadWithDetails[] = (data || []).map((item: any) => ({
-            ...item,
-            interested_cars: (item.interested_cars || []).map((c: any) => ({
-                ...c,
-                brand: c.inventoryoracle?.brand || c.brand,
-                model: c.inventoryoracle?.model || c.model,
-                year: c.inventoryoracle?.year || c.year,
-            })),
-            profiles: item.profiles || { full_name: '' }
-        }));
+        const mappedData: LeadWithDetails[] = rawLeads.map((item: any) => {
+            const pk = Number(item.id);
+            const tradeRows = tradeInByLeadPk.get(pk);
+            return {
+                ...item,
+                interested_cars: (item.interested_cars || []).map((c: any) => ({
+                    ...c,
+                    brand: c.inventoryoracle?.brand || c.brand,
+                    model: c.inventoryoracle?.model || c.model,
+                    year: c.inventoryoracle?.year || c.year,
+                })),
+                trade_in_cars: dedupeTradeInRows(tradeRows || []) as TradeInCarRow[],
+                profiles: item.profiles || { full_name: "" },
+            };
+        });
 
         return { 
             data: mappedData, 
@@ -333,6 +507,31 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
             datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
             asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
         };
+    }
+};
+
+/** Leads distintos que tienen al menos un registro en trade_in_cars (respeta RLS). */
+export const fetchTradeInLeadsCount = async (supabase: any, assignedTo: string) => {
+    try {
+        let q = supabase
+            .from("trade_in_cars")
+            .select("lead_id, leads!inner(assigned_to)")
+            .neq("leads.assigned_to", EXCLUDED_ID);
+
+        if (assignedTo && assignedTo !== "all") {
+            q = q.eq("leads.assigned_to", assignedTo);
+        }
+
+        const { data, error } = await q;
+        if (error) {
+            console.warn("fetchTradeInLeadsCount:", error);
+            return 0;
+        }
+        const unique = new Set((data || []).map((r: { lead_id: number }) => r.lead_id));
+        return unique.size;
+    } catch (e) {
+        console.warn("fetchTradeInLeadsCount:", e);
+        return 0;
     }
 };
 

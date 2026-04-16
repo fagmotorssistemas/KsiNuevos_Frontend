@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchRequestStats, fetchBudgetStats } from "@/services/leads.service";
+import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchRequestStats, fetchBudgetStats, fetchTradeInLeadsCount } from "@/services/leads.service";
 import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 
@@ -17,6 +17,7 @@ export function useLeads() {
     const [interactionsCount, setInteractionsCount] = useState(0);
     
     const [budgetCount, setBudgetCount] = useState(0);
+    const [tradeInLeadsCount, setTradeInLeadsCount] = useState(0);
 
     // NOTIFICACIONES PENDIENTES
     const [requestStats, setRequestStats] = useState({
@@ -43,7 +44,7 @@ export function useLeads() {
     // ------------------------------------------------
 
     const [filters, setFilters] = useState<LeadsFilters>({
-        search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false
+        search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false, hasTradeIn: false
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,7 +52,7 @@ export function useLeads() {
     const resetFilters = () => {
         setPage(1);
         setFilters({
-            search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false
+            search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false, hasTradeIn: false
         });
     };
 
@@ -62,11 +63,12 @@ export function useLeads() {
         else setIsRefetching(true);
 
         try {
-            const [leadsData, interactions, stats, bCount] = await Promise.all([
+            const [leadsData, interactions, stats, bCount, tradeInCount] = await Promise.all([
                 fetchLeadsAPI(supabase, page, rowsPerPage, filters),
                 fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate),
                 fetchRequestStats(supabase, filters.assignedTo),
-                fetchBudgetStats(supabase, filters.assignedTo)
+                fetchBudgetStats(supabase, filters.assignedTo),
+                fetchTradeInLeadsCount(supabase, filters.assignedTo)
             ]);
 
             setLeads(leadsData.data);
@@ -75,6 +77,7 @@ export function useLeads() {
             setInteractionsCount(interactions);
             setRequestStats(stats);
             setBudgetCount(bCount);
+            setTradeInLeadsCount(tradeInCount);
             
         } catch (error) {
             console.error("Error cargando leads:", error);
@@ -108,6 +111,14 @@ export function useLeads() {
                     }, 2000);
                 }
             )
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'trade_in_cars' },
+                () => {
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    debounceRef.current = setTimeout(() => {
+                        loadLeads(false);
+                    }, 2000);
+                }
+            )
             .subscribe();
 
         return () => { 
@@ -125,7 +136,7 @@ export function useLeads() {
             if (key === 'exactDate' && value !== '') {
                 setFilters(prev => ({ ...prev, exactDate: value, dateRange: 'all' }));
             } else if (key === 'status') {
-                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false }));
+                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false }));
             } else {
                 setFilters(prev => ({ ...prev, [key]: value }));
             }
@@ -138,6 +149,7 @@ export function useLeads() {
         respondedCount,
         interactionsCount,
         budgetCount,
+        tradeInLeadsCount,
         requestStats,
         page, setPage, rowsPerPage,
         isLoading,
