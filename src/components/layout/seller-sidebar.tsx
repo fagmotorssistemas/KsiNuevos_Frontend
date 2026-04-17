@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
     Menu,
     X,
@@ -18,6 +18,8 @@ import {
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { fetchRequestStats } from '@/services/leads.service';
 
 // Definición de los items del menú de Ventas
 const menuItems = [
@@ -37,6 +39,70 @@ export function SellerSidebar() {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const { supabase, user, profile } = useAuth();
+
+    const [asesoriaStats, setAsesoriaStats] = useState<{
+        pendiente: number;
+        en_proceso: number;
+        resuelto: number;
+        total: number;
+    }>({ pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 });
+
+    const asesoriasHref = useMemo(
+        () => '/leads?status=asesoria_financiamiento&requestStatus=pendiente',
+        []
+    );
+
+    const isAsesoriasActive = useMemo(() => {
+        if (!pathname.startsWith('/leads')) return false;
+        return searchParams.get('status') === 'asesoria_financiamiento';
+    }, [pathname, searchParams]);
+
+    const asesoriasRequestStatus = useMemo(() => {
+        if (!isAsesoriasActive) return null;
+        const raw = searchParams.get('requestStatus');
+        if (raw === 'pendiente' || raw === 'en_proceso' || raw === 'resuelto' || raw === 'all') return raw;
+        return 'all';
+    }, [isAsesoriasActive, searchParams]);
+
+    const asesoriasBadge = useMemo(() => {
+        // Si estoy parado en Asesorías, muestro el contador del estado activo para que sea obvio qué estoy viendo.
+        if (asesoriasRequestStatus === 'pendiente') return { label: 'pend.', value: asesoriaStats.pendiente };
+        if (asesoriasRequestStatus === 'en_proceso') return { label: 'proc.', value: asesoriaStats.en_proceso };
+        if (asesoriasRequestStatus === 'resuelto') return { label: 'res.', value: asesoriaStats.resuelto };
+        if (asesoriasRequestStatus === 'all') return { label: 'total', value: asesoriaStats.total };
+
+        // Fuera de Asesorías: prioriza pendientes si hay, si no total.
+        if (asesoriaStats.pendiente > 0) return { label: 'pend.', value: asesoriaStats.pendiente };
+        return { label: 'total', value: asesoriaStats.total };
+    }, [
+        asesoriasRequestStatus,
+        asesoriaStats.pendiente,
+        asesoriaStats.en_proceso,
+        asesoriaStats.resuelto,
+        asesoriaStats.total,
+    ]);
+
+    useEffect(() => {
+        let isCancelled = false;
+        const run = async () => {
+            if (!user) return;
+            const assignedTo = profile?.role?.toLowerCase() === 'admin' ? 'all' : user.id;
+            const stats = await fetchRequestStats(supabase, assignedTo);
+            if (isCancelled) return;
+            setAsesoriaStats({
+                pendiente: stats.asesoria.pendiente || 0,
+                en_proceso: stats.asesoria.en_proceso || 0,
+                resuelto: stats.asesoria.resuelto || 0,
+                total: stats.asesoria.total || 0,
+            });
+        };
+        run();
+        return () => {
+            isCancelled = true;
+        };
+    }, [supabase, user, profile?.role]);
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
@@ -167,6 +233,137 @@ export function SellerSidebar() {
                             </Link>
                         );
                     })}
+
+                    {/* Acceso directo: Asesorías de Financiamiento (solo aquí, no en Alertas Rápidas) */}
+                    <Link
+                        href={asesoriasHref}
+                        onClick={() => setIsMobileOpen(false)}
+                        className={`
+                            group flex items-center rounded-xl transition-all duration-200 relative
+                            ${isCollapsed ? 'justify-center py-3 px-2' : 'justify-between px-4 py-3.5'}
+                            ${isAsesoriasActive
+                                ? 'bg-emerald-50 text-emerald-800 font-medium'
+                                : 'text-gray-600 hover:bg-emerald-50/40 hover:text-gray-900'
+                            }
+                        `}
+                        title={
+                            isCollapsed
+                                ? `Asesorías Fin. (${asesoriaStats.pendiente} pend. / ${asesoriaStats.en_proceso} proc. / ${asesoriaStats.resuelto} res. / ${asesoriaStats.total} total)`
+                                : ''
+                        }
+                    >
+                        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+                            <BadgeDollarSign
+                                size={20}
+                                className={`transition-colors shrink-0 ${isAsesoriasActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-emerald-700'}`}
+                            />
+                            <span className={`whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 hidden' : 'w-auto opacity-100'}`}>
+                                Asesorías Fin.
+                            </span>
+                        </div>
+
+                        {!isCollapsed && (
+                            <div className="relative">
+                                {/* Indicador compacto (evita amontonamiento) */}
+                                <div className="flex items-center">
+                                    <span
+                                        className={`
+                                            px-2.5 py-1 rounded-full text-xs font-bold border transition-colors
+                                            ${asesoriasBadge.label === 'pend.'
+                                                ? 'bg-red-50 text-red-700 border-red-200'
+                                                : asesoriasBadge.label === 'proc.'
+                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                    : asesoriasBadge.label === 'res.'
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                        : isAsesoriasActive
+                                                            ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                                                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                                            }
+                                        `}
+                                    >
+                                        {asesoriasBadge.value} {asesoriasBadge.label}
+                                    </span>
+                                </div>
+
+                                {/* Ventanita: detalle por estados */}
+                                <div className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                    <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white shadow-xl p-3">
+                                        <div className="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">
+                                            Asesorías Fin.
+                                        </div>
+
+                                        <div className="space-y-1.5 text-xs">
+                                            <Link
+                                                href="/leads?status=asesoria_financiamiento&requestStatus=pendiente"
+                                                onClick={() => setIsMobileOpen(false)}
+                                                className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
+                                                    asesoriasRequestStatus === 'pendiente'
+                                                        ? 'bg-red-50 border-red-200'
+                                                        : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                }`}
+                                            >
+                                                <span className={`font-medium ${asesoriasRequestStatus === 'pendiente' ? 'text-red-700' : 'text-slate-600'}`}>Pendientes</span>
+                                                <span className="font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.pendiente}
+                                                </span>
+                                            </Link>
+
+                                            <Link
+                                                href="/leads?status=asesoria_financiamiento&requestStatus=en_proceso"
+                                                onClick={() => setIsMobileOpen(false)}
+                                                className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
+                                                    asesoriasRequestStatus === 'en_proceso'
+                                                        ? 'bg-blue-50 border-blue-200'
+                                                        : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                }`}
+                                            >
+                                                <span className={`font-medium ${asesoriasRequestStatus === 'en_proceso' ? 'text-blue-700' : 'text-slate-600'}`}>En proceso</span>
+                                                <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.en_proceso}
+                                                </span>
+                                            </Link>
+
+                                            <Link
+                                                href="/leads?status=asesoria_financiamiento&requestStatus=resuelto"
+                                                onClick={() => setIsMobileOpen(false)}
+                                                className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
+                                                    asesoriasRequestStatus === 'resuelto'
+                                                        ? 'bg-emerald-50 border-emerald-200'
+                                                        : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                }`}
+                                            >
+                                                <span className={`font-medium ${asesoriasRequestStatus === 'resuelto' ? 'text-emerald-700' : 'text-slate-600'}`}>Resueltos</span>
+                                                <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.resuelto}
+                                                </span>
+                                            </Link>
+
+                                            <div className="h-px bg-slate-100 my-1.5" />
+
+                                            <Link
+                                                href="/leads?status=asesoria_financiamiento&requestStatus=all"
+                                                onClick={() => setIsMobileOpen(false)}
+                                                className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
+                                                    asesoriasRequestStatus === 'all'
+                                                        ? 'bg-slate-100 border-slate-200'
+                                                        : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
+                                                }`}
+                                            >
+                                                <span className={`font-semibold ${asesoriasRequestStatus === 'all' ? 'text-slate-900' : 'text-slate-700'}`}>Total</span>
+                                                <span className="font-black text-slate-900 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.total}
+                                                </span>
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {isAsesoriasActive && isCollapsed && (
+                            <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-emerald-600" />
+                        )}
+                    </Link>
                 </nav>
 
                 {/* Footer del Sidebar (Perfil de usuario) - COMENTADO COMO EN EL ORIGINAL

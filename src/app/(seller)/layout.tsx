@@ -1,4 +1,5 @@
 import { SellerSidebar } from '@/components/layout/seller-sidebar';
+import { Suspense } from "react";
 
 export default function AccountingLayout({
     children,
@@ -12,7 +13,9 @@ export default function AccountingLayout({
 
             {/* Sidebar fijo a la izquierda - Oculto al imprimir */}
             <div className="print:hidden">
-                <SellerSidebar  />
+                <Suspense fallback={null}>
+                    <SellerSidebar />
+                </Suspense>
             </div>
 
             {/* Área de contenido principal */}
