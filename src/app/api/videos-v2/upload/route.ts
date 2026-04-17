@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos-v2/types'
+import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
 import { startPipelineBackground } from '@/lib/videos-v2/pipeline'
 
 // Aumentar límite de body para uploads de video grandes (hasta 2 GB)
@@ -49,9 +50,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (videoFiles.length > 10) {
+    if (videoFiles.length > VIDEO_V2_MAX_CLIPS) {
       return NextResponse.json(
-        { error: 'Máximo 10 clips permitidos por job' },
+        { error: `Máximo ${VIDEO_V2_MAX_CLIPS} clips permitidos por job` },
         { status: 400 }
       )
     }

@@ -8,6 +8,8 @@ import { MusicSelector } from './MusicSelector'
 import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
 import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
+import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
+import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 
 type Step = 1 | 2 | 3 | 4 | 5
 type FlowType = 'single' | 'multiple'
@@ -36,6 +38,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [completedJob, setCompletedJob] = useState<VideoJobV2 | null>(null)
+  /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo abre el Reel (solo varios clips). */
+  const [voiceOverBaseClipIndex, setVoiceOverBaseClipIndex] = useState<number | 'auto'>('auto')
 
   function reset() {
     setStep(1)
@@ -47,6 +51,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setCompletedJob(null)
     setIsSubmitting(false)
     setUploadProgress(null)
+    setVoiceOverBaseClipIndex('auto')
   }
 
   function handleClose() {
@@ -105,8 +110,31 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         }
       }
 
-      // ── PASO 3: Notificar al servidor que los archivos están listos ───────
+      // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)
+      let clipDurations: (number | null)[] | undefined
+      if (flowType === 'multiple') {
+        setUploadProgress('Leyendo duración de los videos...')
+        const durs = await Promise.all(files.map((f) => readLocalVideoDurationSeconds(f)))
+        for (let i = 0; i < files.length; i++) {
+          const d = durs[i]
+          if (d == null || !Number.isFinite(d) || d <= 0.05) {
+            throw new Error(
+              `No se pudo leer la duración de "${files[i].name}". Prueba exportar de nuevo como MP4 o MOV.`
+            )
+          }
+        }
+        clipDurations = durs.map((d) => Number(d!.toFixed(3)))
+      }
+
+      // ── PASO 4: Notificar al servidor que los archivos están listos ───────
       setUploadProgress('Iniciando pipeline...')
+
+      const voiceOverPayload =
+        flowType === 'multiple' &&
+        files.length >= 2 &&
+        voiceOverBaseClipIndex !== 'auto'
+          ? { voiceOverBaseClipIndex: voiceOverBaseClipIndex }
+          : {}
 
       const startRes = await fetch('/api/videos-v2/jobs/start', {
         method: 'POST',
@@ -114,6 +142,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         body: JSON.stringify({
           jobId: newJobId,
           paths: uploads.map((u) => u.path),
+          ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
+          ...voiceOverPayload,
         }),
       })
 
@@ -231,7 +261,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                     <p className={`text-sm font-bold ${flowType === 'multiple' ? 'text-violet-800' : 'text-gray-700'}`}>
                       Tengo varios clips
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">2 a 10 clips cortos por separado</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {`2 a ${VIDEO_V2_MAX_CLIPS} clips; voz en off y planos se detectan solos`}
+                    </p>
                   </div>
                   {flowType === 'multiple' && (
                     <div className="w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center">
@@ -245,11 +277,51 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
 
           {/* PASO 2 — Upload */}
           {step === 2 && (
-            <VideoUploader
-              flowType={flowType}
-              files={files}
-              onFilesChange={setFiles}
-            />
+            <div className="space-y-6">
+              <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} />
+
+              {flowType === 'multiple' && files.length >= 2 && (
+                <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-gray-900">Clip de voz en off (audio completo + B-roll)</p>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Elige el archivo cuyo audio debe reproducirse entero una vez en el Reel, con planos sin habla (B-roll
+                    de AssemblyAI) encima y negro donde falte material. Gemini decide en qué momento del montaje va ese
+                    bloque (inicio, mitad o cierre) según el ritmo; el resto son cortes con diálogo de los otros clips.
+                  </p>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="vo-base"
+                        className="mt-1"
+                        checked={voiceOverBaseClipIndex === 'auto'}
+                        onChange={() => setVoiceOverBaseClipIndex('auto')}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <span className="font-medium">Automático</span>
+                        <span className="text-gray-500"> — Gemini decide superposición (visual_overlay).</span>
+                      </span>
+                    </label>
+                    {files.map((f, i) => (
+                      <label key={`${f.name}-${i}`} className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="vo-base"
+                          className="mt-1"
+                          checked={voiceOverBaseClipIndex === i}
+                          onChange={() => setVoiceOverBaseClipIndex(i)}
+                        />
+                        <span className="text-sm text-gray-800 min-w-0">
+                          <span className="font-medium">Clip {i}</span>
+                          <span className="text-gray-500"> — </span>
+                          <span className="break-all">{f.name}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* PASO 3 — Música */}

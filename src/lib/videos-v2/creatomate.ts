@@ -1,13 +1,15 @@
 /**
  * Creatomate V2 — Render de alta calidad para Reels/TikTok (9:16).
  *
- * - Video: Ken Burns (scale scope element, solo >=100%) + transición fade in rápida entre clips.
- * - Subtítulos: transcripción nativa de Creatomate con transcript_effect "highlight"
- *   (una capa de texto por segmento de vídeo, transcript_source → id del clip).
- * - subtitleBlocks solo alimenta SFX pop (timings AssemblyAI).
+ * - Video: Ken Burns + fade entre segmentos; si hay visual_overlay, B-roll (mute) debajo y
+ *   clip de audio (opacidad 0 %) encima para subtítulos highlight ligados al audio.
+ * - Opcional: bloque VO manual (audio completo + B-roll Assembly mute + negro); la posición en la timeline la elige Gemini (insertAfterSegmentCount).
+ * - Subtítulos: texto explícito desde AssemblyAI (`subtitleBlocks`), capa alta para verse sobre B-roll VO;
+ *   animaciones de entrada por palabra o por bloque. `subtitleBlocks` también alimenta SFX pop.
  */
 
 import type { SequenceItem, SubtitleBlock } from './segmenter'
+import { sumSequenceItemsDurationSec } from './segmenter'
 
 const CREATOMATE_API_BASE = 'https://api.creatomate.com/v1'
 const TIMEOUT_MS = 30_000
@@ -91,112 +93,379 @@ export async function getCreatomateRenderStatus(renderId: string): Promise<Creat
 }
 
 // ─── Vídeos + capas de texto con highlight nativo (mismo índice i) ────────────
+// B-roll + voz en off: primero el plano (track bajo), encima el clip de audio (opacidad 0 %),
+// subtítulos ligados al elemento que lleva el audio real.
 
-function buildVideoAndTranscriptLayers(
-  sequence: SequenceItem[],
+/**
+ * Tracks (Creatomate: 1–1000). Importante: no reutilizar el mismo track para vídeo B-roll VO y
+ * otros elementos que compartan tiempo en el Reel (p. ej. SFX), o el motor puede truncar capas.
+ */
+const TRACK_VO_BLACK = 1
+const TRACK_VIDEO_BASE = 1
+const TRACK_TRANSITION_SFX = 4
+/** Antes 5: chocaba con TRACK_VO_BROLL y los planos del bloque VO se cortaban a ~0,35s (pops). */
+const TRACK_SUBTITLE_SFX = 7
+const TRACK_VO_BROLL = 5
+const TRACK_MUSIC = 6
+const TRACK_VIDEO_VOICE = 14
+/** Por encima del B-roll del VO (5) y del vídeo base; texto AssemblyAI, no re-transcripción Creatomate. */
+const TRACK_MANUAL_CAPTIONS = 18
+
+/** Bloque VO manual: audio completo + B-roll mute + negro; `timelineStartSec` = posición en el Reel. */
+export interface VoiceOverIntroRenderInput {
+  voClipIndex: number
+  voDurationSec: number
+  /** Índices de clips `visual_only` en orden de archivo (excluye el clip de VO). */
+  brollClipIndicesInFileOrder: number[]
+  /** Duración de cada archivo (misma longitud que clipUrls). */
+  clipFileDurationsSec: (number | null)[]
+  /** Cuántos segmentos narrativos van antes de este bloque (lo decide Gemini). */
+  insertAfterSegmentCount: number
+  /** Opcional; en render se recalcula desde `sequence` + `insertAfterSegmentCount`. */
+  timelineStartSec?: number
+}
+
+function buildKenBurnsAnimations(i: number, includeFadeIn: boolean): Record<string, unknown>[] {
+  const zoomIn = i % 2 === 0
+  const startScale = zoomIn ? '112%' : '128%'
+  const endScale = zoomIn ? '128%' : '112%'
+  const animations: Record<string, unknown>[] = []
+  if (includeFadeIn) {
+    animations.push({
+      time: 0,
+      duration: TRANSITION_DURATION,
+      transition: true,
+      type: 'fade',
+      easing: 'cubic-in',
+      enable: 'second-only',
+    })
+  }
+  animations.push({
+    easing: 'linear',
+    type: 'scale',
+    scope: 'element',
+    start_scale: startScale,
+    end_scale: endScale,
+    fade: false,
+  })
+  return animations
+}
+
+function captionEntranceAnimations(): Record<string, unknown>[] {
+  return [
+    {
+      time: 0,
+      duration: 0.16,
+      transition: true,
+      type: 'fade',
+      easing: 'cubic-out',
+    },
+    {
+      time: 0,
+      duration: 0.22,
+      transition: true,
+      type: 'scale',
+      easing: 'cubic-out',
+      scope: 'element',
+      start_scale: '78%',
+      end_scale: '100%',
+    },
+  ]
+}
+
+/**
+ * Subtítulos con texto de AssemblyAI (misma fuente que SRT/bloques), visibles sobre B-roll del VO.
+ * Por palabra si `block.words` existe; si no, un elemento por bloque.
+ */
+function buildManualCaptionElements(
+  subtitleBlocks: SubtitleBlock[],
+  totalDuration: number
+): Record<string, unknown>[] {
+  type Entry = { time: number; duration: number; text: string }
+  const entries: Entry[] = []
+
+  for (const block of subtitleBlocks) {
+    if (block.words && block.words.length > 0) {
+      for (const w of block.words) {
+        const t = w.start
+        if (t >= totalDuration - 0.02) continue
+        const raw = w.text.trim()
+        if (!raw) continue
+        const durRaw = Math.max(0.16, w.end - w.start)
+        const capped = Math.min(durRaw, Math.max(0.12, totalDuration - t))
+        entries.push({ time: t, duration: Number(capped.toFixed(3)), text: raw })
+      }
+    } else {
+      const t = block.time
+      if (t >= totalDuration - 0.02) continue
+      const raw = block.text.trim()
+      if (!raw) continue
+      const dur = Number(
+        Math.max(0.24, Math.min(block.duration, totalDuration - t)).toFixed(3)
+      )
+      entries.push({ time: t, duration: dur, text: raw })
+    }
+  }
+
+  return entries.map((entry, idx) => {
+    const upper = entry.text.toUpperCase()
+    const short = upper.length <= 12
+    return {
+      id: `cap_${idx}`,
+      type: 'text',
+      track: TRACK_MANUAL_CAPTIONS,
+      time: Number(entry.time.toFixed(3)),
+      duration: Number(Math.max(0.15, entry.duration).toFixed(3)),
+      text: upper,
+      fill_color: '#ffffff',
+      stroke_color: '#000000',
+      stroke_width: '1.65 vmin',
+      shadow_color: 'rgba(0,0,0,0.6)',
+      shadow_blur: '1.8 vmin',
+      font_family: 'Montserrat',
+      font_weight: 800,
+      font_size: short ? '9.2 vmin' : '7.4 vmin',
+      line_height: '120%',
+      letter_spacing: short ? '2%' : '1%',
+      text_transform: 'uppercase',
+      y: '73%',
+      width: '94%',
+      height: '28%',
+      x_alignment: '50%',
+      y_alignment: '50%',
+      background_color: 'rgba(0,0,0,0.42)',
+      background_x_padding: '36%',
+      background_y_padding: '18%',
+      background_border_radius: '26%',
+      animations: captionEntranceAnimations(),
+    }
+  })
+}
+
+function planVoiceOverBrollTiles(
+  voDurationSec: number,
+  brollIndices: number[],
+  clipFileDurationsSec: (number | null)[],
+  clipUrls: string[]
+): { clipIndex: number; timeStart: number; duration: number; trimStart: number }[] {
+  const tiles: { clipIndex: number; timeStart: number; duration: number; trimStart: number }[] = []
+  let t = 0
+  for (const idx of brollIndices) {
+    if (t >= voDurationSec - 0.04) break
+    if (!clipUrls[idx]) continue
+    const fileDur = clipFileDurationsSec[idx]
+    const dur =
+      typeof fileDur === 'number' && Number.isFinite(fileDur) && fileDur > 0.05
+        ? fileDur
+        : Math.max(0.1, voDurationSec - t)
+    const remaining = Math.max(0, voDurationSec - t)
+    const useDur = Number(Math.min(dur, remaining).toFixed(3))
+    if (useDur < 0.08) continue
+    tiles.push({ clipIndex: idx, timeStart: t, duration: useDur, trimStart: 0 })
+    t += useDur
+  }
+  return tiles
+}
+
+function buildVoiceOverIntroLayers(
+  input: VoiceOverIntroRenderInput,
   clipUrls: string[]
 ): {
   videoElements: Record<string, unknown>[]
-  transcriptElements: Record<string, unknown>[]
+  durationSec: number
+} {
+  const voDur = Number(input.voDurationSec.toFixed(3))
+  const t0 = Number((input.timelineStartSec ?? 0).toFixed(3))
+  const videoElements: Record<string, unknown>[] = []
+
+  videoElements.push({
+    id: 'vo_intro_bg_black',
+    type: 'shape',
+    path: 'M 0% 0% L 100% 0% L 100% 100% L 0% 100% Z',
+    width: '100%',
+    height: '100%',
+    fill_color: '#000000',
+    stroke_width: '0vmin',
+    track: TRACK_VO_BLACK,
+    time: t0,
+    duration: voDur,
+    x: '50%',
+    y: '50%',
+    x_alignment: '50%',
+    y_alignment: '50%',
+  })
+
+  const tiles = planVoiceOverBrollTiles(
+    voDur,
+    input.brollClipIndicesInFileOrder,
+    input.clipFileDurationsSec,
+    clipUrls
+  )
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i]
+    const url = clipUrls[tile.clipIndex]
+    if (!url) continue
+    videoElements.push({
+      id: `vo_intro_broll_${i}`,
+      name: `VO_intro_BROLL_${tile.clipIndex}`,
+      type: 'video',
+      track: TRACK_VO_BROLL,
+      time: Number((t0 + tile.timeStart).toFixed(3)),
+      duration: tile.duration,
+      source: url,
+      trim_start: tile.trimStart,
+      /** Misma ventana que `duration` en timeline (docs Creatomate: trim_start + trim_duration). */
+      trim_duration: tile.duration,
+      volume: '0%',
+      fit: 'cover',
+      clip: true,
+      width: '100%',
+      height: '100%',
+      animations: buildKenBurnsAnimations(i, false),
+    })
+  }
+
+  const voiceId = 'vo_intro_voice_audio'
+  const voiceUrl = clipUrls[input.voClipIndex] ?? clipUrls[0]
+  videoElements.push({
+    id: voiceId,
+    name: 'VO_intro_voice',
+    type: 'video',
+    track: TRACK_VIDEO_VOICE,
+    time: t0,
+    duration: voDur,
+    source: voiceUrl,
+    trim_start: 0,
+    trim_duration: voDur,
+    volume: '100%',
+    opacity: '0%',
+    fit: 'cover',
+    clip: true,
+    width: '100%',
+    height: '100%',
+    animations: [
+      {
+        easing: 'linear',
+        type: 'scale',
+        scope: 'element',
+        start_scale: '100%',
+        end_scale: '100%',
+        fade: false,
+      },
+    ],
+  })
+
+  return { videoElements, durationSec: voDur }
+}
+
+function buildVideoSequenceLayers(
+  sequence: SequenceItem[],
+  clipUrls: string[],
+  layerOpts?: {
+    timeOffsetSec?: number
+    includeFadeInFirstSegment?: boolean
+    /** Evita ids duplicados al concatenar varios tramos (p. ej. pre_/post_). */
+    elementIdPrefix?: string
+  }
+): {
+  videoElements: Record<string, unknown>[]
   totalDuration: number
   transitionTimes: number[]
 } {
+  const timeOffsetSec = layerOpts?.timeOffsetSec ?? 0
+  const includeFadeInFirst = layerOpts?.includeFadeInFirstSegment ?? false
+  const idPre = layerOpts?.elementIdPrefix ?? ''
+
   const videoElements: Record<string, unknown>[] = []
-  const transcriptElements: Record<string, unknown>[] = []
   const transitionTimes: number[] = []
   let timeAccumulator = 0
 
   for (let i = 0; i < sequence.length; i++) {
     const item = sequence[i]
-    const clipUrl = clipUrls[item.clip_index] ?? clipUrls[0]
     const duration = Number(item.trim_duration.toFixed(3))
-    const timeStart = Number(timeAccumulator.toFixed(3))
+    const timeStart = Number((timeAccumulator + timeOffsetSec).toFixed(3))
+    const includeFadeIn = i > 0 || (i === 0 && includeFadeInFirst)
+    if (includeFadeIn) transitionTimes.push(timeStart)
 
-    const zoomIn = i % 2 === 0
-    const startScale = zoomIn ? '112%' : '128%'
-    const endScale = zoomIn ? '128%' : '112%'
+    const ov = item.visual_overlay
 
-    const animations: Record<string, unknown>[] = []
+    if (ov && clipUrls[ov.clip_index]) {
+      const brollUrl = clipUrls[ov.clip_index]!
+      const voiceUrl = clipUrls[item.clip_index] ?? clipUrls[0]
+      const brollId = `${idPre}video_${i}_broll`
+      const voiceId = `${idPre}video_${i}_voice`
 
-    if (i > 0) {
-      animations.push({
-        time: 0,
-        duration: TRANSITION_DURATION,
-        transition: true,
-        type: 'fade',
-        easing: 'cubic-in',
-        enable: 'second-only',
+      videoElements.push({
+        id: brollId,
+        name: `Seg_${item.segment_id}_broll`,
+        type: 'video',
+        track: TRACK_VIDEO_BASE,
+        time: timeStart,
+        duration,
+        source: brollUrl,
+        trim_start: Number(ov.trim_start.toFixed(3)),
+        volume: '0%',
+        fit: 'cover',
+        clip: true,
+        width: '100%',
+        height: '100%',
+        animations: buildKenBurnsAnimations(i, includeFadeIn),
       })
-      transitionTimes.push(timeStart)
+
+      videoElements.push({
+        id: voiceId,
+        name: `Seg_${item.segment_id}_voice`,
+        type: 'video',
+        track: TRACK_VIDEO_VOICE,
+        time: timeStart,
+        duration,
+        source: voiceUrl,
+        trim_start: Number(item.trim_start.toFixed(3)),
+        volume: '100%',
+        opacity: '0%',
+        fit: 'cover',
+        clip: true,
+        width: '100%',
+        height: '100%',
+        animations: [
+          {
+            easing: 'linear',
+            type: 'scale',
+            scope: 'element',
+            start_scale: '100%',
+            end_scale: '100%',
+            fade: false,
+          },
+        ],
+      })
+
+    } else {
+      const clipUrl = clipUrls[item.clip_index] ?? clipUrls[0]
+      const videoId = `${idPre}video_${i}`
+      videoElements.push({
+        id: videoId,
+        name: `Seg_${item.segment_id}`,
+        type: 'video',
+        track: TRACK_VIDEO_BASE,
+        time: timeStart,
+        duration,
+        source: clipUrl,
+        trim_start: Number(item.trim_start.toFixed(3)),
+        fit: 'cover',
+        clip: true,
+        width: '100%',
+        height: '100%',
+        animations: buildKenBurnsAnimations(i, includeFadeIn),
+      })
+
     }
-
-    animations.push({
-      easing: 'linear',
-      type: 'scale',
-      scope: 'element',
-      start_scale: startScale,
-      end_scale: endScale,
-      fade: false,
-    })
-
-    const videoId = `video_${i}`
-
-    videoElements.push({
-      id: videoId,
-      name: `Seg_${item.segment_id}`,
-      type: 'video',
-      track: 1,
-      time: timeStart,
-      duration,
-      source: clipUrl,
-      trim_start: Number(item.trim_start.toFixed(3)),
-      fit: 'cover',
-      clip: true,
-      width: '100%',
-      height: '100%',
-      animations,
-    })
-
-    transcriptElements.push({
-      id: `transcript_${i}`,
-      type: 'text',
-      track: 2,
-      time: timeStart,
-      duration,
-      transcript_source: videoId,
-      transcript_effect: 'highlight',
-      transcript_split: 'word',
-      transcript_placement: 'animate',
-      transcript_maximum_length: 5,
-      transcript_color: '#ff1700',
-      fill_color: '#ffffff',
-      stroke_color: '#000000',
-      stroke_width: '1.5 vmin',
-      shadow_color: 'rgba(0,0,0,0.55)',
-      shadow_blur: '1.6 vmin',
-      font_family: 'Montserrat',
-      font_weight: 800,
-      font_size: '8 vmin',
-      line_height: '125%',
-      text_transform: 'uppercase',
-      y: '72%',
-      width: '88%',
-      height: '30%',
-      x_alignment: '50%',
-      y_alignment: '50%',
-      background_color: 'rgba(0,0,0,0.18)',
-      background_x_padding: '40%',
-      background_y_padding: '22%',
-      background_border_radius: '30%',
-    })
 
     timeAccumulator += duration
   }
 
   return {
     videoElements,
-    transcriptElements,
-    totalDuration: Number(timeAccumulator.toFixed(3)),
+    totalDuration: Number((timeAccumulator + timeOffsetSec).toFixed(3)),
     transitionTimes,
   }
 }
@@ -209,7 +478,7 @@ function buildTransitionSfxElements(transitionTimes: number[]): Record<string, u
   return transitionTimes.map((time, i) => ({
     id: `sfx_whoosh_${i}`,
     type: 'audio',
-    track: 4,
+    track: TRACK_TRANSITION_SFX,
     time: Math.max(0, time - 0.02),
     duration: Math.max(0.15, TRANSITION_DURATION + 0.08),
     source: SFX_WHOOSH_URL,
@@ -243,7 +512,7 @@ function buildSubtitleSfxElements(
   return pops.map((p) => ({
     id: p.id,
     type: 'audio',
-    track: 5,
+    track: TRACK_SUBTITLE_SFX,
     time: p.t,
     duration: 0.35,
     source: SFX_POP_URL,
@@ -256,7 +525,7 @@ function buildMusicElement(musicUrl: string, totalDuration: number): Record<stri
     id: 'music',
     name: 'Musica',
     type: 'audio',
-    track: 6,
+    track: TRACK_MUSIC,
     time: 0,
     duration: totalDuration,
     source: musicUrl,
@@ -272,25 +541,76 @@ export async function renderSegmentsV2(
   sequence: SequenceItem[],
   clipUrls: string[],
   subtitleBlocks: SubtitleBlock[],
-  musicUrl: string
+  musicUrl: string,
+  voiceOverIntro?: VoiceOverIntroRenderInput | null
 ): Promise<string> {
-  console.log(`[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos (highlight nativo por clip)`)
-
   const webhookUrl = getWebhookUrl()
 
-  const { videoElements, transcriptElements, totalDuration, transitionTimes } = buildVideoAndTranscriptLayers(
-    sequence,
-    clipUrls
-  )
+  let videoElements: Record<string, unknown>[] = []
+  let transitionTimes: number[] = []
+  let totalDuration = 0
+
+  if (voiceOverIntro != null) {
+    const ins = Math.max(
+      0,
+      Math.min(voiceOverIntro.insertAfterSegmentCount, sequence.length)
+    )
+    const beforeSeq = sequence.slice(0, ins)
+    const afterSeq = sequence.slice(ins)
+    const dBefore = sumSequenceItemsDurationSec(beforeSeq)
+    const voDur = voiceOverIntro.voDurationSec
+    const voInput: VoiceOverIntroRenderInput = {
+      ...voiceOverIntro,
+      timelineStartSec: dBefore,
+    }
+    const introLayers = buildVoiceOverIntroLayers(voInput, clipUrls)
+
+    const layersBefore = buildVideoSequenceLayers(beforeSeq, clipUrls, {
+      timeOffsetSec: 0,
+      includeFadeInFirstSegment: beforeSeq.length > 0,
+      elementIdPrefix: 'pre_',
+    })
+    const layersAfter = buildVideoSequenceLayers(afterSeq, clipUrls, {
+      timeOffsetSec: dBefore + voDur,
+      includeFadeInFirstSegment: afterSeq.length > 0,
+      elementIdPrefix: 'post_',
+    })
+
+    videoElements = [
+      ...layersBefore.videoElements,
+      ...introLayers.videoElements,
+      ...layersAfter.videoElements,
+    ]
+    transitionTimes = [...layersBefore.transitionTimes, ...layersAfter.transitionTimes]
+    totalDuration = layersAfter.totalDuration
+
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos + VO manual ` +
+        `(${voDur.toFixed(1)}s en t=${dBefore.toFixed(2)}s, tras ${ins} cortes) (subtítulos AssemblyAI + animaciones)`
+    )
+  } else {
+    const mainLayers = buildVideoSequenceLayers(sequence, clipUrls, {
+      timeOffsetSec: 0,
+      includeFadeInFirstSegment: sequence.length > 0,
+    })
+    videoElements = mainLayers.videoElements
+    transitionTimes = mainLayers.transitionTimes
+    totalDuration = mainLayers.totalDuration
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos (subtítulos AssemblyAI + animaciones)`
+    )
+  }
+
   const transitionSfx = buildTransitionSfxElements(transitionTimes)
   const subtitleSfx = buildSubtitleSfxElements(subtitleBlocks, totalDuration)
+  const captionElements = buildManualCaptionElements(subtitleBlocks, totalDuration)
   const musicElement = buildMusicElement(musicUrl, totalDuration)
 
   const allElements = [
     ...videoElements,
-    ...transcriptElements,
     ...transitionSfx,
     ...subtitleSfx,
+    ...captionElements,
     musicElement,
   ]
 
@@ -314,7 +634,7 @@ export async function renderSegmentsV2(
 
   console.log(
     `[VideoV2Pipeline][${jobId}][Creatomate] 1080x1920, totalDuration=${totalDuration}s, ` +
-    `${videoElements.length} clips, ${transcriptElements.length} capas transcript highlight${sfxInfo}, webhook_url=${webhookUrl}`
+      `${videoElements.length} clips, ${captionElements.length} subtítulos (texto AssemblyAI)${sfxInfo}, webhook_url=${webhookUrl}`
   )
 
   const result = await postRender(body)

@@ -2,11 +2,23 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType, VideoJobStatus } from './types'
 import { getSignedUrlForPath } from './storage'
-import { transcribeVideoV2 } from './assemblyai'
-import { buildSegmentMap, buildAdjustedSRT, buildSubtitleBlocks, formatSegmentMapForPrompt } from './segmenter'
+import { transcribeVideoV2, type RawWord } from './assemblyai'
+import {
+  buildSegmentMap,
+  buildAdjustedSRT,
+  buildAdjustedSRTForVoiceOverIntro,
+  buildSubtitleBlocks,
+  buildSubtitleBlocksForVoiceOverIntro,
+  buildVisualOnlyPlaceholderSegment,
+  formatSegmentMapForPrompt,
+  offsetSubtitleBlocks,
+  sumSequenceItemsDurationSec,
+} from './segmenter'
+import type { VideoClipKind } from './clip-config'
+import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import type { Segment } from './segmenter'
 import { analyzeSegments } from './gemini'
-import { renderSegmentsV2, getCreatomateRenderStatus } from './creatomate'
+import { renderSegmentsV2, getCreatomateRenderStatus, type VoiceOverIntroRenderInput } from './creatomate'
 import {
   prepareVideoForGemini,
   prepareMultipleVideosForGemini,
@@ -197,7 +209,7 @@ async function runSingleVideoPipelineFromStorage(
 
     const formattedMap = formatSegmentMapForPrompt(segments)
     const googleRefs = googleFileRef ? [googleFileRef] : []
-    const analysis = await analyzeSegments(formattedMap, segments, jobId, googleRefs, useVisualAnalysis)
+    const analysis = await analyzeSegments(formattedMap, segments, jobId, googleRefs, useVisualAnalysis, [])
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 
     // A3b — Limpiar archivo de Google inmediatamente después del análisis
@@ -258,35 +270,185 @@ async function runSingleVideoPipelineFromStorage(
 // FLUJO B — Múltiples clips (desde Storage)
 // ──────────────────────────────────────────────
 
+interface ClipTranscriptionRow {
+  transcriptId: string
+  srtContent: string
+  rawWords: RawWord[]
+  visualFileDurationSec?: number
+}
+
+interface AutoTranscribeResult {
+  row: ClipTranscriptionRow
+  inferredKind: VideoClipKind
+}
+
+/**
+ * Transcribe con AssemblyAI y clasifica el clip: sin palabras o error de transcripción ⇒ B-roll automático.
+ * Si `forcedKind` viene definido (API), se respeta salvo spoken vacío, que se rebaja a B-roll.
+ */
+async function transcribeClipWithAutoKind(
+  signedUrl: string,
+  jobId: string,
+  clipIndex: number,
+  clientDurationSec: number | null | undefined,
+  forcedKind?: VideoClipKind
+): Promise<AutoTranscribeResult> {
+  const tag = `${jobId}_clip${clipIndex}`
+
+  async function resolveVisualDuration(): Promise<number> {
+    if (typeof clientDurationSec === 'number' && Number.isFinite(clientDurationSec) && clientDurationSec > 0.05) {
+      return Number(clientDurationSec.toFixed(3))
+    }
+    const probed = await tryProbeVideoDurationSecondsFromUrl(signedUrl, tag)
+    if (probed != null && probed > 0.05) return probed
+    throw new Error(
+      `Clip ${clipIndex}: no se pudo obtener la duración del archivo. ` +
+        'Desde la app se envían duraciones leídas en el navegador; revisa el formato del video.'
+    )
+  }
+
+  const emptyVisualRow = (dur: number): ClipTranscriptionRow => ({
+    transcriptId: '',
+    srtContent: '',
+    rawWords: [],
+    visualFileDurationSec: dur,
+  })
+
+  if (forcedKind === 'visual_only') {
+    const d = await resolveVisualDuration()
+    console.log(`[VideoV2Pipeline][${tag}] Clip marcado como B-roll (${d}s)`)
+    return { row: emptyVisualRow(d), inferredKind: 'visual_only' }
+  }
+
+  if (forcedKind === 'spoken') {
+    try {
+      const r = await transcribeVideoV2(signedUrl, tag)
+      if (r.rawWords && r.rawWords.length > 0) {
+        return { row: r, inferredKind: 'spoken' }
+      }
+      console.warn(
+        `[VideoV2Pipeline][${tag}] Marcado como con habla pero sin palabras detectadas; se clasifica como B-roll.`
+      )
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      console.warn(`[VideoV2Pipeline][${tag}] Transcripción falló (${m.slice(0, 180)}); se clasifica como B-roll.`)
+    }
+    const d = await resolveVisualDuration()
+    return { row: emptyVisualRow(d), inferredKind: 'visual_only' }
+  }
+
+  // Automático: AssemblyAI; vacío o error ⇒ B-roll (planos / sin lenguaje útil)
+  try {
+    const r = await transcribeVideoV2(signedUrl, tag)
+    if (!r.rawWords || r.rawWords.length === 0) {
+      const d = await resolveVisualDuration()
+      console.log(`[VideoV2Pipeline][${tag}] Sin habla transcrita → B-roll automático (${d}s)`)
+      return { row: emptyVisualRow(d), inferredKind: 'visual_only' }
+    }
+    return { row: r, inferredKind: 'spoken' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(
+      `[VideoV2Pipeline][${tag}] AssemblyAI no transcribió (${msg.slice(0, 200)}) → B-roll automático`
+    )
+    const d = await resolveVisualDuration()
+    return { row: emptyVisualRow(d), inferredKind: 'visual_only' }
+  }
+}
+
+async function resolveVoiceOverTrackDurationSec(
+  voIdx: number,
+  clipDurationsSec: (number | null)[] | undefined,
+  allSegments: Segment[],
+  signedUrl: string | undefined,
+  jobId: string
+): Promise<number> {
+  const fromClient = clipDurationsSec?.[voIdx]
+  if (typeof fromClient === 'number' && Number.isFinite(fromClient) && fromClient > 0.05) {
+    return Number(fromClient.toFixed(3))
+  }
+  const ends = allSegments.filter((s) => s.clip_index === voIdx).map((s) => s.end_s)
+  const maxSeg = ends.length > 0 ? Math.max(...ends) : 0
+  if (maxSeg > 0.05) {
+    return Number(maxSeg.toFixed(3))
+  }
+  if (signedUrl) {
+    const probed = await tryProbeVideoDurationSecondsFromUrl(signedUrl, `${jobId}_vo_dur`)
+    if (probed != null && probed > 0.05) return Number(probed.toFixed(3))
+  }
+  throw new Error(
+    `No se pudo determinar la duración del clip de voz en off (índice ${voIdx}). ` +
+      'Asegúrate de que el navegador envíe clipDurations o que el video sea legible.'
+  )
+}
+
 async function runMultipleClipsPipelineFromStorage(
   jobId: string,
   files: PipelineFile[],
-  musicTrackUrl: string
+  musicTrackUrl: string,
+  clipKindsInput: VideoClipKind[] | undefined,
+  clipDurationsSecInput: (number | null)[] | undefined,
+  voiceOverBaseClipIndexInput: number | undefined
 ) {
   let googleFileRefs: GoogleFileRef[] = []
 
   try {
     const paths = files.map((f) => f.path!)
     const signedUrls = files.map((f) => f.signedUrl!)
+    const explicitKinds =
+      clipKindsInput && clipKindsInput.length === files.length ? clipKindsInput : undefined
+
+    const voiceOverBaseClipIndex =
+      typeof voiceOverBaseClipIndexInput === 'number' &&
+      Number.isInteger(voiceOverBaseClipIndexInput) &&
+      voiceOverBaseClipIndexInput >= 0 &&
+      voiceOverBaseClipIndexInput < files.length
+        ? voiceOverBaseClipIndexInput
+        : undefined
+
+    if (explicitKinds?.every((k) => k === 'visual_only')) {
+      await updateJob(jobId, {
+        status: 'failed',
+        error_message: 'Se requiere al menos un clip con habla (API: no marques todos los índices como visual_only).',
+      })
+      return
+    }
 
     // B1 — EN PARALELO: Transcripción de todos los clips + Preparación visual
     console.log(`[VideoV2Pipeline][${jobId}][B1] Iniciando transcripción + preparación visual de ${files.length} clips en paralelo`)
     await updateJob(jobId, {
       status: 'transcribing',
-      current_step: `Transcribiendo ${files.length} clips y preparando análisis visual en paralelo...`,
+      current_step: `Transcribiendo y clasificando clips (B-roll automático si no hay habla)… ${files.length} archivos`,
       progress_percentage: 20,
     })
 
     const [transcriptionResults, fileRefsResult] = await Promise.allSettled([
-      Promise.all(signedUrls.map((url, i) => transcribeVideoV2(url, `${jobId}_clip${i}`))),
+      Promise.all(
+        signedUrls.map((url, i) =>
+          transcribeClipWithAutoKind(url, jobId, i, clipDurationsSecInput?.[i] ?? null, explicitKinds?.[i])
+        )
+      ),
       prepareMultipleVideosForGemini(signedUrls, jobId),
     ])
 
-    // Transcripciones son obligatorias
     if (transcriptionResults.status === 'rejected') {
-      throw new Error(`Error en transcripción de clips: ${transcriptionResults.reason}`)
+      throw new Error(`Error en transcripción o lectura de clips: ${transcriptionResults.reason}`)
     }
-    const transcriptions = transcriptionResults.value
+    const autoResults = transcriptionResults.value
+    const transcriptions = autoResults.map((a) => a.row)
+    const kinds = autoResults.map((a) => a.inferredKind)
+    console.log(
+      `[VideoV2Pipeline][${jobId}][B1] Clasificación automática: ${kinds.map((k, i) => `${i}:${k}`).join(', ')}`
+    )
+
+    if (kinds.every((k) => k === 'visual_only')) {
+      await updateJob(jobId, {
+        status: 'failed',
+        error_message:
+          'Ningún clip tiene habla detectable. Sube al menos un clip con audio hablado claro.',
+      })
+      return
+    }
 
     // Preparación visual es opcional
     let useVisualAnalysis = false
@@ -300,11 +462,18 @@ async function runMultipleClipsPipelineFromStorage(
       )
     }
 
-    const combinedSrt = transcriptions.map((r) => r.srtContent).join('\n\n')
-    const firstTranscriptId = transcriptions[0].transcriptId
+    const combinedSrt = transcriptions.map((r) => r.srtContent).filter(Boolean).join('\n\n')
+    let firstAssemblyId: string | undefined
+    for (let i = 0; i < kinds.length; i++) {
+      if (kinds[i] === 'spoken' && transcriptions[i].transcriptId) {
+        firstAssemblyId = transcriptions[i].transcriptId
+        break
+      }
+    }
+
     await updateJob(jobId, {
-      assemblyai_transcript_id: firstTranscriptId,
-      srt_content: combinedSrt,
+      assemblyai_transcript_id: firstAssemblyId,
+      srt_content: combinedSrt.length > 0 ? combinedSrt : undefined,
       progress_percentage: 45,
     })
 
@@ -317,19 +486,50 @@ async function runMultipleClipsPipelineFromStorage(
 
     const allSegments: Segment[] = []
     for (let i = 0; i < transcriptions.length; i++) {
-      const clipSegments = buildSegmentMap(transcriptions[i].rawWords, i)
-      allSegments.push(...clipSegments)
+      if (kinds[i] === 'visual_only') {
+        const dur = transcriptions[i].visualFileDurationSec
+        if (!dur || dur <= 0) {
+          throw new Error(`No se pudo obtener duración del clip B-roll índice ${i}`)
+        }
+        allSegments.push(buildVisualOnlyPlaceholderSegment(i, dur))
+      } else {
+        allSegments.push(...buildSegmentMap(transcriptions[i].rawWords, i))
+      }
     }
 
     await updateJob(jobId, { segment_map: allSegments })
     console.log(`[VideoV2Pipeline][${jobId}][B2] ${allSegments.length} segmentos totales de ${files.length} clips`)
 
-    if (allSegments.length === 0) {
+    const spokenSegments = allSegments.filter((s) => s.source_kind !== 'visual_only')
+    if (spokenSegments.length === 0) {
       await updateJob(jobId, {
         status: 'failed',
-        error_message: 'No se detectó habla en ninguno de los clips.',
+        error_message: 'No se detectó habla en ninguno de los clips marcados como con habla.',
       })
       return
+    }
+
+    if (voiceOverBaseClipIndex != null) {
+      if (kinds[voiceOverBaseClipIndex] !== 'spoken') {
+        await updateJob(jobId, {
+          status: 'failed',
+          error_message:
+            `El clip índice ${voiceOverBaseClipIndex} no tiene habla detectable (AssemblyAI). ` +
+              'Elige como voz en off un clip con diálogo transcrito, o desactiva la opción manual.',
+        })
+        return
+      }
+      const spokenOutsideVo = allSegments.filter(
+        (s) => s.source_kind !== 'visual_only' && s.clip_index !== voiceOverBaseClipIndex
+      )
+      if (spokenOutsideVo.length === 0) {
+        await updateJob(jobId, {
+          status: 'failed',
+          error_message:
+            'Con voz en off manual hace falta al menos otro clip con habla (además del clip base) para el resto del Reel.',
+        })
+        return
+      }
     }
 
     // B3 — Análisis con Gemini (visual + texto, o solo texto como fallback)
@@ -342,9 +542,34 @@ async function runMultipleClipsPipelineFromStorage(
       progress_percentage: 55,
     })
 
-    const formattedMap = formatSegmentMapForPrompt(allSegments)
-    const analysis = await analyzeSegments(formattedMap, allSegments, jobId, googleFileRefs, useVisualAnalysis)
+    const segmentsForGeminiPrompt =
+      voiceOverBaseClipIndex != null
+        ? allSegments.filter(
+            (s) => s.clip_index !== voiceOverBaseClipIndex && s.source_kind !== 'visual_only'
+          )
+        : allSegments
+    const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
+    const analysis = await analyzeSegments(
+      formattedMap,
+      allSegments,
+      jobId,
+      googleFileRefs,
+      useVisualAnalysis,
+      kinds,
+      voiceOverBaseClipIndex != null
+        ? { manualVoiceOverBaseClipIndex: voiceOverBaseClipIndex }
+        : undefined
+    )
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
+
+    if (voiceOverBaseClipIndex != null && analysis.sequence.length === 0) {
+      await updateJob(jobId, {
+        status: 'failed',
+        error_message:
+          'Gemini no devolvió segmentos narrativos (sin el clip de VO). Revisa los clips o inténtalo de nuevo.',
+      })
+      return
+    }
 
     // B3b — Limpiar archivos de Google
     if (googleFileRefs.length > 0) {
@@ -358,9 +583,97 @@ async function runMultipleClipsPipelineFromStorage(
 
     // B4 — Construir subtítulos
     console.log(`[VideoV2Pipeline][${jobId}][B4] Construyendo subtítulos`)
-    const subtitleBlocks = buildSubtitleBlocks(analysis.sequence, allSegments)
-    const adjustedSrt = buildAdjustedSRT(analysis.sequence, allSegments)
-    await updateJob(jobId, { adjusted_srt: adjustedSrt, progress_percentage: 75 })
+    let subtitleBlocks = buildSubtitleBlocks(analysis.sequence, allSegments)
+    let adjustedSrt = buildAdjustedSRT(analysis.sequence, allSegments)
+    let voiceOverIntro: VoiceOverIntroRenderInput | null = null
+
+    if (voiceOverBaseClipIndex != null) {
+      const voDur = await resolveVoiceOverTrackDurationSec(
+        voiceOverBaseClipIndex,
+        clipDurationsSecInput,
+        allSegments,
+        signedUrls[voiceOverBaseClipIndex],
+        jobId
+      )
+      const insertAfter = Math.max(
+        0,
+        Math.min(
+          analysis.voice_over_insert_after_count ?? 0,
+          analysis.sequence.length
+        )
+      )
+      const beforeSeq = analysis.sequence.slice(0, insertAfter)
+      const afterSeq = analysis.sequence.slice(insertAfter)
+      const dBefore = sumSequenceItemsDurationSec(beforeSeq)
+
+      const brollOrder = kinds
+        .map((k, i) => ({ k, i }))
+        .filter(({ k, i }) => k === 'visual_only' && i !== voiceOverBaseClipIndex)
+        .map(({ i }) => i)
+      const clipDurationsForRender = files.map((_, i) => {
+        const c = clipDurationsSecInput?.[i]
+        if (typeof c === 'number' && Number.isFinite(c) && c > 0.05) return Number(c.toFixed(3))
+        const vis = transcriptions[i]?.visualFileDurationSec
+        if (typeof vis === 'number' && vis > 0.05) return Number(vis.toFixed(3))
+        return null
+      })
+      voiceOverIntro = {
+        voClipIndex: voiceOverBaseClipIndex,
+        voDurationSec: voDur,
+        brollClipIndicesInFileOrder: brollOrder,
+        clipFileDurationsSec: clipDurationsForRender,
+        insertAfterSegmentCount: insertAfter,
+      }
+      const blocksBefore = buildSubtitleBlocks(beforeSeq, allSegments)
+      const voBlocks = buildSubtitleBlocksForVoiceOverIntro(
+        allSegments,
+        voiceOverBaseClipIndex,
+        voDur,
+        dBefore
+      )
+      const blocksAfter = offsetSubtitleBlocks(
+        buildSubtitleBlocks(afterSeq, allSegments),
+        dBefore + voDur
+      )
+      subtitleBlocks = [...blocksBefore, ...voBlocks, ...blocksAfter]
+
+      const srtBefore = buildAdjustedSRT(beforeSeq, allSegments, 0)
+      const srtVo = buildAdjustedSRTForVoiceOverIntro(
+        allSegments,
+        voiceOverBaseClipIndex,
+        voDur,
+        dBefore
+      )
+      const srtAfter = buildAdjustedSRT(afterSeq, allSegments, dBefore + voDur)
+      adjustedSrt = [srtBefore, srtVo, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
+      console.log(
+        `[VideoV2Pipeline][${jobId}][B4] Modo VO manual: bloque ${voDur}s en t≈${dBefore}s (tras ${insertAfter} cortes), ` +
+          `${brollOrder.length} clips B-roll en orden de archivo`
+      )
+    }
+
+    let geminiAnalysisPatch: typeof analysis | undefined
+    if (voiceOverBaseClipIndex != null && voiceOverIntro != null) {
+      const ins = Math.max(
+        0,
+        Math.min(analysis.voice_over_insert_after_count ?? 0, analysis.sequence.length)
+      )
+      const afterS = analysis.sequence.slice(ins)
+      const beforeS = analysis.sequence.slice(0, ins)
+      const d0 = sumSequenceItemsDurationSec(beforeS)
+      geminiAnalysisPatch = {
+        ...analysis,
+        total_duration: Number(
+          (d0 + voiceOverIntro.voDurationSec + sumSequenceItemsDurationSec(afterS)).toFixed(3)
+        ),
+      }
+    }
+
+    await updateJob(jobId, {
+      adjusted_srt: adjustedSrt,
+      progress_percentage: 75,
+      ...(geminiAnalysisPatch ? { gemini_analysis: geminiAnalysisPatch } : {}),
+    })
     console.log(`[VideoV2Pipeline][${jobId}][B4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
     // B5 — Renderizado Creatomate
@@ -375,7 +688,14 @@ async function runMultipleClipsPipelineFromStorage(
       paths.map((p) => getSignedUrlForPath(p))
     )
 
-    const renderId = await renderSegmentsV2(jobId, analysis.sequence, freshClipUrls, subtitleBlocks, musicTrackUrl)
+    const renderId = await renderSegmentsV2(
+      jobId,
+      analysis.sequence,
+      freshClipUrls,
+      subtitleBlocks,
+      musicTrackUrl,
+      voiceOverIntro
+    )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
       progress_percentage: 85,
@@ -418,8 +738,12 @@ export function startPipelineBackground(params: {
   flowType: FlowType
   files: PipelineFile[]
   musicTrackUrl: string
+  clipKinds?: VideoClipKind[]
+  clipDurationsSec?: (number | null)[]
+  /** Índice del clip cuyo audio completo abre el Reel (solo flujo múltiple). */
+  voiceOverBaseClipIndex?: number
 }) {
-  const { jobId, flowType, files, musicTrackUrl } = params
+  const { jobId, flowType, files, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex } = params
 
   if (flowType === 'single') {
     const f = files[0]
@@ -437,7 +761,14 @@ export function startPipelineBackground(params: {
     setImmediate(() => {
       const allPreUploaded = files.every((f) => f.alreadyUploaded && f.path && f.signedUrl)
       if (allPreUploaded) {
-        runMultipleClipsPipelineFromStorage(jobId, files, musicTrackUrl).catch((e) =>
+        runMultipleClipsPipelineFromStorage(
+          jobId,
+          files,
+          musicTrackUrl,
+          clipKinds,
+          clipDurationsSec,
+          voiceOverBaseClipIndex
+        ).catch((e) =>
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en multiple pipeline: ${e}`)
         )
       } else {

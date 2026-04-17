@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos-v2/types'
+import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
 
 const RAW_BUCKET = 'raw-videos-v2'
 
@@ -47,8 +48,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (files.length > 10) {
-      return NextResponse.json({ error: 'Máximo 10 clips permitidos' }, { status: 400 })
+    if (files.length > VIDEO_V2_MAX_CLIPS) {
+      return NextResponse.json(
+        { error: `Máximo ${VIDEO_V2_MAX_CLIPS} clips permitidos por job` },
+        { status: 400 }
+      )
     }
 
     if (flowType === 'multiple' && files.length < 2) {

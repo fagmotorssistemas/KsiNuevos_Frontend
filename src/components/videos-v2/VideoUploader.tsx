@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { Film, Layers, X, Upload, AlertTriangle } from 'lucide-react'
+import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
 
 const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'avi', 'webm', 'mkv']
 const ALLOWED_MIME = new Set([
@@ -47,7 +48,7 @@ export function VideoUploader({ flowType, files, onFilesChange }: VideoUploaderP
     }
 
     if (flowType === 'multiple') {
-      const combined = [...files, ...valid].slice(0, 10)
+      const combined = [...files, ...valid].slice(0, VIDEO_V2_MAX_CLIPS)
       onFilesChange(combined)
     }
   }, [flowType, files, onFilesChange])
@@ -94,13 +95,13 @@ export function VideoUploader({ flowType, files, onFilesChange }: VideoUploaderP
             <p className="text-sm font-semibold text-gray-700">
               {flowType === 'single'
                 ? 'Arrastra tu video o haz clic para seleccionar'
-                : `Arrastra los clips (${files.length}/10) o haz clic para seleccionar`}
+                : `Arrastra los clips (${files.length}/${VIDEO_V2_MAX_CLIPS}) o haz clic para seleccionar`}
             </p>
             <p className="text-xs text-gray-400 mt-1">mp4, mov, avi, webm, mkv</p>
             <p className="text-xs text-gray-400">
               {flowType === 'single'
                 ? 'Máximo 2 GB. Archivos >500 MB se comprimirán automáticamente.'
-                : 'Máximo 10 clips. Archivos >200 MB se comprimirán automáticamente.'}
+                : `Hasta ${VIDEO_V2_MAX_CLIPS} clips. Planos sin habla se detectan solos. Archivos >200 MB se comprimirán.`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -141,13 +142,13 @@ export function VideoUploader({ flowType, files, onFilesChange }: VideoUploaderP
             )
           })}
 
-          {flowType === 'multiple' && files.length < 10 && (
+          {flowType === 'multiple' && files.length < VIDEO_V2_MAX_CLIPS && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="w-full py-2 text-sm text-violet-600 hover:text-violet-700 font-medium border border-dashed border-violet-300 rounded-xl hover:bg-violet-50 transition-colors"
             >
-              + Agregar más clips ({files.length}/10)
+              + Agregar más clips ({files.length}/{VIDEO_V2_MAX_CLIPS})
             </button>
           )}
         </div>

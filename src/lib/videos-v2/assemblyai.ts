@@ -14,6 +14,12 @@ const AUTOMOTIVE_WORD_BOOST = [
   'tracción', 'suspensión', 'frenos', 'airbag', 'rines', 'pantalla', 'cámara',
   'sensor', 'asientos', 'cuero', 'bluetooth', 'USB', 'navegación', 'carrocería',
   'sedán', 'SUV', 'pickup', 'hatchback', 'coupé', 'eléctrico', 'híbrido',
+  // Hispano / inventario típico (mejor reconocimiento que solo inglés)
+  'furgoneta', 'camioneta', 'camión', 'pasajeros', 'carga', 'platonera',
+  'Nissan', 'Toyota', 'Chevrolet', 'Hyundai', 'Kia', 'Mazda', 'Honda', 'Ford',
+  'Volkswagen', 'Renault', 'Peugeot', 'Citroën', 'Fiat', 'Suzuki', 'Mitsubishi',
+  'Tiida', 'Sentra', 'Versa', 'March', 'Frontier', 'Hilux', 'RAV4', 'CR-V',
+  'Ksi', 'Casi Nuevos', 'concesionario', 'seminuevo', 'seminuevos', 'kilómetros',
 ]
 
 export interface RawWord {
@@ -38,13 +44,21 @@ function apiHeaders() {
 }
 
 async function submitTranscription(audioUrl: string): Promise<string> {
-  const body = {
+  /** Si está definido (ej. `es`), fija idioma y suele mejorar términos en español vs solo detección. */
+  const forcedLang = process.env.VIDEO_V2_ASSEMBLY_LANGUAGE_CODE?.trim()
+
+  const body: Record<string, unknown> = {
     audio_url: audioUrl,
     speech_models: ['universal-2'],
-    language_detection: true,
     filter_profanity: false,
     word_boost: AUTOMOTIVE_WORD_BOOST,
     boost_param: 'high',
+  }
+  if (forcedLang) {
+    body.language_code = forcedLang
+    body.language_detection = false
+  } else {
+    body.language_detection = true
   }
 
   const res = await fetch(`${ASSEMBLYAI_BASE}/transcript`, {

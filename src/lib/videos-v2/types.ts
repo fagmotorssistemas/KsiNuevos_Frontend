@@ -1,5 +1,8 @@
 import type { SequenceItem } from './segmenter'
 
+export type { VideoClipKind, VideoJobV2PipelineInputMeta } from './clip-config'
+export { isPipelineInputMeta, normalizeClipDurationsInput, VIDEO_V2_MAX_CLIPS } from './clip-config'
+
 export type VideoJobStatus =
   | 'pending'
   | 'uploading'
@@ -39,6 +42,8 @@ export interface GeminiSegmentAnalysisResult {
   sequence: SequenceItem[]
   total_duration: number
   overall_strategy: string
+  /** Modo VO manual: cortes narrativos antes del bloque de audio completo + B-roll. */
+  voice_over_insert_after_count?: number
 }
 
 export type GeminiAnalysis =
