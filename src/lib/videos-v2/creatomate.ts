@@ -14,13 +14,11 @@ import { sumSequenceItemsDurationSec } from './segmenter'
 import type { VoBrollTile } from './vo-broll-semantics'
 
 /**
- * La documentación actual usa POST `https://api.creatomate.com/v2/renders` con RenderScript **plano**
- * (output_format, width, height, elements…). v1 con `{ source: { … } }` es legado y puede usar otro
- * pipeline de composición/color (p. ej. BT.601 vs BT.709, limited range).
- * Revertir: `VIDEO_V2_CREATOMATE_API_VERSION=v1` en el entorno del servidor.
+ * Fuerza API v2 para mantener consistencia de color con exportaciones manuales en Creatomate.
+ * El payload legado v1 (`source: {...}`) puede producir diferencias de colorimetría según el pipeline.
  */
-const CREATOMATE_API_VER = process.env.VIDEO_V2_CREATOMATE_API_VERSION?.trim() === 'v1' ? 'v1' : 'v2'
-const CREATOMATE_API_BASE = `https://api.creatomate.com/${CREATOMATE_API_VER}`
+const CREATOMATE_API_VER = 'v2' as const
+const CREATOMATE_API_BASE = 'https://api.creatomate.com/v2'
 const TIMEOUT_MS = 30_000
 
 /** Duración del golpe de escala solo al corte (no recorre el clip entero). */
@@ -64,13 +62,6 @@ function buildCreatomateRenderRequestBody(
     elements: unknown[]
   }
 ): Record<string, unknown> {
-  if (CREATOMATE_API_VER === 'v1') {
-    return {
-      webhook_url: webhookUrl,
-      metadata,
-      source: renderScript,
-    }
-  }
   return {
     webhook_url: webhookUrl,
     metadata,
