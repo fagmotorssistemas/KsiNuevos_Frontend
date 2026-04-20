@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { X, Film, Layers, ChevronRight, ChevronLeft, Loader2, CheckCircle2, Sparkles, Upload } from 'lucide-react'
+import {
+  X,
+  Film,
+  Layers,
+  ChevronRight,
+  ChevronLeft,
+  Loader2,
+  CheckCircle2,
+  Sparkles,
+  Upload,
+  FileText,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { VideoUploader } from './VideoUploader'
 import { MusicSelector } from './MusicSelector'
@@ -11,12 +22,18 @@ import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/ty
 import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 
-type Step = 1 | 2 | 3 | 4 | 5
+type Step = 1 | 2 | 3 | 4 | 5 | 6
 type FlowType = 'single' | 'multiple'
 
-const STEP_LABELS = ['Tipo', 'Videos', 'Música', 'Procesando', 'Resultado']
+const STEP_LABELS = ['Tipo', 'Videos', 'Guion', 'Música', 'Procesando', 'Resultado']
 
 interface UploadInfo {
+  path: string
+  signedUrl: string
+  token: string
+}
+
+interface ScriptUploadInfo {
   path: string
   signedUrl: string
   token: string
@@ -49,6 +66,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [completedJob, setCompletedJob] = useState<VideoJobV2 | null>(null)
   /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo abre el Reel (solo varios clips). */
   const [voiceOverBaseClipIndex, setVoiceOverBaseClipIndex] = useState<number | 'auto'>('auto')
+  const [scriptPdfFile, setScriptPdfFile] = useState<File | null>(null)
 
   function reset() {
     setStep(1)
@@ -61,6 +79,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setIsSubmitting(false)
     setUploadProgress(null)
     setVoiceOverBaseClipIndex('auto')
+    setScriptPdfFile(null)
   }
 
   function handleClose() {
@@ -92,6 +111,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       const createData = (await createRes.json()) as {
         jobId?: string
         uploads?: UploadInfo[]
+        scriptUpload?: ScriptUploadInfo
         error?: string
       }
 
@@ -99,7 +119,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         throw new Error(createData.error ?? 'Error preparando el upload')
       }
 
-      const { jobId: newJobId, uploads } = createData
+      const { jobId: newJobId, uploads, scriptUpload } = createData
 
       // ── PASO 2: Subir cada archivo DIRECTAMENTE a Supabase Storage ───────
       // El navegador sube el archivo directo; Next.js NO ve el contenido.
@@ -117,6 +137,27 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         if (!uploadRes.ok) {
           throw new Error(`Error subiendo ${file.name} (HTTP ${uploadRes.status})`)
         }
+      }
+
+      let scriptPdfPath: string | undefined
+      if (scriptPdfFile) {
+        if (!scriptUpload) {
+          throw new Error('No se pudo preparar la subida del guion. Actualiza la app e inténtalo de nuevo.')
+        }
+        const n = scriptPdfFile.name.trim().toLowerCase()
+        if (!n.endsWith('.pdf') && scriptPdfFile.type !== 'application/pdf') {
+          throw new Error('El guion debe ser un archivo PDF')
+        }
+        setUploadProgress('Subiendo guion (PDF)...')
+        const scriptPut = await fetch(scriptUpload.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/pdf' },
+          body: scriptPdfFile,
+        })
+        if (!scriptPut.ok) {
+          throw new Error(`Error subiendo el guion (HTTP ${scriptPut.status})`)
+        }
+        scriptPdfPath = scriptUpload.path
       }
 
       // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)
@@ -153,6 +194,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           paths: uploads.map((u) => u.path),
           ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
           ...voiceOverPayload,
+          ...(scriptPdfPath ? { scriptPdfPath } : {}),
         }),
       })
 
@@ -160,7 +202,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
 
       setJobId(newJobId)
-      setStep(4)
+      setStep(5)
       onJobCreated()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error iniciando el proceso')
@@ -172,7 +214,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
 
   const handleCompleted = useCallback((job: VideoJobV2) => {
     setCompletedJob(job)
-    setStep(5)
+    setStep(6)
   }, [])
 
   if (!isOpen) return null
@@ -190,7 +232,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900">Crear Reel V2</h2>
-              <p className="text-xs text-gray-400">Paso {step} de 5 — {STEP_LABELS[step - 1]}</p>
+              <p className="text-xs text-gray-400">Paso {step} de 6 — {STEP_LABELS[step - 1]}</p>
             </div>
           </div>
           <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
@@ -199,9 +241,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         </div>
 
         {/* Stepper */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="flex px-6 pt-4 gap-1">
-            {STEP_LABELS.slice(0, 3).map((label, i) => {
+            {STEP_LABELS.slice(0, 4).map((label, i) => {
               const s = (i + 1) as Step
               const isActive = step === s
               const isDone = step > s
@@ -306,7 +348,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                   <p className="text-sm font-semibold text-gray-900">Clip de voz en off (audio completo + B-roll)</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     Elige el archivo cuyo audio debe reproducirse entero una vez en el Reel, con planos sin habla (B-roll
-                    de AssemblyAI) encima y negro donde falte material. Gemini decide en qué momento del montaje va ese
+                    de AssemblyAI) encima cuando haya material visual encajable. Gemini decide en qué momento del montaje va ese
                     bloque (inicio, mitad o cierre) según el ritmo; el resto son cortes con diálogo de los otros clips.
                   </p>
                   <div className="space-y-2">
@@ -345,8 +387,53 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             </div>
           )}
 
-          {/* PASO 3 — Música */}
+          {/* PASO 3 — Guion PDF (opcional) */}
           {step === 3 && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+                <div className="mt-0.5 rounded-lg bg-violet-100 p-2">
+                  <FileText className="h-5 w-5 text-violet-700" />
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <p className="text-sm font-semibold text-gray-900">Guion en PDF (opcional)</p>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Si tienes un guion, súbelo como referencia para orden de ideas, ritmo y subtítulos. La IA actúa como
+                    director: puede apartarse del PDF si el material en cámara pide otro enfoque; no es un guion técnico
+                    cerrado ni un requisito estricto.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 p-4 space-y-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500">Archivo</span>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      setScriptPdfFile(f)
+                    }}
+                  />
+                </label>
+                {scriptPdfFile && (
+                  <div className="flex items-center justify-between gap-2 text-xs text-gray-700">
+                    <span className="truncate">{scriptPdfFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setScriptPdfFile(null)}
+                      className="shrink-0 text-violet-700 font-semibold hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* PASO 4 — Música */}
+          {step === 4 && (
             <div className="space-y-4">
               {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
@@ -362,13 +449,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             </div>
           )}
 
-          {/* PASO 4 — Procesando */}
-          {step === 4 && jobId && (
+          {/* PASO 5 — Procesando */}
+          {step === 5 && jobId && (
             <PipelineStatus jobId={jobId} onCompleted={handleCompleted} />
           )}
 
-          {/* PASO 5 — Resultado */}
-          {step === 5 && completedJob?.final_video_url && (
+          {/* PASO 6 — Resultado */}
+          {step === 6 && completedJob?.final_video_url && (
             <div className="flex flex-col items-center gap-6">
               <div className="text-center">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -398,7 +485,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         </div>
 
         {/* Footer con botones de navegación */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
             <button
               type="button"
@@ -409,7 +496,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               {step === 1 ? 'Cancelar' : 'Atrás'}
             </button>
 
-            {step < 3 ? (
+            {step < 4 ? (
               <button
                 type="button"
                 onClick={() => setStep((s) => (s + 1) as Step)}

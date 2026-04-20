@@ -4,7 +4,7 @@
  * Recibe el jobId y los paths de los archivos ya subidos a Supabase Storage.
  * Actualiza el job con los paths y dispara el pipeline en background.
  *
- * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex? }
+ * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex?, scriptPdfPath? }
  * Response:  { jobId, status: 'processing' }
  */
 
@@ -19,6 +19,9 @@ import {
   normalizeClipDurationsInput,
   normalizeVoiceOverBaseClipIndex,
 } from '@/lib/videos-v2/clip-config'
+import { extractScriptTextFromPdfBuffer } from '@/lib/videos-v2/extract-pdf-script-text'
+
+const RAW_BUCKET = 'raw-videos-v2'
 
 function getServiceClient() {
   return createSupabaseClient<Database>(
@@ -37,6 +40,8 @@ interface StartJobBody {
   clipDurations?: Array<number | null>
   /** Índice del clip cuyo audio completo abre el Reel (solo múltiple; debe tener habla detectada). */
   voiceOverBaseClipIndex?: number | null
+  /** Ruta en Storage del PDF de guion (mismo prefijo jobId/); opcional. */
+  scriptPdfPath?: string | null
 }
 
 export async function POST(request: NextRequest) {
@@ -48,6 +53,7 @@ export async function POST(request: NextRequest) {
       clipKinds: clipKindsRaw,
       clipDurations: clipDurationsRaw,
       voiceOverBaseClipIndex: voiceOverRaw,
+      scriptPdfPath: scriptPdfPathRaw,
     } = body
 
     if (!jobId || !paths?.length) {
@@ -120,6 +126,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El job no tiene un track de música asignado' }, { status: 400 })
     }
 
+    let scriptPdfPathCol: string | null = null
+    let scriptTextCol: string | null = null
+    if (scriptPdfPathRaw != null && String(scriptPdfPathRaw).trim() !== '') {
+      const sp = String(scriptPdfPathRaw).trim()
+      if (!sp.startsWith(`${jobId}/`)) {
+        return NextResponse.json({ error: 'Ruta del guion inválida' }, { status: 400 })
+      }
+      if (!sp.toLowerCase().endsWith('.pdf')) {
+        return NextResponse.json({ error: 'El guion debe ser un archivo PDF' }, { status: 400 })
+      }
+      if (paths.includes(sp)) {
+        return NextResponse.json({ error: 'La ruta del guion no puede coincidir con un clip de vídeo' }, { status: 400 })
+      }
+      const { data: scriptBlob, error: scriptDlError } = await supabase.storage.from(RAW_BUCKET).download(sp)
+      if (scriptDlError || !scriptBlob) {
+        console.warn(
+          `[VideoV2][/jobs/start] No se pudo descargar el PDF del guion (${sp}): ${scriptDlError?.message ?? 'sin blob'}`
+        )
+      } else {
+        try {
+          const buf = Buffer.from(await scriptBlob.arrayBuffer())
+          const extracted = await extractScriptTextFromPdfBuffer(buf)
+          scriptPdfPathCol = sp
+          scriptTextCol = extracted.length > 0 ? extracted : null
+        } catch (pdfErr) {
+          console.warn(`[VideoV2][/jobs/start] Error extrayendo texto del PDF del guion: ${pdfErr}`)
+          scriptPdfPathCol = sp
+          scriptTextCol = null
+        }
+      }
+    }
+
     const pipelineInput: Json | undefined =
       clipKinds !== undefined || clipDurationsSec !== undefined || voiceOverBaseClipIndex !== undefined
         ? ({
@@ -139,6 +177,8 @@ export async function POST(request: NextRequest) {
         current_step: 'Archivos recibidos. Iniciando pipeline...',
         progress_percentage: 20,
         ...(pipelineInput ? { selected_clips: pipelineInput } : {}),
+        script_pdf_path: scriptPdfPathCol,
+        script_text: scriptTextCol,
       })
       .eq('id', jobId)
 

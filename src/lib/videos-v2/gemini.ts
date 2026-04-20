@@ -789,15 +789,18 @@ MONTAJE 100% AUTOMÁTICO:
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
 - Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
+- Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
+- Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
 `
 
 function manualVoiceOverAutonomousBlock(voIdx: number): string {
   return `
 BLOQUE VO MANUAL (no entra en "sequence"):
-- Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima y negro donde falte material. Ese clip NO está en el mapa de segmentos.
-- "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay.
+- Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima; el pipeline intenta cubrir el audio con planos — elige B-roll temáticamente rico para minimizar huecos visuales. Ese clip NO está en el mapa de segmentos.
+- "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay en "sequence".
 - Debes respetar el arco narrativo del JSON (presentación del carro → desarrollo / VO → CTA) y fijar "voice_over_insert_after_count" en consecuencia.
 - En "sequence", cada corte debe aportar algo distinto: no pongas dos segmentos seguidos que repitan o parafraseen la misma idea (el sistema penaliza redundancia).
+- Ritmo viral: cortes breves y contundentes antes y después del bloque VO; evita sensación de pantalla vacía.
 `
 }
 
@@ -826,12 +829,32 @@ CLIPS SOLO VISUAL (B-ROLL / SIN HABLA):
 Ejemplo: {"segment_id":"0_2","clip_index":0,"trim_start":12.0,"trim_end":18.5,"trim_duration":6.5,"order":1,"reason":"voz en off motor + plano motor","visual_overlay":{"clip_index":3,"trim_start":2.0,"trim_end":8.5}}
 `
 
+function buildScriptGuidanceBlock(scriptGuidanceText?: string | null): string {
+  const raw = scriptGuidanceText?.trim()
+  if (!raw) return ''
+  const capped =
+    raw.length > 24000 ? `${raw.slice(0, 24000)}\n[… texto truncado para el modelo]` : raw
+  return `=== GUION DE REFERENCIA (texto extraído de PDF; guía flexible, NO contractual) ===
+El equipo puede haber adjuntado un guion. Úsalo como INSPIRACIÓN: orden de ideas, tono, posibles líneas de voz, pistas de subtítulos o estructura (intro / datos / cierre).
+
+REGLAS SOBRE EL GUION:
+- NO rechaces ni "fallen" el montaje si el material en cámara no coincide palabra por palabra con el PDF.
+- Si el guion choca con el mapa de segmentos o con lo que ves en vídeo, PRIORIZA el mapa y las imágenes reales; puedes y debes improvisar.
+- Si el guion aporta una estructura clara que encaje con segment_id válidos, aprovéchala para un Reel más coherente.
+
+Texto extraído:
+${capped}
+
+=== FIN GUION ===`
+}
+
 function buildVisualPrompt(
   formattedSegmentMap: string,
   videoCount: number,
   clipKinds: VideoClipKind[],
   clipCatalog: string,
-  manualVoiceOverBaseClipIndex?: number | null
+  manualVoiceOverBaseClipIndex?: number | null,
+  scriptGuidanceText?: string | null
 ): string {
   const manual = manualVoiceOverBaseClipIndex != null
   const videoRef = videoCount === 1 ? 'el video' : `los ${videoCount} videos`
@@ -845,12 +868,14 @@ function buildVisualPrompt(
     ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
     : ''
 
+  const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText)
+
   return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto. Tu objetivo es crear un Reel que detenga el scroll y genere engagement.
 
 Acabas de ver ${videoRef} completo${plural}. Tienes el catálogo de transcripciones y tipos de clip, y el mapa fino de segmentos con timestamps EXACTOS.
 
 ${mapNote}${clipCatalog}
-
+${scriptBlock ? `${scriptBlock}\n\n` : ''}
 ${autonomousBlock}
 
 MAPA DE SEGMENTOS (cortes permitidos; respeta start_s/end_s de cada segment_id elegido):
@@ -894,7 +919,8 @@ function buildTextOnlyPrompt(
   formattedSegmentMap: string,
   clipKinds: VideoClipKind[],
   clipCatalog: string,
-  manualVoiceOverBaseClipIndex?: number | null
+  manualVoiceOverBaseClipIndex?: number | null,
+  scriptGuidanceText?: string | null
 ): string {
   const manual = manualVoiceOverBaseClipIndex != null
   const brollExtra =
@@ -906,12 +932,14 @@ function buildTextOnlyPrompt(
     ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
     : ''
 
+  const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText)
+
   return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto.
 
 Tienes el catálogo de clips y el mapa de segmentos. Sin ver vídeo, infiere el mejor orden${manual ? ' y la posición del bloque VO (voice_over_insert_after_count)' : ' y cuándo usar visual_overlay si hay solo planos'}.
 
 ${mapNote}${clipCatalog}
-
+${scriptBlock ? `${scriptBlock}\n\n` : ''}
 ${autonomousBlock}
 
 MAPA DE SEGMENTOS (silencios eliminados):
@@ -955,6 +983,8 @@ ${manual
 export interface AnalyzeSegmentsOptions {
   /** Clip de voz en off reservado (audio completo + B-roll); excluido del mapa/prompt y de la secuencia validada. */
   manualVoiceOverBaseClipIndex?: number
+  /** Texto extraído de un PDF de guion; referencia editorial no estricta. */
+  scriptGuidanceText?: string
 }
 
 /**
@@ -980,6 +1010,7 @@ export async function analyzeSegments(
   const clipCount = inferClipCountFromSegments(allSegments)
   const kindsForPrompt = clipKindsResolved(clipKinds, clipCount)
   const manualVo = options?.manualVoiceOverBaseClipIndex
+  const scriptGuidance = options?.scriptGuidanceText?.trim() || null
   const clipCatalog = buildClipCatalogForPrompt(allSegments, kindsForPrompt, manualVo ?? null)
   const validateOpts: ValidateGeminiSequenceOptions | undefined =
     manualVo != null
@@ -1010,7 +1041,8 @@ export async function analyzeSegments(
             googleFileRefs.length,
             kindsForPrompt,
             clipCatalog,
-            manualVo ?? null
+            manualVo ?? null,
+            scriptGuidance
           ) + strictSuffix
         contentParts = [
           ...googleFileRefs.map((ref) => ({
@@ -1020,7 +1052,13 @@ export async function analyzeSegments(
         ]
       } else {
         contentParts =
-          buildTextOnlyPrompt(formattedSegmentMap, kindsForPrompt, clipCatalog, manualVo ?? null) + strictSuffix
+          buildTextOnlyPrompt(
+            formattedSegmentMap,
+            kindsForPrompt,
+            clipCatalog,
+            manualVo ?? null,
+            scriptGuidance
+          ) + strictSuffix
       }
 
       const result = await Promise.race([

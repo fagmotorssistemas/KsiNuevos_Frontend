@@ -51,6 +51,17 @@ function getServiceClient() {
   )
 }
 
+async function fetchJobScriptGuidanceText(jobId: string): Promise<string | null> {
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('video_jobs_v2')
+    .select('script_text')
+    .eq('id', jobId)
+    .single()
+  if (error || !data?.script_text?.trim()) return null
+  return data.script_text.trim()
+}
+
 async function updateJob(
   jobId: string,
   fields: Partial<{
@@ -228,7 +239,16 @@ async function runSingleVideoPipelineFromStorage(
 
     const formattedMap = formatSegmentMapForPrompt(segments)
     const googleRefs = googleFileRef ? [googleFileRef] : []
-    const analysis = await analyzeSegments(formattedMap, segments, jobId, googleRefs, useVisualAnalysis, [])
+    const scriptGuidanceText = await fetchJobScriptGuidanceText(jobId)
+    const analysis = await analyzeSegments(
+      formattedMap,
+      segments,
+      jobId,
+      googleRefs,
+      useVisualAnalysis,
+      [],
+      scriptGuidanceText ? { scriptGuidanceText } : undefined
+    )
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 
     // A3b — Limpiar archivo de Google inmediatamente después del análisis
@@ -575,6 +595,16 @@ async function runMultipleClipsPipelineFromStorage(
           )
         : allSegments
     const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
+    const scriptGuidanceText = await fetchJobScriptGuidanceText(jobId)
+    const geminiOpts =
+      voiceOverBaseClipIndex != null || scriptGuidanceText
+        ? {
+            ...(voiceOverBaseClipIndex != null
+              ? { manualVoiceOverBaseClipIndex: voiceOverBaseClipIndex }
+              : {}),
+            ...(scriptGuidanceText ? { scriptGuidanceText } : {}),
+          }
+        : undefined
     const analysis = await analyzeSegments(
       formattedMap,
       allSegments,
@@ -582,9 +612,7 @@ async function runMultipleClipsPipelineFromStorage(
       googleFileRefs,
       useVisualAnalysis,
       kinds,
-      voiceOverBaseClipIndex != null
-        ? { manualVoiceOverBaseClipIndex: voiceOverBaseClipIndex }
-        : undefined
+      geminiOpts
     )
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 

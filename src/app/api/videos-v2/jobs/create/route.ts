@@ -6,7 +6,7 @@
  * sin pasar por el servidor de Next.js (evita el límite de 10 MB).
  *
  * Body JSON: { flowType, files: [{filename, mimeType}], musicTrackId }
- * Response:  { jobId, uploads: [{path, signedUrl}] }
+ * Response:  { jobId, uploads: [{path, signedUrl, token}], scriptUpload: { path, signedUrl, token } }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -131,7 +131,29 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ jobId, uploads })
+    const scriptPath = `${jobId}/guion_${Date.now()}.pdf`
+    const { data: scriptSigned, error: scriptSignedError } = await supabase.storage
+      .from(RAW_BUCKET)
+      .createSignedUploadUrl(scriptPath)
+
+    if (scriptSignedError || !scriptSigned) {
+      return NextResponse.json(
+        {
+          error: `Error generando URL de upload del guion: ${scriptSignedError?.message ?? 'desconocido'}`,
+        },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      jobId,
+      uploads,
+      scriptUpload: {
+        path: scriptPath,
+        signedUrl: scriptSigned.signedUrl,
+        token: scriptSigned.token,
+      },
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[VideoV2][/jobs/create] Error:', message)

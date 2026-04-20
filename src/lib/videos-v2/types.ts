@@ -68,6 +68,10 @@ export interface VideoJobV2 {
   final_video_url: string | null
   final_video_duration: number | null
   music_track_url: string | null
+  /** Ruta en Storage del PDF de guion opcional. */
+  script_pdf_path?: string | null
+  /** Texto extraído del PDF para Gemini (guía no estricta). */
+  script_text?: string | null
   selected_clips: GeminiClip[] | null
   /** Mapa de segmentos (AssemblyAI + post-proceso); útil para re-render y depuración. */
   segment_map: unknown | null

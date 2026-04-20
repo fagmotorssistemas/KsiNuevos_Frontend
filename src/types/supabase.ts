@@ -3580,6 +3580,8 @@ export type Database = {
           music_track_url: string | null
           progress_percentage: number | null
           raw_video_paths: string[]
+          script_pdf_path: string | null
+          script_text: string | null
           segment_map: Json | null
           selected_clips: Json | null
           srt_content: string | null
@@ -3602,6 +3604,8 @@ export type Database = {
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths: string[]
+          script_pdf_path?: string | null
+          script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
           srt_content?: string | null
@@ -3624,6 +3628,8 @@ export type Database = {
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths?: string[]
+          script_pdf_path?: string | null
+          script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
           srt_content?: string | null
