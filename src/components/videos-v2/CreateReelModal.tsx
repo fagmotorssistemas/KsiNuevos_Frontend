@@ -20,6 +20,7 @@ import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
 import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
 import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
+import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
@@ -43,39 +44,6 @@ interface CreateReelModalProps {
   isOpen: boolean
   onClose: () => void
   onJobCreated: () => void
-}
-
-/** Evita que WebKit lance "The string did not match the expected pattern" al hacer `.json()` sobre HTML o cuerpo vacío. */
-async function parseJsonOrThrow<T>(res: Response): Promise<T> {
-  const text = await res.text()
-  if (!text.trim()) {
-    throw new Error(`Respuesta vacía del servidor (HTTP ${res.status}).`)
-  }
-  try {
-    return JSON.parse(text) as T
-  } catch {
-    throw new Error(
-      `El servidor devolvió un formato inesperado (HTTP ${res.status}). Recarga la página o prueba de nuevo en unos segundos.`
-    )
-  }
-}
-
-/**
- * Subida firmada a Storage: el endpoint espera multipart como en
- * `@supabase/storage-js` uploadToSignedUrl (cacheControl + archivo), no un PUT crudo.
- */
-async function putFileToSupabaseSignedUpload(signedUrl: string, file: File): Promise<Response> {
-  if (!signedUrl.trim().startsWith('http')) {
-    throw new Error('URL de subida inválida. Cierra el modal y vuelve a intentarlo.')
-  }
-  const fd = new FormData()
-  fd.append('cacheControl', '3600')
-  fd.append('', file, file.name)
-  return fetch(signedUrl, {
-    method: 'PUT',
-    headers: { 'x-upsert': 'false' },
-    body: fd,
-  })
 }
 
 /** Clips típicos de iPhone (IMG_*.MOV) suelen ir en HDR; al recomponer por API el tono puede verse lavado vs. export manual. */
@@ -161,7 +129,11 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         const upload = uploads[i]
         setUploadProgress(`Subiendo ${i + 1} de ${files.length}: ${file.name}...`)
 
-        const uploadRes = await putFileToSupabaseSignedUpload(upload.signedUrl, file)
+        const uploadRes = await fetch(upload.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type || 'video/mp4' },
+          body: file,
+        })
 
         if (!uploadRes.ok) {
           throw new Error(`Error subiendo ${file.name} (HTTP ${uploadRes.status})`)
@@ -178,7 +150,11 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           throw new Error('El guion debe ser un archivo PDF')
         }
         setUploadProgress('Subiendo guion (PDF)...')
-        const scriptPut = await putFileToSupabaseSignedUpload(scriptUpload.signedUrl, scriptPdfFile)
+        const scriptPut = await fetch(scriptUpload.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': scriptPdfFile.type || 'application/pdf' },
+          body: scriptPdfFile,
+        })
         if (!scriptPut.ok) {
           throw new Error(`Error subiendo el guion (HTTP ${scriptPut.status})`)
         }
