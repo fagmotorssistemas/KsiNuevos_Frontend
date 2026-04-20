@@ -50,22 +50,136 @@ interface CreatomateRenderResponse {
   duration?: number
 }
 
+/** Cuerpo plano del render (mismo JSON que acepta `Preview.setSource` y el POST /v2/renders sin `template_id`). */
+export type CreatomateFlatRenderScript = {
+  output_format: string
+  width: number
+  height: number
+  duration: number
+  elements: unknown[]
+}
+
 function buildCreatomateRenderRequestBody(
   webhookUrl: string,
   metadata: string,
-  renderScript: {
-    output_format: string
-    width: number
-    height: number
-    duration: number
-    elements: unknown[]
-  }
+  renderScript: CreatomateFlatRenderScript
 ): Record<string, unknown> {
   return {
     webhook_url: webhookUrl,
     metadata,
     ...renderScript,
   }
+}
+
+/**
+ * Construye el RenderScript que enviamos a Creatomate (y que el Preview SDK puede cargar con `setSource`).
+ */
+export function buildCreatomateRenderScript(
+  jobId: string,
+  sequence: SequenceItem[],
+  clipUrls: string[],
+  subtitleBlocks: SubtitleBlock[],
+  musicUrl: string,
+  voiceOverIntro?: VoiceOverIntroRenderInput | null
+): CreatomateFlatRenderScript {
+  let videoElements: Record<string, unknown>[] = []
+  let transitionTimes: number[] = []
+  let totalDuration = 0
+
+  if (voiceOverIntro != null) {
+    const ins = Math.max(
+      0,
+      Math.min(voiceOverIntro.insertAfterSegmentCount, sequence.length)
+    )
+    const beforeSeq = sequence.slice(0, ins)
+    const afterSeq = sequence.slice(ins)
+    const dBefore = sumSequenceItemsDurationSec(beforeSeq)
+    const voDur = voiceOverIntro.voDurationSec
+    const voInput: VoiceOverIntroRenderInput = {
+      ...voiceOverIntro,
+      timelineStartSec: dBefore,
+    }
+    const introLayers = buildVoiceOverIntroLayers(voInput, clipUrls)
+
+    const layersBefore = buildVideoSequenceLayers(beforeSeq, clipUrls, {
+      timeOffsetSec: 0,
+      includeFadeInFirstSegment: beforeSeq.length > 0,
+      elementIdPrefix: 'pre_',
+    })
+    const layersAfter = buildVideoSequenceLayers(afterSeq, clipUrls, {
+      timeOffsetSec: dBefore + voDur,
+      includeFadeInFirstSegment: afterSeq.length > 0,
+      elementIdPrefix: 'post_',
+    })
+
+    videoElements = [
+      ...layersBefore.videoElements,
+      ...introLayers.videoElements,
+      ...layersAfter.videoElements,
+    ]
+    transitionTimes = [...layersBefore.transitionTimes, ...layersAfter.transitionTimes]
+    totalDuration = layersAfter.totalDuration
+
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos + VO manual ` +
+        `(${voDur.toFixed(1)}s en t=${dBefore.toFixed(2)}s, tras ${ins} cortes) (subtítulos AssemblyAI + animaciones)`
+    )
+  } else {
+    const mainLayers = buildVideoSequenceLayers(sequence, clipUrls, {
+      timeOffsetSec: 0,
+      includeFadeInFirstSegment: sequence.length > 0,
+    })
+    videoElements = mainLayers.videoElements
+    transitionTimes = mainLayers.transitionTimes
+    totalDuration = mainLayers.totalDuration
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos (subtítulos AssemblyAI + animaciones)`
+    )
+  }
+
+  const transitionSfx = buildTransitionSfxElements(transitionTimes)
+  const subtitleSfx = buildSubtitleSfxElements(subtitleBlocks, totalDuration)
+  const captionElements = buildManualCaptionElements(subtitleBlocks, totalDuration)
+  const musicElement = buildMusicElement(musicUrl, totalDuration)
+
+  const allElements = [
+    ...videoElements,
+    ...transitionSfx,
+    ...subtitleSfx,
+    ...captionElements,
+    musicElement,
+  ]
+
+  const sfxInfo = transitionSfx.length > 0 || subtitleSfx.length > 0
+    ? `, ${transitionSfx.length} whoosh SFX, ${subtitleSfx.length} pop SFX`
+    : ', SFX deshabilitados (sin URLs configuradas)'
+
+  console.log(
+    `[VideoV2Pipeline][${jobId}][Creatomate] API=${CREATOMATE_API_VER}, 1080x1920, totalDuration=${totalDuration}s, ` +
+      `${videoElements.length} clips, ${captionElements.length} subtítulos (texto AssemblyAI)${sfxInfo}`
+  )
+
+  return {
+    output_format: 'mp4',
+    width: 1080,
+    height: 1920,
+    duration: totalDuration,
+    elements: allElements,
+  }
+}
+
+/** Inicia un render en la nube con el mismo JSON que muestra el Preview SDK (tras edición manual). */
+export async function submitCreatomateRenderForJob(
+  jobId: string,
+  script: CreatomateFlatRenderScript
+): Promise<string> {
+  const webhookUrl = getWebhookUrl()
+  const body = buildCreatomateRenderRequestBody(webhookUrl, jobId, script)
+  console.log(
+    `[VideoV2Creatomate] POST render job=${jobId} webhook_url=${webhookUrl} elements=${Array.isArray(script.elements) ? script.elements.length : 0}`
+  )
+  const result = await postRender(body)
+  return result.id
 }
 
 async function postRender(body: Record<string, unknown>): Promise<CreatomateRenderResponse> {
@@ -594,94 +708,15 @@ export async function renderSegmentsV2(
   musicUrl: string,
   voiceOverIntro?: VoiceOverIntroRenderInput | null
 ): Promise<string> {
-  const webhookUrl = getWebhookUrl()
-
-  let videoElements: Record<string, unknown>[] = []
-  let transitionTimes: number[] = []
-  let totalDuration = 0
-
-  if (voiceOverIntro != null) {
-    const ins = Math.max(
-      0,
-      Math.min(voiceOverIntro.insertAfterSegmentCount, sequence.length)
-    )
-    const beforeSeq = sequence.slice(0, ins)
-    const afterSeq = sequence.slice(ins)
-    const dBefore = sumSequenceItemsDurationSec(beforeSeq)
-    const voDur = voiceOverIntro.voDurationSec
-    const voInput: VoiceOverIntroRenderInput = {
-      ...voiceOverIntro,
-      timelineStartSec: dBefore,
-    }
-    const introLayers = buildVoiceOverIntroLayers(voInput, clipUrls)
-
-    const layersBefore = buildVideoSequenceLayers(beforeSeq, clipUrls, {
-      timeOffsetSec: 0,
-      includeFadeInFirstSegment: beforeSeq.length > 0,
-      elementIdPrefix: 'pre_',
-    })
-    const layersAfter = buildVideoSequenceLayers(afterSeq, clipUrls, {
-      timeOffsetSec: dBefore + voDur,
-      includeFadeInFirstSegment: afterSeq.length > 0,
-      elementIdPrefix: 'post_',
-    })
-
-    videoElements = [
-      ...layersBefore.videoElements,
-      ...introLayers.videoElements,
-      ...layersAfter.videoElements,
-    ]
-    transitionTimes = [...layersBefore.transitionTimes, ...layersAfter.transitionTimes]
-    totalDuration = layersAfter.totalDuration
-
-    console.log(
-      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos + VO manual ` +
-        `(${voDur.toFixed(1)}s en t=${dBefore.toFixed(2)}s, tras ${ins} cortes) (subtítulos AssemblyAI + animaciones)`
-    )
-  } else {
-    const mainLayers = buildVideoSequenceLayers(sequence, clipUrls, {
-      timeOffsetSec: 0,
-      includeFadeInFirstSegment: sequence.length > 0,
-    })
-    videoElements = mainLayers.videoElements
-    transitionTimes = mainLayers.transitionTimes
-    totalDuration = mainLayers.totalDuration
-    console.log(
-      `[VideoV2Pipeline][${jobId}][Creatomate] Render → ${sequence.length} segmentos (subtítulos AssemblyAI + animaciones)`
-    )
-  }
-
-  const transitionSfx = buildTransitionSfxElements(transitionTimes)
-  const subtitleSfx = buildSubtitleSfxElements(subtitleBlocks, totalDuration)
-  const captionElements = buildManualCaptionElements(subtitleBlocks, totalDuration)
-  const musicElement = buildMusicElement(musicUrl, totalDuration)
-
-  const allElements = [
-    ...videoElements,
-    ...transitionSfx,
-    ...subtitleSfx,
-    ...captionElements,
-    musicElement,
-  ]
-
-  const body = buildCreatomateRenderRequestBody(webhookUrl, jobId, {
-    output_format: 'mp4',
-    width: 1080,
-    height: 1920,
-    duration: totalDuration,
-    elements: allElements,
-  })
-
-  const sfxInfo = transitionSfx.length > 0 || subtitleSfx.length > 0
-    ? `, ${transitionSfx.length} whoosh SFX, ${subtitleSfx.length} pop SFX`
-    : ', SFX deshabilitados (sin URLs configuradas)'
-
-  console.log(
-    `[VideoV2Pipeline][${jobId}][Creatomate] API=${CREATOMATE_API_VER}, 1080x1920, totalDuration=${totalDuration}s, ` +
-      `${videoElements.length} clips, ${captionElements.length} subtítulos (texto AssemblyAI)${sfxInfo}, webhook_url=${webhookUrl}`
+  const script = buildCreatomateRenderScript(
+    jobId,
+    sequence,
+    clipUrls,
+    subtitleBlocks,
+    musicUrl,
+    voiceOverIntro
   )
-
-  const result = await postRender(body)
-  console.log(`[VideoV2Pipeline][${jobId}][Creatomate] Render iniciado. ID=${result.id} status=${result.status}`)
-  return result.id
+  const renderId = await submitCreatomateRenderForJob(jobId, script)
+  console.log(`[VideoV2Pipeline][${jobId}][Creatomate] Render iniciado. ID=${renderId}`)
+  return renderId
 }

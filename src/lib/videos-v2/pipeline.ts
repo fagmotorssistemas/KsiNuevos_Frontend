@@ -26,7 +26,14 @@ import {
 } from './clip-config'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import { analyzeSegments } from './gemini'
-import { renderSegmentsV2, getCreatomateRenderStatus, type VoiceOverIntroRenderInput } from './creatomate'
+import {
+  buildCreatomateRenderScript,
+  getCreatomateRenderStatus,
+  renderSegmentsV2,
+  submitCreatomateRenderForJob,
+  type CreatomateFlatRenderScript,
+  type VoiceOverIntroRenderInput,
+} from './creatomate'
 import { buildSemanticVoiceOverBrollTiles } from './vo-broll-semantics'
 import {
   prepareVideoForGemini,
@@ -1046,6 +1053,137 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
  * Nuevo envío a Creatomate usando el `segment_map` ya guardado y un `gemini_analysis`
  * (el del job o uno editado). Útil para corregir cortes/subtítulos sin re-transcribir.
  */
+/**
+ * Misma composición que se enviaría a Creatomate en un re-render, sin mutar el job ni iniciar render.
+ * Sirve para el Preview SDK (`setSource`) y para inspección.
+ */
+export async function getCreatomateRenderScriptForJob(
+  jobId: string,
+  geminiAnalysisOverride?: unknown
+): Promise<CreatomateFlatRenderScript> {
+  const supabase = getServiceClient()
+  const { data: job, error } = await supabase
+    .from('video_jobs_v2')
+    .select('*')
+    .eq('id', jobId)
+    .single()
+
+  if (error || !job) {
+    throw new Error('Job no encontrado')
+  }
+  const paths = job.raw_video_paths ?? []
+  if (paths.length === 0) {
+    throw new Error('Job sin raw_video_paths')
+  }
+  if (!job.music_track_url) {
+    throw new Error('Job sin música asignada')
+  }
+  if (!job.segment_map) {
+    throw new Error('Job sin segment_map')
+  }
+
+  const allSegments = parseSegmentMapJson(job.segment_map)
+  const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
+  const analysis = coerceGeminiAnalysisFromUnknown(rawAnalysis, jobId)
+  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
+
+  let kinds = defaultClipKinds(paths.length)
+  let clipDurationsSecInput: (number | null)[] | undefined
+  let voiceOverBaseClipIndex: number | undefined
+  const sc = job.selected_clips
+  if (isPipelineInputMeta(sc)) {
+    if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
+      kinds = normalizeClipKindsInput(sc.clipKinds, paths.length)
+    }
+    if (Array.isArray(sc.clipDurationsSec) && sc.clipDurationsSec.length === paths.length) {
+      clipDurationsSecInput = normalizeClipDurationsInput(sc.clipDurationsSec, paths.length)
+    }
+    if (typeof sc.voiceOverBaseClipIndex === 'number') {
+      voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
+    }
+  }
+  if (voiceOverBaseClipIndex != null && paths.length < 2) {
+    voiceOverBaseClipIndex = undefined
+  }
+
+  const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
+
+  const freshClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
+
+  const { subtitleBlocks: autoSubtitleBlocks, voiceOverIntro } = await computeAutomaticSubtitlePayload({
+    jobId,
+    paths,
+    analysis,
+    allSegments,
+    kinds,
+    clipDurationsSecInput,
+    voiceOverBaseClipIndex,
+    clipFilenames,
+    signedClipUrls: freshClipUrls,
+  })
+
+  let subtitleBlocks = autoSubtitleBlocks
+  try {
+    const ovr = parseSubtitleBlocksOverride(job.subtitle_blocks_override)
+    if (ovr && ovr.length > 0) {
+      subtitleBlocks = ovr
+    }
+  } catch (e) {
+    console.warn(
+      `[VideoV2Pipeline][${jobId}] subtitle_blocks_override inválido, se usan subtítulos automáticos: ${e}`
+    )
+  }
+
+  return buildCreatomateRenderScript(
+    jobId,
+    analysis.sequence,
+    freshClipUrls,
+    subtitleBlocks,
+    job.music_track_url,
+    voiceOverIntro
+  )
+}
+
+/**
+ * Inicia un render en Creatomate con el JSON editado en el Preview SDK (mismo formato que la API).
+ */
+export async function startCreatomateRenderFromClientScript(
+  jobId: string,
+  script: CreatomateFlatRenderScript
+): Promise<{ renderId: string }> {
+  const supabase = getServiceClient()
+  const { data: job, error } = await supabase.from('video_jobs_v2').select('id').eq('id', jobId).single()
+  if (error || !job) {
+    throw new Error('Job no encontrado')
+  }
+
+  await updateJob(jobId, {
+    status: 'rendering',
+    current_step: 'Render desde editor Creatomate (Preview SDK)…',
+    progress_percentage: 82,
+    final_video_url: null,
+    final_video_duration: null,
+    error_message: null,
+  })
+
+  const renderId = await submitCreatomateRenderForJob(jobId, script)
+
+  await updateJob(jobId, {
+    creatomate_render_id: renderId,
+    progress_percentage: 85,
+    current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado…`,
+  })
+
+  setImmediate(() => {
+    monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
+      console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal (preview export): ${e}`)
+    )
+  })
+
+  console.log(`[VideoV2Pipeline][${jobId}] Render desde Preview SDK. Creatomate ID=${renderId}`)
+  return { renderId }
+}
+
 export async function rerunCreatomateRenderForJob(
   jobId: string,
   geminiAnalysisOverride?: unknown

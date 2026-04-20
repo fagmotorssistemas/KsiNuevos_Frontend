@@ -7,6 +7,7 @@ import {
   ArrowLeft, Clock, Film, Layers, Upload, Mic2, Brain, Clapperboard,
   CheckCircle2, AlertCircle, Loader2, RefreshCw,
 } from 'lucide-react'
+import { CreatomateJobPreview } from '@/components/videos-v2/CreatomateJobPreview'
 import { JobManualEditor } from '@/components/videos-v2/JobManualEditor'
 import { VideoPlayer } from '@/components/videos-v2/VideoPlayer'
 import { PipelineStatus } from '@/components/videos-v2/PipelineStatus'
@@ -103,7 +104,7 @@ export default function JobDetailPage() {
   const statusCfg = STATUS_CONFIG[job.status]
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-6xl">
       {/* Back */}
       <Link
         href="/marketing/videos-v2"
@@ -209,13 +210,23 @@ export default function JobDetailPage() {
               </div>
 
               {canRerenderFromEditor && (
-                <JobManualEditor
-                  jobId={jobId}
-                  onSaved={async () => {
-                    await fetchJob()
-                    router.refresh()
-                  }}
-                />
+                <>
+                  <JobManualEditor
+                    jobId={jobId}
+                    onSaved={async () => {
+                      await fetchJob()
+                      router.refresh()
+                    }}
+                  />
+                  <CreatomateJobPreview
+                    jobId={jobId}
+                    jobIsRendering={job.status === 'rendering'}
+                    onExportStarted={async () => {
+                      await fetchJob()
+                      router.refresh()
+                    }}
+                  />
+                </>
               )}
             </div>
           )}
