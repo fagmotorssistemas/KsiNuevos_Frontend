@@ -28,6 +28,15 @@ interface CreateReelModalProps {
   onJobCreated: () => void
 }
 
+/** Clips típicos de iPhone (IMG_*.MOV) suelen ir en HDR; al recomponer por API el tono puede verse lavado vs. export manual. */
+function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
+  return files.some((f) => {
+    const n = f.name.trim()
+    if (!/\.mov$/i.test(n)) return false
+    return /^IMG_\d+/i.test(n) || /^RPReplay|ScreenRecording|Cinematic/i.test(n)
+  })
+}
+
 export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelModalProps) {
   const [step, setStep] = useState<Step>(1)
   const [flowType, setFlowType] = useState<FlowType>('single')
@@ -280,6 +289,18 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             <div className="space-y-6">
               <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} />
 
+              {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
+                  <p className="font-semibold text-amber-950">Sobre el color del resultado</p>
+                  <p className="mt-1">
+                    Los .MOV de iPhone suelen ser HDR (Dolby Vision / HLG). El render automático puede verse más
+                    &quot;lavado&quot; que si exportas a mano en Creatomate. Para colores más fieles, sube versiones en{' '}
+                    <strong>H.264 / SDR</strong> (por ejemplo desde Fotos: compartir → guardar como &quot;Más
+                    compatible&quot;, o exportar MP4 desde DaVinci / HandBrake con perfil Rec.709).
+                  </p>
+                </div>
+              )}
+
               {flowType === 'multiple' && files.length >= 2 && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
                   <p className="text-sm font-semibold text-gray-900">Clip de voz en off (audio completo + B-roll)</p>
@@ -327,6 +348,12 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {/* PASO 3 — Música */}
           {step === 3 && (
             <div className="space-y-4">
+              {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
+                  Recuerda: si los colores del Reel salen apagados con clips <code className="bg-amber-100/80 px-1 rounded">IMG_*.MOV</code>, prueba
+                  subir el mismo material como <strong>MP4 SDR</strong> y vuelve a generar.
+                </div>
+              )}
               <p className="text-sm text-gray-600">Elige el track de música de fondo para el Reel:</p>
               <MusicSelector
                 selectedId={selectedMusicId}

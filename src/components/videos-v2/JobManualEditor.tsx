@@ -189,6 +189,8 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
 
       <p className="text-xs text-gray-500 mt-2 max-w-prose leading-relaxed">
         Corrige texto de subtítulos (AssemblyAI) y los tiempos de cada corte dentro de los límites del mapa de segmentos.
+        Si el color del resultado se ve lavado respecto al clip original, suele deberse a vídeo HDR (p. ej. .MOV de iPhone):
+        prueba a subir una copia en <strong>MP4 H.264 SDR (Rec.709)</strong> y vuelve a procesar.
         Luego usa <strong>Re-renderizar</strong> para enviar otra vez a Creatomate. Abrir el mismo proyecto en el sitio web
         de Creatomate no lo expone la API; alternativas serían integrar su{' '}
         <a

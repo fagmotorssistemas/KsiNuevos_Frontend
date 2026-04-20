@@ -119,8 +119,7 @@ export async function getCreatomateRenderStatus(renderId: string): Promise<Creat
 }
 
 // ─── Vídeos + capas de texto con highlight nativo (mismo índice i) ────────────
-// B-roll + voz en off: primero el plano (track bajo), encima el clip de audio (opacidad 0 %),
-// subtítulos ligados al elemento que lleva el audio real.
+// B-roll + voz en off: plano de vídeo (B-roll o único clip) + pista `audio` separada para la voz.
 
 /**
  * Tracks (Creatomate: 1–1000). Importante: no reutilizar el mismo track para vídeo B-roll VO y
@@ -136,6 +135,19 @@ const TRACK_MUSIC = 6
 const TRACK_VOICE_AUDIO = 14
 /** Por encima del B-roll del VO (5) y del vídeo base; texto AssemblyAI, no re-transcripción Creatomate. */
 const TRACK_MANUAL_CAPTIONS = 18
+
+/**
+ * Valores por defecto explícitos en capas `video` para evitar filtros o modos de fusión heredados
+ * que puedan alterar color al componer varias pistas (ver documentación: blend_mode, color_filter).
+ */
+function creatomateVideoElementBase(): Record<string, unknown> {
+  return {
+    blend_mode: 'none',
+    color_filter: 'none',
+    color_filter_value: '0%',
+    opacity: '100%',
+  }
+}
 
 /** Bloque VO manual: audio completo + B-roll mute + negro; `timelineStartSec` = posición en el Reel. */
 export interface VoiceOverIntroRenderInput {
@@ -358,6 +370,7 @@ function buildVoiceOverIntroLayers(
     videoElements.push(
       withOptionalCutPunchAnimations(
         {
+          ...creatomateVideoElementBase(),
           id: `vo_intro_broll_${i}`,
           name: `VO_intro_BROLL_${tile.clipIndex}`,
           type: 'video',
@@ -437,6 +450,7 @@ function buildVideoSequenceLayers(
       videoElements.push(
         withOptionalCutPunchAnimations(
           {
+            ...creatomateVideoElementBase(),
             id: brollId,
             name: `Seg_${item.segment_id}_broll`,
             type: 'video',
@@ -475,6 +489,7 @@ function buildVideoSequenceLayers(
       videoElements.push(
         withOptionalCutPunchAnimations(
           {
+            ...creatomateVideoElementBase(),
             id: videoId,
             name: `Seg_${item.segment_id}`,
             type: 'video',
