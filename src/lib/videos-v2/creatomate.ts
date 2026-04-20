@@ -2,8 +2,7 @@
  * Creatomate V2 — Render de alta calidad para Reels/TikTok (9:16).
  *
  * - Video: entre cortes, solo un “golpe” de zoom in/out muy breve al inicio del clip (estilo CapCut), sin transiciones nativas Creatomate ni zoom lineal en toda la toma.
- * - visual_overlay: B-roll (mute) debajo y
- *   clip de audio (opacidad 0 %) encima para subtítulos highlight ligados al audio.
+ * - visual_overlay: B-roll (mute) debajo y pista de audio separada para la voz.
  * - Opcional: bloque VO manual (audio completo + B-roll Assembly mute + negro); la posición en la timeline la elige Gemini (insertAfterSegmentCount).
  * - Subtítulos: texto explícito desde AssemblyAI (`subtitleBlocks`), capa alta para verse sobre B-roll VO;
  *   animaciones de entrada por palabra o por bloque. `subtitleBlocks` también alimenta SFX pop.
@@ -134,7 +133,7 @@ const TRACK_TRANSITION_SFX = 4
 const TRACK_SUBTITLE_SFX = 7
 const TRACK_VO_BROLL = 5
 const TRACK_MUSIC = 6
-const TRACK_VIDEO_VOICE = 14
+const TRACK_VOICE_AUDIO = 14
 /** Por encima del B-roll del VO (5) y del vídeo base; texto AssemblyAI, no re-transcripción Creatomate. */
 const TRACK_MANUAL_CAPTIONS = 18
 
@@ -385,19 +384,14 @@ function buildVoiceOverIntroLayers(
   videoElements.push({
     id: voiceId,
     name: 'VO_intro_voice',
-    type: 'video',
-    track: TRACK_VIDEO_VOICE,
+    type: 'audio',
+    track: TRACK_VOICE_AUDIO,
     time: t0,
     duration: voDur,
     source: voiceUrl,
     trim_start: 0,
     trim_duration: voDur,
     volume: '100%',
-    opacity: '0%',
-    fit: 'cover',
-    clip: true,
-    width: '100%',
-    height: '100%',
   })
 
   return { videoElements, durationSec: voDur }
@@ -438,7 +432,7 @@ function buildVideoSequenceLayers(
       const brollUrl = clipUrls[ov.clip_index]!
       const voiceUrl = clipUrls[item.clip_index] ?? clipUrls[0]
       const brollId = `${idPre}video_${i}_broll`
-      const voiceId = `${idPre}video_${i}_voice`
+      const voiceId = `${idPre}audio_${i}_voice`
 
       videoElements.push(
         withOptionalCutPunchAnimations(
@@ -465,18 +459,14 @@ function buildVideoSequenceLayers(
       videoElements.push({
         id: voiceId,
         name: `Seg_${item.segment_id}_voice`,
-        type: 'video',
-        track: TRACK_VIDEO_VOICE,
+        type: 'audio',
+        track: TRACK_VOICE_AUDIO,
         time: timeStart,
         duration,
         source: voiceUrl,
         trim_start: Number(item.trim_start.toFixed(3)),
+        trim_duration: duration,
         volume: '100%',
-        opacity: '0%',
-        fit: 'cover',
-        clip: true,
-        width: '100%',
-        height: '100%',
       })
 
     } else {
