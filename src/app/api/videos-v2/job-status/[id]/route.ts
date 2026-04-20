@@ -20,13 +20,13 @@ export async function GET(
 
     const { data: job, error } = await supabase
       .from('video_jobs_v2')
-      .select(
-        'id, status, progress_percentage, current_step, error_message, final_video_url, final_video_duration, gemini_analysis, flow_type, created_at, updated_at, assemblyai_transcript_id, creatomate_render_id, raw_video_paths, selected_clips, music_track_url'
-      )
+      // `*` evita fallar si aún no existe la columna `subtitle_blocks_override` (migración pendiente).
+      .select('*')
       .eq('id', id)
       .single()
 
     if (error || !job) {
+      console.error(`[VideoV2][job-status/${id}]`, error?.message ?? 'sin job')
       return NextResponse.json({ error: 'Job no encontrado' }, { status: 404 })
     }
 

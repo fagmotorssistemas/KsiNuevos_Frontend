@@ -3584,6 +3584,7 @@ export type Database = {
           selected_clips: Json | null
           srt_content: string | null
           status: string
+          subtitle_blocks_override: Json | null
           updated_at: string | null
         }
         Insert: {
@@ -3605,6 +3606,7 @@ export type Database = {
           selected_clips?: Json | null
           srt_content?: string | null
           status?: string
+          subtitle_blocks_override?: Json | null
           updated_at?: string | null
         }
         Update: {
@@ -3626,6 +3628,7 @@ export type Database = {
           selected_clips?: Json | null
           srt_content?: string | null
           status?: string
+          subtitle_blocks_override?: Json | null
           updated_at?: string | null
         }
         Relationships: []

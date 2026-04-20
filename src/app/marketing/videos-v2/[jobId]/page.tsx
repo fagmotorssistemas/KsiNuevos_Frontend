@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Clock, Film, Layers, Upload, Mic2, Brain, Clapperboard,
-  CheckCircle2, AlertCircle, Loader2, RefreshCw
+  CheckCircle2, AlertCircle, Loader2, RefreshCw,
 } from 'lucide-react'
+import { JobManualEditor } from '@/components/videos-v2/JobManualEditor'
 import { VideoPlayer } from '@/components/videos-v2/VideoPlayer'
 import { PipelineStatus } from '@/components/videos-v2/PipelineStatus'
 import type { VideoJobV2 } from '@/lib/videos-v2/types'
@@ -45,8 +46,7 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<VideoJobV2 | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  async function fetchJob() {
+  const fetchJob = useCallback(async () => {
     try {
       const res = await fetch(`/api/videos-v2/job-status/${jobId}`)
       if (res.status === 404) { setError('Job no encontrado'); return }
@@ -58,11 +58,11 @@ export default function JobDetailPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [jobId])
 
   useEffect(() => {
-    fetchJob()
-  }, [jobId])
+    void fetchJob()
+  }, [fetchJob])
 
   const isProcessing = job && !['completed', 'failed'].includes(job.status)
 
@@ -70,6 +70,13 @@ export default function JobDetailPage() {
   const gemini = job?.gemini_analysis
   const segmentAnalysis =
     gemini != null && 'sequence' in gemini ? gemini : null
+
+  const canRerenderFromEditor = Boolean(
+    job &&
+      job.segment_map &&
+      segmentAnalysis &&
+      (job.status === 'completed' || job.status === 'failed')
+  )
 
   const currentStatusIdx = job ? (STATUS_ORDER[job.status] ?? 0) : 0
 
@@ -200,6 +207,16 @@ export default function JobDetailPage() {
                   </div>
                 ))}
               </div>
+
+              {canRerenderFromEditor && (
+                <JobManualEditor
+                  jobId={jobId}
+                  onSaved={async () => {
+                    await fetchJob()
+                    router.refresh()
+                  }}
+                />
+              )}
             </div>
           )}
         </div>

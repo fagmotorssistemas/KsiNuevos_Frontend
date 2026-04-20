@@ -1,24 +1,33 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import type { FlowType, VideoJobStatus } from './types'
+import type { FlowType, GeminiSegmentAnalysisResult, VideoJobStatus } from './types'
 import { getSignedUrlForPath } from './storage'
 import { transcribeVideoV2, type RawWord } from './assemblyai'
 import {
-  buildSegmentMap,
   buildAdjustedSRT,
   buildAdjustedSRTForVoiceOverIntro,
+  buildAdjustedSrtFromSubtitleBlocks,
   buildSubtitleBlocks,
   buildSubtitleBlocksForVoiceOverIntro,
   buildVisualOnlyPlaceholderSegment,
+  clampSequenceToSegmentBounds,
   formatSegmentMapForPrompt,
   offsetSubtitleBlocks,
+  refineSpokenSegmentsForOneClip,
   sumSequenceItemsDurationSec,
 } from './segmenter'
+import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
 import type { VideoClipKind } from './clip-config'
+import {
+  defaultClipKinds,
+  isPipelineInputMeta,
+  normalizeClipDurationsInput,
+  normalizeClipKindsInput,
+} from './clip-config'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
-import type { Segment } from './segmenter'
 import { analyzeSegments } from './gemini'
 import { renderSegmentsV2, getCreatomateRenderStatus, type VoiceOverIntroRenderInput } from './creatomate'
+import { buildSemanticVoiceOverBrollTiles } from './vo-broll-semantics'
 import {
   prepareVideoForGemini,
   prepareMultipleVideosForGemini,
@@ -41,17 +50,18 @@ async function updateJob(
     status: VideoJobStatus
     current_step: string
     progress_percentage: number
-    error_message: string
+    error_message: string | null
     assemblyai_transcript_id: string
     srt_content: string
     gemini_analysis: unknown
     creatomate_render_id: string
-    final_video_url: string
-    final_video_duration: number
+    final_video_url: string | null
+    final_video_duration: number | null
     raw_video_paths: string[]
     selected_clips: unknown
     segment_map: unknown
     adjusted_srt: string
+    subtitle_blocks_override: unknown
   }>
 ) {
   const supabase = getServiceClient()
@@ -185,7 +195,9 @@ async function runSingleVideoPipelineFromStorage(
       progress_percentage: 50,
     })
 
-    const segments = buildSegmentMap(rawWords, 0)
+    const capMs =
+      rawWords.length > 0 ? rawWords[rawWords.length - 1]!.end + 3000 : null
+    const segments = refineSpokenSegmentsForOneClip(0, rawWords, capMs)
     await updateJob(jobId, { segment_map: segments })
     console.log(`[VideoV2Pipeline][${jobId}][A2] ${segments.length} segmentos detectados`)
 
@@ -493,7 +505,14 @@ async function runMultipleClipsPipelineFromStorage(
         }
         allSegments.push(buildVisualOnlyPlaceholderSegment(i, dur))
       } else {
-        allSegments.push(...buildSegmentMap(transcriptions[i].rawWords, i))
+        const raw = transcriptions[i].rawWords
+        const capMs =
+          typeof clipDurationsSecInput?.[i] === 'number' && Number.isFinite(clipDurationsSecInput[i]!)
+            ? Math.round(clipDurationsSecInput[i]! * 1000)
+            : raw.length > 0
+              ? raw[raw.length - 1]!.end + 3000
+              : null
+        allSegments.push(...refineSpokenSegmentsForOneClip(i, raw, capMs))
       }
     }
 
@@ -617,12 +636,22 @@ async function runMultipleClipsPipelineFromStorage(
         if (typeof vis === 'number' && vis > 0.05) return Number(vis.toFixed(3))
         return null
       })
+      const voBrollTiles = buildSemanticVoiceOverBrollTiles(
+        voDur,
+        brollOrder,
+        clipDurationsForRender,
+        analysis.sequence,
+        allSegments,
+        voiceOverBaseClipIndex,
+        files.map((f) => f.filename || '')
+      )
       voiceOverIntro = {
         voClipIndex: voiceOverBaseClipIndex,
         voDurationSec: voDur,
         brollClipIndicesInFileOrder: brollOrder,
         clipFileDurationsSec: clipDurationsForRender,
         insertAfterSegmentCount: insertAfter,
+        voBrollTiles,
       }
       const blocksBefore = buildSubtitleBlocks(beforeSeq, allSegments)
       const voBlocks = buildSubtitleBlocksForVoiceOverIntro(
@@ -648,7 +677,7 @@ async function runMultipleClipsPipelineFromStorage(
       adjustedSrt = [srtBefore, srtVo, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
       console.log(
         `[VideoV2Pipeline][${jobId}][B4] Modo VO manual: bloque ${voDur}s en t≈${dBefore}s (tras ${insertAfter} cortes), ` +
-          `${brollOrder.length} clips B-roll en orden de archivo`
+          `${brollOrder.length} clips B-roll, ${voBrollTiles.length} ventanas en timeline (semántica + fallback lineal si aplica)`
       )
     }
 
@@ -718,6 +747,496 @@ async function runMultipleClipsPipelineFromStorage(
       cleanupMultipleGoogleFiles(googleFileRefs, jobId).catch(() => {})
     }
   }
+}
+
+function parseSegmentMapJson(raw: unknown): Segment[] {
+  if (!Array.isArray(raw)) {
+    throw new Error('segment_map inválido o vacío: no se puede re-renderizar sin el mapa guardado.')
+  }
+  return raw as Segment[]
+}
+
+function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSegmentAnalysisResult {
+  if (typeof raw !== 'object' || raw === null || !('sequence' in raw)) {
+    throw new Error(`[${jobId}] gemini_analysis inválido: se esperaba un objeto con "sequence".`)
+  }
+  const o = raw as Record<string, unknown>
+  if (!Array.isArray(o.sequence) || o.sequence.length === 0) {
+    throw new Error(`[${jobId}] "sequence" vacía o no es un array.`)
+  }
+  const seq: SequenceItem[] = o.sequence.map((item, idx) => {
+    const it = item as Record<string, unknown>
+    if (typeof it.segment_id !== 'string') {
+      throw new Error(`Ítem ${idx}: falta segment_id (string).`)
+    }
+    const base: SequenceItem = {
+      segment_id: it.segment_id,
+      clip_index: Number(it.clip_index),
+      trim_start: Number(it.trim_start),
+      trim_end: Number(it.trim_end),
+      trim_duration: Number(it.trim_duration),
+      order: Number(it.order ?? idx + 1),
+      reason: String(it.reason ?? ''),
+    }
+    if (it.visual_overlay && typeof it.visual_overlay === 'object') {
+      const ov = it.visual_overlay as Record<string, unknown>
+      base.visual_overlay = {
+        clip_index: Number(ov.clip_index),
+        trim_start: Number(ov.trim_start),
+        trim_end: Number(ov.trim_end),
+      }
+    }
+    return base
+  })
+  seq.sort((a, b) => a.order - b.order)
+  seq.forEach((it, i) => {
+    it.order = i + 1
+  })
+  const sumDur = Number(seq.reduce((s, x) => s + x.trim_duration, 0).toFixed(3))
+  return {
+    sequence: seq,
+    total_duration:
+      typeof o.total_duration === 'number' && Number.isFinite(o.total_duration)
+        ? Number(o.total_duration.toFixed(3))
+        : sumDur,
+    overall_strategy: String(o.overall_strategy ?? ''),
+    ...(typeof o.voice_over_insert_after_count === 'number'
+      ? { voice_over_insert_after_count: o.voice_over_insert_after_count }
+      : {}),
+  }
+}
+
+function assertSequenceMatchesStoredSegments(
+  analysis: GeminiSegmentAnalysisResult,
+  segments: Segment[],
+  jobId: string
+): void {
+  const lookup = new Map(segments.map((s) => [s.segment_id, s]))
+  for (const item of analysis.sequence) {
+    if (!lookup.has(item.segment_id)) {
+      throw new Error(
+        `[${jobId}] segment_id "${item.segment_id}" no existe en el segment_map guardado. ` +
+          'Revisa el JSON o vuelve a procesar el job desde cero.'
+      )
+    }
+  }
+}
+
+export function parseSubtitleBlocksOverride(raw: unknown): SubtitleBlock[] | null {
+  if (raw == null) return null
+  if (!Array.isArray(raw)) {
+    throw new Error('subtitle_blocks_override debe ser un array JSON o null')
+  }
+  const out: SubtitleBlock[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const o = raw[i] as Record<string, unknown>
+    const time = Number(o.time)
+    const duration = Number(o.duration)
+    const text = String(o.text ?? '').trim()
+    if (!Number.isFinite(time) || time < 0 || !Number.isFinite(duration) || duration < 0.08 || text.length === 0) {
+      throw new Error(
+        `Subtítulo ${i + 1}: "time" (s) ≥ 0, "duration" (s) ≥ 0.08 y "text" no vacío son obligatorios`
+      )
+    }
+    out.push({
+      time: Number(time.toFixed(3)),
+      duration: Number(duration.toFixed(3)),
+      text,
+    })
+  }
+  return out.length > 0 ? out : null
+}
+
+async function computeAutomaticSubtitlePayload(params: {
+  jobId: string
+  paths: string[]
+  analysis: GeminiSegmentAnalysisResult
+  allSegments: Segment[]
+  kinds: VideoClipKind[]
+  clipDurationsSecInput?: (number | null)[]
+  voiceOverBaseClipIndex?: number
+  clipFilenames: string[]
+  signedClipUrls: string[]
+}): Promise<{
+  subtitleBlocks: SubtitleBlock[]
+  adjustedSrt: string
+  voiceOverIntro: VoiceOverIntroRenderInput | null
+}> {
+  const {
+    jobId,
+    paths,
+    analysis,
+    allSegments,
+    kinds,
+    clipDurationsSecInput,
+    voiceOverBaseClipIndex,
+    clipFilenames,
+    signedClipUrls,
+  } = params
+
+  let subtitleBlocks = buildSubtitleBlocks(analysis.sequence, allSegments)
+  let adjustedSrt = buildAdjustedSRT(analysis.sequence, allSegments)
+  let voiceOverIntro: VoiceOverIntroRenderInput | null = null
+
+  const clipDurationsForRender = Array.from({ length: paths.length }, (_, i) => {
+    const c = clipDurationsSecInput?.[i]
+    if (typeof c === 'number' && Number.isFinite(c) && c > 0.05) return Number(c.toFixed(3))
+    const vis = allSegments.find((s) => s.clip_index === i && s.source_kind === 'visual_only')
+    if (vis && vis.duration_s > 0.05) return vis.duration_s
+    const ends = allSegments.filter((s) => s.clip_index === i).map((s) => s.end_s)
+    const m = ends.length ? Math.max(...ends) : 0
+    return m > 0.05 ? Number(m.toFixed(3)) : null
+  })
+
+  if (voiceOverBaseClipIndex != null) {
+    const voDur = await resolveVoiceOverTrackDurationSec(
+      voiceOverBaseClipIndex,
+      clipDurationsSecInput,
+      allSegments,
+      signedClipUrls[voiceOverBaseClipIndex],
+      jobId
+    )
+    const insertAfter = Math.max(
+      0,
+      Math.min(analysis.voice_over_insert_after_count ?? 0, analysis.sequence.length)
+    )
+    const beforeSeq = analysis.sequence.slice(0, insertAfter)
+    const afterSeq = analysis.sequence.slice(insertAfter)
+    const dBefore = sumSequenceItemsDurationSec(beforeSeq)
+
+    const brollOrder = kinds
+      .map((k, i) => ({ k, i }))
+      .filter(({ k, i }) => k === 'visual_only' && i !== voiceOverBaseClipIndex)
+      .map(({ i }) => i)
+
+    const voBrollTiles = buildSemanticVoiceOverBrollTiles(
+      voDur,
+      brollOrder,
+      clipDurationsForRender,
+      analysis.sequence,
+      allSegments,
+      voiceOverBaseClipIndex,
+      clipFilenames
+    )
+    voiceOverIntro = {
+      voClipIndex: voiceOverBaseClipIndex,
+      voDurationSec: voDur,
+      brollClipIndicesInFileOrder: brollOrder,
+      clipFileDurationsSec: clipDurationsForRender,
+      insertAfterSegmentCount: insertAfter,
+      voBrollTiles,
+    }
+
+    const blocksBefore = buildSubtitleBlocks(beforeSeq, allSegments)
+    const voBlocks = buildSubtitleBlocksForVoiceOverIntro(
+      allSegments,
+      voiceOverBaseClipIndex,
+      voDur,
+      dBefore
+    )
+    const blocksAfter = offsetSubtitleBlocks(buildSubtitleBlocks(afterSeq, allSegments), dBefore + voDur)
+    subtitleBlocks = [...blocksBefore, ...voBlocks, ...blocksAfter]
+
+    const srtBefore = buildAdjustedSRT(beforeSeq, allSegments, 0)
+    const srtVo = buildAdjustedSRTForVoiceOverIntro(
+      allSegments,
+      voiceOverBaseClipIndex,
+      voDur,
+      dBefore
+    )
+    const srtAfter = buildAdjustedSRT(afterSeq, allSegments, dBefore + voDur)
+    adjustedSrt = [srtBefore, srtVo, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
+  }
+
+  return { subtitleBlocks, adjustedSrt, voiceOverIntro }
+}
+
+export type VideoJobSegmentTrimBound = {
+  segment_id: string
+  clip_index: number
+  min_start_s: number
+  max_end_s: number
+}
+
+export async function getVideoJobEditorState(jobId: string): Promise<{
+  gemini_analysis: GeminiSegmentAnalysisResult
+  subtitle_blocks_auto: SubtitleBlock[]
+  subtitle_blocks_effective: SubtitleBlock[]
+  subtitle_override_active: boolean
+  segment_trim_bounds: VideoJobSegmentTrimBound[]
+}> {
+  const supabase = getServiceClient()
+  const { data: job, error } = await supabase
+    .from('video_jobs_v2')
+    .select('*')
+    .eq('id', jobId)
+    .single()
+
+  if (error || !job?.gemini_analysis || !job.segment_map) {
+    throw new Error('Job no encontrado o sin análisis / mapa de segmentos')
+  }
+
+  const paths = job.raw_video_paths ?? []
+  if (paths.length === 0) throw new Error('Job sin raw_video_paths')
+
+  const allSegments = parseSegmentMapJson(job.segment_map)
+  const analysis = coerceGeminiAnalysisFromUnknown(job.gemini_analysis, jobId)
+  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
+
+  let kinds = defaultClipKinds(paths.length)
+  let clipDurationsSecInput: (number | null)[] | undefined
+  let voiceOverBaseClipIndex: number | undefined
+  const sc = job.selected_clips
+  if (isPipelineInputMeta(sc)) {
+    if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
+      kinds = normalizeClipKindsInput(sc.clipKinds, paths.length)
+    }
+    if (Array.isArray(sc.clipDurationsSec) && sc.clipDurationsSec.length === paths.length) {
+      clipDurationsSecInput = normalizeClipDurationsInput(sc.clipDurationsSec, paths.length)
+    }
+    if (typeof sc.voiceOverBaseClipIndex === 'number') {
+      voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
+    }
+  }
+  if (voiceOverBaseClipIndex != null && paths.length < 2) {
+    voiceOverBaseClipIndex = undefined
+  }
+
+  const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
+  const signedClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
+
+  const { subtitleBlocks: autoBlocks } = await computeAutomaticSubtitlePayload({
+    jobId,
+    paths,
+    analysis,
+    allSegments,
+    kinds,
+    clipDurationsSecInput,
+    voiceOverBaseClipIndex,
+    clipFilenames,
+    signedClipUrls,
+  })
+
+  let override: SubtitleBlock[] | null = null
+  try {
+    override = parseSubtitleBlocksOverride(job.subtitle_blocks_override)
+  } catch (e) {
+    console.warn(`[VideoV2Pipeline][${jobId}] subtitle_blocks_override en DB ignorado: ${e}`)
+  }
+
+  const segment_trim_bounds: VideoJobSegmentTrimBound[] = allSegments
+    .filter((s) => s.source_kind !== 'visual_only')
+    .map((s) => ({
+      segment_id: s.segment_id,
+      clip_index: s.clip_index,
+      min_start_s: s.start_s,
+      max_end_s: s.end_s,
+    }))
+
+  return {
+    gemini_analysis: analysis,
+    subtitle_blocks_auto: autoBlocks,
+    subtitle_blocks_effective: override ?? autoBlocks,
+    subtitle_override_active: override != null,
+    segment_trim_bounds,
+  }
+}
+
+/**
+ * Nuevo envío a Creatomate usando el `segment_map` ya guardado y un `gemini_analysis`
+ * (el del job o uno editado). Útil para corregir cortes/subtítulos sin re-transcribir.
+ */
+export async function rerunCreatomateRenderForJob(
+  jobId: string,
+  geminiAnalysisOverride?: unknown
+): Promise<{ renderId: string }> {
+  const supabase = getServiceClient()
+  const { data: job, error } = await supabase
+    .from('video_jobs_v2')
+    .select('*')
+    .eq('id', jobId)
+    .single()
+
+  if (error || !job) {
+    throw new Error('Job no encontrado')
+  }
+  const paths = job.raw_video_paths ?? []
+  if (paths.length === 0) {
+    throw new Error('Job sin raw_video_paths')
+  }
+  if (!job.music_track_url) {
+    throw new Error('Job sin música asignada')
+  }
+
+  const allSegments = parseSegmentMapJson(job.segment_map)
+  const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
+  const analysis = coerceGeminiAnalysisFromUnknown(rawAnalysis, jobId)
+  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
+
+  let kinds = defaultClipKinds(paths.length)
+  let clipDurationsSecInput: (number | null)[] | undefined
+  let voiceOverBaseClipIndex: number | undefined
+  const sc = job.selected_clips
+  if (isPipelineInputMeta(sc)) {
+    if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
+      kinds = normalizeClipKindsInput(sc.clipKinds, paths.length)
+    }
+    if (Array.isArray(sc.clipDurationsSec) && sc.clipDurationsSec.length === paths.length) {
+      clipDurationsSecInput = normalizeClipDurationsInput(sc.clipDurationsSec, paths.length)
+    }
+    if (typeof sc.voiceOverBaseClipIndex === 'number') {
+      voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
+    }
+  }
+  if (voiceOverBaseClipIndex != null && paths.length < 2) {
+    voiceOverBaseClipIndex = undefined
+  }
+
+  const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
+
+  const freshClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
+
+  const { subtitleBlocks: autoSubtitleBlocks, adjustedSrt: autoAdjustedSrt, voiceOverIntro } =
+    await computeAutomaticSubtitlePayload({
+      jobId,
+      paths,
+      analysis,
+      allSegments,
+      kinds,
+      clipDurationsSecInput,
+      voiceOverBaseClipIndex,
+      clipFilenames,
+      signedClipUrls: freshClipUrls,
+    })
+
+  let subtitleBlocks = autoSubtitleBlocks
+  let adjustedSrt = autoAdjustedSrt
+  try {
+    const ovr = parseSubtitleBlocksOverride(job.subtitle_blocks_override)
+    if (ovr && ovr.length > 0) {
+      subtitleBlocks = ovr
+      adjustedSrt = buildAdjustedSrtFromSubtitleBlocks(ovr)
+    }
+  } catch (e) {
+    console.warn(
+      `[VideoV2Pipeline][${jobId}] subtitle_blocks_override inválido, se usan subtítulos automáticos: ${e}`
+    )
+  }
+
+  let geminiAnalysisPatch: GeminiSegmentAnalysisResult | undefined
+  if (voiceOverBaseClipIndex != null && voiceOverIntro != null) {
+    const ins = Math.max(
+      0,
+      Math.min(analysis.voice_over_insert_after_count ?? 0, analysis.sequence.length)
+    )
+    const afterS = analysis.sequence.slice(ins)
+    const beforeS = analysis.sequence.slice(0, ins)
+    const d0 = sumSequenceItemsDurationSec(beforeS)
+    geminiAnalysisPatch = {
+      ...analysis,
+      total_duration: Number(
+        (d0 + voiceOverIntro.voDurationSec + sumSequenceItemsDurationSec(afterS)).toFixed(3)
+      ),
+    }
+  }
+
+  const analysisToStore = geminiAnalysisPatch ?? analysis
+
+  await updateJob(jobId, {
+    gemini_analysis: analysisToStore,
+    adjusted_srt: adjustedSrt,
+    status: 'rendering',
+    current_step: 'Re-render: enviando a Creatomate…',
+    progress_percentage: 82,
+    final_video_url: null,
+    final_video_duration: null,
+    error_message: null,
+  })
+
+  const renderId = await renderSegmentsV2(
+    jobId,
+    analysis.sequence,
+    freshClipUrls,
+    subtitleBlocks,
+    job.music_track_url,
+    voiceOverIntro
+  )
+
+  await updateJob(jobId, {
+    creatomate_render_id: renderId,
+    progress_percentage: 85,
+    current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado…`,
+  })
+
+  setImmediate(() => {
+    monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
+      console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal (re-render): ${e}`)
+    )
+  })
+
+  console.log(`[VideoV2Pipeline][${jobId}] Re-render iniciado. Creatomate ID=${renderId}`)
+  return { renderId }
+}
+
+/**
+ * Guarda ediciones manuales (subtítulos y/o recortes de cortes) sin re-transcribir.
+ */
+export async function applyVideoJobEditorPatch(
+  jobId: string,
+  patch: {
+    subtitle_blocks_override?: unknown | null
+    sequence?: SequenceItem[]
+  }
+): Promise<void> {
+  const supabase = getServiceClient()
+  const fields: {
+    subtitle_blocks_override?: unknown
+    gemini_analysis?: unknown
+  } = {}
+
+  if ('subtitle_blocks_override' in patch) {
+    const v = patch.subtitle_blocks_override
+    if (v === null) {
+      fields.subtitle_blocks_override = null
+    } else {
+      const parsed = parseSubtitleBlocksOverride(v)
+      fields.subtitle_blocks_override = parsed && parsed.length > 0 ? parsed : null
+    }
+  }
+
+  if (patch.sequence != null) {
+    const { data: job, error } = await supabase
+      .from('video_jobs_v2')
+      .select('gemini_analysis, segment_map')
+      .eq('id', jobId)
+      .single()
+    if (error || !job?.gemini_analysis || !job.segment_map) {
+      throw new Error('Job sin gemini_analysis o segment_map')
+    }
+    const allSegments = parseSegmentMapJson(job.segment_map)
+    const analysis = coerceGeminiAnalysisFromUnknown(job.gemini_analysis, jobId)
+    const clamped = clampSequenceToSegmentBounds(patch.sequence, allSegments)
+    assertSequenceMatchesStoredSegments(
+      { ...analysis, sequence: clamped },
+      allSegments,
+      jobId
+    )
+    clamped.forEach((it, i) => {
+      it.order = i + 1
+    })
+    const total_duration = Number(clamped.reduce((s, x) => s + x.trim_duration, 0).toFixed(3))
+    fields.gemini_analysis = {
+      ...analysis,
+      sequence: clamped,
+      total_duration,
+    }
+  }
+
+  if (Object.keys(fields).length === 0) {
+    throw new Error('Nada que guardar: envía subtitle_blocks_override o sequence')
+  }
+
+  await updateJob(jobId, fields)
 }
 
 // ──────────────────────────────────────────────

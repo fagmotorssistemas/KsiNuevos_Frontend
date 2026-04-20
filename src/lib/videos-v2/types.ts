@@ -69,7 +69,10 @@ export interface VideoJobV2 {
   final_video_duration: number | null
   music_track_url: string | null
   selected_clips: GeminiClip[] | null
+  /** Mapa de segmentos (AssemblyAI + post-proceso); útil para re-render y depuración. */
   segment_map: unknown | null
+  /** Subtítulos corregidos a mano; si existe, el re-render prioriza esto sobre AssemblyAI. */
+  subtitle_blocks_override?: unknown | null
   adjusted_srt: string | null
 }
 

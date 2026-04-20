@@ -290,9 +290,18 @@ function normalizeVisualOverlaysInSequence(
 // ─── Validación de secuencia ─────────────────────────────────────────────────
 
 const CAR_BRANDS = [
-  'hyundai', 'kia', 'toyota', 'chevrolet', 'mazda', 'nissan', 'suzuki',
-  'ford', 'honda', 'mitsubishi', 'renault', 'volkswagen', 'vw'
+  'acura', 'alfa romeo', 'audi', 'bmw', 'bentley', 'buick', 'cadillac', 'chevrolet', 'chevy', 'chery',
+  'chrysler', 'citroen', 'citroën', 'cupra', 'dodge', 'fiat', 'ford', 'genesis', 'gmc', 'great wall',
+  'haval', 'honda', 'hyundai', 'infiniti', 'isuzu', 'jaguar', 'jeep', 'kia', 'lancia', 'land rover',
+  'lexus', 'lincoln', 'maserati', 'mazda', 'mercedes', 'mercedes-benz', 'mercedes benz', 'mini',
+  'mitsubishi', 'nissan', 'peugeot', 'polestar', 'porsche', 'ram', 'renault', 'seat', 'skoda', 'smart',
+  'subaru', 'suzuki', 'tesla', 'toyota', 'volkswagen', 'volvo', 'vw', 'mg', 'byd', 'geely', 'jac',
+  'figmotors', 'ksi',
 ]
+
+/** Modelos / series frecuentes en inventario (ayuda a no clasificar "solo año" como presentación). */
+const MODEL_LINE_REGEX =
+  /\b(f[- ]?150|f[- ]?250|f[- ]?350|f[- ]?450|silverado|sierra|tahoe|yukon|explorer|escape|ranger|raptor|mustang|bronco|corvette|camaro|equinox|traverse|suburban|colorado|frontier|versa|sentra|altima|rogue|murano|armada|titan|pathfinder|hilux|rav4|highlander|sequoia|tundra|camry|corolla|prius|yaris|civic|accord|pilot|cr-v|hr-v|passat|jetta|tiguan|amarok|golf|polo|arteon|rdx|mdx|tlx|cx-5|cx-9|cx-30|mazda\s*3|mazda\s*6|outlander|eclipse|be\s?go|sportage|tucson|sorento|telluride|palisade|elantra|accent|creta|venue|wrangler|grand cherokee|gladiator|compass|renegade|defender|discovery|evoque|h1|h2|transit|promaster|sprinter)\b/i
 
 function normalizeText(text: string): string {
   return text
@@ -311,11 +320,96 @@ function isPresentationSegment(seg: Segment): boolean {
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
   const hasModelLikeToken =
+    MODEL_LINE_REGEX.test(t) ||
     /\b[hx]?\d{1,3}\b/.test(t) ||
     /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
       t
     )
+  if (hasYear && !hasBrand && !hasModelLikeToken) return false
   return hasBrand || hasYear || hasModelLikeToken
+}
+
+/** Primer corte del Reel: debe sonar marca + contexto (modelo o año), no solo "2012" ni solo "F-150" sin marca. */
+function openingPresentationIsAdequate(seg: Segment | undefined): boolean {
+  if (!seg) return false
+  const t = normalizeText(seg.text)
+  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
+  const hasYear = /\b(19|20)\d{2}\b/.test(t)
+  const hasModel =
+    MODEL_LINE_REGEX.test(seg.text) ||
+    /\b[hx]?\d{1,3}\b/.test(t) ||
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+      t
+    )
+  if (!hasBrand) return false
+  return hasYear || hasModel || seg.word_count >= 5
+}
+
+function sequenceItemFromSegment(seg: Segment, order: number, reason: string): SequenceItem {
+  return {
+    segment_id: seg.segment_id,
+    clip_index: seg.clip_index,
+    trim_start: seg.start_s,
+    trim_end: seg.end_s,
+    trim_duration: seg.duration_s,
+    order,
+    reason,
+  }
+}
+
+/**
+ * Si el primer corte no cumple marca+modelo/año, intenta intercambiar con otro segmento ya en la lista
+ * o insertar el mejor candidato no usado.
+ */
+function strengthenOpeningPresentation(
+  sequence: SequenceItem[],
+  segmentLookup: Map<string, Segment>,
+  allSegments: Segment[],
+  jobId: string
+): SequenceItem[] {
+  if (sequence.length === 0) return sequence
+  const firstSeg = segmentLookup.get(sequence[0].segment_id)
+  if (openingPresentationIsAdequate(firstSeg)) return sequence
+
+  for (let j = 1; j < sequence.length; j++) {
+    const sj = segmentLookup.get(sequence[j].segment_id)
+    if (sj && openingPresentationIsAdequate(sj)) {
+      const tmp = sequence[0]
+      sequence[0] = sequence[j]!
+      sequence[j] = tmp
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][Gemini] Apertura: se reordenó el primer corte para incluir marca+modelo/audio más completo (${sj.segment_id}).`
+      )
+      return sequence
+    }
+  }
+
+  const used = new Set(sequence.map((x) => x.segment_id))
+  const candidates = allSegments
+    .filter(
+      (s) =>
+        !used.has(s.segment_id) &&
+        s.source_kind !== 'visual_only' &&
+        !isMistakeSegment(s) &&
+        !isEndCtaSegment(s) &&
+        openingPresentationIsAdequate(s)
+    )
+    .sort((a, b) => b.duration_s - a.duration_s)
+
+  const pick = candidates[0]
+  if (pick) {
+    const rest = sequence.filter((_, idx) => idx !== 0)
+    const merged = [sequenceItemFromSegment(pick, 1, 'apertura: marca+modelo/año (sustituye primer corte débil)'), ...rest]
+    console.warn(
+      `[VideoV2Pipeline][${jobId}][Gemini] Apertura: primer corte sustituido por ${pick.segment_id} (marca+modelo/año).`
+    )
+    return merged
+  }
+
+  console.warn(
+    `[VideoV2Pipeline][${jobId}][Gemini] Apertura: no se encontró segmento alternativo con marca+modelo/año; revisa el mapa o el guion.`
+  )
+  return sequence
 }
 
 function isEndCtaSegment(seg: Segment): boolean {
@@ -353,6 +447,30 @@ function normalizeForDedupe(text: string): string {
 
 function wordCountNormalized(t: string): number {
   return t.split(/\s+/).filter(Boolean).length
+}
+
+/** Palabras vacías ES para detectar misma idea con distinta redacción ("con un diseño" vs "cuenta con un diseño"). */
+const DEDUPE_STOPWORDS = new Set([
+  'con', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'al', 'a', 'en', 'por', 'para',
+  'que', 'y', 'o', 'se', 'su', 'sus', 'le', 'les', 'lo', 'es', 'son', 'hay', 'muy', 'mas', 'más', 'no',
+  'si', 'sí', 'ya', 'me', 'te', 'tu', 'tus', 'mi', 'mis', 'solo', 'también', 'esta', 'este', 'esto', 'estos',
+  'estas', 'como', 'cuenta', 'cuentan', 'tiene', 'tienen', 'ser', 'era', 'fue', 'han', 'hemos', 'puede',
+])
+
+function contentTokensForDedupe(text: string): string[] {
+  return normalizeForDedupe(text)
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !DEDUPE_STOPWORDS.has(w))
+}
+
+function jaccardTokenSets(a: string[], b: string[]): number {
+  const A = new Set(a)
+  const B = new Set(b)
+  if (A.size === 0 && B.size === 0) return 1
+  if (A.size === 0 || B.size === 0) return 0
+  let inter = 0
+  for (const x of A) if (B.has(x)) inter++
+  return inter / (A.size + B.size - inter)
 }
 
 function levenshtein(a: string, b: string): number {
@@ -401,6 +519,15 @@ function isSameUtterance(textA: string, textB: string): boolean {
   if (sim >= 0.94) return true
   if (sim >= 0.88 && wcRatio >= 0.82) return true
   if (sim >= 0.9 && wcRatio >= 0.72 && Math.abs(ca - cb) <= 2) return true
+
+  // Paráfrasis corta misma idea (p. ej. "con un diseño" / "cuenta con un diseño"): solapamiento léxico fuerte.
+  const ta = contentTokensForDedupe(textA)
+  const tb = contentTokensForDedupe(textB)
+  if (ta.length >= 2 && tb.length >= 2) {
+    const jac = jaccardTokenSets(ta, tb)
+    if (jac >= 0.5 && wcRatio >= 0.55) return true
+    if (jac >= 0.38 && wcRatio >= 0.72 && sim >= 0.55) return true
+  }
   return false
 }
 
@@ -429,12 +556,6 @@ function dedupeSequenceByUtterance(
     keptTexts.push(text)
   }
   return kept
-}
-
-function sequenceUtteranceTexts(sequence: SequenceItem[], segmentLookup: Map<string, Segment>): string[] {
-  return sequence
-    .map((item) => segmentLookup.get(item.segment_id)?.text)
-    .filter((t): t is string => !!t)
 }
 
 interface ValidateGeminiSequenceOptions {
@@ -605,37 +726,16 @@ function validateSequence(
   // 4b) Misma frase en tomas distintas: conservar la primera en el orden actual, descartar el resto
   sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
-  // 5) Si quedó muy corto, agregar segmentos útiles no usados
+  // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
+  sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
+
+  // 5) Duración: no se insertan clips extra por debajo de 20s (evita material ajeno al montaje elegido).
   let totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
   if (totalDuration < 20) {
-    const selected = new Set(sequence.map((s) => s.segment_id))
-    const candidates = allSegments
-      .filter(
-        (s) =>
-          !selected.has(s.segment_id) &&
-          !isMistakeSegment(s) &&
-          s.duration_s >= 0.8 &&
-          s.source_kind !== 'visual_only' &&
-          !excluded.includes(s.clip_index)
-      )
-      .sort((a, b) => b.duration_s - a.duration_s)
-
-    for (const seg of candidates) {
-      if (totalDuration >= 24) break
-      const existingTexts = sequenceUtteranceTexts(sequence, segmentLookup)
-      if (existingTexts.some((t) => isSameUtterance(t, seg.text))) continue
-      sequence.push({
-        segment_id: seg.segment_id,
-        clip_index: seg.clip_index,
-        trim_start: seg.start_s,
-        trim_end: seg.end_s,
-        trim_duration: seg.duration_s,
-        order: sequence.length + 1,
-        reason: 'agregado automáticamente para alcanzar duración mínima',
-      })
-      totalDuration += seg.duration_s
-    }
-    totalDuration = Number(totalDuration.toFixed(3))
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Gemini] Duración total ${totalDuration.toFixed(1)}s (<20s): ` +
+        'se mantiene el montaje sin añadir segmentos de relleno.'
+    )
   }
 
   // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre
@@ -688,6 +788,7 @@ MONTAJE 100% AUTOMÁTICO:
 - Usa el CATÁLOGO (transcripciones y tipos de clip) + lo que ves en los videos + el mapa de segmentos.
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
+- Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
 `
 
 function manualVoiceOverAutonomousBlock(voIdx: number): string {
@@ -696,6 +797,7 @@ BLOQUE VO MANUAL (no entra en "sequence"):
 - Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima y negro donde falte material. Ese clip NO está en el mapa de segmentos.
 - "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay.
 - Debes respetar el arco narrativo del JSON (presentación del carro → desarrollo / VO → CTA) y fijar "voice_over_insert_after_count" en consecuencia.
+- En "sequence", cada corte debe aportar algo distinto: no pongas dos segmentos seguidos que repitan o parafraseen la misma idea (el sistema penaliza redundancia).
 `
 }
 
@@ -719,6 +821,7 @@ CLIPS SOLO VISUAL (B-ROLL / SIN HABLA):
 - Cuando exista al menos un clip SOLO PLANO y el audio de un segmento hablado describa o sugiera esa imagen, DEBES preferir visual_overlay en lugar de mostrar solo el vídeo del clip de voz en off (si el emparejamiento es razonable).
 - En el objeto de la secuencia añade "visual_overlay": { "clip_index": N, "trim_start": X, "trim_end": Y } con N = índice del clip solo visual, X/Y en segundos dentro de ese archivo; la duración (Y−X) debe coincidir con trim_duration del segmento hablado.
 - Si ningún plano encaja bien, omite visual_overlay (se usará el vídeo del mismo clip que el audio).
+- El campo "reason" debe mencionar el tema concreto (motor, interior, rines, etc.): el sistema usa eso para alinear planos con la voz en off reservada.
 - clip_index del segmento principal siempre es el del clip CON HABLA de ese segment_id.
 Ejemplo: {"segment_id":"0_2","clip_index":0,"trim_start":12.0,"trim_end":18.5,"trim_duration":6.5,"order":1,"reason":"voz en off motor + plano motor","visual_overlay":{"clip_index":3,"trim_start":2.0,"trim_end":8.5}}
 `
@@ -757,10 +860,12 @@ ${brollExtra}
 REGLAS ABSOLUTAS DE CORTE:
 1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural del habla.
 2. Usa EXACTAMENTE los trim_start y trim_end que correspondan al inicio y fin del segmento (start_s y end_s del mapa). NO modifiques los timestamps a menos que el segmento sea demasiado largo y necesites usar solo una parte (en ese caso, corta en una pausa natural entre palabras).
-3. La duración total DEBE estar entre 20 y 32 segundos. Este es el sweet spot para Reels virales.
+3. Objetivo de duración total: idealmente entre 20 y 32 segundos para Reels; si el material natural queda más corto, NO rellenes con trozos irrelevantes — prioriza coherencia sobre alargar.
 4. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
 5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
 6. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
+7. El PRIMER segmento de "sequence" debe contener en su transcripción MARCA + (modelo o año), p. ej. "Ford F-150" o "Nissan Tiida 2012". Evita como primer corte solo el año ("2012") o solo modelo sin marca si en el mapa hay un segment_id más completo.
+8. MODELO COMPLETO: mira el vídeo (emblema, parrilla, placa, pantalla) y la voz. Si el mapa parte el modelo (p. ej. un segmento termina en "H" y otro empieza en "1"), elige el segment_id que agrupe el nombre completo o el que ya diga "H1" / "X5" junto; en "reason" escribe el modelo tal cual lo venderías (ej. Hyundai H1), nunca truncado.
 
 
 ${manual
@@ -816,11 +921,13 @@ ${brollExtra}
 REGLAS ABSOLUTAS DE CORTE:
 1. NUNCA cortes a la mitad de una palabra o frase. Cada segmento debe empezar y terminar en una pausa natural.
 2. Usa EXACTAMENTE los trim_start y trim_end del segmento (start_s y end_s del mapa). NO inventes timestamps.
-3. La duración total DEBE estar entre 25 y 32 segundos.
+3. Duración total: apunta a 25–32s si el material da; si no, no rellenes con contenido débil.
 4. Puedes usar segmentos cortos si aportan valor (incluso alrededor de 1 segundo) siempre que no corten palabras.
 5. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
 6. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
 7. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
+8. El PRIMER segmento de "sequence" debe incluir MARCA + (modelo o año) en el texto del mapa; no uses solo año o solo modelo sin marca como apertura si existe un segment_id mejor.
+9. MODELO COMPLETO: infiere del catálogo y del texto del mapa el modelo entero (H1, X5, 320d, etc.); en "reason" del primer corte escribe marca+modelo completos, sin truncar dígitos.
 
 ${manual
   ? `CRITERIOS (modo VO reservado):

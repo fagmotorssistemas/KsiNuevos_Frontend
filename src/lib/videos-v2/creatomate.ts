@@ -1,7 +1,8 @@
 /**
  * Creatomate V2 — Render de alta calidad para Reels/TikTok (9:16).
  *
- * - Video: Ken Burns + fade entre segmentos; si hay visual_overlay, B-roll (mute) debajo y
+ * - Video: entre cortes, solo un “golpe” de zoom in/out muy breve al inicio del clip (estilo CapCut), sin transiciones nativas Creatomate ni zoom lineal en toda la toma.
+ * - visual_overlay: B-roll (mute) debajo y
  *   clip de audio (opacidad 0 %) encima para subtítulos highlight ligados al audio.
  * - Opcional: bloque VO manual (audio completo + B-roll Assembly mute + negro); la posición en la timeline la elige Gemini (insertAfterSegmentCount).
  * - Subtítulos: texto explícito desde AssemblyAI (`subtitleBlocks`), capa alta para verse sobre B-roll VO;
@@ -10,12 +11,20 @@
 
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import { sumSequenceItemsDurationSec } from './segmenter'
+import type { VoBrollTile } from './vo-broll-semantics'
 
-const CREATOMATE_API_BASE = 'https://api.creatomate.com/v1'
+/**
+ * La documentación actual usa POST `https://api.creatomate.com/v2/renders` con RenderScript **plano**
+ * (output_format, width, height, elements…). v1 con `{ source: { … } }` es legado y puede usar otro
+ * pipeline de composición/color (p. ej. BT.601 vs BT.709, limited range).
+ * Revertir: `VIDEO_V2_CREATOMATE_API_VERSION=v1` en el entorno del servidor.
+ */
+const CREATOMATE_API_VER = process.env.VIDEO_V2_CREATOMATE_API_VERSION?.trim() === 'v1' ? 'v1' : 'v2'
+const CREATOMATE_API_BASE = `https://api.creatomate.com/${CREATOMATE_API_VER}`
 const TIMEOUT_MS = 30_000
 
-/** Fade entre clips: corta y con easing seco para sensación “brusca” / dinámica. */
-const TRANSITION_DURATION = 0.2
+/** Duración del golpe de escala solo al corte (no recorre el clip entero). */
+const CUT_PUNCH_DURATION_SEC = 0.22
 
 const SFX_WHOOSH_URL = process.env.VIDEO_V2_SFX_WHOOSH_URL || ''
 const SFX_POP_URL = process.env.VIDEO_V2_SFX_POP_URL || ''
@@ -44,12 +53,39 @@ interface CreatomateRenderResponse {
   duration?: number
 }
 
+function buildCreatomateRenderRequestBody(
+  webhookUrl: string,
+  metadata: string,
+  renderScript: {
+    output_format: string
+    width: number
+    height: number
+    duration: number
+    elements: unknown[]
+  }
+): Record<string, unknown> {
+  if (CREATOMATE_API_VER === 'v1') {
+    return {
+      webhook_url: webhookUrl,
+      metadata,
+      source: renderScript,
+    }
+  }
+  return {
+    webhook_url: webhookUrl,
+    metadata,
+    ...renderScript,
+  }
+}
+
 async function postRender(body: Record<string, unknown>): Promise<CreatomateRenderResponse> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
   try {
-    console.log(`[VideoV2Creatomate] POST /renders body (${JSON.stringify(body).length} chars)`)
+    console.log(
+      `[VideoV2Creatomate] POST ${CREATOMATE_API_VER}/renders body (${JSON.stringify(body).length} chars)`
+    )
 
     const res = await fetch(`${CREATOMATE_API_BASE}/renders`, {
       method: 'POST',
@@ -123,32 +159,53 @@ export interface VoiceOverIntroRenderInput {
   insertAfterSegmentCount: number
   /** Opcional; en render se recalcula desde `sequence` + `insertAfterSegmentCount`. */
   timelineStartSec?: number
+  /** Si existe, sustituye el emplanado lineal por ventanas alineadas a la VO (semántica). */
+  voBrollTiles?: VoBrollTile[]
 }
 
-function buildKenBurnsAnimations(i: number, includeFadeIn: boolean): Record<string, unknown>[] {
-  const zoomIn = i % 2 === 0
-  const startScale = zoomIn ? '112%' : '128%'
-  const endScale = zoomIn ? '128%' : '112%'
-  const animations: Record<string, unknown>[] = []
-  if (includeFadeIn) {
-    animations.push({
-      time: 0,
-      duration: TRANSITION_DURATION,
-      transition: true,
-      type: 'fade',
-      easing: 'cubic-in',
-      enable: 'second-only',
-    })
+/**
+ * Entre cortes: zoom agresivo solo los primeros ~0,22 s del clip entrante (tipo CapCut), sin `transition: true`
+ * de Creatomate (slide/fade) y sin escala lineal durante toda la duración del vídeo.
+ */
+function buildCutPunchAnimations(segmentIndex: number, includeCutPunch: boolean): Record<string, unknown>[] {
+  if (!includeCutPunch) return []
+  const zoomOutPunch = segmentIndex % 2 === 0
+  if (zoomOutPunch) {
+    return [
+      {
+        time: 0,
+        duration: CUT_PUNCH_DURATION_SEC,
+        type: 'scale',
+        scope: 'element',
+        start_scale: '128%',
+        end_scale: '100%',
+        easing: 'cubic-out',
+        fade: false,
+      },
+    ]
   }
-  animations.push({
-    easing: 'linear',
-    type: 'scale',
-    scope: 'element',
-    start_scale: startScale,
-    end_scale: endScale,
-    fade: false,
-  })
-  return animations
+  return [
+    {
+      time: 0,
+      duration: CUT_PUNCH_DURATION_SEC,
+      type: 'scale',
+      scope: 'element',
+      start_scale: '82%',
+      end_scale: '100%',
+      easing: 'cubic-out',
+      fade: false,
+    },
+  ]
+}
+
+/** Solo añade `animations` si hay golpe de corte (primer plano = plantilla simple, sin animaciones). */
+function withOptionalCutPunchAnimations(
+  el: Record<string, unknown>,
+  segmentIndex: number,
+  includeCutPunch: boolean
+): Record<string, unknown> {
+  const anims = buildCutPunchAnimations(segmentIndex, includeCutPunch)
+  return anims.length > 0 ? { ...el, animations: anims } : el
 }
 
 function captionEntranceAnimations(): Record<string, unknown>[] {
@@ -156,19 +213,19 @@ function captionEntranceAnimations(): Record<string, unknown>[] {
     {
       time: 0,
       duration: 0.16,
-      transition: true,
       type: 'fade',
       easing: 'cubic-out',
+      fade: false,
     },
     {
       time: 0,
-      duration: 0.22,
-      transition: true,
+      duration: 0.2,
       type: 'scale',
       easing: 'cubic-out',
       scope: 'element',
       start_scale: '78%',
       end_scale: '100%',
+      fade: false,
     },
   ]
 }
@@ -295,34 +352,41 @@ function buildVoiceOverIntroLayers(
     y_alignment: '50%',
   })
 
-  const tiles = planVoiceOverBrollTiles(
-    voDur,
-    input.brollClipIndicesInFileOrder,
-    input.clipFileDurationsSec,
-    clipUrls
-  )
+  const tiles =
+    input.voBrollTiles && input.voBrollTiles.length > 0
+      ? input.voBrollTiles
+      : planVoiceOverBrollTiles(
+          voDur,
+          input.brollClipIndicesInFileOrder,
+          input.clipFileDurationsSec,
+          clipUrls
+        )
   for (let i = 0; i < tiles.length; i++) {
     const tile = tiles[i]
     const url = clipUrls[tile.clipIndex]
     if (!url) continue
-    videoElements.push({
-      id: `vo_intro_broll_${i}`,
-      name: `VO_intro_BROLL_${tile.clipIndex}`,
-      type: 'video',
-      track: TRACK_VO_BROLL,
-      time: Number((t0 + tile.timeStart).toFixed(3)),
-      duration: tile.duration,
-      source: url,
-      trim_start: tile.trimStart,
-      /** Misma ventana que `duration` en timeline (docs Creatomate: trim_start + trim_duration). */
-      trim_duration: tile.duration,
-      volume: '0%',
-      fit: 'cover',
-      clip: true,
-      width: '100%',
-      height: '100%',
-      animations: buildKenBurnsAnimations(i, false),
-    })
+    videoElements.push(
+      withOptionalCutPunchAnimations(
+        {
+          id: `vo_intro_broll_${i}`,
+          name: `VO_intro_BROLL_${tile.clipIndex}`,
+          type: 'video',
+          track: TRACK_VO_BROLL,
+          time: Number((t0 + tile.timeStart).toFixed(3)),
+          duration: tile.duration,
+          source: url,
+          trim_start: tile.trimStart,
+          trim_duration: tile.duration,
+          volume: '0%',
+          fit: 'cover',
+          clip: true,
+          width: '100%',
+          height: '100%',
+        },
+        i,
+        i > 0
+      )
+    )
   }
 
   const voiceId = 'vo_intro_voice_audio'
@@ -343,16 +407,6 @@ function buildVoiceOverIntroLayers(
     clip: true,
     width: '100%',
     height: '100%',
-    animations: [
-      {
-        easing: 'linear',
-        type: 'scale',
-        scope: 'element',
-        start_scale: '100%',
-        end_scale: '100%',
-        fade: false,
-      },
-    ],
   })
 
   return { videoElements, durationSec: voDur }
@@ -395,22 +449,27 @@ function buildVideoSequenceLayers(
       const brollId = `${idPre}video_${i}_broll`
       const voiceId = `${idPre}video_${i}_voice`
 
-      videoElements.push({
-        id: brollId,
-        name: `Seg_${item.segment_id}_broll`,
-        type: 'video',
-        track: TRACK_VIDEO_BASE,
-        time: timeStart,
-        duration,
-        source: brollUrl,
-        trim_start: Number(ov.trim_start.toFixed(3)),
-        volume: '0%',
-        fit: 'cover',
-        clip: true,
-        width: '100%',
-        height: '100%',
-        animations: buildKenBurnsAnimations(i, includeFadeIn),
-      })
+      videoElements.push(
+        withOptionalCutPunchAnimations(
+          {
+            id: brollId,
+            name: `Seg_${item.segment_id}_broll`,
+            type: 'video',
+            track: TRACK_VIDEO_BASE,
+            time: timeStart,
+            duration,
+            source: brollUrl,
+            trim_start: Number(ov.trim_start.toFixed(3)),
+            volume: '0%',
+            fit: 'cover',
+            clip: true,
+            width: '100%',
+            height: '100%',
+          },
+          i,
+          includeFadeIn
+        )
+      )
 
       videoElements.push({
         id: voiceId,
@@ -427,36 +486,31 @@ function buildVideoSequenceLayers(
         clip: true,
         width: '100%',
         height: '100%',
-        animations: [
-          {
-            easing: 'linear',
-            type: 'scale',
-            scope: 'element',
-            start_scale: '100%',
-            end_scale: '100%',
-            fade: false,
-          },
-        ],
       })
 
     } else {
       const clipUrl = clipUrls[item.clip_index] ?? clipUrls[0]
       const videoId = `${idPre}video_${i}`
-      videoElements.push({
-        id: videoId,
-        name: `Seg_${item.segment_id}`,
-        type: 'video',
-        track: TRACK_VIDEO_BASE,
-        time: timeStart,
-        duration,
-        source: clipUrl,
-        trim_start: Number(item.trim_start.toFixed(3)),
-        fit: 'cover',
-        clip: true,
-        width: '100%',
-        height: '100%',
-        animations: buildKenBurnsAnimations(i, includeFadeIn),
-      })
+      videoElements.push(
+        withOptionalCutPunchAnimations(
+          {
+            id: videoId,
+            name: `Seg_${item.segment_id}`,
+            type: 'video',
+            track: TRACK_VIDEO_BASE,
+            time: timeStart,
+            duration,
+            source: clipUrl,
+            trim_start: Number(item.trim_start.toFixed(3)),
+            fit: 'cover',
+            clip: true,
+            width: '100%',
+            height: '100%',
+          },
+          i,
+          includeFadeIn
+        )
+      )
 
     }
 
@@ -480,7 +534,7 @@ function buildTransitionSfxElements(transitionTimes: number[]): Record<string, u
     type: 'audio',
     track: TRACK_TRANSITION_SFX,
     time: Math.max(0, time - 0.02),
-    duration: Math.max(0.15, TRANSITION_DURATION + 0.08),
+    duration: Math.max(0.15, CUT_PUNCH_DURATION_SEC + 0.08),
     source: SFX_WHOOSH_URL,
     volume: '100%',
   }))
@@ -614,26 +668,20 @@ export async function renderSegmentsV2(
     musicElement,
   ]
 
-  const body = {
-    webhook_url: webhookUrl,
-    metadata: jobId,
-    render_scale: 1,
-    source: {
-      output_format: 'mp4',
-      width: 1080,
-      height: 1920,
-      frame_rate: 30,
-      duration: totalDuration,
-      elements: allElements,
-    },
-  }
+  const body = buildCreatomateRenderRequestBody(webhookUrl, jobId, {
+    output_format: 'mp4',
+    width: 1080,
+    height: 1920,
+    duration: totalDuration,
+    elements: allElements,
+  })
 
   const sfxInfo = transitionSfx.length > 0 || subtitleSfx.length > 0
     ? `, ${transitionSfx.length} whoosh SFX, ${subtitleSfx.length} pop SFX`
     : ', SFX deshabilitados (sin URLs configuradas)'
 
   console.log(
-    `[VideoV2Pipeline][${jobId}][Creatomate] 1080x1920, totalDuration=${totalDuration}s, ` +
+    `[VideoV2Pipeline][${jobId}][Creatomate] API=${CREATOMATE_API_VER}, 1080x1920, totalDuration=${totalDuration}s, ` +
       `${videoElements.length} clips, ${captionElements.length} subtítulos (texto AssemblyAI)${sfxInfo}, webhook_url=${webhookUrl}`
   )
 

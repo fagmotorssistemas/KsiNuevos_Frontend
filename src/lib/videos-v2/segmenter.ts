@@ -99,6 +99,78 @@ export function buildVisualOnlyPlaceholderSegment(clipIndex: number, durationSec
   }
 }
 
+/**
+ * Si la ASR parte modelo tipo "H1" en dos tokens ("H" y "1") con pausa artificial,
+ * los unimos en un solo segmento (misma lógica para X5, etc.).
+ */
+const LETTER_DIGIT_MERGE_MAX_GAP_MS = 2500
+
+function mergeLetterDigitSplitSegmentsOneClip(sortedByStart: Segment[]): Segment[] {
+  if (sortedByStart.length === 0) return []
+  const clipIndex = sortedByStart[0]!.clip_index
+  const merged: Segment[] = []
+  for (const seg of sortedByStart) {
+    const prev = merged[merged.length - 1]
+    if (
+      prev &&
+      prev.words.length > 0 &&
+      seg.words.length > 0 &&
+      seg.start_ms - prev.end_ms <= LETTER_DIGIT_MERGE_MAX_GAP_MS
+    ) {
+      const lastLetters = prev.words[prev.words.length - 1]!.text.replace(/[^\p{L}]/gu, '')
+      const firstTrim = seg.words[0]!.text.trim()
+      if (lastLetters.length === 1 && /^\d{1,3}$/.test(firstTrim)) {
+        merged[merged.length - 1] = buildSegment([...prev.words, ...seg.words], clipIndex, 0)
+        continue
+      }
+    }
+    merged.push(seg)
+  }
+  return merged.map((s, i) => buildSegment(s.words, clipIndex, i + 1))
+}
+
+/** Aire después de la última palabra del segmento (hasta el siguiente corte o fin de clip). */
+const SEGMENT_TAIL_EXTEND_MS = 450
+const TAIL_NEXT_BUFFER_MS = 80
+
+function extendSpokenSegmentTailsOneClip(
+  sortedByStart: Segment[],
+  clipMaxEndMs?: number | null
+): Segment[] {
+  if (sortedByStart.length === 0) return []
+  const hardCap = clipMaxEndMs ?? Number.POSITIVE_INFINITY
+  return sortedByStart.map((seg, i) => {
+    const next = sortedByStart[i + 1]
+    const nextStart = next ? next.start_ms : hardCap
+    const room = Math.min(nextStart, hardCap) - seg.end_ms
+    const add = Math.min(SEGMENT_TAIL_EXTEND_MS, Math.max(0, room - TAIL_NEXT_BUFFER_MS))
+    if (add <= 0) return seg
+    const endMs = Math.round(seg.end_ms + add)
+    return {
+      ...seg,
+      end_ms: endMs,
+      end_s: Number((endMs / 1000).toFixed(3)),
+      duration_s: Number(((endMs - seg.start_ms) / 1000).toFixed(3)),
+    }
+  })
+}
+
+/**
+ * Mapa de segmentos por clip: silencios → fusión letra+dígito → cola breve de silencio antes del siguiente corte.
+ * `clipMaxEndMs`: tope en ms del archivo (p. ej. duración cliente o última palabra + margen).
+ */
+export function refineSpokenSegmentsForOneClip(
+  clipIndex: number,
+  rawWords: RawWord[],
+  clipMaxEndMs?: number | null
+): Segment[] {
+  let segs = buildSegmentMap(rawWords, clipIndex)
+  segs.sort((a, b) => a.start_ms - b.start_ms)
+  segs = mergeLetterDigitSplitSegmentsOneClip(segs)
+  segs = extendSpokenSegmentTailsOneClip(segs, clipMaxEndMs ?? undefined)
+  return segs
+}
+
 // ─── Formato humano del mapa de segmentos para el prompt de Gemini ────────────
 
 export function formatSegmentMapForPrompt(segments: Segment[]): string {
@@ -302,7 +374,8 @@ export function buildSubtitleBlocks(
   return blocks
 }
 
-function collectSpokenWordsForClipUntil(
+/** Palabras de un clip (no B-roll) hasta `maxEndMs`, ordenadas; útil para VO y planificación de B-roll. */
+export function collectSpokenWordsForClipUntil(
   allSegments: Segment[],
   clipIndex: number,
   maxEndMs: number
@@ -446,6 +519,36 @@ export function buildAdjustedSRTForVoiceOverIntro(
     blockIndex++
   }
   return srtBlocks.join('\n\n')
+}
+
+/** SRT simple desde bloques ya posicionados en la línea de tiempo del Reel (p. ej. subtítulos editados a mano). */
+export function buildAdjustedSrtFromSubtitleBlocks(blocks: SubtitleBlock[]): string {
+  const parts: string[] = []
+  let i = 1
+  for (const b of blocks) {
+    const t0 = Math.max(0, b.time)
+    const t1 = Math.max(t0 + 0.12, b.time + Math.max(0.12, b.duration))
+    parts.push(
+      `${i}\n${msToSrtTime(Math.round(t0 * 1000))} --> ${msToSrtTime(Math.round(t1 * 1000))}\n${b.text.trim()}`
+    )
+    i++
+  }
+  return parts.join('\n\n')
+}
+
+/** Ajusta trim_start/trim_end de la secuencia para que no salgan del segmento en segment_map. */
+export function clampSequenceToSegmentBounds(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
+  const lookup = new Map(allSegments.map((s) => [s.segment_id, s]))
+  return sequence.map((item) => {
+    const seg = lookup.get(item.segment_id)
+    if (!seg) return item
+    const minS = seg.start_s
+    const maxE = seg.end_s
+    const ts = Number(Math.max(minS, Math.min(item.trim_start, maxE - 0.12)).toFixed(3))
+    const te = Number(Math.max(ts + 0.12, Math.min(item.trim_end, maxE)).toFixed(3))
+    const td = Number((te - ts).toFixed(3))
+    return { ...item, trim_start: ts, trim_end: te, trim_duration: td }
+  })
 }
 
 export function offsetSubtitleBlocks(blocks: SubtitleBlock[], deltaSec: number): SubtitleBlock[] {
