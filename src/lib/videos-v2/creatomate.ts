@@ -267,7 +267,7 @@ function creatomateVideoElementBase(): Record<string, unknown> {
 export interface VoiceOverIntroRenderInput {
   voClipIndex: number
   voDurationSec: number
-  /** Índices de clips `visual_only` en orden de archivo (excluye el clip de VO). */
+  /** Índices de clips para capas sobre la VO (`visual_only` automático, o lista manual en orden de timeline). */
   brollClipIndicesInFileOrder: number[]
   /** Duración de cada archivo (misma longitud que clipUrls). */
   clipFileDurationsSec: (number | null)[]

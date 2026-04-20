@@ -17,6 +17,11 @@ export interface VideoJobV2PipelineInputMeta {
    * Gemini arma solo el tramo posterior (sin este clip ni B-roll en el prompt).
    */
   voiceOverBaseClipIndex?: number | null
+  /**
+   * Opcional con `voiceOverBaseClipIndex`: índices de clips que van encima de la VO (solo vídeo, audio al 0%).
+   * Orden = orden de apilado en timeline. Si se omite o queda vacío, se usan clips `visual_only` + emplanado semántico.
+   */
+  voiceOverOverlayClipIndices?: number[] | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMeta {
@@ -26,7 +31,8 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMet
   return (
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
-    typeof o.voiceOverBaseClipIndex === 'number'
+    typeof o.voiceOverBaseClipIndex === 'number' ||
+    (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0)
   )
 }
 
@@ -66,4 +72,24 @@ export function normalizeVoiceOverBaseClipIndex(
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isInteger(n) || n < 0 || n >= clipCount) return undefined
   return n
+}
+
+/** Índices únicos válidos, sin el clip base de VO; conserva el orden enviado. */
+export function normalizeVoiceOverOverlayClipIndices(
+  raw: unknown,
+  clipCount: number,
+  voBaseIndex: number
+): number[] {
+  if (!Array.isArray(raw) || raw.length === 0) return []
+  const out: number[] = []
+  const seen = new Set<number>()
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
+    if (n === voBaseIndex) continue
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out
 }

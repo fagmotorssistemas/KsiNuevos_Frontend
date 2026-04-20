@@ -30,8 +30,8 @@ export interface GeminiSegmentAnalysis {
   total_duration: number
   overall_strategy: string
   /**
-   * Solo modo VO manual: cuántos ítems de `sequence` van antes del bloque VO+B-roll automático.
-   * 0 = al inicio; N = tras N segmentos; sequence.length = VO al final.
+   * Solo modo VO manual: cuántos ítems de `sequence` van antes del bloque VO + planos encima.
+   * El valor se acota en servidor: con ≥2 segmentos suele quedar en [1, n−1] (ni abre ni cierra el Reel).
    */
   voice_over_insert_after_count?: number
 }
@@ -666,8 +666,9 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
 }
 
 /**
- * Ajusta dónde va el bloque VO en la timeline: siempre después de la presentación inicial (si existe)
- * y siempre antes de cualquier CTA/cierre (para que el llamado a la acción quede al final del Reel).
+ * Ajusta dónde va el bloque VO: Gemini propone `voice_over_insert_after_count`; aquí se acota para que
+ * haya al menos un corte narrativo antes del bloque VO y al menos uno después (no abre ni cierra el Reel)
+ * cuando hay ≥2 segmentos; además se respeta presentación al inicio y CTA antes del cierre.
  */
 function finalizeVoiceOverInsertPlacement(
   sequence: SequenceItem[],
@@ -693,9 +694,11 @@ function finalizeVoiceOverInsertPlacement(
 
   let minI = 0
   if (firstIsPresentation) minI = 1
+  if (n >= 2) minI = Math.max(minI, 1)
 
   let maxI = n
   if (firstCtaIndex >= 0) maxI = firstCtaIndex
+  if (n >= 2) maxI = Math.min(maxI, n - 1)
 
   if (minI > maxI) {
     console.warn(
@@ -704,10 +707,6 @@ function finalizeVoiceOverInsertPlacement(
     m = maxI
   } else {
     m = Math.max(minI, Math.min(m, maxI))
-  }
-
-  if (requested === 0 && n >= 3 && !firstIsPresentation && maxI >= 1) {
-    m = Math.max(m, 1)
   }
 
   if (n >= 4 && firstIsPresentation && firstCtaIndex >= 0 && m < 2 && maxI >= 2) {
@@ -799,11 +798,14 @@ function validateSequence(
     sequence = normalizeVisualOverlaysInSequence(sequence, kinds, allSegments, jobId)
   }
 
-  // 3) Permitir micro-segmentos relevantes (solo descartar ultra-cortos)
+  // 3) Conservar micro-cortes de presentación (ej. solo "Toyota", solo "Prado"); solo descartar ruido casi nulo
+  const MIN_TRIM_DURATION_SEC = 0.22
   const before = sequence.length
-  sequence = sequence.filter((item) => item.trim_duration >= 0.8)
+  sequence = sequence.filter((item) => item.trim_duration >= MIN_TRIM_DURATION_SEC)
   if (sequence.length < before) {
-    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.5s)`)
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<${MIN_TRIM_DURATION_SEC}s)`
+    )
   }
 
   // 4) Orden editorial duro: presentación primero, CTA/marca al final
@@ -827,9 +829,12 @@ function validateSequence(
     )
   }
 
-  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre
-  if (totalDuration > 35 && sequence.length > 0) {
-    for (let i = sequence.length - 1; i >= 0 && totalDuration > 33; i--) {
+  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre (límite amplio: reels largos con varios clips)
+  const REEL_TRIM_TRIGGER_SEC = 92
+  const REEL_TRIM_TARGET_SEC = 88
+  const REEL_LAST_SEGMENT_MIN_SEC = 0.22
+  if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
+    for (let i = sequence.length - 1; i >= 0 && totalDuration > REEL_TRIM_TARGET_SEC; i--) {
       const seg = segmentLookup.get(sequence[i].segment_id)
       if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
         totalDuration -= sequence[i].trim_duration
@@ -838,10 +843,10 @@ function validateSequence(
     }
     totalDuration = Number(totalDuration.toFixed(3))
 
-    if (totalDuration > 35 && sequence.length > 0) {
+    if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
       const last = sequence[sequence.length - 1]
-      const excess = totalDuration - 33
-      last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
+      const excess = totalDuration - REEL_TRIM_TARGET_SEC
+      last.trim_duration = Number(Math.max(REEL_LAST_SEGMENT_MIN_SEC, last.trim_duration - excess).toFixed(3))
       last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
       if (last.visual_overlay) {
         last.visual_overlay = {
@@ -903,10 +908,9 @@ ARCO NARRATIVO (prioridad alta; el sistema reordenará cortes por tipo, pero tú
 
 CLAVE "voice_over_insert_after_count" (obligatoria en el JSON raíz):
 - Entero entre 0 y longitud de "sequence": cuántos elementos de "sequence" se reproducen ANTES del bloque VO.
-- Casi nunca uses 0 si el primer corte es presentación de carro: el espectador debe ver/oir primero qué auto es (cuenta ≥ 1).
-- Todo CTA debe quedar después del bloque VO → tu número debe ser ≤ índice del primer segmento tipo CTA en "sequence" (el orden ya pone CTA al final; no metas el bloque VO después del CTA).
-- Valores típicos con varios cortes: 1 (solo presentación antes del VO), 2 o 3 (presentación + 1–2 clips de desarrollo, luego VO, luego resto + CTA).
-- Igual a sequence.length solo si quieres todo el habla primero y el bloque VO cerrando (evítalo si hay CTA: mejor deja CTA al final con un número menor).
+- El pipeline acota tu número: con 2 o más segmentos en "sequence", el bloque VO no debe abrir ni cerrar el Reel (queda al menos un corte antes y otro después), salvo conflictos raros de detección CTA.
+- Todo CTA debe quedar después del bloque VO → el número debe ser ≤ índice del primer segmento tipo CTA en "sequence".
+- Valores típicos: 1–3 (presentación + algo de desarrollo, luego VO en la parte media, luego más contenido + CTA al final). Evita 0 y evita sequence.length.
 `
 
 const BROLL_PROMPT_BLOCK = `
