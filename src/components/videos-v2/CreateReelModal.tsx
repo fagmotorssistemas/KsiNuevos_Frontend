@@ -45,6 +45,39 @@ interface CreateReelModalProps {
   onJobCreated: () => void
 }
 
+/** Evita que WebKit lance "The string did not match the expected pattern" al hacer `.json()` sobre HTML o cuerpo vacío. */
+async function parseJsonOrThrow<T>(res: Response): Promise<T> {
+  const text = await res.text()
+  if (!text.trim()) {
+    throw new Error(`Respuesta vacía del servidor (HTTP ${res.status}).`)
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(
+      `El servidor devolvió un formato inesperado (HTTP ${res.status}). Recarga la página o prueba de nuevo en unos segundos.`
+    )
+  }
+}
+
+/**
+ * Subida firmada a Storage: el endpoint espera multipart como en
+ * `@supabase/storage-js` uploadToSignedUrl (cacheControl + archivo), no un PUT crudo.
+ */
+async function putFileToSupabaseSignedUpload(signedUrl: string, file: File): Promise<Response> {
+  if (!signedUrl.trim().startsWith('http')) {
+    throw new Error('URL de subida inválida. Cierra el modal y vuelve a intentarlo.')
+  }
+  const fd = new FormData()
+  fd.append('cacheControl', '3600')
+  fd.append('', file, file.name)
+  return fetch(signedUrl, {
+    method: 'PUT',
+    headers: { 'x-upsert': 'false' },
+    body: fd,
+  })
+}
+
 /** Clips típicos de iPhone (IMG_*.MOV) suelen ir en HDR; al recomponer por API el tono puede verse lavado vs. export manual. */
 function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
   return files.some((f) => {
@@ -108,12 +141,12 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         }),
       })
 
-      const createData = (await createRes.json()) as {
+      const createData = await parseJsonOrThrow<{
         jobId?: string
         uploads?: UploadInfo[]
         scriptUpload?: ScriptUploadInfo
         error?: string
-      }
+      }>(createRes)
 
       if (!createRes.ok || !createData.jobId || !createData.uploads) {
         throw new Error(createData.error ?? 'Error preparando el upload')
@@ -128,11 +161,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         const upload = uploads[i]
         setUploadProgress(`Subiendo ${i + 1} de ${files.length}: ${file.name}...`)
 
-        const uploadRes = await fetch(upload.signedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type || 'video/mp4' },
-          body: file,
-        })
+        const uploadRes = await putFileToSupabaseSignedUpload(upload.signedUrl, file)
 
         if (!uploadRes.ok) {
           throw new Error(`Error subiendo ${file.name} (HTTP ${uploadRes.status})`)
@@ -149,11 +178,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           throw new Error('El guion debe ser un archivo PDF')
         }
         setUploadProgress('Subiendo guion (PDF)...')
-        const scriptPut = await fetch(scriptUpload.signedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/pdf' },
-          body: scriptPdfFile,
-        })
+        const scriptPut = await putFileToSupabaseSignedUpload(scriptUpload.signedUrl, scriptPdfFile)
         if (!scriptPut.ok) {
           throw new Error(`Error subiendo el guion (HTTP ${scriptPut.status})`)
         }
@@ -198,7 +223,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         }),
       })
 
-      const startData = (await startRes.json()) as { jobId?: string; error?: string }
+      const startData = await parseJsonOrThrow<{ jobId?: string; error?: string }>(startRes)
       if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
 
       setJobId(newJobId)
