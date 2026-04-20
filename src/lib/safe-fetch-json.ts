@@ -11,8 +11,12 @@ export async function parseJsonOrThrow<T>(res: Response): Promise<T> {
   try {
     return JSON.parse(text) as T
   } catch {
+    const hint =
+      text.trimStart().startsWith('<') || text.includes('<!DOCTYPE')
+        ? ' (el servidor respondió HTML, suele ser un fallo interno de la API: revisa logs de Vercel o la consola del servidor).'
+        : ''
     throw new Error(
-      `El servidor devolvió un formato inesperado (HTTP ${res.status}). Recarga la página o inténtalo de nuevo.`
+      `El servidor devolvió un formato inesperado (HTTP ${res.status}).${hint} Recarga la página o inténtalo de nuevo.`
     )
   }
 }

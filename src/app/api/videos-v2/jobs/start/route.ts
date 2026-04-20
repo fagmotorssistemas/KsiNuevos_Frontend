@@ -168,6 +168,12 @@ export async function POST(request: NextRequest) {
           } as Json)
         : undefined
 
+    /** Solo tocar columnas de guion si el cliente envió scriptPdfPath (evita error si la DB aún no tiene la migración). */
+    const scriptDbFields =
+      scriptPdfPathRaw != null && String(scriptPdfPathRaw).trim() !== ''
+        ? { script_pdf_path: scriptPdfPathCol, script_text: scriptTextCol }
+        : {}
+
     // Actualizar paths en el job
     const { error: updateError } = await supabase
       .from('video_jobs_v2')
@@ -177,8 +183,7 @@ export async function POST(request: NextRequest) {
         current_step: 'Archivos recibidos. Iniciando pipeline...',
         progress_percentage: 20,
         ...(pipelineInput ? { selected_clips: pipelineInput } : {}),
-        script_pdf_path: scriptPdfPathCol,
-        script_text: scriptTextCol,
+        ...scriptDbFields,
       })
       .eq('id', jobId)
 
