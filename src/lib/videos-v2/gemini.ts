@@ -483,14 +483,41 @@ function isCtaCallToActionTrigger(seg: Segment): boolean {
   return /\bcomenta\b/.test(t)
 }
 
-/** Dentro del bloque "cierre", prioridad creciente: info intermedia → comenta redes → marca Ksi/Casi Nuevos al final. */
-function outroClosingStrength(seg: Segment | undefined): number {
-  if (!seg) return 0
+/**
+ * "Comenta Prado 2016" / "comenta Toyota Corolla" sin demostrativo (este/esa/…): engagement de cierre
+ * con auto; debe ir ANTES de "te pasamos la info" / WhatsApp. No marca apertura: eso solo
+ * `isComentaVehicleEngagementHook` ("comenta este Prado", etc.).
+ */
+function isComentaVehicleEngagementClosing(seg: Segment): boolean {
   const t = normalizeText(seg.text)
-  if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return 3
-  if (/\bcomenta\b/.test(t)) return 2
-  if (/informacion|información|whatsapp|redes|siguenos|síguenos|mas info|más info|dm\b/.test(t)) return 1
-  return 0
+  if (!/\bcomenta\b/.test(t)) return false
+  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|los|las|un|una|unos|unas)\b/.test(t)) return false
+  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
+  const hasYear = /\b(19|20)\d{2}\b/.test(t)
+  const hasModel =
+    MODEL_LINE_REGEX.test(seg.text) ||
+    /\b[hx]?\d{1,3}\b/.test(t) ||
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+      t
+    )
+  return (hasBrand && hasModel) || (hasModel && hasYear) || (hasBrand && hasYear)
+}
+
+/**
+ * Dentro del cierre (orden ascendente = timeline): engagement comenta auto → comenta genérico
+ * → info / contacto → marca Ksi al final.
+ */
+function outroClosingStrength(seg: Segment | undefined): number {
+  if (!seg) return 1
+  const t = normalizeText(seg.text)
+  if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return 4
+  if (/te pasamos|te enviamos|te mandamos/.test(t)) return 2
+  if (/informacion|whatsapp|redes|siguenos|síguenos|mas info|más info|\bdm\b/.test(t)) return 2
+  if (/\bcomenta\b/.test(t)) {
+    if (isComentaVehicleEngagementClosing(seg)) return 0
+    return 1
+  }
+  return 1
 }
 
 function introOpeningStrength(seg: Segment | undefined): number {
@@ -500,6 +527,7 @@ function introOpeningStrength(seg: Segment | undefined): number {
 
 function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
   const lookup = new Map(allSegments.map((s) => [s.segment_id, s] as const))
+  const origIndex = new Map(sequence.map((item, i) => [item.segment_id, i] as const))
   const intro: SequenceItem[] = []
   const middle: SequenceItem[] = []
   const outro: SequenceItem[] = []
@@ -527,7 +555,7 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
     const bIsTrigger = sb ? isCtaCallToActionTrigger(sb) : false
     if (aIsTrigger && !bIsTrigger) return -1
     if (!aIsTrigger && bIsTrigger) return 1
-    return 0
+    return (origIndex.get(a.segment_id) ?? 0) - (origIndex.get(b.segment_id) ?? 0)
   })
 
   return [...intro, ...middle, ...outro]
@@ -1042,7 +1070,7 @@ MONTAJE 100% AUTOMÁTICO:
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
 - Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
-- Orden: presentación (marca/modelo/año o "comenta este Prado 2016" como gancho) al inicio; CTA de cierre ("solo aquí en Ksi", "comenta abajo") al final — no inviertas gancho de auto con cierre.
+- Orden: presentación (marca/modelo/año o "comenta este Prado 2016" como gancho) al inicio; al final del Reel: primero engagement "comenta [modelo/año]" y después frases de seguimiento ("te pasamos/enviamos la información", WhatsApp); el cierre de marca ("solo aquí en Ksi") va al último — no pongas "te pasamos la info" antes de "comenta Prado 2016".
 - Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
 - Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
 `
