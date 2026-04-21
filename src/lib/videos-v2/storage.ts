@@ -5,6 +5,53 @@ const RAW_BUCKET = 'raw-videos-v2'
 const MUSIC_BUCKET = 'music-tracks-v2'
 const SIGNED_URL_EXPIRY = 60 * 60 * 24 // 24 horas
 
+/** Audio de VO por job: bucket música (admite audio); `raw-videos-v2` suele limitar solo a vídeo. */
+export function jobVoiceOverAudioStoragePath(jobId: string, extWithDot: string): string {
+  return `reel-vo/${jobId}/voice_over${extWithDot}`
+}
+
+function voiceOverExtFromUpload(filename: string, mimeType: string): string {
+  const n = filename.trim().toLowerCase()
+  if (n.endsWith('.wav')) return '.wav'
+  if (n.endsWith('.m4a')) return '.m4a'
+  if (n.endsWith('.aac')) return '.aac'
+  if (n.endsWith('.mp3')) return '.mp3'
+  const m = mimeType.toLowerCase()
+  if (m.includes('wav')) return '.wav'
+  if (m.includes('aac')) return '.aac'
+  if (m.includes('mp4') || m.includes('m4a')) return '.m4a'
+  return '.mp3'
+}
+
+/** Sube MP3/WAV/… de VO al bucket de música y devuelve path + URL pública. */
+export async function uploadJobVoiceOverAudioToMusicBucket(
+  jobId: string,
+  file: Buffer,
+  originalFilename: string,
+  mimeType: string
+): Promise<{ path: string; publicUrl: string }> {
+  const supabase = getServiceClient()
+  const ext = voiceOverExtFromUpload(originalFilename, mimeType)
+  const path = jobVoiceOverAudioStoragePath(jobId, ext)
+  const { error } = await supabase.storage.from(MUSIC_BUCKET).upload(path, file, {
+    contentType: mimeType || 'audio/mpeg',
+    upsert: true,
+  })
+  if (error) throw new Error(`[VideoV2Storage] Error subiendo audio VO: ${error.message}`)
+  const { data } = supabase.storage.from(MUSIC_BUCKET).getPublicUrl(path)
+  return { path, publicUrl: data.publicUrl }
+}
+
+/** URL para Creatomate: clips en raw bucket (firmada) o VO en bucket música (pública). */
+export async function resolveVoiceOverAudioUrl(storagePath: string): Promise<string> {
+  const p = storagePath.trim()
+  if (p.startsWith('reel-vo/')) {
+    const supabase = getServiceClient()
+    return supabase.storage.from(MUSIC_BUCKET).getPublicUrl(p).data.publicUrl
+  }
+  return getSignedUrlForPath(p)
+}
+
 function getServiceClient() {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

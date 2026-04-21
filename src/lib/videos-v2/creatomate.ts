@@ -264,8 +264,12 @@ function creatomateVideoElementBase(): Record<string, unknown> {
   }
 }
 
+/** Índice reservado: la VO no sale de ningún clip de vídeo (audio externo MP3/WAV). */
+export const VOICE_OVER_EXTERNAL_CLIP_INDEX = -1
+
 /** Bloque VO manual: audio completo + B-roll mute + negro; `timelineStartSec` = posición en el Reel. */
 export interface VoiceOverIntroRenderInput {
+  /** Con `VOICE_OVER_EXTERNAL_CLIP_INDEX`, el audio sale de `externalVoiceAudioUrl` / `voiceOverAudioPath`. */
   voClipIndex: number
   voDurationSec: number
   /** Índices de clips para capas sobre la VO (`visual_only` automático, o lista manual en orden de timeline). */
@@ -278,6 +282,12 @@ export interface VoiceOverIntroRenderInput {
   timelineStartSec?: number
   /** Si existe, sustituye el emplanado lineal por ventanas alineadas a la VO (semántica). */
   voBrollTiles?: VoBrollTile[]
+  /** URL firmada del archivo de audio de VO (Creatomate `type: audio`). */
+  externalVoiceAudioUrl?: string
+  /**
+   * Ruta en Storage del audio VO; el pipeline refresca `externalVoiceAudioUrl` antes de cada render.
+   */
+  voiceOverAudioPath?: string
 }
 
 /**
@@ -461,9 +471,10 @@ function buildVoiceOverIntroLayers(
           input.clipFileDurationsSec,
           clipUrls
         )
-<<<<<<< HEAD
+
+  const skipClipIdx = input.voClipIndex
   const normalizedTiles = tiles
-    .filter((t) => t.clipIndex !== input.voClipIndex)
+    .filter((t) => skipClipIdx < 0 || t.clipIndex !== skipClipIdx)
     .filter((t) => Number.isFinite(t.timeStart) && Number.isFinite(t.duration))
     .filter((t) => t.duration >= 0.08)
     .filter((t) => t.timeStart < voDur - 0.04)
@@ -473,37 +484,19 @@ function buildVoiceOverIntroLayers(
       ? normalizedTiles
       : planVoiceOverBrollTiles(
           voDur,
-          input.brollClipIndicesInFileOrder.filter((idx) => idx !== input.voClipIndex),
+          skipClipIdx < 0
+            ? input.brollClipIndicesInFileOrder
+            : input.brollClipIndicesInFileOrder.filter((idx) => idx !== skipClipIdx),
           input.clipFileDurationsSec,
           clipUrls
         )
+
+  let brollVideoCount = 0
   for (let i = 0; i < resolvedTiles.length; i++) {
     const tile = resolvedTiles[i]
-=======
-  // Sin capa negra cuando hay B-roll: en algunos motores la forma en track 1 tapaba los vídeos del track 5.
-  if (tiles.length === 0) {
-    videoElements.push({
-      id: 'vo_intro_bg_black',
-      type: 'shape',
-      path: 'M 0% 0% L 100% 0% L 100% 100% L 0% 100% Z',
-      width: '100%',
-      height: '100%',
-      fill_color: '#000000',
-      stroke_width: '0vmin',
-      track: TRACK_VO_BLACK,
-      time: t0,
-      duration: voDur,
-      x: '50%',
-      y: '50%',
-      x_alignment: '50%',
-      y_alignment: '50%',
-    })
-  }
-  for (let i = 0; i < tiles.length; i++) {
-    const tile = tiles[i]
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     const url = clipUrls[tile.clipIndex]
     if (!url) continue
+    brollVideoCount++
     videoElements.push(
       withOptionalCutPunchAnimations(
         {
@@ -529,8 +522,34 @@ function buildVoiceOverIntroLayers(
     )
   }
 
+  // Sin capa negra cuando hay B-roll visible (evita que una forma tape el vídeo en algunos motores).
+  if (brollVideoCount === 0) {
+    videoElements.push({
+      id: 'vo_intro_bg_black',
+      type: 'shape',
+      path: 'M 0% 0% L 100% 0% L 100% 100% L 0% 100% Z',
+      width: '100%',
+      height: '100%',
+      fill_color: '#000000',
+      stroke_width: '0vmin',
+      track: TRACK_VO_BLACK,
+      time: t0,
+      duration: voDur,
+      x: '50%',
+      y: '50%',
+      x_alignment: '50%',
+      y_alignment: '50%',
+    })
+  }
+
   const voiceId = 'vo_intro_voice_audio'
-  const voiceUrl = clipUrls[input.voClipIndex] ?? clipUrls[0]
+  const voiceUrl =
+    input.externalVoiceAudioUrl ??
+    (input.voClipIndex >= 0 ? clipUrls[input.voClipIndex] : undefined) ??
+    clipUrls[0]
+  if (!voiceUrl) {
+    throw new Error('[Creatomate] Bloque VO: falta URL de audio (externalVoiceAudioUrl o clip).')
+  }
   videoElements.push({
     id: voiceId,
     name: 'VO_intro_voice',

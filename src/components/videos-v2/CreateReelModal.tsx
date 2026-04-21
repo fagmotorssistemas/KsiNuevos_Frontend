@@ -22,6 +22,9 @@ import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/ty
 import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
+import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
+
+type VoiceOverUiMode = 'auto' | 'clip' | 'mp3'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
 type FlowType = 'single' | 'multiple'
@@ -65,15 +68,15 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [completedJob, setCompletedJob] = useState<VideoJobV2 | null>(null)
-  /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo va como VO. */
-  const [voiceOverBaseClipIndex, setVoiceOverBaseClipIndex] = useState<number | 'auto'>('auto')
-<<<<<<< HEAD
+  /** Automático, audio de un clip, o archivo MP3 de voz en off. */
+  const [voiceOverMode, setVoiceOverMode] = useState<VoiceOverUiMode>('auto')
+  /** Si `voiceOverMode === 'clip'`: índice del clip cuyo audio completo va como VO. */
+  const [voiceOverClipIndex, setVoiceOverClipIndex] = useState(0)
+  /** Archivo MP3 (u otro audio) de VO cuando `voiceOverMode === 'mp3'`. */
+  const [voiceOverMp3File, setVoiceOverMp3File] = useState<File | null>(null)
+  const [voiceOverMp3DurationSec, setVoiceOverMp3DurationSec] = useState<number | null>(null)
   /** Índices de los clips que van como B-roll visual encima del VO (sin audio), en el orden elegido. */
   const [voiceOverOverlayClipIndices, setVoiceOverOverlayClipIndices] = useState<number[]>([])
-=======
-  /** Orden de clips (índices) que van encima de la VO; el audio de estos se silencia en el bloque VO. */
-  const [voiceOverOverlayClipOrder, setVoiceOverOverlayClipOrder] = useState<number[]>([])
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   const [scriptPdfFile, setScriptPdfFile] = useState<File | null>(null)
 
   function reset() {
@@ -86,32 +89,23 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setCompletedJob(null)
     setIsSubmitting(false)
     setUploadProgress(null)
-    setVoiceOverBaseClipIndex('auto')
-<<<<<<< HEAD
+    setVoiceOverMode('auto')
+    setVoiceOverClipIndex(0)
+    setVoiceOverMp3File(null)
+    setVoiceOverMp3DurationSec(null)
     setVoiceOverOverlayClipIndices([])
-=======
-    setVoiceOverOverlayClipOrder([])
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     setScriptPdfFile(null)
   }
 
   useEffect(() => {
-    if (voiceOverBaseClipIndex === 'auto') {
-      setVoiceOverOverlayClipOrder([])
+    if (voiceOverMode === 'auto') {
+      setVoiceOverOverlayClipIndices([])
       return
     }
-    setVoiceOverOverlayClipOrder((prev) => prev.filter((i) => i !== voiceOverBaseClipIndex))
-  }, [voiceOverBaseClipIndex])
-
-  function toggleVoiceOverOverlayClip(i: number) {
-    if (voiceOverBaseClipIndex === 'auto' || typeof voiceOverBaseClipIndex !== 'number') return
-    if (i === voiceOverBaseClipIndex) return
-    setVoiceOverOverlayClipOrder((prev) => {
-      const j = prev.indexOf(i)
-      if (j >= 0) return prev.filter((_, idx) => idx !== j)
-      return [...prev, i]
-    })
-  }
+    if (voiceOverMode === 'clip') {
+      setVoiceOverOverlayClipIndices((prev) => prev.filter((i) => i !== voiceOverClipIndex))
+    }
+  }, [voiceOverMode, voiceOverClipIndex])
 
   function handleClose() {
     reset()
@@ -151,6 +145,28 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       }
 
       const { jobId: newJobId, uploads, scriptUpload } = createData
+
+      let voiceOverStoredPath: string | undefined
+      if (flowType === 'multiple' && voiceOverMode === 'mp3') {
+        if (!voiceOverMp3File) {
+          throw new Error('Selecciona un archivo de audio (MP3) para la voz en off')
+        }
+        if (voiceOverMp3DurationSec == null || !Number.isFinite(voiceOverMp3DurationSec) || voiceOverMp3DurationSec <= 0.2) {
+          throw new Error('No se pudo leer la duración del audio. Prueba con otro MP3.')
+        }
+        setUploadProgress('Subiendo audio de voz en off...')
+        const voFd = new FormData()
+        voFd.append('file', voiceOverMp3File)
+        const voUp = await fetch(`/api/videos-v2/jobs/${newJobId}/voice-over-audio`, {
+          method: 'POST',
+          body: voFd,
+        })
+        const voData = await parseJsonOrThrow<{ path?: string; error?: string }>(voUp)
+        if (!voUp.ok || !voData.path) {
+          throw new Error(voData.error ?? `Error subiendo el audio de voz en off (HTTP ${voUp.status})`)
+        }
+        voiceOverStoredPath = voData.path
+      }
 
       // ── PASO 2: Subir cada archivo DIRECTAMENTE a Supabase Storage ───────
       // El navegador sube el archivo directo; Next.js NO ve el contenido.
@@ -211,21 +227,23 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       setUploadProgress('Iniciando pipeline...')
 
       const voiceOverPayload =
-        flowType === 'multiple' &&
-        files.length >= 2 &&
-        voiceOverBaseClipIndex !== 'auto'
-          ? {
-<<<<<<< HEAD
-              voiceOverBaseClipIndex,
-              ...(voiceOverOverlayClipIndices.length > 0
-                ? { voiceOverOverlayClipIndices }
-=======
-              voiceOverBaseClipIndex: voiceOverBaseClipIndex,
-              ...(voiceOverOverlayClipOrder.length > 0
-                ? { voiceOverOverlayClipIndices: voiceOverOverlayClipOrder }
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
-                : {}),
-            }
+        flowType === 'multiple' && files.length >= 2
+          ? voiceOverMode === 'clip'
+            ? {
+                voiceOverBaseClipIndex: voiceOverClipIndex,
+                ...(voiceOverOverlayClipIndices.length > 0
+                  ? { voiceOverOverlayClipIndices }
+                  : {}),
+              }
+            : voiceOverMode === 'mp3' && voiceOverStoredPath && voiceOverMp3DurationSec != null
+              ? {
+                  voiceOverAudioPath: voiceOverStoredPath,
+                  voiceOverMp3DurationSec: voiceOverMp3DurationSec,
+                  ...(voiceOverOverlayClipIndices.length > 0
+                    ? { voiceOverOverlayClipIndices }
+                    : {}),
+                }
+              : {}
           : {}
 
       const startRes = await fetch('/api/videos-v2/jobs/start', {
@@ -387,63 +405,134 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
 
               {flowType === 'multiple' && files.length >= 2 && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-gray-900">Clip de voz en off (audio completo + B-roll)</p>
+                  <p className="text-sm font-semibold text-gray-900">Voz en off</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Elige el archivo cuyo audio debe reproducirse entero una vez en el Reel. Opcionalmente indica qué
-                    otros clips van encima (solo imagen, en mudo): si no eliges ninguno, el sistema usa planos sin habla
-                    detectados por Assembly y los reparte por semántica. Gemini decide en qué momento del montaje va el
-                    bloque de VO; el resto son cortes con diálogo de los otros clips.
+                    Elige cómo va el audio principal del bloque de voz en off. Los clips que marques como planos encima
+                    van en mudo en Creatomate para que no choquen con ese audio. Gemini sigue ordenando el resto del Reel
+                    y en qué momento entra el bloque de VO.
                   </p>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2.5 cursor-pointer">
                       <input
                         type="radio"
-                        name="vo-base"
+                        name="vo-mode"
                         className="mt-1"
-                        checked={voiceOverBaseClipIndex === 'auto'}
-                        onChange={() => { setVoiceOverBaseClipIndex('auto'); setVoiceOverOverlayClipIndices([]) }}
+                        checked={voiceOverMode === 'auto'}
+                        onChange={() => {
+                          setVoiceOverMode('auto')
+                          setVoiceOverOverlayClipIndices([])
+                          setVoiceOverMp3File(null)
+                          setVoiceOverMp3DurationSec(null)
+                        }}
                       />
                       <span className="text-sm text-gray-800">
                         <span className="font-medium">Automático</span>
-                        <span className="text-gray-500"> — Gemini decide superposición visual.</span>
+                        <span className="text-gray-500"> — Gemini y AssemblyAI deciden el montaje.</span>
                       </span>
                     </label>
-                    {files.map((f, i) => (
-                      <label key={`${f.name}-${i}`} className="flex items-start gap-2.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="vo-base"
-                          className="mt-1"
-                          checked={voiceOverBaseClipIndex === i}
-                          onChange={() => {
-                            setVoiceOverBaseClipIndex(i)
-                            setVoiceOverOverlayClipIndices((prev) => prev.filter((x) => x !== i))
-                          }}
-                        />
-                        <span className="text-sm text-gray-800 min-w-0">
-                          <span className="font-medium">Clip {i}</span>
-                          <span className="text-gray-500"> — </span>
-                          <span className="break-all">{f.name}</span>
-                        </span>
-                      </label>
-                    ))}
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="vo-mode"
+                        className="mt-1"
+                        checked={voiceOverMode === 'clip'}
+                        onChange={() => {
+                          setVoiceOverMode('clip')
+                          setVoiceOverMp3File(null)
+                          setVoiceOverMp3DurationSec(null)
+                        }}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <span className="font-medium">Audio de un clip</span>
+                        <span className="text-gray-500"> — El audio completo de un video subido.</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="vo-mode"
+                        className="mt-1"
+                        checked={voiceOverMode === 'mp3'}
+                        onChange={() => {
+                          setVoiceOverMode('mp3')
+                          setVoiceOverOverlayClipIndices([])
+                        }}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <span className="font-medium">Archivo MP3</span>
+                        <span className="text-gray-500"> — Sube tu voz en off; los videos solo aportan imagen encima.</span>
+                      </span>
+                    </label>
                   </div>
-<<<<<<< HEAD
 
-                  {/* Selección de clips que van encima del VO como B-roll visual */}
-                  {voiceOverBaseClipIndex !== 'auto' && (
+                  {voiceOverMode === 'clip' && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-medium text-gray-700">¿Qué clip aporta el audio entero de la VO?</p>
+                      {files.map((f, i) => (
+                        <label key={`${f.name}-${i}`} className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="vo-clip"
+                            className="mt-1"
+                            checked={voiceOverClipIndex === i}
+                            onChange={() => {
+                              setVoiceOverClipIndex(i)
+                              setVoiceOverOverlayClipIndices((prev) => prev.filter((x) => x !== i))
+                            }}
+                          />
+                          <span className="text-sm text-gray-800 min-w-0">
+                            <span className="font-medium">Clip {i}</span>
+                            <span className="text-gray-500"> — </span>
+                            <span className="break-all">{f.name}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {voiceOverMode === 'mp3' && (
+                    <div className="space-y-2 pt-1 rounded-lg border border-violet-200/60 bg-white/60 p-3">
+                      <p className="text-xs font-medium text-gray-700">Archivo de audio (recomendado: MP3)</p>
+                      <input
+                        type="file"
+                        accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aac,audio/mp4,audio/m4a"
+                        className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0] ?? null
+                          setVoiceOverMp3File(f)
+                          setVoiceOverMp3DurationSec(null)
+                          if (!f) return
+                          const d = await readLocalAudioDurationSeconds(f)
+                          setVoiceOverMp3DurationSec(d)
+                          if (d == null) {
+                            toast.error('No se pudo leer la duración del audio. Prueba otro archivo.')
+                          }
+                        }}
+                      />
+                      {voiceOverMp3File && (
+                        <p className="text-xs text-gray-600">
+                          {voiceOverMp3File.name}
+                          {voiceOverMp3DurationSec != null
+                            ? ` · ${voiceOverMp3DurationSec.toFixed(2)} s`
+                            : ''}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {(voiceOverMode === 'clip' || voiceOverMode === 'mp3') && (
                     <div className="mt-4 pt-3 border-t border-violet-100 space-y-2">
                       <p className="text-sm font-semibold text-gray-900">
-                        Clips visuales encima de la voz en off
+                        Clips visuales encima de la voz en off (opcional)
                       </p>
                       <p className="text-xs text-gray-500 leading-relaxed">
-                        Marca los clips que quieres ver encima del audio de la voz en off (sin su sonido).
-                        Se reproducen en el orden que los seleccionas. Si no marcas ninguno, el sistema
-                        elige automáticamente.
+                        Marca los clips que quieres ver encima del audio de la VO (sin su sonido), en el orden en que
+                        los seleccionas. Si no marcas ninguno, el sistema elige planos (p. ej. clips sin habla o
+                        emplanado automático).
                       </p>
                       <div className="space-y-1.5">
                         {files.map((f, i) => {
-                          if (i === voiceOverBaseClipIndex) return null
+                          if (voiceOverMode === 'clip' && i === voiceOverClipIndex) return null
                           const isChecked = voiceOverOverlayClipIndices.includes(i)
                           const orderPos = voiceOverOverlayClipIndices.indexOf(i) + 1
                           return (
@@ -469,44 +558,6 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                 <span className="font-medium">Clip {i}</span>
                                 <span className="text-gray-400">—</span>
                                 <span className="break-all text-gray-600">{f.name}</span>
-=======
-                  {voiceOverBaseClipIndex !== 'auto' && typeof voiceOverBaseClipIndex === 'number' && (
-                    <div className="mt-3 pt-3 border-t border-violet-200/80 space-y-2">
-                      <p className="text-xs font-semibold text-gray-800">Clips encima de la VO (orden = timeline)</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">
-                        Activa los planos en el orden en que deben ir: primero el que pulsaste primero, etc. El audio de
-                        estos clips se silencia en el tramo de la voz en off; solo su imagen tapa el vídeo de la VO.
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {voiceOverOverlayClipOrder.map((idx, pos) => (
-                          <span
-                            key={`${idx}-${pos}`}
-                            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5"
-                          >
-                            {pos + 1}. Clip {idx}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                        {files.map((f, i) => {
-                          if (i === voiceOverBaseClipIndex) return null
-                          const on = voiceOverOverlayClipOrder.includes(i)
-                          return (
-                            <label
-                              key={`ov-${f.name}-${i}`}
-                              className="flex items-start gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-white/80"
-                            >
-                              <input
-                                type="checkbox"
-                                className="mt-0.5 rounded border-violet-300"
-                                checked={on}
-                                onChange={() => toggleVoiceOverOverlayClip(i)}
-                              />
-                              <span className="text-xs text-gray-800 min-w-0">
-                                <span className="font-medium">Clip {i}</span>
-                                <span className="text-gray-500"> — </span>
-                                <span className="break-all">{f.name}</span>
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
                               </span>
                             </label>
                           )

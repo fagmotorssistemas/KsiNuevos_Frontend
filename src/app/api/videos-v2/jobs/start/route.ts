@@ -19,10 +19,22 @@ import {
   normalizeClipDurationsInput,
   normalizeVoiceOverBaseClipIndex,
   normalizeVoiceOverOverlayClipIndices,
+  normalizeVoiceOverMp3OverlayIndices,
 } from '@/lib/videos-v2/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos-v2/extract-pdf-script-text'
 
 const RAW_BUCKET = 'raw-videos-v2'
+
+const VOICE_OVER_AUDIO_EXT = /\.(mp3|m4a|aac|wav)$/i
+
+function isAllowedVoiceOverStoragePath(jobId: string, p: string): boolean {
+  const s = p.trim()
+  // Bucket música (admite audio); el cliente sube vía POST .../voice-over-audio
+  if (s.startsWith(`reel-vo/${jobId}/`) && VOICE_OVER_AUDIO_EXT.test(s)) return true
+  // Legacy: mismo bucket que vídeos (solo si el proyecto permite audio ahí)
+  if (s.startsWith(`${jobId}/`) && VOICE_OVER_AUDIO_EXT.test(s)) return true
+  return false
+}
 
 function getServiceClient() {
   return createSupabaseClient<Database>(
@@ -41,17 +53,17 @@ interface StartJobBody {
   clipDurations?: Array<number | null>
   /** Índice del clip cuyo audio completo va como voz en off (solo múltiple; debe tener habla detectada). */
   voiceOverBaseClipIndex?: number | null
-<<<<<<< HEAD
-  /** Índices de clips que van como B-roll visual encima del VO, en el orden elegido (sin audio). */
-=======
   /**
-   * Con `voiceOverBaseClipIndex`: orden de clips que van encima de la VO (solo vídeo; audio mute en render).
-   * Emplanado lineal hasta cubrir la duración de la VO.
+   * Con `voiceOverBaseClipIndex`: clips que van encima de la VO (solo vídeo; audio mute en ese bloque).
+   * Orden = orden en timeline; emplanado lineal hasta cubrir la duración de la VO.
    */
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   voiceOverOverlayClipIndices?: number[] | null
   /** Ruta en Storage del PDF de guion (mismo prefijo jobId/); opcional. */
   scriptPdfPath?: string | null
+  /** Audio de voz en off (MP3/WAV/AAC/M4A) ya subido a Storage; excluyente con `voiceOverBaseClipIndex`. */
+  voiceOverAudioPath?: string | null
+  /** Duración del audio VO en segundos (p. ej. leída en el navegador). */
+  voiceOverMp3DurationSec?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -63,12 +75,10 @@ export async function POST(request: NextRequest) {
       clipKinds: clipKindsRaw,
       clipDurations: clipDurationsRaw,
       voiceOverBaseClipIndex: voiceOverRaw,
-<<<<<<< HEAD
       voiceOverOverlayClipIndices: overlayRaw,
-=======
-      voiceOverOverlayClipIndices: voOverlayRaw,
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       scriptPdfPath: scriptPdfPathRaw,
+      voiceOverAudioPath: voiceOverAudioPathRaw,
+      voiceOverMp3DurationSec: voiceOverMp3DurationRaw,
     } = body
 
     if (!jobId || !paths?.length) {
@@ -124,31 +134,84 @@ export async function POST(request: NextRequest) {
       voiceOverBaseClipIndex = vo
     }
 
+    let voiceOverAudioPath: string | undefined
+    if (voiceOverAudioPathRaw !== undefined && voiceOverAudioPathRaw !== null && String(voiceOverAudioPathRaw).trim() !== '') {
+      const ap = String(voiceOverAudioPathRaw).trim()
+      if (paths.length < 2) {
+        return NextResponse.json(
+          { error: 'voiceOverAudioPath solo aplica a jobs con al menos dos clips' },
+          { status: 400 }
+        )
+      }
+      if (voiceOverRaw !== undefined && voiceOverRaw !== null) {
+        return NextResponse.json(
+          { error: 'No combines voiceOverAudioPath con voiceOverBaseClipIndex' },
+          { status: 400 }
+        )
+      }
+      if (!isAllowedVoiceOverStoragePath(jobId, ap)) {
+        return NextResponse.json(
+          {
+            error:
+              'voiceOverAudioPath debe ser reel-vo/{jobId}/voice_over.* (subida por API) o {jobId}/... con extensión de audio',
+          },
+          { status: 400 }
+        )
+      }
+      if (paths.includes(ap)) {
+        return NextResponse.json(
+          { error: 'voiceOverAudioPath no puede ser la misma ruta que un clip de vídeo' },
+          { status: 400 }
+        )
+      }
+      voiceOverAudioPath = ap
+    }
+
+    let voiceOverMp3DurationSec: number | undefined
+    if (voiceOverAudioPath !== undefined) {
+      const d =
+        voiceOverMp3DurationRaw === null || voiceOverMp3DurationRaw === undefined
+          ? NaN
+          : Number(voiceOverMp3DurationRaw)
+      if (!Number.isFinite(d) || d <= 0.2) {
+        return NextResponse.json(
+          {
+            error:
+              'Con voiceOverAudioPath debes enviar voiceOverMp3DurationSec (segundos, > 0.2), medido en el cliente al elegir el audio.',
+          },
+          { status: 400 }
+        )
+      }
+      voiceOverMp3DurationSec = Number(d.toFixed(3))
+    }
+
     let voiceOverOverlayClipIndices: number[] | undefined
-<<<<<<< HEAD
     if (overlayRaw !== undefined && overlayRaw !== null) {
-      voiceOverOverlayClipIndices = normalizeVoiceOverOverlayClipIndices(
-        overlayRaw,
-        paths.length,
-        voiceOverBaseClipIndex
-      )
-=======
-    if (voOverlayRaw !== undefined && voOverlayRaw !== null) {
-      if (!Array.isArray(voOverlayRaw)) {
+      if (!Array.isArray(overlayRaw)) {
         return NextResponse.json(
           { error: 'voiceOverOverlayClipIndices debe ser un array de enteros' },
           { status: 400 }
         )
       }
-      if (voOverlayRaw.length > 0 && voiceOverBaseClipIndex === undefined) {
+      if (overlayRaw.length > 0 && voiceOverBaseClipIndex === undefined && voiceOverAudioPath === undefined) {
         return NextResponse.json(
-          { error: 'voiceOverOverlayClipIndices requiere voiceOverBaseClipIndex' },
+          { error: 'voiceOverOverlayClipIndices requiere voiceOverBaseClipIndex o voiceOverAudioPath' },
           { status: 400 }
         )
       }
-      if (voiceOverBaseClipIndex !== undefined && voOverlayRaw.length > 0) {
-        const norm = normalizeVoiceOverOverlayClipIndices(voOverlayRaw, paths.length, voiceOverBaseClipIndex)
-        if (norm.length === 0) {
+      if (voiceOverAudioPath !== undefined && overlayRaw.length > 0) {
+        const normMp3 = normalizeVoiceOverMp3OverlayIndices(overlayRaw, paths.length)
+        if (!normMp3 || normMp3.length === 0) {
+          return NextResponse.json(
+            { error: 'voiceOverOverlayClipIndices no tiene índices válidos de clip' },
+            { status: 400 }
+          )
+        }
+        voiceOverOverlayClipIndices = normMp3
+      }
+      if (voiceOverBaseClipIndex !== undefined && overlayRaw.length > 0) {
+        const norm = normalizeVoiceOverOverlayClipIndices(overlayRaw, paths.length, voiceOverBaseClipIndex)
+        if (!norm || norm.length === 0) {
           return NextResponse.json(
             { error: 'voiceOverOverlayClipIndices no tiene índices válidos distintos del clip de VO' },
             { status: 400 }
@@ -156,12 +219,23 @@ export async function POST(request: NextRequest) {
         }
         voiceOverOverlayClipIndices = norm
       }
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+    }
+
+    if (voiceOverAudioPath !== undefined && voiceOverOverlayClipIndices !== undefined) {
+      const uniq = new Set(voiceOverOverlayClipIndices)
+      if (uniq.size >= paths.length) {
+        return NextResponse.json(
+          {
+            error:
+              'No puedes reservar todos los clips solo como planos sobre la VO: debe quedar al menos un clip para el montaje con habla.',
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const supabase = getServiceClient()
 
-    // Obtener datos del job (music_track_url y flow_type)
     const { data: job, error: fetchError } = await supabase
       .from('video_jobs_v2')
       .select('flow_type, music_track_url')
@@ -209,36 +283,29 @@ export async function POST(request: NextRequest) {
     }
 
     const pipelineInput: Json | undefined =
-<<<<<<< HEAD
-      clipKinds !== undefined || clipDurationsSec !== undefined || voiceOverBaseClipIndex !== undefined || voiceOverOverlayClipIndices !== undefined
-=======
       clipKinds !== undefined ||
       clipDurationsSec !== undefined ||
       voiceOverBaseClipIndex !== undefined ||
+      voiceOverAudioPath !== undefined ||
       (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0)
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
             ...(clipDurationsSec ? { clipDurationsSec } : {}),
             ...(voiceOverBaseClipIndex !== undefined ? { voiceOverBaseClipIndex } : {}),
-<<<<<<< HEAD
-            ...(voiceOverOverlayClipIndices !== undefined ? { voiceOverOverlayClipIndices } : {}),
-=======
             ...(voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0
               ? { voiceOverOverlayClipIndices }
               : {}),
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+            ...(voiceOverAudioPath !== undefined ? { voiceOverAudioPath } : {}),
+            ...(voiceOverMp3DurationSec !== undefined ? { voiceOverMp3DurationSec } : {}),
           } as Json)
         : undefined
 
-    /** Solo tocar columnas de guion si el cliente envió scriptPdfPath (evita error si la DB aún no tiene la migración). */
     const scriptDbFields =
       scriptPdfPathRaw != null && String(scriptPdfPathRaw).trim() !== ''
         ? { script_pdf_path: scriptPdfPathCol, script_text: scriptTextCol }
         : {}
 
-    // Actualizar paths en el job
     const { error: updateError } = await supabase
       .from('video_jobs_v2')
       .update({
@@ -258,18 +325,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Obtener URLs firmadas de los archivos ya subidos para el pipeline
-    const signedUrls = await Promise.all(
-      paths.map((path) => getSignedUrlForPath(path))
-    )
+    const signedUrls = await Promise.all(paths.map((path) => getSignedUrlForPath(path)))
 
-    // Construir los "files" virtuales para el pipeline (solo necesita el buffer si hay compresión,
-    // pero dado que el usuario ya subió directamente, pasamos los paths y el pipeline
-    // generará sus propias URLs firmadas cuando las necesite)
     const flowType = job.flow_type as 'single' | 'multiple'
     const musicTrackUrl = job.music_track_url
 
-    // Fire and forget: el pipeline lee los archivos desde Supabase Storage
     startPipelineFromPaths({
       jobId,
       flowType,
@@ -280,6 +340,8 @@ export async function POST(request: NextRequest) {
       clipDurationsSec,
       voiceOverBaseClipIndex,
       voiceOverOverlayClipIndices,
+      voiceOverAudioPath,
+      voiceOverMp3DurationSec,
     })
 
     return NextResponse.json({ jobId, status: 'processing' })
@@ -290,10 +352,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Dispara el pipeline usando paths ya subidos en Storage (no buffers locales).
- * El pipeline leerá los archivos directamente desde Supabase usando URLs firmadas.
- */
 function startPipelineFromPaths(params: {
   jobId: string
   flowType: 'single' | 'multiple'
@@ -304,11 +362,9 @@ function startPipelineFromPaths(params: {
   clipDurationsSec?: (number | null)[]
   voiceOverBaseClipIndex?: number
   voiceOverOverlayClipIndices?: number[]
+  voiceOverAudioPath?: string
+  voiceOverMp3DurationSec?: number
 }) {
-<<<<<<< HEAD
-  const { jobId, flowType, paths, signedUrls, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex, voiceOverOverlayClipIndices } =
-    params
-=======
   const {
     jobId,
     flowType,
@@ -319,13 +375,12 @@ function startPipelineFromPaths(params: {
     clipDurationsSec,
     voiceOverBaseClipIndex,
     voiceOverOverlayClipIndices,
+    voiceOverAudioPath,
+    voiceOverMp3DurationSec,
   } = params
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
-  // Pasamos buffers vacíos — el pipeline los ignorará porque los paths ya están en Storage.
-  // El pipeline usará getSignedUrlForPath(path) internamente.
   const files = paths.map((path, i) => ({
-    buffer: Buffer.alloc(0), // vacío — no se usa, el pipeline lee desde Storage
+    buffer: Buffer.alloc(0),
     filename: path.split('/').pop() ?? `clip_${i}.mp4`,
     mimeType: 'video/mp4',
     alreadyUploaded: true,
@@ -342,5 +397,7 @@ function startPipelineFromPaths(params: {
     clipDurationsSec,
     voiceOverBaseClipIndex,
     voiceOverOverlayClipIndices,
+    voiceOverAudioPath,
+    voiceOverMp3DurationSec,
   })
 }

@@ -17,18 +17,17 @@ export interface VideoJobV2PipelineInputMeta {
    */
   voiceOverBaseClipIndex?: number | null
   /**
-<<<<<<< HEAD
-   * Índices de los clips que van como B-roll VISUAL encima de la voz en off (sin audio),
-   * en el orden que el usuario eligió. Si está definido, se usa emplanado lineal en ese orden.
-   * Estos clips se excluyen de la secuencia narrativa de Gemini.
-   */
-  voiceOverOverlayClipIndices?: number[]
-=======
-   * Opcional con `voiceOverBaseClipIndex`: índices de clips que van encima de la VO (solo vídeo, audio al 0%).
-   * Orden = orden de apilado en timeline. Si se omite o queda vacío, se usan clips `visual_only` + emplanado semántico.
+   * Índices de clips que van como B-roll visual encima de la VO (solo vídeo, audio al 0% en ese bloque).
+   * Orden = orden en timeline. Si se omite o queda vacío, el pipeline usa clips `visual_only` + emplanado semántico.
    */
   voiceOverOverlayClipIndices?: number[] | null
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+  /**
+   * Ruta de audio VO: `reel-vo/{jobId}/voice_over.*` en bucket música (subida POST …/voice-over-audio),
+   * o legacy `{jobId}/…` en raw-videos-v2. Exclusivo con `voiceOverBaseClipIndex`.
+   */
+  voiceOverAudioPath?: string | null
+  /** Duración en segundos del audio VO (idealmente medida en el navegador al elegir el archivo). */
+  voiceOverMp3DurationSec?: number | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMeta {
@@ -39,11 +38,8 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMet
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
     typeof o.voiceOverBaseClipIndex === 'number' ||
-<<<<<<< HEAD
-    Array.isArray(o.voiceOverOverlayClipIndices)
-=======
-    (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0)
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+    (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0) ||
+    (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0)
   )
 }
 
@@ -51,10 +47,7 @@ export function defaultClipKinds(count: number): VideoClipKind[] {
   return Array.from({ length: count }, () => 'spoken' as const)
 }
 
-export function normalizeClipKindsInput(
-  raw: unknown,
-  clipCount: number
-): VideoClipKind[] {
+export function normalizeClipKindsInput(raw: unknown, clipCount: number): VideoClipKind[] {
   const base = defaultClipKinds(clipCount)
   if (!Array.isArray(raw) || raw.length !== clipCount) return base
   return raw.map((k) => (k === 'visual_only' ? 'visual_only' : 'spoken'))
@@ -75,20 +68,16 @@ export function normalizeClipDurationsInput(
 }
 
 /** Índice de clip base voz en off (opcional). null/omitido = flujo automático con Gemini. */
-export function normalizeVoiceOverBaseClipIndex(
-  raw: unknown,
-  clipCount: number
-): number | undefined {
+export function normalizeVoiceOverBaseClipIndex(raw: unknown, clipCount: number): number | undefined {
   if (raw === null || raw === undefined) return undefined
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isInteger(n) || n < 0 || n >= clipCount) return undefined
   return n
 }
 
-<<<<<<< HEAD
 /**
- * Valida y normaliza la lista de índices de clips que van como B-roll visual encima del VO.
- * Elimina duplicados, fuera de rango y el índice del clip VO si está repetido.
+ * Valida y normaliza índices de clips que van como B-roll visual encima del VO.
+ * Elimina duplicados, fuera de rango y el índice del clip VO.
  */
 export function normalizeVoiceOverOverlayClipIndices(
   raw: unknown,
@@ -101,29 +90,25 @@ export function normalizeVoiceOverOverlayClipIndices(
   for (const x of raw) {
     const n = typeof x === 'number' ? x : Number(x)
     if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
-    if (n === voiceOverBaseClipIndex) continue
-=======
-/** Índices únicos válidos, sin el clip base de VO; conserva el orden enviado. */
-export function normalizeVoiceOverOverlayClipIndices(
-  raw: unknown,
-  clipCount: number,
-  voBaseIndex: number
-): number[] {
-  if (!Array.isArray(raw) || raw.length === 0) return []
-  const out: number[] = []
-  const seen = new Set<number>()
-  for (const x of raw) {
-    const n = typeof x === 'number' ? x : Number(x)
-    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
-    if (n === voBaseIndex) continue
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+    if (typeof voiceOverBaseClipIndex === 'number' && n === voiceOverBaseClipIndex) continue
     if (seen.has(n)) continue
     seen.add(n)
     out.push(n)
   }
-<<<<<<< HEAD
   return out.length > 0 ? out : undefined
-=======
-  return out
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+}
+
+/** Índices de clips visuales encima de la VO desde archivo MP3 (sin clip base de VO). */
+export function normalizeVoiceOverMp3OverlayIndices(raw: unknown, clipCount: number): number[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out.length > 0 ? out : undefined
 }

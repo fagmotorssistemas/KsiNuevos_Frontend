@@ -135,7 +135,8 @@ function buildClipCatalogForManualVoiceOver(
 function buildClipCatalogForPrompt(
   allSegments: Segment[],
   kinds: VideoClipKind[],
-  manualVoiceOverBaseClipIndex?: number | null
+  manualVoiceOverBaseClipIndex?: number | null,
+  manualVoiceOverFromExternalAudio?: boolean
 ): string {
   if (manualVoiceOverBaseClipIndex != null && Number.isInteger(manualVoiceOverBaseClipIndex)) {
     return buildClipCatalogForManualVoiceOver(allSegments, kinds, manualVoiceOverBaseClipIndex)
@@ -145,6 +146,11 @@ function buildClipCatalogForPrompt(
   if (clipCount <= 0) return ''
 
   const lines: string[] = []
+  if (manualVoiceOverFromExternalAudio === true) {
+    lines.push(
+      'NOTA: La voz en off principal llega desde un archivo de audio (MP3) subido aparte; durante ese bloque el montaje usa solo vídeo de clips (sin su audio) encima. Los segment_id de clips reservados solo para ese bloque NO aparecen en el mapa siguiente.'
+    )
+  }
   lines.push(
     '=== CATÁLOGO DE MATERIAL (orden = índice de archivo: clip 0 = primer video subido, clip 1 = segundo, etc.) ==='
   )
@@ -316,13 +322,12 @@ function isMistakeSegment(seg: Segment): boolean {
 }
 
 /**
- * "Comenta este Prado 2016" / "comenta Toyota Prado" es gancho de presentación, NO el CTA de cierre.
- * Antes `comenta\\b` en CTA metía esos clips al final del Reel y rompía el arco (presentación ↔ CTA).
+ * Solo "comenta este/esa/el… + auto" cuenta como gancho de apertura.
+ * Frases cortas tipo "comenta Prado 2016" (sin marca ni demostrativo) suelen ser CTA de redes → cierre, no intro.
  */
 function isComentaVehicleEngagementHook(seg: Segment): boolean {
   const t = normalizeText(seg.text)
   if (!/\bcomenta\b/.test(t)) return false
-  const hasYear = /\b(19|20)\d{2}\b/.test(t)
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasModel =
     MODEL_LINE_REGEX.test(seg.text) ||
@@ -330,8 +335,7 @@ function isComentaVehicleEngagementHook(seg: Segment): boolean {
     /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
       t
     )
-  if (hasYear && (hasBrand || hasModel)) return true
-  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|un|una|unos|unas)\b/.test(t)) return true
+  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|los|las|un|una|unos|unas)\b/.test(t)) return true
   if (hasBrand && hasModel) return true
   return false
 }
@@ -339,6 +343,7 @@ function isComentaVehicleEngagementHook(seg: Segment): boolean {
 function isPresentationSegment(seg: Segment): boolean {
   if (isComentaVehicleEngagementHook(seg)) return true
   const t = normalizeText(seg.text)
+  if (/\bcomenta\b/.test(t)) return false
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
   const hasModelLikeToken =
@@ -462,21 +467,20 @@ function strengthenOpeningPresentation(
 
 function isEndCtaSegment(seg: Segment): boolean {
   const t = normalizeText(seg.text)
-<<<<<<< HEAD
-  return /solo aqui|ksi nuevos|casi nuevos|comenta\b|te pasamos|te enviamos|te mandamos/.test(t)
-}
-
-/** true si el segmento es el "comenta X" (trigger del flujo), que debe ir ANTES de "te pasamos/enviamos". */
-function isCtaCallToActionTrigger(seg: Segment): boolean {
-  const t = normalizeText(seg.text)
-  return /comenta\b/.test(t)
-=======
   if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return true
+  if (/te pasamos|te enviamos|te mandamos/.test(t)) return true
   if (/\bcomenta\b/.test(t)) {
     if (isComentaVehicleEngagementHook(seg)) return false
     return true
   }
   return false
+}
+
+/** true si el segmento es un "comenta" de cierre (redes), no el gancho "comenta este Prado". */
+function isCtaCallToActionTrigger(seg: Segment): boolean {
+  if (isComentaVehicleEngagementHook(seg)) return false
+  const t = normalizeText(seg.text)
+  return /\bcomenta\b/.test(t)
 }
 
 /** Dentro del bloque "cierre", prioridad creciente: info intermedia → comenta redes → marca Ksi/Casi Nuevos al final. */
@@ -492,7 +496,6 @@ function outroClosingStrength(seg: Segment | undefined): number {
 function introOpeningStrength(seg: Segment | undefined): number {
   if (!seg) return 0
   return openingPresentationIsAdequate(seg) ? 2 : isPresentationSegment(seg) ? 1 : 0
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 }
 
 function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
@@ -512,25 +515,20 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
     else middle.push(item)
   }
 
-<<<<<<< HEAD
-  // Ordenar outro: "comenta" primero → luego "te pasamos/enviamos" (respuesta al comenta)
+  intro.sort(
+    (a, b) => introOpeningStrength(lookup.get(b.segment_id)) - introOpeningStrength(lookup.get(a.segment_id))
+  )
   outro.sort((a, b) => {
     const sa = lookup.get(a.segment_id)
     const sb = lookup.get(b.segment_id)
+    const byStrength = outroClosingStrength(sa) - outroClosingStrength(sb)
+    if (byStrength !== 0) return byStrength
     const aIsTrigger = sa ? isCtaCallToActionTrigger(sa) : false
     const bIsTrigger = sb ? isCtaCallToActionTrigger(sb) : false
     if (aIsTrigger && !bIsTrigger) return -1
     if (!aIsTrigger && bIsTrigger) return 1
     return 0
   })
-=======
-  intro.sort(
-    (a, b) => introOpeningStrength(lookup.get(b.segment_id)) - introOpeningStrength(lookup.get(a.segment_id))
-  )
-  outro.sort(
-    (a, b) => outroClosingStrength(lookup.get(a.segment_id)) - outroClosingStrength(lookup.get(b.segment_id))
-  )
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   return [...intro, ...middle, ...outro]
 }
@@ -699,6 +697,8 @@ interface ValidateGeminiSequenceOptions {
   disableVisualOverlayNormalization?: boolean
   /** Si está definido, se valida y devuelve voice_over_insert_after_count en el resultado. */
   manualVoiceOverBaseClipIndex?: number
+  /** VO desde MP3: mismas reglas de inserción que VO manual sin clip base. */
+  manualVoiceOverFromExternalAudio?: boolean
 }
 
 function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLength: number): number {
@@ -714,21 +714,10 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
 }
 
 /**
-<<<<<<< HEAD
- * Ajusta dónde va el bloque VO en la timeline: siempre después de la presentación inicial (si existe)
- * y siempre antes de cualquier CTA/cierre. Además intenta colocar el VO en la "parte media del arco"
- * medida en tiempo real (30–65% de la duración narrativa total), no solo por conteo de cortes.
- *
- * Prioridades:
- *  1. Restricción dura: CTA siempre después del VO → maxI = índice del primer CTA.
- *  2. Restricción dura: presentación siempre antes del VO → minI = 1 si el primer corte es presentación.
- *  3. Heurística temporal: VO entra cuando se ha consumido entre 30 % y 65 % del tiempo narrativo.
- *     Esto evita que el VO abra el Reel o cierre con clips de larga duración que distorsionen el conteo.
-=======
- * Ajusta dónde va el bloque VO: Gemini propone `voice_over_insert_after_count`; aquí se acota para que
- * haya al menos un corte narrativo antes del bloque VO y al menos uno después (no abre ni cierra el Reel)
- * cuando hay ≥2 segmentos; además se respeta presentación al inicio y CTA antes del cierre.
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+ * Ajusta dónde va el bloque VO: Gemini propone `voice_over_insert_after_count`; se acota para que
+ * haya al menos un corte antes y otro después cuando hay material suficiente, respetando presentación
+ * al inicio y CTA antes del cierre. Opcionalmente se alinea el punto de inserción al 30–65 % del tiempo
+ * narrativo para evitar que el VO abra o cierre el Reel por conteo de cortes engañoso.
  */
 function finalizeVoiceOverInsertPlacement(
   sequence: SequenceItem[],
@@ -769,23 +758,20 @@ function finalizeVoiceOverInsertPlacement(
     return maxI
   }
 
-<<<<<<< HEAD
   m = Math.max(minI, Math.min(m, maxI))
 
   // ── Heurística temporal: 30–65 % del tiempo narrativo ────────────────────
-  // Solo aplica cuando hay suficiente material (≥3 cortes en el rango min..max).
   const rangeSize = maxI - minI
   if (rangeSize >= 2) {
     const totalDur = sequence.reduce((s, x) => s + x.trim_duration, 0)
     if (totalDur > 0) {
-      const TARGET_LOW = 0.30  // VO no antes del 30 % del tiempo
-      const TARGET_HIGH = 0.65 // VO no después del 65 % del tiempo
+      const TARGET_LOW = 0.3
+      const TARGET_HIGH = 0.65
 
       let acc = 0
       let idealMin = minI
       let idealMax = maxI
 
-      // Encontrar el primer índice que supere el 30 % (dentro del rango permitido)
       for (let i = 0; i < maxI; i++) {
         acc += sequence[i].trim_duration
         if (acc / totalDur >= TARGET_LOW) {
@@ -794,7 +780,6 @@ function finalizeVoiceOverInsertPlacement(
         }
       }
 
-      // Encontrar el último índice que no supere el 65 %
       acc = 0
       for (let i = 0; i < maxI; i++) {
         acc += sequence[i].trim_duration
@@ -810,19 +795,13 @@ function finalizeVoiceOverInsertPlacement(
         if (m !== prev) {
           console.log(
             `[VideoV2Pipeline][${jobId}][Gemini] VO insert: ajuste temporal ${prev} → ${m} ` +
-            `(${((sequence.slice(0, m).reduce((s, x) => s + x.trim_duration, 0) / totalDur) * 100).toFixed(0)}% del tiempo narrativo)`
+              `(${((sequence.slice(0, m).reduce((s, x) => s + x.trim_duration, 0) / totalDur) * 100).toFixed(0)}% del tiempo narrativo)`
           )
         }
       }
     }
   }
 
-  // Garantía mínima: si hay 3+ cortes y el modelo pidió 0, empujar al menos a 1
-  if (requested === 0 && n >= 3 && !firstIsPresentation && maxI >= 1) {
-    m = Math.max(m, 1)
-  }
-
-=======
   if (n >= 4 && firstIsPresentation && firstCtaIndex >= 0 && m < 2 && maxI >= 2) {
     const target = Math.min(2, maxI)
     if (target > m) {
@@ -833,7 +812,9 @@ function finalizeVoiceOverInsertPlacement(
     }
   }
 
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+  if (requested === 0 && n >= 3 && !firstIsPresentation && maxI >= 1) {
+    m = Math.max(m, 1)
+  }
   if (m !== requested) {
     console.warn(
       `[VideoV2Pipeline][${jobId}][Gemini] voice_over_insert_after_count ajustado ${requested} → ${m} (arco: presentación → VO → CTA)`
@@ -913,44 +894,27 @@ function validateSequence(
     sequence = normalizeVisualOverlaysInSequence(sequence, kinds, allSegments, jobId)
   }
 
-<<<<<<< HEAD
-  // 3) Permitir micro-segmentos relevantes (solo descartar ultra-cortos)
-  //    Los segmentos de presentación (marca/modelo/año) se conservan a partir de 0.3s
-  //    para no perder menciones cortas como "Toyota" (0.4s) o "Prado" (0.35s).
+  // 3) Permitir micro-segmentos de presentación; descartar ultra-cortos que no aportan
   const before = sequence.length
   sequence = sequence.filter((item) => {
     if (item.trim_duration >= 0.8) return true
     const seg = segmentLookup.get(item.segment_id)
     if (!seg) return false
-    // Micro-segmento de presentación (marca/modelo/año): conservar si ≥ 0.15s
-    // Clips de 0.15-0.8s como "Toyota", "Prado", "2016" son válidos si son presentación
     return isPresentationSegment(seg) && item.trim_duration >= 0.15
   })
   if (sequence.length < before) {
-    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.8s no-presentación)`)
-=======
-  // 3) Conservar micro-cortes de presentación (ej. solo "Toyota", solo "Prado"); solo descartar ruido casi nulo
-  const MIN_TRIM_DURATION_SEC = 0.22
-  const before = sequence.length
-  sequence = sequence.filter((item) => item.trim_duration >= MIN_TRIM_DURATION_SEC)
-  if (sequence.length < before) {
     console.log(
-      `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<${MIN_TRIM_DURATION_SEC}s)`
+      `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.8s no-presentación)`
     )
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   }
 
   // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
   //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
   sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
-<<<<<<< HEAD
-  // 4b) Orden editorial duro: presentación primero, CTA/marca al final
+  // 4b) Orden editorial + dedupe de vecinos casi iguales
   sequence = enforceEditorialOrder(sequence, allSegments)
-=======
-  // 4b2) Evitar dos cortes seguidos casi iguales (reordenar editorial puede juntar duplicados)
   sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
   sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
@@ -996,24 +960,17 @@ function validateSequence(
     )
   }
 
-<<<<<<< HEAD
-  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre.
-  //    En modo VO manual los segmentos narrativos son complementarios; el límite blando es menor
-  //    (el VO aporta sus propios segundos). En modo autónomo se mantiene 33s.
-  const isManualVoMode = opts?.manualVoiceOverBaseClipIndex != null
-  const softCap = isManualVoMode ? 22 : 33   // segundos de narrativa antes de recortar
-  const hardCap = isManualVoMode ? 25 : 36   // techo absoluto (incluye margen)
-
-  if (totalDuration > hardCap && sequence.length > 0) {
-    for (let i = sequence.length - 1; i >= 0 && totalDuration > softCap; i--) {
-=======
-  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre (límite amplio: reels largos con varios clips)
+  // 6) Si quedó muy largo: reels cortos (VO manual vs autónomo) o reels muy largos (>92s)
+  const isManualVoMode =
+    opts?.manualVoiceOverBaseClipIndex != null || opts?.manualVoiceOverFromExternalAudio === true
+  const shortSoftCap = isManualVoMode ? 22 : 33
+  const shortHardCap = isManualVoMode ? 25 : 36
   const REEL_TRIM_TRIGGER_SEC = 92
   const REEL_TRIM_TARGET_SEC = 88
   const REEL_LAST_SEGMENT_MIN_SEC = 0.22
+
   if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
     for (let i = sequence.length - 1; i >= 0 && totalDuration > REEL_TRIM_TARGET_SEC; i--) {
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       const seg = segmentLookup.get(sequence[i].segment_id)
       if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
         totalDuration -= sequence[i].trim_duration
@@ -1022,17 +979,33 @@ function validateSequence(
     }
     totalDuration = Number(totalDuration.toFixed(3))
 
-<<<<<<< HEAD
-    if (totalDuration > hardCap && sequence.length > 0) {
-      const last = sequence[sequence.length - 1]
-      const excess = totalDuration - softCap
-      last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
-=======
     if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
       const last = sequence[sequence.length - 1]
       const excess = totalDuration - REEL_TRIM_TARGET_SEC
       last.trim_duration = Number(Math.max(REEL_LAST_SEGMENT_MIN_SEC, last.trim_duration - excess).toFixed(3))
->>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
+      last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
+      if (last.visual_overlay) {
+        last.visual_overlay = {
+          ...last.visual_overlay,
+          trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
+        }
+      }
+      totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+    }
+  } else if (totalDuration > shortHardCap && sequence.length > 0) {
+    for (let i = sequence.length - 1; i >= 0 && totalDuration > shortSoftCap; i--) {
+      const seg = segmentLookup.get(sequence[i].segment_id)
+      if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
+        totalDuration -= sequence[i].trim_duration
+        sequence.splice(i, 1)
+      }
+    }
+    totalDuration = Number(totalDuration.toFixed(3))
+
+    if (totalDuration > shortHardCap && sequence.length > 0) {
+      const last = sequence[sequence.length - 1]
+      const excess = totalDuration - shortSoftCap
+      last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
       last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
       if (last.visual_overlay) {
         last.visual_overlay = {
@@ -1047,7 +1020,7 @@ function validateSequence(
   sequence.forEach((item, i) => { item.order = i + 1 })
 
   let voiceOverInsertAfter: number | undefined
-  if (opts?.manualVoiceOverBaseClipIndex != null) {
+  if (opts?.manualVoiceOverBaseClipIndex != null || opts?.manualVoiceOverFromExternalAudio === true) {
     const rawInsert = coerceVoiceOverInsertAfterCount(raw, sequence.length)
     voiceOverInsertAfter = finalizeVoiceOverInsertPlacement(sequence, segmentLookup, rawInsert, jobId)
   }
@@ -1073,6 +1046,14 @@ MONTAJE 100% AUTOMÁTICO:
 - Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
 - Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
 `
+
+function manualVoiceOverMp3AutonomousBlock(): string {
+  return `
+BLOQUE VO DESDE ARCHIVO MP3 (no entra en "sequence"):
+- El audio completo de la voz en off viene de un archivo de audio (MP3/WAV) ya subido; durante ese bloque el pipeline muestra solo vídeo de los clips indicados (o B-roll) con volumen 0% encima de ese audio.
+- "sequence" solo contiene cortes de diálogo de clips que siguen en el mapa. NUNCA uses visual_overlay en "sequence".
+`
+}
 
 function manualVoiceOverAutonomousBlock(voIdx: number): string {
   return `
@@ -1139,18 +1120,24 @@ function buildVisualPrompt(
   clipKinds: VideoClipKind[],
   clipCatalog: string,
   manualVoiceOverBaseClipIndex?: number | null,
-  scriptGuidanceText?: string | null
+  scriptGuidanceText?: string | null,
+  manualVoiceOverFromExternalAudio?: boolean
 ): string {
-  const manual = manualVoiceOverBaseClipIndex != null
+  const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
   const videoRef = videoCount === 1 ? 'el video' : `los ${videoCount} videos`
   const plural = videoCount > 1 ? 's' : ''
   const brollExtra =
     !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock = manual
-    ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex!)
-    : AUTONOMOUS_EDIT_BLOCK
+  const autonomousBlock =
+    manualVoiceOverBaseClipIndex != null
+      ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
+      : manualVoiceOverFromExternalAudio === true
+        ? manualVoiceOverMp3AutonomousBlock()
+        : AUTONOMOUS_EDIT_BLOCK
   const mapNote = manual
-    ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
+    ? manualVoiceOverBaseClipIndex != null
+      ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
+      : 'Algunos clips pueden estar reservados solo como planos sobre el audio MP3 de VO (ver catálogo).\n\n'
     : ''
 
   const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText)
@@ -1205,16 +1192,22 @@ function buildTextOnlyPrompt(
   clipKinds: VideoClipKind[],
   clipCatalog: string,
   manualVoiceOverBaseClipIndex?: number | null,
-  scriptGuidanceText?: string | null
+  scriptGuidanceText?: string | null,
+  manualVoiceOverFromExternalAudio?: boolean
 ): string {
-  const manual = manualVoiceOverBaseClipIndex != null
+  const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
   const brollExtra =
     !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock = manual
-    ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex!)
-    : AUTONOMOUS_EDIT_BLOCK
+  const autonomousBlock =
+    manualVoiceOverBaseClipIndex != null
+      ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
+      : manualVoiceOverFromExternalAudio === true
+        ? manualVoiceOverMp3AutonomousBlock()
+        : AUTONOMOUS_EDIT_BLOCK
   const mapNote = manual
-    ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
+    ? manualVoiceOverBaseClipIndex != null
+      ? 'Algunos clips no están en el mapa: el de voz en off reservado y los B-roll automáticos (ver catálogo).\n\n'
+      : 'Algunos clips pueden estar reservados solo como planos sobre el audio MP3 de VO (ver catálogo).\n\n'
     : ''
 
   const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText)
@@ -1268,6 +1261,10 @@ ${manual
 export interface AnalyzeSegmentsOptions {
   /** Clip de voz en off reservado (audio completo + B-roll); excluido del mapa/prompt y de la secuencia validada. */
   manualVoiceOverBaseClipIndex?: number
+  /** VO desde MP3: excluye estos clip_index de "sequence" (p. ej. solo planos encima del audio). */
+  excludeClipIndicesFromSequence?: number[]
+  /** Audio de VO en archivo externo (no clip). */
+  manualVoiceOverFromExternalAudio?: boolean
   /** Texto extraído de un PDF de guion; referencia editorial no estricta. */
   scriptGuidanceText?: string
 }
@@ -1295,8 +1292,14 @@ export async function analyzeSegments(
   const clipCount = inferClipCountFromSegments(allSegments)
   const kindsForPrompt = clipKindsResolved(clipKinds, clipCount)
   const manualVo = options?.manualVoiceOverBaseClipIndex
+  const externalVo = options?.manualVoiceOverFromExternalAudio === true
   const scriptGuidance = options?.scriptGuidanceText?.trim() || null
-  const clipCatalog = buildClipCatalogForPrompt(allSegments, kindsForPrompt, manualVo ?? null)
+  const clipCatalog = buildClipCatalogForPrompt(
+    allSegments,
+    kindsForPrompt,
+    manualVo ?? null,
+    externalVo
+  )
   const validateOpts: ValidateGeminiSequenceOptions | undefined =
     manualVo != null
       ? {
@@ -1304,7 +1307,13 @@ export async function analyzeSegments(
           disableVisualOverlayNormalization: true,
           manualVoiceOverBaseClipIndex: manualVo,
         }
-      : undefined
+      : externalVo
+        ? {
+            excludeClipIndicesFromSequence: options?.excludeClipIndicesFromSequence ?? [],
+            disableVisualOverlayNormalization: true,
+            manualVoiceOverFromExternalAudio: true,
+          }
+        : undefined
   console.log(`[VideoV2Pipeline][${jobId}][Gemini] Analizando ${allSegments.length} segmentos (modo: ${mode})`)
 
   const genAI = getGenAI()
@@ -1327,7 +1336,8 @@ export async function analyzeSegments(
             kindsForPrompt,
             clipCatalog,
             manualVo ?? null,
-            scriptGuidance
+            scriptGuidance,
+            externalVo
           ) + strictSuffix
         contentParts = [
           ...googleFileRefs.map((ref) => ({
@@ -1342,7 +1352,8 @@ export async function analyzeSegments(
             kindsForPrompt,
             clipCatalog,
             manualVo ?? null,
-            scriptGuidance
+            scriptGuidance,
+            externalVo
           ) + strictSuffix
       }
 

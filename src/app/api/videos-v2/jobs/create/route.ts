@@ -6,7 +6,7 @@
  * sin pasar por el servidor de Next.js (evita el límite de 10 MB).
  *
  * Body JSON: { flowType, files: [{filename, mimeType}], musicTrackId }
- * Response:  { jobId, uploads: [{path, signedUrl, token}], scriptUpload: { path, signedUrl, token } }
+ * Response:  { jobId, uploads, scriptUpload }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
