@@ -12,11 +12,16 @@ export interface VideoJobV2PipelineInputMeta {
   /** Duración en segundos por índice de clip (desde el navegador). */
   clipDurationsSec?: (number | null)[]
   /**
-   * Índice del clip cuyo audio completo abre el Reel (voz en off manual).
-   * Los planos mute encima son solo clips `visual_only` (Assembly sin habla), en orden; el hueco restante va en negro.
-   * Gemini arma solo el tramo posterior (sin este clip ni B-roll en el prompt).
+   * Índice del clip cuyo audio completo va como voz en off (audio-only).
+   * Gemini arma solo la secuencia narrativa sin este clip.
    */
   voiceOverBaseClipIndex?: number | null
+  /**
+   * Índices de los clips que van como B-roll VISUAL encima de la voz en off (sin audio),
+   * en el orden que el usuario eligió. Si está definido, se usa emplanado lineal en ese orden.
+   * Estos clips se excluyen de la secuencia narrativa de Gemini.
+   */
+  voiceOverOverlayClipIndices?: number[]
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMeta {
@@ -26,7 +31,8 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMet
   return (
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
-    typeof o.voiceOverBaseClipIndex === 'number'
+    typeof o.voiceOverBaseClipIndex === 'number' ||
+    Array.isArray(o.voiceOverOverlayClipIndices)
   )
 }
 
@@ -66,4 +72,27 @@ export function normalizeVoiceOverBaseClipIndex(
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isInteger(n) || n < 0 || n >= clipCount) return undefined
   return n
+}
+
+/**
+ * Valida y normaliza la lista de índices de clips que van como B-roll visual encima del VO.
+ * Elimina duplicados, fuera de rango y el índice del clip VO si está repetido.
+ */
+export function normalizeVoiceOverOverlayClipIndices(
+  raw: unknown,
+  clipCount: number,
+  voiceOverBaseClipIndex?: number
+): number[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
+    if (n === voiceOverBaseClipIndex) continue
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out.length > 0 ? out : undefined
 }

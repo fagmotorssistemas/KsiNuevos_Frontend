@@ -18,6 +18,7 @@ import {
   normalizeClipKindsInput,
   normalizeClipDurationsInput,
   normalizeVoiceOverBaseClipIndex,
+  normalizeVoiceOverOverlayClipIndices,
 } from '@/lib/videos-v2/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos-v2/extract-pdf-script-text'
 
@@ -38,8 +39,10 @@ interface StartJobBody {
   clipKinds?: string[]
   /** Duración en segundos por clip; en índices B-roll evita depender de ffprobe en el servidor. */
   clipDurations?: Array<number | null>
-  /** Índice del clip cuyo audio completo abre el Reel (solo múltiple; debe tener habla detectada). */
+  /** Índice del clip cuyo audio completo va como voz en off (solo múltiple; debe tener habla detectada). */
   voiceOverBaseClipIndex?: number | null
+  /** Índices de clips que van como B-roll visual encima del VO, en el orden elegido (sin audio). */
+  voiceOverOverlayClipIndices?: number[] | null
   /** Ruta en Storage del PDF de guion (mismo prefijo jobId/); opcional. */
   scriptPdfPath?: string | null
 }
@@ -53,6 +56,7 @@ export async function POST(request: NextRequest) {
       clipKinds: clipKindsRaw,
       clipDurations: clipDurationsRaw,
       voiceOverBaseClipIndex: voiceOverRaw,
+      voiceOverOverlayClipIndices: overlayRaw,
       scriptPdfPath: scriptPdfPathRaw,
     } = body
 
@@ -109,6 +113,15 @@ export async function POST(request: NextRequest) {
       voiceOverBaseClipIndex = vo
     }
 
+    let voiceOverOverlayClipIndices: number[] | undefined
+    if (overlayRaw !== undefined && overlayRaw !== null) {
+      voiceOverOverlayClipIndices = normalizeVoiceOverOverlayClipIndices(
+        overlayRaw,
+        paths.length,
+        voiceOverBaseClipIndex
+      )
+    }
+
     const supabase = getServiceClient()
 
     // Obtener datos del job (music_track_url y flow_type)
@@ -159,12 +172,13 @@ export async function POST(request: NextRequest) {
     }
 
     const pipelineInput: Json | undefined =
-      clipKinds !== undefined || clipDurationsSec !== undefined || voiceOverBaseClipIndex !== undefined
+      clipKinds !== undefined || clipDurationsSec !== undefined || voiceOverBaseClipIndex !== undefined || voiceOverOverlayClipIndices !== undefined
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
             ...(clipDurationsSec ? { clipDurationsSec } : {}),
             ...(voiceOverBaseClipIndex !== undefined ? { voiceOverBaseClipIndex } : {}),
+            ...(voiceOverOverlayClipIndices !== undefined ? { voiceOverOverlayClipIndices } : {}),
           } as Json)
         : undefined
 
@@ -210,6 +224,7 @@ export async function POST(request: NextRequest) {
       clipKinds,
       clipDurationsSec,
       voiceOverBaseClipIndex,
+      voiceOverOverlayClipIndices,
     })
 
     return NextResponse.json({ jobId, status: 'processing' })
@@ -233,8 +248,9 @@ function startPipelineFromPaths(params: {
   clipKinds?: VideoClipKind[]
   clipDurationsSec?: (number | null)[]
   voiceOverBaseClipIndex?: number
+  voiceOverOverlayClipIndices?: number[]
 }) {
-  const { jobId, flowType, paths, signedUrls, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex } =
+  const { jobId, flowType, paths, signedUrls, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex, voiceOverOverlayClipIndices } =
     params
 
   // Pasamos buffers vacíos — el pipeline los ignorará porque los paths ya están en Storage.
@@ -256,5 +272,6 @@ function startPipelineFromPaths(params: {
     clipKinds,
     clipDurationsSec,
     voiceOverBaseClipIndex,
+    voiceOverOverlayClipIndices,
   })
 }

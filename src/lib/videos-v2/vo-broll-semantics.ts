@@ -131,7 +131,8 @@ function scoreClipForWindow(
   return s
 }
 
-/** Igual que el antiguo plan lineal por orden de archivo (fallback). */
+/** Igual que el antiguo plan lineal por orden de archivo (fallback).
+ *  Ahora rastrea trimStart por clip para evitar el loop visual cuando el mismo clip aparece varias veces. */
 export function planLinearBrollTiling(
   voDurationSec: number,
   brollIndices: number[],
@@ -139,17 +140,23 @@ export function planLinearBrollTiling(
 ): VoBrollTile[] {
   const tiles: VoBrollTile[] = []
   let t = 0
+  const clipConsumed = new Map<number, number>() // clipIndex → segundos ya consumidos
   for (const idx of brollIndices) {
     if (t >= voDurationSec - 0.04) break
     const fileDur = clipFileDurationsSec[idx]
-    const dur =
+    const totalDur =
       typeof fileDur === 'number' && Number.isFinite(fileDur) && fileDur > 0.05
         ? fileDur
         : Math.max(0.1, voDurationSec - t)
     const remaining = Math.max(0, voDurationSec - t)
-    const useDur = Number(Math.min(dur, remaining).toFixed(3))
+    const consumed = clipConsumed.get(idx) ?? 0
+    // Avanzar en el clip; si ya se consumió todo, reiniciar desde el inicio
+    const trimStart = consumed < totalDur - 0.08 ? consumed : 0
+    const available = totalDur - trimStart
+    const useDur = Number(Math.min(available, remaining).toFixed(3))
     if (useDur < 0.08) continue
-    tiles.push({ clipIndex: idx, timeStart: t, duration: useDur, trimStart: 0 })
+    tiles.push({ clipIndex: idx, timeStart: t, duration: useDur, trimStart: Number(trimStart.toFixed(3)) })
+    clipConsumed.set(idx, trimStart + useDur)
     t += useDur
   }
   return tiles
@@ -179,6 +186,7 @@ export function buildSemanticVoiceOverBrollTiles(
   const cooc = buildCooccurrenceFromSequence(narrativeSequence, allSegments, brollSet)
   const windows = partitionVoWindows(words, maxMs)
   const usage = new Map<number, number>()
+  const clipConsumedSec = new Map<number, number>() // trimStart acumulativo por clip
   let rr = 0
   const tiles: VoBrollTile[] = []
 
@@ -211,16 +219,21 @@ export function buildSemanticVoiceOverBrollTiles(
 
     const wantDur = t1 - t0
     const fileDur = clipFileDurationsSec[best]
-    const maxFromFile =
+    const totalFileDur =
       typeof fileDur === 'number' && Number.isFinite(fileDur) && fileDur > 0.08 ? fileDur : wantDur
-    const useDur = Number(Math.min(wantDur, maxFromFile, voDurationSec - t0).toFixed(3))
+    const consumed = clipConsumedSec.get(best) ?? 0
+    // Avanzar en el clip para no repetir el inicio en cada ventana
+    const trimStart = consumed < totalFileDur - 0.08 ? consumed : 0
+    const available = totalFileDur - trimStart
+    const useDur = Number(Math.min(wantDur, available, voDurationSec - t0).toFixed(3))
     if (useDur < 0.1) continue
 
+    clipConsumedSec.set(best, trimStart + useDur)
     tiles.push({
       clipIndex: best,
       timeStart: Number(t0.toFixed(3)),
       duration: useDur,
-      trimStart: 0,
+      trimStart: Number(trimStart.toFixed(3)),
     })
   }
 

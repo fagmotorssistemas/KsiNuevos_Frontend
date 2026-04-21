@@ -64,8 +64,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [completedJob, setCompletedJob] = useState<VideoJobV2 | null>(null)
-  /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo abre el Reel (solo varios clips). */
+  /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo va como VO. */
   const [voiceOverBaseClipIndex, setVoiceOverBaseClipIndex] = useState<number | 'auto'>('auto')
+  /** Índices de los clips que van como B-roll visual encima del VO (sin audio), en el orden elegido. */
+  const [voiceOverOverlayClipIndices, setVoiceOverOverlayClipIndices] = useState<number[]>([])
   const [scriptPdfFile, setScriptPdfFile] = useState<File | null>(null)
 
   function reset() {
@@ -79,6 +81,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setIsSubmitting(false)
     setUploadProgress(null)
     setVoiceOverBaseClipIndex('auto')
+    setVoiceOverOverlayClipIndices([])
     setScriptPdfFile(null)
   }
 
@@ -183,7 +186,12 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         flowType === 'multiple' &&
         files.length >= 2 &&
         voiceOverBaseClipIndex !== 'auto'
-          ? { voiceOverBaseClipIndex: voiceOverBaseClipIndex }
+          ? {
+              voiceOverBaseClipIndex,
+              ...(voiceOverOverlayClipIndices.length > 0
+                ? { voiceOverOverlayClipIndices }
+                : {}),
+            }
           : {}
 
       const startRes = await fetch('/api/videos-v2/jobs/start', {
@@ -358,11 +366,11 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                         name="vo-base"
                         className="mt-1"
                         checked={voiceOverBaseClipIndex === 'auto'}
-                        onChange={() => setVoiceOverBaseClipIndex('auto')}
+                        onChange={() => { setVoiceOverBaseClipIndex('auto'); setVoiceOverOverlayClipIndices([]) }}
                       />
                       <span className="text-sm text-gray-800">
                         <span className="font-medium">Automático</span>
-                        <span className="text-gray-500"> — Gemini decide superposición (visual_overlay).</span>
+                        <span className="text-gray-500"> — Gemini decide superposición visual.</span>
                       </span>
                     </label>
                     {files.map((f, i) => (
@@ -372,7 +380,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                           name="vo-base"
                           className="mt-1"
                           checked={voiceOverBaseClipIndex === i}
-                          onChange={() => setVoiceOverBaseClipIndex(i)}
+                          onChange={() => {
+                            setVoiceOverBaseClipIndex(i)
+                            setVoiceOverOverlayClipIndices((prev) => prev.filter((x) => x !== i))
+                          }}
                         />
                         <span className="text-sm text-gray-800 min-w-0">
                           <span className="font-medium">Clip {i}</span>
@@ -382,6 +393,53 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                       </label>
                     ))}
                   </div>
+
+                  {/* Selección de clips que van encima del VO como B-roll visual */}
+                  {voiceOverBaseClipIndex !== 'auto' && (
+                    <div className="mt-4 pt-3 border-t border-violet-100 space-y-2">
+                      <p className="text-sm font-semibold text-gray-900">
+                        Clips visuales encima de la voz en off
+                      </p>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        Marca los clips que quieres ver encima del audio de la voz en off (sin su sonido).
+                        Se reproducen en el orden que los seleccionas. Si no marcas ninguno, el sistema
+                        elige automáticamente.
+                      </p>
+                      <div className="space-y-1.5">
+                        {files.map((f, i) => {
+                          if (i === voiceOverBaseClipIndex) return null
+                          const isChecked = voiceOverOverlayClipIndices.includes(i)
+                          const orderPos = voiceOverOverlayClipIndices.indexOf(i) + 1
+                          return (
+                            <label key={`overlay-${i}`} className="flex items-start gap-2.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="mt-1 accent-violet-600"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setVoiceOverOverlayClipIndices((prev) => [...prev, i])
+                                  } else {
+                                    setVoiceOverOverlayClipIndices((prev) => prev.filter((x) => x !== i))
+                                  }
+                                }}
+                              />
+                              <span className="text-sm text-gray-800 min-w-0 flex items-center gap-1.5">
+                                {isChecked && (
+                                  <span className="shrink-0 w-4 h-4 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">
+                                    {orderPos}
+                                  </span>
+                                )}
+                                <span className="font-medium">Clip {i}</span>
+                                <span className="text-gray-400">—</span>
+                                <span className="break-all text-gray-600">{f.name}</span>
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

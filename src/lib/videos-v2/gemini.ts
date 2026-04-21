@@ -12,8 +12,8 @@ import type { GoogleFileRef } from './google-file-api'
 import type { VideoClipKind } from './clip-config'
 import { defaultClipKinds } from './clip-config'
 
-const MODEL_VISUAL = 'gemini-2.5-flash'
-const MODEL_TEXT = 'gemini-2.5-flash'
+const MODEL_VISUAL = 'gemini-2.5-pro'
+const MODEL_TEXT = 'gemini-2.5-pro'
 const GEMINI_TIMEOUT_MS = 180_000
 const MAX_RETRIES = 2
 
@@ -360,6 +360,9 @@ function sequenceItemFromSegment(seg: Segment, order: number, reason: string): S
 /**
  * Si el primer corte no cumple marca+modelo/año, intenta intercambiar con otro segmento ya en la lista
  * o insertar el mejor candidato no usado.
+ *
+ * Excepción: si los primeros N segmentos consecutivos son todos de presentación y entre ellos
+ * cubren marca + modelo/año (e.g. "Toyota" + "Prado" + "2016"), se acepta el grupo tal cual.
  */
 function strengthenOpeningPresentation(
   sequence: SequenceItem[],
@@ -370,6 +373,28 @@ function strengthenOpeningPresentation(
   if (sequence.length === 0) return sequence
   const firstSeg = segmentLookup.get(sequence[0].segment_id)
   if (openingPresentationIsAdequate(firstSeg)) return sequence
+
+  // Verificar si los primeros clips de presentación forman juntos una apertura completa
+  // (e.g. clip "Toyota" + clip "Prado" + clip "2016")
+  const openingGroup: string[] = []
+  for (const item of sequence) {
+    const seg = segmentLookup.get(item.segment_id)
+    if (!seg || !isPresentationSegment(seg)) break
+    openingGroup.push(normalizeText(seg.text))
+  }
+  if (openingGroup.length >= 2) {
+    const combined = openingGroup.join(' ')
+    const hasBrand = CAR_BRANDS.some((b) => combined.includes(b))
+    const hasYear = /\b(19|20)\d{2}\b/.test(combined)
+    const hasModel = MODEL_LINE_REGEX.test(combined) ||
+      /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(combined)
+    if (hasBrand && (hasYear || hasModel)) {
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Gemini] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
+      )
+      return sequence
+    }
+  }
 
   for (let j = 1; j < sequence.length; j++) {
     const sj = segmentLookup.get(sequence[j].segment_id)
@@ -414,7 +439,13 @@ function strengthenOpeningPresentation(
 
 function isEndCtaSegment(seg: Segment): boolean {
   const t = normalizeText(seg.text)
-  return /solo aqui|ksi nuevos|casi nuevos|comenta\b/.test(t)
+  return /solo aqui|ksi nuevos|casi nuevos|comenta\b|te pasamos|te enviamos|te mandamos/.test(t)
+}
+
+/** true si el segmento es el "comenta X" (trigger del flujo), que debe ir ANTES de "te pasamos/enviamos". */
+function isCtaCallToActionTrigger(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  return /comenta\b/.test(t)
 }
 
 function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
@@ -433,6 +464,17 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
     else if (isPresentationSegment(seg)) intro.push(item)
     else middle.push(item)
   }
+
+  // Ordenar outro: "comenta" primero → luego "te pasamos/enviamos" (respuesta al comenta)
+  outro.sort((a, b) => {
+    const sa = lookup.get(a.segment_id)
+    const sb = lookup.get(b.segment_id)
+    const aIsTrigger = sa ? isCtaCallToActionTrigger(sa) : false
+    const bIsTrigger = sb ? isCtaCallToActionTrigger(sb) : false
+    if (aIsTrigger && !bIsTrigger) return -1
+    if (!aIsTrigger && bIsTrigger) return 1
+    return 0
+  })
 
   return [...intro, ...middle, ...outro]
 }
@@ -581,7 +623,14 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
 
 /**
  * Ajusta dónde va el bloque VO en la timeline: siempre después de la presentación inicial (si existe)
- * y siempre antes de cualquier CTA/cierre (para que el llamado a la acción quede al final del Reel).
+ * y siempre antes de cualquier CTA/cierre. Además intenta colocar el VO en la "parte media del arco"
+ * medida en tiempo real (30–65% de la duración narrativa total), no solo por conteo de cortes.
+ *
+ * Prioridades:
+ *  1. Restricción dura: CTA siempre después del VO → maxI = índice del primer CTA.
+ *  2. Restricción dura: presentación siempre antes del VO → minI = 1 si el primer corte es presentación.
+ *  3. Heurística temporal: VO entra cuando se ha consumido entre 30 % y 65 % del tiempo narrativo.
+ *     Esto evita que el VO abra el Reel o cierre con clips de larga duración que distorsionen el conteo.
  */
 function finalizeVoiceOverInsertPlacement(
   sequence: SequenceItem[],
@@ -590,8 +639,9 @@ function finalizeVoiceOverInsertPlacement(
   jobId: string
 ): number {
   const n = sequence.length
-  let m = Math.max(0, Math.min(Math.floor(requested), n))
   if (n === 0) return 0
+
+  let m = Math.max(0, Math.min(Math.floor(requested), n))
 
   const firstSeg = segmentLookup.get(sequence[0].segment_id)
   const firstIsPresentation = firstSeg ? isPresentationSegment(firstSeg) : false
@@ -605,6 +655,7 @@ function finalizeVoiceOverInsertPlacement(
     }
   }
 
+  // ── Cotas duras ──────────────────────────────────────────────────────────
   let minI = 0
   if (firstIsPresentation) minI = 1
 
@@ -615,23 +666,59 @@ function finalizeVoiceOverInsertPlacement(
     console.warn(
       `[VideoV2Pipeline][${jobId}][Gemini] VO insert: conflicto min (${minI}) vs max (${maxI}); se usa max (CTA tras VO).`
     )
-    m = maxI
-  } else {
-    m = Math.max(minI, Math.min(m, maxI))
+    return maxI
   }
 
+  m = Math.max(minI, Math.min(m, maxI))
+
+  // ── Heurística temporal: 30–65 % del tiempo narrativo ────────────────────
+  // Solo aplica cuando hay suficiente material (≥3 cortes en el rango min..max).
+  const rangeSize = maxI - minI
+  if (rangeSize >= 2) {
+    const totalDur = sequence.reduce((s, x) => s + x.trim_duration, 0)
+    if (totalDur > 0) {
+      const TARGET_LOW = 0.30  // VO no antes del 30 % del tiempo
+      const TARGET_HIGH = 0.65 // VO no después del 65 % del tiempo
+
+      let acc = 0
+      let idealMin = minI
+      let idealMax = maxI
+
+      // Encontrar el primer índice que supere el 30 % (dentro del rango permitido)
+      for (let i = 0; i < maxI; i++) {
+        acc += sequence[i].trim_duration
+        if (acc / totalDur >= TARGET_LOW) {
+          idealMin = Math.max(minI, i + 1)
+          break
+        }
+      }
+
+      // Encontrar el último índice que no supere el 65 %
+      acc = 0
+      for (let i = 0; i < maxI; i++) {
+        acc += sequence[i].trim_duration
+        if (acc / totalDur >= TARGET_HIGH) {
+          idealMax = Math.min(maxI, i + 1)
+          break
+        }
+      }
+
+      if (idealMin <= idealMax) {
+        const prev = m
+        m = Math.max(idealMin, Math.min(m, idealMax))
+        if (m !== prev) {
+          console.log(
+            `[VideoV2Pipeline][${jobId}][Gemini] VO insert: ajuste temporal ${prev} → ${m} ` +
+            `(${((sequence.slice(0, m).reduce((s, x) => s + x.trim_duration, 0) / totalDur) * 100).toFixed(0)}% del tiempo narrativo)`
+          )
+        }
+      }
+    }
+  }
+
+  // Garantía mínima: si hay 3+ cortes y el modelo pidió 0, empujar al menos a 1
   if (requested === 0 && n >= 3 && !firstIsPresentation && maxI >= 1) {
     m = Math.max(m, 1)
-  }
-
-  if (n >= 4 && firstIsPresentation && firstCtaIndex >= 0 && m < 2 && maxI >= 2) {
-    const target = Math.min(2, maxI)
-    if (target > m) {
-      console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] VO insert: se prefiere al menos 2 cortes antes del VO (presentación + desarrollo); ${m} → ${target}`
-      )
-      m = target
-    }
   }
 
   if (m !== requested) {
@@ -714,20 +801,62 @@ function validateSequence(
   }
 
   // 3) Permitir micro-segmentos relevantes (solo descartar ultra-cortos)
+  //    Los segmentos de presentación (marca/modelo/año) se conservan a partir de 0.3s
+  //    para no perder menciones cortas como "Toyota" (0.4s) o "Prado" (0.35s).
   const before = sequence.length
-  sequence = sequence.filter((item) => item.trim_duration >= 0.8)
+  sequence = sequence.filter((item) => {
+    if (item.trim_duration >= 0.8) return true
+    const seg = segmentLookup.get(item.segment_id)
+    if (!seg) return false
+    // Micro-segmento de presentación (marca/modelo/año): conservar si ≥ 0.15s
+    // Clips de 0.15-0.8s como "Toyota", "Prado", "2016" son válidos si son presentación
+    return isPresentationSegment(seg) && item.trim_duration >= 0.15
+  })
   if (sequence.length < before) {
-    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.5s)`)
+    console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.8s no-presentación)`)
   }
 
-  // 4) Orden editorial duro: presentación primero, CTA/marca al final
-  sequence = enforceEditorialOrder(sequence, allSegments)
-
-  // 4b) Misma frase en tomas distintas: conservar la primera en el orden actual, descartar el resto
+  // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
+  //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
   sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
+
+  // 4b) Orden editorial duro: presentación primero, CTA/marca al final
+  sequence = enforceEditorialOrder(sequence, allSegments)
 
   // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
   sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
+
+  // 4d) Forzar micro-clips de presentación que Gemini ignoró (ej. "Toyota", "Prado", "2016" por separado)
+  //     Si existen segmentos de presentación ≥ 0.15s no incluidos por Gemini, se insertan al inicio en
+  //     orden de aparición (clip_index, luego start_s), pero solo si no están ya en la secuencia.
+  {
+    const usedIds = new Set(sequence.map((x) => x.segment_id))
+    const missedPresentation = allSegments
+      .filter(
+        (s) =>
+          !usedIds.has(s.segment_id) &&
+          s.source_kind !== 'visual_only' &&
+          !isMistakeSegment(s) &&
+          isPresentationSegment(s) &&
+          s.duration_s >= 0.15 &&
+          !(excluded.includes(s.clip_index))
+      )
+      .sort((a, b) => a.clip_index - b.clip_index || a.start_s - b.start_s)
+
+    if (missedPresentation.length > 0) {
+      const injected = missedPresentation.map((s, idx) =>
+        sequenceItemFromSegment(s, idx + 1, 'micro-clip presentación forzado al inicio')
+      )
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Gemini] Se inyectan ${injected.length} micro-clips de presentación omitidos por Gemini: ` +
+          injected.map((x) => x.segment_id).join(', ')
+      )
+      // Insertar al frente, antes del resto de la secuencia
+      sequence = [...injected, ...sequence]
+      // Re-aplicar orden editorial para asegurar que presenten antes que middle/outro
+      sequence = enforceEditorialOrder(sequence, allSegments)
+    }
+  }
 
   // 5) Duración: no se insertan clips extra por debajo de 20s (evita material ajeno al montaje elegido).
   let totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
@@ -738,9 +867,15 @@ function validateSequence(
     )
   }
 
-  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre
-  if (totalDuration > 35 && sequence.length > 0) {
-    for (let i = sequence.length - 1; i >= 0 && totalDuration > 33; i--) {
+  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre.
+  //    En modo VO manual los segmentos narrativos son complementarios; el límite blando es menor
+  //    (el VO aporta sus propios segundos). En modo autónomo se mantiene 33s.
+  const isManualVoMode = opts?.manualVoiceOverBaseClipIndex != null
+  const softCap = isManualVoMode ? 22 : 33   // segundos de narrativa antes de recortar
+  const hardCap = isManualVoMode ? 25 : 36   // techo absoluto (incluye margen)
+
+  if (totalDuration > hardCap && sequence.length > 0) {
+    for (let i = sequence.length - 1; i >= 0 && totalDuration > softCap; i--) {
       const seg = segmentLookup.get(sequence[i].segment_id)
       if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
         totalDuration -= sequence[i].trim_duration
@@ -749,9 +884,9 @@ function validateSequence(
     }
     totalDuration = Number(totalDuration.toFixed(3))
 
-    if (totalDuration > 35 && sequence.length > 0) {
+    if (totalDuration > hardCap && sequence.length > 0) {
       const last = sequence[sequence.length - 1]
-      const excess = totalDuration - 33
+      const excess = totalDuration - softCap
       last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
       last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
       if (last.visual_overlay) {
@@ -834,15 +969,19 @@ function buildScriptGuidanceBlock(scriptGuidanceText?: string | null): string {
   if (!raw) return ''
   const capped =
     raw.length > 24000 ? `${raw.slice(0, 24000)}\n[… texto truncado para el modelo]` : raw
-  return `=== GUION DE REFERENCIA (texto extraído de PDF; guía flexible, NO contractual) ===
-El equipo puede haber adjuntado un guion. Úsalo como INSPIRACIÓN: orden de ideas, tono, posibles líneas de voz, pistas de subtítulos o estructura (intro / datos / cierre).
+  return `=== GUION DE REFERENCIA (ORDEN EDITORIAL OBLIGATORIO) ===
+IMPORTANTE: Los clips subidos contienen el audio/diálogo del guion — los vendedores grabaron los clips siguiendo este guion.
+Tu tarea es MAPEAR cada sección del guion a los segment_id correspondientes del mapa y respetar el ORDEN del guion.
 
 REGLAS SOBRE EL GUION:
-- NO rechaces ni "fallen" el montaje si el material en cámara no coincide palabra por palabra con el PDF.
-- Si el guion choca con el mapa de segmentos o con lo que ves en vídeo, PRIORIZA el mapa y las imágenes reales; puedes y debes improvisar.
-- Si el guion aporta una estructura clara que encaje con segment_id válidos, aprovéchala para un Reel más coherente.
+1. SIGUE EL ORDEN del guion: la secuencia debe reflejar el flujo del guion (intro → desarrollo → cierre).
+2. MAPEA cada bloque de texto del guion al segment_id cuya transcripción más se parezca a esa parte.
+3. Si un segmento del mapa corresponde a una sección del guion, inclúyelo en ESA posición dentro de "sequence".
+4. Si hay segmentos que no están en el guion (improvisaciones, errores), puedes descartarlos o incluirlos si aportan valor.
+5. Si el guion tiene una sección que no encontraste en el mapa, no la inventes — simplemente omítela.
+6. El guion es la ESTRUCTURA; el mapa de segmentos son los BLOQUES disponibles. Tú eres el editor que los une.
 
-Texto extraído:
+Texto del guion:
 ${capped}
 
 === FIN GUION ===`

@@ -239,7 +239,8 @@ export async function getCreatomateRenderStatus(renderId: string): Promise<Creat
  * Tracks (Creatomate: 1–1000). Importante: no reutilizar el mismo track para vídeo B-roll VO y
  * otros elementos que compartan tiempo en el Reel (p. ej. SFX), o el motor puede truncar capas.
  */
-const TRACK_VO_BLACK = 1
+/** Fondo negro del bloque VO: track propio, separado del video base para evitar composición no determinista. */
+const TRACK_VO_BLACK = 2
 const TRACK_VIDEO_BASE = 1
 const TRACK_TRANSITION_SFX = 4
 /** Antes 5: chocaba con TRACK_VO_BROLL y los planos del bloque VO se cortaban a ~0,35s (pops). */
@@ -477,8 +478,23 @@ function buildVoiceOverIntroLayers(
           input.clipFileDurationsSec,
           clipUrls
         )
-  for (let i = 0; i < tiles.length; i++) {
-    const tile = tiles[i]
+  const normalizedTiles = tiles
+    .filter((t) => t.clipIndex !== input.voClipIndex)
+    .filter((t) => Number.isFinite(t.timeStart) && Number.isFinite(t.duration))
+    .filter((t) => t.duration >= 0.08)
+    .filter((t) => t.timeStart < voDur - 0.04)
+
+  const resolvedTiles =
+    normalizedTiles.length > 0
+      ? normalizedTiles
+      : planVoiceOverBrollTiles(
+          voDur,
+          input.brollClipIndicesInFileOrder.filter((idx) => idx !== input.voClipIndex),
+          input.clipFileDurationsSec,
+          clipUrls
+        )
+  for (let i = 0; i < resolvedTiles.length; i++) {
+    const tile = resolvedTiles[i]
     const url = clipUrls[tile.clipIndex]
     if (!url) continue
     videoElements.push(
