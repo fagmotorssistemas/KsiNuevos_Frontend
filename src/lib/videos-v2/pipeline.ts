@@ -23,6 +23,7 @@ import {
   isPipelineInputMeta,
   normalizeClipDurationsInput,
   normalizeClipKindsInput,
+  normalizeVoiceOverOverlayClipIndices,
 } from './clip-config'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import { analyzeSegments } from './gemini'
@@ -441,7 +442,11 @@ async function runMultipleClipsPipelineFromStorage(
   clipKindsInput: VideoClipKind[] | undefined,
   clipDurationsSecInput: (number | null)[] | undefined,
   voiceOverBaseClipIndexInput: number | undefined,
+<<<<<<< HEAD
   voiceOverOverlayClipIndicesInput: number[] | undefined
+=======
+  voiceOverOverlayClipIndices?: number[]
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 ) {
   let googleFileRefs: GoogleFileRef[] = []
 
@@ -669,8 +674,9 @@ async function runMultipleClipsPipelineFromStorage(
       googleFileRefs = []
     }
 
-    // B4 — Construir subtítulos
+    // B4 — Construir subtítulos (incluye bloque VO + overlays manuales si vinieron en el job)
     console.log(`[VideoV2Pipeline][${jobId}][B4] Construyendo subtítulos`)
+<<<<<<< HEAD
     let subtitleBlocks = buildSubtitleBlocks(analysis.sequence, allSegments)
     let adjustedSrt = buildAdjustedSRT(analysis.sequence, allSegments)
     let voiceOverIntro: VoiceOverIntroRenderInput | null = null
@@ -772,6 +778,21 @@ async function runMultipleClipsPipelineFromStorage(
           `${brollOrderSafe.length} clips B-roll, ${voBrollTiles.length} ventanas en timeline (semántica + fallback lineal si aplica)`
       )
     }
+=======
+    const clipFilenames = files.map((f) => f.filename || '')
+    const { subtitleBlocks, adjustedSrt, voiceOverIntro } = await computeAutomaticSubtitlePayload({
+      jobId,
+      paths,
+      analysis,
+      allSegments,
+      kinds,
+      clipDurationsSecInput,
+      voiceOverBaseClipIndex,
+      voiceOverOverlayClipIndices,
+      clipFilenames,
+      signedClipUrls: signedUrls,
+    })
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
     let geminiAnalysisPatch: typeof analysis | undefined
     if (voiceOverBaseClipIndex != null && voiceOverIntro != null) {
@@ -947,6 +968,10 @@ async function computeAutomaticSubtitlePayload(params: {
   kinds: VideoClipKind[]
   clipDurationsSecInput?: (number | null)[]
   voiceOverBaseClipIndex?: number
+<<<<<<< HEAD
+=======
+  /** Si hay entradas, planos encima de la VO en ese orden (lineal, audio mute en render). */
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   voiceOverOverlayClipIndices?: number[]
   clipFilenames: string[]
   signedClipUrls: string[]
@@ -963,7 +988,11 @@ async function computeAutomaticSubtitlePayload(params: {
     kinds,
     clipDurationsSecInput,
     voiceOverBaseClipIndex,
+<<<<<<< HEAD
     voiceOverOverlayClipIndices,
+=======
+    voiceOverOverlayClipIndices: voOverlayInput,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     clipFilenames,
     signedClipUrls,
   } = params
@@ -972,6 +1001,11 @@ async function computeAutomaticSubtitlePayload(params: {
   let subtitleBlocks = buildSubtitleBlocks(analysisForRender.sequence, allSegments)
   let adjustedSrt = buildAdjustedSRT(analysisForRender.sequence, allSegments)
   let voiceOverIntro: VoiceOverIntroRenderInput | null = null
+
+  const voOverlayResolved =
+    voiceOverBaseClipIndex != null && voOverlayInput && voOverlayInput.length > 0
+      ? normalizeVoiceOverOverlayClipIndices(voOverlayInput, paths.length, voiceOverBaseClipIndex)
+      : undefined
 
   const clipDurationsForRender = Array.from({ length: paths.length }, (_, i) => {
     const c = clipDurationsSecInput?.[i]
@@ -1013,6 +1047,7 @@ async function computeAutomaticSubtitlePayload(params: {
     const afterSeq = analysisForRender.sequence.slice(insertAfter)
     const dBefore = sumSequenceItemsDurationSec(beforeSeq)
 
+<<<<<<< HEAD
     const dedicatedBrollForRender = kinds
       .map((k, i) => ({ k, i }))
       .filter(({ k, i }) => k === 'visual_only' && i !== voiceOverBaseClipIndex)
@@ -1040,6 +1075,22 @@ async function computeAutomaticSubtitlePayload(params: {
             brollOrderSafe,
             clipDurationsForRender,
             analysisForRender.sequence,
+=======
+    const brollOrderAuto = kinds
+      .map((k, i) => ({ k, i }))
+      .filter(({ k, i }) => k === 'visual_only' && i !== voiceOverBaseClipIndex)
+      .map(({ i }) => i)
+    const brollOrder = voOverlayResolved && voOverlayResolved.length > 0 ? voOverlayResolved : brollOrderAuto
+
+    const voBrollTiles =
+      voOverlayResolved && voOverlayResolved.length > 0
+        ? planLinearBrollTiling(voDur, voOverlayResolved, clipDurationsForRender)
+        : buildSemanticVoiceOverBrollTiles(
+            voDur,
+            brollOrder,
+            clipDurationsForRender,
+            analysis.sequence,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
             allSegments,
             voiceOverBaseClipIndex,
             clipFilenames
@@ -1072,6 +1123,13 @@ async function computeAutomaticSubtitlePayload(params: {
     )
     const srtAfter = buildAdjustedSRT(afterSeq, allSegments, dBefore + voDur)
     adjustedSrt = [srtBefore, srtVo, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
+    const overlayNote =
+      voOverlayResolved && voOverlayResolved.length > 0
+        ? `overlays manuales [${voOverlayResolved.join(',')}] lineales`
+        : `${brollOrder.length} B-roll auto, ${voBrollTiles.length} ventanas`
+    console.log(
+      `[VideoV2Pipeline][${jobId}][B4] Modo VO: bloque ${voDur}s tras ${insertAfter} cortes; ${overlayNote}`
+    )
   }
 
   return { subtitleBlocks, adjustedSrt, voiceOverIntro }
@@ -1112,7 +1170,11 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
   let kinds = defaultClipKinds(paths.length)
   let clipDurationsSecInput: (number | null)[] | undefined
   let voiceOverBaseClipIndex: number | undefined
+<<<<<<< HEAD
   let voiceOverOverlayClipIndicesStored: number[] | undefined
+=======
+  let voiceOverOverlayClipIndices: number[] | undefined
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1124,8 +1186,22 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
     if (typeof sc.voiceOverBaseClipIndex === 'number') {
       voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
     }
+<<<<<<< HEAD
     if (Array.isArray(sc.voiceOverOverlayClipIndices) && sc.voiceOverOverlayClipIndices.length > 0) {
       voiceOverOverlayClipIndicesStored = sc.voiceOverOverlayClipIndices as number[]
+=======
+    if (
+      typeof sc.voiceOverBaseClipIndex === 'number' &&
+      Array.isArray(sc.voiceOverOverlayClipIndices) &&
+      sc.voiceOverOverlayClipIndices.length > 0
+    ) {
+      const norm = normalizeVoiceOverOverlayClipIndices(
+        sc.voiceOverOverlayClipIndices,
+        paths.length,
+        sc.voiceOverBaseClipIndex
+      )
+      if (norm.length > 0) voiceOverOverlayClipIndices = norm
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     }
   }
   if (voiceOverBaseClipIndex != null && paths.length < 2) {
@@ -1143,7 +1219,11 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
     kinds,
     clipDurationsSecInput,
     voiceOverBaseClipIndex,
+<<<<<<< HEAD
     voiceOverOverlayClipIndices: voiceOverOverlayClipIndicesStored,
+=======
+    voiceOverOverlayClipIndices,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     clipFilenames,
     signedClipUrls,
   })
@@ -1214,7 +1294,11 @@ export async function getCreatomateRenderScriptForJob(
   let kinds = defaultClipKinds(paths.length)
   let clipDurationsSecInput: (number | null)[] | undefined
   let voiceOverBaseClipIndex: number | undefined
+<<<<<<< HEAD
   let voiceOverOverlayClipIndicesScript: number[] | undefined
+=======
+  let voiceOverOverlayClipIndices: number[] | undefined
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1226,8 +1310,22 @@ export async function getCreatomateRenderScriptForJob(
     if (typeof sc.voiceOverBaseClipIndex === 'number') {
       voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
     }
+<<<<<<< HEAD
     if (Array.isArray(sc.voiceOverOverlayClipIndices) && sc.voiceOverOverlayClipIndices.length > 0) {
       voiceOverOverlayClipIndicesScript = sc.voiceOverOverlayClipIndices as number[]
+=======
+    if (
+      typeof sc.voiceOverBaseClipIndex === 'number' &&
+      Array.isArray(sc.voiceOverOverlayClipIndices) &&
+      sc.voiceOverOverlayClipIndices.length > 0
+    ) {
+      const norm = normalizeVoiceOverOverlayClipIndices(
+        sc.voiceOverOverlayClipIndices,
+        paths.length,
+        sc.voiceOverBaseClipIndex
+      )
+      if (norm.length > 0) voiceOverOverlayClipIndices = norm
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     }
   }
   if (voiceOverBaseClipIndex != null && paths.length < 2) {
@@ -1246,7 +1344,11 @@ export async function getCreatomateRenderScriptForJob(
     kinds,
     clipDurationsSecInput,
     voiceOverBaseClipIndex,
+<<<<<<< HEAD
     voiceOverOverlayClipIndices: voiceOverOverlayClipIndicesScript,
+=======
+    voiceOverOverlayClipIndices,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     clipFilenames,
     signedClipUrls: freshClipUrls,
   })
@@ -1343,7 +1445,11 @@ export async function rerunCreatomateRenderForJob(
   let kinds = defaultClipKinds(paths.length)
   let clipDurationsSecInput: (number | null)[] | undefined
   let voiceOverBaseClipIndex: number | undefined
+<<<<<<< HEAD
   let voiceOverOverlayClipIndicesRerun: number[] | undefined
+=======
+  let voiceOverOverlayClipIndices: number[] | undefined
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1355,8 +1461,22 @@ export async function rerunCreatomateRenderForJob(
     if (typeof sc.voiceOverBaseClipIndex === 'number') {
       voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
     }
+<<<<<<< HEAD
     if (Array.isArray(sc.voiceOverOverlayClipIndices) && sc.voiceOverOverlayClipIndices.length > 0) {
       voiceOverOverlayClipIndicesRerun = sc.voiceOverOverlayClipIndices as number[]
+=======
+    if (
+      typeof sc.voiceOverBaseClipIndex === 'number' &&
+      Array.isArray(sc.voiceOverOverlayClipIndices) &&
+      sc.voiceOverOverlayClipIndices.length > 0
+    ) {
+      const norm = normalizeVoiceOverOverlayClipIndices(
+        sc.voiceOverOverlayClipIndices,
+        paths.length,
+        sc.voiceOverBaseClipIndex
+      )
+      if (norm.length > 0) voiceOverOverlayClipIndices = norm
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     }
   }
   if (voiceOverBaseClipIndex != null && paths.length < 2) {
@@ -1376,7 +1496,11 @@ export async function rerunCreatomateRenderForJob(
       kinds,
       clipDurationsSecInput,
       voiceOverBaseClipIndex,
+<<<<<<< HEAD
       voiceOverOverlayClipIndices: voiceOverOverlayClipIndicesRerun,
+=======
+      voiceOverOverlayClipIndices,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       clipFilenames,
       signedClipUrls: freshClipUrls,
     })
@@ -1533,10 +1657,26 @@ export function startPipelineBackground(params: {
   clipDurationsSec?: (number | null)[]
   /** Índice del clip cuyo audio completo va como voz en off (solo flujo múltiple). */
   voiceOverBaseClipIndex?: number
+<<<<<<< HEAD
   /** Índices de clips que van como B-roll visual encima del VO (sin audio), en el orden elegido. */
   voiceOverOverlayClipIndices?: number[]
 }) {
   const { jobId, flowType, files, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex, voiceOverOverlayClipIndices } = params
+=======
+  /** Con VO manual: clips encima (orden lineal, mute en render). */
+  voiceOverOverlayClipIndices?: number[]
+}) {
+  const {
+    jobId,
+    flowType,
+    files,
+    musicTrackUrl,
+    clipKinds,
+    clipDurationsSec,
+    voiceOverBaseClipIndex,
+    voiceOverOverlayClipIndices,
+  } = params
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   if (flowType === 'single') {
     const f = files[0]

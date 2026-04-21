@@ -268,7 +268,7 @@ function creatomateVideoElementBase(): Record<string, unknown> {
 export interface VoiceOverIntroRenderInput {
   voClipIndex: number
   voDurationSec: number
-  /** Índices de clips `visual_only` en orden de archivo (excluye el clip de VO). */
+  /** Índices de clips para capas sobre la VO (`visual_only` automático, o lista manual en orden de timeline). */
   brollClipIndicesInFileOrder: number[]
   /** Duración de cada archivo (misma longitud que clipUrls). */
   clipFileDurationsSec: (number | null)[]
@@ -452,23 +452,6 @@ function buildVoiceOverIntroLayers(
   const t0 = Number((input.timelineStartSec ?? 0).toFixed(3))
   const videoElements: Record<string, unknown>[] = []
 
-  videoElements.push({
-    id: 'vo_intro_bg_black',
-    type: 'shape',
-    path: 'M 0% 0% L 100% 0% L 100% 100% L 0% 100% Z',
-    width: '100%',
-    height: '100%',
-    fill_color: '#000000',
-    stroke_width: '0vmin',
-    track: TRACK_VO_BLACK,
-    time: t0,
-    duration: voDur,
-    x: '50%',
-    y: '50%',
-    x_alignment: '50%',
-    y_alignment: '50%',
-  })
-
   const tiles =
     input.voBrollTiles && input.voBrollTiles.length > 0
       ? input.voBrollTiles
@@ -478,6 +461,7 @@ function buildVoiceOverIntroLayers(
           input.clipFileDurationsSec,
           clipUrls
         )
+<<<<<<< HEAD
   const normalizedTiles = tiles
     .filter((t) => t.clipIndex !== input.voClipIndex)
     .filter((t) => Number.isFinite(t.timeStart) && Number.isFinite(t.duration))
@@ -495,6 +479,29 @@ function buildVoiceOverIntroLayers(
         )
   for (let i = 0; i < resolvedTiles.length; i++) {
     const tile = resolvedTiles[i]
+=======
+  // Sin capa negra cuando hay B-roll: en algunos motores la forma en track 1 tapaba los vídeos del track 5.
+  if (tiles.length === 0) {
+    videoElements.push({
+      id: 'vo_intro_bg_black',
+      type: 'shape',
+      path: 'M 0% 0% L 100% 0% L 100% 100% L 0% 100% Z',
+      width: '100%',
+      height: '100%',
+      fill_color: '#000000',
+      stroke_width: '0vmin',
+      track: TRACK_VO_BLACK,
+      time: t0,
+      duration: voDur,
+      x: '50%',
+      y: '50%',
+      x_alignment: '50%',
+      y_alignment: '50%',
+    })
+  }
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i]
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     const url = clipUrls[tile.clipIndex]
     if (!url) continue
     videoElements.push(

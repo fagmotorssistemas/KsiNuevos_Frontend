@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Music, Play, Pause, Loader2, CheckCircle2 } from 'lucide-react'
 import type { MusicTrackV2 } from '@/lib/videos-v2/types'
+import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 
 interface MusicSelectorProps {
   selectedId: string | null
@@ -16,11 +17,17 @@ export function MusicSelector({ selectedId, onSelect }: MusicSelectorProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    fetch('/api/videos-v2/music')
-      .then((r) => r.json())
-      .then((data: { tracks: MusicTrackV2[] }) => setTracks(data.tracks ?? []))
-      .catch(console.error)
-      .finally(() => setIsLoading(false))
+    void (async () => {
+      try {
+        const r = await fetch('/api/videos-v2/music')
+        const data = await parseJsonOrThrow<{ tracks?: MusicTrackV2[] }>(r)
+        setTracks(data.tracks ?? [])
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setIsLoading(false)
+      }
+    })()
   }, [])
 
   function togglePreview(track: MusicTrackV2) {

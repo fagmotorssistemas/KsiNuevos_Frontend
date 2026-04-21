@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   X,
   Film,
@@ -20,6 +20,7 @@ import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
 import type { VideoJobV2, GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
 import { VIDEO_V2_MAX_CLIPS } from '@/lib/videos-v2/clip-config'
+import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
@@ -66,8 +67,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [completedJob, setCompletedJob] = useState<VideoJobV2 | null>(null)
   /** 'auto' = Gemini + visual_overlay; número = índice del clip cuyo audio completo va como VO. */
   const [voiceOverBaseClipIndex, setVoiceOverBaseClipIndex] = useState<number | 'auto'>('auto')
+<<<<<<< HEAD
   /** Índices de los clips que van como B-roll visual encima del VO (sin audio), en el orden elegido. */
   const [voiceOverOverlayClipIndices, setVoiceOverOverlayClipIndices] = useState<number[]>([])
+=======
+  /** Orden de clips (índices) que van encima de la VO; el audio de estos se silencia en el bloque VO. */
+  const [voiceOverOverlayClipOrder, setVoiceOverOverlayClipOrder] = useState<number[]>([])
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   const [scriptPdfFile, setScriptPdfFile] = useState<File | null>(null)
 
   function reset() {
@@ -81,8 +87,30 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setIsSubmitting(false)
     setUploadProgress(null)
     setVoiceOverBaseClipIndex('auto')
+<<<<<<< HEAD
     setVoiceOverOverlayClipIndices([])
+=======
+    setVoiceOverOverlayClipOrder([])
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     setScriptPdfFile(null)
+  }
+
+  useEffect(() => {
+    if (voiceOverBaseClipIndex === 'auto') {
+      setVoiceOverOverlayClipOrder([])
+      return
+    }
+    setVoiceOverOverlayClipOrder((prev) => prev.filter((i) => i !== voiceOverBaseClipIndex))
+  }, [voiceOverBaseClipIndex])
+
+  function toggleVoiceOverOverlayClip(i: number) {
+    if (voiceOverBaseClipIndex === 'auto' || typeof voiceOverBaseClipIndex !== 'number') return
+    if (i === voiceOverBaseClipIndex) return
+    setVoiceOverOverlayClipOrder((prev) => {
+      const j = prev.indexOf(i)
+      if (j >= 0) return prev.filter((_, idx) => idx !== j)
+      return [...prev, i]
+    })
   }
 
   function handleClose() {
@@ -111,12 +139,12 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         }),
       })
 
-      const createData = (await createRes.json()) as {
+      const createData = await parseJsonOrThrow<{
         jobId?: string
         uploads?: UploadInfo[]
         scriptUpload?: ScriptUploadInfo
         error?: string
-      }
+      }>(createRes)
 
       if (!createRes.ok || !createData.jobId || !createData.uploads) {
         throw new Error(createData.error ?? 'Error preparando el upload')
@@ -154,7 +182,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         setUploadProgress('Subiendo guion (PDF)...')
         const scriptPut = await fetch(scriptUpload.signedUrl, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/pdf' },
+          headers: { 'Content-Type': scriptPdfFile.type || 'application/pdf' },
           body: scriptPdfFile,
         })
         if (!scriptPut.ok) {
@@ -187,9 +215,15 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         files.length >= 2 &&
         voiceOverBaseClipIndex !== 'auto'
           ? {
+<<<<<<< HEAD
               voiceOverBaseClipIndex,
               ...(voiceOverOverlayClipIndices.length > 0
                 ? { voiceOverOverlayClipIndices }
+=======
+              voiceOverBaseClipIndex: voiceOverBaseClipIndex,
+              ...(voiceOverOverlayClipOrder.length > 0
+                ? { voiceOverOverlayClipIndices: voiceOverOverlayClipOrder }
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
                 : {}),
             }
           : {}
@@ -206,7 +240,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         }),
       })
 
-      const startData = (await startRes.json()) as { jobId?: string; error?: string }
+      const startData = await parseJsonOrThrow<{ jobId?: string; error?: string }>(startRes)
       if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
 
       setJobId(newJobId)
@@ -355,9 +389,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                 <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
                   <p className="text-sm font-semibold text-gray-900">Clip de voz en off (audio completo + B-roll)</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Elige el archivo cuyo audio debe reproducirse entero una vez en el Reel, con planos sin habla (B-roll
-                    de AssemblyAI) encima cuando haya material visual encajable. Gemini decide en qué momento del montaje va ese
-                    bloque (inicio, mitad o cierre) según el ritmo; el resto son cortes con diálogo de los otros clips.
+                    Elige el archivo cuyo audio debe reproducirse entero una vez en el Reel. Opcionalmente indica qué
+                    otros clips van encima (solo imagen, en mudo): si no eliges ninguno, el sistema usa planos sin habla
+                    detectados por Assembly y los reparte por semántica. Gemini decide en qué momento del montaje va el
+                    bloque de VO; el resto son cortes con diálogo de los otros clips.
                   </p>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2.5 cursor-pointer">
@@ -393,6 +428,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                       </label>
                     ))}
                   </div>
+<<<<<<< HEAD
 
                   {/* Selección de clips que van encima del VO como B-roll visual */}
                   {voiceOverBaseClipIndex !== 'auto' && (
@@ -433,6 +469,44 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                 <span className="font-medium">Clip {i}</span>
                                 <span className="text-gray-400">—</span>
                                 <span className="break-all text-gray-600">{f.name}</span>
+=======
+                  {voiceOverBaseClipIndex !== 'auto' && typeof voiceOverBaseClipIndex === 'number' && (
+                    <div className="mt-3 pt-3 border-t border-violet-200/80 space-y-2">
+                      <p className="text-xs font-semibold text-gray-800">Clips encima de la VO (orden = timeline)</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Activa los planos en el orden en que deben ir: primero el que pulsaste primero, etc. El audio de
+                        estos clips se silencia en el tramo de la voz en off; solo su imagen tapa el vídeo de la VO.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {voiceOverOverlayClipOrder.map((idx, pos) => (
+                          <span
+                            key={`${idx}-${pos}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-violet-600 text-white text-[10px] font-bold px-2 py-0.5"
+                          >
+                            {pos + 1}. Clip {idx}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {files.map((f, i) => {
+                          if (i === voiceOverBaseClipIndex) return null
+                          const on = voiceOverOverlayClipOrder.includes(i)
+                          return (
+                            <label
+                              key={`ov-${f.name}-${i}`}
+                              className="flex items-start gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-white/80"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 rounded border-violet-300"
+                                checked={on}
+                                onChange={() => toggleVoiceOverOverlayClip(i)}
+                              />
+                              <span className="text-xs text-gray-800 min-w-0">
+                                <span className="font-medium">Clip {i}</span>
+                                <span className="text-gray-500"> — </span>
+                                <span className="break-all">{f.name}</span>
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
                               </span>
                             </label>
                           )

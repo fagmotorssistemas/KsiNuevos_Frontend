@@ -30,8 +30,8 @@ export interface GeminiSegmentAnalysis {
   total_duration: number
   overall_strategy: string
   /**
-   * Solo modo VO manual: cuántos ítems de `sequence` van antes del bloque VO+B-roll automático.
-   * 0 = al inicio; N = tras N segmentos; sequence.length = VO al final.
+   * Solo modo VO manual: cuántos ítems de `sequence` van antes del bloque VO + planos encima.
+   * El valor se acota en servidor: con ≥2 segmentos suele quedar en [1, n−1] (ni abre ni cierra el Reel).
    */
   voice_over_insert_after_count?: number
 }
@@ -315,7 +315,29 @@ function isMistakeSegment(seg: Segment): boolean {
   return /me equivoque|equivoc|otra vez|de nuevo/.test(t)
 }
 
+/**
+ * "Comenta este Prado 2016" / "comenta Toyota Prado" es gancho de presentación, NO el CTA de cierre.
+ * Antes `comenta\\b` en CTA metía esos clips al final del Reel y rompía el arco (presentación ↔ CTA).
+ */
+function isComentaVehicleEngagementHook(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  if (!/\bcomenta\b/.test(t)) return false
+  const hasYear = /\b(19|20)\d{2}\b/.test(t)
+  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
+  const hasModel =
+    MODEL_LINE_REGEX.test(seg.text) ||
+    /\b[hx]?\d{1,3}\b/.test(t) ||
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+      t
+    )
+  if (hasYear && (hasBrand || hasModel)) return true
+  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|un|una|unos|unas)\b/.test(t)) return true
+  if (hasBrand && hasModel) return true
+  return false
+}
+
 function isPresentationSegment(seg: Segment): boolean {
+  if (isComentaVehicleEngagementHook(seg)) return true
   const t = normalizeText(seg.text)
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
@@ -332,6 +354,7 @@ function isPresentationSegment(seg: Segment): boolean {
 /** Primer corte del Reel: debe sonar marca + contexto (modelo o año), no solo "2012" ni solo "F-150" sin marca. */
 function openingPresentationIsAdequate(seg: Segment | undefined): boolean {
   if (!seg) return false
+  if (isComentaVehicleEngagementHook(seg)) return true
   const t = normalizeText(seg.text)
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
@@ -439,6 +462,7 @@ function strengthenOpeningPresentation(
 
 function isEndCtaSegment(seg: Segment): boolean {
   const t = normalizeText(seg.text)
+<<<<<<< HEAD
   return /solo aqui|ksi nuevos|casi nuevos|comenta\b|te pasamos|te enviamos|te mandamos/.test(t)
 }
 
@@ -446,6 +470,29 @@ function isEndCtaSegment(seg: Segment): boolean {
 function isCtaCallToActionTrigger(seg: Segment): boolean {
   const t = normalizeText(seg.text)
   return /comenta\b/.test(t)
+=======
+  if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return true
+  if (/\bcomenta\b/.test(t)) {
+    if (isComentaVehicleEngagementHook(seg)) return false
+    return true
+  }
+  return false
+}
+
+/** Dentro del bloque "cierre", prioridad creciente: info intermedia → comenta redes → marca Ksi/Casi Nuevos al final. */
+function outroClosingStrength(seg: Segment | undefined): number {
+  if (!seg) return 0
+  const t = normalizeText(seg.text)
+  if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return 3
+  if (/\bcomenta\b/.test(t)) return 2
+  if (/informacion|información|whatsapp|redes|siguenos|síguenos|mas info|más info|dm\b/.test(t)) return 1
+  return 0
+}
+
+function introOpeningStrength(seg: Segment | undefined): number {
+  if (!seg) return 0
+  return openingPresentationIsAdequate(seg) ? 2 : isPresentationSegment(seg) ? 1 : 0
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 }
 
 function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[]): SequenceItem[] {
@@ -465,6 +512,7 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
     else middle.push(item)
   }
 
+<<<<<<< HEAD
   // Ordenar outro: "comenta" primero → luego "te pasamos/enviamos" (respuesta al comenta)
   outro.sort((a, b) => {
     const sa = lookup.get(a.segment_id)
@@ -475,6 +523,14 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
     if (!aIsTrigger && bIsTrigger) return 1
     return 0
   })
+=======
+  intro.sort(
+    (a, b) => introOpeningStrength(lookup.get(b.segment_id)) - introOpeningStrength(lookup.get(a.segment_id))
+  )
+  outro.sort(
+    (a, b) => outroClosingStrength(lookup.get(a.segment_id)) - outroClosingStrength(lookup.get(b.segment_id))
+  )
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   return [...intro, ...middle, ...outro]
 }
@@ -573,6 +629,17 @@ function isSameUtterance(textA: string, textB: string): boolean {
   return false
 }
 
+/** Cortes seguidos donde uno contiene casi todo el texto del otro (misma toma reeditada). */
+function consecutiveNearDuplicateUtterance(textA: string, textB: string): boolean {
+  const na = normalizeForDedupe(textA)
+  const nb = normalizeForDedupe(textB)
+  if (na.length < 12 || nb.length < 12) return false
+  const short = na.length <= nb.length ? na : nb
+  const long = na.length > nb.length ? na : nb
+  if (long.includes(short) && short.length >= 14) return true
+  return stringSimilarity(na, nb) >= 0.88
+}
+
 function dedupeSequenceByUtterance(
   sequence: SequenceItem[],
   segmentLookup: Map<string, Segment>,
@@ -600,6 +667,31 @@ function dedupeSequenceByUtterance(
   return kept
 }
 
+/** Tras el orden editorial, evita dos cortes seguidos casi idénticos (Gemini a veces repite la misma idea). */
+function dedupeConsecutiveNearDuplicates(
+  sequence: SequenceItem[],
+  segmentLookup: Map<string, Segment>,
+  jobId: string
+): SequenceItem[] {
+  if (sequence.length <= 1) return sequence
+  const out: SequenceItem[] = [sequence[0]!]
+  for (let i = 1; i < sequence.length; i++) {
+    const item = sequence[i]!
+    const seg = segmentLookup.get(item.segment_id)
+    const prevSeg = segmentLookup.get(out[out.length - 1]!.segment_id)
+    if (seg && prevSeg) {
+      if (isSameUtterance(prevSeg.text, seg.text) || consecutiveNearDuplicateUtterance(prevSeg.text, seg.text)) {
+        console.warn(
+          `[VideoV2Pipeline][${jobId}][Gemini] Dedupe consecutivo: descartando ${item.segment_id} (muy similar al corte anterior)`
+        )
+        continue
+      }
+    }
+    out.push(item)
+  }
+  return out
+}
+
 interface ValidateGeminiSequenceOptions {
   /** Descarta cualquier ítem cuyo segmento pertenezca a estos clip_index (p. ej. clip de VO manual). */
   excludeClipIndicesFromSequence?: number[]
@@ -622,6 +714,7 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
 }
 
 /**
+<<<<<<< HEAD
  * Ajusta dónde va el bloque VO en la timeline: siempre después de la presentación inicial (si existe)
  * y siempre antes de cualquier CTA/cierre. Además intenta colocar el VO en la "parte media del arco"
  * medida en tiempo real (30–65% de la duración narrativa total), no solo por conteo de cortes.
@@ -631,6 +724,11 @@ function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLen
  *  2. Restricción dura: presentación siempre antes del VO → minI = 1 si el primer corte es presentación.
  *  3. Heurística temporal: VO entra cuando se ha consumido entre 30 % y 65 % del tiempo narrativo.
  *     Esto evita que el VO abra el Reel o cierre con clips de larga duración que distorsionen el conteo.
+=======
+ * Ajusta dónde va el bloque VO: Gemini propone `voice_over_insert_after_count`; aquí se acota para que
+ * haya al menos un corte narrativo antes del bloque VO y al menos uno después (no abre ni cierra el Reel)
+ * cuando hay ≥2 segmentos; además se respeta presentación al inicio y CTA antes del cierre.
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
  */
 function finalizeVoiceOverInsertPlacement(
   sequence: SequenceItem[],
@@ -658,9 +756,11 @@ function finalizeVoiceOverInsertPlacement(
   // ── Cotas duras ──────────────────────────────────────────────────────────
   let minI = 0
   if (firstIsPresentation) minI = 1
+  if (n >= 2) minI = Math.max(minI, 1)
 
   let maxI = n
   if (firstCtaIndex >= 0) maxI = firstCtaIndex
+  if (n >= 2) maxI = Math.min(maxI, n - 1)
 
   if (minI > maxI) {
     console.warn(
@@ -669,6 +769,7 @@ function finalizeVoiceOverInsertPlacement(
     return maxI
   }
 
+<<<<<<< HEAD
   m = Math.max(minI, Math.min(m, maxI))
 
   // ── Heurística temporal: 30–65 % del tiempo narrativo ────────────────────
@@ -721,6 +822,18 @@ function finalizeVoiceOverInsertPlacement(
     m = Math.max(m, 1)
   }
 
+=======
+  if (n >= 4 && firstIsPresentation && firstCtaIndex >= 0 && m < 2 && maxI >= 2) {
+    const target = Math.min(2, maxI)
+    if (target > m) {
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Gemini] VO insert: se prefiere al menos 2 cortes antes del VO (presentación + desarrollo); ${m} → ${target}`
+      )
+      m = target
+    }
+  }
+
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   if (m !== requested) {
     console.warn(
       `[VideoV2Pipeline][${jobId}][Gemini] voice_over_insert_after_count ajustado ${requested} → ${m} (arco: presentación → VO → CTA)`
@@ -800,6 +913,7 @@ function validateSequence(
     sequence = normalizeVisualOverlaysInSequence(sequence, kinds, allSegments, jobId)
   }
 
+<<<<<<< HEAD
   // 3) Permitir micro-segmentos relevantes (solo descartar ultra-cortos)
   //    Los segmentos de presentación (marca/modelo/año) se conservan a partir de 0.3s
   //    para no perder menciones cortas como "Toyota" (0.4s) o "Prado" (0.35s).
@@ -814,14 +928,29 @@ function validateSequence(
   })
   if (sequence.length < before) {
     console.log(`[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<0.8s no-presentación)`)
+=======
+  // 3) Conservar micro-cortes de presentación (ej. solo "Toyota", solo "Prado"); solo descartar ruido casi nulo
+  const MIN_TRIM_DURATION_SEC = 0.22
+  const before = sequence.length
+  sequence = sequence.filter((item) => item.trim_duration >= MIN_TRIM_DURATION_SEC)
+  if (sequence.length < before) {
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos (<${MIN_TRIM_DURATION_SEC}s)`
+    )
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   }
 
   // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
   //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
   sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
+<<<<<<< HEAD
   // 4b) Orden editorial duro: presentación primero, CTA/marca al final
   sequence = enforceEditorialOrder(sequence, allSegments)
+=======
+  // 4b2) Evitar dos cortes seguidos casi iguales (reordenar editorial puede juntar duplicados)
+  sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
   sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
@@ -867,6 +996,7 @@ function validateSequence(
     )
   }
 
+<<<<<<< HEAD
   // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre.
   //    En modo VO manual los segmentos narrativos son complementarios; el límite blando es menor
   //    (el VO aporta sus propios segundos). En modo autónomo se mantiene 33s.
@@ -876,6 +1006,14 @@ function validateSequence(
 
   if (totalDuration > hardCap && sequence.length > 0) {
     for (let i = sequence.length - 1; i >= 0 && totalDuration > softCap; i--) {
+=======
+  // 6) Si quedó muy largo, quitar últimos no prioritarios y recortar cierre (límite amplio: reels largos con varios clips)
+  const REEL_TRIM_TRIGGER_SEC = 92
+  const REEL_TRIM_TARGET_SEC = 88
+  const REEL_LAST_SEGMENT_MIN_SEC = 0.22
+  if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
+    for (let i = sequence.length - 1; i >= 0 && totalDuration > REEL_TRIM_TARGET_SEC; i--) {
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       const seg = segmentLookup.get(sequence[i].segment_id)
       if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
         totalDuration -= sequence[i].trim_duration
@@ -884,10 +1022,17 @@ function validateSequence(
     }
     totalDuration = Number(totalDuration.toFixed(3))
 
+<<<<<<< HEAD
     if (totalDuration > hardCap && sequence.length > 0) {
       const last = sequence[sequence.length - 1]
       const excess = totalDuration - softCap
       last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
+=======
+    if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
+      const last = sequence[sequence.length - 1]
+      const excess = totalDuration - REEL_TRIM_TARGET_SEC
+      last.trim_duration = Number(Math.max(REEL_LAST_SEGMENT_MIN_SEC, last.trim_duration - excess).toFixed(3))
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
       if (last.visual_overlay) {
         last.visual_overlay = {
@@ -924,6 +1069,7 @@ MONTAJE 100% AUTOMÁTICO:
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
 - Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
+- Orden: presentación (marca/modelo/año o "comenta este Prado 2016" como gancho) al inicio; CTA de cierre ("solo aquí en Ksi", "comenta abajo") al final — no inviertas gancho de auto con cierre.
 - Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
 - Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
 `
@@ -934,6 +1080,7 @@ BLOQUE VO MANUAL (no entra en "sequence"):
 - Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima; el pipeline intenta cubrir el audio con planos — elige B-roll temáticamente rico para minimizar huecos visuales. Ese clip NO está en el mapa de segmentos.
 - "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay en "sequence".
 - Debes respetar el arco narrativo del JSON (presentación del carro → desarrollo / VO → CTA) y fijar "voice_over_insert_after_count" en consecuencia.
+- El PRIMER corte de "sequence" debe ser presentación clara (marca + modelo o año). El ÚLTIMO corte debe ser el cierre/CTA (comenta aquí, Ksi/Casi Nuevos, etc.). NO pongas el CTA antes que un clip que solo pide "comenta" el modelo del auto (eso es gancho, no cierre).
 - En "sequence", cada corte debe aportar algo distinto: no pongas dos segmentos seguidos que repitan o parafraseen la misma idea (el sistema penaliza redundancia).
 - Ritmo viral: cortes breves y contundentes antes y después del bloque VO; evita sensación de pantalla vacía.
 `
@@ -947,10 +1094,9 @@ ARCO NARRATIVO (prioridad alta; el sistema reordenará cortes por tipo, pero tú
 
 CLAVE "voice_over_insert_after_count" (obligatoria en el JSON raíz):
 - Entero entre 0 y longitud de "sequence": cuántos elementos de "sequence" se reproducen ANTES del bloque VO.
-- Casi nunca uses 0 si el primer corte es presentación de carro: el espectador debe ver/oir primero qué auto es (cuenta ≥ 1).
-- Todo CTA debe quedar después del bloque VO → tu número debe ser ≤ índice del primer segmento tipo CTA en "sequence" (el orden ya pone CTA al final; no metas el bloque VO después del CTA).
-- Valores típicos con varios cortes: 1 (solo presentación antes del VO), 2 o 3 (presentación + 1–2 clips de desarrollo, luego VO, luego resto + CTA).
-- Igual a sequence.length solo si quieres todo el habla primero y el bloque VO cerrando (evítalo si hay CTA: mejor deja CTA al final con un número menor).
+- El pipeline acota tu número: con 2 o más segmentos en "sequence", el bloque VO no debe abrir ni cerrar el Reel (queda al menos un corte antes y otro después), salvo conflictos raros de detección CTA.
+- Todo CTA debe quedar después del bloque VO → el número debe ser ≤ índice del primer segmento tipo CTA en "sequence".
+- Valores típicos: 1–3 (presentación + algo de desarrollo, luego VO en la parte media, luego más contenido + CTA al final). Evita 0 y evita sequence.length.
 `
 
 const BROLL_PROMPT_BLOCK = `
@@ -1026,8 +1172,8 @@ REGLAS ABSOLUTAS DE CORTE:
 2. Usa EXACTAMENTE los trim_start y trim_end que correspondan al inicio y fin del segmento (start_s y end_s del mapa). NO modifiques los timestamps a menos que el segmento sea demasiado largo y necesites usar solo una parte (en ese caso, corta en una pausa natural entre palabras).
 3. Objetivo de duración total: idealmente entre 20 y 32 segundos para Reels; si el material natural queda más corto, NO rellenes con trozos irrelevantes — prioriza coherencia sobre alargar.
 4. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
-6. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
+5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO. Un clip tipo "comenta este Toyota Prado 2016" es PRESENTACIÓN (gancho), no cierre: debe ir al inicio, no al final.
+6. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta abajo", "síguenos") deben ir al FINAL — no confundas con "comenta" + nombre del carro + año.
 7. El PRIMER segmento de "sequence" debe contener en su transcripción MARCA + (modelo o año), p. ej. "Ford F-150" o "Nissan Tiida 2012". Evita como primer corte solo el año ("2012") o solo modelo sin marca si en el mapa hay un segment_id más completo.
 8. MODELO COMPLETO: mira el vídeo (emblema, parrilla, placa, pantalla) y la voz. Si el mapa parte el modelo (p. ej. un segmento termina en "H" y otro empieza en "1"), elige el segment_id que agrupe el nombre completo o el que ya diga "H1" / "X5" junto; en "reason" escribe el modelo tal cual lo venderías (ej. Hyundai H1), nunca truncado.
 
@@ -1091,8 +1237,8 @@ REGLAS ABSOLUTAS DE CORTE:
 3. Duración total: apunta a 25–32s si el material da; si no, no rellenes con contenido débil.
 4. Puedes usar segmentos cortos si aportan valor (incluso alrededor de 1 segundo) siempre que no corten palabras.
 5. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-6. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO.
-7. Los segmentos tipo CTA o marca ("comenta ...", "solo aquí en Ksi/Casi Nuevos") deben ir al FINAL.
+6. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO. "Comenta este Toyota Prado 2016" es presentación/gancho, no CTA de cierre.
+7. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta abajo", "síguenos") van al FINAL — no confundas con "comenta" + nombre del carro + año.
 8. El PRIMER segmento de "sequence" debe incluir MARCA + (modelo o año) en el texto del mapa; no uses solo año o solo modelo sin marca como apertura si existe un segment_id mejor.
 9. MODELO COMPLETO: infiere del catálogo y del texto del mapa el modelo entero (H1, X5, 320d, etc.); en "reason" del primer corte escribe marca+modelo completos, sin truncar dígitos.
 

@@ -17,11 +17,18 @@ export interface VideoJobV2PipelineInputMeta {
    */
   voiceOverBaseClipIndex?: number | null
   /**
+<<<<<<< HEAD
    * Índices de los clips que van como B-roll VISUAL encima de la voz en off (sin audio),
    * en el orden que el usuario eligió. Si está definido, se usa emplanado lineal en ese orden.
    * Estos clips se excluyen de la secuencia narrativa de Gemini.
    */
   voiceOverOverlayClipIndices?: number[]
+=======
+   * Opcional con `voiceOverBaseClipIndex`: índices de clips que van encima de la VO (solo vídeo, audio al 0%).
+   * Orden = orden de apilado en timeline. Si se omite o queda vacío, se usan clips `visual_only` + emplanado semántico.
+   */
+  voiceOverOverlayClipIndices?: number[] | null
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMeta {
@@ -32,7 +39,11 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMet
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
     typeof o.voiceOverBaseClipIndex === 'number' ||
+<<<<<<< HEAD
     Array.isArray(o.voiceOverOverlayClipIndices)
+=======
+    (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0)
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   )
 }
 
@@ -74,6 +85,7 @@ export function normalizeVoiceOverBaseClipIndex(
   return n
 }
 
+<<<<<<< HEAD
 /**
  * Valida y normaliza la lista de índices de clips que van como B-roll visual encima del VO.
  * Elimina duplicados, fuera de rango y el índice del clip VO si está repetido.
@@ -90,9 +102,28 @@ export function normalizeVoiceOverOverlayClipIndices(
     const n = typeof x === 'number' ? x : Number(x)
     if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
     if (n === voiceOverBaseClipIndex) continue
+=======
+/** Índices únicos válidos, sin el clip base de VO; conserva el orden enviado. */
+export function normalizeVoiceOverOverlayClipIndices(
+  raw: unknown,
+  clipCount: number,
+  voBaseIndex: number
+): number[] {
+  if (!Array.isArray(raw) || raw.length === 0) return []
+  const out: number[] = []
+  const seen = new Set<number>()
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
+    if (n === voBaseIndex) continue
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     if (seen.has(n)) continue
     seen.add(n)
     out.push(n)
   }
+<<<<<<< HEAD
   return out.length > 0 ? out : undefined
+=======
+  return out
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 }

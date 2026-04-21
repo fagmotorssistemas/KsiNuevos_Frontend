@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Upload, Mic2, Brain, Clapperboard, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import type { VideoJobV2 } from '@/lib/videos-v2/types'
+import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 
 const POLL_INTERVAL_MS = 5_000
 const STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutos
@@ -39,14 +40,14 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
     try {
       const res = await fetch(`/api/videos-v2/job-status/${jobId}`)
       if (!res.ok) return
-      const data = (await res.json()) as VideoJobV2
+      const data = await parseJsonOrThrow<VideoJobV2>(res)
       setJob(data)
 
       if (data.status === 'completed') {
         onCompleted(data)
       }
     } catch {
-      // Silenciar errores de red en polling
+      // Red / HTML / JSON inválido en polling: no spamear consola
     }
   }, [jobId, onCompleted])
 

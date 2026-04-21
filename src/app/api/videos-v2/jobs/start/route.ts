@@ -4,7 +4,7 @@
  * Recibe el jobId y los paths de los archivos ya subidos a Supabase Storage.
  * Actualiza el job con los paths y dispara el pipeline en background.
  *
- * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex?, scriptPdfPath? }
+ * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex?, voiceOverOverlayClipIndices?, scriptPdfPath? }
  * Response:  { jobId, status: 'processing' }
  */
 
@@ -41,7 +41,14 @@ interface StartJobBody {
   clipDurations?: Array<number | null>
   /** Índice del clip cuyo audio completo va como voz en off (solo múltiple; debe tener habla detectada). */
   voiceOverBaseClipIndex?: number | null
+<<<<<<< HEAD
   /** Índices de clips que van como B-roll visual encima del VO, en el orden elegido (sin audio). */
+=======
+  /**
+   * Con `voiceOverBaseClipIndex`: orden de clips que van encima de la VO (solo vídeo; audio mute en render).
+   * Emplanado lineal hasta cubrir la duración de la VO.
+   */
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
   voiceOverOverlayClipIndices?: number[] | null
   /** Ruta en Storage del PDF de guion (mismo prefijo jobId/); opcional. */
   scriptPdfPath?: string | null
@@ -56,7 +63,11 @@ export async function POST(request: NextRequest) {
       clipKinds: clipKindsRaw,
       clipDurations: clipDurationsRaw,
       voiceOverBaseClipIndex: voiceOverRaw,
+<<<<<<< HEAD
       voiceOverOverlayClipIndices: overlayRaw,
+=======
+      voiceOverOverlayClipIndices: voOverlayRaw,
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
       scriptPdfPath: scriptPdfPathRaw,
     } = body
 
@@ -114,12 +125,38 @@ export async function POST(request: NextRequest) {
     }
 
     let voiceOverOverlayClipIndices: number[] | undefined
+<<<<<<< HEAD
     if (overlayRaw !== undefined && overlayRaw !== null) {
       voiceOverOverlayClipIndices = normalizeVoiceOverOverlayClipIndices(
         overlayRaw,
         paths.length,
         voiceOverBaseClipIndex
       )
+=======
+    if (voOverlayRaw !== undefined && voOverlayRaw !== null) {
+      if (!Array.isArray(voOverlayRaw)) {
+        return NextResponse.json(
+          { error: 'voiceOverOverlayClipIndices debe ser un array de enteros' },
+          { status: 400 }
+        )
+      }
+      if (voOverlayRaw.length > 0 && voiceOverBaseClipIndex === undefined) {
+        return NextResponse.json(
+          { error: 'voiceOverOverlayClipIndices requiere voiceOverBaseClipIndex' },
+          { status: 400 }
+        )
+      }
+      if (voiceOverBaseClipIndex !== undefined && voOverlayRaw.length > 0) {
+        const norm = normalizeVoiceOverOverlayClipIndices(voOverlayRaw, paths.length, voiceOverBaseClipIndex)
+        if (norm.length === 0) {
+          return NextResponse.json(
+            { error: 'voiceOverOverlayClipIndices no tiene índices válidos distintos del clip de VO' },
+            { status: 400 }
+          )
+        }
+        voiceOverOverlayClipIndices = norm
+      }
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
     }
 
     const supabase = getServiceClient()
@@ -172,15 +209,34 @@ export async function POST(request: NextRequest) {
     }
 
     const pipelineInput: Json | undefined =
+<<<<<<< HEAD
       clipKinds !== undefined || clipDurationsSec !== undefined || voiceOverBaseClipIndex !== undefined || voiceOverOverlayClipIndices !== undefined
+=======
+      clipKinds !== undefined ||
+      clipDurationsSec !== undefined ||
+      voiceOverBaseClipIndex !== undefined ||
+      (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0)
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
             ...(clipDurationsSec ? { clipDurationsSec } : {}),
             ...(voiceOverBaseClipIndex !== undefined ? { voiceOverBaseClipIndex } : {}),
+<<<<<<< HEAD
             ...(voiceOverOverlayClipIndices !== undefined ? { voiceOverOverlayClipIndices } : {}),
+=======
+            ...(voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0
+              ? { voiceOverOverlayClipIndices }
+              : {}),
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
           } as Json)
         : undefined
+
+    /** Solo tocar columnas de guion si el cliente envió scriptPdfPath (evita error si la DB aún no tiene la migración). */
+    const scriptDbFields =
+      scriptPdfPathRaw != null && String(scriptPdfPathRaw).trim() !== ''
+        ? { script_pdf_path: scriptPdfPathCol, script_text: scriptTextCol }
+        : {}
 
     // Actualizar paths en el job
     const { error: updateError } = await supabase
@@ -191,8 +247,7 @@ export async function POST(request: NextRequest) {
         current_step: 'Archivos recibidos. Iniciando pipeline...',
         progress_percentage: 20,
         ...(pipelineInput ? { selected_clips: pipelineInput } : {}),
-        script_pdf_path: scriptPdfPathCol,
-        script_text: scriptTextCol,
+        ...scriptDbFields,
       })
       .eq('id', jobId)
 
@@ -250,8 +305,22 @@ function startPipelineFromPaths(params: {
   voiceOverBaseClipIndex?: number
   voiceOverOverlayClipIndices?: number[]
 }) {
+<<<<<<< HEAD
   const { jobId, flowType, paths, signedUrls, musicTrackUrl, clipKinds, clipDurationsSec, voiceOverBaseClipIndex, voiceOverOverlayClipIndices } =
     params
+=======
+  const {
+    jobId,
+    flowType,
+    paths,
+    signedUrls,
+    musicTrackUrl,
+    clipKinds,
+    clipDurationsSec,
+    voiceOverBaseClipIndex,
+    voiceOverOverlayClipIndices,
+  } = params
+>>>>>>> dba973794c298690ae51e150ba94f3cc10ae6c8c
 
   // Pasamos buffers vacíos — el pipeline los ignorará porque los paths ya están en Storage.
   // El pipeline usará getSignedUrlForPath(path) internamente.
