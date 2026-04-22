@@ -497,6 +497,12 @@ function isCtaCallToActionTrigger(seg: Segment): boolean {
   return /\bcomenta\b/.test(t)
 }
 
+/** CTA de continuidad informativa ("te pasamos info", WhatsApp, DM): suele ir después del "comenta ...". */
+function isCtaInfoContinuationSegment(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  return /\b(te pasamos|te enviamos|te mandamos)\b/.test(t) || /\b(informacion|información|whatsapp|dm)\b/.test(t)
+}
+
 /**
  * "Comenta Prado 2016" / "comenta Toyota Corolla" sin demostrativo (este/esa/…): engagement de cierre
  * con auto; debe ir ANTES de "te pasamos la info" / WhatsApp. No marca apertura: eso solo
@@ -858,6 +864,15 @@ function dedupeConsecutiveNearDuplicates(
     const seg = segmentLookup.get(item.segment_id)
     const prevSeg = segmentLookup.get(out[out.length - 1]!.segment_id)
     if (seg && prevSeg) {
+      const preserveCtaChain =
+        isEndCtaSegment(prevSeg) &&
+        isEndCtaSegment(seg) &&
+        ((isCtaCallToActionTrigger(prevSeg) && isCtaInfoContinuationSegment(seg)) ||
+          (isCtaCallToActionTrigger(seg) && isCtaInfoContinuationSegment(prevSeg)))
+      if (preserveCtaChain) {
+        out.push(item)
+        continue
+      }
       if (isSameUtterance(prevSeg.text, seg.text) || consecutiveNearDuplicateUtterance(prevSeg.text, seg.text)) {
         console.warn(
           `[VideoV2Pipeline][${jobId}][Gemini] Dedupe consecutivo: descartando ${item.segment_id} (muy similar al corte anterior)`
