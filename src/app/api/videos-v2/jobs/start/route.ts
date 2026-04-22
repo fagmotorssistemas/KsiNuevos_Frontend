@@ -20,6 +20,8 @@ import {
   normalizeVoiceOverBaseClipIndex,
   normalizeVoiceOverOverlayClipIndices,
   normalizeVoiceOverMp3OverlayIndices,
+  normalizeManualIntroClipIndices,
+  normalizeCanonicalVehicle,
 } from '@/lib/videos-v2/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos-v2/extract-pdf-script-text'
 
@@ -64,6 +66,10 @@ interface StartJobBody {
   voiceOverAudioPath?: string | null
   /** Duración del audio VO en segundos (p. ej. leída en el navegador). */
   voiceOverMp3DurationSec?: number | null
+  /** Hasta 3 clips en orden, forzados al inicio del montaje (emergencia). */
+  manualIntroClipIndices?: number[] | null
+  /** Vehículo canónico para contexto en Gemini (inventario o captura manual). */
+  canonicalVehicle?: { brand?: string; model?: string; year?: string } | null
 }
 
 export async function POST(request: NextRequest) {
@@ -79,6 +85,8 @@ export async function POST(request: NextRequest) {
       scriptPdfPath: scriptPdfPathRaw,
       voiceOverAudioPath: voiceOverAudioPathRaw,
       voiceOverMp3DurationSec: voiceOverMp3DurationRaw,
+      manualIntroClipIndices: manualIntroRaw,
+      canonicalVehicle: canonicalVehicleRaw,
     } = body
 
     if (!jobId || !paths?.length) {
@@ -234,6 +242,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let manualIntroClipIndices: number[] | undefined
+    if (manualIntroRaw !== undefined && manualIntroRaw !== null && Array.isArray(manualIntroRaw)) {
+      if (manualIntroRaw.length > 0) {
+        if (paths.length < 2) {
+          return NextResponse.json(
+            { error: 'manualIntroClipIndices solo aplica a jobs con al menos dos clips' },
+            { status: 400 }
+          )
+        }
+        const norm = normalizeManualIntroClipIndices(
+          manualIntroRaw,
+          paths.length,
+          voiceOverBaseClipIndex,
+          voiceOverOverlayClipIndices ?? []
+        )
+        if (!norm || norm.length === 0) {
+          return NextResponse.json(
+            {
+              error:
+                'manualIntroClipIndices: ningún índice válido (no puede ser el clip de VO ni un plano encima del VO).',
+            },
+            { status: 400 }
+          )
+        }
+        manualIntroClipIndices = norm
+      }
+    }
+
+    const canonicalVehicle = normalizeCanonicalVehicle(canonicalVehicleRaw ?? undefined)
+
     const supabase = getServiceClient()
 
     const { data: job, error: fetchError } = await supabase
@@ -287,7 +325,9 @@ export async function POST(request: NextRequest) {
       clipDurationsSec !== undefined ||
       voiceOverBaseClipIndex !== undefined ||
       voiceOverAudioPath !== undefined ||
-      (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0)
+      (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0) ||
+      (manualIntroClipIndices !== undefined && manualIntroClipIndices.length > 0) ||
+      canonicalVehicle !== undefined
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -298,7 +338,11 @@ export async function POST(request: NextRequest) {
               : {}),
             ...(voiceOverAudioPath !== undefined ? { voiceOverAudioPath } : {}),
             ...(voiceOverMp3DurationSec !== undefined ? { voiceOverMp3DurationSec } : {}),
-          } as Json)
+            ...(manualIntroClipIndices && manualIntroClipIndices.length > 0
+              ? { manualIntroClipIndices }
+              : {}),
+            ...(canonicalVehicle ? { canonicalVehicle } : {}),
+          } as unknown as Json)
         : undefined
 
     const scriptDbFields =

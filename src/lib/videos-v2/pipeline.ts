@@ -8,6 +8,8 @@ import {
   buildAdjustedSRTForVoiceOverIntro,
   buildAdjustedSrtFromSubtitleBlocks,
   buildSubtitleBlocks,
+  buildSubtitleBlocksForExternalVoiceOver,
+  buildSubtitleBlocksFromRawWords,
   buildSubtitleBlocksForVoiceOverIntro,
   buildVisualOnlyPlaceholderSegment,
   clampSequenceToSegmentBounds,
@@ -17,17 +19,21 @@ import {
   sumSequenceItemsDurationSec,
 } from './segmenter'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
-import type { VideoClipKind } from './clip-config'
+import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import {
   defaultClipKinds,
   isPipelineInputMeta,
   normalizeClipDurationsInput,
   normalizeClipKindsInput,
+  normalizeCanonicalVehicle,
+  normalizeManualIntroClipIndices,
   normalizeVoiceOverMp3OverlayIndices,
   normalizeVoiceOverOverlayClipIndices,
 } from './clip-config'
+import { extractQuotedDialoguesFromScript } from './script-dialogues'
+import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
-import { analyzeSegments } from './gemini'
+import { analyzeSegments, type AnalyzeSegmentsOptions } from './gemini'
 import {
   buildCreatomateRenderScript,
   getCreatomateRenderStatus,
@@ -54,15 +60,32 @@ function getServiceClient() {
   )
 }
 
-async function fetchJobScriptGuidanceText(jobId: string): Promise<string | null> {
+async function fetchJobGeminiContext(jobId: string): Promise<{
+  scriptText: string | null
+  canonicalVehicle?: CanonicalVehicleMeta
+  manualIntroClipIndicesRaw?: number[]
+}> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
     .from('video_jobs_v2')
-    .select('script_text')
+    .select('script_text, selected_clips')
     .eq('id', jobId)
     .single()
-  if (error || !data?.script_text?.trim()) return null
-  return data.script_text.trim()
+  if (error || !data) return { scriptText: null }
+  const scriptText = data.script_text?.trim() || null
+  let canonicalVehicle: CanonicalVehicleMeta | undefined
+  let manualIntroClipIndicesRaw: number[] | undefined
+  const sc = data.selected_clips
+  if (isPipelineInputMeta(sc)) {
+    canonicalVehicle = normalizeCanonicalVehicle(sc.canonicalVehicle)
+    if (Array.isArray(sc.manualIntroClipIndices) && sc.manualIntroClipIndices.length > 0) {
+      const coerced = sc.manualIntroClipIndices
+        .map((x) => (typeof x === 'number' ? x : typeof x === 'string' ? Number(x) : NaN))
+        .filter((n) => Number.isInteger(n) && n >= 0)
+      if (coerced.length > 0) manualIntroClipIndicesRaw = coerced
+    }
+  }
+  return { scriptText, canonicalVehicle, manualIntroClipIndicesRaw }
 }
 
 async function updateJob(
@@ -242,7 +265,15 @@ async function runSingleVideoPipelineFromStorage(
 
     const formattedMap = formatSegmentMapForPrompt(segments)
     const googleRefs = googleFileRef ? [googleFileRef] : []
-    const scriptGuidanceText = await fetchJobScriptGuidanceText(jobId)
+    const ctx = await fetchJobGeminiContext(jobId)
+    const scriptGuidanceText = ctx.scriptText ?? undefined
+    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
+    const assemblyDump = formatAssemblyTranscriptDumpForPrompt(segments)
+    const geminiOpts: AnalyzeSegmentsOptions = {}
+    if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
+    if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
+    geminiOpts.assemblyTranscriptDump = assemblyDump
+    if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
     const analysis = await analyzeSegments(
       formattedMap,
       segments,
@@ -250,7 +281,7 @@ async function runSingleVideoPipelineFromStorage(
       googleRefs,
       useVisualAnalysis,
       [],
-      scriptGuidanceText ? { scriptGuidanceText } : undefined
+      Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
     )
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 
@@ -362,6 +393,26 @@ async function resolveVoiceOverMp3DurationSec(
   throw new Error(
     'No se pudo determinar la duración del audio de voz en off. Envía voiceOverMp3DurationSec desde el cliente o instala ffprobe en el servidor.'
   )
+}
+
+function deriveVoiceOverSpeechWindow(
+  rawWords: RawWord[],
+  fallbackDurationSec: number
+): { trimStartSec: number; trimmedDurationSec: number; shiftedWords: RawWord[] } {
+  if (rawWords.length === 0) {
+    return { trimStartSec: 0, trimmedDurationSec: fallbackDurationSec, shiftedWords: [] }
+  }
+  const firstStartMs = Math.min(...rawWords.map((w) => w.start))
+  const lastEndMs = Math.max(...rawWords.map((w) => w.end))
+  const maxMs = Math.max(0, Math.round(fallbackDurationSec * 1000))
+  const startMs = Math.max(0, Math.min(firstStartMs, Math.max(0, maxMs - 100)))
+  const endMs = Math.max(startMs + 100, Math.min(lastEndMs, maxMs > 0 ? maxMs : lastEndMs))
+  const trimStartSec = Number((startMs / 1000).toFixed(3))
+  const trimmedDurationSec = Number(((endMs - startMs) / 1000).toFixed(3))
+  const shiftedWords = rawWords
+    .map((w) => ({ ...w, start: w.start - startMs, end: w.end - startMs }))
+    .filter((w) => w.end > 0)
+  return { trimStartSec, trimmedDurationSec, shiftedWords }
 }
 
 async function refreshVoiceOverIntroAudioUrl(
@@ -680,22 +731,44 @@ async function runMultipleClipsPipelineFromStorage(
       (s) => !excludeFromNarrative.has(s.clip_index) && s.source_kind !== 'visual_only'
     )
     const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
-    const scriptGuidanceText = await fetchJobScriptGuidanceText(jobId)
-    const geminiOpts =
-      voiceOverBaseClipIndex != null || voiceOverAudioPath != null || scriptGuidanceText
-        ? {
-            ...(voiceOverBaseClipIndex != null
-              ? { manualVoiceOverBaseClipIndex: voiceOverBaseClipIndex }
-              : {}),
-            ...(voiceOverAudioPath != null
-              ? {
-                  manualVoiceOverFromExternalAudio: true as const,
-                  excludeClipIndicesFromSequence: voiceOverOverlayClipIndicesInput ?? [],
-                }
-              : {}),
-            ...(scriptGuidanceText ? { scriptGuidanceText } : {}),
-          }
-        : undefined
+    const ctx = await fetchJobGeminiContext(jobId)
+    const scriptGuidanceText = ctx.scriptText ?? undefined
+    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
+    const assemblyDump = formatAssemblyTranscriptDumpForPrompt(allSegments)
+    const normIntro = normalizeManualIntroClipIndices(
+      ctx.manualIntroClipIndicesRaw,
+      files.length,
+      voiceOverBaseClipIndex,
+      voiceOverOverlayClipIndicesInput ?? []
+    )
+    if (
+      ctx.manualIntroClipIndicesRaw &&
+      ctx.manualIntroClipIndicesRaw.length > 0 &&
+      (!normIntro || normIntro.length === 0)
+    ) {
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][B3] manualIntroClipIndices en job (${JSON.stringify(ctx.manualIntroClipIndicesRaw)}) ` +
+          'no produjo ningún índice válido tras normalizar (VO/overlays/rango). Intro fija no se aplicará.'
+      )
+    }
+
+    const geminiOpts: AnalyzeSegmentsOptions = {}
+    if (voiceOverBaseClipIndex != null) {
+      geminiOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
+    }
+    if (voiceOverAudioPath != null) {
+      geminiOpts.manualVoiceOverFromExternalAudio = true
+      geminiOpts.excludeClipIndicesFromSequence = voiceOverOverlayClipIndicesInput ?? []
+    }
+    if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
+    if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
+    geminiOpts.assemblyTranscriptDump = assemblyDump
+    if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
+    if (normIntro && normIntro.length > 0) {
+      geminiOpts.manualIntroClipIndices = normIntro
+      console.log(`[VideoV2Pipeline][${jobId}][B3] Intro fija manual activa: clips ${normIntro.join(' → ')}`)
+    }
+
     let analysis = await analyzeSegments(
       formattedMap,
       allSegments,
@@ -703,7 +776,7 @@ async function runMultipleClipsPipelineFromStorage(
       googleFileRefs,
       useVisualAnalysis,
       kinds,
-      geminiOpts
+      Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
     )
     if (voiceOverBaseClipIndex != null) {
       const sanitizedSequence = sanitizeSequenceForManualVoiceOver(
@@ -775,6 +848,7 @@ async function runMultipleClipsPipelineFromStorage(
       voiceOverMp3DurationSec: voiceOverMp3DurationSecInput,
       clipFilenames,
       signedClipUrls: signedUrls,
+      scriptTextForSubtitles: scriptGuidanceText ?? null,
     })
 
     let geminiAnalysisPatch: typeof analysis | undefined
@@ -960,6 +1034,8 @@ async function computeAutomaticSubtitlePayload(params: {
   voiceOverMp3DurationSec?: number
   clipFilenames: string[]
   signedClipUrls: string[]
+  /** Guion / PDF extraído: subtítulos del bloque VO MP3 (sin ASR del MP3). */
+  scriptTextForSubtitles?: string | null
 }): Promise<{
   subtitleBlocks: SubtitleBlock[]
   adjustedSrt: string
@@ -978,6 +1054,7 @@ async function computeAutomaticSubtitlePayload(params: {
     voiceOverMp3DurationSec,
     clipFilenames,
     signedClipUrls,
+    scriptTextForSubtitles,
   } = params
   let analysisForRender = analysis
 
@@ -1105,12 +1182,34 @@ async function computeAutomaticSubtitlePayload(params: {
   } else if (voiceOverAudioPath != null && voiceOverAudioPath.trim().length > 0) {
     const voPath = voiceOverAudioPath.trim()
     const signedAudio = await resolveVoiceOverAudioUrl(voPath)
-    const voDur = await resolveVoiceOverMp3DurationSec(voiceOverMp3DurationSec, signedAudio, jobId)
+    const voFileDur = await resolveVoiceOverMp3DurationSec(voiceOverMp3DurationSec, signedAudio, jobId)
+    let voTrimStartSec = 0
+    let voDur = voFileDur
+    let voMp3Words: RawWord[] = []
 
     const voOverlayMp3 = normalizeVoiceOverMp3OverlayIndices(
       voiceOverOverlayClipIndices ?? [],
       paths.length
     )
+
+    try {
+      const voTx = await transcribeVideoV2(signedAudio, `${jobId}_vo_mp3`)
+      if (voTx.rawWords.length > 0) {
+        const speechWindow = deriveVoiceOverSpeechWindow(voTx.rawWords, voFileDur)
+        voTrimStartSec = speechWindow.trimStartSec
+        voDur = speechWindow.trimmedDurationSec
+        voMp3Words = speechWindow.shiftedWords
+        console.log(
+          `[VideoV2Pipeline][${jobId}][B4] VO MP3 trim silencios: start=${voTrimStartSec.toFixed(2)}s, dur=${voDur.toFixed(2)}s (archivo=${voFileDur.toFixed(2)}s).`
+        )
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][B4] AssemblyAI no pudo transcribir el MP3 de VO (${msg.slice(0, 200)}); ` +
+          'se usa el audio completo sin recorte por silencio en extremos.'
+      )
+    }
 
     analysisForRender = {
       ...analysisForRender,
@@ -1167,15 +1266,28 @@ async function computeAutomaticSubtitlePayload(params: {
       voBrollTiles,
       externalVoiceAudioUrl: signedAudio,
       voiceOverAudioPath: voPath,
+      externalVoiceTrimStartSec: voTrimStartSec,
     }
 
     const blocksBefore = buildSubtitleBlocks(beforeSeq, allSegments)
+    let voMp3Blocks: SubtitleBlock[] = []
+    if (voMp3Words.length > 0) {
+      voMp3Blocks = buildSubtitleBlocksFromRawWords(voMp3Words, voDur, dBefore)
+    }
+    if (voMp3Blocks.length === 0) {
+      voMp3Blocks = buildSubtitleBlocksForExternalVoiceOver(
+        voDur,
+        dBefore,
+        scriptTextForSubtitles ?? null
+      )
+    }
     const blocksAfter = offsetSubtitleBlocks(buildSubtitleBlocks(afterSeq, allSegments), dBefore + voDur)
-    subtitleBlocks = [...blocksBefore, ...blocksAfter]
+    subtitleBlocks = [...blocksBefore, ...voMp3Blocks, ...blocksAfter]
 
     const srtBefore = buildAdjustedSRT(beforeSeq, allSegments, 0)
+    const srtVoMp3 = buildAdjustedSrtFromSubtitleBlocks(voMp3Blocks)
     const srtAfter = buildAdjustedSRT(afterSeq, allSegments, dBefore + voDur)
-    adjustedSrt = [srtBefore, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
+    adjustedSrt = [srtBefore, srtVoMp3, srtAfter].filter((s) => s.trim().length > 0).join('\n\n')
     const overlayNoteMp3 =
       voOverlayMp3 && voOverlayMp3.length > 0
         ? `overlays MP3 [${voOverlayMp3.join(',')}] lineales`
@@ -1274,6 +1386,8 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
   const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
   const signedClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
 
+  const scriptSt =
+    typeof job.script_text === 'string' && job.script_text.trim().length > 0 ? job.script_text : null
   const { subtitleBlocks: autoBlocks } = await computeAutomaticSubtitlePayload({
     jobId,
     paths,
@@ -1287,6 +1401,7 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
     voiceOverMp3DurationSec: voiceOverMp3DurationSecFromMeta,
     clipFilenames,
     signedClipUrls,
+    scriptTextForSubtitles: scriptSt,
   })
 
   let override: SubtitleBlock[] | null = null
@@ -1407,6 +1522,8 @@ export async function getCreatomateRenderScriptForJob(
 
   const freshClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
 
+  const scriptStPreview =
+    typeof job.script_text === 'string' && job.script_text.trim().length > 0 ? job.script_text : null
   const { subtitleBlocks: autoSubtitleBlocks, voiceOverIntro } = await computeAutomaticSubtitlePayload({
     jobId,
     paths,
@@ -1420,6 +1537,7 @@ export async function getCreatomateRenderScriptForJob(
     voiceOverMp3DurationSec: voiceOverMp3DurationSecFromMeta,
     clipFilenames,
     signedClipUrls: freshClipUrls,
+    scriptTextForSubtitles: scriptStPreview,
   })
 
   let subtitleBlocks = autoSubtitleBlocks
@@ -1568,6 +1686,8 @@ export async function rerunCreatomateRenderForJob(
 
   const freshClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
 
+  const scriptStRerun =
+    typeof job.script_text === 'string' && job.script_text.trim().length > 0 ? job.script_text : null
   const { subtitleBlocks: autoSubtitleBlocks, adjustedSrt: autoAdjustedSrt, voiceOverIntro } =
     await computeAutomaticSubtitlePayload({
       jobId,
@@ -1582,6 +1702,7 @@ export async function rerunCreatomateRenderForJob(
       voiceOverMp3DurationSec: voiceOverMp3DurationSecFromMeta,
       clipFilenames,
       signedClipUrls: freshClipUrls,
+      scriptTextForSubtitles: scriptStRerun,
     })
 
   let subtitleBlocks = autoSubtitleBlocks

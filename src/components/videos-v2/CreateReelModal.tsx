@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   X,
   Film,
@@ -78,6 +79,23 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   /** Índices de los clips que van como B-roll visual encima del VO (sin audio), en el orden elegido. */
   const [voiceOverOverlayClipIndices, setVoiceOverOverlayClipIndices] = useState<number[]>([])
   const [scriptPdfFile, setScriptPdfFile] = useState<File | null>(null)
+  /** URLs objeto para previsualizar clips locales (revocadas al cambiar archivos o cerrar). */
+  const clipPreviewUrls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files])
+  useEffect(() => {
+    return () => {
+      clipPreviewUrls.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [clipPreviewUrls])
+
+  type InventoryRow = { id: string; brand: string | null; model: string | null; year: number | null }
+  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
+  const [inventoryPickId, setInventoryPickId] = useState<string>('')
+  const [vehicleBrand, setVehicleBrand] = useState('')
+  const [vehicleModel, setVehicleModel] = useState('')
+  const [vehicleYear, setVehicleYear] = useState('')
+  const [manualIntroEnabled, setManualIntroEnabled] = useState(false)
+  /** Hasta 3 índices de clip en orden; null = vacío. */
+  const [manualIntroSlots, setManualIntroSlots] = useState<(number | null)[]>([null, null, null])
 
   function reset() {
     setStep(1)
@@ -95,6 +113,73 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setVoiceOverMp3DurationSec(null)
     setVoiceOverOverlayClipIndices([])
     setScriptPdfFile(null)
+    setInventoryRows([])
+    setInventoryPickId('')
+    setVehicleBrand('')
+    setVehicleModel('')
+    setVehicleYear('')
+    setManualIntroEnabled(false)
+    setManualIntroSlots([null, null, null])
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const supabase = createClient()
+    supabase
+      .from('inventoryoracle')
+      .select('id, brand, model, year')
+      .eq('status', 'disponible')
+      .order('updated_at', { ascending: false })
+      .limit(120)
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return
+        setInventoryRows(data as InventoryRow[])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!inventoryPickId) return
+    const row = inventoryRows.find((r) => r.id === inventoryPickId)
+    if (!row) return
+    setVehicleBrand(row.brand?.trim() ?? '')
+    setVehicleModel(row.model?.trim() ?? '')
+    setVehicleYear(row.year != null ? String(row.year) : '')
+  }, [inventoryPickId, inventoryRows])
+
+  function clipIndexBlockedForNarrative(i: number): boolean {
+    if (voiceOverMode === 'clip' && i === voiceOverClipIndex) return true
+    if (voiceOverOverlayClipIndices.includes(i)) return true
+    return false
+  }
+
+  function manualIntroPayload(): number[] | undefined {
+    if (!manualIntroEnabled || flowType !== 'multiple' || files.length < 2) return undefined
+    const out: number[] = []
+    const seen = new Set<number>()
+    for (const x of manualIntroSlots) {
+      if (x == null || !Number.isInteger(x)) continue
+      if (x < 0 || x >= files.length) continue
+      if (clipIndexBlockedForNarrative(x)) continue
+      if (seen.has(x)) continue
+      seen.add(x)
+      out.push(x)
+      if (out.length >= 3) break
+    }
+    return out.length > 0 ? out : undefined
+  }
+
+  function canonicalVehiclePayload():
+    | { brand: string; model: string; year: string }
+    | undefined {
+    const b = vehicleBrand.trim()
+    const m = vehicleModel.trim()
+    const y = vehicleYear.trim()
+    if (!b && !m && !y) return undefined
+    return { brand: b, model: m, year: y }
   }
 
   useEffect(() => {
@@ -246,6 +331,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               : {}
           : {}
 
+      const introIdx = manualIntroPayload()
+      const canonV = canonicalVehiclePayload()
+
       const startRes = await fetch('/api/videos-v2/jobs/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -255,6 +343,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
           ...voiceOverPayload,
           ...(scriptPdfPath ? { scriptPdfPath } : {}),
+          ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
+          ...(canonV ? { canonicalVehicle: canonV } : {}),
         }),
       })
 
@@ -466,24 +556,35 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                   </div>
 
                   {voiceOverMode === 'clip' && (
-                    <div className="space-y-2 pt-1">
-                      <p className="text-xs font-medium text-gray-700">¿Qué clip aporta el audio entero de la VO?</p>
+                    <div className="space-y-3 pt-1">
+                      <p className="text-xs font-medium text-gray-700">
+                        ¿Qué clip aporta el audio entero de la VO? Revisa la miniatura para no equivocarte de archivo.
+                      </p>
                       {files.map((f, i) => (
-                        <label key={`${f.name}-${i}`} className="flex items-start gap-2.5 cursor-pointer">
+                        <label
+                          key={`${f.name}-${i}`}
+                          className={`flex gap-3 rounded-xl border p-2.5 cursor-pointer transition-colors ${
+                            voiceOverClipIndex === i ? 'border-violet-500 bg-violet-50/50' : 'border-gray-200 hover:border-violet-200'
+                          }`}
+                        >
                           <input
                             type="radio"
                             name="vo-clip"
-                            className="mt-1"
+                            className="mt-2 shrink-0"
                             checked={voiceOverClipIndex === i}
                             onChange={() => {
                               setVoiceOverClipIndex(i)
                               setVoiceOverOverlayClipIndices((prev) => prev.filter((x) => x !== i))
                             }}
                           />
-                          <span className="text-sm text-gray-800 min-w-0">
-                            <span className="font-medium">Clip {i}</span>
-                            <span className="text-gray-500"> — </span>
-                            <span className="break-all">{f.name}</span>
+                          <div className="w-28 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
+                            {clipPreviewUrls[i] ? (
+                              <video src={clipPreviewUrls[i]} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                            ) : null}
+                          </div>
+                          <span className="text-sm text-gray-800 min-w-0 flex-1">
+                            <span className="font-semibold">Clip {i}</span>
+                            <span className="block text-xs text-gray-500 break-all mt-0.5">{f.name}</span>
                           </span>
                         </label>
                       ))}
@@ -521,25 +622,32 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                   )}
 
                   {(voiceOverMode === 'clip' || voiceOverMode === 'mp3') && (
-                    <div className="mt-4 pt-3 border-t border-violet-100 space-y-2">
-                      <p className="text-sm font-semibold text-gray-900">
-                        Clips visuales encima de la voz en off (opcional)
-                      </p>
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        Marca los clips que quieres ver encima del audio de la VO (sin su sonido), en el orden en que
-                        los seleccionas. Si no marcas ninguno, el sistema elige planos (p. ej. clips sin habla o
-                        emplanado automático).
-                      </p>
-                      <div className="space-y-1.5">
+                    <div className="mt-4 pt-3 border-t border-violet-100 space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          Planos encima del audio de la voz en off (opcional)
+                        </p>
+                        <p className="text-xs text-gray-500 leading-relaxed mt-1">
+                          Elige qué vídeos se <strong>ven</strong> durante la VO (su audio va en silencio en ese tramo).
+                          Marca en el orden deseado: el número indica la secuencia en pantalla. Si no eliges ninguno, la
+                          IA reparte planos sola.
+                        </p>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {files.map((f, i) => {
                           if (voiceOverMode === 'clip' && i === voiceOverClipIndex) return null
                           const isChecked = voiceOverOverlayClipIndices.includes(i)
                           const orderPos = voiceOverOverlayClipIndices.indexOf(i) + 1
                           return (
-                            <label key={`overlay-${i}`} className="flex items-start gap-2.5 cursor-pointer">
+                            <label
+                              key={`overlay-${i}`}
+                              className={`flex gap-2 rounded-xl border p-2 cursor-pointer transition-colors ${
+                                isChecked ? 'border-violet-500 bg-violet-50/40' : 'border-gray-200 hover:border-violet-200'
+                              }`}
+                            >
                               <input
                                 type="checkbox"
-                                className="mt-1 accent-violet-600"
+                                className="mt-8 shrink-0 accent-violet-600"
                                 checked={isChecked}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -549,15 +657,21 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                   }
                                 }}
                               />
-                              <span className="text-sm text-gray-800 min-w-0 flex items-center gap-1.5">
-                                {isChecked && (
-                                  <span className="shrink-0 w-4 h-4 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">
-                                    {orderPos}
-                                  </span>
-                                )}
-                                <span className="font-medium">Clip {i}</span>
-                                <span className="text-gray-400">—</span>
-                                <span className="break-all text-gray-600">{f.name}</span>
+                              <div className="w-24 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
+                                {clipPreviewUrls[i] ? (
+                                  <video src={clipPreviewUrls[i]} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                                ) : null}
+                              </div>
+                              <span className="text-xs text-gray-800 min-w-0 flex-1 flex flex-col justify-center">
+                                <span className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold">Clip {i}</span>
+                                  {isChecked && (
+                                    <span className="rounded-full bg-violet-600 text-white text-[10px] font-bold px-1.5 py-0.5">
+                                      orden {orderPos}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-gray-500 break-all mt-0.5 line-clamp-2">{f.name}</span>
                               </span>
                             </label>
                           )
@@ -565,6 +679,134 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 pt-3 border-t border-gray-200 space-y-3">
+                    <p className="text-sm font-semibold text-gray-900">Vehículo de referencia (opcional)</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Ayuda a la IA a interpretar la transcripción (marca, modelo, año correctos). Puedes elegir del
+                      inventario o escribir a mano.
+                    </p>
+                    {inventoryRows.length > 0 && (
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 block mb-1">Desde inventario</label>
+                        <select
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800"
+                          value={inventoryPickId}
+                          onChange={(e) => setInventoryPickId(e.target.value)}
+                        >
+                          <option value="">— Ninguno / manual —</option>
+                          {inventoryRows.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {[r.brand, r.model, r.year].filter(Boolean).join(' ') || r.id}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">Marca</label>
+                        <input
+                          className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                          value={vehicleBrand}
+                          onChange={(e) => {
+                            setVehicleBrand(e.target.value)
+                            setInventoryPickId('')
+                          }}
+                          placeholder="Toyota"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">Modelo</label>
+                        <input
+                          className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                          value={vehicleModel}
+                          onChange={(e) => {
+                            setVehicleModel(e.target.value)
+                            setInventoryPickId('')
+                          }}
+                          placeholder="Prado"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">Año</label>
+                        <input
+                          className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                          value={vehicleYear}
+                          onChange={(e) => {
+                            setVehicleYear(e.target.value)
+                            setInventoryPickId('')
+                          }}
+                          placeholder="2016"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-amber-100 bg-amber-50/30 rounded-xl p-3 space-y-2">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1 accent-amber-600"
+                        checked={manualIntroEnabled}
+                        onChange={(e) => {
+                          setManualIntroEnabled(e.target.checked)
+                          if (!e.target.checked) setManualIntroSlots([null, null, null])
+                        }}
+                      />
+                      <span className="text-sm text-gray-900">
+                        <span className="font-semibold text-amber-950">Intro fija (emergencia)</span>
+                        <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
+                          Si la automatización no ordena bien los microclips de apertura (marca → modelo → año),
+                          elige aquí hasta <strong>3 clips en orden</strong>. Irán <strong>siempre al inicio</strong> del
+                          reel; el resto sigue automático. No uses el clip de VO ni los reservados como planos encima.
+                        </span>
+                      </span>
+                    </label>
+                    {manualIntroEnabled && (
+                      <div className="grid gap-3 sm:grid-cols-3 pt-1">
+                        {['1.º (ej. marca)', '2.º (ej. modelo)', '3.º (ej. año)'].map((label, slotIdx) => (
+                          <div key={label} className="space-y-1.5">
+                            <span className="text-xs font-medium text-gray-700">{label}</span>
+                            <select
+                              className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"
+                              value={manualIntroSlots[slotIdx] ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setManualIntroSlots((prev) => {
+                                  const next = [...prev]
+                                  next[slotIdx] = v === '' ? null : Number(v)
+                                  return next
+                                })
+                              }}
+                            >
+                              <option value="">—</option>
+                              {files
+                                .map((_, i) => i)
+                                .filter((i) => !clipIndexBlockedForNarrative(i))
+                                .map((i) => (
+                                  <option key={i} value={i}>
+                                    Clip {i}
+                                  </option>
+                                ))}
+                            </select>
+                            {manualIntroSlots[slotIdx] != null && clipPreviewUrls[manualIntroSlots[slotIdx]!] ? (
+                              <div className="aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
+                                <video
+                                  src={clipPreviewUrls[manualIntroSlots[slotIdx]!]!}
+                                  className="h-full w-full object-cover"
+                                  muted
+                                  playsInline
+                                  controls
+                                  preload="metadata"
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -580,9 +822,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                 <div className="min-w-0 space-y-2">
                   <p className="text-sm font-semibold text-gray-900">Guion en PDF (opcional)</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Si tienes un guion, súbelo como referencia para orden de ideas, ritmo y subtítulos. La IA actúa como
-                    director: puede apartarse del PDF si el material en cámara pide otro enfoque; no es un guion técnico
-                    cerrado ni un requisito estricto.
+                    Si tienes un guion, súbelo como referencia para orden de ideas, ritmo y subtítulos. El sistema extrae
+                    automáticamente las frases entre comillas como lista de diálogos para alinearlas con la
+                    transcripción. La IA puede apartarse del PDF si el material en cámara pide otro enfoque.
                   </p>
                 </div>
               </div>

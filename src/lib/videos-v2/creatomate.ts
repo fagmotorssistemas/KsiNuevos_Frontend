@@ -251,6 +251,10 @@ const TRACK_VOICE_AUDIO = 14
 /** Por encima del B-roll del VO (5) y del vídeo base; texto AssemblyAI, no re-transcripción Creatomate. */
 const TRACK_MANUAL_CAPTIONS = 18
 
+/** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
+const REEL_MUSIC_VOLUME = '27%'
+const REEL_DIALOGUE_VOLUME = '108%'
+
 /**
  * Valores por defecto explícitos en capas `video` para evitar filtros o modos de fusión heredados
  * que puedan alterar color al componer varias pistas (ver documentación: blend_mode, color_filter).
@@ -288,6 +292,8 @@ export interface VoiceOverIntroRenderInput {
    * Ruta en Storage del audio VO; el pipeline refresca `externalVoiceAudioUrl` antes de cada render.
    */
   voiceOverAudioPath?: string
+  /** Recorte inicial del archivo VO externo para saltar silencio al inicio. */
+  externalVoiceTrimStartSec?: number
 }
 
 /**
@@ -558,9 +564,9 @@ function buildVoiceOverIntroLayers(
     time: t0,
     duration: voDur,
     source: voiceUrl,
-    trim_start: 0,
+    trim_start: Number((input.externalVoiceTrimStartSec ?? 0).toFixed(3)),
     trim_duration: voDur,
-    volume: '100%',
+    volume: REEL_DIALOGUE_VOLUME,
   })
 
   return { videoElements, durationSec: voDur }
@@ -636,7 +642,7 @@ function buildVideoSequenceLayers(
         source: voiceUrl,
         trim_start: Number(item.trim_start.toFixed(3)),
         trim_duration: duration,
-        volume: '100%',
+        volume: REEL_DIALOGUE_VOLUME,
       })
 
     } else {
@@ -654,6 +660,7 @@ function buildVideoSequenceLayers(
             duration,
             source: clipUrl,
             trim_start: Number(item.trim_start.toFixed(3)),
+            volume: REEL_DIALOGUE_VOLUME,
             fit: 'cover',
             clip: true,
             width: '100%',
@@ -735,7 +742,7 @@ function buildMusicElement(musicUrl: string, totalDuration: number): Record<stri
     time: 0,
     duration: totalDuration,
     source: musicUrl,
-    volume: '32%',
+    volume: REEL_MUSIC_VOLUME,
     audio_fade_out: 2,
   }
 }

@@ -20,6 +20,8 @@ const AUTOMOTIVE_WORD_BOOST = [
   'Volkswagen', 'Renault', 'Peugeot', 'Citroën', 'Fiat', 'Suzuki', 'Mitsubishi',
   'Tiida', 'Sentra', 'Versa', 'March', 'Frontier', 'Hilux', 'RAV4', 'CR-V',
   'Ksi', 'Casi Nuevos', 'concesionario', 'seminuevo', 'seminuevos', 'kilómetros',
+  // Microclips de apertura (marca / modelo / año en clips de ~1s)
+  'Prado', 'Land Cruiser', 'Landcruiser', 'LC200', 'LC 200', 'LC150', 'LC 150',
 ]
 
 export interface RawWord {

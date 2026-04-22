@@ -4,6 +4,13 @@ export type VideoClipKind = 'spoken' | 'visual_only'
 /** Máximo de clips en un job multi-clip (subida + transcripción en paralelo). */
 export const VIDEO_V2_MAX_CLIPS = 50
 
+/** Vehículo canónico (inventario o captura manual) para contexto en prompts y alineación. */
+export interface CanonicalVehicleMeta {
+  brand: string
+  model: string
+  year: string
+}
+
 /** Metadatos guardados en selected_clips al iniciar el job (antes del análisis Gemini). */
 export interface VideoJobV2PipelineInputMeta {
   _v2_pipeline_input: true
@@ -28,18 +35,33 @@ export interface VideoJobV2PipelineInputMeta {
   voiceOverAudioPath?: string | null
   /** Duración en segundos del audio VO (idealmente medida en el navegador al elegir el archivo). */
   voiceOverMp3DurationSec?: number | null
+  /**
+   * Emergencia: hasta 3 índices de clip en orden; el pipeline fuerza el primer segmento hablado de cada uno
+   * al inicio del montaje (marca / modelo / año), luego sigue el resto de la automatización.
+   */
+  manualIntroClipIndices?: number[] | null
+  /** Marca, modelo y año exactos del inventario (o captura manual) para contexto en Gemini. */
+  canonicalVehicle?: CanonicalVehicleMeta | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMeta {
   if (typeof x !== 'object' || x === null || !('_v2_pipeline_input' in x)) return false
   const o = x as VideoJobV2PipelineInputMeta
   if (o._v2_pipeline_input !== true) return false
+  const hasVehicle =
+    o.canonicalVehicle != null &&
+    typeof o.canonicalVehicle === 'object' &&
+    [o.canonicalVehicle.brand, o.canonicalVehicle.model, o.canonicalVehicle.year].some(
+      (s) => typeof s === 'string' && s.trim().length > 0
+    )
   return (
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
     typeof o.voiceOverBaseClipIndex === 'number' ||
     (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0) ||
-    (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0)
+    (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0) ||
+    (Array.isArray(o.manualIntroClipIndices) && o.manualIntroClipIndices.length > 0) ||
+    hasVehicle
   )
 }
 
@@ -111,4 +133,43 @@ export function normalizeVoiceOverMp3OverlayIndices(raw: unknown, clipCount: num
     out.push(n)
   }
   return out.length > 0 ? out : undefined
+}
+
+/**
+ * Hasta 3 clips distintos en orden, para intro fija manual. Excluye índice de VO y clips reservados como overlay.
+ */
+export function normalizeManualIntroClipIndices(
+  raw: unknown,
+  clipCount: number,
+  voiceOverBaseClipIndex?: number,
+  voiceOverOverlayClipIndices?: number[]
+): number[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const blocked = new Set<number>()
+  if (typeof voiceOverBaseClipIndex === 'number') blocked.add(voiceOverBaseClipIndex)
+  for (const x of voiceOverOverlayClipIndices ?? []) {
+    if (Number.isInteger(x) && x >= 0 && x < clipCount) blocked.add(x)
+  }
+  const out: number[] = []
+  const seen = new Set<number>()
+  for (const x of raw) {
+    if (out.length >= 3) break
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) continue
+    if (blocked.has(n)) continue
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out.length > 0 ? out : undefined
+}
+
+export function normalizeCanonicalVehicle(raw: unknown): CanonicalVehicleMeta | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const o = raw as Record<string, unknown>
+  const brand = typeof o.brand === 'string' ? o.brand.trim() : ''
+  const model = typeof o.model === 'string' ? o.model.trim() : ''
+  const year = typeof o.year === 'string' ? o.year.trim() : ''
+  if (!brand && !model && !year) return undefined
+  return { brand, model, year }
 }

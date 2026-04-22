@@ -6,6 +6,7 @@
 
 import type { RawWord } from './assemblyai'
 import type { VideoClipKind } from './clip-config'
+import { extractQuotedDialoguesFromScript } from './script-dialogues'
 
 // Pausa mínima entre palabras para considerar un separador de segmento.
 // Bajamos el umbral para capturar micro-segmentos útiles (marca/modelo/año, CTA cortos).
@@ -129,36 +130,44 @@ function mergeLetterDigitSplitSegmentsOneClip(sortedByStart: Segment[]): Segment
   return merged.map((s, i) => buildSegment(s.words, clipIndex, i + 1))
 }
 
-/** Aire después de la última palabra del segmento (hasta el siguiente corte o fin de clip). */
-const SEGMENT_TAIL_EXTEND_MS = 450
-const TAIL_NEXT_BUFFER_MS = 80
-
-function extendSpokenSegmentTailsOneClip(
-  sortedByStart: Segment[],
-  clipMaxEndMs?: number | null
-): Segment[] {
-  if (sortedByStart.length === 0) return []
-  const hardCap = clipMaxEndMs ?? Number.POSITIVE_INFINITY
-  return sortedByStart.map((seg, i) => {
-    const next = sortedByStart[i + 1]
-    const nextStart = next ? next.start_ms : hardCap
-    const room = Math.min(nextStart, hardCap) - seg.end_ms
-    const add = Math.min(SEGMENT_TAIL_EXTEND_MS, Math.max(0, room - TAIL_NEXT_BUFFER_MS))
-    if (add <= 0) return seg
-    const endMs = Math.round(seg.end_ms + add)
-    return {
-      ...seg,
-      end_ms: endMs,
-      end_s: Number((endMs / 1000).toFixed(3)),
-      duration_s: Number(((endMs - seg.start_ms) / 1000).toFixed(3)),
-    }
-  })
-}
-
 /**
- * Mapa de segmentos por clip: silencios → fusión letra+dígito → cola breve de silencio antes del siguiente corte.
+ * Mapa de segmentos por clip: silencios → fusión letra+dígito.
  * `clipMaxEndMs`: tope en ms del archivo (p. ej. duración cliente o última palabra + margen).
  */
+/**
+ * Si dentro de un segmento hay pausa y luego un micro-token de modelo ("Prado", "Hilux"),
+ * parte en dos segmentos para que el montaje pueda usar el corte corto (marca/modelo/año).
+ */
+function splitSegmentsOnModelWordPause(segments: Segment[], clipIndex: number): Segment[] {
+  const GAP_MS = 280
+  const tailModel = /^(prado|hilux)$/i
+  const flat: Segment[] = []
+  for (const seg of segments) {
+    const ww = seg.words
+    if (ww.length < 2) {
+      flat.push(seg)
+      continue
+    }
+    let splitAt: number | null = null
+    for (let j = 1; j < ww.length; j++) {
+      const tok = ww[j].text.trim().replace(/[.,!?;:¿¡]+$/u, '')
+      if (!tailModel.test(tok)) continue
+      if (ww[j].start - ww[j - 1].end >= GAP_MS) {
+        splitAt = j
+        break
+      }
+    }
+    if (splitAt == null) {
+      flat.push(seg)
+    } else {
+      flat.push(buildSegment(ww.slice(0, splitAt), clipIndex, 0))
+      flat.push(buildSegment(ww.slice(splitAt), clipIndex, 0))
+    }
+  }
+  flat.sort((a, b) => a.start_ms - b.start_ms)
+  return flat.map((s, i) => buildSegment(s.words, clipIndex, i + 1))
+}
+
 export function refineSpokenSegmentsForOneClip(
   clipIndex: number,
   rawWords: RawWord[],
@@ -166,8 +175,8 @@ export function refineSpokenSegmentsForOneClip(
 ): Segment[] {
   let segs = buildSegmentMap(rawWords, clipIndex)
   segs.sort((a, b) => a.start_ms - b.start_ms)
+  segs = splitSegmentsOnModelWordPause(segs, clipIndex)
   segs = mergeLetterDigitSplitSegmentsOneClip(segs)
-  segs = extendSpokenSegmentTailsOneClip(segs, clipMaxEndMs ?? undefined)
   return segs
 }
 
@@ -437,6 +446,120 @@ export function buildSubtitleBlocksForVoiceOverIntro(
   const WORDS_PER_BLOCK = 3
   for (let i = 0; i < wordsInRange.length; i += WORDS_PER_BLOCK) {
     const chunk = wordsInRange.slice(i, i + WORDS_PER_BLOCK)
+    const chunkText = chunk.map((w) => w.text).join(' ')
+    const wordOffsetFromTrimStart = chunk[0].start - trimStartMs
+    const wordEndOffset = chunk[chunk.length - 1].end - trimStartMs
+    const startMs = reelOffMs + timelineOffsetMs + wordOffsetFromTrimStart
+    const endMs = reelOffMs + timelineOffsetMs + wordEndOffset
+    const durationMs = endMs - startMs
+    const finalDuration = Math.max(300, durationMs)
+    const blockTimeS = Number((Math.max(0, startMs) / 1000).toFixed(3))
+    const blockDurS = Number((finalDuration / 1000).toFixed(3))
+    const wordsTimings: SubtitleWordTiming[] = chunk.map((w) => {
+      const absStart = (reelOffMs + timelineOffsetMs + (w.start - trimStartMs)) / 1000
+      const absEnd = (reelOffMs + timelineOffsetMs + (w.end - trimStartMs)) / 1000
+      return {
+        text: w.text,
+        start: Number(absStart.toFixed(3)),
+        end: Number(absEnd.toFixed(3)),
+      }
+    })
+    blocks.push({
+      time: blockTimeS,
+      duration: blockDurS,
+      text: chunkText,
+      words: wordsTimings,
+    })
+  }
+  return blocks
+}
+
+function chunkSubtitleLine(line: string, maxLen: number): string[] {
+  const s = line.trim()
+  if (s.length <= maxLen) return [s]
+  const words = s.split(/\s+/).filter(Boolean)
+  const out: string[] = []
+  let cur = ''
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w
+    if (next.length > maxLen && cur) {
+      out.push(cur)
+      cur = w
+    } else {
+      cur = next
+    }
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+/**
+ * Subtítulos del bloque VO desde archivo MP3 (sin palabras Assembly en ese audio):
+ * reparte el guion (diálogos entre comillas o texto plano) a lo largo de la duración del VO.
+ */
+export function buildSubtitleBlocksForExternalVoiceOver(
+  voDurationSec: number,
+  reelTimelineOffsetSec: number,
+  scriptText?: string | null
+): SubtitleBlock[] {
+  if (voDurationSec < 0.25) return []
+  const t0 = Number(reelTimelineOffsetSec.toFixed(3))
+  const raw = scriptText?.trim()
+  if (!raw) {
+    return [
+      {
+        time: t0,
+        duration: Number(voDurationSec.toFixed(3)),
+        text: 'Voz en off',
+      },
+    ]
+  }
+  const quoted = extractQuotedDialoguesFromScript(raw)
+  const chunks: string[] =
+    quoted.length > 0
+      ? quoted.flatMap((line) => chunkSubtitleLine(line, 80))
+      : chunkSubtitleLine(raw.replace(/\s+/g, ' ').trim(), 80)
+  if (chunks.length === 0) {
+    return [{ time: t0, duration: Number(voDurationSec.toFixed(3)), text: raw.slice(0, 140) }]
+  }
+  const slot = voDurationSec / chunks.length
+  const blocks: SubtitleBlock[] = []
+  for (let i = 0; i < chunks.length; i++) {
+    blocks.push({
+      time: Number((t0 + i * slot).toFixed(3)),
+      duration: Number(slot.toFixed(3)),
+      text: chunks[i]!,
+    })
+  }
+  const end = t0 + voDurationSec
+  const last = blocks[blocks.length - 1]!
+  last.duration = Number(Math.max(0.35, end - last.time).toFixed(3))
+  return blocks
+}
+
+/** Subtítulos del bloque VO MP3 a partir de palabras AssemblyAI (misma lógica que VO desde clip). */
+export function buildSubtitleBlocksFromRawWords(
+  words: RawWord[],
+  maxDurationSec: number,
+  reelTimelineOffsetSec: number
+): SubtitleBlock[] {
+  if (words.length === 0 || maxDurationSec < 0.25) return []
+  const maxMs = maxDurationSec * 1000
+  const reelOff = reelTimelineOffsetSec
+  const wordsInRange = words.filter((w) => w.start >= -50 && w.end <= maxMs + 200)
+  if (wordsInRange.length === 0) return []
+
+  const trimStartMs = 0
+  const trimEndMs = maxMs
+  const wr = wordsInRange.filter((w) => w.start >= trimStartMs - 50 && w.end <= trimEndMs + 50)
+  if (wr.length === 0) return []
+
+  const blocks: SubtitleBlock[] = []
+  const timelineOffsetMs = 0
+  const reelOffMs = reelOff * 1000
+  const WORDS_PER_BLOCK = 3
+  for (let i = 0; i < wr.length; i += WORDS_PER_BLOCK) {
+    const chunk = wr.slice(i, i + WORDS_PER_BLOCK)
     const chunkText = chunk.map((w) => w.text).join(' ')
     const wordOffsetFromTrimStart = chunk[0].start - trimStartMs
     const wordEndOffset = chunk[chunk.length - 1].end - trimStartMs
