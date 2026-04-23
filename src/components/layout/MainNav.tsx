@@ -21,7 +21,8 @@ if (profile?.role === "taller") {
   ];
 } else if (profile?.role === "finanzas") {
   navItems = [
-    { href: "/inventario", label: "Acceso Limitado" }, 
+    { href: "/wallet", label: "Cartera" },
+    { href: "/inventario", label: "Inventario" },
   ];
 } else if (profile?.role === "contable") {
   navItems = [

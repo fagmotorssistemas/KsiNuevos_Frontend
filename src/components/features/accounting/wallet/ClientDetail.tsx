@@ -4,7 +4,6 @@ import {
     Calendar, 
     FileText, 
     History, 
-    User,
     AlertCircle,
     Hash,
     StickyNote,
@@ -14,7 +13,9 @@ import {
     Calculator // Importamos icono para la nueva tab
 } from "lucide-react";
 import { walletService } from "@/services/wallet.service";
-import { DetalleDocumento, ClienteDetalleResponse, HistorialVenta, HistorialPago } from "@/types/wallet.types";
+import { cobrosService } from "@/services/cobros.service";
+import type { Cobro } from "@/types/cobros.types";
+import { DetalleDocumento, ClienteDetalleResponse, HistorialPago, HistorialVenta } from "@/types/wallet.types";
 import { Button } from "@/components/ui/buttontable"; 
 import { Table, TableCard } from "@/components/ui/table"; 
 import { BadgeWithIcon } from "@/components/ui/badges";
@@ -22,12 +23,108 @@ import { ClientContactInfo } from "./ClientContactInfo";
 // Importamos el nuevo componente
 import { AmortizationTab } from "./AmortizationTab"; 
 import { LegalCasesTab } from "./LegalCasesTab";
-import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 
 interface ClientDetailProps {
     clientId: number;
     onBack: () => void;
+}
+
+/** Misma fila en Oracle/Cobros y en historial de cartera (evita duplicados si el API empieza a enviar pagos). */
+function pagoMergeKey(p: HistorialPago) {
+    return `${p.numeroRecibo}|${p.fecha}|${p.montoTotal}`;
+}
+
+function mergePagosLists(oracle: HistorialPago[] | undefined, desdeCobros: HistorialPago[]): HistorialPago[] {
+    const map = new Map<string, HistorialPago>();
+    for (const p of oracle || []) map.set(pagoMergeKey(p), p);
+    for (const p of desdeCobros) {
+        if (!map.has(pagoMergeKey(p))) map.set(pagoMergeKey(p), p);
+    }
+    return Array.from(map.values()).sort(
+        (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+}
+
+/**
+ * Número de cliente Oracle en códigos tipo "CLI-00634" → 634 (debe coincidir con clientId de cartera).
+ * Si no hay patrón CLI-, no infiere (evita cruzar por cédula u otros textos).
+ */
+function numeroClienteDesdeCodigoOracle(codigo: string): number | null {
+    const t = codigo.trim().toUpperCase();
+    const m = t.match(/^CLI-0*(\d+)\s*$/);
+    if (m) return parseInt(m[1], 10);
+    return null;
+}
+
+/** Quita tildes y espacios extra para comparar nombres entre Cartera y Cobros. */
+function normalizarNombreParaMatch(s: string): string {
+    return s
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase()
+        .replace(/\s+/g, " ");
+}
+
+/**
+ * Cartera usa a veces un ID numérico distinto al "CLI-00xxx" de Cobros (ej. 460923 vs CLI-00634).
+ * Si el código no cuadra, se puede igualar por nombre (Cobros a veces trunca el texto).
+ */
+function nombreClienteCoincideConCobro(nombreDetalle: string, nombreEnCobro: string): boolean {
+    const x = normalizarNombreParaMatch(nombreDetalle);
+    const y = normalizarNombreParaMatch(nombreEnCobro);
+    if (x.length < 10 || y.length < 6) return false;
+    if (x === y) return true;
+    const pref = 14;
+    const x0 = x.slice(0, pref);
+    const y0 = y.slice(0, pref);
+    if (x.startsWith(y0) || y.startsWith(x0)) return true;
+    return x.includes(y) || y.includes(x);
+}
+
+/**
+ * Une cobros al cliente aunque `identificacion` venga como cédula y en Cobros sea "CLI-xxxxx",
+ * o haya diferencias de espacios/mayúsculas.
+ */
+function cobroPerteneceACliente(
+    c: Cobro,
+    clientIdOracle: number,
+    identificacionDetalle: string | undefined | null,
+    nombreClienteDetalle: string
+): boolean {
+    const norm = (s: string) => s.trim().toUpperCase();
+    const idDet = identificacionDetalle?.trim();
+    if (idDet && norm(c.codigoCliente) === norm(idDet)) return true;
+
+    const nCobro = numeroClienteDesdeCodigoOracle(c.codigoCliente);
+    if (nCobro !== null && nCobro === clientIdOracle) return true;
+
+    if (idDet) {
+        const nId = numeroClienteDesdeCodigoOracle(idDet);
+        if (nId !== null && nCobro !== null && nId === nCobro) return true;
+    }
+
+    if (nombreClienteDetalle && c.cliente) {
+        if (nombreClienteCoincideConCobro(nombreClienteDetalle, c.cliente)) return true;
+    }
+    return false;
+}
+
+/** Listado de cobros (dashboard) al shape de la pestaña Pagos; usuario no viene en Cobro. */
+function cobroToHistorialPago(c: Cobro): HistorialPago {
+    const detalleVeh =
+        c.vehiculo && c.vehiculo !== "Varios / No aplica" ? c.vehiculo : null;
+    const concepto = [c.concepto, c.tipoPago, detalleVeh].filter(Boolean).join(" · ");
+    return {
+        fecha: c.fechaPago,
+        numeroRecibo: c.comprobantePago || `INT-${c.idInterno}`,
+        concepto: concepto || c.tipoDocumento || "Cobro",
+        montoTotal: c.valorPagado,
+        formaPago: c.tipoPago || "",
+        referenciaPago: c.factura || c.comprobanteDeuda || "",
+        usuario: "Cobros (ERP)",
+    };
 }
 
 export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
@@ -43,7 +140,34 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
         const loadDetail = async () => {
             setLoading(true);
             try {
-                const result = await walletService.getClientDetail(clientId);
+                const [result, cobrosDash] = await Promise.all([
+                    walletService.getClientDetail(clientId),
+                    cobrosService.getDashboard().catch(() => null),
+                ]);
+
+                if (cobrosDash?.listado?.length) {
+                    const nombreParaCruce =
+                        result.nombre?.trim() ||
+                        result.nombreCliente?.trim() ||
+                        result.documentos[0]?.nombreCliente?.trim() ||
+                        "";
+                    const delCliente = cobrosDash.listado.filter((c) =>
+                        cobroPerteneceACliente(
+                            c,
+                            clientId,
+                            result.identificacion,
+                            nombreParaCruce
+                        )
+                    );
+                    if (delCliente.length > 0) {
+                        const extras = delCliente.map(cobroToHistorialPago);
+                        setData({
+                            ...result,
+                            pagos: mergePagosLists(result.pagos, extras),
+                        });
+                        return;
+                    }
+                }
                 setData(result);
             } catch (error) {
                 console.error('❌ Error cargando detalle:', error);
@@ -69,7 +193,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 month: 'short', 
                 year: 'numeric' 
             });
-        } catch (e) {
+        } catch {
             return dateString;
         }
     };
@@ -95,15 +219,15 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const docsVencidos = data.documentos.filter(d => d.diasMora > 0).length;
     
     const nombreCliente = 
-        (data as any).nombre || 
-        (data as any).nombreCliente || 
+        data.nombre || 
+        data.nombreCliente || 
         firstDoc?.nombreCliente || 
         `Cliente #${clientId}`;
     
     const telefonosCliente = {
-        principal: (data as any).telefono1 || firstDoc?.telefono1 || null,
-        secundario: (data as any).telefono2 || firstDoc?.telefono2 || null,
-        celular: (data as any).telefono3 || firstDoc?.telefono3 || null
+        principal: data.telefono1 || firstDoc?.telefono1 || null,
+        secundario: data.telefono2 || firstDoc?.telefono2 || null,
+        celular: data.telefono3 || firstDoc?.telefono3 || null
     };
 
     return (
@@ -380,7 +504,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
             {activeTab === 'sales' && (
                 <div className="space-y-4">
                     {data.ventas && data.ventas.length > 0 ? (
-                        data.ventas.map((venta, idx) => (
+                        data.ventas.map((venta: HistorialVenta, idx) => (
                             <div key={idx} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row">
                                 <div className="p-4 bg-slate-50 border-r border-slate-100 flex flex-col justify-center items-center w-full md:w-32 shrink-0">
                                     <Car className="h-8 w-8 text-slate-400 mb-2" />

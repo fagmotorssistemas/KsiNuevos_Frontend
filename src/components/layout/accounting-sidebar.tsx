@@ -58,10 +58,9 @@ export function AccountingSidebar() {
     let displayedItems = menuItems;
 
     if (profile?.role === 'finanzas') {
-        // En tu local solo tenías inventario, pero GIT trajo también contratos para finanzas.
-        // Se incluyen ambos para respetar la actualización del equipo.
+        // Finanzas: acceso completo a Cartera (Oracle) + Cartera manual.
         displayedItems = menuItems.filter(item =>
-            ['/inventario', '/contracts', '/cartera-manual'].includes(item.href)
+            ['/wallet', '/cartera-manual', '/inventario', '/contracts'].includes(item.href)
         );
     } else if (isAbogadoStaff) {
         // Abogado/abogada: Cartera Oracle + Cartera manual; el resto del módulo legal va en navbar.
