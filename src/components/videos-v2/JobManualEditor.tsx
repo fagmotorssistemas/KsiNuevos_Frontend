@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clapperboard, Loader2, Pencil, RotateCcw, Save } from 'lucide-react'
 import type { SequenceItem, SubtitleBlock } from '@/lib/videos-v2/segmenter'
 import type { GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
@@ -20,12 +20,31 @@ type EditorStateResponse = {
 
 type Tab = 'subtitles' | 'clips' | 'json'
 
+type SubtitleSaveUi = 'idle' | 'saving' | 'saved' | 'error'
+
 interface Props {
   jobId: string
   onSaved: () => void
 }
 
+function subtitleRowsSignature(rows: SubtitleBlock[]): string {
+  return JSON.stringify(
+    rows.map((r) => ({
+      time: r.time,
+      duration: r.duration,
+      text: r.text,
+    }))
+  )
+}
+
+const SUBTITLE_AUTOSAVE_MS = 600
+
 export function JobManualEditor({ jobId, onSaved }: Props) {
+  const onSavedRef = useRef(onSaved)
+  useEffect(() => {
+    onSavedRef.current = onSaved
+  }, [onSaved])
+
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('subtitles')
   const [loading, setLoading] = useState(false)
@@ -37,6 +56,13 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
   const [rerenderJson, setRerenderJson] = useState('')
   const [saving, setSaving] = useState(false)
   const [rendering, setRendering] = useState(false)
+  const [subtitleSaveUi, setSubtitleSaveUi] = useState<SubtitleSaveUi>('idle')
+  const subtitleRowsRef = useRef<SubtitleBlock[]>([])
+  const lastPersistedSubtitleSig = useRef('')
+
+  useEffect(() => {
+    subtitleRowsRef.current = subtitleRows
+  }, [subtitleRows])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -45,13 +71,13 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
       const res = await fetch(`/api/videos-v2/jobs/${jobId}/editor-state`)
       const data = (await res.json()) as EditorStateResponse & { error?: string }
       if (!res.ok) throw new Error(data.error || 'No se pudo cargar el editor')
-      setSubtitleRows(
-        data.subtitle_blocks_effective.map((b) => ({
-          time: b.time,
-          duration: b.duration,
-          text: b.text,
-        }))
-      )
+      const normalized = data.subtitle_blocks_effective.map((b) => ({
+        time: b.time,
+        duration: b.duration,
+        text: b.text,
+      }))
+      lastPersistedSubtitleSig.current = subtitleRowsSignature(normalized)
+      setSubtitleRows(normalized)
       setSequenceRows(
         data.gemini_analysis.sequence.map((s) => ({
           ...s,
@@ -71,25 +97,52 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
     if (open) void load()
   }, [open, load])
 
-  async function saveSubtitles() {
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/videos-v2/jobs/${jobId}/editor-state`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subtitle_blocks_override: subtitleRows }),
-      })
-      const j = (await res.json()) as { error?: string }
-      if (!res.ok) throw new Error(j.error || 'Error al guardar subtítulos')
-      setOverrideActive(true)
-      onSaved()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setSaving(false)
-    }
-  }
+  /** Persiste subtítulos actuales (ref) en Supabase. `notifyParent` tras restaurar o acciones explícitas. */
+  const persistSubtitlesToServer = useCallback(
+    async (notifyParent: boolean) => {
+      const rows = subtitleRowsRef.current
+      if (rows.length === 0) return
+      setSaving(true)
+      setSubtitleSaveUi('saving')
+      setError(null)
+      try {
+        const res = await fetch(`/api/videos-v2/jobs/${jobId}/editor-state`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subtitle_blocks_override: rows }),
+        })
+        const j = (await res.json()) as { error?: string }
+        if (!res.ok) throw new Error(j.error || 'Error al guardar subtítulos')
+        lastPersistedSubtitleSig.current = subtitleRowsSignature(rows)
+        setOverrideActive(true)
+        setSubtitleSaveUi('saved')
+        if (notifyParent) void onSavedRef.current()
+      } catch (e) {
+        setSubtitleSaveUi('error')
+        setError(e instanceof Error ? e.message : 'Error')
+      } finally {
+        setSaving(false)
+      }
+    },
+    [jobId]
+  )
+
+  useEffect(() => {
+    if (!open || loading) return
+    if (subtitleRows.length === 0) return
+    const sig = subtitleRowsSignature(subtitleRows)
+    if (sig === lastPersistedSubtitleSig.current) return
+    const t = window.setTimeout(() => {
+      void persistSubtitlesToServer(false)
+    }, SUBTITLE_AUTOSAVE_MS)
+    return () => window.clearTimeout(t)
+  }, [subtitleRows, open, loading, persistSubtitlesToServer])
+
+  useEffect(() => {
+    if (subtitleSaveUi !== 'saved') return
+    const t = window.setTimeout(() => setSubtitleSaveUi('idle'), 2200)
+    return () => window.clearTimeout(t)
+  }, [subtitleSaveUi])
 
   async function restoreSubtitlesFromTranscript() {
     setSaving(true)
@@ -140,7 +193,10 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
       const res = await fetch(`/api/videos-v2/jobs/${jobId}/rerender`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gemini_analysis: parsed }),
+        body: JSON.stringify({
+          gemini_analysis: parsed,
+          ...(subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}),
+        }),
       })
       const j = (await res.json()) as { error?: string }
       if (!res.ok) throw new Error(j.error || 'JSON inválido o error al guardar')
@@ -160,7 +216,9 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
       const res = await fetch(`/api/videos-v2/jobs/${jobId}/rerender`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(
+          subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}
+        ),
       })
       const j = (await res.json()) as { error?: string }
       if (!res.ok) throw new Error(j.error || 'No se pudo iniciar el render')
@@ -236,7 +294,21 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                   <p className="text-xs text-gray-600">
                     {overrideActive
                       ? 'Usando subtítulos guardados manualmente. «Restaurar» vuelve al texto calculado desde AssemblyAI.'
-                      : 'Texto generado automáticamente; al guardar se fija tu versión para los próximos renders.'}
+                      : 'Texto generado automáticamente; los cambios se guardan solos al poco tiempo de editar.'}
+                  </p>
+                  <p className="text-[11px] text-gray-500 flex flex-wrap items-center gap-2">
+                    {subtitleSaveUi === 'saving' && (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />
+                        Guardando subtítulos…
+                      </>
+                    )}
+                    {subtitleSaveUi === 'saved' && (
+                      <span className="text-emerald-600 font-medium">Subtítulos guardados en el servidor.</span>
+                    )}
+                    {subtitleSaveUi === 'error' && (
+                      <span className="text-red-600 font-medium">No se pudo guardar; revisa el mensaje de error arriba.</span>
+                    )}
                   </p>
                   {subtitleRows.map((row, idx) => (
                     <div
@@ -287,15 +359,6 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                     </div>
                   ))}
                   <div className="flex flex-wrap gap-2 pt-2">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => void saveSubtitles()}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-50"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      Guardar subtítulos
-                    </button>
                     <button
                       type="button"
                       disabled={saving}
@@ -386,7 +449,8 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                 <div className="space-y-2">
                   <p className="text-xs text-gray-500">
                     Edición cruda de <code className="bg-gray-100 px-1 rounded">gemini_analysis</code>. «Aplicar JSON»
-                    solo valida y persiste vía re-render (usa el mismo flujo que antes).
+                    dispara re-render y también envía los subtítulos actuales de la pestaña Subtítulos para no perder
+                    ediciones.
                   </p>
                   <textarea
                     value={rerenderJson}
@@ -422,7 +486,9 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
               Re-renderizar video (Creatomate)
             </button>
             <span className="text-[11px] text-gray-500">
-              Guarda antes los cambios en cada pestaña; este botón solo envía el estado actual del job a Creatomate.
+              Los subtítulos se guardan solos al editar. Los cortes siguen requiriendo «Guardar cortes». Este botón
+              envía a Creatomate el análisis en BD y, si hay filas de subtítulos cargadas, también las persiste antes
+              del render.
             </span>
           </div>
         </div>

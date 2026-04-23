@@ -5,7 +5,8 @@
  * - visual_overlay: B-roll (mute) debajo y pista de audio separada para la voz.
  * - Opcional: bloque VO manual (audio completo + B-roll Assembly mute + negro); la posición en la timeline la elige Gemini (insertAfterSegmentCount).
  * - Subtítulos: texto explícito desde AssemblyAI (`subtitleBlocks`), capa alta para verse sobre B-roll VO;
- *   animaciones de entrada por palabra o por bloque. `subtitleBlocks` también alimenta SFX pop.
+ *   estilo “retención” (paleta rojo / amarillo / blanco, posición y animaciones variables por ítem; mismos timestamps).
+ *   `subtitleBlocks` también alimenta SFX pop.
  */
 
 import type { SequenceItem, SubtitleBlock } from './segmenter'
@@ -251,6 +252,16 @@ const TRACK_VOICE_AUDIO = 14
 /** Por encima del B-roll del VO (5) y del vídeo base; texto AssemblyAI, no re-transcripción Creatomate. */
 const TRACK_MANUAL_CAPTIONS = 18
 
+/** Paleta subtítulos estilo hook / retención (solo apariencia; timings sin cambios). */
+const CAPTION_FILL_PRIMARY = '#E81C2A'
+const CAPTION_FILL_SECONDARY_YELLOW = '#FFE94A'
+const CAPTION_FILL_SECONDARY_WHITE = '#FFFFFF'
+
+/** Duración máxima de la animación de entrada respecto al tiempo visible del subtítulo. */
+const CAPTION_ENTRANCE_MAX_FRAC = 0.48
+const CAPTION_ENTRANCE_MIN_SEC = 0.12
+const CAPTION_ENTRANCE_MAX_SEC = 0.32
+
 /** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
 const REEL_MUSIC_VOLUME = '27%'
 const REEL_DIALOGUE_VOLUME = '108%'
@@ -341,26 +352,146 @@ function withOptionalCutPunchAnimations(
   return anims.length > 0 ? { ...el, animations: anims } : el
 }
 
-function captionEntranceAnimations(): Record<string, unknown>[] {
-  return [
-    {
-      time: 0,
-      duration: 0.16,
-      type: 'fade',
-      easing: 'cubic-out',
-      fade: false,
-    },
-    {
-      time: 0,
-      duration: 0.2,
-      type: 'scale',
-      easing: 'cubic-out',
-      scope: 'element',
-      start_scale: '78%',
-      end_scale: '100%',
-      fade: false,
-    },
-  ]
+function captionEntranceBudgetSec(visibleDurationSec: number): number {
+  const raw = visibleDurationSec * CAPTION_ENTRANCE_MAX_FRAC
+  return Number(
+    Math.min(CAPTION_ENTRANCE_MAX_SEC, Math.max(CAPTION_ENTRANCE_MIN_SEC, raw)).toFixed(3)
+  )
+}
+
+/** Colores de acento sin tocar `time` / `duration` del subtítulo. */
+function pickCaptionFillColor(idx: number, upperText: string): string {
+  const len = upperText.length
+  const h = (idx * 17 + len * 5) % 100
+  if (h < 38) return CAPTION_FILL_PRIMARY
+  if (h < 72) return CAPTION_FILL_SECONDARY_YELLOW
+  return CAPTION_FILL_SECONDARY_WHITE
+}
+
+function pickCaptionStrokeAndShadow(fill: string): {
+  stroke_color: string
+  stroke_width: string
+  shadow_color: string
+  shadow_blur: string
+} {
+  if (fill === CAPTION_FILL_SECONDARY_YELLOW) {
+    return {
+      stroke_color: '#0d0d0d',
+      stroke_width: '2.15 vmin',
+      shadow_color: 'rgba(0,0,0,0.88)',
+      shadow_blur: '1.05 vmin',
+    }
+  }
+  if (fill === CAPTION_FILL_PRIMARY) {
+    return {
+      stroke_color: '#1a0204',
+      stroke_width: '1.9 vmin',
+      shadow_color: 'rgba(0,0,0,0.82)',
+      shadow_blur: '0.95 vmin',
+    }
+  }
+  return {
+    stroke_color: '#000000',
+    stroke_width: '1.95 vmin',
+    shadow_color: 'rgba(0,0,0,0.9)',
+    shadow_blur: '1.1 vmin',
+  }
+}
+
+/** Zonas seguras tipo Reels: arriba (gancho), centro, tercio inferior — ciclo determinista. */
+function pickCaptionVerticalPosition(idx: number): string {
+  const yPositions = ['22%', '34%', '48%', '62%', '74%']
+  return yPositions[idx % yPositions.length]!
+}
+
+function pickCaptionBackground(idx: number, fill: string): {
+  background_color: string
+  background_x_padding: string
+  background_y_padding: string
+  background_border_radius: string
+} {
+  const stickerOnly = idx % 4 === 0
+  if (stickerOnly) {
+    return {
+      background_color: 'rgba(0,0,0,0)',
+      background_x_padding: '28%',
+      background_y_padding: '12%',
+      background_border_radius: '18%',
+    }
+  }
+  const pillDark = idx % 3 === 1
+  if (pillDark) {
+    return {
+      background_color: 'rgba(0,0,0,0.48)',
+      background_x_padding: '34%',
+      background_y_padding: '16%',
+      background_border_radius: '24%',
+    }
+  }
+  const tint =
+    fill === CAPTION_FILL_PRIMARY
+      ? 'rgba(232,28,42,0.14)'
+      : fill === CAPTION_FILL_SECONDARY_YELLOW
+        ? 'rgba(255,233,74,0.12)'
+        : 'rgba(255,255,255,0.1)'
+  return {
+    background_color: tint,
+    background_x_padding: '32%',
+    background_y_padding: '15%',
+    background_border_radius: '22%',
+  }
+}
+
+/**
+ * Entradas variadas (solo animación; no altera cuándo empieza el elemento en la línea de tiempo).
+ * Usa solo `fade` / `scale` como en el resto del archivo, compatibles con la API v2.
+ */
+function buildDynamicCaptionEntrances(idx: number, visibleDurationSec: number): Record<string, unknown>[] {
+  const budget = captionEntranceBudgetSec(visibleDurationSec)
+  const fadeQuick: Record<string, unknown> = {
+    time: 0,
+    duration: Number(Math.min(0.12, budget * 0.35).toFixed(3)),
+    type: 'fade',
+    easing: 'cubic-out',
+    fade: false,
+  }
+
+  const mode = idx % 5
+  const scale = (
+    start: string,
+    end: string,
+    dur: number,
+    t = 0,
+    easing = 'cubic-out'
+  ): Record<string, unknown> => ({
+    time: Number(t.toFixed(3)),
+    duration: Number(dur.toFixed(3)),
+    type: 'scale',
+    easing,
+    scope: 'element',
+    start_scale: start,
+    end_scale: end,
+    fade: false,
+  })
+
+  switch (mode) {
+    case 0: {
+      const d1 = budget * 0.48
+      const d2 = budget - d1
+      return [fadeQuick, scale('56%', '122%', d1), scale('122%', '100%', d2, d1)]
+    }
+    case 1:
+      return [fadeQuick, scale('138%', '100%', budget)]
+    case 2:
+      return [fadeQuick, scale('74%', '100%', budget)]
+    case 3: {
+      const d1 = budget * 0.42
+      const d2 = budget - d1
+      return [fadeQuick, scale('92%', '108%', d1), scale('108%', '100%', d2, d1)]
+    }
+    default:
+      return [fadeQuick, scale('68%', '100%', budget)]
+  }
 }
 
 /**
@@ -400,34 +531,38 @@ function buildManualCaptionElements(
   return entries.map((entry, idx) => {
     const upper = entry.text.toUpperCase()
     const short = upper.length <= 12
+    const fill = pickCaptionFillColor(idx, upper)
+    const strokeShadow = pickCaptionStrokeAndShadow(fill)
+    const bg = pickCaptionBackground(idx, fill)
+    const visible = Math.max(0.15, entry.duration)
     return {
       id: `cap_${idx}`,
       type: 'text',
       track: TRACK_MANUAL_CAPTIONS,
       time: Number(entry.time.toFixed(3)),
-      duration: Number(Math.max(0.15, entry.duration).toFixed(3)),
+      duration: Number(visible.toFixed(3)),
       text: upper,
-      fill_color: '#ffffff',
-      stroke_color: '#000000',
-      stroke_width: '1.65 vmin',
-      shadow_color: 'rgba(0,0,0,0.6)',
-      shadow_blur: '1.8 vmin',
+      fill_color: fill,
+      stroke_color: strokeShadow.stroke_color,
+      stroke_width: strokeShadow.stroke_width,
+      shadow_color: strokeShadow.shadow_color,
+      shadow_blur: strokeShadow.shadow_blur,
       font_family: 'Montserrat',
       font_weight: 800,
-      font_size: short ? '9.2 vmin' : '7.4 vmin',
-      line_height: '120%',
-      letter_spacing: short ? '2%' : '1%',
+      font_size: short ? '9.6 vmin' : '7.85 vmin',
+      line_height: '118%',
+      letter_spacing: short ? '2.2%' : '1.2%',
       text_transform: 'uppercase',
-      y: '73%',
+      y: pickCaptionVerticalPosition(idx),
       width: '94%',
-      height: '28%',
+      height: '30%',
       x_alignment: '50%',
       y_alignment: '50%',
-      background_color: 'rgba(0,0,0,0.42)',
-      background_x_padding: '36%',
-      background_y_padding: '18%',
-      background_border_radius: '26%',
-      animations: captionEntranceAnimations(),
+      background_color: bg.background_color,
+      background_x_padding: bg.background_x_padding,
+      background_y_padding: bg.background_y_padding,
+      background_border_radius: bg.background_border_radius,
+      animations: buildDynamicCaptionEntrances(idx, visible),
     }
   })
 }

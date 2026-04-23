@@ -116,6 +116,7 @@ async function updateJob(
 
   if (error) {
     console.error(`[VideoV2Pipeline][${jobId}] Error actualizando job: ${error.message}`)
+    throw new Error(`No se pudo actualizar el job: ${error.message}`)
   }
 }
 
@@ -1887,7 +1888,9 @@ export function startPipelineBackground(params: {
         )
       } else {
         console.error(`[VideoV2Pipeline][${jobId}] Flujo single requiere archivo pre-subido a Storage.`)
-        updateJob(jobId, { status: 'failed', error_message: 'Archivo no encontrado en Storage.' })
+        void updateJob(jobId, { status: 'failed', error_message: 'Archivo no encontrado en Storage.' }).catch((e) =>
+          console.error(`[VideoV2Pipeline][${jobId}] No se pudo marcar job fallido: ${e}`)
+        )
       }
     })
   } else {
@@ -1909,7 +1912,9 @@ export function startPipelineBackground(params: {
         )
       } else {
         console.error(`[VideoV2Pipeline][${jobId}] Flujo multiple requiere archivos pre-subidos a Storage.`)
-        updateJob(jobId, { status: 'failed', error_message: 'Archivos no encontrados en Storage.' })
+        void updateJob(jobId, { status: 'failed', error_message: 'Archivos no encontrados en Storage.' }).catch((e) =>
+          console.error(`[VideoV2Pipeline][${jobId}] No se pudo marcar job fallido: ${e}`)
+        )
       }
     })
   }
