@@ -46,8 +46,8 @@ function apiHeaders() {
 }
 
 async function submitTranscription(audioUrl: string): Promise<string> {
-  /** Si está definido (ej. `es`), fija idioma y suele mejorar términos en español vs solo detección. */
-  const forcedLang = process.env.VIDEO_V2_ASSEMBLY_LANGUAGE_CODE?.trim()
+  /** Por defecto forzamos español; se puede sobrescribir por env (ej. `en`, `pt`). */
+  const forcedLang = process.env.VIDEO_V2_ASSEMBLY_LANGUAGE_CODE?.trim() || 'es'
 
   const body: Record<string, unknown> = {
     audio_url: audioUrl,

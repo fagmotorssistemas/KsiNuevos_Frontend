@@ -787,6 +787,11 @@ function isSameUtterance(textA: string, textB: string): boolean {
   if (!na || !nb) return false
   if (na === nb) return true
 
+  // Presentación "Glory 560" vs cierre "Comenta glory 560" comparten tokens de modelo pero no son la misma toma.
+  const hasComentaA = /\bcomenta\b/.test(na)
+  const hasComentaB = /\bcomenta\b/.test(nb)
+  if (hasComentaA !== hasComentaB) return false
+
   const shortA = isIsolatedShortVehicleModelName(textA)
   const shortB = isIsolatedShortVehicleModelName(textB)
   if (shortA !== shortB) return false

@@ -439,10 +439,16 @@ function planVoiceOverBrollTiles(
   clipUrls: string[]
 ): { clipIndex: number; timeStart: number; duration: number; trimStart: number }[] {
   const tiles: { clipIndex: number; timeStart: number; duration: number; trimStart: number }[] = []
+  const validIndices = brollIndices.filter((idx) => Number.isInteger(idx) && idx >= 0 && !!clipUrls[idx])
+  if (validIndices.length === 0) return tiles
   let t = 0
-  for (const idx of brollIndices) {
-    if (t >= voDurationSec - 0.04) break
-    if (!clipUrls[idx]) continue
+  let i = 0
+  let safety = 0
+  // Repetir overlays en ciclo hasta cubrir todo el bloque VO (evita huecos negros al agotar lista).
+  while (t < voDurationSec - 0.04 && safety < 400) {
+    const idx = validIndices[i % validIndices.length]!
+    i++
+    safety++
     const fileDur = clipFileDurationsSec[idx]
     const dur =
       typeof fileDur === 'number' && Number.isFinite(fileDur) && fileDur > 0.05
