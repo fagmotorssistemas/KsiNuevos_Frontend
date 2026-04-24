@@ -1,4 +1,4 @@
-import { EXCLUDED_ID, LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
+import { LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
 
 export const fetchSellersRequest = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('id, full_name').eq('status', 'activo').eq('role', 'vendedor').order('full_name');
@@ -177,7 +177,6 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 interested_cars(*, inventoryoracle(brand, model, year)),
                 profiles:assigned_to(full_name)
             `, { count: 'exact' })
-            .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3') // EXCLUDED_ID
             .order('updated_at', { ascending: false })
             .range(from, to);
 
@@ -209,14 +208,14 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
 
                 // Nombre: leads donde name contiene TODOS los tokens (AND)
                 let nameIds: number[] = [];
-                let qName = supabase.from('leads').select('id').neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+                let qName = supabase.from('leads').select('id');
                 for (const t of tokens) qName = qName.ilike('name', `%${t}%`);
                 const { data: nameData } = await qName;
                 nameIds = ((nameData as { id: number }[] | null) ?? []).map((r) => r.id);
 
                 // Teléfono: leads donde phone contiene TODOS los tokens (AND)
                 let phoneIds: number[] = [];
-                let qPhone = supabase.from('leads').select('id').neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+                let qPhone = supabase.from('leads').select('id');
                 for (const t of tokens) qPhone = qPhone.ilike('phone', `%${t}%`);
                 const { data: phoneData } = await qPhone;
                 phoneIds = ((phoneData as { id: number }[] | null) ?? []).map((r) => r.id);
@@ -227,7 +226,6 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                     const { data: kommoData } = await supabase
                         .from('leads')
                         .select('id')
-                        .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
                         .eq('lead_id_kommo', Number(tokens[0]));
                     kommoIds = ((kommoData as { id: number }[] | null) ?? []).map((r) => r.id);
                 }
@@ -264,8 +262,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.hasTradeIn) {
             let tq = supabase
                 .from("trade_in_cars")
-                .select("lead_id, leads!inner(assigned_to)")
-                .neq("leads.assigned_to", EXCLUDED_ID);
+                .select("lead_id, leads!inner(assigned_to)");
             if (filters.assignedTo && filters.assignedTo !== "all") {
                 tq = tq.eq("leads.assigned_to", filters.assignedTo);
             }
@@ -346,7 +343,6 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         let respondedQuery = supabase
             .from('leads')
             .select('id', { count: 'exact', head: true })
-            .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
             .not('resume', 'is', null) // Que no sea NULL
             .neq('resume', '');        // Que no esté vacío
 
@@ -428,7 +424,6 @@ export const fetchDailyInteractions = async (supabase: any, assignedTo: string, 
         let query = supabase
             .from('leads')
             .select('*', { count: 'exact', head: true })
-            .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
             .not('resume', 'is', null)
             .neq('resume', '') 
             .gte('updated_at', start)
@@ -451,8 +446,7 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
     try {
         let datosQuery = supabase
             .from('datos_solicitados_clientes')
-            .select('estado, lead_id, leads!inner(assigned_to)')
-            .neq('leads.assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+            .select('estado, lead_id, leads!inner(assigned_to)');
 
         if (assignedTo && assignedTo !== 'all') {
             datosQuery = datosQuery.eq('leads.assigned_to', assignedTo);
@@ -460,8 +454,7 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
 
         let asesoriaQuery = supabase
             .from('asesoria_financiamiento')
-            .select('estado, lead_id, leads!inner(assigned_to)')
-            .neq('leads.assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3');
+            .select('estado, lead_id, leads!inner(assigned_to)');
 
         if (assignedTo && assignedTo !== 'all') {
             asesoriaQuery = asesoriaQuery.eq('leads.assigned_to', assignedTo);
@@ -515,8 +508,7 @@ export const fetchTradeInLeadsCount = async (supabase: any, assignedTo: string) 
     try {
         let q = supabase
             .from("trade_in_cars")
-            .select("lead_id, leads!inner(assigned_to)")
-            .neq("leads.assigned_to", EXCLUDED_ID);
+            .select("lead_id, leads!inner(assigned_to)");
 
         if (assignedTo && assignedTo !== "all") {
             q = q.eq("leads.assigned_to", assignedTo);
@@ -541,7 +533,6 @@ export const fetchBudgetStats = async (supabase: any, assignedTo: string) => {
         let query = supabase
             .from('leads')
             .select('id', { count: 'exact', head: true })
-            .neq('assigned_to', '920fe992-8f4a-4866-a9b6-02f6009fc7b3')
             .not('presupuesto_cliente', 'is', null)
             .gt('presupuesto_cliente', 0); // Opcional: solo mayores a 0 si consideran 0 como sin presupuesto, o quitar si solo not null
 

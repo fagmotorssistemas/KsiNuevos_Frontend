@@ -35,6 +35,3 @@ export type LeadsFilters = {
     /** Solo leads con al menos un registro en trade_in_cars */
     hasTradeIn?: boolean;
 };
-
-// ID que siempre excluyes
-export const EXCLUDED_ID = '920fe992-8f4a-4866-a9b6-02f6009fc7b3';

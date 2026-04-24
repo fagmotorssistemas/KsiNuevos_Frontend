@@ -1,4 +1,4 @@
-import { LeadWithDetails, LeadsFilters, SortDescriptor, EXCLUDED_ID } from "@/types/leads.types";
+import { LeadWithDetails, LeadsFilters, SortDescriptor } from "@/types/leads.types";
 
 // Tu helper de fechas exacto
 const isSameDate = (date1: Date, date2: Date) => {
@@ -14,8 +14,7 @@ export const processLeadsLogic = (
     sortDescriptor: SortDescriptor
 ): LeadWithDetails[] => {
     
-    // 1. Filtro base (Excluir ID)
-    let filtered = leads.filter(l => l.assigned_to !== EXCLUDED_ID);
+    let filtered = [...leads];
 
     // 2. Buscador (Incluyendo lógica de carros)
     if (filters.search.trim()) {
@@ -90,7 +89,7 @@ export const processLeadsLogic = (
  * Lógica exacta de cálculo de interacciones
  */
 export const calculateInteractionsLogic = (leads: LeadWithDetails[], filters: LeadsFilters) => {
-    let interactions = leads.filter(l => l.assigned_to !== EXCLUDED_ID);
+    let interactions = [...leads];
     
     if (filters.assignedTo !== 'all') {
         interactions = interactions.filter(l => l.assigned_to === filters.assignedTo);

@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { AdminDateFilter } from "@/hooks/useAdminStats";
 
-const IGNORED_USER_ID = '920fe992-8f4a-4866-a9b6-02f6009fc7b3';
-
 export type VehicleStat = {
     vehicle_uid: string;
     brand: string;
@@ -221,8 +219,6 @@ export function useVehicleStats(
             const oppStatsMap = new Map<string, OpportunityStat>();
 
             allLeads.forEach((lead: any) => {
-                if (lead.assigned_to === IGNORED_USER_ID) return;
-
                 const cars = Array.isArray(lead.interested_cars) ? lead.interested_cars : [lead.interested_cars];
 
                 cars.forEach((c: any) => {
