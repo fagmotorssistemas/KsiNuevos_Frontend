@@ -867,6 +867,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                 </div>
               )}
               <p className="text-sm text-gray-600">Elige el track de música de fondo para el Reel:</p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Al generar, el sistema elige solo el fragmento de la pista que mejor encaja con la duración del Reel
+                (parte más dinámica y alineada con los cortes cuando el servidor puede analizar el audio).
+              </p>
               <MusicSelector
                 selectedId={selectedMusicId}
                 onSelect={(id, url) => { setSelectedMusicId(id); setSelectedMusicUrl(url) }}

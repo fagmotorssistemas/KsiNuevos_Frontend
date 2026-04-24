@@ -52,3 +52,11 @@ export async function tryProbeVideoDurationSecondsFromUrl(
     return null
   }
 }
+
+/** Audio o vídeo: `format=duration` con ffprobe (misma invocación que el vídeo). */
+export async function tryProbeMediaDurationSecondsFromUrl(
+  signedUrl: string,
+  jobId: string
+): Promise<number | null> {
+  return tryProbeVideoDurationSecondsFromUrl(signedUrl, jobId)
+}

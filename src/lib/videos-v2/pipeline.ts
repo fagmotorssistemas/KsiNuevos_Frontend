@@ -36,6 +36,7 @@ import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import { analyzeSegments, type AnalyzeSegmentsOptions } from './gemini'
 import {
   buildCreatomateRenderScript,
+  computeReelTimelineMeta,
   getCreatomateRenderStatus,
   renderSegmentsV2,
   submitCreatomateRenderForJob,
@@ -43,6 +44,7 @@ import {
   VOICE_OVER_EXTERNAL_CLIP_INDEX,
   type VoiceOverIntroRenderInput,
 } from './creatomate'
+import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import {
   prepareVideoForGemini,
@@ -1555,13 +1557,22 @@ export async function getCreatomateRenderScriptForJob(
 
   const voIntroFresh = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
 
+  const timeline = computeReelTimelineMeta(analysis.sequence, voIntroFresh)
+  const musicTrimStartSec = await pickSmartMusicTrimStartSec({
+    jobId,
+    musicUrl: job.music_track_url,
+    reelDurationSec: timeline.totalDurationSec,
+    cutStartTimesSec: timeline.cutStartTimesSec,
+  })
+
   return buildCreatomateRenderScript(
     jobId,
     analysis.sequence,
     freshClipUrls,
     subtitleBlocks,
     job.music_track_url,
-    voIntroFresh
+    voIntroFresh,
+    musicTrimStartSec
   )
 }
 

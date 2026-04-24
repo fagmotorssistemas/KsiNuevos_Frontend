@@ -6,12 +6,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2gb',
     },
+    // Si el middleware toca rutas con body grande, evita buffer por defecto ~10MB
+    middlewareClientMaxBodySize: '2gb',
   },
 
-  // Límite de body para route handlers (existe en runtime aunque no en los tipos de esta versión)
-  // Ver: https://nextjs.org/docs/app/api-reference/config/next-config-js/middlewareClientMaxBodySize
-  // @ts-expect-error — opción válida en Next.js 16 pero aún sin declarar en NextConfig types
-  middlewareClientMaxBodySize: '2gb',
+  // Límite para proxy (si aplica)
+  // @ts-expect-error — opción válida en runtime
+  proxyClientMaxBodySize: '2gb',
 
   // 1. Configuración de Imágenes
   images: {

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
@@ -123,6 +124,23 @@ export async function getSignedUrlForPath(path: string): Promise<string> {
   return data.signedUrl
 }
 
+/** Nombre de objeto Storage seguro (evita espacios/Unicode que algunos backends rechazan). */
+function safeMusicStorageBasename(originalFilename: string): string {
+  const base = originalFilename.trim().split(/[/\\]/).pop() || 'audio'
+  const dot = base.lastIndexOf('.')
+  const extRaw = dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  const stem = dot >= 0 ? base.slice(0, dot) : base
+  const allowedExt = new Set(['.mp3', '.wav', '.aac', '.m4a', '.mpeg', '.mp4'])
+  const extNorm = extRaw && allowedExt.has(extRaw) ? extRaw : '.mp3'
+  const slug = stem
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'track'
+  return `${slug}${extNorm}`
+}
+
 export async function uploadMusicTrackV2(
   file: Buffer,
   filename: string,
@@ -130,7 +148,9 @@ export async function uploadMusicTrackV2(
 ): Promise<{ path: string; publicUrl: string }> {
   const supabase = getServiceClient()
   const timestamp = Date.now()
-  const path = `tracks/${timestamp}_${filename}`
+  const rid = randomBytes(4).toString('hex')
+  const safeBase = safeMusicStorageBasename(filename)
+  const path = `tracks/${timestamp}_${rid}_${safeBase}`
 
   const { error } = await supabase.storage
     .from(MUSIC_BUCKET)

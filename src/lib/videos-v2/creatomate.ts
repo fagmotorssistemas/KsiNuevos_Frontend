@@ -12,6 +12,7 @@
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import { sumSequenceItemsDurationSec } from './segmenter'
 import type { VoBrollTile } from './vo-broll-semantics'
+import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 
 /**
  * Fuerza API v2 para mantener consistencia de color con exportaciones manuales en Creatomate.
@@ -73,6 +74,56 @@ function buildCreatomateRenderRequestBody(
 }
 
 /**
+ * Duración total del Reel y tiempos de inicio de cada bloque (cortes / VO) en la timeline final.
+ * Sirve para alinear la música de fondo sin re-ejecutar el montaje de capas de vídeo.
+ */
+export function computeReelTimelineMeta(
+  sequence: SequenceItem[],
+  voiceOverIntro?: VoiceOverIntroRenderInput | null
+): { totalDurationSec: number; cutStartTimesSec: number[] } {
+  const cutStartTimesSec: number[] = []
+  if (voiceOverIntro != null) {
+    const ins = Math.max(
+      0,
+      Math.min(voiceOverIntro.insertAfterSegmentCount, sequence.length)
+    )
+    const beforeSeq = sequence.slice(0, ins)
+    const afterSeq = sequence.slice(ins)
+    const voDur = voiceOverIntro.voDurationSec
+    let acc = 0
+    for (const it of beforeSeq) {
+      cutStartTimesSec.push(Number(acc.toFixed(3)))
+      acc += it.trim_duration
+    }
+    if (voDur > 0) {
+      cutStartTimesSec.push(Number(acc.toFixed(3)))
+      acc += voDur
+    }
+    for (const it of afterSeq) {
+      cutStartTimesSec.push(Number(acc.toFixed(3)))
+      acc += it.trim_duration
+    }
+    return { totalDurationSec: Number(acc.toFixed(3)), cutStartTimesSec: uniqApproxSorted(cutStartTimesSec) }
+  }
+
+  let acc = 0
+  for (const it of sequence) {
+    cutStartTimesSec.push(Number(acc.toFixed(3)))
+    acc += it.trim_duration
+  }
+  return { totalDurationSec: Number(acc.toFixed(3)), cutStartTimesSec: uniqApproxSorted(cutStartTimesSec) }
+}
+
+function uniqApproxSorted(xs: number[]): number[] {
+  const sorted = [...xs].sort((a, b) => a - b)
+  const out: number[] = []
+  for (const x of sorted) {
+    if (out.length === 0 || Math.abs(x - out[out.length - 1]!) > 0.02) out.push(x)
+  }
+  return out
+}
+
+/**
  * Construye el RenderScript que enviamos a Creatomate (y que el Preview SDK puede cargar con `setSource`).
  */
 export function buildCreatomateRenderScript(
@@ -81,7 +132,8 @@ export function buildCreatomateRenderScript(
   clipUrls: string[],
   subtitleBlocks: SubtitleBlock[],
   musicUrl: string,
-  voiceOverIntro?: VoiceOverIntroRenderInput | null
+  voiceOverIntro?: VoiceOverIntroRenderInput | null,
+  musicTrimStartSec = 0
 ): CreatomateFlatRenderScript {
   let videoElements: Record<string, unknown>[] = []
   let transitionTimes: number[] = []
@@ -141,7 +193,7 @@ export function buildCreatomateRenderScript(
   const transitionSfx = buildTransitionSfxElements(transitionTimes)
   const subtitleSfx = buildSubtitleSfxElements(subtitleBlocks, totalDuration)
   const captionElements = buildManualCaptionElements(subtitleBlocks, totalDuration)
-  const musicElement = buildMusicElement(musicUrl, totalDuration)
+  const musicElement = buildMusicElement(musicUrl, totalDuration, musicTrimStartSec)
 
   const allElements = [
     ...videoElements,
@@ -874,8 +926,12 @@ function buildSubtitleSfxElements(
   }))
 }
 
-function buildMusicElement(musicUrl: string, totalDuration: number): Record<string, unknown> {
-  return {
+function buildMusicElement(
+  musicUrl: string,
+  totalDuration: number,
+  musicTrimStartSec: number
+): Record<string, unknown> {
+  const el: Record<string, unknown> = {
     id: 'music',
     name: 'Musica',
     type: 'audio',
@@ -886,6 +942,11 @@ function buildMusicElement(musicUrl: string, totalDuration: number): Record<stri
     volume: REEL_MUSIC_VOLUME,
     audio_fade_out: 2,
   }
+  if (musicTrimStartSec > 0.001) {
+    el.trim_start = Number(musicTrimStartSec.toFixed(3))
+    el.trim_duration = totalDuration
+  }
+  return el
 }
 
 // ─── Render principal ────────────────────────────────────────────────────────
@@ -898,13 +959,21 @@ export async function renderSegmentsV2(
   musicUrl: string,
   voiceOverIntro?: VoiceOverIntroRenderInput | null
 ): Promise<string> {
+  const timeline = computeReelTimelineMeta(sequence, voiceOverIntro)
+  const musicTrimStartSec = await pickSmartMusicTrimStartSec({
+    jobId,
+    musicUrl,
+    reelDurationSec: timeline.totalDurationSec,
+    cutStartTimesSec: timeline.cutStartTimesSec,
+  })
   const script = buildCreatomateRenderScript(
     jobId,
     sequence,
     clipUrls,
     subtitleBlocks,
     musicUrl,
-    voiceOverIntro
+    voiceOverIntro,
+    musicTrimStartSec
   )
   const renderId = await submitCreatomateRenderForJob(jobId, script)
   console.log(`[VideoV2Pipeline][${jobId}][Creatomate] Render iniciado. ID=${renderId}`)
