@@ -103,7 +103,7 @@ export async function middleware(request: NextRequest) {
   // Módulo legal: solo admin y abogado/abogada
   if (pathname === '/legal' || pathname.startsWith('/legal/')) {
     const role = (profile?.role || '').toLowerCase().trim()
-    const allowed = role === 'admin' || role === 'abogado' || role === 'abogada'
+    const allowed = role === 'admin' || role === 'abogado' || role === 'abogada' || role === 'finanzas'
     if (!allowed) {
       return NextResponse.redirect(new URL('/home', request.url))
     }

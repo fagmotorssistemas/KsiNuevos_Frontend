@@ -23,6 +23,7 @@ if (profile?.role === "taller") {
   navItems = [
     { href: "/wallet", label: "Cartera" },
     { href: "/inventario", label: "Inventario" },
+    { href: "/legal/cases", label: "Gestión Legal" },
   ];
 } else if (profile?.role === "contable") {
   navItems = [
