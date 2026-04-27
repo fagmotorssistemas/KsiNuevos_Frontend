@@ -134,7 +134,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes' | 'amortization' | 'legal'>('docs');
     const { profile } = useAuth();
     const role = (profile?.role || "").toLowerCase().trim();
-    const isLegalRole = role === "admin" || role === "abogado" || role === "abogada";
+    const isLegalRole = role === "admin" || role === "abogado" || role === "abogada" || role === "finanzas";
 
     useEffect(() => {
         const loadDetail = async () => {
