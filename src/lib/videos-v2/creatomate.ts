@@ -315,7 +315,7 @@ const CAPTION_ENTRANCE_MIN_SEC = 0.12
 const CAPTION_ENTRANCE_MAX_SEC = 0.32
 
 /** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
-const REEL_MUSIC_VOLUME = '27%'
+const REEL_MUSIC_VOLUME = '21%'
 const REEL_DIALOGUE_VOLUME = '108%'
 
 /**
@@ -941,6 +941,8 @@ function buildMusicElement(
     duration: totalDuration,
     source: musicUrl,
     volume: REEL_MUSIC_VOLUME,
+    /** Sin fundido de entrada (Creatomate: null desactiva). */
+    audio_fade_in: null,
     audio_fade_out: 2,
   }
   if (musicTrimStartSec > 0.001) {

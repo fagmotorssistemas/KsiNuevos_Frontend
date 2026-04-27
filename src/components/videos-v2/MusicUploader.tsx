@@ -34,6 +34,37 @@ function makeId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 }
 
+/** Nombre en el multipart ASCII+corto: evita fallos intermitentes con títulos largos o símbolos raros. */
+function multipartSafeFilename(original: string): string {
+  const base = original.trim().split(/[/\\]/).pop() || 'upload.mp3'
+  const dot = base.lastIndexOf('.')
+  const extRaw = dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  const allowed = new Set(['.mp3', '.wav', '.aac', '.m4a', '.mpeg', '.mp4'])
+  const ext = allowed.has(extRaw) ? extRaw : '.mp3'
+  const stem = dot >= 0 ? base.slice(0, dot) : base.replace(/\.mp3$/i, '')
+  const slug = stem
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 96) || 'track'
+  return `${slug}${ext}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+function shouldRetryUpload(err: unknown, attempt: number): boolean {
+  if (attempt >= 4) return false
+  const s = err instanceof Error ? `${err.message} ${err.name}` : String(err)
+  if (/HTTP\s+429|HTTP\s+502|HTTP\s+503|HTTP\s+504|5\d\d/i.test(s)) return true
+  if (/Failed to fetch|NetworkError|Load failed|fetch/i.test(s)) return true
+  if (/Respuesta vacía|formato inesperado|HTML|ECONNRESET|ETIMEDOUT|socket/i.test(s)) return true
+  return false
+}
+
 export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -63,20 +94,32 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
   }, [])
 
   async function uploadOne(item: PendingItem): Promise<void> {
-    const formData = new FormData()
-    formData.append('file', item.file)
-    formData.append('name', item.name.trim())
+    const safeName = multipartSafeFilename(item.file.name)
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        const formData = new FormData()
+        formData.append('file', item.file, safeName)
+        formData.append('name', item.name.trim())
 
-    const res = await fetch('/api/videos-v2/music', { method: 'POST', body: formData })
-    const data = await parseJsonOrThrow<{ track?: MusicTrackV2; error?: string }>(res)
+        const res = await fetch('/api/videos-v2/music', { method: 'POST', body: formData })
+        const data = await parseJsonOrThrow<{ track?: MusicTrackV2; error?: string }>(res)
 
-    if (!res.ok) {
-      throw new Error(data.error ?? `Error HTTP ${res.status}`)
+        if (!res.ok) {
+          throw new Error(data.error ?? `Error HTTP ${res.status}`)
+        }
+        if (!data.track) {
+          throw new Error('Respuesta sin track')
+        }
+        onTrackAdded(data.track)
+        return
+      } catch (e) {
+        lastErr = e
+        if (!shouldRetryUpload(e, attempt)) throw e
+        await sleep(450 * attempt + Math.floor(Math.random() * 200))
+      }
     }
-    if (!data.track) {
-      throw new Error('Respuesta sin track')
-    }
-    onTrackAdded(data.track)
+    throw lastErr
   }
 
   async function handleUploadAll() {
@@ -90,11 +133,13 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
     let ok = 0
     let fail = 0
     const failedNames: string[] = []
+    const failReasons: string[] = []
 
     try {
       for (let i = 0; i < toUpload.length; i++) {
         const item = toUpload[i]!
         setUploadLabel(`${i + 1}/${toUpload.length}: ${item.name}`)
+        if (i > 0) await sleep(400)
         try {
           await uploadOne(item)
           ok++
@@ -103,6 +148,7 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
           fail++
           failedNames.push(item.name)
           const msg = err instanceof Error ? err.message : String(err)
+          failReasons.push(msg)
           console.error('[MusicUploader]', item.name, msg)
         }
       }
@@ -111,8 +157,9 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
         toast.success(ok === 1 ? '1 track subido' : `${ok} tracks subidos`)
       }
       if (fail > 0) {
+        const hint = failReasons[0] ? ` — ${failReasons[0].slice(0, 180)}${failReasons[0].length > 180 ? '…' : ''}` : ''
         toast.error(
-          `${fail} no se pudieron subir${failedNames.length ? `: ${failedNames.slice(0, 3).join(', ')}${failedNames.length > 3 ? '…' : ''}` : ''}`
+          `${fail} no se pudieron subir${failedNames.length ? `: ${failedNames.slice(0, 3).join(', ')}${failedNames.length > 3 ? '…' : ''}` : ''}${hint}`
         )
       }
     } finally {

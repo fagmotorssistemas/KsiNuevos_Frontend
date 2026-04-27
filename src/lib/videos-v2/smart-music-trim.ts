@@ -14,9 +14,14 @@ import { tryProbeMediaDurationSecondsFromUrl } from './probe-video'
 const execFileAsync = promisify(execFile)
 
 const FFMPEG_TIMEOUT_MS = 120_000
-const COARSE_STEP_SEC = 0.45
-const REFINE_RADIUS_SEC = 0.9
-const REFINE_STEP_SEC = 0.06
+const COARSE_STEP_SEC = 0.35
+const REFINE_RADIUS_SEC = 1.0
+const REFINE_STEP_SEC = 0.05
+
+/** Tramo inicial del reel donde debe sonar fuerte (segundos en timeline del reel = fuente desde trim). */
+function headWindowSec(reelDurationSec: number): number {
+  return Math.min(1.25, Math.max(0.55, reelDurationSec * 0.22))
+}
 
 function mDbToEnergy(mDb: number): number {
   if (!Number.isFinite(mDb) || mDb <= -100) return 1e-10
@@ -118,6 +123,53 @@ function cutAlignmentScore(
   return sum / c
 }
 
+/** Puntuación: prioridad al volumen en los primeros segundos del reel (no solo la media de toda la ventana). */
+function windowScore(
+  series: { t: number; mDb: number }[],
+  s: number,
+  reelDurationSec: number,
+  cutStartTimesSec: number[],
+  onset: Map<number, number>
+): { score: number; n: number } {
+  const head = headWindowSec(reelDurationSec)
+  const headStats = meanEnergyInWindow(series, s, s + head)
+  const fullStats = meanEnergyInWindow(series, s, s + reelDurationSec)
+  if (fullStats.n < 4 || headStats.n < 2) return { score: -Infinity, n: 0 }
+  const align = cutAlignmentScore(s, reelDurationSec, cutStartTimesSec, onset, series)
+  const score =
+    5.2 * headStats.mean +
+    1.0 * fullStats.mean +
+    align * 0.00035
+  return { score, n: fullStats.n }
+}
+
+/**
+ * Si el inicio del corte sigue siendo un build-up, avanza trim_start hasta que el arranque sea fuerte
+ * respecto al cuerpo de la ventana (sin pasarse de maxStart).
+ */
+function nudgeForwardForLoudAttack(
+  series: { t: number; mDb: number }[],
+  s: number,
+  reelDurationSec: number,
+  maxStart: number
+): number {
+  const head = headWindowSec(reelDurationSec)
+  let cur = Math.max(0, Math.min(maxStart, s))
+  const minRatio = 0.58
+  const step = 0.1
+  const maxSteps = 70
+
+  for (let k = 0; k < maxSteps; k++) {
+    const fullM = meanEnergyInWindow(series, cur, cur + reelDurationSec).mean
+    const headM = meanEnergyInWindow(series, cur, cur + head).mean
+    if (fullM < 1e-12) break
+    if (headM / fullM >= minRatio) break
+    if (cur >= maxStart - 1e-4) break
+    cur = Math.min(maxStart, cur + step)
+  }
+  return Number(cur.toFixed(3))
+}
+
 function bestTrimFromSeries(
   series: { t: number; mDb: number }[],
   musicDurationSec: number,
@@ -133,10 +185,8 @@ function bestTrimFromSeries(
   let bestS = 0
   let bestScore = -Infinity
   for (let s = 0; s <= maxStart + 1e-6; s += COARSE_STEP_SEC) {
-    const { mean, n } = meanEnergyInWindow(series, s, s + reelDurationSec)
-    if (n < 3) continue
-    const align = cutAlignmentScore(s, reelDurationSec, cutStartTimesSec, onset, series)
-    const score = mean + align * 0.0004
+    const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
+    if (n < 4) continue
     if (score > bestScore) {
       bestScore = score
       bestS = s
@@ -144,20 +194,24 @@ function bestTrimFromSeries(
   }
 
   let refined = bestS
-  for (let s = Math.max(0, bestS - REFINE_RADIUS_SEC); s <= Math.min(maxStart, bestS + REFINE_RADIUS_SEC) + 1e-9; s += REFINE_STEP_SEC) {
-    const { mean, n } = meanEnergyInWindow(series, s, s + reelDurationSec)
-    if (n < 3) continue
-    const align = cutAlignmentScore(s, reelDurationSec, cutStartTimesSec, onset, series)
-    const score = mean + align * 0.0004
+  for (
+    let s = Math.max(0, bestS - REFINE_RADIUS_SEC);
+    s <= Math.min(maxStart, bestS + REFINE_RADIUS_SEC) + 1e-9;
+    s += REFINE_STEP_SEC
+  ) {
+    const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
+    if (n < 4) continue
     if (score > bestScore) {
       bestScore = score
       refined = s
     }
   }
 
-  const clamped = Math.max(0, Math.min(maxStart, refined))
+  let clamped = Math.max(0, Math.min(maxStart, refined))
+  clamped = nudgeForwardForLoudAttack(series, clamped, reelDurationSec, maxStart)
+
   console.log(
-    `[VideoV2Pipeline][${jobId}][Music] Ventana inteligente: trim_start=${clamped.toFixed(2)}s ` +
+    `[VideoV2Pipeline][${jobId}][Music] Ventana (ataque al inicio): trim_start=${clamped.toFixed(2)}s ` +
       `(pista≈${musicDurationSec.toFixed(1)}s, reel=${reelDurationSec.toFixed(1)}s, muestras=${series.length})`
   )
   return Number(clamped.toFixed(3))
@@ -172,14 +226,11 @@ function heuristicTrimStart(
   if (musicDurationSec == null || !Number.isFinite(musicDurationSec) || musicDurationSec <= reelDurationSec + 0.5) {
     return 0
   }
-  const maxStart = musicDurationSec - reelDurationSec
-  // Sin ffmpeg: saltar parte del intro (~25–30 % del margen disponible).
-  const s = Math.max(0, Math.min(maxStart, maxStart * 0.28))
+  // Sin análisis de audio: no adivinar un punto al 28 % (suele dejar el inicio del reel en un build-up).
   console.log(
-    `[VideoV2Pipeline][${jobId}][Music] Heurística sin análisis de audio: trim_start=${s.toFixed(2)}s ` +
-      `(pista≈${musicDurationSec.toFixed(1)}s)`
+    `[VideoV2Pipeline][${jobId}][Music] Sin ffmpeg: trim_start=0s (pista≈${musicDurationSec.toFixed(1)}s, reel≈${reelDurationSec.toFixed(1)}s)`
   )
-  return Number(s.toFixed(3))
+  return 0
 }
 
 export interface PickSmartMusicTrimOptions {

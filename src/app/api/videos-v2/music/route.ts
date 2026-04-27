@@ -6,6 +6,9 @@ import { uploadMusicTrackV2 } from '@/lib/videos-v2/storage'
 const ALLOWED_AUDIO_TYPES = new Set([
   'audio/mpeg',
   'audio/mp3',
+  'audio/mpeg3',
+  'audio/x-mpeg',
+  'audio/x-mpeg-3',
   'audio/wav',
   'audio/x-wav',
   'audio/aac',
@@ -23,6 +26,7 @@ const EXT_TO_MIME: Record<string, string> = {
 }
 
 export const maxDuration = 300
+export const runtime = 'nodejs'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -44,9 +48,17 @@ function resolveAudioMimeType(file: File): string | null {
   const t = (file.type || '').trim().toLowerCase()
   if (ALLOWED_AUDIO_TYPES.has(t)) {
     if (t === 'audio/x-m4a') return 'audio/mp4'
+    if (t === 'audio/mp3' || t === 'audio/mpeg3' || t === 'audio/x-mpeg' || t === 'audio/x-mpeg-3') {
+      return 'audio/mpeg'
+    }
     return t
   }
-  if (t === 'application/octet-stream' || t === '' || t === 'application/x-unknown') {
+  if (
+    t === 'application/octet-stream' ||
+    t === '' ||
+    t === 'application/x-unknown' ||
+    t === 'binary/octet-stream'
+  ) {
     const ext = extensionFromFilename(file.name)
     const mapped = EXT_TO_MIME[ext]
     if (mapped) return mapped
@@ -85,6 +97,9 @@ export async function POST(request: NextRequest) {
     const nameRaw = formData.get('name') as string | null
 
     if (!file) return NextResponse.json({ error: 'Archivo de audio requerido' }, { status: 400 })
+    if (typeof file.size === 'number' && file.size === 0) {
+      return NextResponse.json({ error: 'El archivo está vacío (0 bytes).' }, { status: 400 })
+    }
 
     const name = normalizeTrackName(typeof nameRaw === 'string' ? nameRaw : '')
     if (!name) return NextResponse.json({ error: 'Nombre del track requerido' }, { status: 400 })
