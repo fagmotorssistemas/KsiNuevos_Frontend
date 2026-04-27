@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clapperboard, Loader2, Pencil, RotateCcw, Save } from 'lucide-react'
 import type { SequenceItem, SubtitleBlock } from '@/lib/videos-v2/segmenter'
 import type { GeminiSegmentAnalysisResult } from '@/lib/videos-v2/types'
+import { MusicSelector } from './MusicSelector'
 
 type EditorStateResponse = {
   gemini_analysis: GeminiSegmentAnalysisResult
@@ -56,6 +57,8 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
   const [rerenderJson, setRerenderJson] = useState('')
   const [saving, setSaving] = useState(false)
   const [rendering, setRendering] = useState(false)
+  const [changeMusicOnRerender, setChangeMusicOnRerender] = useState(false)
+  const [rerenderMusicId, setRerenderMusicId] = useState<string | null>(null)
   const [subtitleSaveUi, setSubtitleSaveUi] = useState<SubtitleSaveUi>('idle')
   const subtitleRowsRef = useRef<SubtitleBlock[]>([])
   const lastPersistedSubtitleSig = useRef('')
@@ -196,6 +199,7 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
         body: JSON.stringify({
           gemini_analysis: parsed,
           ...(subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}),
+          ...(changeMusicOnRerender && rerenderMusicId ? { music_track_id: rerenderMusicId } : {}),
         }),
       })
       const j = (await res.json()) as { error?: string }
@@ -217,7 +221,10 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
-          subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}
+          {
+            ...(subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}),
+            ...(changeMusicOnRerender && rerenderMusicId ? { music_track_id: rerenderMusicId } : {}),
+          }
         ),
       })
       const j = (await res.json()) as { error?: string }
@@ -472,9 +479,43 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
           )}
 
           <div className="pt-4 border-t border-gray-100 flex flex-wrap gap-2 items-center">
+            <div className="w-full rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={changeMusicOnRerender}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setChangeMusicOnRerender(on)
+                    if (!on) {
+                      setRerenderMusicId(null)
+                    }
+                  }}
+                />
+                Cambiar música en el próximo re-render
+              </label>
+              {changeMusicOnRerender && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-gray-500">
+                    Selecciona un track. Se re-renderiza el mismo job con la nueva música, sin rehacer transcripción ni análisis.
+                  </p>
+                  <MusicSelector
+                    selectedId={rerenderMusicId}
+                    onSelect={(id, _url) => {
+                      setRerenderMusicId(id)
+                    }}
+                  />
+                  {rerenderMusicId && (
+                    <p className="text-[11px] text-emerald-700">
+                      Nuevo track listo para aplicar en re-render.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              disabled={rendering || loading}
+              disabled={rendering || loading || (changeMusicOnRerender && !rerenderMusicId)}
               onClick={() => void rerenderOnly()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
             >
@@ -488,7 +529,7 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
             <span className="text-[11px] text-gray-500">
               Los subtítulos se guardan solos al editar. Los cortes siguen requiriendo «Guardar cortes». Este botón
               envía a Creatomate el análisis en BD y, si hay filas de subtítulos cargadas, también las persiste antes
-              del render.
+              del render. Si activas “Cambiar música”, también actualiza la pista de fondo del job.
             </span>
           </div>
         </div>

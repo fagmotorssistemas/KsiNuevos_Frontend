@@ -108,6 +108,7 @@ async function updateJob(
     segment_map: unknown
     adjusted_srt: string
     subtitle_blocks_override: unknown
+    music_track_url: string
   }>
 ) {
   const supabase = getServiceClient()
@@ -120,6 +121,22 @@ async function updateJob(
     console.error(`[VideoV2Pipeline][${jobId}] Error actualizando job: ${error.message}`)
     throw new Error(`No se pudo actualizar el job: ${error.message}`)
   }
+}
+
+async function resolveMusicTrackUrlById(musicTrackId: string): Promise<string> {
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('music_tracks_v2')
+    .select('public_url, is_active')
+    .eq('id', musicTrackId)
+    .single()
+  if (error || !data?.public_url) {
+    throw new Error('No se encontró el track de música seleccionado')
+  }
+  if (data.is_active === false) {
+    throw new Error('El track de música seleccionado está inactivo')
+  }
+  return data.public_url
 }
 
 async function getJobStatus(jobId: string): Promise<VideoJobStatus | null> {
@@ -1618,7 +1635,8 @@ export async function startCreatomateRenderFromClientScript(
 
 export async function rerunCreatomateRenderForJob(
   jobId: string,
-  geminiAnalysisOverride?: unknown
+  geminiAnalysisOverride?: unknown,
+  opts?: { musicTrackIdOverride?: string }
 ): Promise<{ renderId: string }> {
   const supabase = getServiceClient()
   const { data: job, error } = await supabase
@@ -1634,9 +1652,13 @@ export async function rerunCreatomateRenderForJob(
   if (paths.length === 0) {
     throw new Error('Job sin raw_video_paths')
   }
-  if (!job.music_track_url) {
+  if (!job.music_track_url && !opts?.musicTrackIdOverride) {
     throw new Error('Job sin música asignada')
   }
+  const musicTrackUrl =
+    opts?.musicTrackIdOverride != null
+      ? await resolveMusicTrackUrlById(opts.musicTrackIdOverride)
+      : (job.music_track_url as string)
 
   const allSegments = parseSegmentMapJson(job.segment_map)
   const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
@@ -1753,6 +1775,7 @@ export async function rerunCreatomateRenderForJob(
   await updateJob(jobId, {
     gemini_analysis: analysisToStore,
     adjusted_srt: adjustedSrt,
+    music_track_url: musicTrackUrl,
     status: 'rendering',
     current_step: 'Re-render: enviando a Creatomate…',
     progress_percentage: 82,
@@ -1768,7 +1791,7 @@ export async function rerunCreatomateRenderForJob(
     analysis.sequence,
     freshClipUrls,
     subtitleBlocks,
-    job.music_track_url,
+    musicTrackUrl,
     voIntroForRender
   )
 

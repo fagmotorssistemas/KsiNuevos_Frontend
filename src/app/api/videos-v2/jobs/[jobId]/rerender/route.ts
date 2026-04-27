@@ -22,18 +22,26 @@ export async function POST(
     let geminiOverride: unknown
     const raw = await request.text()
     if (raw.trim()) {
-      let body: { gemini_analysis?: unknown; subtitle_blocks_override?: unknown | null }
+      let body: { gemini_analysis?: unknown; subtitle_blocks_override?: unknown | null; music_track_id?: unknown }
       try {
         body = JSON.parse(raw) as { gemini_analysis?: unknown; subtitle_blocks_override?: unknown | null }
       } catch {
         return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 })
       }
       geminiOverride = body.gemini_analysis
+      const musicTrackId =
+        typeof body.music_track_id === 'string' && body.music_track_id.trim().length > 0
+          ? body.music_track_id.trim()
+          : undefined
       if (Object.prototype.hasOwnProperty.call(body, 'subtitle_blocks_override')) {
         await applyVideoJobEditorPatch(jobId, {
           subtitle_blocks_override: body.subtitle_blocks_override,
         })
       }
+      const { renderId } = await rerunCreatomateRenderForJob(jobId, geminiOverride, {
+        musicTrackIdOverride: musicTrackId,
+      })
+      return NextResponse.json({ ok: true, renderId })
     }
 
     const { renderId } = await rerunCreatomateRenderForJob(jobId, geminiOverride)

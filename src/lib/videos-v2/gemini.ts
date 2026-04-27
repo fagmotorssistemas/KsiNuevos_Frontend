@@ -310,7 +310,7 @@ const CAR_BRANDS = [
 
 /** Modelos / series frecuentes en inventario (ayuda a no clasificar "solo año" como presentación). */
 const MODEL_LINE_REGEX =
-  /\b(f[- ]?150|f[- ]?250|f[- ]?350|f[- ]?450|silverado|sierra|tahoe|yukon|explorer|escape|ranger|raptor|mustang|bronco|corvette|camaro|equinox|traverse|suburban|colorado|frontier|versa|sentra|altima|rogue|murano|armada|titan|pathfinder|hilux|rav4|highlander|sequoia|tundra|camry|corolla|prius|yaris|civic|accord|pilot|cr-v|hr-v|passat|jetta|tiguan|amarok|golf|polo|arteon|rdx|mdx|tlx|cx-5|cx-9|cx-30|mazda\s*3|mazda\s*6|outlander|eclipse|be\s?go|sportage|tucson|sorento|telluride|palisade|elantra|accent|creta|venue|wrangler|grand cherokee|gladiator|compass|renegade|defender|discovery|evoque|h1|h2|transit|promaster|sprinter|land\s*cruiser|landcruiser|lc\s*200|lc\s*150)\b/i
+  /\b(f[- ]?150|f[- ]?250|f[- ]?350|f[- ]?450|silverado|sierra|tahoe|yukon|explorer|escape|ranger|raptor|mustang|bronco|corvette|camaro|equinox|traverse|suburban|colorado|frontier|versa|sentra|altima|rogue|murano|armada|titan|pathfinder|hilux|rav4|highlander|sequoia|tundra|camry|corolla|prius|yaris|civic|accord|pilot|cr-v|hr-v|passat|jetta|tiguan|amarok|golf|polo|arteon|rdx|mdx|tlx|cx[- ]?5|cx[- ]?9|cx[- ]?30|mazda\s*3|mazda\s*6|outlander|eclipse|be\s?go|sportage|tucson|sorento|telluride|palisade|elantra|accent|creta|venue|wrangler|grand cherokee|gladiator|compass|renegade|defender|discovery|evoque|h1|h2|transit|promaster|sprinter|land\s*cruiser|landcruiser|lc\s*200|lc\s*150)\b/i
 
 function normalizeText(text: string): string {
   return text
@@ -772,7 +772,7 @@ function isIsolatedShortVehicleModelName(text: string): boolean {
     .trim()
     .replace(/\s+/g, ' ')
   if (wordCountNormalized(t) > 3) return false
-  return /^(prado|hilux|picanto|versa|march|sunny|tiida|sentra|altima|creta|tucson|sportage|be\s*go|rio|accent|elantra)$/.test(
+  return /^(prado|hilux|picanto|versa|march|sunny|tiida|sentra|altima|creta|tucson|sportage|be\s*go|rio|accent|elantra|cx[- ]?5|cx[- ]?9|cx[- ]?30)$/.test(
     t
   )
 }
@@ -1076,6 +1076,13 @@ function pinManualIntroClipIndicesToStart(
       .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))
     const seg = pickBestSegmentForManualIntroClip(candidates)
     if (!seg) {
+      const visualFallback = allSegments
+        .filter((s) => s.clip_index === clipIdx && !isMistakeSegment(s))
+        .sort((a, b) => a.start_s - b.start_s || b.duration_s - a.duration_s)[0]
+      if (visualFallback) {
+        picked.push(sequenceItemFromSegment(visualFallback, 0, `intro fija manual (clip ${clipIdx}, fallback visual)`))
+        continue
+      }
       console.warn(
         `[VideoV2Pipeline][${jobId}][Gemini] Intro manual: clip ${clipIdx} sin habla en el mapa — se omite.`
       )
@@ -1156,14 +1163,23 @@ function validateSequence(
     })
 
   // 2) Forzar cortes exactos al segmento para no romper palabras
+  const clipMaxEndByIndex = new Map<number, number>()
+  for (const s of allSegments) {
+    clipMaxEndByIndex.set(s.clip_index, Math.max(clipMaxEndByIndex.get(s.clip_index) ?? 0, s.end_s))
+  }
   sequence = sequence.map((item) => {
     const seg = segmentLookup.get(item.segment_id)
     if (!seg) return item
+    const clipMaxEnd = clipMaxEndByIndex.get(seg.clip_index) ?? seg.end_s
+    const TRIM_START_PAD_SEC = 0.05
+    const TRIM_END_PAD_SEC = 0.14
+    const safeStart = Math.max(0, seg.start_s - TRIM_START_PAD_SEC)
+    const safeEnd = Math.min(clipMaxEnd, seg.end_s + TRIM_END_PAD_SEC)
     return {
       ...item,
-      trim_start: seg.start_s,
-      trim_end: seg.end_s,
-      trim_duration: Number((seg.end_s - seg.start_s).toFixed(3)),
+      trim_start: Number(safeStart.toFixed(3)),
+      trim_end: Number(Math.max(safeStart + 0.12, safeEnd).toFixed(3)),
+      trim_duration: Number((Math.max(safeStart + 0.12, safeEnd) - safeStart).toFixed(3)),
     }
   })
 
@@ -1177,7 +1193,7 @@ function validateSequence(
   // 3) Permitir micro-segmentos de presentación; descartar ultra-cortos que no aportan
   const before = sequence.length
   sequence = sequence.filter((item) => {
-    if (item.trim_duration >= 0.8) return true
+    if (item.trim_duration >= 0.6) return true
     const seg = segmentLookup.get(item.segment_id)
     if (!seg) return false
     return isPresentationSegment(seg) && item.trim_duration >= PRESENTATION_MICROCLIP_MIN_SEC
@@ -1185,7 +1201,7 @@ function validateSequence(
   if (sequence.length < before) {
     console.log(
       `[VideoV2Pipeline][${jobId}][Gemini] Se eliminaron ${before - sequence.length} segmentos ultra-cortos ` +
-        `(<0.8s no-presentación, o presentación <${PRESENTATION_MICROCLIP_MIN_SEC}s)`
+        `(<0.6s no-presentación, o presentación <${PRESENTATION_MICROCLIP_MIN_SEC}s)`
     )
   }
 

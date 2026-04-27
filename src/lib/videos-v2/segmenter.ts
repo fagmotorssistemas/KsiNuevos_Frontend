@@ -120,7 +120,8 @@ function mergeLetterDigitSplitSegmentsOneClip(sortedByStart: Segment[]): Segment
     ) {
       const lastLetters = prev.words[prev.words.length - 1]!.text.replace(/[^\p{L}]/gu, '')
       const firstTrim = seg.words[0]!.text.trim()
-      if (lastLetters.length === 1 && /^\d{1,3}$/.test(firstTrim)) {
+      // Soporta modelos tipo "CX 5", "X5", "H1": ASR suele separarlos en tokens.
+      if (lastLetters.length >= 1 && lastLetters.length <= 3 && /^\d{1,3}$/.test(firstTrim)) {
         merged[merged.length - 1] = buildSegment([...prev.words, ...seg.words], clipIndex, 0)
         continue
       }
@@ -140,7 +141,7 @@ function mergeLetterDigitSplitSegmentsOneClip(sortedByStart: Segment[]): Segment
  */
 function splitSegmentsOnModelWordPause(segments: Segment[], clipIndex: number): Segment[] {
   const GAP_MS = 280
-  const tailModel = /^(prado|hilux)$/i
+  const tailModel = /^(prado|hilux|cx[- ]?5|cx[- ]?9|cx[- ]?30)$/i
   const flat: Segment[] = []
   for (const seg of segments) {
     const ww = seg.words
@@ -251,6 +252,10 @@ export function buildAdjustedSRT(
     )
 
     if (wordsInRange.length === 0) {
+      if (seg.source_kind === 'visual_only') {
+        timelineOffsetMs += item.trim_duration * 1000
+        continue
+      }
       // Sin palabras → generar un solo bloque con el texto del segmento
       const startSrt = msToSrtTime(timelineOffsetMs)
       const endSrt = msToSrtTime(timelineOffsetMs + item.trim_duration * 1000)
@@ -333,6 +338,10 @@ export function buildSubtitleBlocks(
     )
 
     if (wordsInRange.length === 0) {
+      if (seg.source_kind === 'visual_only') {
+        timelineOffsetMs += item.trim_duration * 1000
+        continue
+      }
       blocks.push({
         time: Number((timelineOffsetMs / 1000).toFixed(3)),
         duration: Number(item.trim_duration.toFixed(3)),

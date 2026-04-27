@@ -466,7 +466,7 @@ function pickCaptionBackground(idx: number, fill: string): {
   if (stickerOnly) {
     return {
       background_color: 'rgba(0,0,0,0)',
-      background_x_padding: '28%',
+      background_x_padding: '14%',
       background_y_padding: '12%',
       background_border_radius: '18%',
     }
@@ -475,7 +475,7 @@ function pickCaptionBackground(idx: number, fill: string): {
   if (pillDark) {
     return {
       background_color: 'rgba(0,0,0,0.48)',
-      background_x_padding: '34%',
+      background_x_padding: '16%',
       background_y_padding: '16%',
       background_border_radius: '24%',
     }
@@ -488,7 +488,7 @@ function pickCaptionBackground(idx: number, fill: string): {
         : 'rgba(255,255,255,0.1)'
   return {
     background_color: tint,
-    background_x_padding: '32%',
+    background_x_padding: '15%',
     background_y_padding: '15%',
     background_border_radius: '22%',
   }
@@ -605,8 +605,9 @@ function buildManualCaptionElements(
       line_height: '118%',
       letter_spacing: short ? '2.2%' : '1.2%',
       text_transform: 'uppercase',
+      x: '50%',
       y: pickCaptionVerticalPosition(idx),
-      width: '94%',
+      width: '86%',
       height: '30%',
       x_alignment: '50%',
       y_alignment: '50%',
