@@ -501,8 +501,8 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                   </p>
                   <MusicSelector
                     selectedId={rerenderMusicId}
-                    onSelect={(id, _url) => {
-                      setRerenderMusicId(id)
+                    onSelect={(track) => {
+                      setRerenderMusicId(track.id)
                     }}
                   />
                   {rerenderMusicId && (

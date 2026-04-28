@@ -3577,6 +3577,7 @@ export type Database = {
           flow_type: string
           gemini_analysis: Json | null
           id: string
+          job_name: string | null
           music_track_url: string | null
           progress_percentage: number | null
           raw_video_paths: string[]
@@ -3601,6 +3602,7 @@ export type Database = {
           flow_type: string
           gemini_analysis?: Json | null
           id?: string
+          job_name?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths: string[]
@@ -3625,6 +3627,7 @@ export type Database = {
           flow_type?: string
           gemini_analysis?: Json | null
           id?: string
+          job_name?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths?: string[]

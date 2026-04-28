@@ -14,9 +14,10 @@ import { tryProbeMediaDurationSecondsFromUrl } from './probe-video'
 const execFileAsync = promisify(execFile)
 
 const FFMPEG_TIMEOUT_MS = 120_000
-const COARSE_STEP_SEC = 0.35
-const REFINE_RADIUS_SEC = 1.0
+const COARSE_STEP_SEC = 0.2
+const REFINE_RADIUS_SEC = 1.4
 const REFINE_STEP_SEC = 0.05
+const TOP_K_CANDIDATES = 8
 
 /** Tramo inicial del reel donde debe sonar fuerte (segundos en timeline del reel = fuente desde trim). */
 function headWindowSec(reelDurationSec: number): number {
@@ -83,6 +84,26 @@ function meanEnergyInWindow(
   return { mean: sum / n, n }
 }
 
+function topQuantileMeanEnergyInWindow(
+  series: { t: number; mDb: number }[],
+  winStart: number,
+  winEnd: number,
+  topFraction: number
+): { mean: number; n: number } {
+  const vals: number[] = []
+  for (const p of series) {
+    if (p.t < winStart) continue
+    if (p.t >= winEnd) continue
+    vals.push(mDbToEnergy(p.mDb))
+  }
+  if (vals.length === 0) return { mean: 0, n: 0 }
+  vals.sort((a, b) => b - a)
+  const k = Math.max(1, Math.floor(vals.length * topFraction))
+  const top = vals.slice(0, k)
+  const sum = top.reduce((s, x) => s + x, 0)
+  return { mean: sum / top.length, n: top.length }
+}
+
 /** Derivada aproximada |dM/dt| en cada punto (picos ≈ golpes / subidas de energía). */
 function onsetWeights(series: { t: number; mDb: number }[]): Map<number, number> {
   const w = new Map<number, number>()
@@ -133,12 +154,18 @@ function windowScore(
 ): { score: number; n: number } {
   const head = headWindowSec(reelDurationSec)
   const headStats = meanEnergyInWindow(series, s, s + head)
+  const headPeaks = topQuantileMeanEnergyInWindow(series, s, s + head, 0.35)
   const fullStats = meanEnergyInWindow(series, s, s + reelDurationSec)
+  const fullPeaks = topQuantileMeanEnergyInWindow(series, s, s + reelDurationSec, 0.22)
   if (fullStats.n < 4 || headStats.n < 2) return { score: -Infinity, n: 0 }
   const align = cutAlignmentScore(s, reelDurationSec, cutStartTimesSec, onset, series)
+  const punchRatio = fullStats.mean > 1e-12 ? headStats.mean / fullStats.mean : 0
   const score =
-    5.2 * headStats.mean +
-    1.0 * fullStats.mean +
+    5.6 * headStats.mean +
+    3.1 * headPeaks.mean +
+    1.2 * fullStats.mean +
+    1.4 * fullPeaks.mean +
+    0.35 * punchRatio +
     align * 0.00035
   return { score, n: fullStats.n }
 }
@@ -182,32 +209,34 @@ function bestTrimFromSeries(
 
   const onset = onsetWeights(series)
 
-  let bestS = 0
-  let bestScore = -Infinity
+  const coarseCandidates: { s: number; score: number }[] = []
   for (let s = 0; s <= maxStart + 1e-6; s += COARSE_STEP_SEC) {
     const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
     if (n < 4) continue
-    if (score > bestScore) {
-      bestScore = score
-      bestS = s
+    coarseCandidates.push({ s, score })
+  }
+  if (coarseCandidates.length === 0) return 0
+  coarseCandidates.sort((a, b) => b.score - a.score)
+  const top = coarseCandidates.slice(0, TOP_K_CANDIDATES)
+
+  let bestS = top[0]!.s
+  let bestScore = top[0]!.score
+  for (const cand of top) {
+    for (
+      let s = Math.max(0, cand.s - REFINE_RADIUS_SEC);
+      s <= Math.min(maxStart, cand.s + REFINE_RADIUS_SEC) + 1e-9;
+      s += REFINE_STEP_SEC
+    ) {
+      const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
+      if (n < 4) continue
+      if (score > bestScore) {
+        bestScore = score
+        bestS = s
+      }
     }
   }
 
-  let refined = bestS
-  for (
-    let s = Math.max(0, bestS - REFINE_RADIUS_SEC);
-    s <= Math.min(maxStart, bestS + REFINE_RADIUS_SEC) + 1e-9;
-    s += REFINE_STEP_SEC
-  ) {
-    const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
-    if (n < 4) continue
-    if (score > bestScore) {
-      bestScore = score
-      refined = s
-    }
-  }
-
-  let clamped = Math.max(0, Math.min(maxStart, refined))
+  let clamped = Math.max(0, Math.min(maxStart, bestS))
   clamped = nudgeForwardForLoudAttack(series, clamped, reelDurationSec, maxStart)
 
   console.log(

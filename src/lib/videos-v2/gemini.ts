@@ -332,27 +332,7 @@ function isStandaloneYearPresentationToken(seg: Segment): boolean {
   return /^(19|20)\d{2}$/.test(t)
 }
 
-/**
- * Solo "comenta este/esa/el… + auto" cuenta como gancho de apertura.
- * Frases cortas tipo "comenta Prado 2016" (sin marca ni demostrativo) suelen ser CTA de redes → cierre, no intro.
- */
-function isComentaVehicleEngagementHook(seg: Segment): boolean {
-  const t = normalizeText(seg.text)
-  if (!/\bcomenta\b/.test(t)) return false
-  const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
-  const hasModel =
-    MODEL_LINE_REGEX.test(seg.text) ||
-    /\b[hx]?\d{1,3}\b/.test(t) ||
-    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
-      t
-    )
-  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|los|las|un|una|unos|unas)\b/.test(t)) return true
-  if (hasBrand && hasModel) return true
-  return false
-}
-
 function isPresentationSegment(seg: Segment): boolean {
-  if (isComentaVehicleEngagementHook(seg)) return true
   const t = normalizeText(seg.text)
   if (/\bcomenta\b/.test(t)) return false
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
@@ -373,8 +353,8 @@ function isPresentationSegment(seg: Segment): boolean {
 /** Primer corte del Reel: debe sonar marca + contexto (modelo o año), no solo "2012" ni solo "F-150" sin marca. */
 function openingPresentationIsAdequate(seg: Segment | undefined): boolean {
   if (!seg) return false
-  if (isComentaVehicleEngagementHook(seg)) return true
   const t = normalizeText(seg.text)
+  if (/\bcomenta\b/.test(t)) return false
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
   const hasModel =
@@ -414,7 +394,10 @@ function strengthenOpeningPresentation(
 ): SequenceItem[] {
   if (sequence.length === 0) return sequence
   const firstSeg = segmentLookup.get(sequence[0].segment_id)
-  if (openingPresentationIsAdequate(firstSeg)) return sequence
+  if (!firstSeg) return sequence
+  const firstIsSolidOpening =
+    openingPresentationIsAdequate(firstSeg) && !isTechnicalSpecIntroSegment(firstSeg)
+  if (firstIsSolidOpening) return sequence
 
   // Verificar si los primeros clips de presentación forman juntos una apertura completa
   // (e.g. clip "Toyota" + clip "Prado" + clip "2016")
@@ -425,22 +408,28 @@ function strengthenOpeningPresentation(
     openingGroup.push(normalizeText(seg.text))
   }
   if (openingGroup.length >= 2) {
-    const combined = openingGroup.join(' ')
-    const hasBrand = CAR_BRANDS.some((b) => combined.includes(b))
-    const hasYear = /\b(19|20)\d{2}\b/.test(combined)
-    const hasModel = MODEL_LINE_REGEX.test(combined) ||
-      /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(combined)
-    if (hasBrand && (hasYear || hasModel)) {
-      console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
-      )
-      return sequence
+    const leaderSeg = segmentLookup.get(sequence[0].segment_id)
+    if (!(leaderSeg && isTechnicalSpecIntroSegment(leaderSeg))) {
+      const combined = openingGroup.join(' ')
+      const hasBrand = CAR_BRANDS.some((b) => combined.includes(b))
+      const hasYear = /\b(19|20)\d{2}\b/.test(combined)
+      const hasModel =
+        MODEL_LINE_REGEX.test(combined) ||
+        /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+          combined
+        )
+      if (hasBrand && (hasYear || hasModel)) {
+        console.log(
+          `[VideoV2Pipeline][${jobId}][Gemini] Apertura: grupo de ${openingGroup.length} micro-clips de presentación aceptado (marca+modelo/año combinados).`
+        )
+        return sequence
+      }
     }
   }
 
   for (let j = 1; j < sequence.length; j++) {
     const sj = segmentLookup.get(sequence[j].segment_id)
-    if (sj && openingPresentationIsAdequate(sj)) {
+    if (sj && openingPresentationIsAdequate(sj) && !isTechnicalSpecIntroSegment(sj)) {
       const tmp = sequence[0]
       sequence[0] = sequence[j]!
       sequence[j] = tmp
@@ -459,7 +448,8 @@ function strengthenOpeningPresentation(
         s.source_kind !== 'visual_only' &&
         !isMistakeSegment(s) &&
         !isEndCtaSegment(s) &&
-        openingPresentationIsAdequate(s)
+        openingPresentationIsAdequate(s) &&
+        !isTechnicalSpecIntroSegment(s)
     )
     .sort((a, b) => b.duration_s - a.duration_s)
 
@@ -483,16 +473,12 @@ function isEndCtaSegment(seg: Segment): boolean {
   const t = normalizeText(seg.text)
   if (/solo aqui|ksi nuevos|casi nuevos/.test(t)) return true
   if (/te pasamos|te enviamos|te mandamos/.test(t)) return true
-  if (/\bcomenta\b/.test(t)) {
-    if (isComentaVehicleEngagementHook(seg)) return false
-    return true
-  }
+  if (/\bcomenta\b/.test(t)) return true
   return false
 }
 
-/** true si el segmento es un "comenta" de cierre (redes), no el gancho "comenta este Prado". */
+/** "comenta …" en redes: siempre CTA de cierre (orden dentro del outro vs info/marca). */
 function isCtaCallToActionTrigger(seg: Segment): boolean {
-  if (isComentaVehicleEngagementHook(seg)) return false
   const t = normalizeText(seg.text)
   return /\bcomenta\b/.test(t)
 }
@@ -504,14 +490,12 @@ function isCtaInfoContinuationSegment(seg: Segment): boolean {
 }
 
 /**
- * "Comenta Prado 2016" / "comenta Toyota Corolla" sin demostrativo (este/esa/…): engagement de cierre
- * con auto; debe ir ANTES de "te pasamos la info" / WhatsApp. No marca apertura: eso solo
- * `isComentaVehicleEngagementHook` ("comenta este Prado", etc.).
+ * "Comenta …" + vehículo (marca/modelo/año): engagement de cierre con auto; suele ir antes de
+ * "te pasamos la info" / WhatsApp dentro del bloque outro.
  */
 function isComentaVehicleEngagementClosing(seg: Segment): boolean {
   const t = normalizeText(seg.text)
   if (!/\bcomenta\b/.test(t)) return false
-  if (/\bcomenta\b\s+(este|esta|ese|esa|el|la|los|las|un|una|unos|unas)\b/.test(t)) return false
   const hasBrand = CAR_BRANDS.some((b) => t.includes(b))
   const hasYear = /\b(19|20)\d{2}\b/.test(t)
   const hasModel =
@@ -545,10 +529,62 @@ function introOpeningStrength(seg: Segment | undefined): number {
   return openingPresentationIsAdequate(seg) ? 2 : isPresentationSegment(seg) ? 1 : 0
 }
 
+/** Tono “gancho” lifestyle / identidad (misma heurística que antes favorecía después del dato; ahora se usa en capas). */
+function hasEmotionalOrLifestyleHookTone(t: string): boolean {
+  return (
+    /\b(identidad|estilo de vida|lifestyle|quien eres|quien eres|reflej|personalidad|conecta|eres tu|tu vida|alma|deseo|elegancia|pasión|pasion|sueño|sueno)\b/.test(
+      t
+    ) ||
+    /\b(sentir|siente|vive|vivis)\b.*\b(volante|conduc|manej)\b/.test(t) ||
+    /\b(no es solo|no es un carro|mas que un carro|más que un carro)\b/.test(t) ||
+    /\b(identity|desire|statement)\b/.test(t)
+  )
+}
+
 /**
- * Dentro del bloque intro (misma fuerza de apertura): prioriza hechos del auto antes que ganchos lifestyle.
- * Mayor número = más al inicio del reel. Evita que un clip con índice bajo (p. ej. 5) gane por empate a
- * "Toyota Land Cruiser" (clip 14) solo por `clip_index`.
+ * Gancho narrativo de apertura (necesidad del cliente, propósito, pregunta) — debe ir antes que motor/ficha.
+ */
+function isNarrativeNeedHookSegment(seg: Segment): boolean {
+  const t = normalizeText(seg.text)
+  if (/\bcomenta\b/.test(t)) return false
+  if (hasEmotionalOrLifestyleHookTone(t)) return true
+  if (/^¿/.test(t.trim())) return true
+  return (
+    /\b(buscas|busca|necesitas|necesita|te interesa|te gusta|te gustan|te sirve|te sirven|ideal para|perfecto para|perfecta para|listo para|listos para|pensando en|imagina|supongamos)\b/.test(
+      t
+    ) ||
+    /\b(camioneta de trabajo|pickup de trabajo|pick-?up de trabajo|vehiculo de trabajo|vehículo de trabajo|para tu (negocio|empresa|taller|flota|familia|trabajo))\b/.test(
+      t
+    ) ||
+    /\b(proposito|propósito|enfocado en|dirigido a|necesidad del cliente|dirigiendose|dirigiéndose)\b/.test(t) ||
+    /\b(looking for|need a|need an|want a|want an|if you need|work vehicle|work truck|pickup truck|daily driver|here'?s why|tell you why|get the job done|primary benefit|use case|why this|why the)\b/.test(
+      t
+    )
+  )
+}
+
+/** Presentación que es sobre todo ficha técnica (motor, caja, etc.) — va después del gancho narrativo. */
+function isTechnicalSpecIntroSegment(seg: Segment): boolean {
+  if (!isPresentationSegment(seg)) return false
+  if (isNarrativeNeedHookSegment(seg)) return false
+  const t = normalizeText(seg.text)
+  return /\b(motor|motores|cilindros|caballos?\s*de\s*fuerza|\bhp\b|horsepower|torque|transmis|tracción|traccion|suspensi|frenos?|combustible|\blitros?\b|cilindraje|\bc\s*c\b|cc\.|dimension(es)?|capacidad de carga|kilometraje|tanque|rinden|engine|engines|ecoboost|turbocharged|\bturbo\b|supercharged|diesel|gasoline|petrol|cylinders?|\bv6\b|\bv8\b|\bi4\b|specs?|specification|specifications|technical\s+spec|under\s+the\s+hood|hood\s+open|bonnet)\b/i.test(
+    t
+  )
+}
+
+/** Mayor = más al inicio del bloque intro: gancho narrativo (2) > presentación neutra (1) > ficha técnica (0). */
+function introNarrativeHookRank(seg: Segment | undefined): number {
+  if (!seg) return 1
+  if (isNarrativeNeedHookSegment(seg)) return 2
+  if (!isPresentationSegment(seg)) return 1
+  if (isTechnicalSpecIntroSegment(seg)) return 0
+  return 1
+}
+
+/**
+ * Dentro del bloque intro: tras el gancho narrativo, prioriza hechos del auto (marca/modelo/año) sobre ruido;
+ * mayor número = más al inicio del reel donde aplique el mismo “tier” de gancho vs ficha.
  */
 function vehicleFactsIntroTier(seg: Segment | undefined): number {
   if (!seg) return 0
@@ -562,15 +598,7 @@ function vehicleFactsIntroTier(seg: Segment | undefined): number {
     ) ||
     /\b[hx]?\d{1,3}\b/.test(t)
 
-  const emotionalOrLifestyleHook =
-    /\b(identidad|estilo de vida|lifestyle|quien eres|quien eres|reflej|personalidad|conecta|eres tu|tu vida|alma|deseo|elegancia|pasión|pasion|sueño|sueno)\b/.test(
-      t
-    ) ||
-    /\b(sentir|siente|vive|vivis)\b.*\b(volante|conduc|manej)\b/.test(t) ||
-    /\b(no es solo|no es un carro|mas que un carro|más que un carro)\b/.test(t) ||
-    /\b(identity|desire|statement)\b/.test(t)
-
-  if (emotionalOrLifestyleHook) {
+  if (hasEmotionalOrLifestyleHookTone(t)) {
     if (hasBrand && hasExplicitModel && hasYear) return 96
     return 18
   }
@@ -639,6 +667,10 @@ function compareIntroPresentationOrder(
 ): number {
   const sa = lookup.get(a.segment_id)
   const sb = lookup.get(b.segment_id)
+  // Primero: gancho narrativo > presentación neutra > ficha técnica (motor); si no, un motor “adecuado”
+  // por marca+modelo ganaba siempre a ganchos sin marca por introOpeningStrength.
+  const byHookBeforeSpecs = introNarrativeHookRank(sb) - introNarrativeHookRank(sa)
+  if (byHookBeforeSpecs !== 0) return byHookBeforeSpecs
   const byStrength = introOpeningStrength(sb) - introOpeningStrength(sa)
   if (byStrength !== 0) return byStrength
   const structA = hasStructuredVehicleIntroFacts(sa) ? 1 : 0
@@ -668,7 +700,7 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
       continue
     }
     if (isEndCtaSegment(seg)) outro.push(item)
-    else if (isPresentationSegment(seg)) intro.push(item)
+    else if (isPresentationSegment(seg) || isNarrativeNeedHookSegment(seg)) intro.push(item)
     else middle.push(item)
   }
 
@@ -1360,11 +1392,11 @@ const AUTONOMOUS_EDIT_BLOCK = `
 MONTAJE 100% AUTOMÁTICO:
 - Nadie más va a reordenar: tu JSON es la timeline final del Reel.
 - Usa el CATÁLOGO (transcripciones y tipos de clip) + lo que ves en los videos + el mapa de segmentos.
-- Apertura del Reel: primero hechos del vehículo (marca, línea/modelo tipo Land Cruiser/Prado, año). Los ganchos lifestyle o identidad ("refleja quién eres", etc.) van DESPUÉS de esa tanda, no antes.
+- Apertura del Reel: si hay gancho de necesidad/pregunta/propósito del cliente, va ANTES que motor o ficha técnica; después marca/línea/modelo/año. Los ganchos lifestyle o identidad ("refleja quién eres", etc.) no deben ir después de un dato técnico seco si ese dato abre el reel.
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
 - Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
-- Orden: presentación (marca/modelo/año o "comenta este Prado 2016" como gancho) al inicio; al final del Reel: primero engagement "comenta [modelo/año]" y después frases de seguimiento ("te pasamos/enviamos la información", WhatsApp); el cierre de marca ("solo aquí en Ksi") va al último — no pongas "te pasamos la info" antes de "comenta Prado 2016".
+- Orden: apertura con hechos del vehículo (marca/modelo/año) sin CTA de redes. Cualquier frase con "comenta" (incl. "comenta este Prado…") es CTA y va al FINAL del Reel; dentro del cierre: engagement "comenta …" antes de "te pasamos/enviamos la información" / WhatsApp; el cierre de marca ("solo aquí en Ksi") al último.
 - Reel llamativo: cada 2–4s debe haber cambio claro de imagen, dato o energía; evita planos estáticos largos sin mensaje nuevo.
 - Evita sensación de hueco o negro prolongado: prioriza visual_overlay con B-roll alineado al audio; si un plano no aporta imagen, acorta el corte o cambia de segment_id en lugar de alargar silencio visual.
 `
@@ -1383,7 +1415,7 @@ BLOQUE VO MANUAL (no entra en "sequence"):
 - Hay un clip reservado (índice ${voIdx}) cuyo audio completo irá una sola vez con planos sin habla (B-roll de AssemblyAI) encima; el pipeline intenta cubrir el audio con planos — elige B-roll temáticamente rico para minimizar huecos visuales. Ese clip NO está en el mapa de segmentos.
 - "sequence" solo contiene cortes de diálogo de OTROS clips con habla (nunca clip ${voIdx}). NUNCA uses visual_overlay en "sequence".
 - Debes respetar el arco narrativo del JSON (presentación del carro → desarrollo / VO → CTA) y fijar "voice_over_insert_after_count" en consecuencia.
-- El PRIMER corte de "sequence" debe ser presentación clara (marca + modelo o año). El ÚLTIMO corte debe ser el cierre/CTA (comenta aquí, Ksi/Casi Nuevos, etc.). NO pongas el CTA antes que un clip que solo pide "comenta" el modelo del auto (eso es gancho, no cierre).
+- El PRIMER corte de "sequence" debe ser presentación clara (marca + modelo o año), sin pedir "comenta" en redes. El ÚLTIMO tramo de "sequence" debe ser cierre/CTA: cualquier "comenta …", luego Ksi/Casi Nuevos, etc.
 - En "sequence", cada corte debe aportar algo distinto: no pongas dos segmentos seguidos que repitan o parafraseen la misma idea (el sistema penaliza redundancia).
 - Ritmo viral: cortes breves y contundentes antes y después del bloque VO; evita sensación de pantalla vacía.
 `
@@ -1535,8 +1567,8 @@ REGLAS ABSOLUTAS DE CORTE:
 2. Usa EXACTAMENTE los trim_start y trim_end que correspondan al inicio y fin del segmento (start_s y end_s del mapa). NO modifiques los timestamps a menos que el segmento sea demasiado largo y necesites usar solo una parte (en ese caso, corta en una pausa natural entre palabras).
 3. Objetivo de duración total: idealmente entre 20 y 32 segundos para Reels; si el material natural queda más corto, NO rellenes con trozos irrelevantes — prioriza coherencia sobre alargar.
 4. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO. Un clip tipo "comenta este Toyota Prado 2016" es PRESENTACIÓN (gancho), no cierre: debe ir al inicio, no al final.
-6. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta abajo", "síguenos") deben ir al FINAL — no confundas con "comenta" + nombre del carro + año.
+5. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO y NO deben ser CTAs de redes: cualquier segmento cuyo texto pida "comenta" (con o sin "este/esa/…") es CTA y va al FINAL del Reel.
+6. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta …", "síguenos", etc.) deben ir al FINAL.
 7. El PRIMER segmento de "sequence" debe contener en su transcripción MARCA + (modelo o año), p. ej. "Ford F-150" o "Nissan Tiida 2012". Evita como primer corte solo el año ("2012") o solo modelo sin marca si en el mapa hay un segment_id más completo.
 8. MODELO COMPLETO: mira el vídeo (emblema, parrilla, placa, pantalla) y la voz. Si el mapa parte el modelo (p. ej. un segmento termina en "H" y otro empieza en "1"), elige el segment_id que agrupe el nombre completo o el que ya diga "H1" / "X5" junto; en "reason" escribe el modelo tal cual lo venderías (ej. Hyundai H1), nunca truncado.
 
@@ -1611,8 +1643,8 @@ REGLAS ABSOLUTAS DE CORTE:
 3. Duración total: apunta a 25–32s si el material da; si no, no rellenes con contenido débil.
 4. Puedes usar segmentos cortos si aportan valor (incluso alrededor de 1 segundo) siempre que no corten palabras.
 5. Si detectas partes de error del vendedor (ej: "me equivoqué", "otra vez", "de nuevo"), descártalas.
-6. Los segmentos de presentación de vehículo (marca/modelo/año) deben ir al INICIO. "Comenta este Toyota Prado 2016" es presentación/gancho, no CTA de cierre.
-7. Los segmentos tipo CTA de cierre ("solo aquí en Ksi/Casi Nuevos", "comenta abajo", "síguenos") van al FINAL — no confundas con "comenta" + nombre del carro + año.
+6. Los segmentos de presentación de vehículo (marca/modelo/año) van al INICIO y no deben incluir CTAs "comenta …" (incl. "comenta este Toyota…"): eso siempre es cierre.
+7. Los CTAs de cierre ("solo aquí en Ksi/Casi Nuevos", cualquier "comenta …", "síguenos", etc.) van al FINAL.
 8. El PRIMER segmento de "sequence" debe incluir MARCA + (modelo o año) en el texto del mapa; no uses solo año o solo modelo sin marca como apertura si existe un segment_id mejor.
 9. MODELO COMPLETO: infiere del catálogo y del texto del mapa el modelo entero (H1, X5, 320d, etc.); en "reason" del primer corte escribe marca+modelo completos, sin truncar dígitos.
 

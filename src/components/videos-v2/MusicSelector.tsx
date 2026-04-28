@@ -7,7 +7,7 @@ import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 
 interface MusicSelectorProps {
   selectedId: string | null
-  onSelect: (id: string, url: string) => void
+  onSelect: (track: MusicTrackV2) => void
 }
 
 export function MusicSelector({ selectedId, onSelect }: MusicSelectorProps) {
@@ -73,8 +73,8 @@ export function MusicSelector({ selectedId, onSelect }: MusicSelectorProps) {
             role="radio"
             aria-checked={isSelected}
             tabIndex={0}
-            onClick={() => onSelect(track.id, track.public_url)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(track.id, track.public_url) }}
+            onClick={() => onSelect(track)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(track) }}
             className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer select-none ${
               isSelected
                 ? 'border-violet-600 bg-violet-50'

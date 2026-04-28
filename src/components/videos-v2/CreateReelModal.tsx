@@ -26,6 +26,7 @@ import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
 
 type VoiceOverUiMode = 'auto' | 'clip' | 'mp3'
+type MusicTrimMode = 'smart' | 'manual'
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6
 type FlowType = 'single' | 'multiple'
@@ -61,10 +62,14 @@ function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
 
 export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelModalProps) {
   const [step, setStep] = useState<Step>(1)
+  const [jobName, setJobName] = useState('')
   const [flowType, setFlowType] = useState<FlowType>('single')
   const [files, setFiles] = useState<File[]>([])
   const [selectedMusicId, setSelectedMusicId] = useState<string | null>(null)
   const [selectedMusicUrl, setSelectedMusicUrl] = useState<string | null>(null)
+  const [selectedMusicDurationSec, setSelectedMusicDurationSec] = useState<number | null>(null)
+  const [musicTrimMode, setMusicTrimMode] = useState<MusicTrimMode>('smart')
+  const [manualMusicTrimStartSec, setManualMusicTrimStartSec] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
@@ -99,10 +104,14 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
 
   function reset() {
     setStep(1)
+    setJobName('')
     setFlowType('single')
     setFiles([])
     setSelectedMusicId(null)
     setSelectedMusicUrl(null)
+    setSelectedMusicDurationSec(null)
+    setMusicTrimMode('smart')
+    setManualMusicTrimStartSec(0)
     setJobId(null)
     setCompletedJob(null)
     setIsSubmitting(false)
@@ -212,6 +221,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          jobName: jobName.trim(),
           flowType,
           files: files.map((f) => ({ filename: f.name, mimeType: f.type || 'video/mp4' })),
           musicTrackId: selectedMusicId,
@@ -345,6 +355,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           ...(scriptPdfPath ? { scriptPdfPath } : {}),
           ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
           ...(canonV ? { canonicalVehicle: canonV } : {}),
+          ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         }),
       })
 
@@ -419,6 +430,17 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {/* PASO 1 — Tipo de flujo */}
           {step === 1 && (
             <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <label className="text-xs font-semibold text-gray-600">Nombre del JOB (opcional)</label>
+                <input
+                  type="text"
+                  value={jobName}
+                  onChange={(e) => setJobName(e.target.value)}
+                  maxLength={100}
+                  placeholder="Ej: Hilux negra mayo 2026"
+                  className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800"
+                />
+              </div>
               <p className="text-sm text-gray-600">¿Qué tipo de material tienes para el Reel?</p>
               <div className="grid grid-cols-2 gap-4">
                 <button
@@ -873,8 +895,107 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               </p>
               <MusicSelector
                 selectedId={selectedMusicId}
-                onSelect={(id, url) => { setSelectedMusicId(id); setSelectedMusicUrl(url) }}
+                onSelect={(track) => {
+                  setSelectedMusicId(track.id)
+                  setSelectedMusicUrl(track.public_url)
+                  const dur = track.duration_seconds
+                  if (typeof dur === 'number' && Number.isFinite(dur) && dur > 0) {
+                    setSelectedMusicDurationSec(dur)
+                    setManualMusicTrimStartSec((prev) => Math.max(0, Math.min(prev, Math.max(0, dur - 1))))
+                  } else {
+                    setSelectedMusicDurationSec(null)
+                    setManualMusicTrimStartSec(0)
+                  }
+                }}
               />
+              {selectedMusicId && (
+                <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-gray-900">Tramo de música</p>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="music-trim-mode"
+                        className="mt-1"
+                        checked={musicTrimMode === 'smart'}
+                        onChange={() => setMusicTrimMode('smart')}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <span className="font-medium">Selección inteligente</span>
+                        <span className="text-gray-500"> — Detecta automáticamente la parte más movida.</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="music-trim-mode"
+                        className="mt-1"
+                        checked={musicTrimMode === 'manual'}
+                        onChange={() => setMusicTrimMode('manual')}
+                      />
+                      <span className="text-sm text-gray-800">
+                        <span className="font-medium">Elegir manualmente</span>
+                        <span className="text-gray-500"> — Define desde qué segundo inicia la canción.</span>
+                      </span>
+                    </label>
+                  </div>
+                  {musicTrimMode === 'manual' && (
+                    <div className="space-y-2 rounded-lg border border-violet-200/70 bg-white/70 p-3">
+                      <label className="text-xs font-medium text-gray-700">Inicio manual del track (segundos)</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0}
+                          step={0.1}
+                          max={Math.max(0, (selectedMusicDurationSec ?? 300) - 1)}
+                          value={manualMusicTrimStartSec}
+                          onChange={(e) => setManualMusicTrimStartSec(Number(e.target.value))}
+                          className="flex-1 accent-violet-600"
+                          disabled={selectedMusicDurationSec == null}
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.1}
+                          max={Math.max(0, (selectedMusicDurationSec ?? 300) - 1)}
+                          value={manualMusicTrimStartSec}
+                          onChange={(e) => setManualMusicTrimStartSec(Math.max(0, Number(e.target.value) || 0))}
+                          className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        El Reel usará este segundo como arranque y tomará la duración necesaria del clip final.
+                        {selectedMusicDurationSec == null
+                          ? ' Esta pista aún no tiene duración calculada en la base; se usa un rango temporal aproximado.'
+                          : ''}
+                      </p>
+                      {selectedMusicUrl && (
+                        <audio
+                          controls
+                          src={selectedMusicUrl}
+                          className="w-full"
+                          onLoadedMetadata={(e) => {
+                            const el = e.currentTarget
+                            if (!Number.isFinite(el.duration) || el.duration <= 0) return
+                            setSelectedMusicDurationSec(el.duration)
+                          }}
+                          onCanPlay={(e) => {
+                            const el = e.currentTarget
+                            const t = Math.max(0, manualMusicTrimStartSec)
+                            if (Math.abs(el.currentTime - t) > 0.25) {
+                              try {
+                                el.currentTime = t
+                              } catch {
+                                // Algunos navegadores bloquean seek temprano; no interrumpe el flujo.
+                              }
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

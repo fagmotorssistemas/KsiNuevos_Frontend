@@ -34,12 +34,13 @@ interface CreateJobBody {
   flowType: FlowType
   files: FileInfo[]
   musicTrackId: string
+  jobName?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateJobBody
-    const { flowType, files, musicTrackId } = body
+    const { flowType, files, musicTrackId, jobName } = body
 
     if (!flowType || !files?.length || !musicTrackId) {
       return NextResponse.json(
@@ -79,19 +80,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const normalizedJobName =
+      typeof jobName === 'string' && jobName.trim().length > 0
+        ? jobName.trim().slice(0, 100)
+        : null
+
     // Crear registro inicial del job
-    const { data: job, error: insertError } = await supabase
-      .from('video_jobs_v2')
-      .insert({
-        flow_type: flowType,
-        raw_video_paths: [],
-        status: 'pending',
-        current_step: 'Esperando subida de archivos...',
-        progress_percentage: 0,
-        music_track_url: musicTrack.public_url,
-      })
-      .select('id')
-      .single()
+    const baseInsert = {
+      flow_type: flowType,
+      raw_video_paths: [],
+      status: 'pending',
+      current_step: 'Esperando subida de archivos...',
+      progress_percentage: 0,
+      music_track_url: musicTrack.public_url,
+    }
+
+    let job: { id: string } | null = null
+    let insertError: Error | null = null
+
+    if (normalizedJobName) {
+      const withName = await supabase
+        .from('video_jobs_v2')
+        .insert({
+          ...baseInsert,
+          job_name: normalizedJobName,
+        })
+        .select('id')
+        .single()
+      job = withName.data
+      insertError = withName.error
+    }
+
+    if (!job) {
+      const withoutName = await supabase
+        .from('video_jobs_v2')
+        .insert(baseInsert)
+        .select('id')
+        .single()
+      job = withoutName.data
+      insertError = withoutName.error
+    }
 
     if (insertError || !job) {
       return NextResponse.json(

@@ -24,6 +24,7 @@ const EXT_TO_MIME: Record<string, string> = {
   '.m4a': 'audio/mp4',
   '.mp4': 'audio/mp4',
 }
+const MAX_MUSIC_UPLOAD_BYTES = 45 * 1024 * 1024
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -99,6 +100,14 @@ export async function POST(request: NextRequest) {
     if (!file) return NextResponse.json({ error: 'Archivo de audio requerido' }, { status: 400 })
     if (typeof file.size === 'number' && file.size === 0) {
       return NextResponse.json({ error: 'El archivo está vacío (0 bytes).' }, { status: 400 })
+    }
+    if (typeof file.size === 'number' && file.size > MAX_MUSIC_UPLOAD_BYTES) {
+      return NextResponse.json(
+        {
+          error: `El archivo supera el límite permitido (${Math.round(MAX_MUSIC_UPLOAD_BYTES / (1024 * 1024))} MB).`,
+        },
+        { status: 413 }
+      )
     }
 
     const name = normalizeTrackName(typeof nameRaw === 'string' ? nameRaw : '')

@@ -27,6 +27,7 @@ import {
   normalizeClipKindsInput,
   normalizeCanonicalVehicle,
   normalizeManualIntroClipIndices,
+  normalizeMusicTrimStartSec,
   normalizeVoiceOverMp3OverlayIndices,
   normalizeVoiceOverOverlayClipIndices,
 } from './clip-config'
@@ -210,7 +211,8 @@ async function runSingleVideoPipelineFromStorage(
   jobId: string,
   storagePath: string,
   signedUrl: string,
-  musicTrackUrl: string
+  musicTrackUrl: string,
+  musicTrimStartSecOverride?: number
 ) {
   let googleFileRef: GoogleFileRef | null = null
 
@@ -333,7 +335,9 @@ async function runSingleVideoPipelineFromStorage(
     const freshSignedUrl = await getSignedUrlForPath(storagePath)
     const clipUrls = [freshSignedUrl]
 
-    const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl)
+    const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
+      musicTrimStartSecOverride,
+    })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
       progress_percentage: 85,
@@ -553,7 +557,8 @@ async function runMultipleClipsPipelineFromStorage(
   voiceOverBaseClipIndexInput: number | undefined,
   voiceOverOverlayClipIndicesInput: number[] | undefined,
   voiceOverAudioPathInput: string | undefined,
-  voiceOverMp3DurationSecInput: number | undefined
+  voiceOverMp3DurationSecInput: number | undefined,
+  musicTrimStartSecOverride?: number
 ) {
   let googleFileRefs: GoogleFileRef[] = []
 
@@ -915,7 +920,8 @@ async function runMultipleClipsPipelineFromStorage(
       freshClipUrls,
       subtitleBlocks,
       musicTrackUrl,
-      voIntroForRender
+      voIntroForRender,
+      { musicTrimStartSecOverride }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1358,6 +1364,7 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
   let voiceOverOverlayClipIndicesFromMeta: number[] | undefined
   let voiceOverAudioPathFromMeta: string | undefined
   let voiceOverMp3DurationSecFromMeta: number | undefined
+  let musicTrimStartSecFromMeta: number | undefined
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1379,6 +1386,7 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
     ) {
       voiceOverMp3DurationSecFromMeta = Number(sc.voiceOverMp3DurationSec.toFixed(3))
     }
+    musicTrimStartSecFromMeta = normalizeMusicTrimStartSec(sc.musicTrimStartSec)
     if (
       voiceOverAudioPathFromMeta &&
       Array.isArray(sc.voiceOverOverlayClipIndices) &&
@@ -1493,6 +1501,7 @@ export async function getCreatomateRenderScriptForJob(
   let voiceOverOverlayClipIndicesFromMeta: number[] | undefined
   let voiceOverAudioPathFromMeta: string | undefined
   let voiceOverMp3DurationSecFromMeta: number | undefined
+  let musicTrimStartSecFromMeta: number | undefined
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1514,6 +1523,7 @@ export async function getCreatomateRenderScriptForJob(
     ) {
       voiceOverMp3DurationSecFromMeta = Number(sc.voiceOverMp3DurationSec.toFixed(3))
     }
+    musicTrimStartSecFromMeta = normalizeMusicTrimStartSec(sc.musicTrimStartSec)
     if (
       voiceOverAudioPathFromMeta &&
       Array.isArray(sc.voiceOverOverlayClipIndices) &&
@@ -1575,12 +1585,14 @@ export async function getCreatomateRenderScriptForJob(
   const voIntroFresh = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
 
   const timeline = computeReelTimelineMeta(analysis.sequence, voIntroFresh)
-  const musicTrimStartSec = await pickSmartMusicTrimStartSec({
-    jobId,
-    musicUrl: job.music_track_url,
-    reelDurationSec: timeline.totalDurationSec,
-    cutStartTimesSec: timeline.cutStartTimesSec,
-  })
+  const musicTrimStartSec =
+    musicTrimStartSecFromMeta ??
+    (await pickSmartMusicTrimStartSec({
+      jobId,
+      musicUrl: job.music_track_url,
+      reelDurationSec: timeline.totalDurationSec,
+      cutStartTimesSec: timeline.cutStartTimesSec,
+    }))
 
   return buildCreatomateRenderScript(
     jobId,
@@ -1671,6 +1683,7 @@ export async function rerunCreatomateRenderForJob(
   let voiceOverOverlayClipIndicesFromMeta: number[] | undefined
   let voiceOverAudioPathFromMeta: string | undefined
   let voiceOverMp3DurationSecFromMeta: number | undefined
+  let musicTrimStartSecFromMeta: number | undefined
   const sc = job.selected_clips
   if (isPipelineInputMeta(sc)) {
     if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
@@ -1692,6 +1705,7 @@ export async function rerunCreatomateRenderForJob(
     ) {
       voiceOverMp3DurationSecFromMeta = Number(sc.voiceOverMp3DurationSec.toFixed(3))
     }
+    musicTrimStartSecFromMeta = normalizeMusicTrimStartSec(sc.musicTrimStartSec)
     if (
       voiceOverAudioPathFromMeta &&
       Array.isArray(sc.voiceOverOverlayClipIndices) &&
@@ -1792,7 +1806,8 @@ export async function rerunCreatomateRenderForJob(
     freshClipUrls,
     subtitleBlocks,
     musicTrackUrl,
-    voIntroForRender
+    voIntroForRender,
+    { musicTrimStartSecOverride: musicTrimStartSecFromMeta }
   )
 
   await updateJob(jobId, {
@@ -1899,6 +1914,7 @@ export function startPipelineBackground(params: {
   /** Ruta Storage del MP3/WAV de VO (excluyente con voiceOverBaseClipIndex). */
   voiceOverAudioPath?: string
   voiceOverMp3DurationSec?: number
+  musicTrimStartSec?: number
 }) {
   const {
     jobId,
@@ -1911,13 +1927,14 @@ export function startPipelineBackground(params: {
     voiceOverOverlayClipIndices,
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
+    musicTrimStartSec,
   } = params
 
   if (flowType === 'single') {
     const f = files[0]
     setImmediate(() => {
       if (f.alreadyUploaded && f.path && f.signedUrl) {
-        runSingleVideoPipelineFromStorage(jobId, f.path, f.signedUrl, musicTrackUrl).catch((e) =>
+        runSingleVideoPipelineFromStorage(jobId, f.path, f.signedUrl, musicTrackUrl, musicTrimStartSec).catch((e) =>
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en single pipeline: ${e}`)
         )
       } else {
@@ -1940,7 +1957,8 @@ export function startPipelineBackground(params: {
           voiceOverBaseClipIndex,
           voiceOverOverlayClipIndices,
           voiceOverAudioPath,
-          voiceOverMp3DurationSec
+          voiceOverMp3DurationSec,
+          musicTrimStartSec
         ).catch((e) =>
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en multiple pipeline: ${e}`)
         )

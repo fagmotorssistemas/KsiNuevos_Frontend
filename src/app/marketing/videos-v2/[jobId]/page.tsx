@@ -7,11 +7,12 @@ import {
   ArrowLeft, Clock, Film, Layers, Upload, Mic2, Brain, Clapperboard,
   CheckCircle2, AlertCircle, Loader2, RefreshCw,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { CreatomateJobPreview } from '@/components/videos-v2/CreatomateJobPreview'
 import { JobManualEditor } from '@/components/videos-v2/JobManualEditor'
 import { VideoPlayer } from '@/components/videos-v2/VideoPlayer'
 import { PipelineStatus } from '@/components/videos-v2/PipelineStatus'
-import type { VideoJobV2 } from '@/lib/videos-v2/types'
+import type { VideoJobStatus, VideoJobV2 } from '@/lib/videos-v2/types'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600', icon: Clock },
@@ -39,6 +40,16 @@ const STATUS_ORDER: Record<string, number> = {
   pending: 0, uploading: 1, transcribing: 2, analyzing: 3, rendering: 4, completed: 5, failed: -1,
 }
 
+const STATUS_OPTIONS: Array<{ value: VideoJobStatus; label: string }> = [
+  { value: 'pending', label: 'Pendiente' },
+  { value: 'uploading', label: 'Subiendo' },
+  { value: 'transcribing', label: 'Transcribiendo' },
+  { value: 'analyzing', label: 'Analizando' },
+  { value: 'rendering', label: 'Renderizando' },
+  { value: 'completed', label: 'Completado' },
+  { value: 'failed', label: 'Fallido' },
+]
+
 export default function JobDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -47,6 +58,8 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<VideoJobV2 | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isSavingMeta, setIsSavingMeta] = useState(false)
+  const [jobNameInput, setJobNameInput] = useState('')
   const fetchJob = useCallback(async () => {
     try {
       const res = await fetch(`/api/videos-v2/job-status/${jobId}`)
@@ -54,6 +67,7 @@ export default function JobDetailPage() {
       if (!res.ok) throw new Error('Error cargando job')
       const data = (await res.json()) as VideoJobV2
       setJob(data)
+      setJobNameInput(data.job_name ?? '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -103,6 +117,26 @@ export default function JobDetailPage() {
 
   const statusCfg = STATUS_CONFIG[job.status]
 
+  async function patchJobMeta(payload: { status?: VideoJobStatus; jobName?: string | null }) {
+    setIsSavingMeta(true)
+    try {
+      const res = await fetch(`/api/videos-v2/jobs/${jobId}/meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = (await res.json()) as VideoJobV2 & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudieron guardar los cambios')
+      setJob(data)
+      setJobNameInput(data.job_name ?? '')
+      toast.success('Cambios guardados')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error guardando cambios')
+    } finally {
+      setIsSavingMeta(false)
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Back */}
@@ -126,7 +160,9 @@ export default function JobDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-extrabold text-gray-900">Job #{job.id.slice(0, 8)}…</h1>
+                <h1 className="text-lg font-extrabold text-gray-900">
+                  {job.job_name?.trim() ? job.job_name : `Job #${job.id.slice(0, 8)}…`}
+                </h1>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusCfg.className}`}>
                   {statusCfg.label}
                 </span>
@@ -135,6 +171,31 @@ export default function JobDetailPage() {
                 {job.flow_type === 'single' ? '1 video largo' : `${job.raw_video_paths.length} clips`}
                 {' · '}Creado {formatDate(job.created_at)}
               </p>
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={jobNameInput}
+                  onChange={(e) => setJobNameInput(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = jobNameInput.trim()
+                    if ((job.job_name ?? '') === trimmed) return
+                    void patchJobMeta({ jobName: trimmed })
+                  }}
+                  placeholder="Nombre del job"
+                  maxLength={100}
+                  className="w-full sm:w-72 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800"
+                />
+                <select
+                  value={job.status}
+                  onChange={(e) => void patchJobMeta({ status: e.target.value as VideoJobStatus })}
+                  disabled={isSavingMeta}
+                  className="w-full sm:w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 disabled:opacity-70"
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
           <button

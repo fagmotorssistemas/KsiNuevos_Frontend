@@ -11,6 +11,11 @@ export async function parseJsonOrThrow<T>(res: Response): Promise<T> {
   try {
     return JSON.parse(text) as T
   } catch {
+    if (res.status === 413) {
+      throw new Error(
+        'El archivo supera el tamaño permitido por el servidor (HTTP 413). Prueba con un audio más liviano o córtalo antes de subirlo.'
+      )
+    }
     const hint =
       text.trimStart().startsWith('<') || text.includes('<!DOCTYPE')
         ? ' (el servidor respondió HTML, suele ser un fallo interno de la API: revisa logs de Vercel o la consola del servidor).'

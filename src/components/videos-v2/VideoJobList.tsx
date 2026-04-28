@@ -38,7 +38,7 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
         .from('video_jobs_v2')
         .select('*')
         .order('created_at', { ascending: false })
-        .range(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE)
+        .range(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (currentFilter !== 'all') {
         query = query.eq('status', currentFilter)
@@ -49,7 +49,7 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
 
       const items = (data ?? []) as unknown as VideoJobV2[]
       setJobs(currentPage === 0 ? items : (prev) => [...prev, ...items])
-      setHasMore(items.length === PAGE_SIZE + 1)
+      setHasMore(items.length === PAGE_SIZE)
     } catch (err) {
       console.error('[VideoJobList] Error cargando jobs:', err)
     } finally {
@@ -71,6 +71,10 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
     const nextPage = page + 1
     setPage(nextPage)
     fetchJobs(nextPage, filter)
+  }
+
+  function handleJobDeleted(jobId: string) {
+    setJobs((prev) => prev.filter((job) => job.id !== jobId))
   }
 
   return (
@@ -110,9 +114,9 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {jobs.map((job) => (
-              <VideoJobCard key={job.id} job={job} />
+              <VideoJobCard key={job.id} job={job} onJobDeleted={handleJobDeleted} />
             ))}
           </div>
 

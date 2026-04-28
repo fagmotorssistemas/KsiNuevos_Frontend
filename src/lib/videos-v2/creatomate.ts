@@ -315,7 +315,7 @@ const CAPTION_ENTRANCE_MIN_SEC = 0.12
 const CAPTION_ENTRANCE_MAX_SEC = 0.32
 
 /** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
-const REEL_MUSIC_VOLUME = '21%'
+const REEL_MUSIC_VOLUME = '25%'
 const REEL_DIALOGUE_VOLUME = '108%'
 
 /**
@@ -960,15 +960,23 @@ export async function renderSegmentsV2(
   clipUrls: string[],
   subtitleBlocks: SubtitleBlock[],
   musicUrl: string,
-  voiceOverIntro?: VoiceOverIntroRenderInput | null
+  voiceOverIntro?: VoiceOverIntroRenderInput | null,
+  opts?: { musicTrimStartSecOverride?: number }
 ): Promise<string> {
+  const requested = opts?.musicTrimStartSecOverride
+  const manualTrim =
+    typeof requested === 'number' && Number.isFinite(requested) && requested >= 0
+      ? Number(requested.toFixed(3))
+      : undefined
   const timeline = computeReelTimelineMeta(sequence, voiceOverIntro)
-  const musicTrimStartSec = await pickSmartMusicTrimStartSec({
-    jobId,
-    musicUrl,
-    reelDurationSec: timeline.totalDurationSec,
-    cutStartTimesSec: timeline.cutStartTimesSec,
-  })
+  const musicTrimStartSec =
+    manualTrim ??
+    (await pickSmartMusicTrimStartSec({
+      jobId,
+      musicUrl,
+      reelDurationSec: timeline.totalDurationSec,
+      cutStartTimesSec: timeline.cutStartTimesSec,
+    }))
   const script = buildCreatomateRenderScript(
     jobId,
     sequence,

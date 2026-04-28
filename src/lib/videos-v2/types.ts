@@ -53,6 +53,7 @@ export type GeminiAnalysis =
 
 export interface VideoJobV2 {
   id: string
+  job_name?: string | null
   created_at: string
   updated_at: string
   flow_type: FlowType

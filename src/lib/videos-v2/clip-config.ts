@@ -35,6 +35,8 @@ export interface VideoJobV2PipelineInputMeta {
   voiceOverAudioPath?: string | null
   /** Duración en segundos del audio VO (idealmente medida en el navegador al elegir el archivo). */
   voiceOverMp3DurationSec?: number | null
+  /** Inicio manual del track musical (segundos desde el comienzo del archivo). */
+  musicTrimStartSec?: number | null
   /**
    * Emergencia: hasta 3 índices de clip en orden; el pipeline fuerza el primer segmento hablado de cada uno
    * al inicio del montaje (marca / modelo / año), luego sigue el resto de la automatización.
@@ -60,9 +62,18 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobV2PipelineInputMet
     typeof o.voiceOverBaseClipIndex === 'number' ||
     (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0) ||
     (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0) ||
+    (typeof o.musicTrimStartSec === 'number' && Number.isFinite(o.musicTrimStartSec) && o.musicTrimStartSec >= 0) ||
     (Array.isArray(o.manualIntroClipIndices) && o.manualIntroClipIndices.length > 0) ||
     hasVehicle
   )
+}
+
+/** Inicio manual de música en segundos (>=0), con tope de seguridad para payloads inválidos. */
+export function normalizeMusicTrimStartSec(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined || raw === '') return undefined
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n < 0) return undefined
+  return Number(Math.min(n, 60 * 60 * 2).toFixed(3))
 }
 
 export function defaultClipKinds(count: number): VideoClipKind[] {

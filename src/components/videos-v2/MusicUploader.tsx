@@ -19,6 +19,8 @@ type PendingItem = {
 }
 
 const ACCEPT_INPUT = '.mp3,.wav,.aac,.m4a,.mpeg,audio/*,application/octet-stream'
+/** Evita 413 en proxys/gateways que rechazan multipart grandes antes de llegar al handler. */
+const MAX_UPLOAD_BYTES = 45 * 1024 * 1024
 
 function defaultNameFromFile(file: File): string {
   return file.name.replace(/\.[^.]+$/, '')
@@ -28,6 +30,10 @@ function isLikelyAudioFile(file: File): boolean {
   if (file.type.startsWith('audio/')) return true
   const n = file.name.toLowerCase()
   return /\.(mp3|wav|aac|m4a|mpeg)$/i.test(n)
+}
+
+function isAllowedUploadSize(file: File): boolean {
+  return Number.isFinite(file.size) && file.size > 0 && file.size <= MAX_UPLOAD_BYTES
 }
 
 function makeId(): string {
@@ -74,10 +80,17 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const list = Array.from(files)
-    const accepted = list.filter(isLikelyAudioFile)
-    const rejected = list.length - accepted.length
-    if (rejected > 0) {
-      toast.error(`${rejected} archivo(s) omitidos (no parecen audio mp3/wav/aac/m4a)`)
+    const likelyAudio = list.filter(isLikelyAudioFile)
+    const accepted = likelyAudio.filter(isAllowedUploadSize)
+    const rejectedType = list.length - likelyAudio.length
+    const rejectedSize = likelyAudio.length - accepted.length
+    if (rejectedType > 0) {
+      toast.error(`${rejectedType} archivo(s) omitidos (no parecen audio mp3/wav/aac/m4a)`)
+    }
+    if (rejectedSize > 0) {
+      toast.error(
+        `${rejectedSize} archivo(s) omitidos por tamaño (máx ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB para evitar error 413).`
+      )
     }
     if (accepted.length === 0) {
       toast.error('No hay archivos de audio válidos')

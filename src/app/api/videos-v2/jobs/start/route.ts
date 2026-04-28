@@ -22,6 +22,7 @@ import {
   normalizeVoiceOverMp3OverlayIndices,
   normalizeManualIntroClipIndices,
   normalizeCanonicalVehicle,
+  normalizeMusicTrimStartSec,
 } from '@/lib/videos-v2/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos-v2/extract-pdf-script-text'
 
@@ -70,6 +71,8 @@ interface StartJobBody {
   manualIntroClipIndices?: number[] | null
   /** Vehículo canónico para contexto en Gemini (inventario o captura manual). */
   canonicalVehicle?: { brand?: string; model?: string; year?: string } | null
+  /** Inicio manual del track musical en segundos (opcional). */
+  musicTrimStartSec?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -87,6 +90,7 @@ export async function POST(request: NextRequest) {
       voiceOverMp3DurationSec: voiceOverMp3DurationRaw,
       manualIntroClipIndices: manualIntroRaw,
       canonicalVehicle: canonicalVehicleRaw,
+      musicTrimStartSec: musicTrimStartRaw,
     } = body
 
     if (!jobId || !paths?.length) {
@@ -271,6 +275,7 @@ export async function POST(request: NextRequest) {
     }
 
     const canonicalVehicle = normalizeCanonicalVehicle(canonicalVehicleRaw ?? undefined)
+    const musicTrimStartSec = normalizeMusicTrimStartSec(musicTrimStartRaw ?? undefined)
 
     const supabase = getServiceClient()
 
@@ -327,7 +332,8 @@ export async function POST(request: NextRequest) {
       voiceOverAudioPath !== undefined ||
       (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0) ||
       (manualIntroClipIndices !== undefined && manualIntroClipIndices.length > 0) ||
-      canonicalVehicle !== undefined
+      canonicalVehicle !== undefined ||
+      musicTrimStartSec !== undefined
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -342,6 +348,7 @@ export async function POST(request: NextRequest) {
               ? { manualIntroClipIndices }
               : {}),
             ...(canonicalVehicle ? { canonicalVehicle } : {}),
+            ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),
           } as unknown as Json)
         : undefined
 
@@ -386,6 +393,7 @@ export async function POST(request: NextRequest) {
       voiceOverOverlayClipIndices,
       voiceOverAudioPath,
       voiceOverMp3DurationSec,
+      musicTrimStartSec,
     })
 
     return NextResponse.json({ jobId, status: 'processing' })
@@ -408,6 +416,7 @@ function startPipelineFromPaths(params: {
   voiceOverOverlayClipIndices?: number[]
   voiceOverAudioPath?: string
   voiceOverMp3DurationSec?: number
+  musicTrimStartSec?: number
 }) {
   const {
     jobId,
@@ -421,6 +430,7 @@ function startPipelineFromPaths(params: {
     voiceOverOverlayClipIndices,
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
+    musicTrimStartSec,
   } = params
 
   const files = paths.map((path, i) => ({
@@ -443,5 +453,6 @@ function startPipelineFromPaths(params: {
     voiceOverOverlayClipIndices,
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
+    musicTrimStartSec,
   })
 }
