@@ -14,12 +14,16 @@ export type InformativePostRow = {
   caption_facebook: string | null
   caption_instagram: string | null
   image_url: string | null
+  image_urls?: unknown | null
+  carousel_format?: string | null
   source_url: string | null
   source_title: string | null
   source_snippet: string | null
   instagram_permalink: string | null
   facebook_permalink: string | null
   created_at: string | null
+  story_hash?: string | null
+  topic_key?: string | null
 }
 
 function typeBadge(t: string | null) {
@@ -50,20 +54,51 @@ function statusBadge(s: string | null) {
   return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>{v || '—'}</span>
 }
 
+function extractFirstUrl(input: unknown): string | null {
+  if (!input) return null
+  if (Array.isArray(input)) {
+    const first = input[0]
+    return typeof first === 'string' ? first : null
+  }
+  if (typeof input === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyObj = input as any
+    const urls = anyObj?.urls
+    if (Array.isArray(urls)) {
+      const first = urls[0]
+      return typeof first === 'string' ? first : null
+    }
+  }
+  return null
+}
+
+function countUrls(input: unknown): number {
+  if (!input) return 0
+  if (Array.isArray(input)) return input.filter((x) => typeof x === 'string').length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyObj = input as any
+  if (Array.isArray(anyObj?.urls)) return anyObj.urls.filter((x: unknown) => typeof x === 'string').length
+  return 0
+}
+
 export function PublicacionCard({ post }: { post: InformativePostRow }) {
   const scheduled =
     post.scheduled_for && !Number.isNaN(new Date(post.scheduled_for).getTime())
       ? format(new Date(post.scheduled_for), "dd/MM/yyyy '•' HH:mm", { locale: es })
       : null
 
+  const firstFromJson = extractFirstUrl(post.image_urls)
+  const thumb = post.image_url || firstFromJson
+  const imagesCount = countUrls(post.image_urls)
+
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
       <div className="p-5">
         <div className="flex items-start gap-4">
           <div className="h-20 w-20 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shrink-0 flex items-center justify-center">
-            {post.image_url ? (
+            {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.image_url} alt={post.headline ?? 'Post'} className="h-full w-full object-cover" loading="lazy" />
+              <img src={thumb} alt={post.headline ?? 'Post'} className="h-full w-full object-cover" loading="lazy" />
             ) : (
               <ImageIcon className="h-6 w-6 text-gray-400" />
             )}
@@ -74,6 +109,11 @@ export function PublicacionCard({ post }: { post: InformativePostRow }) {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {typeBadge(post.type)}
               {statusBadge(post.status)}
+              {imagesCount > 1 && (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border bg-slate-100 text-slate-700 border-slate-200">
+                  Carrusel: {imagesCount}
+                </span>
+              )}
               {scheduled && (
                 <span className="text-xs font-semibold text-gray-500">
                   Programado: <span className="text-gray-700">{scheduled}</span>

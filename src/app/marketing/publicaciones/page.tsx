@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Loader2, Megaphone, Sparkles } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { ScriptCard, type ScriptRow } from '@/components/marketing/ScriptCard'
@@ -73,9 +75,11 @@ export default function MarketingPublicacionesPage() {
         const { data, error } = await (supabase as unknown as { from: (t: string) => any })
           .from('informative_posts')
           .select(
-            'id, type, status, scheduled_for, headline, caption_facebook, caption_instagram, image_url, source_url, source_title, source_snippet, instagram_permalink, facebook_permalink, created_at'
+            'id, type, status, scheduled_for, headline, caption_facebook, caption_instagram, image_url, image_urls, carousel_format, source_url, source_title, source_snippet, instagram_permalink, facebook_permalink, created_at, story_hash, topic_key'
           )
-          .order('scheduled_for', { ascending: false })
+          // Solo posts generados por el pipeline de IA
+          .not('story_hash', 'is', null)
+          .order('created_at', { ascending: false })
           .limit(50)
 
         if (error) {
@@ -99,9 +103,21 @@ export default function MarketingPublicacionesPage() {
     () =>
       tab === 'videos'
         ? { title: 'Videos de Vendedores', subtitle: 'Guiones publicados con métricas de Meta/Facebook.' }
-        : { title: 'Posts Informativos / Educativos', subtitle: 'Publicaciones programadas o publicadas.' },
+        : { title: 'Posts (IA)', subtitle: 'Solo posts generados por IA, agrupados por día.' },
     [tab]
   )
+
+  const postsByDay = useMemo(() => {
+    if (tab !== 'posts') return []
+    const map = new Map<string, InformativePostRow[]>()
+    for (const p of posts) {
+      const dt = p.created_at || p.scheduled_for
+      const key = dt ? format(new Date(dt), 'yyyy-MM-dd') : 'sin-fecha'
+      map.set(key, [...(map.get(key) ?? []), p])
+    }
+    const keys = Array.from(map.keys()).sort((a, b) => (b === 'sin-fecha' ? -1 : b.localeCompare(a)))
+    return keys.map((k) => ({ day: k, items: map.get(k) ?? [] }))
+  }, [posts, tab])
 
   return (
     <div className="space-y-6">
@@ -183,7 +199,27 @@ export default function MarketingPublicacionesPage() {
               </div>
             ))}
 
-          {tab === 'posts' && posts.map((p) => <PublicacionCard key={p.id} post={p} />)}
+          {/* Posts (IA) agrupados por día */}
+          {tab === 'posts' &&
+            postsByDay.map((g) => {
+              const human =
+                g.day === 'sin-fecha'
+                  ? 'Sin fecha'
+                  : format(new Date(g.day), "EEEE dd/MM/yyyy", { locale: es })
+              return (
+                <div key={g.day} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-extrabold text-gray-900">{human}</p>
+                    <span className="text-xs font-semibold text-gray-500">{g.items.length}</span>
+                  </div>
+                  <div className="space-y-4">
+                    {g.items.map((p) => (
+                      <PublicacionCard key={p.id} post={p} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
         </div>
       </div>
     </div>

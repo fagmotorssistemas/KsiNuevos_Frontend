@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format } from 'date-fns'
+import { addDays, format, startOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Loader2, ScrollText } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -17,17 +17,30 @@ function ymd(d: Date) {
   return format(d, 'yyyy-MM-dd')
 }
 
+function parseDateInputLocal(value: string) {
+  // value: "YYYY-MM-DD" from <input type="date">
+  const [y, m, d] = value.split('-').map((n) => Number(n))
+  if (!y || !m || !d) return new Date()
+  // Important: construct as LOCAL midnight (not UTC)
+  return new Date(y, m - 1, d, 0, 0, 0, 0)
+}
+
 export default function MarketingGuionesPage() {
   const { supabase } = useAuth()
   const [date, setDate] = useState(() => ymd(new Date()))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<ScriptRow[]>([])
+  const [hint, setHint] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) return
     setLoading(true)
     setError(null)
+    setHint(null)
+
+    const start = startOfDay(parseDateInputLocal(date))
+    const end = addDays(start, 1)
 
     ;(supabase as unknown as { from: (t: string) => any })
       .from('video_scripts')
@@ -39,7 +52,8 @@ export default function MarketingGuionesPage() {
         inventoryoracle:inventoryoracle (brand, model, year, color, img_main_url)
       `
       )
-      .eq('fecha_generacion', date)
+      .gte('created_at', start.toISOString())
+      .lt('created_at', end.toISOString())
       .order('vendedor_nombre', { ascending: true })
       .order('created_at', { ascending: true })
       .then(({ data, error }: { data: unknown[] | null; error: { message: string } | null }) => {
@@ -49,6 +63,19 @@ export default function MarketingGuionesPage() {
           return
         }
         setRows((data ?? []) as ScriptRow[])
+        if (!data || data.length === 0) {
+          ;(supabase as unknown as { from: (t: string) => any })
+            .from('video_scripts')
+            .select('created_at')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .then(({ data: d2 }: { data: Array<{ created_at: string }> | null }) => {
+              const last = d2?.[0]?.created_at
+              if (!last) return
+              const day = format(new Date(last), 'yyyy-MM-dd')
+              setHint(`Tip: el último día con guiones es ${day}. Cambia la fecha para verlos.`)
+            })
+        }
       })
       .finally(() => setLoading(false))
   }, [supabase, date])
@@ -104,6 +131,11 @@ export default function MarketingGuionesPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
           {error}
+        </div>
+      )}
+      {hint && !error && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900 font-semibold">
+          {hint}
         </div>
       )}
 
