@@ -34,4 +34,10 @@ export type LeadsFilters = {
     hasBudget?: boolean;
     /** Solo leads con al menos un registro en trade_in_cars */
     hasTradeIn?: boolean;
+    /**
+     * Muestra únicamente los "gestionados" (equivalente a la métrica de interacciones):
+     * - resume no vacío
+     * - updated_at dentro del día seleccionado (exactDate) o hoy (Ecuador)
+     */
+    onlyInteractions?: boolean;
 };

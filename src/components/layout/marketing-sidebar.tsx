@@ -12,10 +12,15 @@ import {
     ChevronRight,
     Megaphone,
     Sparkles,
+    BarChart3,
+    ScrollText,
 } from 'lucide-react';
 
 const menuItems = [
     { name: 'Inicio', href: '/marketing', icon: LayoutDashboard },
+    { name: 'Guiones', href: '/marketing/guiones', icon: ScrollText },
+    { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
+    { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Videos IA (V1)', href: '/marketing/video-automation', icon: Film },
     { name: 'Videos V2 ✨', href: '/marketing/videos-v2', icon: Sparkles },
 ];

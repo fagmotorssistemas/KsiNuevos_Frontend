@@ -95,6 +95,7 @@ export function LeadsToolbar({
         filters.search !== '' ||
         filters.hasBudget ||
         filters.hasTradeIn ||
+        filters.onlyInteractions ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
         (isAdmin && assignedToValue !== 'all');
 
@@ -263,13 +264,35 @@ export function LeadsToolbar({
                     <span className="hidden sm:inline h-4 w-[1px] bg-slate-200 mx-1"></span>
 
                     {/* MÉTRICA 2: Interacciones (Calculado con offset manual) */}
-                    <div className="flex items-center gap-1.5 text-slate-600 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-sm animate-in fade-in"
-                        title="Leads gestionados en la fecha seleccionada por el responsable seleccionado">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const next = !filters.onlyInteractions;
+                            // Si se activa y no hay exactDate, usamos HOY (Ecuador) para que sea consistente con la métrica.
+                            const ensureDate = next && !filters.exactDate ? getEcuadorDateISO() : filters.exactDate;
+                            onFilterChange({
+                                onlyInteractions: next,
+                                // Evitamos confusión con rangos: "solo interacciones" es SIEMPRE por día.
+                                dateRange: 'all',
+                                exactDate: ensureDate,
+                            });
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm animate-in fade-in transition-colors ${
+                            filters.onlyInteractions
+                                ? "text-orange-800 bg-orange-50 border-orange-200"
+                                : "text-slate-600 bg-white border-slate-200 hover:bg-slate-50"
+                        }`}
+                        title={
+                            filters.onlyInteractions
+                                ? "Filtro activo: mostrando solo leads gestionados (click para quitar)"
+                                : "Click para filtrar: solo leads gestionados en la fecha seleccionada"
+                        }
+                    >
                         <ClipboardList className="h-3.5 w-3.5 text-orange-500" />
                         <span>
                             {getInteractionLabel()}: <strong className="text-slate-900 text-sm">{interactionsCount}</strong> interacciones
                         </span>
-                    </div>
+                    </button>
 
                     {(budgetCount > 0 || tradeInLeadsCount > 0 || requestStats.datosPedidos.total > 0) && (
                         <>
@@ -298,7 +321,7 @@ export function LeadsToolbar({
                                         {budgetCount > 0 && (
                                             <button 
                                                 type="button"
-                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all', hasTradeIn: false })}
+                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all', hasTradeIn: false, onlyInteractions: false })}
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                     filters.hasBudget 
                                                     ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm' 
@@ -326,6 +349,7 @@ export function LeadsToolbar({
                                                         status: "all",
                                                         requestStatus: "all",
                                                         hasBudget: false,
+                                                        onlyInteractions: false,
                                                     })
                                                 }
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
@@ -363,7 +387,7 @@ export function LeadsToolbar({
                                         {requestStats.datosPedidos.total > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 <button 
-                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false })}
+                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false })}
                                                     className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                         filters.status === 'datos_pedidos'
                                                         ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm'
@@ -392,7 +416,7 @@ export function LeadsToolbar({
                                                 {filters.status === 'datos_pedidos' && (
                                                     <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'pendiente' 
                                                                 ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
@@ -403,7 +427,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.pendiente}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'en_proceso' 
                                                                 ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
@@ -414,7 +438,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.en_proceso}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'resuelto' 
                                                                 ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
@@ -425,7 +449,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.resuelto}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 (filters.requestStatus === 'all' || !filters.requestStatus)
                                                                 ? 'bg-purple-100 text-purple-800 font-semibold border-purple-200 shadow-sm' 

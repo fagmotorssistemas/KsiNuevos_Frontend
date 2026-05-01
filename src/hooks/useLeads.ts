@@ -46,7 +46,16 @@ export function useLeads() {
     // ------------------------------------------------
 
     const [filters, setFilters] = useState<LeadsFilters>({
-        search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false, hasTradeIn: false
+        search: '',
+        status: 'all',
+        temperature: 'all',
+        dateRange: 'all',
+        exactDate: '',
+        assignedTo: 'all',
+        requestStatus: 'all',
+        hasBudget: false,
+        hasTradeIn: false,
+        onlyInteractions: false,
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -76,13 +85,23 @@ export function useLeads() {
             // un filtro incompatible con el estado.
             hasBudget: false,
             hasTradeIn: false,
+            onlyInteractions: false,
         }));
     }, [searchParams]);
 
     const resetFilters = () => {
         setPage(1);
         setFilters({
-            search: '', status: 'all', temperature: 'all', dateRange: 'all', exactDate: '', assignedTo: 'all', requestStatus: 'all', hasBudget: false, hasTradeIn: false
+            search: '',
+            status: 'all',
+            temperature: 'all',
+            dateRange: 'all',
+            exactDate: '',
+            assignedTo: 'all',
+            requestStatus: 'all',
+            hasBudget: false,
+            hasTradeIn: false,
+            onlyInteractions: false,
         });
     };
 

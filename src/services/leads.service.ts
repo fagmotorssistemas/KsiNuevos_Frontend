@@ -313,21 +313,33 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         }
 
         // 3. Lógica de Fechas (CORRECCIÓN ZONA HORARIA)
-        if (filters.exactDate) {
-            const { start, end } = getEcuadorRange(filters.exactDate);
-            query = query.gte('updated_at', start).lte('updated_at', end);
-        } else if (filters.dateRange !== 'all') {
-            const today = getEcuadorDateISO();
-            
-            if (filters.dateRange === 'today') {
-                const { start, end } = getEcuadorRange(today);
+        // Si activamos "solo interacciones", la fecha SIEMPRE es el día seleccionado (exactDate) o hoy (Ecuador),
+        // igual que la métrica "Gestión de Hoy / Gestión del dd/mm".
+        if (filters.onlyInteractions) {
+            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
+            const { start, end } = getEcuadorRange(targetDateStr);
+            query = query
+                .not('resume', 'is', null)
+                .neq('resume', '')
+                .gte('updated_at', start)
+                .lte('updated_at', end);
+        } else {
+            if (filters.exactDate) {
+                const { start, end } = getEcuadorRange(filters.exactDate);
                 query = query.gte('updated_at', start).lte('updated_at', end);
-            } else {
-                const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
-                const pastDate = new Date();
-                pastDate.setDate(pastDate.getDate() - daysBack);
-                const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                query = query.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+            } else if (filters.dateRange !== 'all') {
+                const today = getEcuadorDateISO();
+
+                if (filters.dateRange === 'today') {
+                    const { start, end } = getEcuadorRange(today);
+                    query = query.gte('updated_at', start).lte('updated_at', end);
+                } else {
+                    const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
+                    const pastDate = new Date();
+                    pastDate.setDate(pastDate.getDate() - daysBack);
+                    const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+                    query = query.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+                }
             }
         }
 
@@ -364,22 +376,28 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
         
         // Filtros de fecha para el conteo de respondidos (AQUÍ ESTABA EL ERROR - ARREGLADO)
-        if (filters.exactDate) {
-            const { start, end } = getEcuadorRange(filters.exactDate);
+        if (filters.onlyInteractions) {
+            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
+            const { start, end } = getEcuadorRange(targetDateStr);
             respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
-        } else if (filters.dateRange !== 'all') {
-            const today = getEcuadorDateISO();
-            
-            if (filters.dateRange === 'today') {
-                const { start, end } = getEcuadorRange(today);
+        } else {
+            if (filters.exactDate) {
+                const { start, end } = getEcuadorRange(filters.exactDate);
                 respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
-            } else {
-                // Faltaba esta lógica en la query de respondidos para 7days, 15days, 30days
-                const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
-                const pastDate = new Date();
-                pastDate.setDate(pastDate.getDate() - daysBack);
-                const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                respondedQuery = respondedQuery.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+            } else if (filters.dateRange !== 'all') {
+                const today = getEcuadorDateISO();
+
+                if (filters.dateRange === 'today') {
+                    const { start, end } = getEcuadorRange(today);
+                    respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
+                } else {
+                    // Faltaba esta lógica en la query de respondidos para 7days, 15days, 30days
+                    const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
+                    const pastDate = new Date();
+                    pastDate.setDate(pastDate.getDate() - daysBack);
+                    const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+                    respondedQuery = respondedQuery.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+                }
             }
         }
 
