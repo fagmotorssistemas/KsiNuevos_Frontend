@@ -11,7 +11,8 @@ export interface VehicleCaptionInput {
   tipo: string
 }
 
-const MODEL = 'gemini-2.0-flash'
+
+const MODEL = 'gemini-flash-latest'
 
 function buildPrompt(v: VehicleCaptionInput): string {
   return `Genera un caption para Instagram y Facebook para la venta de un vehículo seminuevo con las siguientes características:
