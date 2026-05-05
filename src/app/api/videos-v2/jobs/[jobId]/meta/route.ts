@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import type { VideoJobStatus } from '@/lib/videos-v2/types'
+import type { VideoJobStatus, VideoSocialPublishStage } from '@/lib/videos-v2/types'
 
 const ALLOWED_STATUS: VideoJobStatus[] = [
   'pending',
@@ -11,6 +11,14 @@ const ALLOWED_STATUS: VideoJobStatus[] = [
   'rendering',
   'completed',
   'failed',
+]
+
+const ALLOWED_SOCIAL_STAGE: VideoSocialPublishStage[] = [
+  'generado',
+  'aprobado',
+  'programado',
+  'publicado',
+  'fallido',
 ]
 
 function getServiceClient() {
@@ -24,6 +32,8 @@ function getServiceClient() {
 interface PatchBody {
   status?: VideoJobStatus
   jobName?: string | null
+  /** Flujo publicación redes (solo jobs completados). */
+  socialPublishStage?: VideoSocialPublishStage
 }
 
 export async function PATCH(
@@ -33,7 +43,23 @@ export async function PATCH(
   try {
     const { jobId } = await params
     const body = (await request.json()) as PatchBody
+    const supabase = getServiceClient()
     const updates: Database['public']['Tables']['video_jobs_v2']['Update'] = {}
+
+    if (body.socialPublishStage !== undefined) {
+      if (!ALLOWED_SOCIAL_STAGE.includes(body.socialPublishStage)) {
+        return NextResponse.json({ error: 'socialPublishStage no permitido' }, { status: 400 })
+      }
+      const { data: prevJob } = await supabase.from('video_jobs_v2').select('status').eq('id', jobId).single()
+      if (prevJob?.status !== 'completed') {
+        return NextResponse.json(
+          { error: 'socialPublishStage solo aplica a jobs con video completado' },
+          { status: 400 }
+        )
+      }
+      updates.social_publish_stage = body.socialPublishStage
+      updates.updated_at = new Date().toISOString()
+    }
 
     if (body.status !== undefined) {
       if (!ALLOWED_STATUS.includes(body.status)) {
@@ -64,7 +90,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 })
     }
 
-    const supabase = getServiceClient()
     const { data, error } = await supabase
       .from('video_jobs_v2')
       .update(updates)

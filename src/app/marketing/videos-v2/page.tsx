@@ -1,16 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, Film, Plus, Music, Settings } from 'lucide-react'
+import { Sparkles, Film, Plus, Music, Settings, Megaphone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { VideoJobList } from '@/components/videos-v2/VideoJobList'
 import { CreateReelModal } from '@/components/videos-v2/CreateReelModal'
 import { MusicUploader } from '@/components/videos-v2/MusicUploader'
+import { VideosV2PublishingSection } from '@/components/videos-v2/VideosV2PublishingSection'
 import type { MusicTrackV2 } from '@/lib/videos-v2/types'
 
+type MainTab = 'generacion' | 'publicacion'
+
 export default function VideosV2Page() {
+  const [mainTab, setMainTab] = useState<MainTab>('generacion')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [publishingTick, setPublishingTick] = useState(0)
   const [monthCount, setMonthCount] = useState<number | null>(null)
   const [showMusicPanel, setShowMusicPanel] = useState(false)
   const [tracks, setTracks] = useState<MusicTrackV2[]>([])
@@ -40,6 +45,28 @@ export default function VideosV2Page() {
 
   return (
     <div className="space-y-8">
+      <div className="flex gap-2 flex-wrap border-b border-gray-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setMainTab('generacion')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+            mainTab === 'generacion' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Generación
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('publicacion')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+            mainTab === 'publicacion' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Megaphone className="w-4 h-4" />
+          Publicación
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -84,6 +111,18 @@ export default function VideosV2Page() {
         </div>
       </div>
 
+      {mainTab === 'publicacion' ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900 mb-4">Publicación en redes</h2>
+          <VideosV2PublishingSection
+            refreshKey={publishingTick}
+            onPublishingMutate={() => setPublishingTick((t) => t + 1)}
+          />
+        </div>
+      ) : null}
+
+      {mainTab === 'generacion' && (
+        <>
       {/* Panel de gestión de música (colapsable) */}
       {showMusicPanel && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -107,8 +146,10 @@ export default function VideosV2Page() {
           <Sparkles className="w-4 h-4 text-violet-600" />
           Reels Generados
         </h2>
-        <VideoJobList refreshKey={refreshKey} />
+        <VideoJobList refreshKey={refreshKey} publishRefreshKey={publishingTick} />
       </div>
+        </>
+      )}
 
       {/* Modal de creación */}
       <CreateReelModal

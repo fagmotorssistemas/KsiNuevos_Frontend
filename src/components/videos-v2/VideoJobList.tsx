@@ -19,9 +19,11 @@ const STATUS_FILTERS: Array<{ value: VideoJobStatus | 'all'; label: string }> = 
 
 interface VideoJobListProps {
   refreshKey?: number
+  /** Incrementar para refrescar lista tras cambios en publicación (aprobar, etc.). */
+  publishRefreshKey?: number
 }
 
-export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
+export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJobListProps) {
   const [jobs, setJobs] = useState<VideoJobV2[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<VideoJobStatus | 'all'>('all')
@@ -61,7 +63,7 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
     setPage(0)
     setJobs([])
     fetchJobs(0, filter)
-  }, [filter, refreshKey, fetchJobs])
+  }, [filter, refreshKey, publishRefreshKey, fetchJobs])
 
   function handleFilterChange(f: VideoJobStatus | 'all') {
     setFilter(f)
@@ -75,6 +77,10 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
 
   function handleJobDeleted(jobId: string) {
     setJobs((prev) => prev.filter((job) => job.id !== jobId))
+  }
+
+  function handleJobUpdated(updated: VideoJobV2) {
+    setJobs((prev) => prev.map((j) => (j.id === updated.id ? { ...j, ...updated } : j)))
   }
 
   return (
@@ -116,7 +122,12 @@ export function VideoJobList({ refreshKey = 0 }: VideoJobListProps) {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {jobs.map((job) => (
-              <VideoJobCard key={job.id} job={job} onJobDeleted={handleJobDeleted} />
+              <VideoJobCard
+                key={job.id}
+                job={job}
+                onJobDeleted={handleJobDeleted}
+                onJobUpdated={handleJobUpdated}
+              />
             ))}
           </div>
 

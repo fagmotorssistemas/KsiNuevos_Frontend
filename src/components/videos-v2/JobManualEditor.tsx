@@ -59,6 +59,10 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
   const [rendering, setRendering] = useState(false)
   const [changeMusicOnRerender, setChangeMusicOnRerender] = useState(false)
   const [rerenderMusicId, setRerenderMusicId] = useState<string | null>(null)
+  const [rerenderMusicUrl, setRerenderMusicUrl] = useState<string | null>(null)
+  const [rerenderMusicDurationSec, setRerenderMusicDurationSec] = useState<number | null>(null)
+  const [rerenderMusicTrimMode, setRerenderMusicTrimMode] = useState<'smart' | 'manual'>('smart')
+  const [rerenderMusicTrimStartSec, setRerenderMusicTrimStartSec] = useState(0)
   const [subtitleSaveUi, setSubtitleSaveUi] = useState<SubtitleSaveUi>('idle')
   const subtitleRowsRef = useRef<SubtitleBlock[]>([])
   const lastPersistedSubtitleSig = useRef('')
@@ -200,6 +204,12 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
           gemini_analysis: parsed,
           ...(subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}),
           ...(changeMusicOnRerender && rerenderMusicId ? { music_track_id: rerenderMusicId } : {}),
+          ...(changeMusicOnRerender
+            ? {
+                music_trim_start_sec:
+                  rerenderMusicTrimMode === 'manual' ? rerenderMusicTrimStartSec : null,
+              }
+            : {}),
         }),
       })
       const j = (await res.json()) as { error?: string }
@@ -224,6 +234,12 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
           {
             ...(subtitleRows.length > 0 ? { subtitle_blocks_override: subtitleRows } : {}),
             ...(changeMusicOnRerender && rerenderMusicId ? { music_track_id: rerenderMusicId } : {}),
+            ...(changeMusicOnRerender
+              ? {
+                  music_trim_start_sec:
+                    rerenderMusicTrimMode === 'manual' ? rerenderMusicTrimStartSec : null,
+                }
+              : {}),
           }
         ),
       })
@@ -489,6 +505,10 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                     setChangeMusicOnRerender(on)
                     if (!on) {
                       setRerenderMusicId(null)
+                      setRerenderMusicUrl(null)
+                      setRerenderMusicDurationSec(null)
+                      setRerenderMusicTrimMode('smart')
+                      setRerenderMusicTrimStartSec(0)
                     }
                   }}
                 />
@@ -503,12 +523,99 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                     selectedId={rerenderMusicId}
                     onSelect={(track) => {
                       setRerenderMusicId(track.id)
+                      setRerenderMusicUrl(track.public_url)
+                      const dur = track.duration_seconds
+                      if (typeof dur === 'number' && Number.isFinite(dur) && dur > 0) {
+                        setRerenderMusicDurationSec(dur)
+                        setRerenderMusicTrimStartSec((prev) => Math.max(0, Math.min(prev, Math.max(0, dur - 1))))
+                      } else {
+                        setRerenderMusicDurationSec(null)
+                        setRerenderMusicTrimStartSec(0)
+                      }
                     }}
                   />
                   {rerenderMusicId && (
-                    <p className="text-[11px] text-emerald-700">
-                      Nuevo track listo para aplicar en re-render.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-emerald-700">
+                        Nuevo track listo para aplicar en re-render.
+                      </p>
+                      <div className="rounded-lg border border-violet-200/70 bg-white p-3 space-y-2">
+                        <p className="text-xs font-semibold text-gray-800">Inicio de la música para este re-render</p>
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="rerender-music-trim-mode"
+                            className="mt-1"
+                            checked={rerenderMusicTrimMode === 'smart'}
+                            onChange={() => setRerenderMusicTrimMode('smart')}
+                          />
+                          <span className="text-xs text-gray-700">
+                            <span className="font-medium">Automático</span>
+                            <span className="text-gray-500"> — Busca una parte más fuerte de la canción.</span>
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="rerender-music-trim-mode"
+                            className="mt-1"
+                            checked={rerenderMusicTrimMode === 'manual'}
+                            onChange={() => setRerenderMusicTrimMode('manual')}
+                          />
+                          <span className="text-xs text-gray-700">
+                            <span className="font-medium">Manual</span>
+                            <span className="text-gray-500"> — Tú eliges desde qué segundo iniciar.</span>
+                          </span>
+                        </label>
+
+                        {rerenderMusicTrimMode === 'manual' && (
+                          <div className="space-y-2 rounded-lg border border-violet-200/70 bg-violet-50/40 p-2.5">
+                            <label className="text-[11px] font-medium text-gray-700">
+                              Inicio manual del track (segundos)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min={0}
+                                step={0.1}
+                                max={Math.max(0, (rerenderMusicDurationSec ?? 300) - 1)}
+                                value={rerenderMusicTrimStartSec}
+                                onChange={(e) => setRerenderMusicTrimStartSec(Number(e.target.value))}
+                                className="flex-1 accent-violet-600"
+                                disabled={rerenderMusicDurationSec == null}
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                max={Math.max(0, (rerenderMusicDurationSec ?? 300) - 1)}
+                                value={rerenderMusicTrimStartSec}
+                                onChange={(e) => setRerenderMusicTrimStartSec(Math.max(0, Number(e.target.value) || 0))}
+                                className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
+                              />
+                            </div>
+                            {rerenderMusicUrl && (
+                              <audio
+                                controls
+                                src={rerenderMusicUrl}
+                                className="w-full"
+                                onCanPlay={(e) => {
+                                  const el = e.currentTarget
+                                  const t = Math.max(0, rerenderMusicTrimStartSec)
+                                  if (Math.abs(el.currentTime - t) > 0.25) {
+                                    try {
+                                      el.currentTime = t
+                                    } catch {
+                                      // Algunos navegadores bloquean seek temprano.
+                                    }
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

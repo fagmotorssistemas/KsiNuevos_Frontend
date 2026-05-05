@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { applyVideoJobEditorPatch, rerunCreatomateRenderForJob } from '@/lib/videos-v2/pipeline'
+import { normalizeMusicTrimStartSec } from '@/lib/videos-v2/clip-config'
 
 /**
  * POST /api/videos-v2/jobs/[jobId]/rerender
@@ -22,7 +23,12 @@ export async function POST(
     let geminiOverride: unknown
     const raw = await request.text()
     if (raw.trim()) {
-      let body: { gemini_analysis?: unknown; subtitle_blocks_override?: unknown | null; music_track_id?: unknown }
+      let body: {
+        gemini_analysis?: unknown
+        subtitle_blocks_override?: unknown | null
+        music_track_id?: unknown
+        music_trim_start_sec?: unknown | null
+      }
       try {
         body = JSON.parse(raw) as { gemini_analysis?: unknown; subtitle_blocks_override?: unknown | null }
       } catch {
@@ -33,6 +39,12 @@ export async function POST(
         typeof body.music_track_id === 'string' && body.music_track_id.trim().length > 0
           ? body.music_track_id.trim()
           : undefined
+      const hasMusicTrimOverride = Object.prototype.hasOwnProperty.call(body, 'music_trim_start_sec')
+      const musicTrimStartSecOverride = hasMusicTrimOverride
+        ? body.music_trim_start_sec === null
+          ? null
+          : normalizeMusicTrimStartSec(body.music_trim_start_sec)
+        : undefined
       if (Object.prototype.hasOwnProperty.call(body, 'subtitle_blocks_override')) {
         await applyVideoJobEditorPatch(jobId, {
           subtitle_blocks_override: body.subtitle_blocks_override,
@@ -40,6 +52,7 @@ export async function POST(
       }
       const { renderId } = await rerunCreatomateRenderForJob(jobId, geminiOverride, {
         musicTrackIdOverride: musicTrackId,
+        musicTrimStartSecOverride,
       })
       return NextResponse.json({ ok: true, renderId })
     }

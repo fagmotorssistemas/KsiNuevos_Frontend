@@ -12,6 +12,18 @@ export type VideoJobStatus =
   | 'completed'
   | 'failed'
 
+/** Flujo de publicación en redes (post-render, solo si status = completed). */
+export type VideoSocialPublishStage =
+  | 'generado'
+  | 'aprobado'
+  | 'programado'
+  | 'publicado'
+  | 'fallido'
+
+export type PublishingQueueStatus = 'pending' | 'publishing' | 'published' | 'failed' | 'cancelled'
+
+export type PublishingPlatform = 'instagram' | 'facebook'
+
 export type FlowType = 'single' | 'multiple'
 
 // Formato anterior — se mantiene por compatibilidad con jobs viejos
@@ -68,6 +80,8 @@ export interface VideoJobV2 {
   creatomate_render_id: string | null
   final_video_url: string | null
   final_video_duration: number | null
+  /** Etapa de publicación social; null en jobs legacy se trata como generado si ya está completado. */
+  social_publish_stage?: VideoSocialPublishStage | string | null
   music_track_url: string | null
   /** Ruta en Storage del PDF de guion opcional. */
   script_pdf_path?: string | null

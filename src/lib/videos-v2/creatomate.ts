@@ -57,6 +57,7 @@ export type CreatomateFlatRenderScript = {
   output_format: string
   width: number
   height: number
+  frame_rate?: number
   duration: number
   elements: unknown[]
 }
@@ -214,8 +215,9 @@ export function buildCreatomateRenderScript(
 
   return {
     output_format: 'mp4',
-    width: 1080,
-    height: 1920,
+    width: 720,
+    height: 1280,
+    frame_rate: 30,
     duration: totalDuration,
     elements: allElements,
   }

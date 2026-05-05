@@ -298,9 +298,12 @@ function normalizeVisualOverlaysInSequence(
 /** Microclips de apertura (marca / modelo / año en vídeos de ~1s): no descartar por duración casi nula. */
 const PRESENTATION_MICROCLIP_MIN_SEC = 0.06
 
+/** Motivo fijo al inyectar segmentos de presentación omitidos por Gemini (`validateGeminiSequence`). */
+const INJECTED_PRESENTATION_REASON_MARKER = 'micro-clip presentación forzado al inicio'
+
 const CAR_BRANDS = [
   'acura', 'alfa romeo', 'audi', 'bmw', 'bentley', 'buick', 'cadillac', 'chevrolet', 'chevy', 'chery',
-  'chrysler', 'citroen', 'citroën', 'cupra', 'dodge', 'fiat', 'ford', 'genesis', 'gmc', 'great wall',
+  'chrysler', 'citroen', 'citroën', 'cupra', 'dodge', 'dongfeng', 'fiat', 'ford', 'genesis', 'gmc', 'great wall',
   'haval', 'honda', 'hyundai', 'infiniti', 'isuzu', 'jaguar', 'jeep', 'kia', 'lancia', 'land rover',
   'lexus', 'lincoln', 'maserati', 'mazda', 'mercedes', 'mercedes-benz', 'mercedes benz', 'mini',
   'mitsubishi', 'nissan', 'peugeot', 'polestar', 'porsche', 'ram', 'renault', 'seat', 'skoda', 'smart',
@@ -310,7 +313,7 @@ const CAR_BRANDS = [
 
 /** Modelos / series frecuentes en inventario (ayuda a no clasificar "solo año" como presentación). */
 const MODEL_LINE_REGEX =
-  /\b(f[- ]?150|f[- ]?250|f[- ]?350|f[- ]?450|silverado|sierra|tahoe|yukon|explorer|escape|ranger|raptor|mustang|bronco|corvette|camaro|equinox|traverse|suburban|colorado|frontier|versa|sentra|altima|rogue|murano|armada|titan|pathfinder|hilux|rav4|highlander|sequoia|tundra|camry|corolla|prius|yaris|civic|accord|pilot|cr-v|hr-v|passat|jetta|tiguan|amarok|golf|polo|arteon|rdx|mdx|tlx|cx[- ]?5|cx[- ]?9|cx[- ]?30|mazda\s*3|mazda\s*6|outlander|eclipse|be\s?go|sportage|tucson|sorento|telluride|palisade|elantra|accent|creta|venue|wrangler|grand cherokee|gladiator|compass|renegade|defender|discovery|evoque|h1|h2|transit|promaster|sprinter|land\s*cruiser|landcruiser|lc\s*200|lc\s*150)\b/i
+  /\b(f[- ]?150|f[- ]?250|f[- ]?350|f[- ]?450|silverado|sierra|tahoe|yukon|explorer|escape|eco[\s-]*sport|ecosport|edge|kuga|puma|territory|maverick|bronco\s*sport|ranger|raptor|mustang|bronco|corvette|camaro|equinox|traverse|suburban|colorado|frontier|versa|sentra|altima|rogue|murano|armada|titan|pathfinder|hilux|rav4|highlander|sequoia|tundra|camry|corolla|prius|yaris|civic|accord|pilot|cr-v|hr-v|passat|jetta|tiguan|amarok|golf|polo|arteon|rdx|mdx|tlx|cx[- ]?5|cx[- ]?9|cx[- ]?30|mazda\s*3|mazda\s*6|outlander|eclipse|be\s?go|sportage|tucson|sorento|telluride|palisade|elantra|accent|creta|venue|wrangler|grand cherokee|gladiator|compass|renegade|defender|discovery|evoque|h1|h2|haval\s*h[- ]?6|dongfeng|rich[- ]?6|transit|promaster|sprinter|land\s*cruiser|landcruiser|lc\s*200|lc\s*150)\b/i
 
 function normalizeText(text: string): string {
   return text
@@ -340,7 +343,7 @@ function isPresentationSegment(seg: Segment): boolean {
   const hasModelLikeToken =
     MODEL_LINE_REGEX.test(t) ||
     /\b[hx]?\d{1,3}\b/.test(t) ||
-    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
       t
     )
   if (hasYear && !hasBrand && !hasModelLikeToken) {
@@ -360,7 +363,7 @@ function openingPresentationIsAdequate(seg: Segment | undefined): boolean {
   const hasModel =
     MODEL_LINE_REGEX.test(seg.text) ||
     /\b[hx]?\d{1,3}\b/.test(t) ||
-    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
       t
     )
   if (!hasBrand) return false
@@ -393,10 +396,12 @@ function strengthenOpeningPresentation(
   jobId: string
 ): SequenceItem[] {
   if (sequence.length === 0) return sequence
+  const reasonBySegmentId = new Map(sequence.map((it) => [it.segment_id, it.reason ?? ''] as const))
   const firstSeg = segmentLookup.get(sequence[0].segment_id)
   if (!firstSeg) return sequence
   const firstIsSolidOpening =
-    openingPresentationIsAdequate(firstSeg) && !isTechnicalSpecIntroSegment(firstSeg)
+    openingPresentationIsAdequate(firstSeg) &&
+    !isTechnicalSpecIntroSegment(firstSeg, sequence[0].reason)
   if (firstIsSolidOpening) return sequence
 
   // Verificar si los primeros clips de presentación forman juntos una apertura completa
@@ -409,13 +414,13 @@ function strengthenOpeningPresentation(
   }
   if (openingGroup.length >= 2) {
     const leaderSeg = segmentLookup.get(sequence[0].segment_id)
-    if (!(leaderSeg && isTechnicalSpecIntroSegment(leaderSeg))) {
+    if (!(leaderSeg && isTechnicalSpecIntroSegment(leaderSeg, sequence[0].reason))) {
       const combined = openingGroup.join(' ')
       const hasBrand = CAR_BRANDS.some((b) => combined.includes(b))
       const hasYear = /\b(19|20)\d{2}\b/.test(combined)
       const hasModel =
         MODEL_LINE_REGEX.test(combined) ||
-        /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+        /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
           combined
         )
       if (hasBrand && (hasYear || hasModel)) {
@@ -429,7 +434,11 @@ function strengthenOpeningPresentation(
 
   for (let j = 1; j < sequence.length; j++) {
     const sj = segmentLookup.get(sequence[j].segment_id)
-    if (sj && openingPresentationIsAdequate(sj) && !isTechnicalSpecIntroSegment(sj)) {
+    if (
+      sj &&
+      openingPresentationIsAdequate(sj) &&
+      !isTechnicalSpecIntroSegment(sj, sequence[j].reason)
+    ) {
       const tmp = sequence[0]
       sequence[0] = sequence[j]!
       sequence[j] = tmp
@@ -449,7 +458,7 @@ function strengthenOpeningPresentation(
         !isMistakeSegment(s) &&
         !isEndCtaSegment(s) &&
         openingPresentationIsAdequate(s) &&
-        !isTechnicalSpecIntroSegment(s)
+        !isTechnicalSpecIntroSegment(s, reasonBySegmentId.get(s.segment_id))
     )
     .sort((a, b) => b.duration_s - a.duration_s)
 
@@ -501,7 +510,7 @@ function isComentaVehicleEngagementClosing(seg: Segment): boolean {
   const hasModel =
     MODEL_LINE_REGEX.test(seg.text) ||
     /\b[hx]?\d{1,3}\b/.test(t) ||
-    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta)\b/.test(
+    /\b(prado|picanto|hilux|rio|elantra|accent|tiida|sentra|versa|march|sunny|altima|be\s?go|sportage|tucson|creta|ecosport|edge|kuga|puma|territory)\b/.test(
       t
     )
   return (hasBrand && hasModel) || (hasModel && hasYear) || (hasBrand && hasYear)
@@ -541,15 +550,45 @@ function hasEmotionalOrLifestyleHookTone(t: string): boolean {
   )
 }
 
+/** El `reason` de Gemini describe explícitamente un gancho de apertura / anti-scroll (aunque el ASR sea breve o coloquial). */
+function isOpeningScrollHookFromEditorialReason(editorialReason?: string | null): boolean {
+  if (!editorialReason || !editorialReason.trim()) return false
+  const r = normalizeText(editorialReason)
+  return (
+    /\b(el\s+)?video\s+comienza\s+con\s+un\s+gancho\b/.test(r) ||
+    /\bcomienza\s+con\s+un\s+gancho\b/.test(r) ||
+    /\bgancho\s+fuerte\s+y\s+directo\b/.test(r) ||
+    /\bgancho\s+fuerte\b.*\b(beneficio|principal|publico|público)\b/.test(r) ||
+    /\bes\s+la\s+frase\s+mas\s+potente\b/.test(r) ||
+    /\bfrase\s+mas\s+potente\b/.test(r) ||
+    /\bpara\s+detener\s+el\s+scroll\b/.test(r) ||
+    /\bdetener\s+el\s+scroll\b/.test(r) ||
+    /\bopening\s+hook\b/.test(r)
+  )
+}
+
+function isInjectedPresentationMicroclip(item: SequenceItem): boolean {
+  return item.reason.includes(INJECTED_PRESENTATION_REASON_MARKER)
+}
+
 /**
  * Gancho narrativo de apertura (necesidad del cliente, propósito, pregunta) — debe ir antes que motor/ficha.
+ * `editorialReason`: motivo de Gemini; ayuda cuando el ASR no coincide con patrones (p. ej. "si esta camioneta trabaja").
  */
-function isNarrativeNeedHookSegment(seg: Segment): boolean {
+function isNarrativeNeedHookSegment(seg: Segment, editorialReason?: string | null): boolean {
   const t = normalizeText(seg.text)
   if (/\bcomenta\b/.test(t)) return false
   if (hasEmotionalOrLifestyleHookTone(t)) return true
   if (/^¿/.test(t.trim())) return true
-  return (
+  if (
+    /\bsi\s+esta\s+(la\s+)?(camioneta|pickup|pick-?up|vehiculo|vehículo)\b/.test(t) ||
+    /\bsi\s+este\s+(auto|carro|vehiculo|vehículo|camioneta|pickup)\b/.test(t)
+  ) {
+    return true
+  }
+  if (/\bt[uú]\s+factur/.test(t)) return true
+  if (/\b(trabaja|trabajan)\b[^.]{0,40}\b(tu|tú)\s+factur/.test(t)) return true
+  if (
     /\b(buscas|busca|necesitas|necesita|te interesa|te gusta|te gustan|te sirve|te sirven|ideal para|perfecto para|perfecta para|listo para|listos para|pensando en|imagina|supongamos)\b/.test(
       t
     ) ||
@@ -559,26 +598,51 @@ function isNarrativeNeedHookSegment(seg: Segment): boolean {
     /\b(proposito|propósito|enfocado en|dirigido a|necesidad del cliente|dirigiendose|dirigiéndose)\b/.test(t) ||
     /\b(looking for|need a|need an|want a|want an|if you need|work vehicle|work truck|pickup truck|daily driver|here'?s why|tell you why|get the job done|primary benefit|use case|why this|why the)\b/.test(
       t
-    )
-  )
+    ) ||
+    /\b(connects|connect)\b.*\b(need|customer|viewer|audience)\b/.test(t) ||
+    /\b(makes?\s+the\s+pitch|making\s+it\s+relatable)\b/.test(t)
+  ) {
+    return true
+  }
+  if (
+    isOpeningScrollHookFromEditorialReason(editorialReason) &&
+    !segmentMentionsPowertrainSpecs(editorialBundleForSpecs(seg, editorialReason))
+  ) {
+    return true
+  }
+  return false
 }
 
-/** Presentación que es sobre todo ficha técnica (motor, caja, etc.) — va después del gancho narrativo. */
-function isTechnicalSpecIntroSegment(seg: Segment): boolean {
-  if (!isPresentationSegment(seg)) return false
-  if (isNarrativeNeedHookSegment(seg)) return false
-  const t = normalizeText(seg.text)
-  return /\b(motor|motores|cilindros|caballos?\s*de\s*fuerza|\bhp\b|horsepower|torque|transmis|tracción|traccion|suspensi|frenos?|combustible|\blitros?\b|cilindraje|\bc\s*c\b|cc\.|dimension(es)?|capacidad de carga|kilometraje|tanque|rinden|engine|engines|ecoboost|turbocharged|\bturbo\b|supercharged|diesel|gasoline|petrol|cylinders?|\bv6\b|\bv8\b|\bi4\b|specs?|specification|specifications|technical\s+spec|under\s+the\s+hood|hood\s+open|bonnet)\b/i.test(
+/**
+ * Menciones claras de tren motriz / ficha (ES/EN). Se usa para clasificar “motor después del gancho y de la presentación”.
+ */
+function segmentMentionsPowertrainSpecs(t: string): boolean {
+  return /\b(motor|motores|motor(es)?\s+de|cilindro|cilindros|cilindrada|caballos?\s*de\s*fuerza|\bhp\b|horsepower|torque|potencia|caja(\s+de)?\s*cambios|caja\s+automatica|caja\s+automática|transmis|transmission|tracción|traccion|suspensi|frenos?|combustible|\blitros?\b|litro(s)?\s+de|cilindraje|\bc\s*c\b|cc\.|dimension(es)?|capacidad de carga|kilometraje|tanque|rinden|engine|engines|ecoboost|turbocharged|\bturbo\b|supercharged|diesel|gasoline|petrol|cylinders?|\bv6\b|\bv8\b|\bi4\b|\bcvt\b|\bdct\b|syncro|powershift|inyecc|inyección|rendimiento\s+motor|rendimiento\s+de\s+motor|bajo\s+(el\s+)?capot|bajo\s+(el\s+)?capó|compartimento\s+del\s+motor|bay\s+del\s+motor|engine\s+bay|under\s+the\s+hood|hood\s+open|bonnet|specs?|specification|specifications|technical\s+spec|technical\s+specifications|ficha\s+tecnica|ficha\s+técnica|plano\s+del\s+motor|vista\s+del\s+motor)\b/i.test(
     t
   )
 }
 
+/**
+ * Texto del segmento (ASR) + motivo editorial de Gemini: el audio a veces no dice "motor" pero el reason sí
+ * describe ficha / compartimento del motor.
+ */
+function editorialBundleForSpecs(seg: Segment, geminiReason?: string | null): string {
+  return normalizeText([seg.text, geminiReason ?? ''].filter(Boolean).join(' '))
+}
+
+/** Presentación que es sobre todo ficha técnica (motor, caja, etc.) — va después del gancho narrativo. */
+function isTechnicalSpecIntroSegment(seg: Segment, geminiReason?: string | null): boolean {
+  if (!isPresentationSegment(seg)) return false
+  if (isNarrativeNeedHookSegment(seg, geminiReason)) return false
+  return segmentMentionsPowertrainSpecs(editorialBundleForSpecs(seg, geminiReason))
+}
+
 /** Mayor = más al inicio del bloque intro: gancho narrativo (2) > presentación neutra (1) > ficha técnica (0). */
-function introNarrativeHookRank(seg: Segment | undefined): number {
+function introNarrativeHookRank(seg: Segment | undefined, item?: SequenceItem): number {
   if (!seg) return 1
-  if (isNarrativeNeedHookSegment(seg)) return 2
+  if (isNarrativeNeedHookSegment(seg, item?.reason)) return 2
   if (!isPresentationSegment(seg)) return 1
-  if (isTechnicalSpecIntroSegment(seg)) return 0
+  if (isTechnicalSpecIntroSegment(seg, item?.reason)) return 0
   return 1
 }
 
@@ -669,7 +733,7 @@ function compareIntroPresentationOrder(
   const sb = lookup.get(b.segment_id)
   // Primero: gancho narrativo > presentación neutra > ficha técnica (motor); si no, un motor “adecuado”
   // por marca+modelo ganaba siempre a ganchos sin marca por introOpeningStrength.
-  const byHookBeforeSpecs = introNarrativeHookRank(sb) - introNarrativeHookRank(sa)
+  const byHookBeforeSpecs = introNarrativeHookRank(sb, b) - introNarrativeHookRank(sa, a)
   if (byHookBeforeSpecs !== 0) return byHookBeforeSpecs
   const byStrength = introOpeningStrength(sb) - introOpeningStrength(sa)
   if (byStrength !== 0) return byStrength
@@ -680,6 +744,20 @@ function compareIntroPresentationOrder(
   if (byStage !== 0) return byStage
   const byVehicleTier = vehicleFactsIntroTier(sb) - vehicleFactsIntroTier(sa)
   if (byVehicleTier !== 0) return byVehicleTier
+  // Tras gancho: presentación del auto (marca/modelo/año) antes que corte que suena a ficha/motor aunque ambos
+  // compartan marca+año y el desempate por clip_index favoreciera el clip con índice menor.
+  const powertrainPitch = (s: Segment | undefined, item: SequenceItem) =>
+    !!s &&
+    isPresentationSegment(s) &&
+    !isNarrativeNeedHookSegment(s, item.reason) &&
+    segmentMentionsPowertrainSpecs(editorialBundleForSpecs(s, item.reason))
+  const ppa = powertrainPitch(sa, a)
+  const ppb = powertrainPitch(sb, b)
+  if (ppa !== ppb) return ppa ? 1 : -1
+  // Micro-clips de presentación inyectados por el pipeline: después del gancho y de la identidad fuerte (marca/modelo/año).
+  const injA = isInjectedPresentationMicroclip(a)
+  const injB = isInjectedPresentationMicroclip(b)
+  if (injA !== injB) return injA ? 1 : -1
   const ca = sa?.clip_index ?? 0
   const cb = sb?.clip_index ?? 0
   if (ca !== cb) return ca - cb
@@ -700,7 +778,7 @@ function enforceEditorialOrder(sequence: SequenceItem[], allSegments: Segment[])
       continue
     }
     if (isEndCtaSegment(seg)) outro.push(item)
-    else if (isPresentationSegment(seg) || isNarrativeNeedHookSegment(seg)) intro.push(item)
+    else if (isPresentationSegment(seg) || isNarrativeNeedHookSegment(seg, item.reason)) intro.push(item)
     else middle.push(item)
   }
 
@@ -1267,7 +1345,7 @@ function validateSequence(
 
     if (missedPresentation.length > 0) {
       const injected = missedPresentation.map((s, idx) =>
-        sequenceItemFromSegment(s, idx + 1, 'micro-clip presentación forzado al inicio')
+        sequenceItemFromSegment(s, idx + 1, INJECTED_PRESENTATION_REASON_MARKER)
       )
       console.log(
         `[VideoV2Pipeline][${jobId}][Gemini] Se inyectan ${injected.length} micro-clips de presentación omitidos por Gemini: ` +

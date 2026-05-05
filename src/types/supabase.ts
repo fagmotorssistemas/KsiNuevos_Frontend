@@ -3586,6 +3586,7 @@ export type Database = {
           segment_map: Json | null
           selected_clips: Json | null
           srt_content: string | null
+          social_publish_stage: string | null
           status: string
           subtitle_blocks_override: Json | null
           updated_at: string | null
@@ -3611,6 +3612,7 @@ export type Database = {
           segment_map?: Json | null
           selected_clips?: Json | null
           srt_content?: string | null
+          social_publish_stage?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
@@ -3636,11 +3638,101 @@ export type Database = {
           segment_map?: Json | null
           selected_clips?: Json | null
           srt_content?: string | null
+          social_publish_stage?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      video_publishing_queue: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          platforms: string[]
+          scheduled_at: string
+          status: string
+          updated_at: string
+          vehicle_id: string | null
+          video_id: string
+        }
+        Insert: {
+          caption: string
+          created_at?: string
+          id?: string
+          platforms: string[]
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          video_id: string
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          platforms?: string[]
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_publishing_queue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_publishing_queue_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "video_jobs_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_publishing_results: {
+        Row: {
+          attempted_at: string
+          error_message: string | null
+          id: string
+          platform: string
+          platform_post_id: string | null
+          queue_id: string
+          status: string
+        }
+        Insert: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform: string
+          platform_post_id?: string | null
+          queue_id: string
+          status: string
+        }
+        Update: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform?: string
+          platform_post_id?: string | null
+          queue_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_publishing_results_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "video_publishing_queue"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       web_appointments: {
         Row: {

@@ -18,6 +18,8 @@ const COARSE_STEP_SEC = 0.2
 const REFINE_RADIUS_SEC = 1.4
 const REFINE_STEP_SEC = 0.05
 const TOP_K_CANDIDATES = 8
+const AUTO_MIN_START_FLOOR_SEC = 3
+const AUTO_MAX_START_FLOOR_SEC = 14
 
 /** Tramo inicial del reel donde debe sonar fuerte (segundos en timeline del reel = fuente desde trim). */
 function headWindowSec(reelDurationSec: number): number {
@@ -27,6 +29,19 @@ function headWindowSec(reelDurationSec: number): number {
 function mDbToEnergy(mDb: number): number {
   if (!Number.isFinite(mDb) || mDb <= -100) return 1e-10
   return Math.pow(10, mDb / 20)
+}
+
+/**
+ * Evita arrancar demasiado al inicio cuando hay espacio suficiente en la pista.
+ * Busca saltar intros lentas típicas sin irse demasiado profundo en la canción.
+ */
+function preferredAutoStartFloorSec(musicDurationSec: number, reelDurationSec: number): number {
+  const maxStart = Math.max(0, musicDurationSec - reelDurationSec)
+  if (maxStart <= 0.05) return 0
+  if (maxStart < 6) return 0
+  const byDuration = musicDurationSec * 0.12
+  const floor = Math.max(AUTO_MIN_START_FLOOR_SEC, Math.min(AUTO_MAX_START_FLOOR_SEC, byDuration))
+  return Number(Math.min(maxStart, floor).toFixed(3))
 }
 
 /** Parsea stderr de `ffmpeg ... ebur128` → muestras (t, M en dB). */
@@ -206,16 +221,17 @@ function bestTrimFromSeries(
 ): number {
   const maxStart = Math.max(0, musicDurationSec - reelDurationSec)
   if (maxStart <= 0.05) return 0
+  const minStart = preferredAutoStartFloorSec(musicDurationSec, reelDurationSec)
 
   const onset = onsetWeights(series)
 
   const coarseCandidates: { s: number; score: number }[] = []
-  for (let s = 0; s <= maxStart + 1e-6; s += COARSE_STEP_SEC) {
+  for (let s = minStart; s <= maxStart + 1e-6; s += COARSE_STEP_SEC) {
     const { score, n } = windowScore(series, s, reelDurationSec, cutStartTimesSec, onset)
     if (n < 4) continue
     coarseCandidates.push({ s, score })
   }
-  if (coarseCandidates.length === 0) return 0
+  if (coarseCandidates.length === 0) return minStart
   coarseCandidates.sort((a, b) => b.score - a.score)
   const top = coarseCandidates.slice(0, TOP_K_CANDIDATES)
 
@@ -237,6 +253,7 @@ function bestTrimFromSeries(
   }
 
   let clamped = Math.max(0, Math.min(maxStart, bestS))
+  clamped = Math.max(minStart, clamped)
   clamped = nudgeForwardForLoudAttack(series, clamped, reelDurationSec, maxStart)
 
   console.log(
@@ -255,11 +272,13 @@ function heuristicTrimStart(
   if (musicDurationSec == null || !Number.isFinite(musicDurationSec) || musicDurationSec <= reelDurationSec + 0.5) {
     return 0
   }
-  // Sin análisis de audio: no adivinar un punto al 28 % (suele dejar el inicio del reel en un build-up).
+  const floor = preferredAutoStartFloorSec(musicDurationSec, reelDurationSec)
+  // Sin análisis de audio, usar un piso anti-intro-lenta en lugar de 0s.
   console.log(
-    `[VideoV2Pipeline][${jobId}][Music] Sin ffmpeg: trim_start=0s (pista≈${musicDurationSec.toFixed(1)}s, reel≈${reelDurationSec.toFixed(1)}s)`
+    `[VideoV2Pipeline][${jobId}][Music] Sin ffmpeg: trim_start=${floor.toFixed(2)}s ` +
+      `(pista≈${musicDurationSec.toFixed(1)}s, reel≈${reelDurationSec.toFixed(1)}s)`
   )
-  return 0
+  return floor
 }
 
 export interface PickSmartMusicTrimOptions {

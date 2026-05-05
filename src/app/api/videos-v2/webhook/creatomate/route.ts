@@ -27,6 +27,12 @@ export async function POST(request: NextRequest) {
     const supabase = getServiceClient()
 
     if (payload.status === 'succeeded') {
+      const { data: prev } = await supabase
+        .from('video_jobs_v2')
+        .select('social_publish_stage')
+        .eq('id', jobId)
+        .single()
+
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({
@@ -35,6 +41,7 @@ export async function POST(request: NextRequest) {
           final_video_duration: payload.duration ?? null,
           progress_percentage: 100,
           current_step: 'Video listo',
+          social_publish_stage: prev?.social_publish_stage ?? 'generado',
         })
         .eq('id', jobId)
 

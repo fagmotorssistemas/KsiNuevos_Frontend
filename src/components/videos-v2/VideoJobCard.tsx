@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X } from 'lucide-react'
+import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoJobV2, VideoJobStatus } from '@/lib/videos-v2/types'
+import { resolveSocialPublishStage } from '@/lib/videos-v2/publish-flow'
 
 const STATUS_CONFIG: Record<VideoJobStatus, { label: string; className: string }> = {
   pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600' },
@@ -26,15 +27,27 @@ function formatDate(dateStr: string) {
 interface VideoJobCardProps {
   job: VideoJobV2
   onJobDeleted: (jobId: string) => void
+  onJobUpdated?: (job: VideoJobV2) => void
 }
 
-export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
+const SOCIAL_STAGE_BADGE: Record<string, { label: string; className: string }> = {
+  generado: { label: 'Listo (redes)', className: 'bg-slate-700/90 text-white' },
+  aprobado: { label: 'Aprobado', className: 'bg-emerald-700/90 text-white' },
+  programado: { label: 'Programado', className: 'bg-sky-700/90 text-white' },
+  publicado: { label: 'Publicado', className: 'bg-green-800/90 text-white' },
+  fallido: { label: 'Fallido (redes)', className: 'bg-red-800/90 text-white' },
+}
+
+export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardProps) {
   const isProcessing = !['completed', 'failed'].includes(job.status)
   const cfg = STATUS_CONFIG[job.status]
+  const socialStage = job.status === 'completed' ? resolveSocialPublishStage(job) : null
+  const socialBadge = socialStage ? SOCIAL_STAGE_BADGE[socialStage] : null
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
 
   async function handleDeleteJob() {
     setIsDeleting(true)
@@ -50,6 +63,25 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
     } finally {
       setIsDeleting(false)
       setIsDeleteOpen(false)
+    }
+  }
+
+  async function handleApproveForPublish() {
+    setIsApproving(true)
+    try {
+      const res = await fetch(`/api/videos-v2/jobs/${job.id}/meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ socialPublishStage: 'aprobado' }),
+      })
+      const data = (await res.json()) as VideoJobV2 & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo aprobar')
+      toast.success('Video aprobado para publicación')
+      onJobUpdated?.(data as VideoJobV2)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al aprobar')
+    } finally {
+      setIsApproving(false)
     }
   }
 
@@ -106,10 +138,15 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
           )}
 
           {/* Badge de estado */}
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.className}`}>
               {cfg.label}
             </span>
+            {socialBadge ? (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${socialBadge.className}`}>
+                {socialBadge.label}
+              </span>
+            ) : null}
           </div>
 
           {job.final_video_url && (
@@ -161,6 +198,18 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
 
           {/* Acciones */}
           <div className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto] gap-2 pt-1">
+            {job.status === 'completed' && socialStage === 'generado' ? (
+              <button
+                type="button"
+                onClick={() => void handleApproveForPublish()}
+                disabled={isApproving}
+                className="col-span-2 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+              >
+                <Megaphone className="w-3.5 h-3.5" />
+                {isApproving ? 'Aprobando…' : 'Aprobar para publicar'}
+              </button>
+            ) : null}
+
             <Link
               href={`/marketing/videos-v2/${job.id}`}
               className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xl transition-colors"

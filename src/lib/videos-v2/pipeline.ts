@@ -113,10 +113,16 @@ async function updateJob(
   }>
 ) {
   const supabase = getServiceClient()
-  const { error } = await supabase
-    .from('video_jobs_v2')
-    .update(fields as Record<string, unknown>)
-    .eq('id', jobId)
+  const payload = { ...fields } as Record<string, unknown>
+  if (fields.status === 'completed') {
+    const { data: prev } = await supabase
+      .from('video_jobs_v2')
+      .select('social_publish_stage')
+      .eq('id', jobId)
+      .single()
+    payload.social_publish_stage = prev?.social_publish_stage ?? 'generado'
+  }
+  const { error } = await supabase.from('video_jobs_v2').update(payload).eq('id', jobId)
 
   if (error) {
     console.error(`[VideoV2Pipeline][${jobId}] Error actualizando job: ${error.message}`)
@@ -1648,7 +1654,7 @@ export async function startCreatomateRenderFromClientScript(
 export async function rerunCreatomateRenderForJob(
   jobId: string,
   geminiAnalysisOverride?: unknown,
-  opts?: { musicTrackIdOverride?: string }
+  opts?: { musicTrackIdOverride?: string; musicTrimStartSecOverride?: number | null }
 ): Promise<{ renderId: string }> {
   const supabase = getServiceClient()
   const { data: job, error } = await supabase
@@ -1671,6 +1677,11 @@ export async function rerunCreatomateRenderForJob(
     opts?.musicTrackIdOverride != null
       ? await resolveMusicTrackUrlById(opts.musicTrackIdOverride)
       : (job.music_track_url as string)
+  const hasMusicTrimOverride =
+    opts != null && Object.prototype.hasOwnProperty.call(opts, 'musicTrimStartSecOverride')
+  const musicTrimStartSecOverride = hasMusicTrimOverride
+    ? normalizeMusicTrimStartSec(opts?.musicTrimStartSecOverride ?? undefined)
+    : undefined
 
   const allSegments = parseSegmentMapJson(job.segment_map)
   const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
@@ -1729,6 +1740,9 @@ export async function rerunCreatomateRenderForJob(
   if (voiceOverBaseClipIndex != null && paths.length < 2) {
     voiceOverBaseClipIndex = undefined
   }
+  const effectiveMusicTrimStartSec = hasMusicTrimOverride
+    ? musicTrimStartSecOverride
+    : musicTrimStartSecFromMeta
 
   const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
 
@@ -1790,6 +1804,17 @@ export async function rerunCreatomateRenderForJob(
     gemini_analysis: analysisToStore,
     adjusted_srt: adjustedSrt,
     music_track_url: musicTrackUrl,
+    ...(hasMusicTrimOverride
+      ? {
+          selected_clips: isPipelineInputMeta(sc)
+            ? {
+                ...(sc as Record<string, unknown>),
+                _v2_pipeline_input: true,
+                musicTrimStartSec: effectiveMusicTrimStartSec ?? null,
+              }
+            : { _v2_pipeline_input: true, musicTrimStartSec: effectiveMusicTrimStartSec ?? null },
+        }
+      : {}),
     status: 'rendering',
     current_step: 'Re-render: enviando a Creatomate…',
     progress_percentage: 82,
@@ -1807,7 +1832,7 @@ export async function rerunCreatomateRenderForJob(
     subtitleBlocks,
     musicTrackUrl,
     voIntroForRender,
-    { musicTrimStartSecOverride: musicTrimStartSecFromMeta }
+    { musicTrimStartSecOverride: effectiveMusicTrimStartSec }
   )
 
   await updateJob(jobId, {
