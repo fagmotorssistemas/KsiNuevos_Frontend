@@ -34,7 +34,7 @@ Routes are organized into route groups with role-based access enforced in `src/m
 | `(admin)` | Admin features | Admin only |
 | `/taller` | Workshop module | `taller` role |
 | `/legal` | Legal module | `abogado`/`abogada` roles |
-| `/marketing` | Marketing + video automation | `marketing`/`contable` roles |
+| `/marketing` | Marketing (incl. Videos) | `marketing`/`contable` roles |
 | `/rastreadores` | GPS tracking | Authorized roles |
 | `/seguros` | Insurance policies | Authorized roles |
 
@@ -63,8 +63,8 @@ The accounting/cartera module also calls a separate backend at `NEXT_PUBLIC_API_
 
 ### External Integrations
 
-- **Descript API** (`DESCRIPT_API_KEY`) — video generation via `src/app/api/video-automation/`
-- **Google Gemini AI** (`GEMINI_API_KEY`) — content analysis in marketing/scraper modules
+- **Videos** — AssemblyAI, Creatomate, Gemini; rutas en `src/app/api/videos/` y UI en `src/app/marketing/videos/`
+- **Google Gemini AI** (`GEMINI_API_KEY`) — content analysis in marketing/scraper modules and Videos
 - **Custom accounting backend** (`NEXT_PUBLIC_API_URL`) — separate service for financial operations
 
 ### Key Conventions

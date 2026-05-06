@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/videos-v2/publish/process",
+      "path": "/api/videos/publish/process",
       "schedule": "* * * * *"
     }
   ]

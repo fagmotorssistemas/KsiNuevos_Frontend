@@ -109,7 +109,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Módulo marketing: admin, marketing y contable (equivalente al menú completo de contabilidad con Videos IA)
+  // Módulo marketing: admin, marketing y contable
   if (pathname === '/marketing' || pathname.startsWith('/marketing/')) {
     const role = (profile?.role || '').toLowerCase().trim()
     const allowed = role === 'admin' || role === 'marketing' || role === 'contable'

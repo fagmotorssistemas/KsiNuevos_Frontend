@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Film, ArrowRight, ScrollText, Megaphone, BarChart3, CalendarDays, Sparkles } from 'lucide-react';
+import { ArrowRight, ScrollText, Megaphone, BarChart3, CalendarDays, Sparkles } from 'lucide-react';
 
 export default function MarketingDashboardPage() {
     return (
@@ -8,7 +8,7 @@ export default function MarketingDashboardPage() {
                 <h1 className="text-2xl font-extrabold text-gray-900">Marketing</h1>
                 <p className="text-sm text-gray-500 mt-2 max-w-xl">
                     Herramientas de contenido y automatización. Elige una opción en el menú lateral
-                    o accede directamente a Videos IA.
+                    o accede directamente a Videos.
                 </p>
             </div>
 
@@ -88,25 +88,7 @@ export default function MarketingDashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <Link
-                    href="/marketing/video-automation"
-                    className="group flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-red-200 hover:shadow-md"
-                >
-                    <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white shadow-lg shadow-red-500/20">
-                            <Film className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-gray-900">Videos IA (V1)</h2>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Automatización de edición con IA (Gemini + Descript).
-                            </p>
-                        </div>
-                    </div>
-                    <ArrowRight className="w-5 h-5 text-red-600 shrink-0 transition-transform group-hover:translate-x-1" />
-                </Link>
-
-                <Link
-                    href="/marketing/videos-v2"
+                    href="/marketing/videos"
                     className="group flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-violet-200 hover:shadow-md"
                 >
                     <div className="flex items-start gap-4">
@@ -114,7 +96,7 @@ export default function MarketingDashboardPage() {
                             <Sparkles className="w-6 h-6" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900">Videos V2 ✨</h2>
+                            <h2 className="text-lg font-bold text-gray-900">Videos ✨</h2>
                             <p className="text-sm text-gray-500 mt-1">
                                 Fábrica automatizada de Reels (AssemblyAI + Gemini + Creatomate).
                             </p>

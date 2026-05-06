@@ -40,7 +40,12 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/dashboard/video-automation",
-        destination: "/marketing/video-automation",
+        destination: "/marketing/videos",
+        permanent: false,
+      },
+      {
+        source: "/marketing/video-automation",
+        destination: "/marketing/videos",
         permanent: false,
       },
     ];

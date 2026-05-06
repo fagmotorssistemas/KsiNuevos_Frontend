@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-    Film,
     Menu,
     X,
     LayoutDashboard,
@@ -21,8 +20,7 @@ const menuItems = [
     { name: 'Guiones', href: '/marketing/guiones', icon: ScrollText },
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
-    { name: 'Videos IA (V1)', href: '/marketing/video-automation', icon: Film },
-    { name: 'Videos V2 ✨', href: '/marketing/videos-v2', icon: Sparkles },
+    { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
 ];
 
 export function MarketingSidebar() {

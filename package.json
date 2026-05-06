@@ -8,7 +8,7 @@
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "videos-v2:ffprobe": "node scripts/ffprobe-stream-color.mjs"
+    "videos:ffprobe": "node scripts/ffprobe-stream-color.mjs"
   },
   "dependencies": {
     "@creatomate/preview": "^1.6.0",
