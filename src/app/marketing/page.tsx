@@ -96,7 +96,7 @@ export default function MarketingDashboardPage() {
                             <Sparkles className="w-6 h-6" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900">Videos ✨</h2>
+                            <h2 className="text-lg font-bold text-gray-900">Videos</h2>
                             <p className="text-sm text-gray-500 mt-1">
                                 Fábrica automatizada de Reels (AssemblyAI + Gemini + Creatomate).
                             </p>
