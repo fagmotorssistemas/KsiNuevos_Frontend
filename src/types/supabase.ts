@@ -304,6 +304,24 @@ export type Database = {
           },
         ]
       }
+      automation_recovery_markers: {
+        Row: {
+          marker_key: string
+          run_day: string
+          updated_at: string
+        }
+        Insert: {
+          marker_key: string
+          run_day: string
+          updated_at?: string
+        }
+        Update: {
+          marker_key?: string
+          run_day?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       brokers: {
         Row: {
           activo: boolean | null
@@ -1152,6 +1170,81 @@ export type Database = {
           },
         ]
       }
+      daily_metrics_report: {
+        Row: {
+          alertas: Json | null
+          analisis_guiones: string | null
+          analisis_marcas: string | null
+          autos_publicados: number
+          autos_sin_leads: number
+          conversion_vs_ayer: number | null
+          costo_por_lead: number
+          created_at: string
+          generated_at: string
+          id: string
+          leads_organico: number
+          leads_pagado: number
+          leads_total: number
+          leads_vs_ayer: number | null
+          mejor_marca: string | null
+          mejor_tipo_guion: string | null
+          peor_tipo_guion: string | null
+          raw_data: Json | null
+          recomendaciones: string | null
+          report_date: string
+          resumen_ejecutivo: string | null
+          spend_total: number
+        }
+        Insert: {
+          alertas?: Json | null
+          analisis_guiones?: string | null
+          analisis_marcas?: string | null
+          autos_publicados?: number
+          autos_sin_leads?: number
+          conversion_vs_ayer?: number | null
+          costo_por_lead?: number
+          created_at?: string
+          generated_at?: string
+          id?: string
+          leads_organico?: number
+          leads_pagado?: number
+          leads_total?: number
+          leads_vs_ayer?: number | null
+          mejor_marca?: string | null
+          mejor_tipo_guion?: string | null
+          peor_tipo_guion?: string | null
+          raw_data?: Json | null
+          recomendaciones?: string | null
+          report_date: string
+          resumen_ejecutivo?: string | null
+          spend_total?: number
+        }
+        Update: {
+          alertas?: Json | null
+          analisis_guiones?: string | null
+          analisis_marcas?: string | null
+          autos_publicados?: number
+          autos_sin_leads?: number
+          conversion_vs_ayer?: number | null
+          costo_por_lead?: number
+          created_at?: string
+          generated_at?: string
+          id?: string
+          leads_organico?: number
+          leads_pagado?: number
+          leads_total?: number
+          leads_vs_ayer?: number | null
+          mejor_marca?: string | null
+          mejor_tipo_guion?: string | null
+          peor_tipo_guion?: string | null
+          raw_data?: Json | null
+          recomendaciones?: string | null
+          report_date?: string
+          resumen_ejecutivo?: string | null
+          spend_total?: number
+        }
+        Relationships: []
+      }
       datos_solicitados_clientes: {
         Row: {
           estado: string | null
@@ -1403,6 +1496,96 @@ export type Database = {
           },
         ]
       }
+      informative_posts: {
+        Row: {
+          attempt_count: number
+          caption_facebook: string | null
+          caption_instagram: string | null
+          carousel_format: string | null
+          created_at: string
+          error_message: string | null
+          facebook_permalink: string | null
+          facebook_post_id: string | null
+          headline: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          image_urls: Json | null
+          instagram_media_id: string | null
+          instagram_permalink: string | null
+          next_retry_at: string | null
+          scheduled_for: string | null
+          source_snippet: string | null
+          source_title: string | null
+          source_url: string | null
+          source_url_hash: string
+          status: string
+          story_hash: string | null
+          summary_es: string | null
+          topic_key: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          carousel_format?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          headline: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          image_urls?: Json | null
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          next_retry_at?: string | null
+          scheduled_for?: string | null
+          source_snippet?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          source_url_hash: string
+          status?: string
+          story_hash?: string | null
+          summary_es?: string | null
+          topic_key?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          carousel_format?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          headline?: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          image_urls?: Json | null
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          next_retry_at?: string | null
+          scheduled_for?: string | null
+          source_snippet?: string | null
+          source_title?: string | null
+          source_url?: string | null
+          source_url_hash?: string
+          status?: string
+          story_hash?: string | null
+          summary_es?: string | null
+          topic_key?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           content: string | null
@@ -1642,6 +1825,77 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      inventory_auto_publication: {
+        Row: {
+          attempt_count: number
+          caption_facebook: string | null
+          caption_instagram: string | null
+          created_at: string
+          error_message: string | null
+          facebook_permalink: string | null
+          facebook_post_id: string | null
+          id: string
+          instagram_media_id: string | null
+          instagram_permalink: string | null
+          kind: string
+          next_retry_at: string | null
+          scheduled_for: string | null
+          status: string
+          theme_id: string | null
+          updated_at: string
+          vehicle_id: string | null
+          vehicle_ids: string[] | null
+        }
+        Insert: {
+          attempt_count?: number
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          kind: string
+          next_retry_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_ids?: string[] | null
+        }
+        Update: {
+          attempt_count?: number
+          caption_facebook?: string | null
+          caption_instagram?: string | null
+          created_at?: string
+          error_message?: string | null
+          facebook_permalink?: string | null
+          facebook_post_id?: string | null
+          id?: string
+          instagram_media_id?: string | null
+          instagram_permalink?: string | null
+          kind?: string
+          next_retry_at?: string | null
+          scheduled_for?: string | null
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_auto_publication_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventoryoracle: {
         Row: {
@@ -1960,7 +2214,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           behavior_signals: Json | null
-          budget: number | null
+          budget: string | null
           contact_id: number | null
           created_at: string | null
           day_detected: string | null
@@ -1984,7 +2238,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           behavior_signals?: Json | null
-          budget?: number | null
+          budget?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -2008,7 +2262,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           behavior_signals?: Json | null
-          budget?: number | null
+          budget?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -2035,6 +2289,194 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_video_plan_items: {
+        Row: {
+          assigned_seller_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          inventory_id: string
+          notes: string | null
+          planned_date: string
+          status: string
+          updated_at: string
+          video_kind: string
+        }
+        Insert: {
+          assigned_seller_id?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          inventory_id: string
+          notes?: string | null
+          planned_date: string
+          status?: string
+          updated_at?: string
+          video_kind?: string
+        }
+        Update: {
+          assigned_seller_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          inventory_id?: string
+          notes?: string | null
+          planned_date?: string
+          status?: string
+          updated_at?: string
+          video_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_video_plan_items_assigned_seller_id_fkey"
+            columns: ["assigned_seller_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_video_plan_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_video_plan_items_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_campaign_metrics: {
+        Row: {
+          campaign_id: string
+          campaign_name: string | null
+          clicks: number
+          cost_per_lead: number
+          created_at: string
+          date_start: string | null
+          date_stop: string | null
+          id: string
+          impressions: number
+          inventory_id: string | null
+          leads_count: number
+          raw_data: Json | null
+          reach: number
+          spend: number
+          updated_at: string
+          video_thruplay: number
+        }
+        Insert: {
+          campaign_id: string
+          campaign_name?: string | null
+          clicks?: number
+          cost_per_lead?: number
+          created_at?: string
+          date_start?: string | null
+          date_stop?: string | null
+          id?: string
+          impressions?: number
+          inventory_id?: string | null
+          leads_count?: number
+          raw_data?: Json | null
+          reach?: number
+          spend?: number
+          updated_at?: string
+          video_thruplay?: number
+        }
+        Update: {
+          campaign_id?: string
+          campaign_name?: string | null
+          clicks?: number
+          cost_per_lead?: number
+          created_at?: string
+          date_start?: string | null
+          date_stop?: string | null
+          id?: string
+          impressions?: number
+          inventory_id?: string | null
+          leads_count?: number
+          raw_data?: Json | null
+          reach?: number
+          spend?: number
+          updated_at?: string
+          video_thruplay?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_campaign_metrics_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_video_metrics: {
+        Row: {
+          avg_time_watched_s: number
+          caption: string | null
+          comments_count: number
+          created_time: string | null
+          fetched_at: string
+          inventory_vehicle_id: string | null
+          parsed_brand: string | null
+          parsed_model: string | null
+          parsed_year: number | null
+          permalink_url: string | null
+          retention_rate: number
+          shares_count: number
+          title: string | null
+          video_id: string
+          views: number
+        }
+        Insert: {
+          avg_time_watched_s?: number
+          caption?: string | null
+          comments_count?: number
+          created_time?: string | null
+          fetched_at?: string
+          inventory_vehicle_id?: string | null
+          parsed_brand?: string | null
+          parsed_model?: string | null
+          parsed_year?: number | null
+          permalink_url?: string | null
+          retention_rate?: number
+          shares_count?: number
+          title?: string | null
+          video_id: string
+          views?: number
+        }
+        Update: {
+          avg_time_watched_s?: number
+          caption?: string | null
+          comments_count?: number
+          created_time?: string | null
+          fetched_at?: string
+          inventory_vehicle_id?: string | null
+          parsed_brand?: string | null
+          parsed_model?: string | null
+          parsed_year?: number | null
+          permalink_url?: string | null
+          retention_rate?: number
+          shares_count?: number
+          title?: string | null
+          video_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_video_metrics_inventory_vehicle_id_fkey"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
@@ -2084,6 +2526,39 @@ export type Database = {
           id?: number | null
           message?: Json | null
           session_id?: string | null
+        }
+        Relationships: []
+      }
+      pipeline_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json
+          result: Json | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          type?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2325,6 +2800,45 @@ export type Database = {
             columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "scraper_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      script_vehicle_assignments: {
+        Row: {
+          created_at: string
+          fecha_asignacion: string
+          id: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          fecha_asignacion: string
+          id?: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          fecha_asignacion?: string
+          id?: string
+          vehicle_id?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_vehicle_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -3585,8 +4099,8 @@ export type Database = {
           script_text: string | null
           segment_map: Json | null
           selected_clips: Json | null
-          srt_content: string | null
           social_publish_stage: string | null
+          srt_content: string | null
           status: string
           subtitle_blocks_override: Json | null
           updated_at: string | null
@@ -3611,8 +4125,8 @@ export type Database = {
           script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
-          srt_content?: string | null
           social_publish_stage?: string | null
+          srt_content?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
@@ -3637,8 +4151,8 @@ export type Database = {
           script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
-          srt_content?: string | null
           social_publish_stage?: string | null
+          srt_content?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
@@ -3730,6 +4244,131 @@ export type Database = {
             columns: ["queue_id"]
             isOneToOne: false
             referencedRelation: "video_publishing_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_script_metrics: {
+        Row: {
+          comments_count: number
+          created_at: string
+          engaged_users: number
+          metrics_updated_at: string | null
+          performance_score: number | null
+          reactions: Json
+          retention_rate: number
+          script_id: string
+          shares_count: number
+          updated_at: string
+          views: number
+        }
+        Insert: {
+          comments_count?: number
+          created_at?: string
+          engaged_users?: number
+          metrics_updated_at?: string | null
+          performance_score?: number | null
+          reactions?: Json
+          retention_rate?: number
+          script_id: string
+          shares_count?: number
+          updated_at?: string
+          views?: number
+        }
+        Update: {
+          comments_count?: number
+          created_at?: string
+          engaged_users?: number
+          metrics_updated_at?: string | null
+          performance_score?: number | null
+          reactions?: Json
+          retention_rate?: number
+          script_id?: string
+          shares_count?: number
+          updated_at?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_script_metrics_script_id_fkey"
+            columns: ["script_id"]
+            isOneToOne: true
+            referencedRelation: "video_scripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_scripts: {
+        Row: {
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_tipo: string
+          id: string
+          objecion_tipo: string | null
+          palabras_count: number
+          semana_tipo: number
+          status: string
+          texto_guion: string
+          texto_hash: string
+          updated_at: string
+          vehicle_data: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre: string | null
+        }
+        Insert: {
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_tipo: string
+          id?: string
+          objecion_tipo?: string | null
+          palabras_count: number
+          semana_tipo: number
+          status?: string
+          texto_guion: string
+          texto_hash: string
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre?: string | null
+        }
+        Update: {
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_tipo?: string
+          id?: string
+          objecion_tipo?: string | null
+          palabras_count?: number
+          semana_tipo?: number
+          status?: string
+          texto_guion?: string
+          texto_hash?: string
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id?: string
+          vendedor_id?: string
+          vendedor_nombre?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4101,6 +4740,7 @@ export type Database = {
         }[]
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
+      reassign_stale_unmanaged_leads: { Args: never; Returns: number }
       rpc_cases_without_gestion: {
         Args: { p_days: number }
         Returns: {
