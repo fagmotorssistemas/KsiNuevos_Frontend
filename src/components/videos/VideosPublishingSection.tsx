@@ -54,6 +54,18 @@ export function VideosPublishingSection({
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-r from-violet-50 to-indigo-50 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold text-violet-700">Publicación inteligente</p>
+            <h3 className="text-lg font-extrabold text-gray-900 mt-0.5">Gestiona, programa y monitorea tus publicaciones</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Flujo recomendado: aprobar video → programar con vehículo y caption → monitorear estado en cola.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {tokenWarn?.soon ? (
         <div className="flex gap-3 items-start rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -69,12 +81,14 @@ export function VideosPublishingSection({
         </div>
       ) : null}
 
-      <div className="flex gap-2 flex-wrap border-b border-gray-200 pb-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => setSub('approved')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-            sub === 'approved' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors border ${
+            sub === 'approved'
+              ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-500/20'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
           }`}
         >
           <Megaphone className="w-4 h-4" />
@@ -83,8 +97,10 @@ export function VideosPublishingSection({
         <button
           type="button"
           onClick={() => setSub('queue')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-            sub === 'queue' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors border ${
+            sub === 'queue'
+              ? 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-500/20'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
           }`}
         >
           <ListVideo className="w-4 h-4" />
@@ -92,25 +108,19 @@ export function VideosPublishingSection({
         </button>
       </div>
 
-      {sub === 'approved' ? (
-        <ApprovedVideosPublishingPanel
-          refreshKey={refreshKey}
-          onScheduleDone={onPublishingMutate}
-        />
-      ) : (
-        <PublishingQueueTable refreshKey={refreshKey} onMutate={onPublishingMutate} />
-      )}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+        {sub === 'approved' ? (
+          <ApprovedVideosPublishingPanel
+            refreshKey={refreshKey}
+            onScheduleDone={onPublishingMutate}
+          />
+        ) : (
+          <PublishingQueueTable refreshKey={refreshKey} onMutate={onPublishingMutate} />
+        )}
+      </div>
 
       {sub === 'queue' ? (
         <div className="rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-3 space-y-3">
-          <p className="text-sm text-gray-800">
-            <strong className="text-violet-900">¿Sigue en &quot;Pendiente&quot; pasada la hora?</strong> El cron solo
-            corre en el despliegue de <strong>producción</strong> en Vercel (no en <code className="text-xs bg-white/80 px-1 rounded">npm run dev</code>).
-            Define <code className="text-xs bg-white/80 px-1 rounded">CRON_SECRET</code> en las variables de entorno de Vercel: el cron enviará{' '}
-            <code className="text-xs bg-white/80 px-1 rounded">Authorization: Bearer …</code> automáticamente. Si no
-            usas <code className="text-xs bg-white/80 px-1 rounded">CRON_SECRET</code>, Vercel envía la cabecera{' '}
-            <code className="text-xs bg-white/80 px-1 rounded">x-vercel-cron: 1</code> y el servidor ya la acepta.
-          </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
