@@ -5,14 +5,14 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Clock, Film, Layers, Upload, Mic2, Brain, Clapperboard,
-  CheckCircle2, AlertCircle, Loader2, RefreshCw,
+  CheckCircle2, AlertCircle, Loader2, Megaphone,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { CreatomateJobPreview } from '@/components/videos/CreatomateJobPreview'
 import { JobManualEditor } from '@/components/videos/JobManualEditor'
 import { VideoPlayer } from '@/components/videos/VideoPlayer'
 import { PipelineStatus } from '@/components/videos/PipelineStatus'
 import type { VideoJobStatus, VideoJob } from '@/lib/videos/types'
+import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
 
 const STATUS_CONFIG = {
   pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600', icon: Clock },
@@ -50,6 +50,13 @@ const STATUS_OPTIONS: Array<{ value: VideoJobStatus; label: string }> = [
   { value: 'failed', label: 'Fallido' },
 ]
 
+const SOCIAL_STAGE_CONFIG: Record<string, { label: string; className: string }> = {
+  aprobado: { label: 'Aprobado para publicar', className: 'bg-emerald-100 text-emerald-800' },
+  programado: { label: 'Programado para publicar', className: 'bg-sky-100 text-sky-800' },
+  publicado: { label: 'Publicado', className: 'bg-green-100 text-green-800' },
+  fallido: { label: 'Error en publicación', className: 'bg-red-100 text-red-800' },
+}
+
 export default function JobDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -59,6 +66,7 @@ export default function JobDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSavingMeta, setIsSavingMeta] = useState(false)
+  const [isApprovingForPublish, setIsApprovingForPublish] = useState(false)
   const [jobNameInput, setJobNameInput] = useState('')
   const fetchJob = useCallback(async () => {
     try {
@@ -80,6 +88,8 @@ export default function JobDetailPage() {
   }, [fetchJob])
 
   const isProcessing = job && !['completed', 'failed'].includes(job.status)
+  const socialStage = job ? resolveSocialPublishStage(job) : null
+  const socialStageConfig = socialStage ? SOCIAL_STAGE_CONFIG[socialStage] : null
 
   // Nuevo formato: secuencia de segmentos
   const gemini = job?.gemini_analysis
@@ -134,6 +144,25 @@ export default function JobDetailPage() {
       toast.error(err instanceof Error ? err.message : 'Error guardando cambios')
     } finally {
       setIsSavingMeta(false)
+    }
+  }
+
+  async function handleApproveForPublish() {
+    setIsApprovingForPublish(true)
+    try {
+      const res = await fetch(`/api/videos/jobs/${jobId}/meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ socialPublishStage: 'aprobado' }),
+      })
+      const data = (await res.json()) as VideoJob & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo aprobar')
+      setJob(data)
+      toast.success('Video aprobado para publicación')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al aprobar')
+    } finally {
+      setIsApprovingForPublish(false)
     }
   }
 
@@ -198,14 +227,23 @@ export default function JobDetailPage() {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={fetchJob}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Actualizar
-          </button>
+          {job.status === 'completed' && socialStage === 'generado' ? (
+            <button
+              type="button"
+              onClick={() => void handleApproveForPublish()}
+              disabled={isApprovingForPublish}
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+            >
+              <Megaphone className="w-4 h-4" />
+              {isApprovingForPublish ? 'Aprobando...' : 'Aprobar para publicar'}
+            </button>
+          ) : null}
+          {job.status === 'completed' && socialStageConfig ? (
+            <div className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-xl ${socialStageConfig.className}`}>
+              <CheckCircle2 className="w-4 h-4" />
+              {socialStageConfig.label}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -275,14 +313,6 @@ export default function JobDetailPage() {
                   <JobManualEditor
                     jobId={jobId}
                     onSaved={async () => {
-                      await fetchJob()
-                      router.refresh()
-                    }}
-                  />
-                  <CreatomateJobPreview
-                    jobId={jobId}
-                    jobIsRendering={job.status === 'rendering'}
-                    onExportStarted={async () => {
                       await fetchJob()
                       router.refresh()
                     }}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X, Megaphone } from 'lucide-react'
+import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoJob, VideoJobStatus } from '@/lib/videos/types'
 import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
@@ -27,7 +27,6 @@ function formatDate(dateStr: string) {
 interface VideoJobCardProps {
   job: VideoJob
   onJobDeleted: (jobId: string) => void
-  onJobUpdated?: (job: VideoJob) => void
 }
 
 const SOCIAL_STAGE_BADGE: Record<string, { label: string; className: string }> = {
@@ -38,7 +37,7 @@ const SOCIAL_STAGE_BADGE: Record<string, { label: string; className: string }> =
   fallido: { label: 'Fallido (redes)', className: 'bg-red-800/90 text-white' },
 }
 
-export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardProps) {
+export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
   const isProcessing = !['completed', 'failed'].includes(job.status)
   const cfg = STATUS_CONFIG[job.status]
   const socialStage = job.status === 'completed' ? resolveSocialPublishStage(job) : null
@@ -47,7 +46,6 @@ export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardPr
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [isApproving, setIsApproving] = useState(false)
 
   async function handleDeleteJob() {
     setIsDeleting(true)
@@ -63,25 +61,6 @@ export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardPr
     } finally {
       setIsDeleting(false)
       setIsDeleteOpen(false)
-    }
-  }
-
-  async function handleApproveForPublish() {
-    setIsApproving(true)
-    try {
-      const res = await fetch(`/api/videos/jobs/${job.id}/meta`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ socialPublishStage: 'aprobado' }),
-      })
-      const data = (await res.json()) as VideoJob & { error?: string }
-      if (!res.ok) throw new Error(data.error ?? 'No se pudo aprobar')
-      toast.success('Video aprobado para publicación')
-      onJobUpdated?.(data as VideoJob)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error al aprobar')
-    } finally {
-      setIsApproving(false)
     }
   }
 
@@ -197,32 +176,21 @@ export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardPr
           </div>
 
           {/* Acciones */}
-          <div className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto] gap-2 pt-1">
-            {job.status === 'completed' && socialStage === 'generado' ? (
-              <button
-                type="button"
-                onClick={() => void handleApproveForPublish()}
-                disabled={isApproving}
-                className="col-span-2 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
-              >
-                <Megaphone className="w-3.5 h-3.5" />
-                {isApproving ? 'Aprobando…' : 'Aprobar para publicar'}
-              </button>
-            ) : null}
-
+          <div className="grid grid-cols-3 gap-2 pt-1">
             <Link
               href={`/marketing/videos/${job.id}`}
-              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xl transition-colors"
+              className="flex items-center justify-center w-full h-9 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl transition-colors"
+              title="Ver detalle"
+              aria-label="Ver detalle"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              Ver detalle
             </Link>
 
             <button
               type="button"
               onClick={() => void handleDownload()}
               disabled={!job.final_video_url || isDownloading}
-              className="flex items-center justify-center w-9 h-9 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
+              className="flex items-center justify-center w-full h-9 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
               title="Descargar"
             >
               <Download className="w-4 h-4" />
@@ -230,7 +198,7 @@ export function VideoJobCard({ job, onJobDeleted, onJobUpdated }: VideoJobCardPr
             <button
               type="button"
               onClick={() => setIsDeleteOpen(true)}
-              className="flex items-center justify-center w-9 h-9 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl transition-colors"
+              className="flex items-center justify-center w-full h-9 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl transition-colors"
               title="Eliminar job"
             >
               <Trash2 className="w-4 h-4" />

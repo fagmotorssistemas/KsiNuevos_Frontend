@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, RefreshCw, Pencil, Ban, Eye } from 'lucide-react'
+import { Loader2, RefreshCw, Pencil, Ban, Eye, Search, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoJob } from '@/lib/videos/types'
 import { formatUtcForEcuadorDisplay } from '@/lib/videos/ecuador-time'
@@ -10,6 +10,7 @@ import { SchedulePublishModal, type QueueRowLike } from './SchedulePublishModal'
 
 type VideoJoin = { job_name: string | null; final_video_url: string | null }
 type VehicleJoin = { brand: string; model: string; year: number; version: string | null }
+type PublishResultRow = { queue_id: string; platform: string; platform_post_id: string | null }
 
 export interface PublishingQueueRow {
   id: string
@@ -33,6 +34,35 @@ function StatusBadge({ status }: { status: string }) {
   }
   const c = map[status] ?? { label: status, className: 'bg-gray-100 text-gray-600' }
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.className}`}>{c.label}</span>
+}
+
+function toTitleCase(text: string) {
+  return text
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+function formatPlatformLabel(platform: string) {
+  if (platform === 'instagram') return 'Instagram'
+  if (platform === 'facebook') return 'Facebook'
+  return toTitleCase(platform)
+}
+
+function formatStatusLabel(status: string) {
+  if (status === 'published') return 'Publicado'
+  if (status === 'failed') return 'Fallido'
+  if (status === 'cancelled') return 'Cancelado'
+  return toTitleCase(status)
+}
+
+function buildDirectPostUrl(platform: string, postId: string | null): string | null {
+  if (!postId) return null
+  if (/^https?:\/\//i.test(postId)) return postId
+  if (platform === 'facebook') return `https://www.facebook.com/${postId}`
+  return null
 }
 
 interface ResultModalProps {
@@ -79,8 +109,8 @@ function PublishResultsModal({ queueId, onClose }: ResultModalProps) {
           <ul className="space-y-2 text-sm">
             {rows.map((r) => (
               <li key={r.platform} className="border border-gray-100 rounded-xl p-3">
-                <div className="font-semibold capitalize">{r.platform}</div>
-                <div className="text-gray-600">Estado: {r.status}</div>
+                <div className="font-semibold">{formatPlatformLabel(r.platform)}</div>
+                <div className="text-gray-600">Estado: {formatStatusLabel(r.status)}</div>
                 {r.platform_post_id ? (
                   <div className="text-xs font-mono break-all mt-1">ID: {r.platform_post_id}</div>
                 ) : null}
@@ -112,6 +142,9 @@ export function PublishingQueueTable({
   const [editJob, setEditJob] = useState<VideoJob | null>(null)
   const [editQueue, setEditQueue] = useState<QueueRowLike | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'published' | 'failed' | 'cancelled'>('published')
+  const [query, setQuery] = useState('')
+  const [resultsByQueue, setResultsByQueue] = useState<Record<string, PublishResultRow[]>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -126,10 +159,28 @@ export function PublishingQueueTable({
           inventoryoracle ( brand, model, year, version )
         `
         )
+        .in('status', ['published', 'failed', 'cancelled'])
         .order('scheduled_at', { ascending: false })
         .limit(200)
       if (error) throw error
-      setRows((data ?? []) as unknown as PublishingQueueRow[])
+      const queueRows = (data ?? []) as unknown as PublishingQueueRow[]
+      setRows(queueRows)
+
+      const queueIds = queueRows.map((r) => r.id)
+      if (queueIds.length > 0) {
+        const { data: resultsData } = await supabase
+          .from('video_publishing_results')
+          .select('queue_id, platform, platform_post_id')
+          .in('queue_id', queueIds)
+
+        const grouped: Record<string, PublishResultRow[]> = {}
+        for (const row of (resultsData ?? []) as PublishResultRow[]) {
+          grouped[row.queue_id] = [...(grouped[row.queue_id] ?? []), row]
+        }
+        setResultsByQueue(grouped)
+      } else {
+        setResultsByQueue({})
+      }
     } catch (e) {
       console.error(e)
       toast.error('No se pudo cargar la cola')
@@ -215,8 +266,45 @@ export function PublishingQueueTable({
     )
   }
 
+  const filteredRows = rows.filter((row) => {
+    if (row.status !== statusFilter) return false
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    const v = row.inventoryoracle
+    const text = `${row.video_jobs_v2?.job_name ?? ''} ${row.video_id} ${v?.brand ?? ''} ${v?.model ?? ''} ${v?.year ?? ''}`.toLowerCase()
+    return text.includes(q)
+  })
+
   return (
     <>
+      <div className="space-y-3">
+        <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-md">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por video o vehículo..."
+              className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(['published', 'failed', 'cancelled'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  statusFilter === s ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {formatStatusLabel(s)}
+              </button>
+            ))}
+          </div>
+        </div>
+
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs font-bold text-gray-600 uppercase tracking-wide">
@@ -230,16 +318,19 @@ export function PublishingQueueTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {rows.map((row) => {
+            {filteredRows.map((row) => {
               const v = row.inventoryoracle
-              const vehLabel = v ? `${v.brand} ${v.model} ${v.year}` : '—'
+              const vehLabel = v ? `${toTitleCase(v.brand)} ${toTitleCase(v.model)} ${v.year}` : '—'
+              const postLinks = (resultsByQueue[row.id] ?? [])
+                .map((r) => ({ platform: r.platform, url: buildDirectPostUrl(r.platform, r.platform_post_id) }))
+                .filter((x): x is { platform: string; url: string } => Boolean(x.url))
               return (
                 <tr key={row.id} className="hover:bg-gray-50/80">
                   <td className="px-3 py-2 font-medium text-gray-900 max-w-[140px] truncate">
                     {row.video_jobs_v2?.job_name || row.video_id.slice(0, 8)}
                   </td>
                   <td className="px-3 py-2 text-gray-700 max-w-[160px] truncate">{vehLabel}</td>
-                  <td className="px-3 py-2 text-gray-600">{row.platforms.join(', ')}</td>
+                  <td className="px-3 py-2 text-gray-600">{row.platforms.map(formatPlatformLabel).join(', ')}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatUtcForEcuadorDisplay(row.scheduled_at)}</td>
                   <td className="px-3 py-2">
                     <StatusBadge status={row.status} />
@@ -273,13 +364,25 @@ export function PublishingQueueTable({
                       </button>
                     )}
                     {row.status === 'published' && (
-                      <button
-                        type="button"
-                        onClick={() => setResultQueueId(row.id)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-xs font-semibold"
-                      >
-                        <Eye className="w-3 h-3" /> Ver resultado
-                      </button>
+                      <>
+                        {postLinks.length > 0 ? (
+                          <a
+                            href={postLinks[0].url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Abrir publicación
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setResultQueueId(row.id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-xs font-semibold"
+                        >
+                          <Eye className="w-3 h-3" /> Ver resultado
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -288,7 +391,8 @@ export function PublishingQueueTable({
           </tbody>
         </table>
       </div>
-      {rows.length === 0 && !loading ? (
+      </div>
+      {filteredRows.length === 0 && !loading ? (
         <p className="text-center text-sm text-gray-500 py-8">No hay publicaciones programadas.</p>
       ) : null}
 

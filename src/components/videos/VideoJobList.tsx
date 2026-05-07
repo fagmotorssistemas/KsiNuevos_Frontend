@@ -79,10 +79,6 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
     setJobs((prev) => prev.filter((job) => job.id !== jobId))
   }
 
-  function handleJobUpdated(updated: VideoJob) {
-    setJobs((prev) => prev.map((j) => (j.id === updated.id ? { ...j, ...updated } : j)))
-  }
-
   return (
     <div className="space-y-6">
       {/* Filtros */}
@@ -126,7 +122,6 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
                 key={job.id}
                 job={job}
                 onJobDeleted={handleJobDeleted}
-                onJobUpdated={handleJobUpdated}
               />
             ))}
           </div>

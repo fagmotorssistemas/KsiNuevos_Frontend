@@ -13,6 +13,7 @@ import {
     Sparkles,
     BarChart3,
     ScrollText,
+    ClipboardList,
 } from 'lucide-react';
 
 const menuItems = [
@@ -21,6 +22,7 @@ const menuItems = [
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
+    { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
 ];
 
 export function MarketingSidebar() {
