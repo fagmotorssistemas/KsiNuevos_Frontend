@@ -15,7 +15,27 @@ import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 
-const RAW_BUCKET = 'raw-videos'
+const RAW_BUCKET = 'raw-videos-v2'
+
+/**
+ * Sanea el nombre del archivo para Supabase Storage.
+ * Elimina espacios, paréntesis y otros caracteres que pueden generar errores
+ * (p. ej. "WhatsApp Video 2026-05-08 at 14.17.54 (3).mp4").
+ */
+function sanitizeStorageFilename(filename: string): string {
+  const base = filename.trim().split(/[/\\]/).pop() || 'video.mp4'
+  const dot = base.lastIndexOf('.')
+  const extRaw = dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  const stem = dot >= 0 ? base.slice(0, dot) : base
+  const ext = /^\.[a-z0-9]{1,8}$/.test(extRaw) ? extRaw : '.mp4'
+  const slug = stem
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'clip'
+  return `${slug}${ext}`
+}
 
 function getServiceClient() {
   return createClient<Database>(
@@ -135,11 +155,12 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < files.length; i++) {
       const { filename } = files[i]
+      const safeFilename = sanitizeStorageFilename(filename)
       const timestamp = Date.now() + i
       const path =
         flowType === 'single'
-          ? `${jobId}/${timestamp}_${filename}`
-          : `${jobId}/clip_${i}_${timestamp}_${filename}`
+          ? `${jobId}/${timestamp}_${safeFilename}`
+          : `${jobId}/clip_${i}_${timestamp}_${safeFilename}`
 
       const { data: signedData, error: signedError } = await supabase.storage
         .from(RAW_BUCKET)

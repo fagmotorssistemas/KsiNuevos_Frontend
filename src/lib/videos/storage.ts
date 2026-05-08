@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
-const RAW_BUCKET = 'raw-videos'
+const RAW_BUCKET = 'raw-videos-v2'
 const MUSIC_BUCKET = 'music-tracks-v2'
 const SIGNED_URL_EXPIRY = 60 * 60 * 24 // 24 horas
 
