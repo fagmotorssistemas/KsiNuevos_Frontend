@@ -6,6 +6,40 @@ const RAW_BUCKET = 'raw-videos-v2'
 const MUSIC_BUCKET = 'music-tracks-v2'
 const SIGNED_URL_EXPIRY = 60 * 60 * 24 // 24 horas
 
+function assertVideoStorageEnv(): void {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!url) {
+    throw new Error('[VideoStorage] Falta NEXT_PUBLIC_SUPABASE_URL en el entorno del servidor.')
+  }
+  if (!/^https:\/\//i.test(url)) {
+    throw new Error('[VideoStorage] NEXT_PUBLIC_SUPABASE_URL debe ser una URL https absoluta.')
+  }
+  if (!key) {
+    throw new Error(
+      '[VideoStorage] Falta SUPABASE_SERVICE_ROLE_KEY en el entorno del servidor (requerida para Storage y URLs firmadas).'
+    )
+  }
+}
+
+function isRetryableStorageNetworkMessage(message: string | undefined): boolean {
+  if (!message) return false
+  const m = message.toLowerCase()
+  return (
+    m.includes('fetch failed') ||
+    m.includes('econnreset') ||
+    m.includes('etimedout') ||
+    m.includes('enotfound') ||
+    m.includes('eai_again') ||
+    m.includes('socket') ||
+    m.includes('network')
+  )
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /** Audio de VO por job: bucket música (admite audio); `raw-videos` suele limitar solo a vídeo. */
 export function jobVoiceOverAudioStoragePath(jobId: string, extWithDot: string): string {
   return `reel-vo/${jobId}/voice_over${extWithDot}`
@@ -38,7 +72,7 @@ export async function uploadJobVoiceOverAudioToMusicBucket(
     contentType: mimeType || 'audio/mpeg',
     upsert: true,
   })
-  if (error) throw new Error(`[VideoV2Storage] Error subiendo audio VO: ${error.message}`)
+  if (error) throw new Error(`[VideoStorage] Error subiendo audio VO: ${error.message}`)
   const { data } = supabase.storage.from(MUSIC_BUCKET).getPublicUrl(path)
   return { path, publicUrl: data.publicUrl }
 }
@@ -54,11 +88,42 @@ export async function resolveVoiceOverAudioUrl(storagePath: string): Promise<str
 }
 
 function getServiceClient() {
+  assertVideoStorageEnv()
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   )
+}
+
+async function createSignedUrlForRawPath(
+  supabase: ReturnType<typeof getServiceClient>,
+  objectPath: string
+): Promise<string> {
+  const maxAttempts = 4
+  let lastMessage = 'sin respuesta'
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await sleep(250 * 2 ** (attempt - 1))
+    }
+    const { data, error } = await supabase.storage
+      .from(RAW_BUCKET)
+      .createSignedUrl(objectPath, SIGNED_URL_EXPIRY)
+
+    if (!error && data?.signedUrl) {
+      return data.signedUrl
+    }
+
+    lastMessage = error?.message || 'error desconocido al firmar URL'
+    if (!isRetryableStorageNetworkMessage(lastMessage) || attempt === maxAttempts - 1) {
+      const hint = isRetryableStorageNetworkMessage(lastMessage)
+        ? ' Revisa conectividad HTTPS hacia Supabase, DNS/VPN/firewall y que las variables NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY estén definidas en el entorno donde corre esta API (local o Vercel).'
+        : ''
+      throw new Error(`[VideoStorage] Error generando URL firmada: ${lastMessage}.${hint}`)
+    }
+  }
+
+  throw new Error(`[VideoStorage] Error generando URL firmada: ${lastMessage}`)
 }
 
 export async function uploadRawVideoV2(
@@ -75,16 +140,11 @@ export async function uploadRawVideoV2(
     .from(RAW_BUCKET)
     .upload(path, file, { contentType: mimeType, upsert: false })
 
-  if (error) throw new Error(`[VideoV2Storage] Error subiendo video: ${error.message}`)
+  if (error) throw new Error(`[VideoStorage] Error subiendo video: ${error.message}`)
 
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from(RAW_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_EXPIRY)
+  const signedUrl = await createSignedUrlForRawPath(supabase, path)
 
-  if (signedError || !signedData)
-    throw new Error(`[VideoV2Storage] Error generando URL firmada: ${signedError?.message}`)
-
-  return { path, signedUrl: signedData.signedUrl }
+  return { path, signedUrl }
 }
 
 export async function uploadRawVideoClipV2(
@@ -102,26 +162,16 @@ export async function uploadRawVideoClipV2(
     .from(RAW_BUCKET)
     .upload(path, file, { contentType: mimeType, upsert: false })
 
-  if (error) throw new Error(`[VideoV2Storage] Error subiendo clip ${clipIndex}: ${error.message}`)
+  if (error) throw new Error(`[VideoStorage] Error subiendo clip ${clipIndex}: ${error.message}`)
 
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from(RAW_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_EXPIRY)
+  const signedUrl = await createSignedUrlForRawPath(supabase, path)
 
-  if (signedError || !signedData)
-    throw new Error(`[VideoV2Storage] Error firmando URL clip ${clipIndex}: ${signedError?.message}`)
-
-  return { path, signedUrl: signedData.signedUrl }
+  return { path, signedUrl }
 }
 
 export async function getSignedUrlForPath(path: string): Promise<string> {
   const supabase = getServiceClient()
-  const { data, error } = await supabase.storage
-    .from(RAW_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_EXPIRY)
-
-  if (error || !data) throw new Error(`[VideoV2Storage] Error generando URL firmada: ${error?.message}`)
-  return data.signedUrl
+  return createSignedUrlForRawPath(supabase, path)
 }
 
 /** Nombre de objeto Storage seguro (evita espacios/Unicode que algunos backends rechazan). */
@@ -156,7 +206,7 @@ export async function uploadMusicTrack(
     .from(MUSIC_BUCKET)
     .upload(path, file, { contentType: mimeType, upsert: false })
 
-  if (error) throw new Error(`[VideoV2Storage] Error subiendo música: ${error.message}`)
+  if (error) throw new Error(`[VideoStorage] Error subiendo música: ${error.message}`)
 
   const { data: publicData } = supabase.storage.from(MUSIC_BUCKET).getPublicUrl(path)
 

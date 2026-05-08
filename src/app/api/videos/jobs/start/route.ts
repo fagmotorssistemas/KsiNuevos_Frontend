@@ -26,6 +26,8 @@ import {
 } from '@/lib/videos/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos/extract-pdf-script-text'
 
+export const runtime = 'nodejs'
+
 const RAW_BUCKET = 'raw-videos-v2'
 
 const VOICE_OVER_AUDIO_EXT = /\.(mp3|m4a|aac|wav)$/i
