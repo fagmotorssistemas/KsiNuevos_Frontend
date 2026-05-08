@@ -724,6 +724,45 @@ function introFactSequenceStage(seg: Segment | undefined): number {
   return 1
 }
 
+/**
+ * El motivo editorial de Gemini a veces etiqueta mejor el rol que el ASR (p. ej. “Presentación del producto”).
+ */
+function geminiReasonHintsProductIdentityPresentation(reason?: string | null): boolean {
+  if (!reason?.trim()) return false
+  const r = normalizeText(reason)
+  if (!/\bpresentaci/.test(r)) return false
+  return (
+    /\b(producto|vehiculo|vehículo|auto|carro|modelo)\b/.test(r) ||
+    /\b(resuelve la intriga|nombrando el modelo)\b/.test(r)
+  )
+}
+
+/**
+ * La presentación clara del vehículo (identidad marca/modelo/año) debe ir **siempre** antes que
+ * ganchos aspiracionales, detalle técnico u otros cortes del bloque intro.
+ */
+function introPresentationMustLeadRank(seg: Segment | undefined, item?: SequenceItem): number {
+  if (!seg) return 0
+  const tech = isTechnicalSpecIntroSegment(seg, item?.reason)
+  const hook = isNarrativeNeedHookSegment(seg, item?.reason)
+  const fromGeminiReason = geminiReasonHintsProductIdentityPresentation(item?.reason)
+
+  if (!tech && fromGeminiReason) return 100
+  if (
+    !tech &&
+    !hook &&
+    isPresentationSegment(seg) &&
+    (openingPresentationIsAdequate(seg) || hasStructuredVehicleIntroFacts(seg))
+  ) {
+    return 100
+  }
+  if (isPresentationSegment(seg) && !tech && !hook) return 75
+  if (hook) return 40
+  if (isPresentationSegment(seg) && tech) return 20
+  if (isPresentationSegment(seg)) return 60
+  return 30
+}
+
 function compareIntroPresentationOrder(
   a: SequenceItem,
   b: SequenceItem,
@@ -731,8 +770,9 @@ function compareIntroPresentationOrder(
 ): number {
   const sa = lookup.get(a.segment_id)
   const sb = lookup.get(b.segment_id)
-  // Primero: gancho narrativo > presentación neutra > ficha técnica (motor); si no, un motor “adecuado”
-  // por marca+modelo ganaba siempre a ganchos sin marca por introOpeningStrength.
+  const byPresentationFirst = introPresentationMustLeadRank(sb, b) - introPresentationMustLeadRank(sa, a)
+  if (byPresentationFirst !== 0) return byPresentationFirst
+  // Desempate dentro del mismo “tier”: gancho narrativo > presentación neutra > ficha técnica (motor).
   const byHookBeforeSpecs = introNarrativeHookRank(sb, b) - introNarrativeHookRank(sa, a)
   if (byHookBeforeSpecs !== 0) return byHookBeforeSpecs
   const byStrength = introOpeningStrength(sb) - introOpeningStrength(sa)
@@ -1470,7 +1510,7 @@ const AUTONOMOUS_EDIT_BLOCK = `
 MONTAJE 100% AUTOMÁTICO:
 - Nadie más va a reordenar: tu JSON es la timeline final del Reel.
 - Usa el CATÁLOGO (transcripciones y tipos de clip) + lo que ves en los videos + el mapa de segmentos.
-- Apertura del Reel: si hay gancho de necesidad/pregunta/propósito del cliente, va ANTES que motor o ficha técnica; después marca/línea/modelo/año. Los ganchos lifestyle o identidad ("refleja quién eres", etc.) no deben ir después de un dato técnico seco si ese dato abre el reel.
+- Apertura del Reel: el PRIMER corte efectivo debe ser la presentación clara del vehículo (marca + modelo o año en habla o en plano) cuando exista en el mapa; después ganchos de necesidad/lifestyle o detalle técnico. Los datos de motor/ficha no deben abrir el Reel por delante de esa presentación.
 - Voz en off: si el clip con habla muestra poco (pantalla negra, tapado, solo audio útil), pon visual_overlay con el B-roll que mejor ilustre lo que se DICE en ese momento.
 - Si hay varios clips "solo plano", elige el que mejor coincida tema a tema (motor vs interior vs exterior).
 - Ritmo Reel/TikTok: cada corte debe aportar información NUEVA; NUNCA pongas dos segmentos seguidos que digan lo mismo o parafraseen la misma idea (ej. "con un diseño" y después "cuenta con un diseño" sobre el mismo tema).
