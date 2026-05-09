@@ -19,6 +19,7 @@ import {
     Box,
     StickyNote,
     HandCoins,
+    Receipt,
 } from 'lucide-react';
 
 
@@ -35,6 +36,7 @@ const menuItems = [
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
     { name: 'Inventario', href: '/inventario', icon: Box },
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
+    { name: 'Comprobantes', href: '/comprobantes', icon: Receipt },
 ];
 
 export function AccountingSidebar() {
@@ -45,7 +47,8 @@ export function AccountingSidebar() {
     // Evita errores de hydration cuando `profile.role` llega después en el cliente.
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
-        setMounted(true);
+        const id = window.setTimeout(() => setMounted(true), 0);
+        return () => window.clearTimeout(id);
     }, []);
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);

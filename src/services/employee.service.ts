@@ -1,6 +1,6 @@
 import { DashboardEmpleadosResponse } from "@/types/employees.types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export const employeesService = {
     async getDashboard(): Promise<DashboardEmpleadosResponse> {

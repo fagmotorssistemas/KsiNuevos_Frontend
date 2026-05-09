@@ -30,6 +30,7 @@ const RUTAS_PROTEGIDAS_PREFIX = [
   '/cobros',
   '/billing',
   '/notasdeventas',
+  '/comprobantes',
   '/taller',
   '/seguros',
   '/scraper',

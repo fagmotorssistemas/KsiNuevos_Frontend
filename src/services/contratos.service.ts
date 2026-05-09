@@ -1,7 +1,7 @@
 // src/services/contratos.service.ts
 import { ContratoResumen, ContratoDetalle, CuotaAmortizacion, CuotaAdicional, PagoCheque } from "@/types/contratos.types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 // --- HELPER DE EXTRACCIÓN ---
 const extraerTipoReal = (bloqueTexto: string, fallback: string): string => {

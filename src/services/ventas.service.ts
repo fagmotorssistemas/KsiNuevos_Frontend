@@ -1,6 +1,6 @@
 import { DashboardVentasResponse } from "@/types/ventas.types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export const ventasService = {
     async getDashboard(): Promise<DashboardVentasResponse> {

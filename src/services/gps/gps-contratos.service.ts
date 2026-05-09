@@ -2,7 +2,7 @@ import { ContratoGPS } from "@/types/rastreadores.types";
 import { limpiarTexto, parseMonedaGPS } from "@/utils/rastreo-format";
 import { supabase } from "./supabase-client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cartera.ksinuevos.com/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export const gpsContratosService = {
   
