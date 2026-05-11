@@ -50,13 +50,20 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
             @media print {
                 html, body {
                     width: 210mm;
-                    height: 297mm;
+                    height: auto !important;
+                    min-height: 0 !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     -webkit-font-smoothing: antialiased;
                     text-rendering: optimizeLegibility;
                 }
                 body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                /* Refuerzo: Pág. 7 no debe colarse en el sobrante bajo Pág. 6 (flex + impresión suelen ignorar break-before) */
+                [data-contract-print-page7] {
+                    break-before: page !important;
+                    page-break-before: always !important;
+                    display: block !important;
+                }
             }
         `
     });
@@ -92,7 +99,7 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
 
     return (
         /* CLAVE: 'fixed inset-0 z-50' hace que el visor oculte el dashboard */
-        <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-in fade-in duration-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col animate-in fade-in duration-200 overflow-hidden print:overflow-visible">
             
             {/* Barra Superior - Se mantiene visible arriba */}
             <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm shrink-0">
@@ -122,10 +129,10 @@ export function ContractViewer({ contratoId, onClose }: ContractViewerProps) {
             </div>
 
             {/* Área de Visualización - Scroll independiente para ver las páginas */}
-            <div className="flex-1 overflow-y-auto p-8 bg-slate-100/50">
+            <div className="flex-1 overflow-y-auto p-8 bg-slate-100/50 print:overflow-visible print:p-0">
                 <div 
                     ref={contentRef} 
-                    className="mx-auto w-fit bg-white shadow-2xl print:shadow-none mb-10"
+                    className="mx-auto w-fit bg-white shadow-2xl print:shadow-none mb-10 print:w-full print:max-w-none print:min-w-0"
                     style={{ 
                         fontFamily: 'Arial, Helvetica, sans-serif',
                         WebkitFontSmoothing: 'antialiased'

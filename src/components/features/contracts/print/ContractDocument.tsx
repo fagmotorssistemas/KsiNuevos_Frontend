@@ -16,35 +16,58 @@ interface ContractDocumentProps {
 
 export function ContractDocument({ data, amortizacion, fechaImpresion }: ContractDocumentProps) {
     const hasAmortization = amortizacion && amortizacion.length > 0;
+    const tieneAdicionales = Boolean(data.listaCuotasAdicionales?.length);
+    const tienePagosCheque = Boolean(data.listaPagosCheque?.length);
+    const muestraPaginaAmortizacion = hasAmortization || tieneAdicionales || tienePagosCheque;
+
+    const page7 = (
+        <Page7
+            data={data}
+            hasAmortization={hasAmortization}
+            fechaImpresion={fechaImpresion}
+        />
+    );
 
     return (
-        <div 
-            className="print:w-[210mm] w-full flex flex-col items-center"
-            style={{ 
+        <div
+            className="print:w-[210mm] w-full flex flex-col items-center print:block print:mx-auto"
+            style={{
                 fontFamily: 'Arial, Helvetica, sans-serif',
                 WebkitFontSmoothing: 'antialiased',
-                textRendering: 'optimizeLegibility'
+                textRendering: 'optimizeLegibility',
             }}
         >
             <Page1 data={data} />
             <Page2 data={data} />
             <Page3 data={data} />
             <Page4 data={data} />
-            
-            {/* PASAMOS LA FECHA A LAS PÁGINAS FINALES */}
+
             <Page5 data={data} fechaImpresion={fechaImpresion} />
-            
-            <Page6 
-                data={data} 
-                hasAmortization={hasAmortization} 
-                fechaImpresion={fechaImpresion} 
+
+            <Page6
+                data={data}
+                hasAmortization={hasAmortization}
+                fechaImpresion={fechaImpresion}
             />
-            
-            <Page7 
-                data={data} 
-                hasAmortization={hasAmortization} 
-                fechaImpresion={fechaImpresion} 
-            />
+
+            {/*
+              Tras Pág. 6 fragmentada, el motor suele rellenar el hueco bajo las firmas con el inicio de Pág. 7.
+              Los hijos de flex ignoran a menudo break-before al imprimir; forzamos flujo en bloque + salto explícito.
+            */}
+            {muestraPaginaAmortizacion ? (
+                <div
+                    data-contract-print-page7=""
+                    className="w-full print:block print:w-[210mm] print:mx-auto"
+                    style={{
+                        breakBefore: 'page',
+                        pageBreakBefore: 'always',
+                    }}
+                >
+                    {page7}
+                </div>
+            ) : (
+                page7
+            )}
         </div>
     );
 }

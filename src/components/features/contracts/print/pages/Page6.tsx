@@ -45,7 +45,7 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
     const cuotasParaTabla = [...adicionales, ...cheques];
 
     return (
-        <ContractPageLayout pageNumber={6}>
+        <ContractPageLayout pageNumber={6} allowPrintOverflow>
             {/* QUITAMOS 'flex flex-col justify-between h-full'.
                Ahora usamos un flujo normal (block).
                Esto hace que las firmas sigan inmediatamente al contenido anterior.
@@ -136,12 +136,7 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
                 </div>
 
                 {/* --- FIRMAS --- */}
-                {/* Al estar en flujo normal:
-                    1. Si la tabla es pequeña -> Aparecen justo aquí (mitad de hoja).
-                    2. Si la tabla crece -> Se empujan hacia abajo.
-                    3. Si la tabla llena la hoja -> Se empujan fuera del área visible y el 'overflow-hidden' del Layout las oculta.
-                */}
-                <div className="w-full px-4 pb-4">
+                <div className="w-full px-4 pb-4 print:break-inside-avoid">
                     <div className="grid grid-cols-2 gap-16">
                         {/* FIRMA EMPRESA */}
                         <div className="flex flex-col items-center">

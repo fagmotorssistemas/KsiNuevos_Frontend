@@ -68,27 +68,29 @@ export function AmortizacionTable({
 
     // --- RENDERIZADO MODO IMPRESIÓN (PARA EL PDF/PÁGINA 6) ---
     if (printMode) {
+        const cellPad = "py-0.5 print:py-[5px]";
+        const headPad = "py-1 print:py-2";
         return (
-            <div className="w-full">
-                <table className="w-full text-[9px] font-mono border-collapse border-b border-black">
-                    <thead>
-                        <tr className="border-t border-b border-black">
-                            <th className="text-left py-1 pl-1 font-bold w-[30%]">Detalle Cuota</th>
-                            <th className="text-left py-1 font-bold">F.Vence</th>
-                            <th className="text-right py-1 font-bold">Capital</th>
-                            <th className="text-right py-1 font-bold">Cuota</th>
-                            <th className="text-right py-1 pr-1 font-bold">Saldo</th>
+            <div className="w-full print:pt-1 print:pb-2">
+                <table className="w-full text-[9px] font-mono border-collapse border-b border-black print:break-inside-auto">
+                    <thead className="print:table-header-group">
+                        <tr className="border-t border-b border-black print:[break-inside:avoid]">
+                            <th className={`text-left pl-1 font-bold w-[30%] ${headPad}`}>Detalle Cuota</th>
+                            <th className={`text-left font-bold ${headPad}`}>F.Vence</th>
+                            <th className={`text-right font-bold ${headPad}`}>Capital</th>
+                            <th className={`text-right font-bold ${headPad}`}>Cuota</th>
+                            <th className={`text-right pr-1 font-bold ${headPad}`}>Saldo</th>
                         </tr>
                     </thead>
                     <tbody>
                         {/* --- RENDERIZADO DE CADA CUOTA ADICIONAL POR SEPARADO --- */}
                         {cuotasAdicionales.map((ca, idx) => (
-                            <tr key={`ca-print-${idx}`} className="border-b border-gray-300 border-dotted">
-                                <td className="py-0.5 pl-1">Cuota Adicional {idx + 1}</td>
-                                <td className="py-0.5">{ca.fecha ? ca.fecha : '–'}</td>
-                                <td className="py-0.5 text-right">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="py-0.5 text-right font-bold">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                                <td className="py-0.5 text-right pr-1">${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <tr key={`ca-print-${idx}`} className="border-b border-gray-300 border-dotted print:break-inside-avoid">
+                                <td className={`pl-1 ${cellPad}`}>Cuota Adicional {idx + 1}</td>
+                                <td className={cellPad}>{ca.fecha ? ca.fecha : '–'}</td>
+                                <td className={`text-right ${cellPad}`}>${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className={`text-right font-bold ${cellPad}`}>${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                                <td className={`text-right pr-1 ${cellPad}`}>${ca.monto.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             </tr>
                         ))}
 
@@ -98,12 +100,12 @@ export function AmortizacionTable({
                             // El número de fila visual se desplaza según cuántas cuotas adicionales existan
                             const nroFilaVisual = index + 1 + cuotasAdicionales.length;
                             return (
-                                <tr key={row.nroCuota} className="border-b border-gray-300 border-dotted">
-                                    <td className="py-0.5 pl-1">{nroFilaVisual} {label}</td>
-                                    <td className="py-0.5">{row.fechaVencimiento}</td>
-                                    <td className="py-0.5 text-right">${row.capital.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    <td className="py-0.5 text-right font-bold">${row.valorCuota}</td>
-                                    <td className="py-0.5 text-right pr-1">${row.saldoCapital.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                <tr key={row.nroCuota} className="border-b border-gray-300 border-dotted print:break-inside-avoid">
+                                    <td className={`pl-1 ${cellPad}`}>{nroFilaVisual} {label}</td>
+                                    <td className={cellPad}>{row.fechaVencimiento}</td>
+                                    <td className={`text-right ${cellPad}`}>${row.capital.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className={`text-right font-bold ${cellPad}`}>${row.valorCuota}</td>
+                                    <td className={`text-right pr-1 ${cellPad}`}>${row.saldoCapital.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                 </tr>
                             );
                         })}
