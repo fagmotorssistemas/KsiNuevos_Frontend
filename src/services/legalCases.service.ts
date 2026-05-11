@@ -1,5 +1,33 @@
 import { createClient } from '@/lib/supabase/client';
-import type { CaseFullPayload } from '@/types/legal.types';
+import type { CaseFullPayload, LegalCaseActorBrief } from '@/types/legal.types';
+
+async function fetchActorsForCasePayload(
+  supabase: ReturnType<typeof createClient>,
+  payload: CaseFullPayload,
+): Promise<Record<string, LegalCaseActorBrief>> {
+  const ids = new Set<string>();
+  for (const e of payload.events ?? []) {
+    if (e.usuario_id) ids.add(e.usuario_id);
+  }
+  for (const h of payload.status_history ?? []) {
+    if (h.usuario_id) ids.add(h.usuario_id);
+  }
+  if (ids.size === 0) return {};
+  const list = [...ids];
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .in('id', list);
+  if (error) {
+    console.error('[legalCases] profiles lookup:', error);
+    return {};
+  }
+  const actors: Record<string, LegalCaseActorBrief> = {};
+  for (const p of profiles ?? []) {
+    actors[p.id] = { full_name: p.full_name ?? null, role: p.role ?? null };
+  }
+  return actors;
+}
 
 export const legalCasesService = {
   async createCase(input: {
@@ -177,7 +205,13 @@ export const legalCasesService = {
     const supabase = createClient();
     const { data, error } = await supabase.rpc('rpc_get_case_full', { p_case_id: case_id });
     if (error) throw error;
-    return data as unknown as CaseFullPayload;
+    const payload = data as unknown as CaseFullPayload;
+    // El RPC ya devuelve `actors` (mapa id → nombre/rol); fallback solo si falta (BD antigua).
+    if (payload.actors != null && typeof payload.actors === 'object') {
+      return payload;
+    }
+    const actors = await fetchActorsForCasePayload(supabase, payload);
+    return { ...payload, actors };
   },
 };
 

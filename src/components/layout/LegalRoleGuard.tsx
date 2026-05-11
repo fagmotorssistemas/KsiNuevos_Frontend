@@ -12,7 +12,11 @@ export function LegalRoleGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading || !profile) return;
     const role = (profile.role || '').toLowerCase().trim();
-    const allowed = role === 'admin' || role === 'abogado' || role === 'abogada';
+    const allowed =
+      role === 'admin' ||
+      role === 'abogado' ||
+      role === 'abogada' ||
+      role === 'finanzas';
     if (!allowed && (pathname === '/legal' || pathname.startsWith('/legal/'))) {
       router.replace('/home');
     }

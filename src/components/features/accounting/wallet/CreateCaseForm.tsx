@@ -135,7 +135,7 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
   };
 
   const onSubmit = async () => {
-    if (!abogadoId) return alert("Debe asignar un abogado al caso.");
+    if (!abogadoId) return alert("Debe indicar el responsable del caso.");
     if (!proximaAccion.trim())
       return alert("La próxima acción es obligatoria.");
     if (!fechaProxima)
@@ -230,7 +230,7 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
 
         <div className="md:col-span-2">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Abogado Asignado
+            Responsable del caso
           </label>
           <input
             value={profile?.full_name || profile?.phone || "Usuario actual"}

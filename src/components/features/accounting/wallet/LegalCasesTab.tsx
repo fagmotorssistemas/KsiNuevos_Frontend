@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { legalCasesService } from "@/services/legalCases.service";
 import type {
   CaseFullPayload,
+  LegalCaseActorBrief,
   LegalCaseContext,
   LegalCaseRow,
 } from "@/types/legal.types";
@@ -35,6 +36,32 @@ import { AddEventForm } from "./AddEventForm";
 import { ChangeStatusForm } from "./ChangeStatusForm";
 import { AddTaskForm } from "./AddTaskForm";
 import { ChangeProcessForm } from "./ChangeProcessForm";
+
+function formatRoleLabelEsp(role: string | null | undefined): string {
+  const r = (role || "").toLowerCase().trim();
+  if (r === "abogado") return "Abogado";
+  if (r === "abogada") return "Abogada";
+  if (r === "finanzas") return "Finanzas";
+  if (r === "admin") return "Admin";
+  if (r === "contable") return "Contable";
+  return r ? r.charAt(0).toUpperCase() + r.slice(1) : "";
+}
+
+/** Texto para pie de bitácora: nombre + rol (ej. Gladys Armijos · Finanzas). */
+function lineaRegistrante(
+  actors: Record<string, LegalCaseActorBrief> | undefined,
+  usuarioId: string | null | undefined,
+): string | null {
+  if (!usuarioId) return null;
+  const a = actors?.[usuarioId];
+  if (!a) return null;
+  const name = (a.full_name || "").trim();
+  const roleLbl = formatRoleLabelEsp(a.role);
+  if (name && roleLbl) return `${name} · ${roleLbl}`;
+  if (name) return name;
+  if (roleLbl) return roleLbl;
+  return null;
+}
 
 const getCanalIcon = (canal: string | null | undefined) => {
   switch (canal) {
@@ -549,10 +576,14 @@ export function LegalCasesTab({
                           </div>
                         ) : <div></div>}
                         
-                        {/* Pequeña info de usuario (simulada o real si estuviera en la query) */}
-                        <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                          <UserCircle className="h-3.5 w-3.5" />
-                          Registrado por usuario
+                        <div className="text-[10px] text-slate-500 font-medium flex items-center gap-1 max-w-[85%] justify-end text-right leading-tight">
+                          <UserCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <span>
+                            {lineaRegistrante(data?.actors, e.usuario_id) ??
+                              (e.usuario_id
+                                ? "Usuario sin perfil visible"
+                                : "Sistema / sin usuario")}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -662,7 +693,9 @@ export function LegalCasesTab({
                     No hay cambios de estado aún.
                   </p>
                 ) : (
-                  (data?.status_history ?? []).map((h) => (
+                  (data?.status_history ?? []).map((h) => {
+                    const por = lineaRegistrante(data?.actors, h.usuario_id);
+                    return (
                     <div key={h.id} className="flex gap-3 relative z-10">
                       <div className="shrink-0 mt-1 h-3 w-3 rounded-full border-2 border-slate-300 bg-white z-10"></div>
                       <div className="flex-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
@@ -679,9 +712,15 @@ export function LegalCasesTab({
                           <CalendarClock className="h-3 w-3" />
                           {h.fecha ? new Date(h.fecha).toLocaleString() : ""}
                         </div>
+                        {por && (
+                          <div className="text-[10px] text-slate-600 mt-1.5 flex items-center gap-1">
+                            <UserCircle className="h-3 w-3 shrink-0 text-slate-400" />
+                            {por}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))
+                  );})
                 )}
               </div>
             </div>

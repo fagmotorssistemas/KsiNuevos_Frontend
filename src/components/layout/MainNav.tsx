@@ -12,24 +12,25 @@ interface NavItem {
 export function MainNav({ className }: { className?: string }) {
   const pathname = usePathname();
   const { profile } = useAuth();
-  
+  const roleNorm = (profile?.role ?? "").toString().toLowerCase();
+
   let navItems: NavItem[] = [];
 
-if (profile?.role === "taller") {
+if (roleNorm === "taller") {
   navItems = [
     { href: "/taller/dashboard", label: "Taller" },
   ];
-} else if (profile?.role === "finanzas") {
+} else if (roleNorm === "finanzas") {
   navItems = [
     { href: "/wallet", label: "Cartera" },
     { href: "/inventario", label: "Inventario" },
     { href: "/legal/cases", label: "Gestión Legal" },
   ];
-} else if (profile?.role === "contable") {
+} else if (roleNorm === "contable") {
   navItems = [
     { href: "/wallet", label: "Contabilidad" },
   ];
-} else if (profile?.role === "abogado") {
+} else if (roleNorm === "abogado" || roleNorm === "abogada") {
   navItems = [
     { href: "/wallet", label: "Cartera" },
     { href: "/legal/cases", label: "Gestión Legal" },
