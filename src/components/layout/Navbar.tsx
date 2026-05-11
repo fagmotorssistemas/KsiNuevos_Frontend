@@ -10,12 +10,17 @@ import { Menu, X } from 'lucide-react'
 // Sub-componentes
 import { MainNav } from './MainNav'
 import { UserNav } from './UserNav'
+import { contableMayAccessSeguros, contableMayAccessTaller } from '@/lib/access/contableModuleAccess'
 
 export const Navbar = () => {
   const { user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const showRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
-  const showSeguros = profile?.role === 'admin'
+  const showSeguros = profile?.role === 'admin' || contableMayAccessSeguros(profile)
+  const showTallerMobile =
+    profile?.role === 'admin' ||
+    profile?.role === 'taller' ||
+    contableMayAccessTaller(profile)
   const r = (profile?.role || '').toLowerCase().trim()
   const showLegal =
     r === 'admin' || r === 'abogado' || r === 'abogada' || r === 'finanzas'
@@ -131,6 +136,15 @@ export const Navbar = () => {
                   onClick={() => setIsMobileMenuOpen(false)}
               >
                   Seguros
+              </Link>
+            )}
+            {showTallerMobile && (
+              <Link
+                  href="/taller/dashboard"
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Taller
               </Link>
             )}
           </div>

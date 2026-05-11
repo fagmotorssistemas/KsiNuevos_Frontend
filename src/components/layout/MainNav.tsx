@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { contableMayAccessSeguros, contableMayAccessTaller } from "@/lib/access/contableModuleAccess";
 
 interface NavItem {
   href: string;
@@ -30,6 +31,12 @@ if (roleNorm === "taller") {
   navItems = [
     { href: "/wallet", label: "Contabilidad" },
   ];
+  if (contableMayAccessTaller(profile)) {
+    navItems.push({ href: "/taller/dashboard", label: "Taller" });
+  }
+  if (contableMayAccessSeguros(profile)) {
+    navItems.push({ href: "/seguros", label: "Seguros" });
+  }
 } else if (roleNorm === "abogado" || roleNorm === "abogada") {
   navItems = [
     { href: "/wallet", label: "Cartera" },

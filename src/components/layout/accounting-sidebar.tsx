@@ -20,6 +20,8 @@ import {
     StickyNote,
     HandCoins,
     Receipt,
+    Wrench,
+    ShieldCheck,
 } from 'lucide-react';
 
 
@@ -72,6 +74,15 @@ export function AccountingSidebar() {
         );
     }
     // Admin y otros roles ven todo (displayedItems = menuItems)
+
+    const roleKey = (profile?.role || '').toLowerCase().trim();
+    const extraModuleLinks: { name: string; href: string; icon: typeof Wrench }[] =
+        roleKey === 'contable' || profile?.role === 'admin'
+            ? [
+                  { name: 'Taller', href: '/taller/dashboard', icon: Wrench },
+                  { name: 'Seguros', href: '/seguros', icon: ShieldCheck },
+              ]
+            : [];
 
     return (
         <>
@@ -154,7 +165,7 @@ export function AccountingSidebar() {
                     )}
 
                     {mounted &&
-                        displayedItems.map((item) => {
+                        [...displayedItems, ...extraModuleLinks].map((item) => {
                             const isActive = pathname.startsWith(item.href);
                             return (
                                 <Link

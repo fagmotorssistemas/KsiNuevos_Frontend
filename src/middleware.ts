@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
+import { mayAccessSegurosRoute, mayAccessTallerRoute } from '@/lib/access/contableModuleAccess'
 
 /**
  * Rutas que requieren estar logueado (solo roles empresa: vendedores, admin, contabilidad, taller, etc.).
@@ -93,6 +94,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
+  // Módulo taller: admin, personal de taller, o contable con permiso en perfil
+  if (pathname === '/taller' || pathname.startsWith('/taller/')) {
+    if (!mayAccessTallerRoute(profile)) {
+      return NextResponse.redirect(new URL('/wallet', request.url))
+    }
+  }
+
   // Módulo taller: solo admin y taller
   if (profile?.role === 'taller') {
     const allowed = pathname === '/taller' || pathname.startsWith('/taller/')
@@ -119,11 +127,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Módulo seguros (/seguros/*): solo admin
+  // Módulo seguros (/seguros/*): admin o contable con permiso en perfil
   if (pathname === '/seguros' || pathname.startsWith('/seguros/')) {
-    const role = (profile?.role || '').toLowerCase().trim()
-    if (role !== 'admin') {
-      return NextResponse.redirect(new URL('/leads', request.url))
+    if (!mayAccessSegurosRoute(profile)) {
+      const r = (profile?.role ?? '').toString().toLowerCase().trim()
+      const fallback = r === 'contable' ? '/wallet' : '/leads'
+      return NextResponse.redirect(new URL(fallback, request.url))
     }
   }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { OrdenTrabajo, ConsumoMaterial, TallerEstadoOrden, DetalleOrden, ServicioCatalogo } from "@/types/taller";
+import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 export function useOrdenes() {
     const { supabase, profile } = useAuth();
@@ -65,10 +66,20 @@ export function useOrdenes() {
             updatePayload.fecha_salida_real = fechaSalida;
         }
 
-        await supabase
+        const { error } = await supabase
             .from('taller_ordenes')
             .update(updatePayload)
             .eq('id', id);
+        if (!error && profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'update',
+                entityType: 'taller_ordenes',
+                entityId: id,
+                summary: `Estado orden → ${nuevoEstado}`,
+            });
+        }
     };
 
     // --- FUNCIÓN: Cambiar Estado Contable ---
@@ -80,7 +91,18 @@ export function useOrdenes() {
             .from('taller_ordenes')
             .update({ estado_contable: nuevoEstado })
             .eq('id', id);
-            
+
+        if (!error && profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'update',
+                entityType: 'taller_ordenes',
+                entityId: id,
+                summary: `Estado contable → ${nuevoEstado}`,
+            });
+        }
+
         return { success: !error, error: error?.message };
     };
 
@@ -91,6 +113,16 @@ export function useOrdenes() {
             .update({ observaciones_ingreso: texto.trim() || null })
             .eq('id', ordenId);
         if (error) return { success: false, error: error.message };
+        if (profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'update',
+                entityType: 'taller_ordenes',
+                entityId: ordenId,
+                summary: 'Observaciones de ingreso actualizadas',
+            });
+        }
         setOrdenes(prev => prev.map(o => o.id === ordenId ? { ...o, observaciones_ingreso: texto.trim() || undefined } as OrdenTrabajo : o));
         return { success: true };
     };
@@ -109,6 +141,17 @@ export function useOrdenes() {
             }]);
 
         if (error) return { success: false, error: error.message };
+        if (profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'create',
+                entityType: 'taller_consumos_materiales',
+                entityId: ordenId,
+                summary: `Consumo material (ítem ${itemId}) cantidad ${cantidad}`,
+                metadata: { item_id: itemId, cantidad },
+            });
+        }
         return { success: true };
     };
 
@@ -145,6 +188,17 @@ export function useOrdenes() {
             .insert([detalle]);
             
         if (error) return { success: false, error: error.message };
+        if (profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'create',
+                entityType: 'taller_detalles_orden',
+                entityId: detalle.orden_id,
+                summary: 'Línea de detalle / presupuesto agregada',
+                metadata: { descripcion: detalle.descripcion, precio_unitario: detalle.precio_unitario, cantidad: detalle.cantidad },
+            });
+        }
         return { success: true };
     };
 
@@ -153,7 +207,18 @@ export function useOrdenes() {
             .from('taller_detalles_orden')
             .delete()
             .eq('id', id);
-            
+
+        if (!error && profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'delete',
+                entityType: 'taller_detalles_orden',
+                entityId: id,
+                summary: 'Línea de detalle eliminada',
+            });
+        }
+
         return { success: !error };
     };
 
@@ -185,6 +250,16 @@ export function useOrdenes() {
             .update({ fotos_salida_urls: urls })
             .eq('id', ordenId);
         if (error) return { success: false, error: error.message };
+        if (profile?.id) {
+            void logModuleAudit(supabase, {
+                userId: profile.id,
+                module: 'taller',
+                action: 'update',
+                entityType: 'taller_ordenes',
+                entityId: ordenId,
+                summary: `Fotos salida actualizadas (${urls.length} archivo(s))`,
+            });
+        }
         setOrdenes(prev => prev.map(o => o.id === ordenId ? { ...o, fotos_salida_urls: urls } as OrdenTrabajo : o));
         return { success: true };
     };

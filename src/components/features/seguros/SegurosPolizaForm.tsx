@@ -18,6 +18,8 @@ import { brokersService } from "@/services/brokers.service";
 import type { Aseguradora } from "@/types/aseguradoras.types";
 import type { Broker } from "@/types/brokers.types";
 import { useInstallationStatus } from "@/hooks/useInstallationStatus";
+import { useAuth } from "@/hooks/useAuth";
+import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 const PLANES = ["TODO RIESGO (1 AÑO)", "TODO RIESGO (2 AÑO)", "PÉRDIDA TOTAL"];
 
@@ -44,6 +46,7 @@ export function SegurosPolizaForm({
   onSuccess,
   backLabel = "Volver al listado",
 }: SegurosPolizaFormProps) {
+  const { supabase, user } = useAuth();
   const [formLoading, setFormLoading] = useState(false);
   const [existingId, setExistingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -136,6 +139,19 @@ export function SegurosPolizaForm({
       }
 
       if (res.success) {
+        if (user?.id) {
+          const action = existingId ? "update" : "create";
+          const polizaId = (res as { data?: { id?: string } }).data?.id ?? existingId ?? undefined;
+          void logModuleAudit(supabase, {
+            userId: user.id,
+            module: "seguros",
+            action,
+            entityType: "seguros_polizas",
+            entityId: polizaId,
+            summary: `${action === "create" ? "Emisión" : "Edición"} póliza · nota ${seleccionado.notaId}`,
+            metadata: { nota_venta: seleccionado.notaId },
+          });
+        }
         alert("Póliza guardada correctamente");
         onSuccess?.();
         onClose();

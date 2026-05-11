@@ -2490,6 +2490,50 @@ export type Database = {
           },
         ]
       }
+      module_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json
+          module: string
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json
+          module: string
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json
+          module?: string
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       music_tracks_v2: {
         Row: {
           created_at: string | null
@@ -2597,6 +2641,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          can_access_seguros: boolean
+          can_access_taller: boolean
           created_at: string
           full_name: string
           id: string
@@ -2606,6 +2652,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_access_seguros?: boolean
+          can_access_taller?: boolean
           created_at?: string
           full_name: string
           id: string
@@ -2615,6 +2663,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_access_seguros?: boolean
+          can_access_taller?: boolean
           created_at?: string
           full_name?: string
           id?: string
@@ -5139,7 +5189,6 @@ export type Database = {
         | "finanzas"
         | "contable"
         | "abogado"
-        | "abogada"
         | "taller"
       vehicle_request_type:
         | "sedan"
@@ -5435,7 +5484,6 @@ export const Constants = {
         "finanzas",
         "contable",
         "abogado",
-        "abogada",
         "taller",
       ],
       vehicle_request_type: [

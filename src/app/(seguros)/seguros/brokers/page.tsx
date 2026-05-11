@@ -17,6 +17,8 @@ import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { brokersService } from "@/services/brokers.service";
 import type { Broker, BrokerInsert } from "@/types/brokers.types";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 type FormState = Omit<BrokerInsert, "porcentaje_comision"> & {
   porcentaje_comision: number | null;
@@ -31,6 +33,7 @@ const initialForm: FormState = {
 };
 
 export default function BrokersPage() {
+  const { supabase, user } = useAuth();
   const [list, setList] = useState<Broker[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -97,13 +100,33 @@ export default function BrokersPage() {
         activo: form.activo,
       };
       if (editing) {
-        const { data, error } = await brokersService.actualizar(editing.id, payload);
+        const { error } = await brokersService.actualizar(editing.id, payload);
         if (error) throw error;
         toast.success("Broker actualizado");
+        if (user?.id) {
+          void logModuleAudit(supabase, {
+            userId: user.id,
+            module: "seguros",
+            action: "update",
+            entityType: "brokers",
+            entityId: editing.id,
+            summary: `Broker actualizado: ${form.nombre.trim()}`,
+          });
+        }
       } else {
         const { data, error } = await brokersService.crear(payload);
         if (error) throw error;
         toast.success("Broker creado");
+        if (user?.id && data?.id) {
+          void logModuleAudit(supabase, {
+            userId: user.id,
+            module: "seguros",
+            action: "create",
+            entityType: "brokers",
+            entityId: data.id,
+            summary: `Broker creado: ${form.nombre.trim()}`,
+          });
+        }
       }
       closeModal();
       cargar();
@@ -121,6 +144,16 @@ export default function BrokersPage() {
       const { error } = await brokersService.eliminar(id);
       if (error) throw error;
       toast.success("Broker eliminado");
+      if (user?.id) {
+        void logModuleAudit(supabase, {
+          userId: user.id,
+          module: "seguros",
+          action: "delete",
+          entityType: "brokers",
+          entityId: id,
+          summary: `Broker eliminado: ${nombre}`,
+        });
+      }
       cargar();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al eliminar";

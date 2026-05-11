@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Cuenta, TransaccionFinanciera, CuentaPorCobrar } from "@/types/taller";
+import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 export type Transaccion = TransaccionFinanciera;
 
@@ -117,6 +118,15 @@ export function useFinanzas() {
                 }]);
 
             if (error) throw error;
+            if (profile?.id) {
+                void logModuleAudit(supabase, {
+                    userId: profile.id,
+                    module: 'taller',
+                    action: 'create',
+                    entityType: 'taller_cuentas',
+                    summary: `Cuenta creada: ${datosCuenta.nombre_cuenta}`,
+                });
+            }
             await fetchData(); 
             return { success: true };
         } catch (error: any) {
@@ -174,6 +184,22 @@ export function useFinanzas() {
                     .eq('id', formData.cuenta_id);
             }
 
+            if (profile?.id) {
+                void logModuleAudit(supabase, {
+                    userId: profile.id,
+                    module: 'taller',
+                    action: 'create',
+                    entityType: 'taller_transacciones',
+                    entityId: formData.orden_id || formData.cuenta_id,
+                    summary: `Transacción ${formData.tipo} monto ${formData.monto}`,
+                    metadata: {
+                        cuenta_id: formData.cuenta_id,
+                        orden_id: formData.orden_id,
+                        descripcion: formData.descripcion,
+                    },
+                });
+            }
+
             await fetchData(); 
             return { success: true };
         } catch (error: any) {
@@ -190,6 +216,16 @@ export function useFinanzas() {
                 .eq('id', ordenId);
             
             if (error) throw error;
+            if (profile?.id) {
+                void logModuleAudit(supabase, {
+                    userId: profile.id,
+                    module: 'taller',
+                    action: 'update',
+                    entityType: 'taller_ordenes',
+                    entityId: ordenId,
+                    summary: 'Orden marcada como pagada (estado contable)',
+                });
+            }
             await fetchData();
             return { success: true };
         } catch (err: any) {

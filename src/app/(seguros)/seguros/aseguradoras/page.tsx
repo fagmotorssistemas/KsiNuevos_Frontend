@@ -18,6 +18,8 @@ import { SegurosSidebar } from "@/components/layout/seguros-sidebar";
 import { aseguradorasService } from "@/services/aseguradoras.service";
 import type { Aseguradora, AseguradoraInsert } from "@/types/aseguradoras.types";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 type FormState = {
   nombre: string;
@@ -37,6 +39,7 @@ const initialForm: FormState = {
 };
 
 export default function AseguradorasPage() {
+  const { supabase, user } = useAuth();
   const [list, setList] = useState<Aseguradora[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -116,13 +119,33 @@ export default function AseguradorasPage() {
             activa: true,
           };
       if (editing) {
-        const { data, error } = await aseguradorasService.actualizar(editing.id, payload);
+        const { error } = await aseguradorasService.actualizar(editing.id, payload);
         if (error) throw error;
         toast.success("Aseguradora actualizada");
+        if (user?.id) {
+          void logModuleAudit(supabase, {
+            userId: user.id,
+            module: "seguros",
+            action: "update",
+            entityType: "aseguradoras",
+            entityId: editing.id,
+            summary: `Aseguradora actualizada: ${form.nombre.trim()}`,
+          });
+        }
       } else {
         const { data, error } = await aseguradorasService.crear(payload);
         if (error) throw error;
         toast.success("Aseguradora creada");
+        if (user?.id && data?.id) {
+          void logModuleAudit(supabase, {
+            userId: user.id,
+            module: "seguros",
+            action: "create",
+            entityType: "aseguradoras",
+            entityId: data.id,
+            summary: `Aseguradora creada: ${form.nombre.trim()}`,
+          });
+        }
       }
       closeModal();
       cargar();
@@ -141,6 +164,16 @@ export default function AseguradorasPage() {
       const { error } = await aseguradorasService.eliminar(id);
       if (error) throw error;
       toast.success("Aseguradora eliminada");
+      if (user?.id) {
+        void logModuleAudit(supabase, {
+          userId: user.id,
+          module: "seguros",
+          action: "delete",
+          entityType: "aseguradoras",
+          entityId: id,
+          summary: `Aseguradora eliminada: ${nombre}`,
+        });
+      }
       cargar();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error al eliminar";
