@@ -645,7 +645,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                                 Gestión Legal de Cartera
                             </p>
                             <p className="text-sm text-slate-500 mt-1">
-                                Módulo de abogados y cobranza externa para el cliente actual.
+                                Gestiones por equipo legal y finanzas; en cada registro se indica quién actuó.
                             </p>
                         </div>
                     </div>

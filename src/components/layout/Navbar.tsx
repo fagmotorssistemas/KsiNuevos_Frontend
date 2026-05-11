@@ -16,7 +16,9 @@ export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const showRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
   const showSeguros = profile?.role === 'admin'
-  const showLegal = profile?.role === 'admin' || profile?.role === 'abogado'
+  const r = (profile?.role || '').toLowerCase().trim()
+  const showLegal =
+    r === 'admin' || r === 'abogado' || r === 'abogada' || r === 'finanzas'
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">

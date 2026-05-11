@@ -74,11 +74,19 @@ export interface CaseStatusHistoryRow {
   fecha: string;
 }
 
+/** Perfiles cargados para enriquecer eventos/historial (id → datos breves). */
+export interface LegalCaseActorBrief {
+  full_name: string | null;
+  role: string | null;
+}
+
 export interface CaseFullPayload {
   case: LegalCaseRow | null;
   events: CaseEventRow[];
   tasks_pending: CaseTaskRow[];
   status_history: CaseStatusHistoryRow[];
   etapas: ProcesoEtapaRow[];
+  /** Opcional: mapa id usuario → nombre y rol (consulta extra tras RPC). */
+  actors?: Record<string, LegalCaseActorBrief>;
 }
 

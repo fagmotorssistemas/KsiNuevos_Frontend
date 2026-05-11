@@ -2221,13 +2221,16 @@ export type Database = {
           email: string | null
           fecha_ultimo_contacto: string | null
           financing: boolean | null
+          fotos_enviadas_at: string | null
           hour_detected: string | null
           id: number
           lead_id_kommo: number
+          mensaje_post_fotos_enviado: boolean | null
           mensajes_enviados: string[]
           name: string
           phone: string
           presupuesto_cliente: string | null
+          respondio_post_fotos: boolean | null
           resume: string | null
           source: Database["public"]["Enums"]["acquisition_source"] | null
           status: Database["public"]["Enums"]["lead_status"] | null
@@ -2245,13 +2248,16 @@ export type Database = {
           email?: string | null
           fecha_ultimo_contacto?: string | null
           financing?: boolean | null
+          fotos_enviadas_at?: string | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo: number
+          mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name: string
           phone?: string
           presupuesto_cliente?: string | null
+          respondio_post_fotos?: boolean | null
           resume?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
@@ -2269,13 +2275,16 @@ export type Database = {
           email?: string | null
           fecha_ultimo_contacto?: string | null
           financing?: boolean | null
+          fotos_enviadas_at?: string | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo?: number
+          mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name?: string
           phone?: string
           presupuesto_cliente?: string | null
+          respondio_post_fotos?: boolean | null
           resume?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
@@ -4720,6 +4729,24 @@ export type Database = {
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
+      leads_sin_respuesta: {
+        Args: never
+        Returns: {
+          brand: string
+          color: string
+          contact_id: number
+          fuel_type: string
+          lead_id_kommo: number
+          mileage: number
+          model: string
+          name: string
+          passenger_capacity: string
+          phone: string
+          plate_short: string
+          price: number
+          year: number
+        }[]
+      }
       mark_overdue_case_tasks: { Args: never; Returns: number }
       match_inventory: {
         Args: { filter?: Json; match_count?: number; query_embedding: string }
@@ -5112,6 +5139,7 @@ export type Database = {
         | "finanzas"
         | "contable"
         | "abogado"
+        | "abogada"
         | "taller"
       vehicle_request_type:
         | "sedan"
@@ -5407,6 +5435,7 @@ export const Constants = {
         "finanzas",
         "contable",
         "abogado",
+        "abogada",
         "taller",
       ],
       vehicle_request_type: [

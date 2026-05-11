@@ -88,7 +88,10 @@ export function CarteraManualModule() {
   const { profile, user } = useAuth();
   const role = (profile?.role || "").toLowerCase().trim();
   const isLegalRole =
-    role === "admin" || role === "abogado" || role === "abogada";
+    role === "admin" ||
+    role === "abogado" ||
+    role === "abogada" ||
+    role === "finanzas";
 
   const [rows, setRows] = useState<CarteraManualRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -830,7 +833,7 @@ function CarteraManualDetail({
                 Gestión legal de cartera
               </p>
               <p className="text-sm text-slate-500 mt-0.5">
-                Mismo flujo que Oracle, vinculado a esta obligación manual.
+                Mismo flujo que Oracle; equipo legal y finanzas. Cada gestión indica quién la registró.
               </p>
             </div>
           </div>
