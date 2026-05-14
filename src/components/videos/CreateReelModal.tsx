@@ -8,7 +8,6 @@ import {
   Layers,
   ChevronRight,
   ChevronLeft,
-  Loader2,
   CheckCircle2,
   Sparkles,
   Upload,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { VideoUploader } from './VideoUploader'
+import { ManualClipOrderSortable } from './ManualClipOrderSortable'
 import { MusicSelector } from './MusicSelector'
 import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
@@ -101,6 +101,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [manualIntroEnabled, setManualIntroEnabled] = useState(false)
   /** Hasta 3 índices de clip en orden; null = vacío. */
   const [manualIntroSlots, setManualIntroSlots] = useState<(number | null)[]>([null, null, null])
+  /** Orden macro de clips en el Reel (permutación de índices elegibles). */
+  const [manualFullClipOrderEnabled, setManualFullClipOrderEnabled] = useState(false)
+  const [manualClipOrderIndices, setManualClipOrderIndices] = useState<number[]>([])
 
   function reset() {
     setStep(1)
@@ -129,6 +132,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setVehicleYear('')
     setManualIntroEnabled(false)
     setManualIntroSlots([null, null, null])
+    setManualFullClipOrderEnabled(false)
+    setManualClipOrderIndices([])
   }
 
   useEffect(() => {
@@ -159,11 +164,26 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setVehicleYear(row.year != null ? String(row.year) : '')
   }, [inventoryPickId, inventoryRows])
 
-  function clipIndexBlockedForNarrative(i: number): boolean {
+  const clipIndexBlockedForNarrative = useCallback((i: number): boolean => {
     if (voiceOverMode === 'clip' && i === voiceOverClipIndex) return true
     if (voiceOverOverlayClipIndices.includes(i)) return true
     return false
-  }
+  }, [voiceOverMode, voiceOverClipIndex, voiceOverOverlayClipIndices])
+
+  useEffect(() => {
+    if (!manualFullClipOrderEnabled || flowType !== 'multiple' || files.length < 2) return
+    const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+    setManualClipOrderIndices((prev) => {
+      const kept = prev.filter((i) => eligible.includes(i))
+      const missing = eligible.filter((i) => !kept.includes(i)).sort((a, b) => a - b)
+      return [...kept, ...missing]
+    })
+  }, [
+    files,
+    flowType,
+    manualFullClipOrderEnabled,
+    clipIndexBlockedForNarrative,
+  ])
 
   function manualIntroPayload(): number[] | undefined {
     if (!manualIntroEnabled || flowType !== 'multiple' || files.length < 2) return undefined
@@ -341,8 +361,21 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               : {}
           : {}
 
-      const introIdx = manualIntroPayload()
+      const introIdx = manualFullClipOrderEnabled ? undefined : manualIntroPayload()
       const canonV = canonicalVehiclePayload()
+
+      if (manualFullClipOrderEnabled && flowType === 'multiple' && files.length >= 2) {
+        const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+        const ok =
+          eligible.length > 0 &&
+          eligible.length === manualClipOrderIndices.length &&
+          eligible.every((i) => manualClipOrderIndices.includes(i))
+        if (!ok) {
+          throw new Error(
+            'Orden manual de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
+          )
+        }
+      }
 
       const startRes = await fetch('/api/videos/jobs/start', {
         method: 'POST',
@@ -354,6 +387,11 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           ...voiceOverPayload,
           ...(scriptPdfPath ? { scriptPdfPath } : {}),
           ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
+          ...(manualFullClipOrderEnabled &&
+          flowType === 'multiple' &&
+          manualClipOrderIndices.length > 0
+            ? { manualClipOrderIndices: manualClipOrderIndices }
+            : {}),
           ...(canonV ? { canonicalVehicle: canonV } : {}),
           ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         }),
@@ -501,7 +539,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {/* PASO 2 — Upload */}
           {step === 2 && (
             <div className="space-y-6">
-              <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} />
+              <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} previewUrls={clipPreviewUrls} />
 
               {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
@@ -601,7 +639,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                           />
                           <div className="w-28 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
                             {clipPreviewUrls[i] ? (
-                              <video src={clipPreviewUrls[i]} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                              <video
+                                src={clipPreviewUrls[i]}
+                                className="h-full w-full object-cover"
+                                controls
+                                playsInline
+                                preload="metadata"
+                              />
                             ) : null}
                           </div>
                           <span className="text-sm text-gray-800 min-w-0 flex-1">
@@ -681,7 +725,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                               />
                               <div className="w-24 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
                                 {clipPreviewUrls[i] ? (
-                                  <video src={clipPreviewUrls[i]} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                                  <video
+                                    src={clipPreviewUrls[i]}
+                                    className="h-full w-full object-cover"
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                  />
                                 ) : null}
                               </div>
                               <span className="text-xs text-gray-800 min-w-0 flex-1 flex flex-col justify-center">
@@ -772,8 +822,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                         className="mt-1 accent-amber-600"
                         checked={manualIntroEnabled}
                         onChange={(e) => {
-                          setManualIntroEnabled(e.target.checked)
-                          if (!e.target.checked) setManualIntroSlots([null, null, null])
+                          const v = e.target.checked
+                          setManualIntroEnabled(v)
+                          if (v) {
+                            setManualFullClipOrderEnabled(false)
+                            setManualClipOrderIndices([])
+                          }
+                          if (!v) setManualIntroSlots([null, null, null])
                         }}
                       />
                       <span className="text-sm text-gray-900">
@@ -817,7 +872,6 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                 <video
                                   src={clipPreviewUrls[manualIntroSlots[slotIdx]!]!}
                                   className="h-full w-full object-cover"
-                                  muted
                                   playsInline
                                   controls
                                   preload="metadata"
@@ -827,6 +881,41 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-emerald-100 bg-emerald-50/30 rounded-xl p-3 space-y-3">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1 accent-emerald-600"
+                        checked={manualFullClipOrderEnabled}
+                        onChange={(e) => {
+                          const on = e.target.checked
+                          setManualFullClipOrderEnabled(on)
+                          if (on) {
+                            setManualIntroEnabled(false)
+                            setManualIntroSlots([null, null, null])
+                            const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+                            setManualClipOrderIndices(eligible.slice().sort((a, b) => a - b))
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-gray-900">
+                        <span className="font-semibold text-emerald-950">Ordenar clips manualmente</span>
+                        <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
+                          Elige el orden de los clips en el Reel (arrastra la lista). Dentro de cada clip siguen valiendo
+                          los cortes automáticos, subtítulos y música. No se combina con Intro fija (emergencia).
+                        </span>
+                      </span>
+                    </label>
+                    {manualFullClipOrderEnabled && manualClipOrderIndices.length > 0 && (
+                      <ManualClipOrderSortable
+                        order={manualClipOrderIndices}
+                        onOrderChange={setManualClipOrderIndices}
+                        files={files}
+                        previewUrls={clipPreviewUrls}
+                      />
                     )}
                   </div>
                 </div>

@@ -30,6 +30,7 @@ import {
   normalizeMusicTrimStartSec,
   normalizeVoiceOverMp3OverlayIndices,
   normalizeVoiceOverOverlayClipIndices,
+  normalizeManualClipOrderIndices,
 } from './clip-config'
 import { extractQuotedDialoguesFromScript } from './script-dialogues'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
@@ -67,6 +68,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   scriptText: string | null
   canonicalVehicle?: CanonicalVehicleMeta
   manualIntroClipIndicesRaw?: number[]
+  manualClipOrderIndicesRaw?: number[]
 }> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
@@ -78,6 +80,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   const scriptText = data.script_text?.trim() || null
   let canonicalVehicle: CanonicalVehicleMeta | undefined
   let manualIntroClipIndicesRaw: number[] | undefined
+  let manualClipOrderIndicesRaw: number[] | undefined
   const sc = data.selected_clips
   if (isPipelineInputMeta(sc)) {
     canonicalVehicle = normalizeCanonicalVehicle(sc.canonicalVehicle)
@@ -87,8 +90,14 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
         .filter((n) => Number.isInteger(n) && n >= 0)
       if (coerced.length > 0) manualIntroClipIndicesRaw = coerced
     }
+    if (Array.isArray(sc.manualClipOrderIndices) && sc.manualClipOrderIndices.length > 0) {
+      const coercedOrder = sc.manualClipOrderIndices
+        .map((x) => (typeof x === 'number' ? x : typeof x === 'string' ? Number(x) : NaN))
+        .filter((n) => Number.isInteger(n) && n >= 0)
+      if (coercedOrder.length > 0) manualClipOrderIndicesRaw = coercedOrder
+    }
   }
-  return { scriptText, canonicalVehicle, manualIntroClipIndicesRaw }
+  return { scriptText, canonicalVehicle, manualIntroClipIndicesRaw, manualClipOrderIndicesRaw }
 }
 
 async function updateJob(
@@ -772,6 +781,12 @@ async function runMultipleClipsPipelineFromStorage(
       voiceOverBaseClipIndex,
       voiceOverOverlayClipIndicesInput ?? []
     )
+    const normClipOrder = normalizeManualClipOrderIndices(
+      ctx.manualClipOrderIndicesRaw,
+      files.length,
+      voiceOverBaseClipIndex,
+      voiceOverOverlayClipIndicesInput ?? []
+    )
     if (
       ctx.manualIntroClipIndicesRaw &&
       ctx.manualIntroClipIndicesRaw.length > 0 &&
@@ -780,6 +795,16 @@ async function runMultipleClipsPipelineFromStorage(
       console.warn(
         `[VideoV2Pipeline][${jobId}][B3] manualIntroClipIndices en job (${JSON.stringify(ctx.manualIntroClipIndicesRaw)}) ` +
           'no produjo ningún índice válido tras normalizar (VO/overlays/rango). Intro fija no se aplicará.'
+      )
+    }
+    if (
+      ctx.manualClipOrderIndicesRaw &&
+      ctx.manualClipOrderIndicesRaw.length > 0 &&
+      (!normClipOrder || normClipOrder.length === 0)
+    ) {
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][B3] manualClipOrderIndices en job (${JSON.stringify(ctx.manualClipOrderIndicesRaw)}) ` +
+          'no produjo una permutación válida (VO/overlays/rango). Orden manual de clips no se aplicará.'
       )
     }
 
@@ -795,7 +820,10 @@ async function runMultipleClipsPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
-    if (normIntro && normIntro.length > 0) {
+    if (normClipOrder && normClipOrder.length > 0) {
+      geminiOpts.manualClipOrderIndices = normClipOrder
+      console.log(`[VideoV2Pipeline][${jobId}][B3] Orden manual de clips activo: ${normClipOrder.join(' → ')}`)
+    } else if (normIntro && normIntro.length > 0) {
       geminiOpts.manualIntroClipIndices = normIntro
       console.log(`[VideoV2Pipeline][${jobId}][B3] Intro fija manual activa: clips ${normIntro.join(' → ')}`)
     }

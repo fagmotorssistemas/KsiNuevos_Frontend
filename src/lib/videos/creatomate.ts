@@ -317,7 +317,7 @@ const CAPTION_ENTRANCE_MIN_SEC = 0.12
 const CAPTION_ENTRANCE_MAX_SEC = 0.32
 
 /** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
-const REEL_MUSIC_VOLUME = '25%'
+const REEL_MUSIC_VOLUME = '18%'
 const REEL_DIALOGUE_VOLUME = '108%'
 
 /**

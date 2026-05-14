@@ -4,7 +4,7 @@
  * Recibe el jobId y los paths de los archivos ya subidos a Supabase Storage.
  * Actualiza el job con los paths y dispara el pipeline en background.
  *
- * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex?, voiceOverOverlayClipIndices?, scriptPdfPath? }
+ * Body JSON: { jobId, paths: string[], clipKinds?, clipDurations?, voiceOverBaseClipIndex?, voiceOverOverlayClipIndices?, scriptPdfPath?, manualIntroClipIndices?, manualClipOrderIndices?, ... }
  * Response:  { jobId, status: 'processing' }
  */
 
@@ -21,6 +21,7 @@ import {
   normalizeVoiceOverOverlayClipIndices,
   normalizeVoiceOverMp3OverlayIndices,
   normalizeManualIntroClipIndices,
+  normalizeManualClipOrderIndices,
   normalizeCanonicalVehicle,
   normalizeMusicTrimStartSec,
 } from '@/lib/videos/clip-config'
@@ -71,6 +72,8 @@ interface StartJobBody {
   voiceOverMp3DurationSec?: number | null
   /** Hasta 3 clips en orden, forzados al inicio del montaje (emergencia). */
   manualIntroClipIndices?: number[] | null
+  /** Permutación de índices de clip narrativos: orden macro del Reel (excluye VO y planos reservados). */
+  manualClipOrderIndices?: number[] | null
   /** Vehículo canónico para contexto en Gemini (inventario o captura manual). */
   canonicalVehicle?: { brand?: string; model?: string; year?: string } | null
   /** Inicio manual del track musical en segundos (opcional). */
@@ -91,6 +94,7 @@ export async function POST(request: NextRequest) {
       voiceOverAudioPath: voiceOverAudioPathRaw,
       voiceOverMp3DurationSec: voiceOverMp3DurationRaw,
       manualIntroClipIndices: manualIntroRaw,
+      manualClipOrderIndices: manualClipOrderRaw,
       canonicalVehicle: canonicalVehicleRaw,
       musicTrimStartSec: musicTrimStartRaw,
     } = body
@@ -276,6 +280,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let manualClipOrderIndices: number[] | undefined
+    if (manualClipOrderRaw !== undefined && manualClipOrderRaw !== null && Array.isArray(manualClipOrderRaw)) {
+      if (manualClipOrderRaw.length > 0) {
+        if (paths.length < 2) {
+          return NextResponse.json(
+            { error: 'manualClipOrderIndices solo aplica a jobs con al menos dos clips' },
+            { status: 400 }
+          )
+        }
+        const normOrder = normalizeManualClipOrderIndices(
+          manualClipOrderRaw,
+          paths.length,
+          voiceOverBaseClipIndex,
+          voiceOverOverlayClipIndices ?? []
+        )
+        if (!normOrder || normOrder.length === 0) {
+          return NextResponse.json(
+            {
+              error:
+                'manualClipOrderIndices debe ser una permutación exacta de los clips del montaje (todos los índices excepto VO y planos encima del VO).',
+            },
+            { status: 400 }
+          )
+        }
+        manualClipOrderIndices = normOrder
+      }
+    }
+
+    if (
+      manualClipOrderIndices !== undefined &&
+      manualClipOrderIndices.length > 0 &&
+      manualIntroClipIndices !== undefined &&
+      manualIntroClipIndices.length > 0
+    ) {
+      return NextResponse.json(
+        { error: 'No combines manualClipOrderIndices con manualIntroClipIndices' },
+        { status: 400 }
+      )
+    }
+
     const canonicalVehicle = normalizeCanonicalVehicle(canonicalVehicleRaw ?? undefined)
     const musicTrimStartSec = normalizeMusicTrimStartSec(musicTrimStartRaw ?? undefined)
 
@@ -334,6 +378,7 @@ export async function POST(request: NextRequest) {
       voiceOverAudioPath !== undefined ||
       (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0) ||
       (manualIntroClipIndices !== undefined && manualIntroClipIndices.length > 0) ||
+      (manualClipOrderIndices !== undefined && manualClipOrderIndices.length > 0) ||
       canonicalVehicle !== undefined ||
       musicTrimStartSec !== undefined
         ? ({
@@ -348,6 +393,9 @@ export async function POST(request: NextRequest) {
             ...(voiceOverMp3DurationSec !== undefined ? { voiceOverMp3DurationSec } : {}),
             ...(manualIntroClipIndices && manualIntroClipIndices.length > 0
               ? { manualIntroClipIndices }
+              : {}),
+            ...(manualClipOrderIndices && manualClipOrderIndices.length > 0
+              ? { manualClipOrderIndices }
               : {}),
             ...(canonicalVehicle ? { canonicalVehicle } : {}),
             ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),

@@ -28,9 +28,11 @@ interface VideoUploaderProps {
   flowType: FlowType
   files: File[]
   onFilesChange: (files: File[]) => void
+  /** URLs objeto (p. ej. createObjectURL) para previsualizar cada clip en múltiple. */
+  previewUrls?: string[]
 }
 
-export function VideoUploader({ flowType, files, onFilesChange }: VideoUploaderProps) {
+export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: VideoUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = useState(false)
 
@@ -119,25 +121,38 @@ export function VideoUploader({ flowType, files, onFilesChange }: VideoUploaderP
             const willCompress = sizeMB > warnThresh
 
             return (
-              <div key={`${file.name}-${i}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                <Film className="w-4 h-4 text-violet-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
-                  <p className="text-xs text-gray-400">{formatSize(file.size)}</p>
-                </div>
-                {willCompress && (
-                  <div className="flex items-center gap-1 text-amber-600 shrink-0">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span className="text-xs font-medium">Se comprimirá</span>
+              <div key={`${file.name}-${i}`} className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                {flowType === 'multiple' && previewUrls?.[i] ? (
+                  <div className="w-full sm:w-44 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
+                    <video
+                      src={previewUrls[i]}
+                      className="h-full w-full object-cover"
+                      controls
+                      playsInline
+                      preload="metadata"
+                    />
                   </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeFile(i)}
-                  className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                ) : null}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <Film className="w-4 h-4 text-violet-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
+                    <p className="text-xs text-gray-400">{formatSize(file.size)}</p>
+                  </div>
+                  {willCompress && (
+                    <div className="flex items-center gap-1 text-amber-600 shrink-0">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="text-xs font-medium">Se comprimirá</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )
           })}

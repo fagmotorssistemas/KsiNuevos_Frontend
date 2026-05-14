@@ -42,6 +42,11 @@ export interface VideoJobPipelineInputMeta {
    * al inicio del montaje (marca / modelo / año), luego sigue el resto de la automatización.
    */
   manualIntroClipIndices?: number[] | null
+  /**
+   * Orden manual de clips en el Reel (permutación de índices elegibles: no VO ni planos reservados sobre VO).
+   * El pipeline reagrupa los cortes de Gemini en ese orden; el resto (cortes, subtítulos, música) sigue igual.
+   */
+  manualClipOrderIndices?: number[] | null
   /** Marca, modelo y año exactos del inventario (o captura manual) para contexto en Gemini. */
   canonicalVehicle?: CanonicalVehicleMeta | null
 }
@@ -64,6 +69,7 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0) ||
     (typeof o.musicTrimStartSec === 'number' && Number.isFinite(o.musicTrimStartSec) && o.musicTrimStartSec >= 0) ||
     (Array.isArray(o.manualIntroClipIndices) && o.manualIntroClipIndices.length > 0) ||
+    (Array.isArray(o.manualClipOrderIndices) && o.manualClipOrderIndices.length > 0) ||
     hasVehicle
   )
 }
@@ -173,6 +179,39 @@ export function normalizeManualIntroClipIndices(
     out.push(n)
   }
   return out.length > 0 ? out : undefined
+}
+
+/**
+ * Permutación exacta de todos los índices de clip que participan en el montaje narrativo (no bloqueados).
+ */
+export function normalizeManualClipOrderIndices(
+  raw: unknown,
+  clipCount: number,
+  voiceOverBaseClipIndex?: number,
+  voiceOverOverlayClipIndices?: number[]
+): number[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const blocked = new Set<number>()
+  if (typeof voiceOverBaseClipIndex === 'number') blocked.add(voiceOverBaseClipIndex)
+  for (const x of voiceOverOverlayClipIndices ?? []) {
+    if (Number.isInteger(x) && x >= 0 && x < clipCount) blocked.add(x)
+  }
+  const eligible: number[] = []
+  for (let i = 0; i < clipCount; i++) {
+    if (!blocked.has(i)) eligible.push(i)
+  }
+  if (eligible.length === 0) return undefined
+  if (raw.length !== eligible.length) return undefined
+  const seen = new Set<number>()
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (!Number.isInteger(n) || n < 0 || n >= clipCount) return undefined
+    if (blocked.has(n)) return undefined
+    if (seen.has(n)) return undefined
+    seen.add(n)
+  }
+  if (seen.size !== eligible.length) return undefined
+  return raw.map((x) => (typeof x === 'number' ? x : Number(x))) as number[]
 }
 
 export function normalizeCanonicalVehicle(raw: unknown): CanonicalVehicleMeta | undefined {

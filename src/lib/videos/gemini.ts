@@ -1051,6 +1051,8 @@ interface ValidateGeminiSequenceOptions {
   manualVoiceOverFromExternalAudio?: boolean
   /** Hasta 3 clips en orden: se fuerzan al inicio del montaje tras el resto de validación. */
   manualIntroClipIndices?: number[]
+  /** Permutación de clips: el montaje final agrupa cortes por clip en este orden (no aplica con intro fija). */
+  manualClipOrderIndices?: number[]
 }
 
 function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLength: number): number {
@@ -1258,6 +1260,93 @@ function pinManualIntroClipIndicesToStart(
   return { sequence: [...picked, ...tail], pinnedCount: picked.length }
 }
 
+function buildManualClipOrderPromptBlock(order: number[]): string {
+  if (!order.length) return ''
+  return `=== ORDEN DE CLIPS (OPERADOR — FIJO) ===
+El operador definió este orden de aparición en el Reel (índice de archivo subido): ${order.join(' → ')}.
+OBLIGATORIO: incluye al menos un segment_id del mapa por cada clip de esa lista que tenga habla en el mapa.
+El sistema reagrupará tu "sequence" final para que todo lo elegido del clip ${order[0]} vaya primero, luego el clip ${order[1] ?? '—'}, etc., sin mezclar bloques de distintos clips entre sí.
+Dentro de cada clip puedes usar varios cortes y el orden interno que mejor cuente la historia; elimina zonas muertas y errores ("me equivoqué") como siempre.
+No priorices el orden global de los segment_id en el JSON frente a buenos cortes por clip: la macro-estructura por clip ya está fijada arriba.
+=== FIN ORDEN DE CLIPS ===
+
+`
+}
+
+/**
+ * Reagrupa la secuencia: todos los ítems de cada clip_index consecutivos según `manualOrder`.
+ * Si un clip no tenía ítems, inserta un corte mínimo desde el mapa.
+ */
+function reorderSequenceByManualClipOrder(
+  sequence: SequenceItem[],
+  manualOrder: number[],
+  allSegments: Segment[],
+  excluded: number[],
+  segmentLookup: Map<string, Segment>,
+  jobId: string
+): SequenceItem[] {
+  const excludedSet = new Set(excluded)
+  const byClip = new Map<number, SequenceItem[]>()
+  for (const idx of manualOrder) {
+    if (!excludedSet.has(idx)) byClip.set(idx, [])
+  }
+  for (const item of sequence) {
+    const seg = segmentLookup.get(item.segment_id)
+    if (!seg) continue
+    if (excludedSet.has(seg.clip_index)) continue
+    if (!byClip.has(seg.clip_index)) {
+      byClip.set(seg.clip_index, [])
+    }
+    byClip.get(seg.clip_index)!.push(item)
+  }
+
+  const out: SequenceItem[] = []
+  for (const idx of manualOrder) {
+    if (excludedSet.has(idx)) continue
+    let bucket = byClip.get(idx) ?? []
+    if (bucket.length === 0) {
+      const candidates = allSegments
+        .filter(
+          (s) =>
+            s.clip_index === idx &&
+            s.source_kind !== 'visual_only' &&
+            !isMistakeSegment(s)
+        )
+        .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))
+      const seg = pickBestSegmentForManualIntroClip(candidates) ?? candidates[0]
+      if (seg) {
+        console.warn(
+          `[VideoV2Pipeline][${jobId}][Gemini] Orden manual: clip ${idx} sin cortes en la propuesta — se inserta un corte por defecto.`
+        )
+        bucket = [sequenceItemFromSegment(seg, 0, `orden manual: clip ${idx} (mínimo requerido)`)]
+      } else {
+        const visualFallback = allSegments
+          .filter((s) => s.clip_index === idx && !isMistakeSegment(s))
+          .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))[0]
+        if (visualFallback) {
+          console.warn(
+            `[VideoV2Pipeline][${jobId}][Gemini] Orden manual: clip ${idx} solo con plano — fallback visual.`
+          )
+          bucket = [
+            sequenceItemFromSegment(visualFallback, 0, `orden manual: clip ${idx} (plano, fallback)`),
+          ]
+        }
+      }
+    }
+    out.push(...bucket)
+  }
+
+  const usedIds = new Set(out.map((x) => x.segment_id))
+  for (const item of sequence) {
+    if (!usedIds.has(item.segment_id)) {
+      const seg = segmentLookup.get(item.segment_id)
+      if (seg && excludedSet.has(seg.clip_index)) continue
+      out.push(item)
+    }
+  }
+  return out
+}
+
 function validateSequence(
   raw: GeminiSegmentAnalysis,
   allSegments: Segment[],
@@ -1355,49 +1444,69 @@ function validateSequence(
     )
   }
 
-  // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
-  //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
-  sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
+  const manualOrderMode =
+    Array.isArray(opts?.manualClipOrderIndices) && opts.manualClipOrderIndices.length > 0
+  const manualOrder = manualOrderMode ? opts.manualClipOrderIndices : null
 
-  // 4b) Orden editorial + dedupe de vecinos casi iguales
-  sequence = enforceEditorialOrder(sequence, allSegments)
-  sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+  if (manualOrderMode && manualOrder) {
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Gemini] Orden manual de clips: ${manualOrder.join(' → ')} ` +
+        '(macro-orden fijo; sin dedupe global ni reorden editorial automático entre clips)'
+    )
+    sequence = reorderSequenceByManualClipOrder(
+      sequence,
+      manualOrder,
+      allSegments,
+      excluded,
+      segmentLookup,
+      jobId
+    )
+    sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+  } else {
+    // 4) Deduplicar en el orden de Gemini (antes de reordenar): así conservamos la toma que el modelo
+    //    consideró más relevante, no la que quedó primero tras el reordenamiento editorial.
+    sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
 
-  // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
-  sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
+    // 4b) Orden editorial + dedupe de vecinos casi iguales
+    sequence = enforceEditorialOrder(sequence, allSegments)
+    sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
 
-  // 4d) Forzar micro-clips de presentación que Gemini ignoró (ej. "Toyota", "Prado", "2016" por separado)
-  //     Si existen segmentos de presentación ≥ PRESENTATION_MICROCLIP_MIN_SEC no incluidos por Gemini,
-  //     se insertan al inicio en orden de aparición (clip_index, luego start_s), si no están ya en la secuencia.
-  {
-    const usedIds = new Set(sequence.map((x) => x.segment_id))
-    const missedPresentation = allSegments
-      .filter(
-        (s) =>
-          !usedIds.has(s.segment_id) &&
-          s.source_kind !== 'visual_only' &&
-          !isMistakeSegment(s) &&
-          isPresentationSegment(s) &&
-          s.duration_s >= PRESENTATION_MICROCLIP_MIN_SEC &&
-          !(excluded.includes(s.clip_index))
-      )
-      .sort((a, b) => a.clip_index - b.clip_index || a.start_s - b.start_s)
+    // 4c) Primer corte: debe incluir marca y modelo o año (evita solo "2012" o "F-150" sin marca en mapa)
+    sequence = strengthenOpeningPresentation(sequence, segmentLookup, allSegments, jobId)
 
-    if (missedPresentation.length > 0) {
-      const injected = missedPresentation.map((s, idx) =>
-        sequenceItemFromSegment(s, idx + 1, INJECTED_PRESENTATION_REASON_MARKER)
-      )
-      console.log(
-        `[VideoV2Pipeline][${jobId}][Gemini] Se inyectan ${injected.length} micro-clips de presentación omitidos por Gemini: ` +
-          injected.map((x) => x.segment_id).join(', ')
-      )
-      // Insertar al frente, antes del resto de la secuencia
-      sequence = [...injected, ...sequence]
-      // La inyección va después del dedupe inicial: varios clips con el mismo micro ("Kia", "Kia", …)
-      // volvían a colarse. Volvemos a deduplicar y a limpiar vecinos antes del reorden editorial final.
-      sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
-      sequence = enforceEditorialOrder(sequence, allSegments)
-      sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+    // 4d) Forzar micro-clips de presentación que Gemini ignoró (ej. "Toyota", "Prado", "2016" por separado)
+    //     Si existen segmentos de presentación ≥ PRESENTATION_MICROCLIP_MIN_SEC no incluidos por Gemini,
+    //     se insertan al inicio en orden de aparición (clip_index, luego start_s), si no están ya en la secuencia.
+    {
+      const usedIdsInSeq = new Set(sequence.map((x) => x.segment_id))
+      const missedPresentation = allSegments
+        .filter(
+          (s) =>
+            !usedIdsInSeq.has(s.segment_id) &&
+            s.source_kind !== 'visual_only' &&
+            !isMistakeSegment(s) &&
+            isPresentationSegment(s) &&
+            s.duration_s >= PRESENTATION_MICROCLIP_MIN_SEC &&
+            !(excluded.includes(s.clip_index))
+        )
+        .sort((a, b) => a.clip_index - b.clip_index || a.start_s - b.start_s)
+
+      if (missedPresentation.length > 0) {
+        const injected = missedPresentation.map((s, idx) =>
+          sequenceItemFromSegment(s, idx + 1, INJECTED_PRESENTATION_REASON_MARKER)
+        )
+        console.log(
+          `[VideoV2Pipeline][${jobId}][Gemini] Se inyectan ${injected.length} micro-clips de presentación omitidos por Gemini: ` +
+            injected.map((x) => x.segment_id).join(', ')
+        )
+        // Insertar al frente, antes del resto de la secuencia
+        sequence = [...injected, ...sequence]
+        // La inyección va después del dedupe inicial: varios clips con el mismo micro ("Kia", "Kia", …)
+        // volvían a colarse. Volvemos a deduplicar y a limpiar vecinos antes del reorden editorial final.
+        sequence = dedupeSequenceByUtterance(sequence, segmentLookup, jobId)
+        sequence = enforceEditorialOrder(sequence, allSegments)
+        sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+      }
     }
   }
 
@@ -1467,7 +1576,7 @@ function validateSequence(
     }
   }
 
-  if (opts?.manualIntroClipIndices && opts.manualIntroClipIndices.length > 0) {
+  if (!manualOrderMode && opts?.manualIntroClipIndices && opts.manualIntroClipIndices.length > 0) {
     const pinResult = pinManualIntroClipIndicesToStart(
       sequence,
       allSegments,
@@ -1645,15 +1754,22 @@ function buildVisualPrompt(
   manualVoiceOverFromExternalAudio?: boolean,
   scriptDialogueLines?: string[] | null,
   assemblyTranscriptDump?: string | null,
-  canonicalVehicle?: CanonicalVehicleMeta | null
+  canonicalVehicle?: CanonicalVehicleMeta | null,
+  manualClipOrderIndices?: number[] | null
 ): string {
   const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
+  const clipOrderFixed = (manualClipOrderIndices?.length ?? 0) > 0
   const videoRef = videoCount === 1 ? 'el video' : `los ${videoCount} videos`
   const plural = videoCount > 1 ? 's' : ''
   const brollExtra =
     !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock =
-    manualVoiceOverBaseClipIndex != null
+  const autonomousBlock = clipOrderFixed
+    ? `MONTAJE CON ORDEN DE CLIPS (OPERADOR):
+- El bloque "ORDEN DE CLIPS" define la macro-línea: primero todo lo que elijas del clip índice ${manualClipOrderIndices![0]}, luego del siguiente de la lista, etc.
+- Dentro de cada clip, elige los mejores segment_id, trims EXACTOS del mapa, ritmo y descarte de errores como siempre.
+- Puedes listar los cortes en "sequence" en el orden que prefieras en el JSON; el sistema los reagrupará por clip al validar según la lista fija.
+`
+    : manualVoiceOverBaseClipIndex != null
       ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
       : manualVoiceOverFromExternalAudio === true
         ? manualVoiceOverMp3AutonomousBlock()
@@ -1667,14 +1783,14 @@ function buildVisualPrompt(
   const vehicleBlock = buildCanonicalVehicleBlock(canonicalVehicle ?? null)
   const assemblyBlock = buildAssemblyTranscriptBlock(assemblyTranscriptDump ?? null)
   const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText, scriptDialogueLines ?? null)
+  const manualOrderBlock = clipOrderFixed ? buildManualClipOrderPromptBlock(manualClipOrderIndices!) : ''
 
   return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto. Tu objetivo es crear un Reel que detenga el scroll y genere engagement.
 
 Acabas de ver ${videoRef} completo${plural}. Tienes el catálogo de transcripciones y tipos de clip, y el mapa fino de segmentos con timestamps EXACTOS.
 
 ${mapNote}${clipCatalog}
-${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}
-${autonomousBlock}
+${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}${autonomousBlock}
 
 MAPA DE SEGMENTOS (cortes permitidos; respeta start_s/end_s de cada segment_id elegido):
 
@@ -1696,7 +1812,12 @@ ${manual
 - PRIMER corte: presentación del auto (marca/modelo/año, ej. Nissan Tiida 2012) si existe segmento adecuado en el mapa.
 - MEDIO: desarrollo (precio, equipamiento, etc.); el bloque VO con B-roll encaja aquí (planos sin habla).
 - CIERRE: CTA o mensaje de marca; debe quedar en los últimos cortes de sequence (después del bloque VO en la línea de tiempo).`
-  : `CRITERIOS DE SELECCIÓN VISUAL (en orden de prioridad):
+  : clipOrderFixed
+    ? `CRITERIOS (orden de clips fijado por el operador):
+- Tras la validación, todo lo elegido del primer clip del bloque ORDEN DE CLIPS va primero en el Reel, luego el segundo clip de esa lista, etc.
+- Dentro de cada clip, elige tomas claras y con energía; descarta silencios y errores.
+- El primer corte efectivo del montaje será del primer clip de esa lista: que sea presentación o gancho fuerte según el mapa.`
+    : `CRITERIOS DE SELECCIÓN VISUAL (en orden de prioridad):
 - GANCHO (primer segmento): Elige la toma más impactante visualmente + el texto más llamativo. Debe generar curiosidad o emoción en los primeros 2 segundos.
 - Prioriza tomas donde el vendedor está frente a la cámara con buena energía
 - Incluye tomas que muestren el auto desde ángulos atractivos
@@ -1722,13 +1843,20 @@ function buildTextOnlyPrompt(
   manualVoiceOverFromExternalAudio?: boolean,
   scriptDialogueLines?: string[] | null,
   assemblyTranscriptDump?: string | null,
-  canonicalVehicle?: CanonicalVehicleMeta | null
+  canonicalVehicle?: CanonicalVehicleMeta | null,
+  manualClipOrderIndices?: number[] | null
 ): string {
   const manual = manualVoiceOverBaseClipIndex != null || manualVoiceOverFromExternalAudio === true
+  const clipOrderFixed = (manualClipOrderIndices?.length ?? 0) > 0
   const brollExtra =
     !manual && clipKinds.some((k) => k === 'visual_only') ? BROLL_PROMPT_BLOCK : ''
-  const autonomousBlock =
-    manualVoiceOverBaseClipIndex != null
+  const autonomousBlock = clipOrderFixed
+    ? `MONTAJE CON ORDEN DE CLIPS (OPERADOR):
+- El bloque "ORDEN DE CLIPS" define la macro-línea: primero todo lo que elijas del clip índice ${manualClipOrderIndices![0]}, luego del siguiente de la lista, etc.
+- Dentro de cada clip, elige los mejores segment_id, trims EXACTOS del mapa, ritmo y descarte de errores como siempre.
+- Puedes listar los cortes en "sequence" en el orden que prefieras en el JSON; el sistema los reagrupará por clip al validar según la lista fija.
+`
+    : manualVoiceOverBaseClipIndex != null
       ? manualVoiceOverAutonomousBlock(manualVoiceOverBaseClipIndex)
       : manualVoiceOverFromExternalAudio === true
         ? manualVoiceOverMp3AutonomousBlock()
@@ -1742,14 +1870,14 @@ function buildTextOnlyPrompt(
   const vehicleBlock = buildCanonicalVehicleBlock(canonicalVehicle ?? null)
   const assemblyBlock = buildAssemblyTranscriptBlock(assemblyTranscriptDump ?? null)
   const scriptBlock = buildScriptGuidanceBlock(scriptGuidanceText, scriptDialogueLines ?? null)
+  const manualOrderBlock = clipOrderFixed ? buildManualClipOrderPromptBlock(manualClipOrderIndices!) : ''
 
   return `Eres un editor de video profesional especializado en crear Reels virales de venta de autos para Instagram y TikTok. Eres el mejor del mundo en esto.
 
-Tienes el catálogo de clips y el mapa de segmentos. Sin ver vídeo, infiere el mejor orden${manual ? ' y la posición del bloque VO (voice_over_insert_after_count)' : ' y cuándo usar visual_overlay si hay solo planos'}.
+Tienes el catálogo de clips y el mapa de segmentos. Sin ver vídeo, infiere el mejor orden${manual ? ' y la posición del bloque VO (voice_over_insert_after_count)' : clipOrderFixed ? ' de cortes dentro de cada clip' : ' y cuándo usar visual_overlay si hay solo planos'}.
 
 ${mapNote}${clipCatalog}
-${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}
-${autonomousBlock}
+${vehicleBlock}${assemblyBlock}${scriptBlock ? `${scriptBlock}\n\n` : ''}${manualOrderBlock}${autonomousBlock}
 
 MAPA DE SEGMENTOS (silencios eliminados):
 
@@ -1771,7 +1899,12 @@ ${manual
 - Primer corte: presentación marca/modelo/año si el mapa lo permite.
 - Bloque VO en la parte media salvo mapa muy corto.
 - Últimos cortes: CTA o marca.`
-  : `CRITERIOS DE SELECCIÓN:
+  : clipOrderFixed
+    ? `CRITERIOS DE SELECCIÓN (orden de clips fijo):
+- Incluye al menos un segmento por cada clip listado en ORDEN DE CLIPS.
+- Dentro de cada clip, prioriza frases con información nueva; descarta muletillas y errores.
+- El primer corte del primer clip de esa lista debe abrir fuerte (presentación o gancho según el mapa).`
+    : `CRITERIOS DE SELECCIÓN:
 - GANCHO (primer segmento): La frase más impactante, una pregunta, un precio, algo que detenga el scroll
 - Puedes reordenar segmentos: no importa el orden original del video
 - Puedes usar segmentos del mismo clip de forma discontinua
@@ -1806,6 +1939,8 @@ export interface AnalyzeSegmentsOptions {
   canonicalVehicle?: CanonicalVehicleMeta
   /** Emergencia: orden fijo de clips al inicio del montaje (validado en servidor). */
   manualIntroClipIndices?: number[]
+  /** Orden macro de clips en el Reel (permutación de índices narrativos). */
+  manualClipOrderIndices?: number[]
 }
 
 /**
@@ -1850,7 +1985,9 @@ export async function analyzeSegments(
       o.disableVisualOverlayNormalization = true
       o.manualVoiceOverFromExternalAudio = true
     }
-    if (options?.manualIntroClipIndices && options.manualIntroClipIndices.length > 0) {
+    if (options?.manualClipOrderIndices && options.manualClipOrderIndices.length > 0) {
+      o.manualClipOrderIndices = options.manualClipOrderIndices
+    } else if (options?.manualIntroClipIndices && options.manualIntroClipIndices.length > 0) {
       o.manualIntroClipIndices = options.manualIntroClipIndices
     }
     return Object.keys(o).length > 0 ? o : undefined
@@ -1881,7 +2018,8 @@ export async function analyzeSegments(
             externalVo,
             options?.scriptDialogueLines ?? null,
             options?.assemblyTranscriptDump ?? null,
-            options?.canonicalVehicle ?? null
+            options?.canonicalVehicle ?? null,
+            options?.manualClipOrderIndices
           ) + strictSuffix
         contentParts = [
           ...googleFileRefs.map((ref) => ({
@@ -1900,7 +2038,8 @@ export async function analyzeSegments(
             externalVo,
             options?.scriptDialogueLines ?? null,
             options?.assemblyTranscriptDump ?? null,
-            options?.canonicalVehicle ?? null
+            options?.canonicalVehicle ?? null,
+            options?.manualClipOrderIndices
           ) + strictSuffix
       }
 
