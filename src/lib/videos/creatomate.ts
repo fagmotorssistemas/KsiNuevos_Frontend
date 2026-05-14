@@ -316,9 +316,23 @@ const CAPTION_ENTRANCE_MAX_FRAC = 0.48
 const CAPTION_ENTRANCE_MIN_SEC = 0.12
 const CAPTION_ENTRANCE_MAX_SEC = 0.32
 
-/** Mix maestro: música un poco más baja, voz / vídeo un poco más altos. */
-const REEL_MUSIC_VOLUME = '18%'
-const REEL_DIALOGUE_VOLUME = '108%'
+/**
+ * Mezcla voz vs música (Creatomate `volume` en % por elemento).
+ * Prioridad: la voz debe ganar siempre al bed musical (los MP3 de librería suelen ir muy “calientes”).
+ * Ajusta ambos a la vez si cambias el balance; opcionalmente `VIDEO_REEL_MUSIC_VOLUME` / `VIDEO_REEL_DIALOGUE_VOLUME`
+ * (ej. `12%` y `125%`) en el servidor.
+ */
+function volumePercentFromEnv(envKey: string, fallback: string): string {
+  const raw = process.env[envKey]?.trim()
+  if (!raw) return fallback
+  if (!/^\d{1,3}%$/.test(raw)) return fallback
+  const n = Number.parseInt(raw.slice(0, -1), 10)
+  if (!Number.isFinite(n) || n < 0 || n > 200) return fallback
+  return raw
+}
+
+const REEL_MUSIC_VOLUME = volumePercentFromEnv('VIDEO_REEL_MUSIC_VOLUME', '12%')
+const REEL_DIALOGUE_VOLUME = volumePercentFromEnv('VIDEO_REEL_DIALOGUE_VOLUME', '125%')
 
 /**
  * Valores por defecto explícitos en capas `video` para evitar filtros o modos de fusión heredados
