@@ -320,7 +320,7 @@ const CAPTION_ENTRANCE_MAX_SEC = 0.32
  * Mezcla voz vs música (Creatomate `volume` en % por elemento).
  * Prioridad: la voz debe ganar siempre al bed musical (los MP3 de librería suelen ir muy “calientes”).
  * Ajusta ambos a la vez si cambias el balance; opcionalmente `VIDEO_REEL_MUSIC_VOLUME` / `VIDEO_REEL_DIALOGUE_VOLUME`
- * (ej. `12%` y `125%`) en el servidor.
+ * (ej. `17%` y `125%`) en el servidor.
  */
 function volumePercentFromEnv(envKey: string, fallback: string): string {
   const raw = process.env[envKey]?.trim()
@@ -331,7 +331,7 @@ function volumePercentFromEnv(envKey: string, fallback: string): string {
   return raw
 }
 
-const REEL_MUSIC_VOLUME = volumePercentFromEnv('VIDEO_REEL_MUSIC_VOLUME', '12%')
+const REEL_MUSIC_VOLUME = volumePercentFromEnv('VIDEO_REEL_MUSIC_VOLUME', '17%')
 const REEL_DIALOGUE_VOLUME = volumePercentFromEnv('VIDEO_REEL_DIALOGUE_VOLUME', '125%')
 
 /**
