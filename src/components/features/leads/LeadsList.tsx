@@ -44,7 +44,9 @@ export function LeadsList({
     currentUserRole
 }: LeadsListProps) {
 
-    const isAdmin = currentUserRole === 'admin';
+    const showResponsibleColumn =
+        currentUserRole?.toLowerCase().trim() === 'admin' ||
+        currentUserRole?.toLowerCase().trim() === 'marketing';
 
     // --- Helpers Visuales ---
     const getInitials = (name: string | null) =>
@@ -119,7 +121,7 @@ export function LeadsList({
                     {/* Cliente: No le ponemos ancho fijo para que absorba el espacio disponible */}
                     <Table.Head id="name" label="Cliente" allowsSorting />
 
-                    {isAdmin && (
+                    {showResponsibleColumn && (
                         <Table.Head id="assigned_to" label="Responsable" />
                     )}
 
@@ -172,7 +174,7 @@ export function LeadsList({
                                     </div>
                                 </Table.Cell>
 
-                                {isAdmin && (
+                                {showResponsibleColumn && (
                                     <Table.Cell>
                                         {responsableName ? (
                                             <div className="flex items-center gap-2">

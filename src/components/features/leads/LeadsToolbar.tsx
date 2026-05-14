@@ -84,7 +84,9 @@ export function LeadsToolbar({
     sellers = []
 }: LeadsToolbarProps) {
 
-    const isAdmin = currentUserRole?.toLowerCase() === 'admin';
+    const canFilterByAssignee =
+        currentUserRole?.toLowerCase().trim() === 'admin' ||
+        currentUserRole?.toLowerCase().trim() === 'marketing';
     const assignedToValue = filters.assignedTo || 'all';
 
     const hasActiveFilters =
@@ -97,7 +99,7 @@ export function LeadsToolbar({
         filters.hasTradeIn ||
         filters.onlyInteractions ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
-        (isAdmin && assignedToValue !== 'all');
+        (canFilterByAssignee && assignedToValue !== 'all');
 
     // Porcentaje para la métrica vieja
     const responseRate = totalResults > 0 ? Math.round((respondedCount / totalResults) * 100) : 0;
@@ -220,7 +222,7 @@ export function LeadsToolbar({
                         </div>
                     </div>
 
-                    {isAdmin && (
+                    {canFilterByAssignee && (
                         <div className="min-w-[160px]">
                             <CustomSelect
                                 icon={User}

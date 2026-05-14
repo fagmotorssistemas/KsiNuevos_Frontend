@@ -5,13 +5,16 @@ import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchReques
 import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 
+const MARKETING_DEFAULT_ASSIGNEE_NAME_PART = "fagmotors";
+
 export function useLeads() {
-    const { supabase, user, isLoading: isAuthLoading } = useAuth();
+    const { supabase, user, profile, isLoading: isAuthLoading } = useAuth();
     const searchParams = useSearchParams();
 
     // DATOS DE LEADS
     const [leads, setLeads] = useState<LeadWithDetails[]>([]);
     const [sellers, setSellers] = useState<{ id: string; full_name: string }[]>([]);
+    const [sellersHydrated, setSellersHydrated] = useState(false);
 
     // MÉTRICAS
     const [totalCount, setTotalCount] = useState(0);
@@ -60,6 +63,7 @@ export function useLeads() {
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
     const didInitFromUrlRef = useRef(false);
+    const marketingAssigneeDefaultHandledRef = useRef(false);
 
     useEffect(() => {
         if (didInitFromUrlRef.current) return;
@@ -88,6 +92,49 @@ export function useLeads() {
             onlyInteractions: false,
         }));
     }, [searchParams]);
+
+    useEffect(() => {
+        if (isAuthLoading || !user || !profile) return;
+        if (marketingAssigneeDefaultHandledRef.current) return;
+
+        const role = (profile.role || "").toLowerCase().trim();
+        if (role !== "marketing") {
+            marketingAssigneeDefaultHandledRef.current = true;
+            return;
+        }
+        if (searchParams.get("assignedTo")) {
+            marketingAssigneeDefaultHandledRef.current = true;
+            return;
+        }
+        if (!sellersHydrated) return;
+
+        const slug = MARKETING_DEFAULT_ASSIGNEE_NAME_PART.toLowerCase();
+        const fromSellers = sellers.find((s) => (s.full_name || "").toLowerCase().includes(slug));
+        if (fromSellers) {
+            marketingAssigneeDefaultHandledRef.current = true;
+            setPage(1);
+            setFilters((prev) => ({ ...prev, assignedTo: fromSellers.id }));
+            return;
+        }
+
+        let cancelled = false;
+        (async () => {
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id")
+                .ilike("full_name", `%${MARKETING_DEFAULT_ASSIGNEE_NAME_PART}%`)
+                .limit(1);
+            if (cancelled || marketingAssigneeDefaultHandledRef.current) return;
+            marketingAssigneeDefaultHandledRef.current = true;
+            if (error || !data?.[0]?.id) return;
+            setPage(1);
+            setFilters((prev) => ({ ...prev, assignedTo: data[0].id as string }));
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthLoading, user, profile, sellers, sellersHydrated, searchParams, supabase]);
 
     const resetFilters = () => {
         setPage(1);
@@ -144,8 +191,17 @@ export function useLeads() {
 
     useEffect(() => {
         if (!isAuthLoading && user) {
-            fetchSellersRequest(supabase).then(setSellers);
+            let cancelled = false;
+            fetchSellersRequest(supabase).then((rows) => {
+                if (cancelled) return;
+                setSellers(rows || []);
+                setSellersHydrated(true);
+            });
+            return () => {
+                cancelled = true;
+            };
         }
+        setSellersHydrated(false);
     }, [isAuthLoading, user, supabase]);
 
     useEffect(() => {
