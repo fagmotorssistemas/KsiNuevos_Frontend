@@ -8,7 +8,8 @@ import {
     MapPin,
     Hash,
     ImageIcon,
-    FileText
+    FileText,
+    Download,
 } from "lucide-react";
 import jsPDF from "jspdf";
 
@@ -17,6 +18,7 @@ import { Table, TableCard } from "@/components/ui/table";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
 import { ImageViewerModal } from "@/components/features/inventory/ImageViewerModal";
+import { downloadAllInventoryImages } from "@/lib/download-inventory-images";
 
 import type { InventoryCar } from "@/hooks/useInventory";
 
@@ -223,6 +225,7 @@ export function InventoryTable({
 
     const [viewingCar, setViewingCar] = useState<InventoryCar | null>(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
+    const [downloadingImagesId, setDownloadingImagesId] = useState<string | null>(null);
 
     const role = currentUserRole?.toLowerCase() || '';
     const canEdit = role === 'admin' || role === 'marketing'; // Admin y marketing pueden abrir modal; en el modal solo admin edita precio
@@ -255,6 +258,19 @@ export function InventoryTable({
             alert("No se pudo generar el PDF. Revisa la consola.");
         } finally {
             setIsGeneratingPdf(null);
+        }
+    };
+
+    const handleDownloadAllImages = async (car: InventoryCar, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDownloadingImagesId(car.id);
+        try {
+            await downloadAllInventoryImages(car);
+        } catch (error) {
+            console.error("Error al descargar imágenes:", error);
+            alert("No se pudieron descargar todas las imágenes.");
+        } finally {
+            setDownloadingImagesId(null);
         }
     };
 
@@ -359,6 +375,24 @@ export function InventoryTable({
                                                     <FileText className="h-4 w-4" />
                                                 )}
                                             </button>
+
+                                            {hasImages && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleDownloadAllImages(car, e)}
+                                                    disabled={
+                                                        downloadingImagesId === car.id || isGeneratingPdf === car.id
+                                                    }
+                                                    className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50"
+                                                    title="Descargar todas las fotos (portada y galería)"
+                                                >
+                                                    {downloadingImagesId === car.id ? (
+                                                        <div className="animate-spin h-4 w-4 border-2 border-brand-600 border-t-transparent rounded-full" />
+                                                    ) : (
+                                                        <Download className="h-4 w-4" />
+                                                    )}
+                                                </button>
+                                            )}
 
                                             {canEdit && (
                                                 <Button

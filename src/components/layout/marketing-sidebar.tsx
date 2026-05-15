@@ -14,7 +14,6 @@ import {
     BarChart3,
     ScrollText,
     ClipboardList,
-    Newspaper,
 } from 'lucide-react';
 
 const menuItems = [
@@ -23,7 +22,8 @@ const menuItems = [
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
-    { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
+    // Noticiero: oculto en sidebar hasta lanzamiento (la ruta /marketing/noticiero sigue existiendo).
+    // { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
     { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
 ];
 
