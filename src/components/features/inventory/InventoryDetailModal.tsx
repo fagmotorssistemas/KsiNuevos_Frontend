@@ -1,13 +1,15 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
-    X, Save, Car, Share2, MapPin, Tag,
-    DollarSign, Gauge, Calendar, Loader2, 
+    X, Save, Car, Share2, MapPin, Tag, Cog,
+    DollarSign, Gauge, Loader2,
     Image as ImageIcon, UploadCloud, Plus, Trash2,
-    Link // <--- Nuevo icono importado
+    Link,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "../../../hooks/useInventory";
+import type { VehiculoInventario } from "@/types/inventario.types";
+import { inventarioService } from "@/services/inventario.service";
 import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
 import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
@@ -62,6 +64,76 @@ const STATUS_STYLES: Record<string, string> = {
     consignacion: 'text-blue-600 font-medium bg-blue-50 border-blue-200',
 };
 
+function displayVal(v: string | number | null | undefined): string | null {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    return s === "" || s === "." ? null : s;
+}
+
+function coalesce(...vals: (string | number | null | undefined)[]): string | null {
+    for (const v of vals) {
+        const d = displayVal(v);
+        if (d) return d;
+    }
+    return null;
+}
+
+function SpecCell({
+    label,
+    value,
+    highlight = false,
+    mono = false,
+}: {
+    label: string;
+    value: string | null | undefined;
+    highlight?: boolean;
+    mono?: boolean;
+}) {
+    const isEmpty = !value;
+    return (
+        <div>
+            <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">
+                {label}
+            </dt>
+            <dd
+                className={`text-sm leading-snug ${
+                    isEmpty
+                        ? "text-slate-400 italic"
+                        : highlight
+                          ? "font-mono font-semibold text-brand-900 bg-brand-50 px-2 py-1 rounded-md inline-block"
+                          : mono
+                            ? "font-mono text-slate-800"
+                            : "text-slate-800 capitalize"
+                }`}
+            >
+                {isEmpty ? "—" : value}
+            </dd>
+        </div>
+    );
+}
+
+function FichaSection({
+    icon: Icon,
+    title,
+    children,
+}: {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
+                    <Icon className="h-3.5 w-3.5" />
+                </span>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">{children}</div>
+        </div>
+    );
+}
+
 function StatusBadge({ status }: { status: string }) {
     const label = STATUS_LABELS[status] ?? status;
     const style = STATUS_STYLES[status] ?? 'text-slate-600 font-medium bg-slate-50 border-slate-200';
@@ -91,6 +163,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos' | 'publications'>('general');
     const [isSaving, setIsSaving] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
+    const [oracleFicha, setOracleFicha] = useState<VehiculoInventario | null>(null);
+    const [loadingFicha, setLoadingFicha] = useState(false);
 
     // --- ESTADO DE IMÁGENES ---
     // 1. Imagen Principal (Nueva)
@@ -129,6 +203,53 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
+
+    useEffect(() => {
+        if (!car.plate) {
+            setOracleFicha(null);
+            return;
+        }
+        let cancelled = false;
+        setLoadingFicha(true);
+        inventarioService
+            .getDetalleVehiculo(car.plate)
+            .then((data) => {
+                if (!cancelled) setOracleFicha(data.fichaTecnica ?? null);
+            })
+            .catch(() => {
+                if (!cancelled) setOracleFicha(null);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingFicha(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [car.plate]);
+
+    const ficha = useMemo(() => {
+        const o = oracleFicha;
+        const cyl = car.cylinder_count != null ? String(car.cylinder_count) : null;
+        return {
+            marca: coalesce(car.brand, o?.marca),
+            modelo: coalesce(car.model, o?.modelo),
+            anio: coalesce(car.year, o?.anioModelo),
+            color: coalesce(formData.color, car.color, o?.color),
+            tipo: coalesce(car.type_body, car.type, o?.tipo),
+            version: coalesce(car.version, o?.version),
+            motor: coalesce(car.engine_number, o?.motor),
+            chasis: coalesce(car.vin, o?.chasis),
+            cilindraje: coalesce(car.engine_displacement, cyl, o?.cilindraje),
+            combustible: coalesce(car.fuel_type, o?.combustible),
+            ejes: coalesce(car.axles_count, o?.nroEjes),
+            llantas: coalesce(car.wheels_count, o?.nroLlantas),
+            paisOrigen: coalesce(car.country_origin, o?.paisOrigen),
+            anioMatricula: coalesce(car.registration_year, o?.anioMatricula),
+            lugarMatricula: coalesce(car.registration_place, o?.lugarMatricula),
+            proveedor: coalesce(car.supplier, o?.proveedor),
+            descripcionSistema: coalesce(o?.descripcion, car.description),
+        };
+    }, [car, oracleFicha, formData.color]);
 
     // --- MANEJO DE ARCHIVOS ---
 
@@ -292,7 +413,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
 
                 {/* HEADER */}
                 <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -445,6 +566,65 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     disabled={!canEdit}
                                 />
                             </InputGroup>
+
+                            <div className="border-t border-slate-100 pt-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-sm font-bold text-slate-800">Ficha técnica</h3>
+                                    {loadingFicha && (
+                                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Sincronizando Oracle…
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
+                                            <Tag className="h-4 w-4" /> Detalles generales
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <FichaItem label="Marca" value={ficha.marca} />
+                                            <FichaItem label="Modelo" value={ficha.modelo} />
+                                            <FichaItem label="Año" value={ficha.anio} />
+                                            <FichaItem label="Color" value={ficha.color} />
+                                            <FichaItem label="Tipo" value={ficha.tipo} />
+                                            <FichaItem label="Versión" value={ficha.version} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
+                                            <Cog className="h-4 w-4" /> Mecánica
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <FichaItem label="Motor" value={ficha.motor} highlight />
+                                            <FichaItem label="Chasis" value={ficha.chasis} highlight />
+                                            <FichaItem label="Cilindraje" value={ficha.cilindraje} />
+                                            <FichaItem label="Combustible" value={ficha.combustible} />
+                                            <FichaItem label="Ejes" value={ficha.ejes} />
+                                            <FichaItem label="Llantas" value={ficha.llantas} />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
+                                            <MapPin className="h-4 w-4" /> Legal
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <FichaItem label="País origen" value={ficha.paisOrigen} />
+                                            <FichaItem label="Año matrícula" value={ficha.anioMatricula} />
+                                            <FichaItem label="Lugar matrícula" value={ficha.lugarMatricula} />
+                                            <FichaItem label="Proveedor" value={ficha.proveedor} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                    <span className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                                        Descripción sistema
+                                    </span>
+                                    <p className="text-sm text-slate-700">
+                                        {ficha.descripcionSistema || "Sin descripción"}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     )}
 

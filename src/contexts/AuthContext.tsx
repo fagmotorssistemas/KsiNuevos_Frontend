@@ -1,11 +1,16 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { Session, User, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
+import {
+  fetchPermissionMap,
+  hasPermission as hasPermissionFn,
+  type PermissionAction,
+  type PermissionMap,
+} from '@/lib/permissions'
 
-// (Tipos - sin cambios)
 interface AuthContextType {
   supabase: SupabaseClient<Database>
   session: Session | null
@@ -13,6 +18,11 @@ interface AuthContextType {
   profile: Profile | null
   role: Profile['role'] | null
   isLoading: boolean
+  /** Mapa de permisos efectivos (RPC); vacío hasta cargar sesión */
+  permissionMap: PermissionMap
+  permissionsLoading: boolean
+  refreshPermissions: () => Promise<void>
+  hasPermission: (submoduleSlug: string, action: PermissionAction) => boolean
 }
 type Profile = Database['public']['Tables']['profiles']['Row']
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -23,6 +33,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [permissionMap, setPermissionMap] = useState<PermissionMap>({})
+  const [permissionsLoading, setPermissionsLoading] = useState(false)
 
   // useEffect 1: Maneja SÓLO la autenticación (rápido)
   useEffect(() => {
@@ -36,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (event === 'SIGNED_OUT') {
           setProfile(null)
+          setPermissionMap({})
           setIsLoading(false)
         }
       }
@@ -52,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (!user) {
       setProfile(null)
+      setPermissionMap({})
       setIsLoading(false)
       return
     }
@@ -61,12 +75,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .select('*')
       .eq('id', user.id)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error) {
           console.error('Error al obtener el perfil:', error)
           setProfile(null)
+          setPermissionMap({})
         } else {
           setProfile(data)
+          setPermissionsLoading(true)
+          try {
+            setPermissionMap(await fetchPermissionMap(supabase))
+          } catch (e) {
+            console.error('Error al cargar permisos:', e)
+            setPermissionMap({})
+          } finally {
+            setPermissionsLoading(false)
+          }
         }
         setIsLoading(false)
       })
@@ -83,8 +107,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           table: 'profiles',
           filter: `id=eq.${user.id}`,
         },
-        (payload) => {
+        async (payload) => {
           setProfile(payload.new as Profile)
+          setPermissionsLoading(true)
+          try {
+            setPermissionMap(await fetchPermissionMap(supabase))
+          } catch (e) {
+            console.error('Error al refrescar permisos:', e)
+          } finally {
+            setPermissionsLoading(false)
+          }
         }
       )
       .subscribe()
@@ -94,6 +126,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user, supabase])
 
+  const refreshPermissions = useCallback(async () => {
+    if (!user) {
+      setPermissionMap({})
+      return
+    }
+    setPermissionsLoading(true)
+    try {
+      setPermissionMap(await fetchPermissionMap(supabase))
+    } catch (e) {
+      console.error('Error al refrescar permisos:', e)
+    } finally {
+      setPermissionsLoading(false)
+    }
+  }, [user, supabase])
+
+  const hasPermission = useCallback(
+    (submoduleSlug: string, action: PermissionAction) =>
+      hasPermissionFn({ baseRole: profile?.role ?? null, map: permissionMap }, submoduleSlug, action),
+    [profile?.role, permissionMap]
+  )
+
   const value = {
     supabase,
     session,
@@ -101,6 +154,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     profile,
     role: profile?.role ?? null,
     isLoading,
+    permissionMap,
+    permissionsLoading,
+    refreshPermissions,
+    hasPermission,
   }
 
   // (¡LA CORRECCIÓN MÁS IMPORTANTE!)

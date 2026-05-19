@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image' // Importamos Image
 import { useAuth } from '@/hooks/useAuth'
@@ -10,20 +10,30 @@ import { Menu, X } from 'lucide-react'
 // Sub-componentes
 import { MainNav } from './MainNav'
 import { UserNav } from './UserNav'
-import { contableMayAccessSeguros, contableMayAccessTaller } from '@/lib/access/contableModuleAccess'
+import {
+  ADMIN_PRIMARY_NAV,
+  mayAccessGpsRoutes,
+  mayAccessLegalRoutes,
+  mayAccessMarketingRoutes,
+  mayAccessSegurosAppRoutes,
+  mayAccessTallerRoutes,
+  type PermissionContext,
+} from '@/lib/permissions'
 
 export const Navbar = () => {
-  const { user, profile } = useAuth()
+  const { user, profile, permissionMap, hasPermission } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const showRastreadores = profile?.role === 'admin' || profile?.role === 'vendedor'
-  const showSeguros = profile?.role === 'admin' || contableMayAccessSeguros(profile)
-  const showTallerMobile =
-    profile?.role === 'admin' ||
-    profile?.role === 'taller' ||
-    contableMayAccessTaller(profile)
-  const r = (profile?.role || '').toLowerCase().trim()
-  const showLegal =
-    r === 'admin' || r === 'abogado' || r === 'abogada' || r === 'finanzas'
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+    [profile?.role, permissionMap]
+  )
+  const isAppAdmin = profile?.role === 'admin'
+  const showRastreadores = isAppAdmin || mayAccessGpsRoutes(permCtx)
+  const showSeguros = isAppAdmin || mayAccessSegurosAppRoutes(permCtx)
+  const showTallerMobile = isAppAdmin || mayAccessTallerRoutes(permCtx)
+  const showLegal = isAppAdmin || mayAccessLegalRoutes(permCtx)
+  const showWallet = isAppAdmin || hasPermission('cartera-clientes', 'read')
+  const showMarketingExtras = isAppAdmin || mayAccessMarketingRoutes(permCtx)
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -81,6 +91,19 @@ export const Navbar = () => {
       {isMobileMenuOpen && user && (
         <div className="md:hidden border-t border-slate-100 bg-white absolute w-full left-0 shadow-lg animate-in slide-in-from-top-5 duration-200">
           <div className="p-4 space-y-2">
+            {isAppAdmin ? (
+              ADMIN_PRIMARY_NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              ))
+            ) : (
+              <>
             <Link 
                 href="/leads" 
                 className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
@@ -111,15 +134,6 @@ export const Navbar = () => {
                   Gestión Legal
               </Link>
             )}
-            {profile?.role === 'admin' && (
-              <Link 
-                  href="/templates" 
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-              >
-                  Plantillas
-              </Link>
-            )}
             {showRastreadores && (
               <Link 
                   href="/rastreadores" 
@@ -146,6 +160,42 @@ export const Navbar = () => {
               >
                   Taller
               </Link>
+            )}
+            {showWallet && (
+              <Link
+                  href="/wallet"
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+              >
+                  Contabilidad
+              </Link>
+            )}
+            {showMarketingExtras && (
+              <>
+                <Link
+                  href="/marketing"
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Marketing
+                </Link>
+                <Link
+                  href="/scraper"
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Scraper
+                </Link>
+                <Link
+                  href="/report"
+                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Monitoreo
+                </Link>
+              </>
+            )}
+              </>
             )}
           </div>
         </div>

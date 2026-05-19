@@ -2639,10 +2639,62 @@ export type Database = {
         }
         Relationships: []
       }
+      modules: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      profile_roles: {
+        Row: {
+          assigned_at: string
+          profile_id: string
+          role_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          profile_id: string
+          role_id: string
+        }
+        Update: {
+          assigned_at?: string
+          profile_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_roles_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
-          can_access_seguros: boolean
-          can_access_taller: boolean
           created_at: string
           full_name: string
           id: string
@@ -2652,8 +2704,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          can_access_seguros?: boolean
-          can_access_taller?: boolean
           created_at?: string
           full_name: string
           id: string
@@ -2663,8 +2713,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          can_access_seguros?: boolean
-          can_access_taller?: boolean
           created_at?: string
           full_name?: string
           id?: string
@@ -2674,6 +2722,107 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      role_permissions: {
+        Row: {
+          can_delete: boolean
+          can_read: boolean
+          can_write: boolean
+          id: string
+          role_id: string
+          submodule_id: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          id?: string
+          role_id: string
+          submodule_id: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          id?: string
+          role_id?: string
+          submodule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_submodule_id_fkey"
+            columns: ["submodule_id"]
+            isOneToOne: false
+            referencedRelation: "submodules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          base_role: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          base_role: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          base_role?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      submodules: {
+        Row: {
+          id: string
+          module_id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          id?: string
+          module_id: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          id?: string
+          module_id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submodules_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scraper_sellers: {
         Row: {
@@ -4775,6 +4924,16 @@ export type Database = {
           tipo_mensaje: string
         }[]
       }
+      get_my_effective_permissions: {
+        Args: Record<string, never>
+        Returns: {
+          submodule_slug: string
+          can_read: boolean
+          can_write: boolean
+          can_delete: boolean
+        }[]
+      }
+      is_profile_admin: { Args: Record<string, never>; Returns: boolean }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
