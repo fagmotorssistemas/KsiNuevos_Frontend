@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { requireNoticieroEnv } from '@/lib/noticiero/env'
-import { generateNoticieroScript } from '@/lib/noticiero/gemini'
-import type { GenerateScriptRequest, NoticieroVehicle } from '@/lib/noticiero/types'
+import { buildVehicleHeadlineSync, isBannerTitleValid, normalizeBannerTitle } from '@/lib/noticiero/banner-title'
+import { generateCustomBannerTitle, generateVehicleHeadline } from '@/lib/noticiero/gemini'
+import type { GenerateBannerTitleRequest, NoticieroVehicle } from '@/lib/noticiero/types'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -34,20 +35,20 @@ export async function POST(request: NextRequest) {
 
   try {
     requireNoticieroEnv()
-    const body = (await request.json()) as GenerateScriptRequest
+    const body = (await request.json()) as GenerateBannerTitleRequest
 
     if (body.mode === 'vehicle') {
       const vehicle = parseVehicle(body.vehicle ?? {})
       if (!vehicle) {
         return NextResponse.json({ error: 'Vehículo inválido o incompleto' }, { status: 400 })
       }
-      const result = await generateNoticieroScript(
-        'vehicle',
-        vehicle,
-        undefined,
-        body.bannerTitle
-      )
-      return NextResponse.json(result)
+
+      const useAi = body.useAi !== false
+      const bannerTitle = useAi
+        ? await generateVehicleHeadline(vehicle)
+        : buildVehicleHeadlineSync(vehicle)
+
+      return NextResponse.json({ bannerTitle, source: useAi ? 'ai' : 'sync' })
     }
 
     if (body.mode === 'custom') {
@@ -55,14 +56,22 @@ export async function POST(request: NextRequest) {
       if (!topic) {
         return NextResponse.json({ error: 'El tema personalizado es requerido' }, { status: 400 })
       }
-      const result = await generateNoticieroScript('custom', undefined, topic, body.bannerTitle)
-      return NextResponse.json(result)
+      const bannerTitle = await generateCustomBannerTitle(topic)
+      return NextResponse.json({ bannerTitle, source: 'ai' })
     }
 
-    return NextResponse.json({ error: 'mode debe ser "vehicle" o "custom"' }, { status: 400 })
+    if (body.mode === 'manual') {
+      const title = normalizeBannerTitle(body.bannerTitle ?? '')
+      if (!isBannerTitleValid(title)) {
+        return NextResponse.json({ error: 'Titular inválido (mín. 3 caracteres)' }, { status: 400 })
+      }
+      return NextResponse.json({ bannerTitle: title, source: 'manual' })
+    }
+
+    return NextResponse.json({ error: 'mode debe ser vehicle, custom o manual' }, { status: 400 })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error generando guión'
-    console.error('[noticiero/generate-script]', err)
+    const message = err instanceof Error ? err.message : 'Error generando titular'
+    console.error('[noticiero/generate-banner-title]', err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

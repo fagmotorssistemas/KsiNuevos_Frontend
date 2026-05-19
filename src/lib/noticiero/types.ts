@@ -1,3 +1,5 @@
+import type { VideoSocialPublishStage } from '@/lib/videos/types'
+
 /** Vehículo de inventoryoracle usado en el noticiero */
 export interface NoticieroVehicle {
   id: string
@@ -20,10 +22,63 @@ export interface NoticieroVehicle {
 
 export type NoticieroMode = 'vehicle' | 'custom'
 
+export type NoticieroJobStatus =
+  | 'pending'
+  | 'script'
+  | 'avatar'
+  | 'compositing'
+  | 'completed'
+  | 'failed'
+
+export type NoticieroSocialPublishStage = VideoSocialPublishStage
+
+export interface NoticieroJob {
+  id: string
+  created_at: string
+  updated_at: string
+  created_by: string | null
+  job_name: string | null
+  status: NoticieroJobStatus
+  current_step: string | null
+  progress_percentage: number
+  error_message: string | null
+  mode: NoticieroMode
+  vehicle_id: string | null
+  custom_topic: string | null
+  vehicle_snapshot: NoticieroVehicle | null
+  script_text: string | null
+  banner_title: string | null
+  heygen_background_url: string | null
+  heygen_video_id: string | null
+  heygen_video_url: string | null
+  creatomate_render_id: string | null
+  final_video_url: string | null
+  social_publish_stage: NoticieroSocialPublishStage | string | null
+}
+
+export interface StartPipelineRequest {
+  mode: NoticieroMode
+  vehicle?: NoticieroVehicle
+  customTopic?: string
+  bannerTitle?: string
+  backgroundUrl?: string | null
+}
+
 export interface GenerateScriptRequest {
   mode: NoticieroMode
   vehicle?: NoticieroVehicle
   customTopic?: string
+  /** Si el usuario editó el titular en la UI, se respeta al generar el guión. */
+  bannerTitle?: string
+}
+
+export interface GenerateBannerTitleRequest {
+  mode: 'vehicle' | 'custom' | 'manual'
+  vehicle?: NoticieroVehicle
+  customTopic?: string
+  bannerTitle?: string
+  /** vehicle: true = Gemini, false = limpieza local rápida */
+  useAi?: boolean
 }
 
 export interface GenerateScriptResponse {
@@ -33,6 +88,8 @@ export interface GenerateScriptResponse {
 
 export interface GenerateAvatarRequest {
   script: string
+  /** URL pública de imagen en bucket noticiero-fondos; null/omitido = fondo blanco */
+  backgroundUrl?: string | null
 }
 
 export interface GenerateAvatarResponse {
@@ -41,6 +98,7 @@ export interface GenerateAvatarResponse {
 }
 
 export interface GenerateVideoRequest {
+  jobId?: string
   heygenVideoUrl: string
   mode: NoticieroMode
   vehicle?: NoticieroVehicle
@@ -52,6 +110,14 @@ export interface GenerateVideoResponse {
   bannerTitle: string
   renderId: string
 }
+
+export type NoticieroPipelineStep =
+  | 'idle'
+  | 'script'
+  | 'avatar'
+  | 'video'
+  | 'done'
+  | 'error'
 
 // ─── HeyGen ─────────────────────────────────────────────────────────────────
 
@@ -67,10 +133,9 @@ export interface HeyGenGenerateBody {
       voice_id: string
       input_text: string
     }
-    background: {
-      type: 'color'
-      value: string
-    }
+    background:
+      | { type: 'color'; value: string }
+      | { type: 'image'; url: string }
   }>
   dimension: { width: number; height: number }
 }
@@ -84,10 +149,12 @@ export interface HeyGenGenerateResponse {
 export interface HeyGenStatusData {
   status?: string
   video_url?: string
-  error?: string | null
+  error?: string | { message?: string; detail?: string; code?: number } | null
 }
 
 export interface HeyGenStatusResponse {
+  code?: number
+  message?: string
   data?: HeyGenStatusData
   status?: string
   video_url?: string
@@ -107,23 +174,11 @@ export interface CreatomateV1RenderResponse {
   error_message?: string
 }
 
-export type NoticieroPipelineStep =
-  | 'idle'
-  | 'script'
-  | 'avatar'
-  | 'video'
-  | 'social'
-  | 'done'
-  | 'error'
+export type NoticieroPublishingQueueStatus =
+  | 'pending'
+  | 'publishing'
+  | 'published'
+  | 'failed'
+  | 'cancelled'
 
-export interface NoticieroPipelineState {
-  step: NoticieroPipelineStep
-  script: string | null
-  bannerTitle: string | null
-  heygenVideoUrl: string | null
-  finalVideoUrl: string | null
-  error: string | null
-  instagramResult: { mediaId: string; containerId: string } | null
-  facebookResult: { postId: string } | null
-  socialError: string | null
-}
+export type NoticieroPublishingPlatform = 'instagram' | 'facebook'

@@ -2582,6 +2582,175 @@ export type Database = {
         }
         Relationships: []
       }
+      noticiero_jobs: {
+        Row: {
+          banner_title: string | null
+          created_at: string
+          created_by: string | null
+          creatomate_render_id: string | null
+          current_step: string | null
+          custom_topic: string | null
+          error_message: string | null
+          final_video_url: string | null
+          heygen_background_url: string | null
+          heygen_video_id: string | null
+          heygen_video_url: string | null
+          id: string
+          job_name: string | null
+          mode: string
+          progress_percentage: number
+          script_text: string | null
+          social_publish_stage: string | null
+          status: string
+          updated_at: string
+          vehicle_id: string | null
+          vehicle_snapshot: Json | null
+        }
+        Insert: {
+          banner_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          custom_topic?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          heygen_background_url?: string | null
+          heygen_video_id?: string | null
+          heygen_video_url?: string | null
+          id?: string
+          job_name?: string | null
+          mode: string
+          progress_percentage?: number
+          script_text?: string | null
+          social_publish_stage?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_snapshot?: Json | null
+        }
+        Update: {
+          banner_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          custom_topic?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          heygen_background_url?: string | null
+          heygen_video_id?: string | null
+          heygen_video_url?: string | null
+          id?: string
+          job_name?: string | null
+          mode?: string
+          progress_percentage?: number
+          script_text?: string | null
+          social_publish_stage?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      noticiero_publishing_queue: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          noticiero_job_id: string
+          platforms: string[]
+          scheduled_at: string
+          status: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          caption: string
+          created_at?: string
+          id?: string
+          noticiero_job_id: string
+          platforms: string[]
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          noticiero_job_id?: string
+          platforms?: string[]
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_publishing_queue_noticiero_job_id_fkey"
+            columns: ["noticiero_job_id"]
+            isOneToOne: false
+            referencedRelation: "noticiero_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noticiero_publishing_queue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      noticiero_publishing_results: {
+        Row: {
+          attempted_at: string
+          error_message: string | null
+          id: string
+          platform: string
+          platform_post_id: string | null
+          queue_id: string
+          status: string
+        }
+        Insert: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform: string
+          platform_post_id?: string | null
+          queue_id: string
+          status: string
+        }
+        Update: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform?: string
+          platform_post_id?: string | null
+          queue_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_publishing_results_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "noticiero_publishing_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_runs: {
         Row: {
           created_at: string

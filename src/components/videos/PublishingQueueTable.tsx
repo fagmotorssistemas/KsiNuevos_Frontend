@@ -8,7 +8,7 @@ import type { VideoJob } from '@/lib/videos/types'
 import { formatUtcForEcuadorDisplay } from '@/lib/videos/ecuador-time'
 import { SchedulePublishModal, type QueueRowLike } from './SchedulePublishModal'
 
-type VideoJoin = { job_name: string | null; final_video_url: string | null }
+type VideoJoin = { job_name: string | null; final_video_url: string | null; flow_type?: string | null }
 type VehicleJoin = { brand: string; model: string; year: number; version: string | null }
 type PublishResultRow = { queue_id: string; platform: string; platform_post_id: string | null }
 
@@ -132,9 +132,11 @@ function PublishResultsModal({ queueId, onClose }: ResultModalProps) {
 export function PublishingQueueTable({
   refreshKey = 0,
   onMutate,
+  flowTypeFilter,
 }: {
   refreshKey?: number
   onMutate?: () => void
+  flowTypeFilter?: string
 }) {
   const [rows, setRows] = useState<PublishingQueueRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -155,7 +157,7 @@ export function PublishingQueueTable({
         .select(
           `
           id, video_id, vehicle_id, caption, scheduled_at, platforms, status,
-          video_jobs_v2 ( job_name, final_video_url ),
+          video_jobs_v2 ( job_name, final_video_url, flow_type ),
           inventoryoracle ( brand, model, year, version )
         `
         )
@@ -163,7 +165,10 @@ export function PublishingQueueTable({
         .order('scheduled_at', { ascending: false })
         .limit(200)
       if (error) throw error
-      const queueRows = (data ?? []) as unknown as PublishingQueueRow[]
+      let queueRows = (data ?? []) as unknown as PublishingQueueRow[]
+      if (flowTypeFilter) {
+        queueRows = queueRows.filter((r) => r.video_jobs_v2?.flow_type === flowTypeFilter)
+      }
       setRows(queueRows)
 
       const queueIds = queueRows.map((r) => r.id)
@@ -187,7 +192,7 @@ export function PublishingQueueTable({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [flowTypeFilter])
 
   useEffect(() => {
     load()

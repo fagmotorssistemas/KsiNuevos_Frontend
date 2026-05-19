@@ -39,6 +39,7 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
       let query = supabase
         .from('video_jobs_v2')
         .select('*')
+        .neq('flow_type', 'noticiero')
         .order('created_at', { ascending: false })
         .range(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE - 1)
 

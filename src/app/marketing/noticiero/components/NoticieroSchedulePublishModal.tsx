@@ -4,9 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Sparkles, Search, ChevronDown, Car, Calendar, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import type { VideoJob } from '@/lib/videos/types'
+import type { NoticieroJob } from '@/lib/noticiero/types'
 import { ecuadorLocalDateTimeToUtcIso, utcIsoToEcuadorDateAndTime } from '@/lib/videos/ecuador-time'
-
 type InventoryOracleRow = {
   id: string
   brand: string
@@ -31,23 +30,23 @@ export interface QueueRowLike {
   scheduled_at: string
 }
 
-interface SchedulePublishModalProps {
+interface NoticieroSchedulePublishModalProps {
   isOpen: boolean
   onClose: () => void
-  job: VideoJob | null
+  job: NoticieroJob | null
   mode?: 'create' | 'edit'
   initialQueue?: QueueRowLike | null
   onScheduled: () => void
 }
 
-export function SchedulePublishModal({
+export function NoticieroSchedulePublishModal({
   isOpen,
   onClose,
   job,
   mode = 'create',
   initialQueue,
   onScheduled,
-}: SchedulePublishModalProps) {
+}: NoticieroSchedulePublishModalProps) {
   function toTitleCase(text: string) {
     return text
       .toLowerCase()
@@ -118,7 +117,7 @@ export function SchedulePublishModal({
     setDateYmd(dy)
     setTimeHm(th)
     setSearchTerm('')
-    setVehicleId('')
+    setVehicleId(job?.vehicle_id ?? '')
   }, [isOpen, mode, job?.id])
 
   useEffect(() => {
@@ -231,25 +230,15 @@ export function SchedulePublishModal({
 
     setSaving(true)
     try {
-      if (mode === 'edit' && initialQueue) {
-        const res = await fetch(`/api/videos/publish/queue/${initialQueue.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            caption: caption.trim(),
-            platforms,
-            scheduledAt: scheduledIso,
-          }),
-        })
-        const data = (await res.json()) as { error?: string }
-        if (!res.ok) throw new Error(data.error ?? 'Error')
-        toast.success('Cola actualizada')
+      if (mode === 'edit') {
+        toast.error('La edición de cola para noticieros estará disponible pronto')
+        return
       } else {
-        const res = await fetch('/api/videos/publish/queue', {
+        const res = await fetch('/api/marketing/noticiero/publish/queue', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            videoId: job.id,
+            noticieroJobId: job.id,
             vehicleId,
             caption: caption.trim(),
             platforms,
