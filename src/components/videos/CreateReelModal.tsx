@@ -25,9 +25,9 @@ import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import {
   VIDEO_RAW_BUCKET,
   VIDEO_RAW_BUCKET_MAX_BYTES,
-  fileWithResolvedVideoMime,
   resolveVideoMimeType,
 } from '@/lib/videos/resolve-video-mime'
+import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
 
@@ -305,20 +305,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         voiceOverStoredPath = voData.path
       }
 
-      // ── PASO 2: Subir cada archivo DIRECTAMENTE a Supabase Storage ───────
-      // Usar uploadToSignedUrl (FormData + headers del SDK); PUT crudo con File suele dar 400.
+      // ── PASO 2: Subir clips (firmado directo o proxy API si el archivo es grande) ──
       for (let i = 0; i < files.length; i++) {
-        const file = fileWithResolvedVideoMime(files[i])
+        const file = files[i]
         const upload = uploads[i]
         setUploadProgress(`Subiendo ${i + 1} de ${files.length}: ${file.name}...`)
 
-        const { error: uploadError } = await supabase.storage
-          .from(VIDEO_RAW_BUCKET)
-          .uploadToSignedUrl(upload.path, upload.token, file, { cacheControl: '3600' })
-
-        if (uploadError) {
-          throw new Error(`Error subiendo ${file.name}: ${uploadError.message}`)
-        }
+        await uploadRawVideoClip(supabase, newJobId, upload.path, upload.token, file)
       }
 
       let scriptPdfPath: string | undefined

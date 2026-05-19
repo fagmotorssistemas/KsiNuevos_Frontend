@@ -1,8 +1,14 @@
 /** Bucket de clips crudos en Supabase Storage (debe coincidir con jobs/create y storage.ts). */
 export const VIDEO_RAW_BUCKET = 'raw-videos-v2'
 
-/** Límite del bucket `raw-videos-v2` en Supabase (2 GB). */
+/** Límite del bucket `raw-videos-v2` en Supabase (2 GB por objeto). */
 export const VIDEO_RAW_BUCKET_MAX_BYTES = 2 * 1024 * 1024 * 1024
+
+/**
+ * Límite efectivo típico si el proyecto no subió el tope global en Supabase Dashboard.
+ * El global suele ser 50 MB y prevalece sobre el límite del bucket.
+ */
+export const VIDEO_SUPABASE_GLOBAL_DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 
 const ALLOWED_VIDEO_MIME = new Set([
   'video/mp4',

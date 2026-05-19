@@ -10,7 +10,8 @@ const ALLOWED_MIME = new Set([
   'video/x-msvideo', 'video/webm', 'video/x-matroska',
 ])
 const WARN_SIZE_MB = 500
-const CLIP_WARN_SIZE_MB = 200
+/** Aviso en UI: clips grandes requieren límite global de Storage ≥500 MB en Supabase. */
+const CLIP_WARN_SIZE_MB = 45
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -103,7 +104,7 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
             <p className="text-xs text-gray-400">
               {flowType === 'single'
                 ? 'Máximo 2 GB. Archivos >500 MB se comprimirán automáticamente.'
-                : `Hasta ${VIDEO_MAX_CLIPS} clips. Planos sin habla se detectan solos. Archivos >200 MB se comprimirán.`}
+                : `Hasta ${VIDEO_MAX_CLIPS} clips. Cada clip hasta ~500 MB (configura el límite global en Supabase Storage).`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors">
