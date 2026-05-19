@@ -8,18 +8,30 @@ import {
   VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
   VIDEO_SUPABASE_GLOBAL_DEFAULT_MAX_BYTES,
 } from '@/lib/videos/resolve-video-mime'
+import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
 export type VideoCompressProgressFn = (message: string) => void
 
 type FfmpegModule = typeof import('@ffmpeg/ffmpeg')
 type UtilModule = typeof import('@ffmpeg/util')
 
-let ffmpegSingleton: InstanceType<FfmpegModule['FFmpeg']> | null = null
 let ffmpegLoadPromise: Promise<InstanceType<FfmpegModule['FFmpeg']>> | null = null
 
 function safeExt(filename: string): string {
   const m = filename.trim().toLowerCase().match(/\.([a-z0-9]{1,8})$/)
   return m?.[1] ?? 'mov'
+}
+
+function toError(err: unknown, prefix: string): Error {
+  const detail = extractErrorMessage(err, 'fallo desconocido')
+  if (err instanceof Error) {
+    return new Error(`${prefix}: ${detail}`, { cause: err })
+  }
+  return new Error(`${prefix}: ${detail}`)
+}
+
+function resetFfmpegLoader(): void {
+  ffmpegLoadPromise = null
 }
 
 async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
@@ -42,25 +54,42 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
           onProgress?.(`Comprimiendo… ${Math.round(progress * 100)}%`)
         }
       })
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm'
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      })
-      ffmpegSingleton = ffmpeg
+
+      const baseURL = `${window.location.origin}/ffmpeg`
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        })
+      } catch (err) {
+        resetFfmpegLoader()
+        throw toError(
+          err,
+          'No se pudo cargar el compresor de video. Ejecuta npm install y recarga la página'
+        )
+      }
+
       return ffmpeg
     })()
   }
 
-  const ffmpeg = await ffmpegLoadPromise
-  return { ffmpeg, fetchFile }
+  try {
+    const ffmpeg = await ffmpegLoadPromise
+    return { ffmpeg, fetchFile }
+  } catch (err) {
+    resetFfmpegLoader()
+    throw err instanceof Error ? err : toError(err, 'Compresor de video no disponible')
+  }
 }
 
 function uint8ToFile(data: Uint8Array, originalName: string): File {
   const base = originalName.replace(/\.[^.]+$/i, '') || 'clip'
   const copy = new Uint8Array(data.byteLength)
   copy.set(data)
-  return new File([copy.buffer], `${base}.mp4`, { type: 'video/mp4', lastModified: Date.now() })
+  return new File([new Blob([copy], { type: 'video/mp4' })], `${base}.mp4`, {
+    type: 'video/mp4',
+    lastModified: Date.now(),
+  })
 }
 
 async function encodeOnce(
@@ -135,15 +164,15 @@ export async function compressVideoFileForStorage(
 
   let lastData: Uint8Array | null = null
   for (const attempt of ENCODE_ATTEMPTS) {
-    onProgress?.(
-      `Comprimiendo ${file.name} (720p/CRF ${attempt.crf})…`
-    )
-    lastData = await encodeOnce(ffmpeg, fetchFile, file, attempt.crf, attempt.maxWidth)
+    onProgress?.(`Comprimiendo ${file.name} (720p/CRF ${attempt.crf})…`)
+    try {
+      lastData = await encodeOnce(ffmpeg, fetchFile, file, attempt.crf, attempt.maxWidth)
+    } catch (err) {
+      throw toError(err, `Error comprimiendo "${file.name}"`)
+    }
     if (lastData.byteLength <= target) {
       const out = uint8ToFile(lastData, file.name)
-      onProgress?.(
-        `Listo: ${file.name} quedó en ${(out.size / (1024 * 1024)).toFixed(1)} MB`
-      )
+      onProgress?.(`Listo: ${file.name} quedó en ${(out.size / (1024 * 1024)).toFixed(1)} MB`)
       return out
     }
   }

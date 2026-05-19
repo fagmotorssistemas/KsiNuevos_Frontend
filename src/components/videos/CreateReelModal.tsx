@@ -28,6 +28,7 @@ import {
   resolveVideoMimeType,
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
+import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
 
@@ -425,7 +426,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       setStep(5)
       onJobCreated()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error iniciando el proceso')
+      console.error('[CreateReelModal] submit failed:', err)
+      toast.error(extractErrorMessage(err, 'Error iniciando el proceso'))
     } finally {
       setIsSubmitting(false)
       setUploadProgress(null)

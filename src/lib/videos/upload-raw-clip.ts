@@ -8,7 +8,7 @@ import {
   VIDEO_SIGNED_UPLOAD_MAX_BYTES,
   VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
 } from '@/lib/videos/resolve-video-mime'
-import type { VideoCompressProgressFn } from '@/lib/videos/compress-video-client'
+import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
 type StorageClient = SupabaseClient<Database>
 
@@ -55,9 +55,20 @@ async function prepareFileForUpload(
     return fileWithResolvedVideoMime(file)
   }
 
-  const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
-  const compressed = await compressVideoFileForStorage(file, onProgress)
-  return fileWithResolvedVideoMime(compressed)
+  try {
+    const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
+    const compressed = await compressVideoFileForStorage(file, onProgress)
+    return fileWithResolvedVideoMime(compressed)
+  } catch (err) {
+    console.warn(
+      '[videos] compresión en navegador falló, se intentará subida vía servidor:',
+      err
+    )
+    onProgress?.(
+      `No se pudo comprimir en el navegador (${extractErrorMessage(err)}). Subiendo vía servidor…`
+    )
+    return fileWithResolvedVideoMime(file)
+  }
 }
 
 async function uploadClipViaSignedUrl(

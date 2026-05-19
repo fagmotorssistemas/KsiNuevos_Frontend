@@ -20,6 +20,9 @@
 # production
 /build
 
+# ffmpeg.wasm (generado por npm postinstall → scripts/copy-ffmpeg-core.mjs)
+/public/ffmpeg/
+
 # misc
 .DS_Store
 *.pem
