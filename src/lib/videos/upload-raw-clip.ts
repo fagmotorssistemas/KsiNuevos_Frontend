@@ -4,12 +4,15 @@ import {
   VIDEO_RAW_BUCKET,
   fileWithResolvedVideoMime,
   resolveVideoMimeType,
+  VIDEO_AUTO_COMPRESS_ABOVE_BYTES,
+  VIDEO_SIGNED_UPLOAD_MAX_BYTES,
+  VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
 } from '@/lib/videos/resolve-video-mime'
-
-/** Por debajo del límite global típico de Supabase (50 MB) en planes sin ajustar Storage. */
-export const VIDEO_SIGNED_UPLOAD_MAX_BYTES = 48 * 1024 * 1024
+import type { VideoCompressProgressFn } from '@/lib/videos/compress-video-client'
 
 type StorageClient = SupabaseClient<Database>
+
+export type VideoUploadProgressFn = (message: string) => void
 
 function isLikelyStorageSizeError(message: string, status?: number): boolean {
   if (status === 413) return true
@@ -33,12 +36,28 @@ export function formatVideoClipUploadError(file: File, message: string, status?:
   const mb = (file.size / (1024 * 1024)).toFixed(1)
   if (isLikelyStorageSizeError(message, status)) {
     return (
-      `"${file.name}" (~${mb} MB) supera el límite de tamaño de Supabase Storage. ` +
-      'El proyecto suele tener un tope global de 50 MB: en el panel de Supabase ve a Storage → configuración y sube el límite global (recomendado 500 MB o 2 GB). ' +
-      'Los clips de ~60 MB necesitan ese cambio.'
+      `"${file.name}" (~${mb} MB) sigue siendo demasiado pesado para Storage tras comprimir. ` +
+      'Prueba un clip más corto o exporta como MP4 "Más compatible" desde el teléfono.'
     )
   }
   return `Error subiendo ${file.name}: ${message}`
+}
+
+async function prepareFileForUpload(
+  file: File,
+  onProgress?: VideoUploadProgressFn
+): Promise<File> {
+  if (file.size <= VIDEO_AUTO_COMPRESS_ABOVE_BYTES) {
+    return fileWithResolvedVideoMime(file)
+  }
+
+  if (typeof window === 'undefined') {
+    return fileWithResolvedVideoMime(file)
+  }
+
+  const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
+  const compressed = await compressVideoFileForStorage(file, onProgress)
+  return fileWithResolvedVideoMime(compressed)
 }
 
 async function uploadClipViaSignedUrl(
@@ -47,10 +66,9 @@ async function uploadClipViaSignedUrl(
   token: string,
   file: File
 ): Promise<{ ok: true } | { ok: false; message: string; status?: number }> {
-  const body = fileWithResolvedVideoMime(file)
   const { error } = await supabase.storage
     .from(VIDEO_RAW_BUCKET)
-    .uploadToSignedUrl(path, token, body, { cacheControl: '3600' })
+    .uploadToSignedUrl(path, token, file, { cacheControl: '3600' })
 
   if (error) {
     const status = 'status' in error && typeof error.status === 'number' ? error.status : undefined
@@ -63,7 +81,7 @@ async function uploadClipViaApiProxy(
   jobId: string,
   path: string,
   file: File
-): Promise<{ ok: true } | { ok: false; message: string; status?: number }> {
+): Promise<{ ok: true; compressed?: boolean } | { ok: false; message: string; status?: number }> {
   const mime = resolveVideoMimeType(file)
   if (!mime) {
     return { ok: false, message: 'Tipo de video no permitido' }
@@ -79,9 +97,9 @@ async function uploadClipViaApiProxy(
     body: fd,
   })
 
-  let data: { error?: string } = {}
+  let data: { error?: string; compressed?: boolean } = {}
   try {
-    data = (await res.json()) as { error?: string }
+    data = (await res.json()) as { error?: string; compressed?: boolean }
   } catch {
     data = {}
   }
@@ -89,33 +107,45 @@ async function uploadClipViaApiProxy(
   if (!res.ok) {
     return { ok: false, message: data.error ?? `HTTP ${res.status}`, status: res.status }
   }
-  return { ok: true }
+  return { ok: true, compressed: data.compressed }
 }
 
 /**
- * Sube un clip al bucket raw-videos-v2.
- * Archivos >48 MB usan proxy API (service role); el resto, URL firmada directa.
+ * Comprime si hace falta (~50 MB Supabase) y sube al bucket raw-videos-v2.
  */
 export async function uploadRawVideoClip(
   supabase: StorageClient,
   jobId: string,
   path: string,
   token: string,
-  file: File
+  file: File,
+  options?: { onProgress?: VideoUploadProgressFn }
 ): Promise<void> {
-  const useProxyFirst = file.size > VIDEO_SIGNED_UPLOAD_MAX_BYTES
+  const onProgress = options?.onProgress
+  const prepared = await prepareFileForUpload(file, onProgress)
 
-  if (useProxyFirst) {
-    const proxy = await uploadClipViaApiProxy(jobId, path, file)
+  if (prepared.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+    onProgress?.(`Subiendo ${prepared.name} (archivo grande, vía servidor)…`)
+    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
     if (proxy.ok) return
     throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
   }
 
-  const signed = await uploadClipViaSignedUrl(supabase, path, token, file)
+  const useProxyFirst = prepared.size > VIDEO_SIGNED_UPLOAD_MAX_BYTES
+
+  if (useProxyFirst) {
+    onProgress?.(`Subiendo ${prepared.name}…`)
+    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
+    if (proxy.ok) return
+    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
+  }
+
+  onProgress?.(`Subiendo ${prepared.name}…`)
+  const signed = await uploadClipViaSignedUrl(supabase, path, token, prepared)
   if (signed.ok) return
 
   if (isLikelyStorageSizeError(signed.message, signed.status)) {
-    const proxy = await uploadClipViaApiProxy(jobId, path, file)
+    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
     if (proxy.ok) return
     throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
   }

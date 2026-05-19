@@ -10,6 +10,15 @@ export const VIDEO_RAW_BUCKET_MAX_BYTES = 2 * 1024 * 1024 * 1024
  */
 export const VIDEO_SUPABASE_GLOBAL_DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 
+/** Objetivo tras compresión automática (margen bajo el tope global de 50 MB). */
+export const VIDEO_STORAGE_UPLOAD_TARGET_BYTES = 47 * 1024 * 1024
+
+/** Por encima de esto se comprime en el navegador antes de subir. */
+export const VIDEO_AUTO_COMPRESS_ABOVE_BYTES = 44 * 1024 * 1024
+
+/** Tras comprimir, subida directa con URL firmada si queda por debajo de esto. */
+export const VIDEO_SIGNED_UPLOAD_MAX_BYTES = 48 * 1024 * 1024
+
 const ALLOWED_VIDEO_MIME = new Set([
   'video/mp4',
   'video/quicktime',

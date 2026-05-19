@@ -104,7 +104,7 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
             <p className="text-xs text-gray-400">
               {flowType === 'single'
                 ? 'Máximo 2 GB. Archivos >500 MB se comprimirán automáticamente.'
-                : `Hasta ${VIDEO_MAX_CLIPS} clips. Cada clip hasta ~500 MB (configura el límite global en Supabase Storage).`}
+                : `Hasta ${VIDEO_MAX_CLIPS} clips. Los que pasen de ~45 MB se comprimen solos antes de subir (tope Storage ~50 MB).`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors">

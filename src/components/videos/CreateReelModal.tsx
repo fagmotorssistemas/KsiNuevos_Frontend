@@ -309,9 +309,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const upload = uploads[i]
-        setUploadProgress(`Subiendo ${i + 1} de ${files.length}: ${file.name}...`)
-
-        await uploadRawVideoClip(supabase, newJobId, upload.path, upload.token, file)
+        await uploadRawVideoClip(supabase, newJobId, upload.path, upload.token, file, {
+          onProgress: (msg) =>
+            setUploadProgress(`${i + 1}/${files.length}: ${msg}`),
+        })
       }
 
       let scriptPdfPath: string | undefined

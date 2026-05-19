@@ -8,7 +8,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import { VIDEO_RAW_BUCKET, VIDEO_RAW_BUCKET_MAX_BYTES } from '@/lib/videos/resolve-video-mime'
+import { compressVideoForStorageCap } from '@/lib/videos/compression'
+import {
+  VIDEO_RAW_BUCKET,
+  VIDEO_RAW_BUCKET_MAX_BYTES,
+  VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
+} from '@/lib/videos/resolve-video-mime'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -87,11 +92,31 @@ export async function POST(
       )
     }
 
-    const buf = Buffer.from(await file.arrayBuffer())
+    let buf = Buffer.from(await file.arrayBuffer())
+    let compressedOnServer = false
+
+    if (buf.length > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+      const result = await compressVideoForStorageCap(buf, file.name)
+      if (result.error && buf.length > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+        return NextResponse.json({ error: result.error }, { status: 413 })
+      }
+      buf = Buffer.from(result.buffer)
+      compressedOnServer = result.wasCompressed
+      if (buf.length > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+        return NextResponse.json(
+          {
+            error: `Tras comprimir en servidor, el archivo sigue pesando ${(buf.length / (1024 * 1024)).toFixed(1)} MB (máx. ~47 MB). Usa un clip más corto.`,
+          },
+          { status: 413 }
+        )
+      }
+    }
+
+    const uploadMime = compressedOnServer ? 'video/mp4' : mime
     const supabase = getServiceClient()
 
     const { error } = await supabase.storage.from(VIDEO_RAW_BUCKET).upload(path, buf, {
-      contentType: mime,
+      contentType: uploadMime,
       upsert: true,
       cacheControl: '3600',
     })
@@ -111,7 +136,7 @@ export async function POST(
       )
     }
 
-    return NextResponse.json({ path, ok: true })
+    return NextResponse.json({ path, ok: true, compressed: compressedOnServer })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[VideoV2][/jobs/upload-clip] Error:', message)
