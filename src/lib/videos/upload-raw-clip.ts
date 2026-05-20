@@ -4,9 +4,8 @@ import {
   VIDEO_RAW_BUCKET,
   fileWithResolvedVideoMime,
   resolveVideoMimeType,
-  VIDEO_AUTO_COMPRESS_ABOVE_BYTES,
-  VIDEO_SIGNED_UPLOAD_MAX_BYTES,
   VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
+  VIDEO_STORAGE_SPEND_CAP_TARGET_BYTES,
 } from '@/lib/videos/resolve-video-mime'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
@@ -46,40 +45,38 @@ export function formatVideoClipUploadError(
       : ` (~${originalMb} MB)`
 
   if (isLikelyStorageSizeError(message, status)) {
-    if (file.size > VIDEO_AUTO_COMPRESS_ABOVE_BYTES && (uploadBytes == null || uploadBytes > VIDEO_STORAGE_UPLOAD_TARGET_BYTES)) {
-      return (
-        `"${file.name}"${sizeNote} no pudo reducirse lo suficiente para Storage (máx. ~50 MB en tu proyecto Supabase). ` +
-        'Comprime en el navegador antes de subir: usa un clip más corto o exporta como MP4 "Más compatible" desde el iPhone. ' +
-        `Detalle: ${message}`
-      )
-    }
     return (
-      `"${file.name}"${sizeNote} es demasiado pesado para Storage (tope ~50 MB). ` +
-      'Prueba un clip más corto o exporta como MP4 "Más compatible" desde el teléfono.'
+      `"${file.name}"${sizeNote} no se pudo subir a Storage por el límite de tamaño del proyecto. ` +
+      'Si ya subiste el tope global en Supabase, recarga la app. Si no, usa un clip más corto o exporta como MP4 "Más compatible". ' +
+      `Detalle: ${message}`
     )
   }
   return `Error subiendo ${file.name}: ${message}`
 }
 
-async function prepareFileForUpload(
-  file: File,
+/** Objetivo de compresión según el tamaño del archivo original. */
+function compressionTargetForFile(file: File): number {
+  if (file.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+    return VIDEO_STORAGE_UPLOAD_TARGET_BYTES
+  }
+  return VIDEO_STORAGE_SPEND_CAP_TARGET_BYTES
+}
+
+async function compressAfterStorageRejection(
+  original: File,
   onProgress?: VideoUploadProgressFn
 ): Promise<File> {
-  if (file.size <= VIDEO_AUTO_COMPRESS_ABOVE_BYTES) {
-    return fileWithResolvedVideoMime(file)
-  }
-
   if (typeof window === 'undefined') {
-    throw new Error('Los clips grandes deben comprimirse en el navegador antes de subir.')
+    throw new Error('La compresión tras rechazo de Storage solo está disponible en el navegador.')
   }
 
+  const targetBytes = compressionTargetForFile(original)
   const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
-  const compressed = await compressVideoFileForStorage(file, onProgress)
+  const compressed = await compressVideoFileForStorage(original, onProgress, { targetBytes })
 
-  if (compressed.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+  if (compressed.size >= original.size * 0.98 && compressed.size > targetBytes) {
     throw new Error(
-      `"${file.name}" sigue pesando ${(compressed.size / (1024 * 1024)).toFixed(1)} MB tras comprimir (máx. ~47 MB). ` +
-        'Usa un clip más corto o baja la calidad al exportar desde el teléfono.'
+      `No se pudo reducir "${original.name}" por debajo de ~${(targetBytes / (1024 * 1024)).toFixed(1)} MB.`
     )
   }
 
@@ -138,7 +135,7 @@ async function uploadClipViaApiProxy(
 }
 
 /**
- * Comprime si hace falta (~50 MB Supabase) y sube al bucket raw-videos-v2.
+ * Sube al bucket raw-videos-v2: primero el archivo original; si Storage rechaza por tamaño, comprime y reintenta.
  */
 export async function uploadRawVideoClip(
   supabase: StorageClient,
@@ -149,33 +146,36 @@ export async function uploadRawVideoClip(
   options?: { onProgress?: VideoUploadProgressFn }
 ): Promise<void> {
   const onProgress = options?.onProgress
-  const prepared = await prepareFileForUpload(file, onProgress)
+  let uploadFile = fileWithResolvedVideoMime(file)
+  let compressionAttempted = false
 
-  if (prepared.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
-    throw new Error(
-      formatVideoClipUploadError(file, 'El archivo comprimido sigue superando el tope de Storage', 413, prepared.size)
-    )
-  }
-
-  const useProxyFirst = prepared.size > VIDEO_SIGNED_UPLOAD_MAX_BYTES
-
-  if (useProxyFirst) {
-    onProgress?.(`Subiendo ${prepared.name} (vía servidor)…`)
-    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
-    if (proxy.ok) return
-    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status, prepared.size))
-  }
-
-  onProgress?.(`Subiendo ${prepared.name}…`)
-  const signed = await uploadClipViaSignedUrl(supabase, path, token, prepared)
+  onProgress?.(`Subiendo ${uploadFile.name}…`)
+  let signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile)
   if (signed.ok) return
 
-  if (isLikelyStorageSizeError(signed.message, signed.status)) {
-    onProgress?.(`Reintentando ${prepared.name} vía servidor…`)
-    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
-    if (proxy.ok) return
-    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status, prepared.size))
+  if (isLikelyStorageSizeError(signed.message, signed.status) && !compressionAttempted) {
+    compressionAttempted = true
+    onProgress?.('Storage rechazó el tamaño; comprimiendo en el navegador…')
+
+    try {
+      uploadFile = await compressAfterStorageRejection(file, onProgress)
+    } catch (err) {
+      throw new Error(formatVideoClipUploadError(file, extractErrorMessage(err), 413))
+    }
+
+    onProgress?.(
+      `Reintentando subida de ${uploadFile.name} (${(uploadFile.size / (1024 * 1024)).toFixed(1)} MB)…`
+    )
+    signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile)
+    if (signed.ok) return
+
+    if (isLikelyStorageSizeError(signed.message, signed.status)) {
+      onProgress?.(`Reintentando ${uploadFile.name} vía servidor…`)
+      const proxy = await uploadClipViaApiProxy(jobId, path, uploadFile)
+      if (proxy.ok) return
+      throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status, uploadFile.size))
+    }
   }
 
-  throw new Error(formatVideoClipUploadError(file, signed.message, signed.status, prepared.size))
+  throw new Error(formatVideoClipUploadError(file, signed.message, signed.status, uploadFile.size))
 }

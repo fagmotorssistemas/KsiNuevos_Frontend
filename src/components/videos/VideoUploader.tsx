@@ -104,7 +104,7 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
             <p className="text-xs text-gray-400">
               {flowType === 'single'
                 ? 'Máximo 2 GB. Archivos >500 MB se comprimirán automáticamente.'
-                : `Hasta ${VIDEO_MAX_CLIPS} clips. Los que pasen de ~45 MB se comprimen solos antes de subir (tope Storage ~50 MB).`}
+                : `Hasta ${VIDEO_MAX_CLIPS} clips. Se suben tal cual; solo se comprimen si Storage rechaza el tamaño.`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -141,9 +141,9 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
                     <p className="text-xs text-gray-400">{formatSize(file.size)}</p>
                   </div>
                   {willCompress && (
-                    <div className="flex items-center gap-1 text-amber-600 shrink-0">
+                    <div className="flex items-center gap-1 text-amber-600 shrink-0" title="Solo si Storage rechaza la subida por tamaño">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      <span className="text-xs font-medium">Se comprimirá</span>
+                      <span className="text-xs font-medium">Comprimir si falla</span>
                     </div>
                   )}
                   <button

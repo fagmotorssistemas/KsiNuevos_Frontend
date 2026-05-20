@@ -3,10 +3,7 @@
  * Solo importar desde componentes cliente.
  */
 
-import {
-  VIDEO_AUTO_COMPRESS_ABOVE_BYTES,
-  VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
-} from '@/lib/videos/resolve-video-mime'
+import { VIDEO_STORAGE_UPLOAD_TARGET_BYTES } from '@/lib/videos/resolve-video-mime'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
 export type VideoCompressProgressFn = (message: string) => void
@@ -171,18 +168,24 @@ const ENCODE_ATTEMPTS: EncodeAttempt[] = [
   { crf: 40, maxWidth: 426, audioK: 48, fps: 24 },
 ]
 
+export type CompressForStorageOptions = {
+  /** Tamaño máximo deseado en bytes (por defecto ~47 MB). */
+  targetBytes?: number
+}
+
 /**
- * Comprime el archivo si supera el umbral, hasta quedar por debajo de ~47 MB (tope Supabase 50 MB).
+ * Comprime el archivo hasta quedar por debajo de `targetBytes` (p. ej. tras rechazo de Storage).
  */
 export async function compressVideoFileForStorage(
   file: File,
-  onProgress?: VideoCompressProgressFn
+  onProgress?: VideoCompressProgressFn,
+  options?: CompressForStorageOptions
 ): Promise<File> {
-  if (file.size <= VIDEO_AUTO_COMPRESS_ABOVE_BYTES) {
+  const target = options?.targetBytes ?? VIDEO_STORAGE_UPLOAD_TARGET_BYTES
+
+  if (file.size <= target) {
     return file
   }
-
-  const target = VIDEO_STORAGE_UPLOAD_TARGET_BYTES
   const originalMb = (file.size / (1024 * 1024)).toFixed(1)
   onProgress?.(
     `Comprimiendo ${file.name} (${originalMb} MB → objetivo <${Math.round(target / (1024 * 1024))} MB). No cierres esta ventana…`
