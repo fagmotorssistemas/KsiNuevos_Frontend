@@ -78,7 +78,7 @@ export default function MarketingDashboardPage() {
                         <div>
                             <h2 className="text-lg font-bold text-gray-900">Planificador</h2>
                             <p className="text-sm text-gray-500 mt-1">
-                                Arrastra vehículos a fechas y asigna vendedor + estado.
+                                Calendario, tareas, recursos y eventos de equipo para marketing.
                             </p>
                         </div>
                     </div>

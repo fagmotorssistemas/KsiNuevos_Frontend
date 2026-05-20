@@ -62,6 +62,12 @@ export function moduleRouteDenied(pathname: string, ctx: PermissionContext): str
   if (pathname === '/legal' || pathname.startsWith('/legal/')) {
     return canAccessModule(ctx, MODULE_SLUGS.legal) ? null : MODULE_SLUGS.legal
   }
+  if (pathname === '/marketing/planificador' || pathname.startsWith('/marketing/planificador/')) {
+    if (!canAccessModule(ctx, MODULE_SLUGS.marketing)) return MODULE_SLUGS.marketing
+    const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
+    if (role === 'contable') return 'planificador'
+    return null
+  }
   if (pathname === '/marketing' || pathname.startsWith('/marketing/')) {
     return canAccessModule(ctx, MODULE_SLUGS.marketing) ? null : MODULE_SLUGS.marketing
   }
@@ -130,7 +136,13 @@ function staffEnumPathAllowed(pathname: string, ctx: PermissionContext): boolean
   if (role === 'vendedor') {
     return VENTAS_PATH_ACCESS.some(({ prefix }) => pathMatchesPrefix(pathname, prefix))
   }
-  if (role === 'marketing') return pathMatchesPrefix(pathname, '/marketing')
+  if (role === 'marketing') {
+    if (pathMatchesPrefix(pathname, '/marketing/planificador')) return true
+    return pathMatchesPrefix(pathname, '/marketing')
+  }
+  if (role === 'contable' && pathMatchesPrefix(pathname, '/marketing/planificador')) {
+    return false
+  }
   if (role === 'abogado' || role === 'abogada') return pathMatchesPrefix(pathname, '/legal')
   if (role === 'taller') return pathMatchesPrefix(pathname, '/taller')
   return false

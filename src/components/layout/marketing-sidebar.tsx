@@ -14,6 +14,7 @@ import {
     BarChart3,
     ScrollText,
     ClipboardList,
+    CalendarDays,
     // Newspaper,
 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ const menuItems = [
     { name: 'Guiones', href: '/marketing/guiones', icon: ScrollText },
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
+    { name: 'Planificador', href: '/marketing/planificador', icon: CalendarDays },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
     // { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
     { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
