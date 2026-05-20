@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, FileSpreadsheet } from "lucide-react";
+import { useState, useMemo } from "react";
+import { FileSpreadsheet, ClipboardList } from "lucide-react";
 
 import { useInventory, type InventoryCar } from "@/hooks/useInventory";
+import {
+    InventoryKpiStats,
+    type InventoryKpiFilter,
+} from "@/components/features/inventory/InventoryKpiStats";
 import { InventoryToolbar } from "@/components/features/inventory/InventoryToolbar";
 import { InventoryTable } from "@/components/features/inventory/InventoryTable";
 import { InventoryDetailModal } from "@/components/features/inventory/InventoryDetailModal";
@@ -15,10 +19,6 @@ import { useAuth } from "@/hooks/useAuth";
 export default function InventoryPage() {
     const { profile } = useAuth();
     
-    // Validamos rol para botón crear
-    const role = profile?.role?.toLowerCase() || '';
-    const canCreate = role === 'admin' || role === 'marketing';
-
     const { 
         cars, 
         isLoading, 
@@ -71,18 +71,42 @@ export default function InventoryPage() {
         reload(); // Recargar la lista para ver el nuevo auto
     };
 
+    const kpiSummary = useMemo(
+        () => ({
+            totalVehiculosRegistrados: allCars.length,
+            totalActivos: allCars.filter((c) => c.status === "disponible").length,
+            totalBaja: allCars.filter((c) => c.status === "vendido").length,
+        }),
+        [allCars]
+    );
+
+    const activeKpiFilter: InventoryKpiFilter =
+        filters.status === "disponible"
+            ? "active"
+            : filters.status === "vendido"
+              ? "baja"
+              : "all";
+
+    const handleKpiFilterChange = (filter: InventoryKpiFilter) => {
+        if (filter === "active") updateFilter("status", "disponible");
+        else if (filter === "baja") updateFilter("status", "vendido");
+        else updateFilter("status", "all");
+    };
+
     return (
         <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-            
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold text-slate-900">Inventario de Vehículos</h1>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Gestión total de la flota ({totalCount} vehículos).
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                        Inventario de Vehículos
+                    </h1>
+                    <p className="text-slate-500 text-sm mt-1 flex items-center gap-1.5">
+                        <ClipboardList className="h-3.5 w-3.5 text-blue-500" />
+                        Gestión total de la flota ({allCars.length} vehículos).
                     </p>
                 </div>
-                
+
                 <div className="flex gap-3">
                     <Button
                         variant="primary"
@@ -93,51 +117,42 @@ export default function InventoryPage() {
                         <FileSpreadsheet className="h-4 w-4" />
                         Exportar / Imprimir
                     </Button>
-                    {/* BOTÓN CREAR: Solo visible si tiene permisos
-                    {canCreate && (
-                        <Button 
-                            variant="primary" 
-                            size="sm" 
-                            className="gap-2"
-                            onClick={handleOpenCreateModal}
-                        >
-                            <Plus className="h-4 w-4" />
-                            Nuevo Vehículo
-                        </Button>
-                    )} */}
                 </div>
             </div>
 
-            {/* Barra de Herramientas */}
-            <InventoryToolbar 
-                filters={filters}
-                sortBy={sortBy}
-                onFilterChange={updateFilter}
-                onSortChange={setSortBy}
-                onReset={resetFilters}
-                resultsCount={totalCount} // Usamos totalCount aquí también
-            />
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-6">
+                <InventoryKpiStats
+                    data={kpiSummary}
+                    loading={isLoading}
+                    activeFilter={activeKpiFilter}
+                    onFilterChange={handleKpiFilterChange}
+                />
 
-            {/* VISTA DE TABLA */}
-            {isLoading ? (
-                <div className="bg-white rounded-xl border border-slate-200 p-10 flex justify-center items-center">
-                    <span className="text-slate-400 animate-pulse">Cargando inventario...</span>
-                </div>
-            ) : (
-                <div className="animate-in fade-in duration-500">
-                    <InventoryTable 
+                <InventoryToolbar
+                    filters={filters}
+                    sortBy={sortBy}
+                    onFilterChange={updateFilter}
+                    onSortChange={setSortBy}
+                    onReset={resetFilters}
+                    resultsCount={totalCount}
+                />
+
+                {isLoading ? (
+                    <div className="bg-white rounded-xl border border-slate-200 p-10 flex justify-center items-center">
+                        <span className="text-slate-400 animate-pulse">Cargando inventario...</span>
+                    </div>
+                ) : (
+                    <InventoryTable
                         cars={cars}
                         onEdit={handleEditCar}
-                        // --- PROPS DE PAGINACIÓN ---
                         page={page}
-                        totalCount={totalCount}   
-                        rowsPerPage={rowsPerPage} 
-                        onPageChange={setPage}  
-                        // --- NUEVA PROP DE ROL ---
-                        currentUserRole={profile?.role}  
+                        totalCount={totalCount}
+                        rowsPerPage={rowsPerPage}
+                        onPageChange={setPage}
+                        currentUserRole={profile?.role}
                     />
-                </div>
-            )}
+                )}
+            </div>
 
             {/* MODAL DE EDICIÓN */}
             {isDetailModalOpen && selectedCar && (
