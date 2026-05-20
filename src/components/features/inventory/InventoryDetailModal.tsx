@@ -3,7 +3,7 @@ import {
     X, Save, Car, Share2, MapPin, Tag, Cog,
     DollarSign, Gauge, Loader2,
     Image as ImageIcon, UploadCloud, Plus, Trash2,
-    Link,
+    Link, FileText,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -14,20 +14,76 @@ import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-op
 import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
-// Componentes UI Locales
-const InputGroup = ({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            {label}
-            {required && <span className="text-red-500">*</span>}
-        </label>
-        {children}
-    </div>
-);
+// --- UI unificada (mismo patrón que modal Inventario General) ---
+function SectionTitle({
+    icon: Icon,
+    title,
+}: {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+}) {
+    return (
+        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
+            <Icon className="h-4 w-4" />
+            {title}
+        </div>
+    );
+}
+
+function ItemDetail({
+    label,
+    value,
+    highlight = false,
+}: {
+    label: string;
+    value: string | number | null | undefined;
+    highlight?: boolean;
+}) {
+    const text = value != null ? String(value).trim() : "";
+    const isEmpty = !text || text === ".";
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400">{label}</span>
+            <div
+                className={`text-xs p-2 rounded border ${
+                    isEmpty
+                        ? "bg-red-50 text-red-600 border-red-100 italic"
+                        : highlight
+                          ? "bg-blue-50 text-blue-800 border-blue-100 font-bold"
+                          : "bg-white text-slate-700 border-slate-200"
+                }`}
+            >
+                {isEmpty ? "No especificado" : text}
+            </div>
+        </div>
+    );
+}
+
+function FormField({
+    label,
+    required = false,
+    children,
+    className = "",
+}: {
+    label: string;
+    required?: boolean;
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`flex flex-col gap-1 ${className}`}>
+            <span className="text-[10px] uppercase font-bold text-slate-400">
+                {label}
+                {required && <span className="text-red-500 normal-case"> *</span>}
+            </span>
+            <div className="rounded border border-slate-200 bg-white overflow-hidden">{children}</div>
+        </div>
+    );
+}
 
 const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input
-        className={`w-full h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 ${className}`}
+        className={`w-full h-9 px-2 bg-white focus:bg-blue-50/30 focus:border-blue-300 outline-none transition-all text-xs text-slate-800 placeholder:text-slate-400 border-0 ${className}`}
         {...props}
     />
 );
@@ -35,11 +91,13 @@ const Input = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
 const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
     <div className="relative">
         <select
-            className={`w-full h-10 px-3 pr-8 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 appearance-none cursor-pointer ${className}`}
+            className={`w-full h-9 px-2 pr-7 bg-white focus:bg-blue-50/30 outline-none transition-all text-xs text-slate-800 appearance-none cursor-pointer border-0 ${className}`}
             {...props}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
         </div>
     </div>
 );
@@ -78,71 +136,20 @@ function coalesce(...vals: (string | number | null | undefined)[]): string | nul
     return null;
 }
 
-function SpecCell({
-    label,
-    value,
-    highlight = false,
-    mono = false,
-}: {
-    label: string;
-    value: string | null | undefined;
-    highlight?: boolean;
-    mono?: boolean;
-}) {
-    const isEmpty = !value;
-    return (
-        <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">
-                {label}
-            </dt>
-            <dd
-                className={`text-sm leading-snug ${
-                    isEmpty
-                        ? "text-slate-400 italic"
-                        : highlight
-                          ? "font-mono font-semibold text-brand-900 bg-brand-50 px-2 py-1 rounded-md inline-block"
-                          : mono
-                            ? "font-mono text-slate-800"
-                            : "text-slate-800 capitalize"
-                }`}
-            >
-                {isEmpty ? "—" : value}
-            </dd>
-        </div>
-    );
-}
-
-function FichaSection({
-    icon: Icon,
-    title,
-    children,
-}: {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <div className="space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
-                    <Icon className="h-3.5 w-3.5" />
-                </span>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">{title}</h4>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">{children}</div>
-        </div>
-    );
-}
-
 function StatusBadge({ status }: { status: string }) {
     const label = STATUS_LABELS[status] ?? status;
-    const style = STATUS_STYLES[status] ?? 'text-slate-600 font-medium bg-slate-50 border-slate-200';
+    const style = STATUS_STYLES[status] ?? "text-slate-600 font-medium bg-slate-50 border-slate-200";
     return (
-        <div
-            className={`w-full h-10 px-3 flex items-center rounded-lg border text-sm ${style} cursor-default select-none`}
-            aria-readonly
-        >
+        <div className={`w-full h-9 px-2 flex items-center text-xs border-0 ${style} cursor-default select-none`}>
             {label}
+        </div>
+    );
+}
+
+function ModalPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    return (
+        <div className={`rounded-xl border border-slate-200 bg-slate-50/40 p-5 space-y-4 ${className}`}>
+            {children}
         </div>
     );
 }
@@ -412,53 +419,63 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
 
                 {/* HEADER */}
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                            {car.brand.toUpperCase()} {car.model.toUpperCase()}
-                            <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                                {formData.year}
-                            </span>
-                        </h2>
-                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-                            <span className="font-mono bg-slate-100 px-1 rounded text-slate-600">
-                                {car.plate || formData.plate_short || 'S/P'}
-                            </span>
-                            • {car.type_body || 'Vehículo'}
-                        </p>
+                <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-blue-200 shadow-lg shrink-0">
+                            <Car className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-900">
+                                {car.brand} {car.model}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <span className="bg-slate-800 text-white text-xs font-mono px-2 py-0.5 rounded">
+                                    {car.plate || formData.plate_short || "S/P"}
+                                </span>
+                                <span className="text-slate-500 text-sm border-l border-slate-300 pl-2">
+                                    {formData.year}
+                                </span>
+                                <span className="text-slate-500 text-sm capitalize">
+                                    {car.type_body || "Vehículo"}
+                                </span>
+                            </div>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+                    <button
+                        onClick={onClose}
+                        className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+                    >
                         <X className="h-5 w-5" />
                     </button>
                 </div>
 
                 {/* TABS */}
-                <div className="flex border-b border-slate-100 bg-slate-50/50 px-6 overflow-x-auto">
+                <div className="flex border-b border-slate-200 px-6 overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('general')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'general' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Car className="h-4 w-4" /> Datos Generales
                     </button>
                     <button
                         onClick={() => setActiveTab('photos')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'photos' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'photos' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <ImageIcon className="h-4 w-4" /> Fotos & Galería
                     </button>
                     <button
                         onClick={() => setActiveTab('marketing')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'marketing' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'marketing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Share2 className="h-4 w-4" /> Marketing
                     </button>
                     <button
                         onClick={() => setActiveTab('publications')}
-                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'publications' ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'publications' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
                         <Link className="h-4 w-4" /> Publicaciones
                     </button>
@@ -469,174 +486,168 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
                     {/* --- PESTAÑA GENERAL --- */}
                     {activeTab === 'general' && (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputGroup label="Estado del Vehículo" required>
-                                    <StatusBadge status={formData.status} />
-                                </InputGroup>
+                        <div className="space-y-6 animate-in slide-in-from-left-4 duration-300">
+                            <ModalPanel>
+                                <SectionTitle icon={Tag} title="Gestión comercial" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <FormField label="Estado del vehículo" required>
+                                        <StatusBadge status={formData.status} />
+                                    </FormField>
 
-                                <InputGroup label="Ubicación Actual">
-                                    {canEdit ? (
-                                        <Select
-                                            value={formData.location}
-                                            onChange={(e) => handleChange('location', e.target.value)}
-                                        >
-                                            <option value="patio">🏠 Patio Principal</option>
-                                            <option value="taller">🔧 Taller</option>
-                                            <option value="showroom">✨ Showroom</option>
-                                            <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
-                                            <option value="otro">📍 Otro</option>
-                                        </Select>
-                                    ) : (
-                                        <div className="h-10 px-3 flex items-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800">
-                                            {formData.location === 'patio' && '🏠 Patio Principal'}
-                                            {formData.location === 'taller' && '🔧 Taller'}
-                                            {formData.location === 'showroom' && '✨ Showroom'}
-                                            {formData.location === 'conwilsonhernan' && '👥 Con Wilson Hernan'}
-                                            {formData.location === 'otro' && '📍 Otro'}
-                                            {!['patio', 'taller', 'showroom', 'conwilsonhernan', 'otro'].includes(formData.location) && formData.location}
-                                        </div>
-                                    )}
-                                </InputGroup>
-                            </div>
+                                    <FormField label="Ubicación actual">
+                                        {canEdit ? (
+                                            <Select
+                                                value={formData.location}
+                                                onChange={(e) => handleChange('location', e.target.value)}
+                                            >
+                                                <option value="patio">🏠 Patio Principal</option>
+                                                <option value="taller">🔧 Taller</option>
+                                                <option value="showroom">✨ Showroom</option>
+                                                <option value="conwilsonhernan">👥 Con Wilson Hernan</option>
+                                                <option value="otro">📍 Otro</option>
+                                            </Select>
+                                        ) : (
+                                            <div className="h-9 px-2 flex items-center text-xs text-slate-700">
+                                                {formData.location === 'patio' && '🏠 Patio Principal'}
+                                                {formData.location === 'taller' && '🔧 Taller'}
+                                                {formData.location === 'showroom' && '✨ Showroom'}
+                                                {formData.location === 'conwilsonhernan' && '👥 Con Wilson Hernan'}
+                                                {formData.location === 'otro' && '📍 Otro'}
+                                                {!['patio', 'taller', 'showroom', 'conwilsonhernan', 'otro'].includes(formData.location) && formData.location}
+                                            </div>
+                                        )}
+                                    </FormField>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputGroup label="Precio de Venta" required>
-                                    {isAdmin ? (
-                                        <div className="relative">
-                                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <FormField label="Precio de venta" required>
+                                        {isAdmin ? (
+                                            <div className="relative flex items-center">
+                                                <DollarSign className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
+                                                <Input
+                                                    type="number"
+                                                    className="pl-7 font-mono font-bold"
+                                                    value={formData.price}
+                                                    onChange={(e) => handleChange('price', e.target.value)}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="h-9 px-2 flex items-center text-xs font-mono font-bold text-blue-800 bg-blue-50">
+                                                $ {Number(formData.price).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                            </div>
+                                        )}
+                                    </FormField>
+
+                                    <FormField label="Kilometraje">
+                                        <div className="relative flex items-center">
+                                            <Gauge className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
                                             <Input
                                                 type="number"
-                                                className="pl-9 font-mono font-medium"
-                                                value={formData.price}
-                                                onChange={(e) => handleChange('price', e.target.value)}
+                                                className="pl-7"
+                                                value={formData.mileage}
+                                                onChange={(e) => handleChange('mileage', e.target.value)}
+                                                readOnly={!canEdit}
+                                                disabled={!canEdit}
                                             />
                                         </div>
-                                    ) : (
-                                        /* Precio solo lectura para marketing y otros roles (solo admin puede modificarlo) */
-                                        <div className="h-10 px-3 flex items-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-mono font-medium text-slate-800">
-                                            $ {Number(formData.price).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                                        </div>
-                                    )}
-                                </InputGroup>
+                                    </FormField>
 
-                                <InputGroup label="Kilometraje">
-                                    <div className="relative">
-                                        <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                                    <FormField label="Color">
                                         <Input
-                                            type="number"
-                                            className="pl-9"
-                                            value={formData.mileage}
-                                            onChange={(e) => handleChange('mileage', e.target.value)}
+                                            value={formData.color}
+                                            onChange={(e) => handleChange('color', e.target.value)}
+                                            placeholder="Ej: Rojo, Plata..."
                                             readOnly={!canEdit}
                                             disabled={!canEdit}
                                         />
-                                    </div>
-                                </InputGroup>
-                            </div>
+                                    </FormField>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputGroup label="Color">
-                                    <Input
-                                        value={formData.color}
-                                        onChange={(e) => handleChange('color', e.target.value)}
-                                        placeholder="Ej: Rojo, Plata..."
+                                    <FormField label="Año modelo">
+                                        <Input
+                                            type="number"
+                                            value={formData.year}
+                                            onChange={(e) => handleChange('year', e.target.value)}
+                                            readOnly={!canEdit}
+                                            disabled={!canEdit}
+                                        />
+                                    </FormField>
+                                </div>
+
+                                <FormField label="Observaciones internas" className="md:col-span-2 lg:col-span-3">
+                                    <textarea
+                                        className="w-full min-h-[72px] px-2 py-2 bg-white focus:bg-blue-50/30 outline-none text-xs text-slate-800 placeholder:text-slate-400 resize-none border-0 disabled:opacity-90 disabled:cursor-not-allowed"
+                                        placeholder="Detalles sobre llaves, rayones, estado mecánico..."
+                                        value={formData.description}
+                                        onChange={(e) => handleChange('description', e.target.value)}
                                         readOnly={!canEdit}
                                         disabled={!canEdit}
                                     />
-                                </InputGroup>
-                                <InputGroup label="Año Modelo">
-                                    <Input
-                                        type="number"
-                                        value={formData.year}
-                                        onChange={(e) => handleChange('year', e.target.value)}
-                                        readOnly={!canEdit}
-                                        disabled={!canEdit}
-                                    />
-                                </InputGroup>
-                            </div>
+                                </FormField>
+                            </ModalPanel>
 
-                            <InputGroup label="Observaciones Internas">
-                                <textarea
-                                    className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-none disabled:opacity-90 disabled:cursor-not-allowed"
-                                    placeholder="Detalles sobre llaves, rayones, estado mecánico..."
-                                    value={formData.description}
-                                    onChange={(e) => handleChange('description', e.target.value)}
-                                    readOnly={!canEdit}
-                                    disabled={!canEdit}
-                                />
-                            </InputGroup>
-
-                            <div className="border-t border-slate-100 pt-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-bold text-slate-800">Ficha técnica</h3>
+                            <ModalPanel>
+                                <div className="flex items-center justify-between gap-2">
+                                    <SectionTitle icon={FileText} title="Ficha técnica" />
                                     {loadingFicha && (
-                                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                        <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0">
+                                            <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
                                             Sincronizando Oracle…
                                         </span>
                                     )}
                                 </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
-                                            <Tag className="h-4 w-4" /> Detalles generales
-                                        </div>
+                                        <SectionTitle icon={Tag} title="Detalles generales" />
                                         <div className="grid grid-cols-1 gap-3">
-                                            <SpecCell label="Marca" value={ficha.marca} />
-                                            <SpecCell label="Modelo" value={ficha.modelo} />
-                                            <SpecCell label="Año" value={ficha.anio} />
-                                            <SpecCell label="Color" value={ficha.color} />
-                                            <SpecCell label="Tipo" value={ficha.tipo} />
-                                            <SpecCell label="Versión" value={ficha.version} />
+                                            <ItemDetail label="Marca" value={ficha.marca} />
+                                            <ItemDetail label="Modelo" value={ficha.modelo} />
+                                            <ItemDetail label="Año" value={ficha.anio} />
+                                            <ItemDetail label="Color" value={ficha.color} />
+                                            <ItemDetail label="Tipo" value={ficha.tipo} />
+                                            <ItemDetail label="Versión" value={ficha.version} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
-                                            <Cog className="h-4 w-4" /> Mecánica
-                                        </div>
+                                        <SectionTitle icon={Cog} title="Mecánica" />
                                         <div className="grid grid-cols-1 gap-3">
-                                            <SpecCell label="Motor" value={ficha.motor} highlight />
-                                            <SpecCell label="Chasis" value={ficha.chasis} highlight />
-                                            <SpecCell label="Cilindraje" value={ficha.cilindraje} />
-                                            <SpecCell label="Combustible" value={ficha.combustible} />
-                                            <SpecCell label="Ejes" value={ficha.ejes} />
-                                            <SpecCell label="Llantas" value={ficha.llantas} />
+                                            <ItemDetail label="Motor" value={ficha.motor} highlight />
+                                            <ItemDetail label="Chasis" value={ficha.chasis} highlight />
+                                            <ItemDetail label="Cilindraje" value={ficha.cilindraje} />
+                                            <ItemDetail label="Combustible" value={ficha.combustible} />
+                                            <ItemDetail label="Ejes" value={ficha.ejes} />
+                                            <ItemDetail label="Llantas" value={ficha.llantas} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-brand-600 font-medium border-b border-brand-50 pb-2">
-                                            <MapPin className="h-4 w-4" /> Legal
-                                        </div>
+                                        <SectionTitle icon={MapPin} title="Legal" />
                                         <div className="grid grid-cols-1 gap-3">
-                                            <SpecCell label="País origen" value={ficha.paisOrigen} />
-                                            <SpecCell label="Año matrícula" value={ficha.anioMatricula} />
-                                            <SpecCell label="Lugar matrícula" value={ficha.lugarMatricula} />
-                                            <SpecCell label="Proveedor" value={ficha.proveedor} />
+                                            <ItemDetail label="País origen" value={ficha.paisOrigen} />
+                                            <ItemDetail label="Año matrícula" value={ficha.anioMatricula} />
+                                            <ItemDetail label="Lugar matrícula" value={ficha.lugarMatricula} />
+                                            <ItemDetail label="Proveedor" value={ficha.proveedor} />
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                    <span className="block text-xs font-bold text-slate-500 uppercase mb-1">
+
+                                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                    <span className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                                         Descripción sistema
                                     </span>
-                                    <p className="text-sm text-slate-700">
+                                    <p className="text-xs text-slate-700">
                                         {ficha.descripcionSistema || "Sin descripción"}
                                     </p>
                                 </div>
-                            </div>
+                            </ModalPanel>
                         </div>
                     )}
 
                     {/* --- PESTAÑA FOTOS --- */}
                     {activeTab === 'photos' && (
-                        <div className="space-y-6">
-                            {/* FOTO PRINCIPAL */}
+                        <ModalPanel className="space-y-6">
                             <div className="space-y-2">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Foto Principal</h3>
+                                <SectionTitle icon={ImageIcon} title="Foto principal" />
                                 <div 
                                     onClick={() => canEdit && mainInputRef.current?.click()}
-                                    className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 overflow-hidden group ${canEdit ? 'cursor-pointer hover:border-brand-400' : 'cursor-default opacity-90'}`}
+                                    className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden group ${canEdit ? 'cursor-pointer hover:border-blue-400' : 'cursor-default opacity-90'}`}
                                 >
                                     {/* Mostramos la preview nueva O la URL existente (optimizada si es formato vehicle-images) */}
                                     {mainImagePreview || formData.img_main_url ? (
@@ -673,16 +684,13 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                 </div>
                             </div>
 
-                            {/* GALERÍA */}
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                        Galería ({existingGallery.length + newGalleryFiles.length})
-                                    </h3>
+                                    <SectionTitle icon={ImageIcon} title={`Galería (${existingGallery.length + newGalleryFiles.length})`} />
                                     {canEdit && (
                                         <button 
                                             onClick={() => galleryInputRef.current?.click()}
-                                            className="text-xs text-brand-600 font-bold hover:underline flex items-center gap-1"
+                                            className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1 shrink-0"
                                         >
                                             <Plus className="w-4 h-4" /> Agregar Fotos
                                         </button>
@@ -719,7 +727,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
                                     {/* 2. Fotos Nuevas (Pendientes) */}
                                     {newGalleryPreviews.map((preview, idx) => (
-                                        <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-brand-200 group">
+                                        <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-blue-200 group">
                                             <img src={preview} alt="Nueva" className="w-full h-full object-cover" />
                                             {canEdit && (
                                                 <button 
@@ -729,7 +737,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                                     <X className="w-3 h-3" />
                                                 </button>
                                             )}
-                                            <span className="absolute bottom-1 left-1 bg-brand-500 text-white text-[10px] px-1.5 rounded font-medium">Nueva</span>
+                                            <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-[10px] px-1.5 rounded font-medium">Nueva</span>
                                         </div>
                                     ))}
 
@@ -737,7 +745,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     {canEdit && (
                                         <div 
                                             onClick={() => galleryInputRef.current?.click()}
-                                            className="aspect-square rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-brand-400 hover:bg-slate-50 text-slate-300 hover:text-brand-500 transition-colors"
+                                            className="aspect-square rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 text-slate-300 hover:text-blue-600 transition-colors"
                                         >
                                             <Plus className="w-6 h-6 mb-1" />
                                             <span className="text-[10px] font-medium">Agregar</span>
@@ -745,12 +753,12 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     )}
                                 </div>
                             </div>
-                        </div>
+                        </ModalPanel>
                     )}
 
                     {/* --- PESTAÑA MARKETING --- */}
                     {activeTab === 'marketing' && (
-                        <div className="space-y-8">
+                        <ModalPanel className="space-y-8">
                             {/* Toggle Principal */}
                             <div className="flex items-center justify-between bg-purple-50 p-4 rounded-xl border border-purple-100">
                                 <div>
@@ -808,26 +816,27 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                     />
                                 </div>
                             </div>
-                        </div>
+                        </ModalPanel>
                     )}
 
                     {/* --- PESTAÑA PUBLICACIONES --- */}
                     {activeTab === 'publications' && (
-                        <div className="space-y-6">
-                            <InputGroup label="URLs de Publicación">
+                        <ModalPanel>
+                            <SectionTitle icon={Link} title="Publicaciones" />
+                            <FormField label="URLs de publicación">
                                 <textarea
-                                    className="w-full min-h-[150px] px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 resize-y font-mono disabled:opacity-90 disabled:cursor-not-allowed"
+                                    className="w-full min-h-[150px] px-2 py-2 bg-white focus:bg-blue-50/30 outline-none text-xs text-slate-800 placeholder:text-slate-400 resize-y font-mono border-0 disabled:opacity-90 disabled:cursor-not-allowed"
                                     placeholder="https://facebook.com/...\nhttps://instagram.com/..."
                                     value={formData.publication_url}
                                     onChange={(e) => handleChange('publication_url', e.target.value)}
                                     readOnly={!canEdit}
                                     disabled={!canEdit}
                                 />
-                                <p className="text-xs text-slate-500">
-                                    Pega aquí los enlaces a las publicaciones en redes sociales o portales.
-                                </p>
-                            </InputGroup>
-                        </div>
+                            </FormField>
+                            <p className="text-xs text-slate-500">
+                                Pega aquí los enlaces a las publicaciones en redes sociales o portales.
+                            </p>
+                        </ModalPanel>
                     )}
 
                 </div>
@@ -848,7 +857,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving}
-                                className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-6 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSaving ? (
                                     <>
