@@ -14,6 +14,7 @@ interface NavbarMobileProps {
   isLoading: boolean;
   supabase: any;
   permissionMap?: PermissionMap;
+  permissionsLoading?: boolean;
 }
 
 export const NavbarMobile = ({
@@ -25,6 +26,7 @@ export const NavbarMobile = ({
   isLoading,
   supabase,
   permissionMap,
+  permissionsLoading,
 }: NavbarMobileProps) => {
   const router = useRouter()
 
@@ -32,7 +34,15 @@ export const NavbarMobile = ({
     () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
     [profile?.role, permissionMap]
   )
-  const dashboardMenu = getUserDashboardMenuItem(permCtx)
+  const dashboardMenu = useMemo(
+    () => getUserDashboardMenuItem(permCtx),
+    [permCtx, permissionsLoading]
+  )
+
+  const goToDashboard = () => {
+    setIsOpen(false)
+    window.location.assign(dashboardMenu.href)
+  }
 
   // 3. Creamos la función de cierre de sesión
   const handleLogout = async () => {
@@ -73,11 +83,15 @@ export const NavbarMobile = ({
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
               <p className="font-bold text-gray-900">Hola, {profile?.full_name}</p>
               
-              <Link href={dashboardMenu.href} onClick={() => setIsOpen(false)}>
-                <KsButton variant="dark" fullWidth size="sm">
-                  {dashboardMenu.label}
-                </KsButton>
-              </Link>
+              <KsButton
+                variant="dark"
+                fullWidth
+                size="sm"
+                disabled={permissionsLoading}
+                onClick={goToDashboard}
+              >
+                {permissionsLoading ? 'Cargando…' : dashboardMenu.label}
+              </KsButton>
 
               {/* 4. Usamos la nueva función handleLogout */}
               <button 

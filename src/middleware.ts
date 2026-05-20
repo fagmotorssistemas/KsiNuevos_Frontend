@@ -73,6 +73,12 @@ export async function middleware(request: NextRequest) {
 
   if (!isRouteAllowed(pathname, ctx)) {
     let target = resolveAccessDeniedRedirect(pathname, ctx)
+    if (!isRouteAllowed(target, ctx) && profile?.role) {
+      target = resolveAccessDeniedRedirect(pathname, {
+        baseRole: profile.role,
+        map,
+      })
+    }
     if (!isRouteAllowed(target, ctx)) {
       target = '/home'
     }

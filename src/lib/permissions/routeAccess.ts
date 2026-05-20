@@ -4,7 +4,7 @@ import {
   MODULE_SLUGS,
   VENTAS_PATH_ACCESS,
 } from './catalog'
-import { canAccessModule, canAccessSubmodule, hasAccessMap } from './access'
+import { canAccessModule, canAccessSubmodule, hasAccessMap, hasAnyReadPermission } from './access'
 import type { PermissionContext } from './context'
 import { isAppAdminRole } from './access'
 import { resolveDefaultDashboardHref } from './nav'
@@ -48,7 +48,7 @@ export function canSeeAccountingSidebarHref(href: string, ctx: PermissionContext
 export function canSeeVentasSidebarHref(href: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
   const rule = firstMatchingPrefix(href, VENTAS_PATH_ACCESS)
-  if (!rule) return canAccessModule(ctx, MODULE_SLUGS.ventas)
+  if (!rule) return true
   return canAccessSubmodule(ctx, rule.submodule)
 }
 
@@ -102,8 +102,43 @@ export function resolveAccessDeniedRedirect(
   return resolveDefaultDashboardHref(ctx)
 }
 
+function pathMatchesPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+}
+
+/** Si el rol staff no tiene ningún permiso activo en BD, permitir rutas del módulo según enum (evita bucle a /home). */
+function staffEnumPathAllowed(pathname: string, ctx: PermissionContext): boolean {
+  if (hasAnyReadPermission(ctx.map)) return false
+  const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
+  if (!role || role === 'cliente' || isAppAdminRole(ctx)) return false
+
+  if (role === 'finanzas' || role === 'contable') {
+    if (ACCOUNTING_PATH_ACCESS.some(({ prefix }) => pathMatchesPrefix(pathname, prefix))) {
+      return true
+    }
+    if (role === 'contable' && pathMatchesPrefix(pathname, '/rastreadores')) return true
+    if (
+      role === 'finanzas' &&
+      (pathMatchesPrefix(pathname, '/legal') ||
+        pathMatchesPrefix(pathname, '/rastreadores') ||
+        pathMatchesPrefix(pathname, '/seguros'))
+    ) {
+      return true
+    }
+    return false
+  }
+  if (role === 'vendedor') {
+    return VENTAS_PATH_ACCESS.some(({ prefix }) => pathMatchesPrefix(pathname, prefix))
+  }
+  if (role === 'marketing') return pathMatchesPrefix(pathname, '/marketing')
+  if (role === 'abogado' || role === 'abogada') return pathMatchesPrefix(pathname, '/legal')
+  if (role === 'taller') return pathMatchesPrefix(pathname, '/taller')
+  return false
+}
+
 export function isRouteAllowed(pathname: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
+  if (staffEnumPathAllowed(pathname, ctx)) return true
 
   if (isTallerOnlyAccess(ctx)) {
     const onTaller = pathname === '/taller' || pathname.startsWith('/taller/')

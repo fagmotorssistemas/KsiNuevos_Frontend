@@ -10,6 +10,10 @@ export function hasAccessMap(map: PermissionMap, submoduleSlug: string): boolean
   return map[submoduleSlug]?.can_read === true
 }
 
+export function hasAnyReadPermission(map: PermissionMap): boolean {
+  return Object.values(map).some((p) => p?.can_read === true)
+}
+
 export function hasAnySubmoduleAccess(map: PermissionMap, slugs: readonly string[]): boolean {
   return slugs.some((s) => hasAccessMap(map, s))
 }

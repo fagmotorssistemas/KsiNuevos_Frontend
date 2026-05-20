@@ -1,7 +1,7 @@
 import {
-  ACCOUNTING_PATH_ACCESS,
   MODULE_SLUGS,
   PRIMARY_NAV_ITEMS,
+  RBAC_SUBMODULE_DEFINITIONS,
   type PrimaryNavItem,
 } from './catalog'
 import { canAccessModule, canAccessSubmodule, isAppAdminRole } from './access'
@@ -19,10 +19,16 @@ export function buildPrimaryNavItems(ctx: PermissionContext): PrimaryNavItem[] {
   return PRIMARY_NAV_ITEMS.filter((item) => canSeePrimaryNavItem(ctx, item))
 }
 
-/** Primera ruta de contabilidad con submódulo activo (no asumir /wallet). */
+/** Primera ruta de contabilidad con submódulo activo (orden del catálogo, no /wallet por defecto). */
 export function resolveFirstAccountingHref(ctx: PermissionContext): string | null {
-  for (const { prefix, submodule } of ACCOUNTING_PATH_ACCESS) {
-    if (canAccessSubmodule(ctx, submodule)) return prefix
+  const finanzasSubs = RBAC_SUBMODULE_DEFINITIONS.filter(
+    (s) => s.moduleSlug === MODULE_SLUGS.finanzas
+  ).sort((a, b) => a.sortOrder - b.sortOrder)
+
+  for (const sub of finanzasSubs) {
+    if (!canAccessSubmodule(ctx, sub.slug)) continue
+    const prefix = sub.routePrefixes?.[0]
+    if (prefix) return prefix
   }
   return null
 }
@@ -34,6 +40,26 @@ export function resolvePrimaryNavItemHref(item: PrimaryNavItem, ctx: PermissionC
     return resolveFirstAccountingHref(ctx) ?? item.href
   }
   return item.href
+}
+
+const STAFF_DASHBOARD_FALLBACK: Record<string, string> = {
+  admin: '/leads',
+  vendedor: '/leads',
+  marketing: '/marketing',
+  finanzas: '/wallet',
+  contable: '/wallet',
+  abogado: '/legal/cases',
+  abogada: '/legal/cases',
+  taller: '/taller/dashboard',
+}
+
+function resolveStaffRoleFallback(role: string, ctx: PermissionContext): string | null {
+  const base = STAFF_DASHBOARD_FALLBACK[role]
+  if (!base) return null
+  if (role === 'finanzas' || role === 'contable') {
+    return resolveFirstAccountingHref(ctx) ?? base
+  }
+  return base
 }
 
 /** Login / enlace Dashboard: primer módulo habilitado en el orden del nav. */
@@ -49,9 +75,7 @@ export function resolveDefaultDashboardHref(ctx: PermissionContext): string {
     if (href) return href
   }
 
-  if (role === 'taller') return '/taller/dashboard'
-  if (role) return '/home'
-  return '/home'
+  return resolveStaffRoleFallback(role, ctx) ?? '/home'
 }
 
 export function getUserDashboardMenuItem(ctx: PermissionContext): { href: string; label: string } {

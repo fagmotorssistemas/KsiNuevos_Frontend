@@ -17,11 +17,13 @@ const UserDropdown = ({
   profile,
   supabase,
   permCtx,
+  permissionsLoading,
 }: {
   user: { email: string }
   profile: { full_name?: string | null; role?: string | null }
   supabase: { auth: { signOut: () => Promise<void> } }
   permCtx: PermissionContext
+  permissionsLoading?: boolean
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -57,7 +59,15 @@ const UserDropdown = ({
 
   const userInitial = profile?.full_name ? profile.full_name[0].toUpperCase() : user.email[0].toUpperCase();
   const firstName = profile?.full_name?.split(' ')[0] || 'Usuario'
-  const dashboardMenu = getUserDashboardMenuItem(permCtx)
+  const dashboardMenu = useMemo(
+    () => getUserDashboardMenuItem(permCtx),
+    [permCtx, permissionsLoading]
+  )
+
+  const goToDashboard = () => {
+    setIsOpen(false)
+    window.location.assign(dashboardMenu.href)
+  }
 
   return (
     <div className="relative" ref={menuRef}>
@@ -81,13 +91,14 @@ const UserDropdown = ({
              <p className="text-sm font-bold text-gray-900 truncate">{profile?.full_name}</p>
           </div>
           <div className="py-1">
-            <Link
-              href={dashboardMenu.href}
-              className="block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-black transition-colors"
-              onClick={() => setIsOpen(false)}
+            <button
+              type="button"
+              onClick={goToDashboard}
+              disabled={permissionsLoading}
+              className="w-full text-left block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-black transition-colors disabled:opacity-50"
             >
-              {dashboardMenu.label}
-            </Link>
+              {permissionsLoading ? 'Cargando…' : dashboardMenu.label}
+            </button>
             <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors">
               Cerrar Sesión
             </button>
@@ -105,9 +116,17 @@ interface NavbarUserAreaProps {
   isLoading: boolean;
   supabase: any;
   permissionMap?: PermissionMap;
+  permissionsLoading?: boolean;
 }
 
-export const NavbarUserArea = ({ user, profile, isLoading, supabase, permissionMap }: NavbarUserAreaProps) => {
+export const NavbarUserArea = ({
+  user,
+  profile,
+  isLoading,
+  supabase,
+  permissionMap,
+  permissionsLoading,
+}: NavbarUserAreaProps) => {
   const permCtx: PermissionContext = useMemo(
     () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
     [profile?.role, permissionMap]
@@ -118,7 +137,15 @@ export const NavbarUserArea = ({ user, profile, isLoading, supabase, permissionM
   }
 
   if (user) {
-    return <UserDropdown user={user} profile={profile} supabase={supabase} permCtx={permCtx} />;
+    return (
+      <UserDropdown
+        user={user}
+        profile={profile}
+        supabase={supabase}
+        permCtx={permCtx}
+        permissionsLoading={permissionsLoading}
+      />
+    );
   }
 
   return (
