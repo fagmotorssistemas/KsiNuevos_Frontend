@@ -1,37 +1,77 @@
 // src/components/features/auth/LoginForm.tsx
 'use client'
 
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth' // Usamos tu hook
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
 import {
-  fetchPermissionMap,
+  fetchPermissionMapWithTimeout,
   isAppAdminRole,
   isRouteAllowed,
   resolveDefaultDashboardHref,
   type PermissionContext,
+  type PermissionMap,
 } from '@/lib/permissions'
 
+function resolvePostLoginHref(
+  role: string | null,
+  permissionMap: PermissionMap,
+  redirectTo: string | null
+): string {
+  const permCtx: PermissionContext = {
+    baseRole: role,
+    map: permissionMap,
+  }
+
+  if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
+    const mayUseRedirect =
+      role === 'cliente'
+        ? redirectTo === '/perfil' || redirectTo.startsWith('/perfil/')
+        : isAppAdminRole(permCtx) || isRouteAllowed(redirectTo, permCtx)
+    if (mayUseRedirect) return redirectTo
+  }
+
+  return resolveDefaultDashboardHref(permCtx)
+}
+
+function navigateAfterLogin(href: string) {
+  window.location.assign(href)
+}
+
 export const LoginForm = () => {
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const { supabase } = useAuth() // Instancia desde el contexto
   const redirectTo = searchParams.get('redirect')
+  const {
+    supabase,
+    user,
+    profile,
+    permissionMap,
+    isLoading: authLoading,
+    permissionsLoading,
+  } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Sesión activa en /login → ir al módulo correspondiente (evita quedar en spinner)
+  useEffect(() => {
+    if (authLoading || permissionsLoading || !user || !profile) return
+    if (profile.status !== 'activo') return
+
+    const href = resolvePostLoginHref(profile.role, permissionMap, redirectTo)
+    navigateAfterLogin(href)
+  }, [authLoading, permissionsLoading, user, profile, permissionMap, redirectTo])
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
 
-    // 1. Login con Supabase
     const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -43,59 +83,40 @@ export const LoginForm = () => {
       return
     }
 
-    if (data.user) {
-      try {
-        // 2. Verificar Rol en Base de Datos
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role, status')
-          .eq('id', data.user.id)
-          .single()
+    if (!data.user) {
+      setIsLoading(false)
+      setError('No se pudo iniciar sesión. Intenta de nuevo.')
+      return
+    }
 
-        if (profileError || !profile) throw new Error('Error al cargar perfil.')
+    try {
+      const { data: profileRow, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', data.user.id)
+        .single()
 
-        // 3. Verificar si está activo
-        if (profile.status !== 'activo') {
-          await supabase.auth.signOut()
-          throw new Error('Tu cuenta está desactivada.')
-        }
+      if (profileError || !profileRow) throw new Error('Error al cargar perfil.')
 
-        const permissionMap = await fetchPermissionMap(supabase)
-        const permCtx: PermissionContext = {
-          baseRole: profile.role,
-          map: permissionMap,
-        }
-
-        router.refresh()
-
-        const defaultHref = resolveDefaultDashboardHref(permCtx)
-
-        if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
-          const mayUseRedirect =
-            profile.role === 'cliente'
-              ? redirectTo === '/perfil' || redirectTo.startsWith('/perfil/')
-              : isAppAdminRole(permCtx) || isRouteAllowed(redirectTo, permCtx)
-          if (mayUseRedirect) {
-            router.push(redirectTo)
-            return
-          }
-        }
-
-        router.push(defaultHref)
-
-      } catch (err: any) {
-        console.error(err)
-        setError(err.message || 'Error interno.')
+      if (profileRow.status !== 'activo') {
         await supabase.auth.signOut()
-        setIsLoading(false)
+        throw new Error('Tu cuenta está desactivada.')
       }
-      // Nota: No ponemos setIsLoading(false) si redirigimos para evitar parpadeos
+
+      const map = await fetchPermissionMapWithTimeout(supabase)
+      const href = resolvePostLoginHref(profileRow.role, map, redirectTo)
+      navigateAfterLogin(href)
+    } catch (err: unknown) {
+      console.error(err)
+      const message = err instanceof Error ? err.message : 'Error interno.'
+      setError(message)
+      await supabase.auth.signOut()
+      setIsLoading(false)
     }
   }
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
-      {/* ... Tus inputs de Email y Password ... */}
       <div>
         <label className="mb-1 block text-sm font-medium">Email</label>
         <Input

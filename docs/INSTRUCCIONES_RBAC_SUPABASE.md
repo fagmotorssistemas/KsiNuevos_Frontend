@@ -38,3 +38,23 @@ SELECT count(*) FROM public.profile_roles;
 ```
 
 Deberías ver ~10 roles, 8 módulos y una fila en `profile_roles` por cada usuario staff.
+
+## Agregar una ruta nueva (aparece en Permisos)
+
+1. Edita `src/lib/permissions/rbacCatalog.ts`.
+2. En `RBAC_SUBMODULE_DEFINITIONS`, crea un submódulo nuevo o añade la ruta a uno existente:
+
+```ts
+{
+  moduleSlug: 'ventas',
+  slug: 'mi-nueva-pantalla',
+  name: 'Mi nueva pantalla',
+  sortOrder: 7,
+  routePrefixes: ['/mi-ruta'],
+},
+```
+
+3. Abre **Admin → Permisos** (o pulsa **Actualizar**): se ejecuta la sincronización con Supabase y el submódulo aparece en la matriz de permisos.
+4. Asigna acceso al rol o usuario que corresponda.
+
+El middleware usa los mismos `routePrefixes` vía `getProtectedRoutePrefixes()`; no hace falta duplicar rutas en `middleware.ts`.

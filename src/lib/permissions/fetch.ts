@@ -19,3 +19,23 @@ export async function fetchPermissionMap(supabase: SupabaseClient<Database>): Pr
   const rows = await fetchEffectivePermissionRows(supabase)
   return rowsToPermissionMap(rows)
 }
+
+const PERMISSION_FETCH_TIMEOUT_MS = 8_000
+
+/** Evita bloquear login si el RPC tarda o no responde */
+export async function fetchPermissionMapWithTimeout(
+  supabase: SupabaseClient<Database>,
+  timeoutMs = PERMISSION_FETCH_TIMEOUT_MS
+): Promise<PermissionMap> {
+  try {
+    return await Promise.race([
+      fetchPermissionMap(supabase),
+      new Promise<PermissionMap>((resolve) => {
+        setTimeout(() => resolve({}), timeoutMs)
+      }),
+    ])
+  } catch (e) {
+    console.error('[permissions] fetchPermissionMapWithTimeout', e)
+    return {}
+  }
+}

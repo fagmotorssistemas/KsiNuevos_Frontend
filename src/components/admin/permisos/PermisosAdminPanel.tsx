@@ -137,9 +137,28 @@ export function PermisosAdminPanel() {
     }
   }, [supabase])
 
+  const syncCatalogFromCode = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/rbac/sync-catalog', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.warn('[permisos] sync-catalog', json.error ?? res.status)
+        return false
+      }
+      return true
+    } catch (e) {
+      console.warn('[permisos] sync-catalog', e)
+      return false
+    }
+  }, [])
+
   const loadDashboard = useCallback(async () => {
     setLoading(true)
     try {
+      await syncCatalogFromCode()
       const res = await fetch('/api/admin/rbac', { credentials: 'include' })
       const json = await res.json()
 
@@ -174,7 +193,7 @@ export function PermisosAdminPanel() {
     } finally {
       setLoading(false)
     }
-  }, [loadClientFallback])
+  }, [loadClientFallback, syncCatalogFromCode])
 
   useEffect(() => {
     if (profile?.role !== 'admin') return

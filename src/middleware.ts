@@ -8,42 +8,11 @@ import {
   isRouteAllowed,
   isTallerOnlyAccess,
   resolveAccessDeniedRedirect,
+  getProtectedRoutePrefixes,
 } from '@/lib/permissions'
 
-const RUTAS_PROTEGIDAS_PREFIX = [
-  '/perfil',
-  '/leads',
-  '/inventory',
-  '/finance',
-  '/contracts',
-  '/agenda',
-  '/showroom',
-  '/tareas',
-  '/requests',
-  '/wallet',
-  '/cartera-manual',
-  '/inventario',
-  '/dashboard',
-  '/treasury',
-  '/salesreport',
-  '/pagos',
-  '/insurance',
-  '/financing',
-  '/employee',
-  '/cobros',
-  '/billing',
-  '/notasdeventas',
-  '/comprobantes',
-  '/taller',
-  '/seguros',
-  '/scraper',
-  '/rastreadores',
-  '/report',
-  '/legal',
-  '/marketing',
-  '/admin',
-  '/templates',
-]
+/** Derivado del catálogo RBAC (`rbacCatalog.ts`); se actualiza al sincronizar permisos */
+const RUTAS_PROTEGIDAS_PREFIX = getProtectedRoutePrefixes()
 
 function esRutaProtegida(pathname: string): boolean {
   return RUTAS_PROTEGIDAS_PREFIX.some((ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`))
@@ -118,5 +87,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    '/((?!api/|_next/static|_next/image|favicon.ico|ffmpeg/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|wasm)$).*)',
   ],
 }

@@ -1,6 +1,10 @@
 export type { PermissionAction, PermissionMap, EffectivePermissionRow, SubmodulePermission } from './types'
 export { rowsToPermissionMap, hasPermissionMap, hasAnyRead } from './merge'
-export { fetchEffectivePermissionRows, fetchPermissionMap } from './fetch'
+export {
+  fetchEffectivePermissionRows,
+  fetchPermissionMap,
+  fetchPermissionMapWithTimeout,
+} from './fetch'
 export type { PermissionContext } from './context'
 export { hasPermission } from './hasPermission'
 export { isAppAdminRole } from './access'
@@ -17,9 +21,16 @@ export {
   VENTAS_PATH_ACCESS,
   ACCOUNTING_PATH_ACCESS,
   ADMIN_FIXED_ACCESS_LINES,
+  getProtectedRoutePrefixes,
+  findSubmoduleByRoutePrefix,
+  RBAC_MODULE_DEFINITIONS,
+  RBAC_SUBMODULE_DEFINITIONS,
   type ModuleSlug,
   type PrimaryNavItem,
+  type RbacModuleDef,
+  type RbacSubmoduleDef,
 } from './catalog'
+export { syncRbacCatalogToSupabase, type SyncRbacCatalogResult } from './syncCatalog'
 export {
   buildPrimaryNavItems,
   canSeePrimaryNavItem,

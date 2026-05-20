@@ -5,7 +5,7 @@ import { Session, User, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import {
-  fetchPermissionMap,
+  fetchPermissionMapWithTimeout,
   hasPermission as hasPermissionFn,
   type PermissionAction,
   type PermissionMap,
@@ -36,25 +36,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [permissionMap, setPermissionMap] = useState<PermissionMap>({})
   const [permissionsLoading, setPermissionsLoading] = useState(false)
 
-  // useEffect 1: Maneja SÓLO la autenticación (rápido)
+  // useEffect 1: Sesión inicial + cambios de auth
   useEffect(() => {
-    // (¡CORRECCIÓN!) No ponemos setIsLoading(true) aquí
-    // para evitar el parpadeo
+    let cancelled = false
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        
-        if (event === 'SIGNED_OUT') {
-          setProfile(null)
-          setPermissionMap({})
-          setIsLoading(false)
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return
+      setSession(session)
+      setUser(session?.user ?? null)
+      if (!session?.user) setIsLoading(false)
+    })
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+
+      if (event === 'SIGNED_OUT') {
+        setProfile(null)
+        setPermissionMap({})
+        setIsLoading(false)
       }
-    )
+    })
 
     return () => {
+      cancelled = true
       authListener.subscription.unsubscribe()
     }
   }, [supabase])
@@ -84,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(data)
           setPermissionsLoading(true)
           try {
-            setPermissionMap(await fetchPermissionMap(supabase))
+            setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
           } catch (e) {
             console.error('Error al cargar permisos:', e)
             setPermissionMap({})
@@ -100,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refreshPerms = async () => {
       setPermissionsLoading(true)
       try {
-        setPermissionMap(await fetchPermissionMap(supabase))
+        setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
       } catch (e) {
         console.error('Error al refrescar permisos:', e)
       } finally {
@@ -170,7 +175,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setPermissionsLoading(true)
     try {
-      setPermissionMap(await fetchPermissionMap(supabase))
+      setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
     } catch (e) {
       console.error('Error al refrescar permisos:', e)
     } finally {
