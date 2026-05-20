@@ -77,9 +77,6 @@ export function moduleRouteDenied(pathname: string, ctx: PermissionContext): str
   if (pathname === '/rastreadores' || pathname.startsWith('/rastreadores/')) {
     return canAccessModule(ctx, MODULE_SLUGS.gps) ? null : MODULE_SLUGS.gps
   }
-  if (pathname === '/templates' || pathname.startsWith('/templates/')) {
-    return canAccessSubmodule(ctx, 'plantillas-documentos') ? null : 'plantillas-documentos'
-  }
   if (pathname === '/admin/permisos' || pathname.startsWith('/admin/permisos/')) {
     return isAppAdminRole(ctx) ? null : 'permisos-roles'
   }

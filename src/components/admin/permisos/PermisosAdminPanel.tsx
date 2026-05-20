@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Users,
-  Shield,
-  Layers,
   CheckCircle2,
   Plus,
   UserCircle2,
@@ -65,8 +63,6 @@ type DashboardStats = {
   staff_users: number
 }
 
-type TabId = 'roles' | 'users'
-
 const BASE_ROLE_OPTIONS = ['vendedor', 'marketing', 'finanzas', 'contable', 'abogado', 'taller'] as const
 
 function slugify(input: string) {
@@ -84,15 +80,11 @@ export function PermisosAdminPanel() {
   const { profile, isLoading: authLoading } = useAuth()
   const supabase = useMemo(() => createClient(), [])
 
-  const [tab, setTab] = useState<TabId>('roles')
   const [modules, setModules] = useState<ModuleRow[]>([])
   const [roles, setRoles] = useState<RoleRow[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
-  const [permBySubmodule, setPermBySubmodule] = useState<Map<string, boolean>>(new Map())
   const [loading, setLoading] = useState(true)
-  const [loadingPerms, setLoadingPerms] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
@@ -131,6 +123,7 @@ export function PermisosAdminPanel() {
           active_permissions: s?.active_permissions ?? 0,
           staff_users: profiles.length,
         }))
+        setSelectedUserId(profiles[0]?.id ?? null)
       }
     } catch {
       /* ignore */
@@ -174,17 +167,17 @@ export function PermisosAdminPanel() {
       setRoles(rls)
       setUsers(us)
       setStats(json.stats as DashboardStats ?? null)
-      setSelectedRoleId((prev) => {
-        if (prev && rls.some((r) => r.id === prev)) return prev
-        return rls.find((r) => r.base_role !== 'admin')?.id ?? rls[0]?.id ?? null
+      setSelectedUserId((prev) => {
+        if (prev && us.some((u) => u.id === prev)) return prev
+        return us[0]?.id ?? null
       })
 
       if (json.profilesError) {
         toast.error(`Usuarios (profiles): ${json.profilesError}`)
       }
 
-      if (rls.length === 0 && mods.length === 0) {
-        toast.error(json.error ?? 'No se pudieron cargar roles ni módulos.')
+      if (us.length === 0) {
+        toast.error(json.error ?? 'No se pudieron cargar usuarios del equipo.')
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'No se pudo cargar'
@@ -199,55 +192,6 @@ export function PermisosAdminPanel() {
     if (profile?.role !== 'admin') return
     void loadDashboard()
   }, [profile?.role, loadDashboard])
-
-  const selectedRole = useMemo(
-    () => roles.find((r) => r.id === selectedRoleId) ?? null,
-    [roles, selectedRoleId]
-  )
-
-  const isImmutableAdminRole = selectedRole?.base_role === 'admin'
-
-  const loadRolePerms = useCallback(
-    async (roleId: string) => {
-      setLoadingPerms(true)
-      try {
-        const { data, error } = await supabase
-          .from('role_permissions')
-          .select('submodule_id, can_read')
-          .eq('role_id', roleId)
-        if (error) throw error
-        const m = new Map<string, boolean>()
-        for (const row of data ?? []) {
-          m.set(row.submodule_id, row.can_read === true)
-        }
-        setPermBySubmodule(m)
-      } catch (e) {
-        console.error(e)
-        toast.error('No se pudieron cargar los permisos del rol')
-      } finally {
-        setLoadingPerms(false)
-      }
-    },
-    [supabase]
-  )
-
-  useEffect(() => {
-    if (!selectedRoleId || isImmutableAdminRole) {
-      setPermBySubmodule(new Map())
-      return
-    }
-    void loadRolePerms(selectedRoleId)
-  }, [selectedRoleId, isImmutableAdminRole, loadRolePerms])
-
-  const rolesByBase = useMemo(() => {
-    const g = new Map<string, RoleRow[]>()
-    for (const r of roles) {
-      const k = r.base_role
-      if (!g.has(k)) g.set(k, [])
-      g.get(k)!.push(r)
-    }
-    return g
-  }, [roles])
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase()
@@ -306,18 +250,17 @@ export function PermisosAdminPanel() {
   )
 
   useEffect(() => {
-    if (tab !== 'users') return
     if (selectedUserId && filteredUsers.some((u) => u.id === selectedUserId)) return
     setSelectedUserId(filteredUsers[0]?.id ?? null)
-  }, [tab, filteredUsers, selectedUserId])
+  }, [filteredUsers, selectedUserId])
 
   useEffect(() => {
-    if (tab !== 'users' || !selectedUser) {
+    if (!selectedUser) {
       setUserPermBySubmodule(new Map())
       return
     }
     void loadUserPerms(selectedUser)
-  }, [tab, selectedUser, loadUserPerms])
+  }, [selectedUser, loadUserPerms])
 
   const selectedUserRoleId = selectedUser?.catalog_roles[0]?.id ?? null
 
@@ -325,9 +268,6 @@ export function PermisosAdminPanel() {
     async (roleId: string, submoduleId: string, access: boolean, previousAccess: boolean) => {
       const key = `${roleId}:${submoduleId}`
       setSavingKey(key)
-      if (selectedRoleId === roleId) {
-        setPermBySubmodule((m) => new Map(m).set(submoduleId, access))
-      }
       if (selectedUser?.catalog_roles.some((cr) => cr.id === roleId)) {
         setUserPermBySubmodule((m) => new Map(m).set(submoduleId, access))
       }
@@ -358,7 +298,6 @@ export function PermisosAdminPanel() {
       } catch (e) {
         console.error(e)
         toast.error('Error al guardar')
-        if (selectedRoleId === roleId) void loadRolePerms(roleId)
         if (selectedUser?.catalog_roles.some((cr) => cr.id === roleId)) {
           void loadUserPerms(selectedUser)
         }
@@ -366,14 +305,8 @@ export function PermisosAdminPanel() {
         setSavingKey(null)
       }
     },
-    [supabase, selectedRoleId, selectedUser, loadRolePerms, loadUserPerms]
+    [supabase, selectedUser, loadUserPerms]
   )
-
-  const upsertPerm = async (submoduleId: string, access: boolean) => {
-    if (!selectedRoleId || isImmutableAdminRole) return
-    const previous = permBySubmodule.get(submoduleId) ?? false
-    await upsertRolePermission(selectedRoleId, submoduleId, access, previous)
-  }
 
   const upsertUserPerm = async (submoduleId: string, access: boolean) => {
     if (!selectedUserRoleId || selectedUser?.role === 'admin') return
@@ -381,48 +314,11 @@ export function PermisosAdminPanel() {
     await upsertRolePermission(selectedUserRoleId, submoduleId, access, previous)
   }
 
-  const toggleModuleAccess = async (mod: ModuleRow, enable: boolean) => {
-    if (!selectedRoleId || isImmutableAdminRole) return
-    for (const s of mod.submodules) {
-      const current = permBySubmodule.get(s.id) ?? false
-      if (current !== enable) await upsertPerm(s.id, enable)
-    }
-  }
-
   const toggleUserModuleAccess = async (mod: ModuleRow, enable: boolean) => {
     if (!selectedUserRoleId || selectedUser?.role === 'admin') return
     for (const s of mod.submodules) {
       const current = userPermBySubmodule.get(s.id) ?? false
       if (current !== enable) await upsertUserPerm(s.id, enable)
-    }
-  }
-
-  const createRole = async () => {
-    const name = newRoleName.trim()
-    if (!name) {
-      toast.error('Indica un nombre de rol')
-      return
-    }
-    let slug = slugify(name)
-    if (!slug) slug = `rol-${Date.now()}`
-    setCreating(true)
-    try {
-      const { data, error } = await supabase
-        .from('roles')
-        .insert({ name, slug, base_role: newBaseRole, description: null })
-        .select('id')
-        .single()
-      if (error) throw error
-      toast.success('Rol creado')
-      setShowCreate(false)
-      setNewRoleName('')
-      await loadDashboard()
-      if (data?.id) setSelectedRoleId(data.id)
-    } catch (e) {
-      console.error(e)
-      toast.error('No se pudo crear el rol')
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -437,13 +333,45 @@ export function PermisosAdminPanel() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Error')
-      toast.success('Rol asignado al usuario')
+      toast.success('Permisos actualizados para este usuario')
       await loadDashboard()
       setSelectedUserId(profileId)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo asignar')
     } finally {
       setAssigningUserId(null)
+    }
+  }
+
+  const createRole = async () => {
+    const name = newRoleName.trim()
+    if (!name) {
+      toast.error('Indica un nombre de perfil')
+      return
+    }
+    let slug = slugify(name)
+    if (!slug) slug = `rol-${Date.now()}`
+    setCreating(true)
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .insert({ name, slug, base_role: newBaseRole, description: null })
+        .select('id')
+        .single()
+      if (error) throw error
+      setShowCreate(false)
+      setNewRoleName('')
+      await loadDashboard()
+      if (data?.id && selectedUserId) {
+        await assignUserRole(selectedUserId, data.id)
+      } else {
+        toast.success('Perfil creado. Asígnalo a un usuario en la lista.')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('No se pudo crear el perfil')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -455,7 +383,7 @@ export function PermisosAdminPanel() {
     )
   }
 
-  const style = selectedRole ? BASE_ROLE_STYLES[selectedRole.base_role] ?? BASE_ROLE_STYLES.admin : null
+  const staffCount = stats?.staff_users ?? users.length
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-100 via-stone-50 to-white">
@@ -465,10 +393,10 @@ export function PermisosAdminPanel() {
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">
               Administración
             </p>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Permisos y accesos</h1>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Usuarios y accesos</h1>
             <p className="text-slate-600 mt-2 max-w-2xl">
-              Define qué módulos ve cada rol y asigna roles a tu equipo. Un acceso activo permite
-              entrar al submódulo; el CRUD lo controla la app y la base de datos.
+              Elige un miembro del equipo, asígnale un perfil de permisos y activa los módulos que
+              puede ver. Los cambios aplican a ese usuario de inmediato.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -478,17 +406,16 @@ export function PermisosAdminPanel() {
             </Button>
             <Button type="button" variant="primary" onClick={() => setShowCreate((v) => !v)}>
               <Plus className="h-4 w-4 mr-2" />
-              {showCreate ? 'Cerrar' : 'Nuevo rol'}
+              {showCreate ? 'Cerrar' : 'Nuevo perfil de permisos'}
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[
-            { label: 'Departamentos', value: stats?.departments ?? '—', icon: Layers },
-            { label: 'Roles', value: stats?.roles ?? '—', icon: Shield },
-            { label: 'Módulos', value: stats?.modules ?? '—', icon: FolderOpen },
-            { label: 'Permisos activos', value: stats?.active_permissions ?? '—', icon: CheckCircle2 },
+            { label: 'Usuarios del equipo', value: staffCount, icon: Users },
+            { label: 'Módulos en catálogo', value: stats?.modules ?? '—', icon: FolderOpen },
+            { label: 'Accesos activos (total)', value: stats?.active_permissions ?? '—', icon: CheckCircle2 },
           ].map(({ label, value, icon: Icon }) => (
             <div
               key={label}
@@ -506,7 +433,7 @@ export function PermisosAdminPanel() {
         {showCreate && (
           <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm flex flex-col md:flex-row gap-4 items-end">
             <div className="flex-1 w-full">
-              <label className="text-sm font-medium text-slate-700">Nombre del rol</label>
+              <label className="text-sm font-medium text-slate-700">Nombre del perfil</label>
               <input
                 className="mt-1 w-full rounded-xl border border-stone-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 outline-none"
                 value={newRoleName}
@@ -529,415 +456,218 @@ export function PermisosAdminPanel() {
               </select>
             </div>
             <Button type="button" variant="primary" disabled={creating} onClick={() => void createRole()}>
-              {creating ? 'Creando…' : 'Crear rol'}
+              {creating ? 'Creando…' : 'Crear y asignar al usuario seleccionado'}
             </Button>
           </div>
         )}
 
-        <div className="flex gap-2 border-b border-stone-200">
-          {(
-            [
-              { id: 'roles' as const, label: 'Roles y módulos', icon: Shield },
-              { id: 'users' as const, label: `Usuarios (${stats?.staff_users ?? users.length})`, icon: Users },
-            ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                tab === id
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'roles' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <aside className="lg:col-span-4 rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
-              <div className="px-5 py-4 border-b border-stone-100 bg-stone-50/80">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Departamentos y roles
-                </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <aside className="lg:col-span-4 rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
+            <div className="px-5 py-4 border-b border-stone-100 bg-stone-50/80 space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Equipo ({staffCount})
+              </h2>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="search"
+                  placeholder="Buscar nombre o email…"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full rounded-xl border border-stone-200 pl-9 pr-3 py-2 text-sm outline-none focus:border-slate-400"
+                />
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-5">
-                {loading ? (
-                  <p className="text-sm text-slate-500 px-2">Cargando roles…</p>
-                ) : roles.length === 0 ? (
-                  <p className="text-sm text-slate-500 px-2">Sin roles en base de datos.</p>
-                ) : (
-                  [...rolesByBase.entries()].map(([base, list]) => {
-                    const st = BASE_ROLE_STYLES[base] ?? BASE_ROLE_STYLES.admin
-                    return (
-                      <div key={base}>
-                        <p className={`text-xs font-bold uppercase tracking-wide mb-2 px-1 ${st.header}`}>
-                          {BASE_ROLE_LABELS[base] ?? base}
-                        </p>
-                        <ul className="space-y-1.5">
-                          {list.map((r) => {
-                            const sel = selectedRoleId === r.id
-                            return (
-                              <li key={r.id}>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedRoleId(r.id)}
-                                  className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                                    sel
-                                      ? `bg-white ring-2 ${st.ring} shadow-md`
-                                      : 'hover:bg-stone-50 border border-transparent'
-                                  }`}
-                                >
-                                  <span
-                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${st.badge}`}
-                                  >
-                                    <UserCircle2 className="h-5 w-5" />
-                                  </span>
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block font-semibold text-slate-900 text-sm truncate">
-                                      {r.name}
-                                    </span>
-                                    <span className="block text-xs text-slate-500 truncate">
-                                      {r.base_role === 'admin'
-                                        ? 'Acceso total'
-                                        : `${r.active_permissions ?? 0} accesos · ${r.user_count ?? 0} usuarios`}
-                                    </span>
-                                  </span>
-                                </button>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </aside>
-
-            <section className="lg:col-span-8 rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col min-h-[480px] max-h-[calc(100vh-12rem)]">
-              {!selectedRole ? (
-                <div className="flex-1 flex items-center justify-center text-slate-500 text-sm p-8">
-                  Selecciona un rol para configurar módulos.
-                </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {loading ? (
+                <p className="text-sm text-slate-500 px-2 py-4">Cargando usuarios…</p>
+              ) : filteredUsers.length === 0 ? (
+                <p className="text-sm text-slate-500 px-2 py-4">No hay usuarios staff.</p>
               ) : (
-                <>
-                  <div className="px-6 py-5 border-b border-stone-100 flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900">{selectedRole.name}</h2>
-                      <p className={`text-sm mt-0.5 font-medium ${style?.header ?? 'text-slate-600'}`}>
-                        {BASE_ROLE_LABELS[selectedRole.base_role] ?? selectedRole.base_role}
-                      </p>
-                    </div>
-                    {!isImmutableAdminRole && (
-                      <span className="text-xs text-slate-500 bg-stone-100 px-3 py-1 rounded-full">
-                        {selectedRole.active_permissions ?? 0} submódulos activos
+                filteredUsers.map((u) => {
+                  const catalog = u.catalog_roles[0]
+                  const st =
+                    BASE_ROLE_STYLES[catalog?.base_role ?? u.role ?? ''] ?? BASE_ROLE_STYLES.admin
+                  const sel = selectedUserId === u.id
+                  const accessCount = catalog
+                    ? (roles.find((r) => r.id === catalog.id)?.active_permissions ?? 0)
+                    : 0
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => setSelectedUserId(u.id)}
+                      className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
+                        sel
+                          ? `bg-white ring-2 ${st.ring} shadow-md`
+                          : 'hover:bg-stone-50 border border-transparent'
+                      }`}
+                    >
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${st.badge}`}
+                      >
+                        <UserCircle2 className="h-5 w-5" />
                       </span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {isImmutableAdminRole ? (
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-6">
-                        <p className="font-semibold text-emerald-950 mb-2">Acceso completo (admin)</p>
-                        <ul className="list-disc list-inside text-sm text-emerald-900 space-y-1">
-                          {ADMIN_FIXED_ACCESS_LINES.map((line) => (
-                            <li key={line}>{line}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : loadingPerms ? (
-                      <p className="text-sm text-slate-500">Cargando permisos…</p>
-                    ) : (
-                      modules.map((mod) => {
-                        const subs = mod.submodules
-                        const activeCount = subs.filter((s) => permBySubmodule.get(s.id)).length
-                        const allOn = subs.length > 0 && activeCount === subs.length
-                        const icon = MODULE_ICONS[mod.slug] ?? '📁'
-                        return (
-                          <div
-                            key={mod.id}
-                            className="rounded-xl border border-stone-200 overflow-hidden"
-                          >
-                            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-stone-50 border-b border-stone-100">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg" aria-hidden>
-                                  {icon}
-                                </span>
-                                <span className="font-semibold text-slate-900">{mod.name}</span>
-                                <span className="text-xs text-slate-500">
-                                  {activeCount}/{subs.length}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void toggleModuleAccess(mod, !allOn)}
-                                className="text-xs font-medium text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
-                              >
-                                {allOn ? 'Quitar todo' : 'Activar todo'}
-                              </button>
-                            </div>
-                            <ul className="divide-y divide-stone-100">
-                              {subs.map((s) => {
-                                const on = permBySubmodule.get(s.id) ?? false
-                                const busy = savingKey === `${selectedRoleId}:${s.id}`
-                                return (
-                                  <li
-                                    key={s.id}
-                                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-stone-50/50"
-                                  >
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-800">{s.name}</p>
-                                      <p className="text-xs text-slate-400">{s.slug}</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      disabled={busy}
-                                      onClick={() => void upsertPerm(s.id, !on)}
-                                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                                        on
-                                          ? 'bg-emerald-100 text-emerald-800'
-                                          : 'bg-stone-100 text-stone-500'
-                                      }`}
-                                      aria-pressed={on}
-                                    >
-                                      <ToggleRight
-                                        className={`h-5 w-5 ${on ? 'text-emerald-600' : 'text-stone-400'}`}
-                                      />
-                                      {on ? 'Activo' : 'Inactivo'}
-                                    </button>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-slate-900 text-sm truncate">
+                          {u.full_name ?? 'Sin nombre'}
+                        </span>
+                        <span className="block text-xs text-slate-500 truncate">
+                          {catalog?.name ?? u.role ?? 'Sin perfil'} · {accessCount} módulos
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })
               )}
-            </section>
-          </div>
-        )}
+            </div>
+          </aside>
 
-        {tab === 'users' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <aside className="lg:col-span-4 rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
-              <div className="px-5 py-4 border-b border-stone-100 bg-stone-50/80 space-y-3">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Equipo
-                </h2>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="search"
-                    placeholder="Buscar nombre o email…"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full rounded-xl border border-stone-200 pl-9 pr-3 py-2 text-sm outline-none focus:border-slate-400"
-                  />
-                </div>
+          <section className="lg:col-span-8 rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col min-h-[480px] max-h-[calc(100vh-12rem)]">
+            {!selectedUser ? (
+              <div className="flex-1 flex items-center justify-center text-slate-500 text-sm p-8">
+                Selecciona un usuario de la lista.
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                {loading ? (
-                  <p className="text-sm text-slate-500 px-2 py-4">Cargando usuarios…</p>
-                ) : filteredUsers.length === 0 ? (
-                  <p className="text-sm text-slate-500 px-2 py-4">No hay usuarios staff.</p>
-                ) : (
-                  filteredUsers.map((u) => {
-                    const catalog = u.catalog_roles[0]
-                    const st =
-                      BASE_ROLE_STYLES[catalog?.base_role ?? u.role ?? ''] ?? BASE_ROLE_STYLES.admin
-                    const sel = selectedUserId === u.id
-                    const accessCount = catalog
-                      ? (roles.find((r) => r.id === catalog.id)?.active_permissions ?? 0)
-                      : 0
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => setSelectedUserId(u.id)}
-                        className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all ${
-                          sel
-                            ? `bg-white ring-2 ${st.ring} shadow-md`
-                            : 'hover:bg-stone-50 border border-transparent'
+            ) : (
+              <>
+                <div className="px-6 py-5 border-b border-stone-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">
+                      {selectedUser.full_name ?? 'Sin nombre'}
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {selectedUser.email ?? selectedUser.phone ?? selectedUser.id}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          (BASE_ROLE_STYLES[selectedUser.role ?? ''] ?? BASE_ROLE_STYLES.admin).badge
                         }`}
                       >
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${st.badge}`}
-                        >
-                          <UserCircle2 className="h-5 w-5" />
+                        Cuenta: {BASE_ROLE_LABELS[selectedUser.role ?? ''] ?? selectedUser.role ?? '—'}
+                      </span>
+                      {selectedUser.catalog_roles[0] && (
+                        <span className="text-xs text-slate-600 bg-stone-100 px-2.5 py-0.5 rounded-full">
+                          Perfil: {selectedUser.catalog_roles[0].name}
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-semibold text-slate-900 text-sm truncate">
-                            {u.full_name ?? 'Sin nombre'}
-                          </span>
-                          <span className="block text-xs text-slate-500 truncate">
-                            {catalog?.name ?? u.role ?? 'Sin rol'} · {accessCount} accesos
-                          </span>
-                        </span>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            </aside>
-
-            <section className="lg:col-span-8 rounded-2xl border border-stone-200 bg-white shadow-sm flex flex-col min-h-[480px] max-h-[calc(100vh-12rem)]">
-              {!selectedUser ? (
-                <div className="flex-1 flex items-center justify-center text-slate-500 text-sm p-8">
-                  Selecciona un usuario para ver sus módulos y submódulos.
-                </div>
-              ) : (
-                <>
-                  <div className="px-6 py-5 border-b border-stone-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-900">
-                        {selectedUser.full_name ?? 'Sin nombre'}
-                      </h2>
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        {selectedUser.email ?? selectedUser.phone ?? selectedUser.id}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            (BASE_ROLE_STYLES[selectedUser.role ?? ''] ?? BASE_ROLE_STYLES.admin).badge
-                          }`}
-                        >
-                          Perfil: {selectedUser.role ?? '—'}
-                        </span>
-                        {selectedUser.catalog_roles[0] && (
-                          <span className="text-xs text-slate-600 bg-stone-100 px-2.5 py-0.5 rounded-full">
-                            {selectedUser.catalog_roles[0].name}
-                          </span>
-                        )}
-                      </div>
+                      )}
                     </div>
-                    {selectedUser.role !== 'admin' && (
-                      <div className="shrink-0">
-                        <label className="text-xs font-medium text-slate-500 block mb-1">
-                          Rol de permisos
-                        </label>
-                        <select
-                          className="rounded-lg border border-stone-200 px-3 py-2 text-sm min-w-[220px]"
-                          value={selectedUser.catalog_roles[0]?.id ?? ''}
-                          disabled={assigningUserId === selectedUser.id}
-                          onChange={(e) => {
-                            const roleId = e.target.value
-                            if (roleId) void assignUserRole(selectedUser.id, roleId)
-                          }}
-                        >
-                          <option value="">— Sin rol catálogo —</option>
-                          {roles
-                            .filter(
-                              (r) =>
-                                selectedUser.role === 'admin' || r.base_role !== 'admin'
-                            )
-                            .map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    )}
                   </div>
-
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {selectedUser.role === 'admin' ? (
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-6">
-                        <p className="font-semibold text-emerald-950 mb-2">Acceso completo (admin)</p>
-                        <ul className="list-disc list-inside text-sm text-emerald-900 space-y-1">
-                          {ADMIN_FIXED_ACCESS_LINES.map((line) => (
-                            <li key={line}>{line}</li>
+                  {selectedUser.role !== 'admin' && (
+                    <div className="shrink-0">
+                      <label className="text-xs font-medium text-slate-500 block mb-1">
+                        Perfil de permisos
+                      </label>
+                      <select
+                        className="rounded-lg border border-stone-200 px-3 py-2 text-sm min-w-[220px]"
+                        value={selectedUser.catalog_roles[0]?.id ?? ''}
+                        disabled={assigningUserId === selectedUser.id}
+                        onChange={(e) => {
+                          const roleId = e.target.value
+                          if (roleId) void assignUserRole(selectedUser.id, roleId)
+                        }}
+                      >
+                        <option value="">— Elegir perfil —</option>
+                        {roles
+                          .filter((r) => r.base_role !== 'admin')
+                          .map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
                           ))}
-                        </ul>
-                      </div>
-                    ) : selectedUser.catalog_roles.length === 0 ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
-                        Este usuario no tiene rol de permisos asignado. Elige uno arriba para
-                        definir qué módulos puede ver.
-                      </div>
-                    ) : loadingUserPerms ? (
-                      <p className="text-sm text-slate-500">Cargando accesos…</p>
-                    ) : (
-                      modules.map((mod) => {
-                        const subs = mod.submodules
-                        const activeCount = subs.filter((s) => userPermBySubmodule.get(s.id)).length
-                        const allOn = subs.length > 0 && activeCount === subs.length
-                        const icon = MODULE_ICONS[mod.slug] ?? '📁'
-                        return (
-                          <div
-                            key={mod.id}
-                            className="rounded-xl border border-stone-200 overflow-hidden"
-                          >
-                            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-stone-50 border-b border-stone-100">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg" aria-hidden>
-                                  {icon}
-                                </span>
-                                <span className="font-semibold text-slate-900">{mod.name}</span>
-                                <span className="text-xs text-slate-500">
-                                  {activeCount}/{subs.length}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void toggleUserModuleAccess(mod, !allOn)}
-                                className="text-xs font-medium text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
-                              >
-                                {allOn ? 'Quitar todo' : 'Activar todo'}
-                              </button>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {selectedUser.role === 'admin' ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-6">
+                      <p className="font-semibold text-emerald-950 mb-2">Acceso completo (administrador)</p>
+                      <ul className="list-disc list-inside text-sm text-emerald-900 space-y-1">
+                        {ADMIN_FIXED_ACCESS_LINES.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : selectedUser.catalog_roles.length === 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-6 text-sm text-amber-950">
+                      Asigna un <strong>perfil de permisos</strong> arriba. Después podrás activar los
+                      módulos que verá en la app.
+                    </div>
+                  ) : loadingUserPerms ? (
+                    <p className="text-sm text-slate-500">Cargando módulos…</p>
+                  ) : (
+                    modules.map((mod) => {
+                      const subs = mod.submodules
+                      const activeCount = subs.filter((s) => userPermBySubmodule.get(s.id)).length
+                      const allOn = subs.length > 0 && activeCount === subs.length
+                      const icon = MODULE_ICONS[mod.slug] ?? '📁'
+                      return (
+                        <div
+                          key={mod.id}
+                          className="rounded-xl border border-stone-200 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-stone-50 border-b border-stone-100">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg" aria-hidden>
+                                {icon}
+                              </span>
+                              <span className="font-semibold text-slate-900">{mod.name}</span>
+                              <span className="text-xs text-slate-500">
+                                {activeCount}/{subs.length}
+                              </span>
                             </div>
-                            <ul className="divide-y divide-stone-100">
-                              {subs.map((s) => {
-                                const on = userPermBySubmodule.get(s.id) ?? false
-                                const busy =
-                                  savingKey === `${selectedUserRoleId}:${s.id}`
-                                return (
-                                  <li
-                                    key={s.id}
-                                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-stone-50/50"
-                                  >
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-800">{s.name}</p>
-                                      <p className="text-xs text-slate-400">{s.slug}</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      disabled={busy}
-                                      onClick={() => void upsertUserPerm(s.id, !on)}
-                                      className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                                        on
-                                          ? 'bg-emerald-100 text-emerald-800'
-                                          : 'bg-stone-100 text-stone-500'
-                                      }`}
-                                      aria-pressed={on}
-                                    >
-                                      <ToggleRight
-                                        className={`h-5 w-5 ${on ? 'text-emerald-600' : 'text-stone-400'}`}
-                                      />
-                                      {on ? 'Activo' : 'Inactivo'}
-                                    </button>
-                                  </li>
-                                )
-                              })}
-                            </ul>
+                            <button
+                              type="button"
+                              onClick={() => void toggleUserModuleAccess(mod, !allOn)}
+                              className="text-xs font-medium text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
+                            >
+                              {allOn ? 'Quitar todo' : 'Activar todo'}
+                            </button>
                           </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </>
-              )}
-            </section>
-          </div>
-        )}
+                          <ul className="divide-y divide-stone-100">
+                            {subs.map((s) => {
+                              const on = userPermBySubmodule.get(s.id) ?? false
+                              const busy = savingKey === `${selectedUserRoleId}:${s.id}`
+                              return (
+                                <li
+                                  key={s.id}
+                                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-stone-50/50"
+                                >
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-800">{s.name}</p>
+                                    <p className="text-xs text-slate-400">{s.slug}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => void upsertUserPerm(s.id, !on)}
+                                    className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                      on
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-stone-100 text-stone-500'
+                                    }`}
+                                    aria-pressed={on}
+                                  >
+                                    <ToggleRight
+                                      className={`h-5 w-5 ${on ? 'text-emerald-600' : 'text-stone-400'}`}
+                                    />
+                                    {on ? 'Activo' : 'Inactivo'}
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   )

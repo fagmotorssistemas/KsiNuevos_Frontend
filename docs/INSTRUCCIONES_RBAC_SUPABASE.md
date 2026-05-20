@@ -58,3 +58,7 @@ Deberías ver ~10 roles, 8 módulos y una fila en `profile_roles` por cada usuar
 4. Asigna acceso al rol o usuario que corresponda.
 
 El middleware usa los mismos `routePrefixes` vía `getProtectedRoutePrefixes()`; no hace falta duplicar rutas en `middleware.ts`.
+
+Solo deben existir en el catálogo submódulos con pantalla o ruta real. Los que venían de la migración inicial como “admin futuro” (p. ej. `api-webhooks`, `backup-exportacion`) se eliminan al sincronizar si ya no están en `rbacCatalog.ts`.
+
+**“Inactivo”** en el panel significa que el rol seleccionado no tiene ese submódulo activado (toggle apagado), no que falte la pantalla en el código.

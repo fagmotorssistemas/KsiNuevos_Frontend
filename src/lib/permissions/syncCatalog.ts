@@ -5,6 +5,7 @@ import { RBAC_MODULE_DEFINITIONS, RBAC_SUBMODULE_DEFINITIONS } from './rbacCatal
 export type SyncRbacCatalogResult = {
   modulesUpserted: number
   submodulesUpserted: number
+  submodulesRemoved: number
   adminPermissionsEnsured: number
 }
 
@@ -17,7 +18,10 @@ export async function syncRbacCatalogToSupabase(
 ): Promise<SyncRbacCatalogResult> {
   let modulesUpserted = 0
   let submodulesUpserted = 0
+  let submodulesRemoved = 0
   let adminPermissionsEnsured = 0
+
+  const catalogSubmoduleSlugs = new Set(RBAC_SUBMODULE_DEFINITIONS.map((s) => s.slug))
 
   for (const mod of RBAC_MODULE_DEFINITIONS) {
     const { error } = await supabase.from('modules').upsert(
@@ -54,6 +58,16 @@ export async function syncRbacCatalogToSupabase(
     submodulesUpserted++
   }
 
+  const { data: dbSubs, error: listErr } = await supabase.from('submodules').select('id, slug')
+  if (listErr) throw new Error(listErr.message)
+
+  for (const row of dbSubs ?? []) {
+    if (catalogSubmoduleSlugs.has(row.slug)) continue
+    const { error: delErr } = await supabase.from('submodules').delete().eq('id', row.id)
+    if (delErr) throw new Error(`submodules.delete[${row.slug}]: ${delErr.message}`)
+    submodulesRemoved++
+  }
+
   const { data: adminRole, error: roleErr } = await supabase
     .from('roles')
     .select('id')
@@ -82,5 +96,5 @@ export async function syncRbacCatalogToSupabase(
     }
   }
 
-  return { modulesUpserted, submodulesUpserted, adminPermissionsEnsured }
+  return { modulesUpserted, submodulesUpserted, submodulesRemoved, adminPermissionsEnsured }
 }
