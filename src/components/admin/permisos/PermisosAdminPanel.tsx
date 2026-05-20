@@ -223,20 +223,35 @@ export function PermisosAdminPanel() {
           setUserPermBySubmodule(all)
           return
         }
-        const roleIds = user.catalog_roles.map((cr) => cr.id)
-        if (roleIds.length === 0) {
-          setUserPermBySubmodule(new Map())
-          return
-        }
-        const { data, error } = await supabase
-          .from('role_permissions')
-          .select('submodule_id, can_read')
-          .in('role_id', roleIds)
-        if (error) throw error
         const m = new Map<string, boolean>()
-        for (const row of data ?? []) {
+        for (const mod of modules) {
+          for (const s of mod.submodules) m.set(s.id, false)
+        }
+
+        let { data: profileData, error: profileErr } = await supabase
+          .from('profile_permissions')
+          .select('submodule_id, can_read')
+          .eq('profile_id', user.id)
+        if (profileErr) throw profileErr
+
+        if ((profileData?.length ?? 0) === 0 && user.catalog_roles[0]) {
+          const { error: seedErr } = await supabase.rpc('seed_profile_permissions_from_role', {
+            p_profile_id: user.id,
+            p_role_id: user.catalog_roles[0].id,
+          })
+          if (!seedErr) {
+            const refetch = await supabase
+              .from('profile_permissions')
+              .select('submodule_id, can_read')
+              .eq('profile_id', user.id)
+            profileData = refetch.data
+          }
+        }
+
+        for (const row of profileData ?? []) {
           if (row.can_read) m.set(row.submodule_id, true)
         }
+
         setUserPermBySubmodule(m)
       } catch (e) {
         console.error(e)
@@ -262,45 +277,28 @@ export function PermisosAdminPanel() {
     void loadUserPerms(selectedUser)
   }, [selectedUser, loadUserPerms])
 
-  const selectedUserRoleId = selectedUser?.catalog_roles[0]?.id ?? null
-
-  const upsertRolePermission = useCallback(
-    async (roleId: string, submoduleId: string, access: boolean, previousAccess: boolean) => {
-      const key = `${roleId}:${submoduleId}`
+  const upsertUserPerm = useCallback(
+    async (submoduleId: string, access: boolean) => {
+      if (!selectedUser || selectedUser.role === 'admin') return
+      const key = `${selectedUser.id}:${submoduleId}`
       setSavingKey(key)
-      if (selectedUser?.catalog_roles.some((cr) => cr.id === roleId)) {
-        setUserPermBySubmodule((m) => new Map(m).set(submoduleId, access))
-      }
+      setUserPermBySubmodule((m) => new Map(m).set(submoduleId, access))
       try {
-        const { error } = await supabase.from('role_permissions').upsert(
+        const { error } = await supabase.from('profile_permissions').upsert(
           {
-            role_id: roleId,
+            profile_id: selectedUser.id,
             submodule_id: submoduleId,
             can_read: access,
             can_write: access,
             can_delete: access,
           },
-          { onConflict: 'role_id,submodule_id' }
+          { onConflict: 'profile_id,submodule_id' }
         )
         if (error) throw error
-        const realDelta = access === previousAccess ? 0 : access ? 1 : -1
-        if (realDelta !== 0) {
-          setRoles((prev) =>
-            prev.map((r) => {
-              if (r.id !== roleId) return r
-              return {
-                ...r,
-                active_permissions: Math.max(0, (r.active_permissions ?? 0) + realDelta),
-              }
-            })
-          )
-        }
       } catch (e) {
         console.error(e)
-        toast.error('Error al guardar')
-        if (selectedUser?.catalog_roles.some((cr) => cr.id === roleId)) {
-          void loadUserPerms(selectedUser)
-        }
+        toast.error('Error al guardar acceso del usuario')
+        void loadUserPerms(selectedUser)
       } finally {
         setSavingKey(null)
       }
@@ -308,14 +306,8 @@ export function PermisosAdminPanel() {
     [supabase, selectedUser, loadUserPerms]
   )
 
-  const upsertUserPerm = async (submoduleId: string, access: boolean) => {
-    if (!selectedUserRoleId || selectedUser?.role === 'admin') return
-    const previous = userPermBySubmodule.get(submoduleId) ?? false
-    await upsertRolePermission(selectedUserRoleId, submoduleId, access, previous)
-  }
-
   const toggleUserModuleAccess = async (mod: ModuleRow, enable: boolean) => {
-    if (!selectedUserRoleId || selectedUser?.role === 'admin') return
+    if (!selectedUser || selectedUser?.role === 'admin') return
     for (const s of mod.submodules) {
       const current = userPermBySubmodule.get(s.id) ?? false
       if (current !== enable) await upsertUserPerm(s.id, enable)
@@ -395,8 +387,9 @@ export function PermisosAdminPanel() {
             </p>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Usuarios y accesos</h1>
             <p className="text-slate-600 mt-2 max-w-2xl">
-              Elige un miembro del equipo, asígnale un perfil de permisos y activa los módulos que
-              puede ver. Los cambios aplican a ese usuario de inmediato.
+              Cada usuario tiene sus propios accesos en la base de datos. El perfil de permisos solo
+              copia una plantilla al asignarlo; después, activar o quitar módulos afecta únicamente a
+              esa persona.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -489,9 +482,10 @@ export function PermisosAdminPanel() {
                   const st =
                     BASE_ROLE_STYLES[catalog?.base_role ?? u.role ?? ''] ?? BASE_ROLE_STYLES.admin
                   const sel = selectedUserId === u.id
-                  const accessCount = catalog
-                    ? (roles.find((r) => r.id === catalog.id)?.active_permissions ?? 0)
-                    : 0
+                  const accessCount =
+                    selectedUserId === u.id
+                      ? [...userPermBySubmodule.values()].filter(Boolean).length
+                      : '—'
                   return (
                     <button
                       key={u.id}
@@ -513,7 +507,8 @@ export function PermisosAdminPanel() {
                           {u.full_name ?? 'Sin nombre'}
                         </span>
                         <span className="block text-xs text-slate-500 truncate">
-                          {catalog?.name ?? u.role ?? 'Sin perfil'} · {accessCount} módulos
+                          {catalog?.name ?? u.role ?? 'Sin perfil'}
+                          {typeof accessCount === 'number' ? ` · ${accessCount} módulos` : ''}
                         </span>
                       </span>
                     </button>
@@ -598,7 +593,14 @@ export function PermisosAdminPanel() {
                   ) : loadingUserPerms ? (
                     <p className="text-sm text-slate-500">Cargando módulos…</p>
                   ) : (
-                    modules.map((mod) => {
+                    <>
+                      <p className="text-sm text-slate-600 rounded-lg bg-slate-50 border border-stone-200 px-4 py-3">
+                        Accesos guardados en <strong>este usuario</strong> únicamente. Cambiar el
+                        perfil arriba vuelve a copiar la plantilla{' '}
+                        {selectedUser.catalog_roles[0]?.name ? `(${selectedUser.catalog_roles[0].name})` : ''}{' '}
+                        y reemplaza los toggles actuales.
+                      </p>
+                      {modules.map((mod) => {
                       const subs = mod.submodules
                       const activeCount = subs.filter((s) => userPermBySubmodule.get(s.id)).length
                       const allOn = subs.length > 0 && activeCount === subs.length
@@ -629,7 +631,7 @@ export function PermisosAdminPanel() {
                           <ul className="divide-y divide-stone-100">
                             {subs.map((s) => {
                               const on = userPermBySubmodule.get(s.id) ?? false
-                              const busy = savingKey === `${selectedUserRoleId}:${s.id}`
+                              const busy = savingKey === `${selectedUser.id}:${s.id}`
                               return (
                                 <li
                                   key={s.id}
@@ -661,7 +663,8 @@ export function PermisosAdminPanel() {
                           </ul>
                         </div>
                       )
-                    })
+                    })}
+                    </>
                   )}
                 </div>
               </>

@@ -51,7 +51,6 @@ export async function POST(request: Request) {
     }
   }
 
-  // Después del enum: el trigger puede poner el rol por defecto; aquí fijamos el rol de catálogo elegido.
   const { error: delErr } = await supabase.from('profile_roles').delete().eq('profile_id', body.profileId)
   if (delErr) {
     return NextResponse.json({ error: delErr.message }, { status: 500 })
@@ -63,6 +62,14 @@ export async function POST(request: Request) {
   })
   if (insErr) {
     return NextResponse.json({ error: insErr.message }, { status: 500 })
+  }
+
+  const { error: seedErr } = await supabase.rpc('seed_profile_permissions_from_role', {
+    p_profile_id: body.profileId,
+    p_role_id: body.roleId,
+  })
+  if (seedErr) {
+    return NextResponse.json({ error: seedErr.message }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

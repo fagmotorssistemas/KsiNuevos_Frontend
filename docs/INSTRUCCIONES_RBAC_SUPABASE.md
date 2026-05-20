@@ -55,7 +55,14 @@ Deberías ver ~10 roles, 8 módulos y una fila en `profile_roles` por cada usuar
 ```
 
 3. Abre **Admin → Permisos** (o pulsa **Actualizar**): se ejecuta la sincronización con Supabase y el submódulo aparece en la matriz de permisos.
-4. Asigna acceso al rol o usuario que corresponda.
+4. Asigna acceso en **Usuarios** (por persona) o define la plantilla del **perfil de permisos** (rol de catálogo).
+
+## Permisos por usuario (no compartidos por rol)
+
+- **`profile_permissions`**: fuente de verdad de lo que ve cada usuario (login, middleware, panel).
+- **`role_permissions`**: solo plantilla interna; al **asignar o cambiar** el perfil de permisos se copia a ese usuario vía `seed_profile_permissions_from_role`.
+- **Admin → Permisos → Usuarios**: los toggles escriben solo en `profile_permissions` del usuario seleccionado.
+- **`get_my_effective_permissions`**: lee únicamente `profile_permissions` del usuario autenticado.
 
 El middleware usa los mismos `routePrefixes` vía `getProtectedRoutePrefixes()`; no hace falta duplicar rutas en `middleware.ts`.
 

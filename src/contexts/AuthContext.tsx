@@ -145,20 +145,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         {
           event: '*',
           schema: 'public',
-          table: 'role_permissions',
+          table: 'profile_permissions',
+          filter: `profile_id=eq.${user.id}`,
         },
-        async (payload) => {
-          const changedRoleId =
-            (payload.new as { role_id?: string } | undefined)?.role_id ??
-            (payload.old as { role_id?: string } | undefined)?.role_id
-          if (!changedRoleId) return
-          const { data: mine } = await supabase
-            .from('profile_roles')
-            .select('role_id')
-            .eq('profile_id', user.id)
-          if (mine?.some((r) => r.role_id === changedRoleId)) {
-            await refreshPerms()
-          }
+        async () => {
+          await refreshPerms()
         }
       )
       .subscribe()

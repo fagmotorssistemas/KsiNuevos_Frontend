@@ -3158,6 +3158,51 @@ export type Database = {
           },
         ]
       }
+      profile_permissions: {
+        Row: {
+          can_delete: boolean
+          can_read: boolean
+          can_write: boolean
+          created_at: string
+          profile_id: string
+          submodule_id: string
+          updated_at: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          created_at?: string
+          profile_id: string
+          submodule_id: string
+          updated_at?: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_read?: boolean
+          can_write?: boolean
+          created_at?: string
+          profile_id?: string
+          submodule_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_permissions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_permissions_submodule_id_fkey"
+            columns: ["submodule_id"]
+            isOneToOne: false
+            referencedRelation: "submodules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -5406,6 +5451,10 @@ export type Database = {
           can_write: boolean
           submodule_slug: string
         }[]
+      }
+      seed_profile_permissions_from_role: {
+        Args: { p_profile_id: string; p_role_id: string }
+        Returns: undefined
       }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
