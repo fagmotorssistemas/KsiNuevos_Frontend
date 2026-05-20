@@ -22,6 +22,13 @@ import { VideoPlayer } from './VideoPlayer'
 import type { VideoJob, GeminiSegmentAnalysisResult } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
+import {
+  VIDEO_RAW_BUCKET,
+  VIDEO_RAW_BUCKET_MAX_BYTES,
+  resolveVideoMimeType,
+} from '@/lib/videos/resolve-video-mime'
+import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
+import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
 
@@ -234,6 +241,22 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
 
     setIsSubmitting(true)
     try {
+      for (const file of files) {
+        if (!resolveVideoMimeType(file)) {
+          throw new Error(
+            `Tipo de archivo no permitido para "${file.name}". Usa MP4, MOV, AVI, WEBM o MKV.`
+          )
+        }
+        if (file.size > VIDEO_RAW_BUCKET_MAX_BYTES) {
+          const mb = (file.size / (1024 * 1024)).toFixed(0)
+          throw new Error(
+            `"${file.name}" pesa ~${mb} MB y supera el límite de 2 GB por clip. Comprime o divide el video.`
+          )
+        }
+      }
+
+      const supabase = createClient()
+
       // ── PASO 1: Crear job y obtener URLs firmadas de upload ──────────────
       setUploadProgress('Preparando upload...')
 
@@ -283,22 +306,14 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         voiceOverStoredPath = voData.path
       }
 
-      // ── PASO 2: Subir cada archivo DIRECTAMENTE a Supabase Storage ───────
-      // El navegador sube el archivo directo; Next.js NO ve el contenido.
+      // ── PASO 2: Subir clips (firmado directo o proxy API si el archivo es grande) ──
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const upload = uploads[i]
-        setUploadProgress(`Subiendo ${i + 1} de ${files.length}: ${file.name}...`)
-
-        const uploadRes = await fetch(upload.signedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type || 'video/mp4' },
-          body: file,
+        await uploadRawVideoClip(supabase, newJobId, upload.path, upload.token, file, {
+          onProgress: (msg) =>
+            setUploadProgress(`${i + 1}/${files.length}: ${msg}`),
         })
-
-        if (!uploadRes.ok) {
-          throw new Error(`Error subiendo ${file.name} (HTTP ${uploadRes.status})`)
-        }
       }
 
       let scriptPdfPath: string | undefined
@@ -311,13 +326,20 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           throw new Error('El guion debe ser un archivo PDF')
         }
         setUploadProgress('Subiendo guion (PDF)...')
-        const scriptPut = await fetch(scriptUpload.signedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': scriptPdfFile.type || 'application/pdf' },
-          body: scriptPdfFile,
-        })
-        if (!scriptPut.ok) {
-          throw new Error(`Error subiendo el guion (HTTP ${scriptPut.status})`)
+        const scriptBody =
+          scriptPdfFile.type === 'application/pdf'
+            ? scriptPdfFile
+            : new File([scriptPdfFile], scriptPdfFile.name, {
+                type: 'application/pdf',
+                lastModified: scriptPdfFile.lastModified,
+              })
+        const { error: scriptUploadError } = await supabase.storage
+          .from(VIDEO_RAW_BUCKET)
+          .uploadToSignedUrl(scriptUpload.path, scriptUpload.token, scriptBody, {
+            cacheControl: '3600',
+          })
+        if (scriptUploadError) {
+          throw new Error(`Error subiendo el guion: ${scriptUploadError.message}`)
         }
         scriptPdfPath = scriptUpload.path
       }
@@ -404,7 +426,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       setStep(5)
       onJobCreated()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error iniciando el proceso')
+      console.error('[CreateReelModal] submit failed:', err)
+      toast.error(extractErrorMessage(err, 'Error iniciando el proceso'))
     } finally {
       setIsSubmitting(false)
       setUploadProgress(null)

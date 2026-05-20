@@ -6,6 +6,8 @@
 
 const MAX_SIZE_SINGLE_BYTES = 500 * 1024 * 1024 // 500 MB
 const MAX_SIZE_CLIP_BYTES = 200 * 1024 * 1024 // 200 MB
+/** Tope Supabase con spend cap (~50 MB global). */
+export const STORAGE_UPLOAD_CAP_BYTES = 47 * 1024 * 1024
 const MAX_WIDTH = 1280 // 720p
 
 export interface CompressionResult {
@@ -18,7 +20,8 @@ export interface CompressionResult {
 
 async function compressWithFfmpeg(
   inputBuffer: Buffer,
-  maxWidthPx: number
+  maxWidthPx: number,
+  crf: number = 28
 ): Promise<Buffer> {
   const { execFile } = await import('child_process')
   const { promisify } = await import('util')
@@ -39,7 +42,7 @@ async function compressWithFfmpeg(
       '-i', inputPath,
       '-vf', `scale='min(${maxWidthPx},iw)':-2`,
       '-c:v', 'libx264',
-      '-crf', '28',
+      '-crf', String(crf),
       '-preset', 'fast',
       '-c:a', 'aac',
       '-b:a', '128k',
@@ -52,6 +55,73 @@ async function compressWithFfmpeg(
   } finally {
     if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath)
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+  }
+}
+
+/** Comprime en servidor (ffmpeg) hasta caber en el tope global de Storage (~50 MB). */
+export async function compressVideoForStorageCap(
+  buffer: Buffer,
+  filename: string
+): Promise<CompressionResult> {
+  const originalSize = buffer.length
+  if (originalSize <= STORAGE_UPLOAD_CAP_BYTES) {
+    return { buffer, originalSize, compressedSize: originalSize, wasCompressed: false }
+  }
+
+  const attempts = [
+    { crf: 28, width: 1280 },
+    { crf: 30, width: 1280 },
+    { crf: 32, width: 960 },
+    { crf: 35, width: 720 },
+  ]
+
+  console.log(
+    `[VideoV2Compression][${filename}] Storage cap: ${(originalSize / 1024 / 1024).toFixed(1)} MB -> <${(STORAGE_UPLOAD_CAP_BYTES / 1024 / 1024).toFixed(0)} MB`
+  )
+
+  try {
+    let lastBuf = buffer
+    for (const { crf, width } of attempts) {
+      lastBuf = await compressWithFfmpeg(buffer, width, crf)
+      if (lastBuf.length <= STORAGE_UPLOAD_CAP_BYTES) {
+        console.log(
+          `[VideoV2Compression][${filename}] OK tras CRF ${crf}: ${(lastBuf.length / 1024 / 1024).toFixed(1)} MB`
+        )
+        return {
+          buffer: lastBuf,
+          originalSize,
+          compressedSize: lastBuf.length,
+          wasCompressed: true,
+        }
+      }
+    }
+
+    if (lastBuf.length < originalSize && lastBuf.length <= 52 * 1024 * 1024) {
+      return {
+        buffer: lastBuf,
+        originalSize,
+        compressedSize: lastBuf.length,
+        wasCompressed: true,
+      }
+    }
+
+    return {
+      buffer,
+      originalSize,
+      compressedSize: originalSize,
+      wasCompressed: false,
+      error: `El video (${(originalSize / 1024 / 1024).toFixed(1)} MB) no pudo comprimirse por debajo de ~47 MB en el servidor.`,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[VideoV2Compression][${filename}] ffmpeg no disponible: ${msg}`)
+    return {
+      buffer,
+      originalSize,
+      compressedSize: originalSize,
+      wasCompressed: false,
+      error: `Compresión en servidor no disponible (${msg}). El navegador debería comprimir antes de subir.`,
+    }
   }
 }
 

@@ -20,6 +20,10 @@
 # production
 /build
 
+# ffmpeg.wasm (generado por npm postinstall / build; ver public/ffmpeg/.gitkeep)
+/public/ffmpeg/*
+!/public/ffmpeg/.gitkeep
+
 # misc
 .DS_Store
 *.pem

@@ -110,7 +110,6 @@ export function SchedulePublishModal({
 
   useEffect(() => {
     if (!isOpen || mode !== 'create') return
-    setVehicleId('')
     setCaption('')
     setIg(true)
     setFb(true)
@@ -119,6 +118,7 @@ export function SchedulePublishModal({
     setDateYmd(dy)
     setTimeHm(th)
     setSearchTerm('')
+    setVehicleId('')
   }, [isOpen, mode, job?.id])
 
   useEffect(() => {

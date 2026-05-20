@@ -11,11 +11,15 @@ type SubTab = 'approved' | 'queue'
 interface VideosPublishingSectionProps {
   refreshKey?: number
   onPublishingMutate?: () => void
+  flowTypeFilter?: string
+  approvedEmptyHint?: string
 }
 
 export function VideosPublishingSection({
   refreshKey = 0,
   onPublishingMutate,
+  flowTypeFilter,
+  approvedEmptyHint,
 }: VideosPublishingSectionProps) {
   const [sub, setSub] = useState<SubTab>('approved')
   const [tokenWarn, setTokenWarn] = useState<{ soon: boolean; expiresAt: string | null } | null>(null)
@@ -113,9 +117,15 @@ export function VideosPublishingSection({
           <ApprovedVideosPublishingPanel
             refreshKey={refreshKey}
             onScheduleDone={onPublishingMutate}
+            flowTypeFilter={flowTypeFilter}
+            emptyHint={approvedEmptyHint}
           />
         ) : (
-          <PublishingQueueTable refreshKey={refreshKey} onMutate={onPublishingMutate} />
+          <PublishingQueueTable
+            refreshKey={refreshKey}
+            onMutate={onPublishingMutate}
+            flowTypeFilter={flowTypeFilter}
+          />
         )}
       </div>
 

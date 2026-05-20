@@ -8,13 +8,12 @@ const STEPS: { key: NoticieroPipelineStep; label: string; hint?: string }[] = [
   {
     key: 'avatar',
     label: 'Creando avatar con HeyGen...',
-    hint: 'Este paso puede tardar entre 1 y 3 minutos',
+    hint: 'Este paso puede tardar entre 2 y 5 minutos según la carga de HeyGen',
   },
   { key: 'video', label: 'Componiendo video con Creatomate...' },
-  { key: 'social', label: 'Subiendo a redes sociales...' },
 ]
 
-const ORDER: NoticieroPipelineStep[] = ['script', 'avatar', 'video', 'social', 'done']
+const ORDER: NoticieroPipelineStep[] = ['script', 'avatar', 'video', 'done']
 
 function stepIndex(step: NoticieroPipelineStep): number {
   if (step === 'idle' || step === 'error') return -1
@@ -79,6 +78,12 @@ export function GenerationProgress({ currentStep, error }: GenerationProgressPro
 
       {error && (
         <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">{error}</p>
+      )}
+
+      {currentStep !== 'done' && !error && (
+        <p className="text-xs text-gray-500">
+          Si recargas la página, el proceso sigue en el servidor y el progreso se actualizará solo.
+        </p>
       )}
     </div>
   )

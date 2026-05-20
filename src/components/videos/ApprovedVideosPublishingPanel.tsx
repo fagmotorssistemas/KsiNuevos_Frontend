@@ -10,9 +10,14 @@ import { SchedulePublishModal } from './SchedulePublishModal'
 export function ApprovedVideosPublishingPanel({
   refreshKey = 0,
   onScheduleDone,
+  flowTypeFilter,
+  emptyHint,
 }: {
   refreshKey?: number
   onScheduleDone?: () => void
+  /** Ej. `noticiero` para mostrar solo clips del noticiero IA */
+  flowTypeFilter?: string
+  emptyHint?: string
 }) {
   const [jobs, setJobs] = useState<VideoJob[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,13 +28,17 @@ export function ApprovedVideosPublishingPanel({
     setLoading(true)
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
+      let query = supabase
         .from('video_jobs_v2')
         .select('*')
         .eq('status', 'completed')
         .eq('social_publish_stage', 'aprobado')
         .order('updated_at', { ascending: false })
         .limit(100)
+      if (flowTypeFilter) {
+        query = query.eq('flow_type', flowTypeFilter)
+      }
+      const { data, error } = await query
       if (error) throw error
       setJobs((data ?? []) as VideoJob[])
     } catch (e) {
@@ -37,7 +46,7 @@ export function ApprovedVideosPublishingPanel({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [flowTypeFilter])
 
   useEffect(() => {
     load()
@@ -57,7 +66,8 @@ export function ApprovedVideosPublishingPanel({
         <Film className="w-12 h-12 text-gray-300 mb-3" />
         <p className="font-semibold text-gray-800">No hay videos aprobados</p>
         <p className="text-sm mt-1 max-w-md">
-          Aprueba un video completado desde la lista de Reels (botón &quot;Aprobar para publicar&quot;).
+          {emptyHint ??
+            'Aprueba un video completado desde la lista (botón "Aprobar para publicar").'}
         </p>
       </div>
     )

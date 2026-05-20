@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
       if (!vehicle) {
         return NextResponse.json({ error: 'Vehículo inválido o incompleto' }, { status: 400 })
       }
-      const result = await generateNoticieroScript('vehicle', vehicle)
+      const result = await generateNoticieroScript(
+        'vehicle',
+        vehicle,
+        undefined,
+        body.bannerTitle
+      )
       return NextResponse.json(result)
     }
 
@@ -50,7 +55,7 @@ export async function POST(request: NextRequest) {
       if (!topic) {
         return NextResponse.json({ error: 'El tema personalizado es requerido' }, { status: 400 })
       }
-      const result = await generateNoticieroScript('custom', undefined, topic)
+      const result = await generateNoticieroScript('custom', undefined, topic, body.bannerTitle)
       return NextResponse.json(result)
     }
 

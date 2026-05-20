@@ -1,0 +1,4 @@
+# Los binarios ffmpeg-core.js y ffmpeg-core.wasm se generan con:
+#   npm install  (postinstall)
+#   npm run build
+# No se versionan (ver .gitignore); Vercel los crea en cada deploy.

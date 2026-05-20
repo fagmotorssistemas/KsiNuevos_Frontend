@@ -25,15 +25,24 @@ export async function renderNoticieroTemplate(
   heygenVideoUrl: string,
   bannerTitle: string
 ): Promise<{ renderId: string; videoUrl: string }> {
+  const title = bannerTitle.trim()
+  if (!title) {
+    throw new Error('El titular del banner (titulo_vehiculo) es requerido para Creatomate')
+  }
+
+  // La plantilla usa {{titulo_vehiculo}}; Creatomate espera esa clave dinámica (no solo el name del elemento).
   const body: CreatomateV1RenderRequest = {
     template_id: getNoticieroEnv('CREATOMATE_TEMPLATE_ID'),
     modifications: {
       'Avatar-HeyGen': heygenVideoUrl,
-      'Titulo-Vehiculo': bannerTitle,
+      'bg-video': heygenVideoUrl,
+      titulo_vehiculo: title,
+      'Titulo-Vehiculo': title,
+      'Titulo-Vehiculo.text': title,
     },
   }
 
-  console.log('[noticiero/creatomate] POST /v1/renders template=', body.template_id)
+  console.log('[noticiero/creatomate] POST /v1/renders template=', body.template_id, 'titulo=', title)
   const createRes = await fetch(`${CREATOMATE_V1_BASE}/renders`, {
     method: 'POST',
     headers: creatomateHeaders(),

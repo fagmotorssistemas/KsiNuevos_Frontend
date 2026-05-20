@@ -5,15 +5,20 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev-turbopack": "next dev --turbopack",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build --webpack",
+    "build": "node scripts/copy-ffmpeg-core.mjs && cross-env NODE_OPTIONS=--max-old-space-size=4096 next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "videos:ffprobe": "node scripts/ffprobe-stream-color.mjs"
+    "postinstall": "node scripts/copy-ffmpeg-core.mjs",
+    "videos:ffprobe": "node scripts/ffprobe-stream-color.mjs",
+    "supabase:admin-set-password": "node --env-file=.env ./scripts/supabase-admin-set-user-password.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@ffmpeg/core": "^0.12.6",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@google/generative-ai": "^0.24.1",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.7.0",

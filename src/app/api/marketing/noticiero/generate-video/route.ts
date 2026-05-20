@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { requireNoticieroEnv } from '@/lib/noticiero/env'
 import { renderNoticieroTemplate } from '@/lib/noticiero/creatomate-template'
-import { buildVehicleBannerTitle, generateCustomBannerTitle } from '@/lib/noticiero/gemini'
+import { updateNoticieroJob } from '@/lib/noticiero/jobs'
+import { isBannerTitleValid, normalizeBannerTitle } from '@/lib/noticiero/banner-title'
+import { generateCustomBannerTitle, generateVehicleHeadline } from '@/lib/noticiero/gemini'
 import type { GenerateVideoRequest, NoticieroVehicle } from '@/lib/noticiero/types'
 
 export const dynamic = 'force-dynamic'
@@ -40,15 +42,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'heygenVideoUrl es requerido' }, { status: 400 })
     }
 
-    let bannerTitle = body.bannerTitle?.trim() ?? ''
+    let bannerTitle = body.bannerTitle?.trim() ? normalizeBannerTitle(body.bannerTitle) : ''
 
-    if (!bannerTitle) {
+    if (!isBannerTitleValid(bannerTitle)) {
       if (body.mode === 'vehicle') {
         const vehicle = parseVehicle(body.vehicle ?? {})
         if (!vehicle) {
           return NextResponse.json({ error: 'Vehículo inválido para el banner' }, { status: 400 })
         }
-        bannerTitle = buildVehicleBannerTitle(vehicle)
+        bannerTitle = await generateVehicleHeadline(vehicle)
       } else if (body.mode === 'custom') {
         const topic = body.customTopic?.trim()
         if (!topic) {
@@ -62,6 +64,20 @@ export async function POST(request: NextRequest) {
 
     console.log('[noticiero/generate-video] Componiendo con Creatomate, banner=', bannerTitle)
     const { renderId, videoUrl } = await renderNoticieroTemplate(heygenVideoUrl, bannerTitle)
+
+    const jobId = body.jobId?.trim()
+    if (jobId) {
+      await updateNoticieroJob(jobId, {
+        final_video_url: videoUrl,
+        creatomate_render_id: renderId,
+        banner_title: bannerTitle,
+        status: 'completed',
+        current_step: 'done',
+        progress_percentage: 100,
+        social_publish_stage: 'generado',
+        error_message: null,
+      })
+    }
 
     return NextResponse.json({ videoUrl, bannerTitle, renderId })
   } catch (err) {
