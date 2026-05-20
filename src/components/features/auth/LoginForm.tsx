@@ -7,6 +7,13 @@ import { useAuth } from '@/hooks/useAuth' // Usamos tu hook
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
+import {
+  fetchPermissionMap,
+  isAppAdminRole,
+  isRouteAllowed,
+  resolveDefaultDashboardHref,
+  type PermissionContext,
+} from '@/lib/permissions'
 
 export const LoginForm = () => {
   const router = useRouter()
@@ -53,37 +60,28 @@ export const LoginForm = () => {
           throw new Error('Tu cuenta está desactivada.')
         }
 
-        // 4. LÓGICA DE REDIRECCIONAMIENTO
-        router.refresh() // Actualiza el Header para mostrar el avatar
+        const permissionMap = await fetchPermissionMap(supabase)
+        const permCtx: PermissionContext = {
+          baseRole: profile.role,
+          map: permissionMap,
+        }
 
-        // Si venían de una ruta protegida (redirect), llevarlos ahí si es segura
+        router.refresh()
+
+        const defaultHref = resolveDefaultDashboardHref(permCtx)
+
         if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
-          router.push(redirectTo)
-          return
+          const mayUseRedirect =
+            profile.role === 'cliente'
+              ? redirectTo === '/perfil' || redirectTo.startsWith('/perfil/')
+              : isAppAdminRole(permCtx) || isRouteAllowed(redirectTo, permCtx)
+          if (mayUseRedirect) {
+            router.push(redirectTo)
+            return
+          }
         }
 
-        switch (profile.role) {
-          case 'cliente':
-            router.push('/') // Al Home Público
-            break
-          case 'vendedor':
-          case 'admin':
-          case "marketing":
-            router.push('/leads') // Al CRM
-            break
-          case 'finanzas':
-            router.push('/inventario') // A Finanzas
-            break
-          case 'contable':
-            router.push('/wallet') // A Cartera
-            break
-          case 'abogado':
-            router.push('/wallet') // Solo acceso a Cartera
-            break
-
-          default:
-            router.push('/') // Por seguridad, al home
-        }
+        router.push(defaultHref)
 
       } catch (err: any) {
         console.error(err)

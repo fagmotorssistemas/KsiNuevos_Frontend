@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubmoduleAccess } from "@/hooks/useSubmoduleAccess";
 import { useAdminStats } from "@/hooks/useAdminStats";
 import { useVehicleStats } from "@/hooks/useVehicleStats";
 import { AdminToolbar } from "@/components/features/admin/AdminToolbar";
@@ -263,12 +264,14 @@ export default function AdminDashboardPage() {
         proformas: acc.proformas + curr.proformas_created
     }), { leads: 0, showroom: 0, appointments: 0, requests: 0, proformas: 0 }), [sellerStats]);
 
-    if (!isAuthLoading && (!profile || (profile.role !== 'admin' && profile.role !== 'vendedor' && profile.role !== 'marketing'))) {
+    const { allowed: canMonitoreo, isLoading: permLoading } = useSubmoduleAccess('monitoreo-reportes');
+
+    if (!isAuthLoading && !permLoading && !canMonitoreo) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-600">
                 <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
                 <h1 className="text-xl font-bold">Acceso Restringido</h1>
-                <p>No tienes permisos para ver el panel administrativo.</p>
+                <p>No tienes permiso para ver Monitoreo.</p>
             </div>
         );
     }

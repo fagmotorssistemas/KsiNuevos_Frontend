@@ -1,100 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { contableMayAccessSeguros, contableMayAccessTaller } from "@/lib/access/contableModuleAccess";
-
-interface NavItem {
-  href: string;
-  label: string;
-}
+import {
+  buildPrimaryNavItems,
+  resolvePrimaryNavItemHref,
+  type PermissionContext,
+} from "@/lib/permissions";
 
 export function MainNav({ className }: { className?: string }) {
   const pathname = usePathname();
-  const { profile } = useAuth();
-  const roleNorm = (profile?.role ?? "").toString().toLowerCase();
+  const { profile, permissionMap } = useAuth();
 
-  let navItems: NavItem[] = [];
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+    [profile?.role, permissionMap]
+  );
 
-if (roleNorm === "taller") {
-  navItems = [
-    { href: "/taller/dashboard", label: "Taller" },
-  ];
-} else if (roleNorm === "finanzas") {
-  navItems = [
-    { href: "/wallet", label: "Cartera" },
-    { href: "/inventario", label: "Inventario" },
-    { href: "/legal/cases", label: "Gestión Legal" },
-  ];
-} else if (roleNorm === "contable") {
-  navItems = [
-    { href: "/wallet", label: "Contabilidad" },
-  ];
-  if (contableMayAccessTaller(profile)) {
-    navItems.push({ href: "/taller/dashboard", label: "Taller" });
-  }
-  if (contableMayAccessSeguros(profile)) {
-    navItems.push({ href: "/seguros", label: "Seguros" });
-  }
-} else if (roleNorm === "abogado" || roleNorm === "abogada") {
-  navItems = [
-    { href: "/wallet", label: "Cartera" },
-    { href: "/legal/cases", label: "Gestión Legal" },
-  ];
-  
-} else {
-  navItems = [
-    { href: "/leads", label: "Ventas" },
-  ];
-
-
-    // Admin
-    if (profile?.role === "admin") {
-      navItems.push({ href: "/wallet", label: "Contabilidad" });
-      navItems.push({ href: "/legal/cases", label: "Gestión Legal" });
-      navItems.push({ href: "/taller/dashboard", label: "Taller" });
-      navItems.push({ href: "/marketing", label: "Marketing" });
-    }
-
-    if (profile?.role === "marketing") {
-      navItems.push({ href: "/marketing", label: "Marketing" });
-    }
-
-    // Admin y Vendedores: Rastreadores
-    if (profile?.role === "admin" || profile?.role === "vendedor") {
-      navItems.push({ href: "/rastreadores", label: "Rastreadores" });
-    }
-
-    // Solo admin: Seguros
-    if (profile?.role === "admin") {
-      navItems.push({ href: "/seguros", label: "Seguros" });
-    }
-
-
-
-    // Admin y Marketing ven la sección de reportes y Scraper
-    if (profile?.role === "admin" || profile?.role === "marketing") {
-      navItems.push({
-        href: "/scraper",
-        label: "Scraper",
-      });
-      navItems.push({
-        href: "/report",
-        label: "Monitoreo",
-      });
-    }
-  }
+  const navItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx]);
 
   return (
-    <nav className={`flex items-center space-x-1 ${className || ''}`}>
+    <nav className={`flex items-center space-x-1 ${className || ""}`}>
       {navItems.map((item) => {
-        const isActive = pathname?.startsWith(item.href);
+        const href = resolvePrimaryNavItemHref(item, permCtx) ?? item.href;
+        const isActive = pathname?.startsWith(href);
 
         return (
           <Link
-            key={item.href}
-            href={item.href}
+            key={`${item.label}-${href}`}
+            href={href}
             className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
               isActive
                 ? "bg-slate-900 text-white shadow-sm"

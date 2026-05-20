@@ -2,7 +2,12 @@ import { useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation"; // Importante para leer la URL
 
 // 1. IMPORTS
-import { useInventoryData } from "./useInventoryData"; 
+import { useInventoryData, type InventoryCar } from "./useInventoryData"; 
+
+/** Solo autos listables en comprar: precio válido e imagen principal */
+function isCatalogCar(car: InventoryCar): boolean {
+  return (car.price ?? 0) > 0 && Boolean(car.img_main_url?.trim());
+}
 import { filterBySearch } from "./modules/filterBySearch";
 import { filterByPrice } from "./modules/filterByPrice";
 import { filterByCategory } from "./modules/filterByCategory";
@@ -62,15 +67,15 @@ export function useInventoryMaster() {
 
   const [sortBy, setSortBy] = useState<SortOption>('newest'); 
   const [page, setPage] = useState(1); 
-  const ITEMS_PER_PAGE = 9; 
+  const ITEMS_PER_PAGE = 12;
 
   // 5. TUBERÍA DE PROCESAMIENTO (PIPELINE)
   const processedCars = useMemo(() => {
     // Si todavía no hay datos, retornamos array vacío
     if (!rawCars) return [];
 
-    // Excluir autos con precio 0 o menor (no mostrarlos en el catálogo)
-    let result = rawCars.filter((car) => (car.price ?? 0) > 0);
+    // Solo vehículos que se muestran en el catálogo (precio + imagen)
+    let result = rawCars.filter(isCatalogCar);
 
     // A. Aplicar Filtros
     result = filterBySearch(result, filters.searchQuery);

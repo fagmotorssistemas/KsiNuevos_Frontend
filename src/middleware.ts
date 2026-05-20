@@ -1,15 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
-import { mayAccessSegurosRoute, mayAccessTallerRoute } from '@/lib/access/contableModuleAccess'
+import {
+  rowsToPermissionMap,
+  type PermissionContext,
+  type EffectivePermissionRow,
+  isRouteAllowed,
+  isTallerOnlyAccess,
+  resolveAccessDeniedRedirect,
+} from '@/lib/permissions'
 
-/**
- * Rutas que requieren estar logueado (solo roles empresa: vendedores, admin, contabilidad, taller, etc.).
- * Las rutas de clientes son públicas: /, /home, /buyCar, /sellCar, /creditCar, /aboutUs (y similares).
- * Si el usuario no tiene sesión en una ruta protegida, se redirige a /login.
- */
 const RUTAS_PROTEGIDAS_PREFIX = [
-  '/perfil', // perfil del usuario logueado (no público)
+  '/perfil',
   '/leads',
   '/inventory',
   '/finance',
@@ -39,6 +41,8 @@ const RUTAS_PROTEGIDAS_PREFIX = [
   '/report',
   '/legal',
   '/marketing',
+  '/admin',
+  '/templates',
 ]
 
 function esRutaProtegida(pathname: string): boolean {
@@ -65,7 +69,6 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refrescar sesión (importante para que el token no expire sin redirigir)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -76,64 +79,38 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Ruta interna de la empresa: exige estar logueado
   if (!user) {
     const urlLogin = new URL('/login', request.url)
     urlLogin.searchParams.set('redirect', pathname)
     return NextResponse.redirect(urlLogin)
   }
 
-  // Si está logueado pero es cliente, no puede entrar a rutas de la empresa → acceso denegado
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
 
   if (profile?.role === 'cliente') {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  // Módulo taller: admin, personal de taller, o contable con permiso en perfil
-  if (pathname === '/taller' || pathname.startsWith('/taller/')) {
-    if (!mayAccessTallerRoute(profile)) {
-      return NextResponse.redirect(new URL('/wallet', request.url))
-    }
-  }
+  const { data: permRows } = await supabase.rpc('get_my_effective_permissions')
+  const map = rowsToPermissionMap((permRows ?? []) as EffectivePermissionRow[])
+  const ctx: PermissionContext = { baseRole: profile?.role ?? null, map }
 
-  // Módulo taller: solo admin y taller
-  if (profile?.role === 'taller') {
-    const allowed = pathname === '/taller' || pathname.startsWith('/taller/')
-    if (!allowed) {
-      return NextResponse.redirect(new URL('/taller/dashboard', request.url))
-    }
-  }
-
-  // Módulo legal: solo admin y abogado/abogada
-  if (pathname === '/legal' || pathname.startsWith('/legal/')) {
-    const role = (profile?.role || '').toLowerCase().trim()
-    const allowed = role === 'admin' || role === 'abogado' || role === 'abogada' || role === 'finanzas'
-    if (!allowed) {
+  if (pathname === '/admin/permisos' || pathname.startsWith('/admin/permisos/')) {
+    if (profile?.role !== 'admin') {
       return NextResponse.redirect(new URL('/home', request.url))
     }
+    return response
   }
 
-  // Módulo marketing: admin, marketing y contable
-  if (pathname === '/marketing' || pathname.startsWith('/marketing/')) {
-    const role = (profile?.role || '').toLowerCase().trim()
-    const allowed = role === 'admin' || role === 'marketing' || role === 'contable'
-    if (!allowed) {
-      return NextResponse.redirect(new URL('/home', request.url))
+  if (!isRouteAllowed(pathname, ctx)) {
+    let target = resolveAccessDeniedRedirect(pathname, ctx)
+    if (!isRouteAllowed(target, ctx)) {
+      target = '/home'
     }
-  }
-
-  // Módulo seguros (/seguros/*): admin o contable con permiso en perfil
-  if (pathname === '/seguros' || pathname.startsWith('/seguros/')) {
-    if (!mayAccessSegurosRoute(profile)) {
-      const r = (profile?.role ?? '').toString().toLowerCase().trim()
-      const fallback = r === 'contable' ? '/wallet' : '/leads'
-      return NextResponse.redirect(new URL(fallback, request.url))
+    if (isTallerOnlyAccess(ctx) && target === '/home') {
+      target = '/taller/dashboard'
     }
+    return NextResponse.redirect(new URL(target, request.url))
   }
 
   return response
@@ -141,14 +118,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Ejecutar en todas las rutas excepto:
-     * - _next/static
-     * - _next/image
-     * - favicon.ico
-     * - assets
-     * - api
-     */
     '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

@@ -20,9 +20,12 @@ interface KpiDashboardProps {
 }
 
 export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: KpiDashboardProps) {
-    const { profile } = useAuth();
+    const { profile, isLoading: authLoading } = useAuth();
     const role = (profile?.role || "").toLowerCase().trim();
     const isAbogadoRole = role === "abogado" || role === "abogada";
+
+    if (authLoading) return null;
+    if (profile?.role !== "admin") return null;
 
     // Helper para formatear dinero
     const formatMoney = (amount: number) => {

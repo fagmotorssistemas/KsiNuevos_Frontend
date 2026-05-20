@@ -18,7 +18,7 @@ interface Template {
 }
 
 export default function TemplatesPage() {
-  const { profile, isLoading: isAuthLoading } = useAuth();
+  const { profile, hasPermission, isLoading: isAuthLoading } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,10 +33,10 @@ export default function TemplatesPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.role === "admin") {
+    if (!isAuthLoading && hasPermission("plantillas-documentos", "read")) {
       fetchTemplates();
     }
-  }, [profile]);
+  }, [profile, isAuthLoading, hasPermission]);
 
   const fetchTemplates = async () => {
     setIsLoading(true);
@@ -131,7 +131,7 @@ export default function TemplatesPage() {
     }
   };
 
-  if (!isAuthLoading && profile?.role !== "admin") {
+  if (!isAuthLoading && !hasPermission("plantillas-documentos", "read")) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-600">
         <h1 className="text-xl font-bold">Acceso Restringido</h1>

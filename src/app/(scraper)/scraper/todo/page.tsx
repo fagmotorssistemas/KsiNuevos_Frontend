@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { ShieldAlert } from "lucide-react";
+import { useSubmoduleAccess } from "@/hooks/useSubmoduleAccess";
+import { SubmoduleAccessDenied } from "@/components/layout/SubmoduleAccessDenied";
 import { useScraperData } from "@/hooks/useScraperData";
 import { getVehicleTraction } from "@/services/scraper.service";
 import { OpportunitiesCenterView } from "@/components/features/admin/opportunities/OpportunitiesCenterView";
@@ -10,7 +10,7 @@ import { OpportunitiesTableView } from "@/components/features/admin/opportunitie
 import { Pagination } from "@/shared/components/Pagination";
 
 export default function ScraperTodoPage() {
-    const { profile, isLoading: isAuthLoading } = useAuth();
+    const { isLoading: isAuthLoading, allowed } = useSubmoduleAccess("scraper-marketing");
     const {
         vehicles,
         isLoading: isScraperLoading,
@@ -55,14 +55,8 @@ export default function ScraperTodoPage() {
         [vehicleFilters]
     );
 
-    if (!isAuthLoading && (!profile || (profile.role !== "admin" && profile.role !== "vendedor" && profile.role !== "marketing"))) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] bg-slate-50 text-slate-600">
-                <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
-                <h1 className="text-xl font-bold">Acceso restringido</h1>
-                <p>No tienes permisos para ver el módulo Scraper.</p>
-            </div>
-        );
+    if (!isAuthLoading && !allowed) {
+        return <SubmoduleAccessDenied moduleLabel="Scraper" />;
     }
 
     return (

@@ -1,27 +1,29 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { canAccessModule, MODULE_SLUGS, type PermissionContext } from '@/lib/permissions';
 
 export function LegalRoleGuard({ children }: { children: React.ReactNode }) {
-  const { profile, isLoading } = useAuth();
+  const { profile, isLoading, permissionMap } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+    [profile?.role, permissionMap]
+  );
+
   useEffect(() => {
     if (isLoading || !profile) return;
-    const role = (profile.role || '').toLowerCase().trim();
-    const allowed =
-      role === 'admin' ||
-      role === 'abogado' ||
-      role === 'abogada' ||
-      role === 'finanzas';
-    if (!allowed && (pathname === '/legal' || pathname.startsWith('/legal/'))) {
+    if (
+      !canAccessModule(permCtx, MODULE_SLUGS.legal) &&
+      (pathname === '/legal' || pathname.startsWith('/legal/'))
+    ) {
       router.replace('/home');
     }
-  }, [isLoading, profile, pathname, router]);
+  }, [isLoading, profile, pathname, router, permCtx]);
 
   return <>{children}</>;
 }
-
