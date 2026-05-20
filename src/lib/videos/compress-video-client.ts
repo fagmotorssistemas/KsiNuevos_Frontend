@@ -6,7 +6,6 @@
 import {
   VIDEO_AUTO_COMPRESS_ABOVE_BYTES,
   VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
-  VIDEO_SUPABASE_GLOBAL_DEFAULT_MAX_BYTES,
 } from '@/lib/videos/resolve-video-mime'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
@@ -14,6 +13,13 @@ export type VideoCompressProgressFn = (message: string) => void
 
 type FfmpegModule = typeof import('@ffmpeg/ffmpeg')
 type UtilModule = typeof import('@ffmpeg/util')
+
+type EncodeAttempt = {
+  crf: number
+  maxWidth: number
+  audioK?: number
+  fps?: number
+}
 
 let ffmpegLoadPromise: Promise<InstanceType<FfmpegModule['FFmpeg']>> | null = null
 
@@ -34,6 +40,17 @@ function resetFfmpegLoader(): void {
   ffmpegLoadPromise = null
 }
 
+async function assertFfmpegAssetsReachable(): Promise<void> {
+  const wasmUrl = `${window.location.origin}/ffmpeg/ffmpeg-core.wasm`
+  const res = await fetch(wasmUrl, { method: 'HEAD' })
+  if (!res.ok) {
+    throw new Error(
+      `No se encontró el compresor en ${wasmUrl} (HTTP ${res.status}). ` +
+        'En local: npm install y reinicia el servidor. En producción: espera a que termine el deploy.'
+    )
+  }
+}
+
 async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
   ffmpeg: InstanceType<FfmpegModule['FFmpeg']>
   fetchFile: UtilModule['fetchFile']
@@ -42,12 +59,14 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
     throw new Error('La compresión de video solo está disponible en el navegador.')
   }
 
+  await assertFfmpegAssetsReachable()
+
   const { FFmpeg } = await import('@ffmpeg/ffmpeg')
   const { fetchFile, toBlobURL } = await import('@ffmpeg/util')
 
   if (!ffmpegLoadPromise) {
     ffmpegLoadPromise = (async () => {
-      onProgress?.('Preparando compresor de video (primera vez puede tardar un poco)…')
+      onProgress?.('Preparando compresor de video (primera vez puede tardar 1–2 min)…')
       const ffmpeg = new FFmpeg()
       ffmpeg.on('progress', ({ progress }) => {
         if (progress > 0.02 && progress <= 1) {
@@ -65,7 +84,7 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
         resetFfmpegLoader()
         throw toError(
           err,
-          'No se pudo cargar el compresor de video. Ejecuta npm install y recarga la página'
+          'No se pudo cargar el compresor de video. Recarga la página o ejecuta npm install en el proyecto'
         )
       }
 
@@ -82,6 +101,11 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
   }
 }
 
+/** Precarga wasm (p. ej. al seleccionar clips grandes) para fallar antes de pulsar Crear. */
+export async function preloadVideoCompressor(onProgress?: VideoCompressProgressFn): Promise<void> {
+  await loadFfmpeg(onProgress)
+}
+
 function uint8ToFile(data: Uint8Array, originalName: string): File {
   const base = originalName.replace(/\.[^.]+$/i, '') || 'clip'
   const copy = new Uint8Array(data.byteLength)
@@ -92,45 +116,44 @@ function uint8ToFile(data: Uint8Array, originalName: string): File {
   })
 }
 
-async function encodeOnce(
+async function encodeFromInput(
   ffmpeg: InstanceType<FfmpegModule['FFmpeg']>,
-  fetchFile: UtilModule['fetchFile'],
-  file: File,
-  crf: number,
-  maxWidth: number
+  inputName: string,
+  attempt: EncodeAttempt
 ): Promise<Uint8Array> {
-  const ext = safeExt(file.name)
-  const inputName = `in_${Date.now()}.${ext}`
-  const outputName = `out_${Date.now()}.mp4`
+  const outputName = `out_${attempt.crf}_${attempt.maxWidth}.mp4`
+  const args: string[] = ['-i', inputName]
 
-  await ffmpeg.writeFile(inputName, await fetchFile(file))
-  await ffmpeg.exec([
-    '-i',
-    inputName,
+  if (attempt.fps) {
+    args.push('-r', String(attempt.fps))
+  }
+
+  args.push(
     '-vf',
-    `scale='min(${maxWidth},iw)':-2`,
+    `scale='min(${attempt.maxWidth},iw)':-2`,
     '-c:v',
     'libx264',
     '-crf',
-    String(crf),
+    String(attempt.crf),
     '-preset',
-    'fast',
+    'veryfast',
     '-c:a',
     'aac',
     '-b:a',
-    '96k',
+    `${attempt.audioK ?? 96}k`,
     '-movflags',
     '+faststart',
     '-y',
-    outputName,
-  ])
+    outputName
+  )
+
+  await ffmpeg.exec(args)
 
   const out = await ffmpeg.readFile(outputName)
   try {
-    await ffmpeg.deleteFile(inputName)
     await ffmpeg.deleteFile(outputName)
   } catch {
-    /* best-effort cleanup */
+    /* best-effort */
   }
 
   if (out instanceof Uint8Array) return out
@@ -138,11 +161,14 @@ async function encodeOnce(
   throw new Error('Salida de compresión inválida')
 }
 
-const ENCODE_ATTEMPTS: Array<{ crf: number; maxWidth: number }> = [
-  { crf: 28, maxWidth: 1280 },
-  { crf: 30, maxWidth: 1280 },
-  { crf: 32, maxWidth: 960 },
-  { crf: 35, maxWidth: 720 },
+const ENCODE_ATTEMPTS: EncodeAttempt[] = [
+  { crf: 28, maxWidth: 1280, audioK: 96 },
+  { crf: 30, maxWidth: 1280, audioK: 80 },
+  { crf: 32, maxWidth: 960, audioK: 80 },
+  { crf: 34, maxWidth: 720, audioK: 64 },
+  { crf: 36, maxWidth: 640, audioK: 64 },
+  { crf: 38, maxWidth: 480, audioK: 48, fps: 30 },
+  { crf: 40, maxWidth: 426, audioK: 48, fps: 24 },
 ]
 
 /**
@@ -158,36 +184,50 @@ export async function compressVideoFileForStorage(
 
   const target = VIDEO_STORAGE_UPLOAD_TARGET_BYTES
   const originalMb = (file.size / (1024 * 1024)).toFixed(1)
-  onProgress?.(`Comprimiendo ${file.name} (${originalMb} MB → objetivo <${Math.round(target / (1024 * 1024))} MB)…`)
+  onProgress?.(
+    `Comprimiendo ${file.name} (${originalMb} MB → objetivo <${Math.round(target / (1024 * 1024))} MB). No cierres esta ventana…`
+  )
 
   const { ffmpeg, fetchFile } = await loadFfmpeg(onProgress)
 
-  let lastData: Uint8Array | null = null
-  for (const attempt of ENCODE_ATTEMPTS) {
-    onProgress?.(`Comprimiendo ${file.name} (720p/CRF ${attempt.crf})…`)
+  const ext = safeExt(file.name)
+  const inputName = `in_${Date.now()}.${ext}`
+
+  try {
+    onProgress?.(`Leyendo ${file.name} en el compresor…`)
+    await ffmpeg.writeFile(inputName, await fetchFile(file))
+
+    let lastData: Uint8Array | null = null
+    let lastMb = ''
+
+    for (const attempt of ENCODE_ATTEMPTS) {
+      const label = `${attempt.maxWidth}px CRF ${attempt.crf}`
+      onProgress?.(`Comprimiendo ${file.name} (${label})…`)
+      try {
+        lastData = await encodeFromInput(ffmpeg, inputName, attempt)
+      } catch (err) {
+        throw toError(err, `Error comprimiendo "${file.name}"`)
+      }
+
+      lastMb = (lastData.byteLength / (1024 * 1024)).toFixed(1)
+      onProgress?.(`${file.name}: intento ${label} → ${lastMb} MB`)
+
+      if (lastData.byteLength <= target) {
+        const out = uint8ToFile(lastData, file.name)
+        onProgress?.(`Listo: ${file.name} quedó en ${(out.size / (1024 * 1024)).toFixed(1)} MB`)
+        return out
+      }
+    }
+
+    throw new Error(
+      `Tras varios intentos, "${file.name}" quedó en ~${lastMb} MB (necesita <${Math.round(target / (1024 * 1024))} MB). ` +
+        'Usa un clip más corto (menos de ~90 s) o en el iPhone: Fotos → Compartir → "Guardar en archivos" eligiendo calidad más baja / MP4 compatible.'
+    )
+  } finally {
     try {
-      lastData = await encodeOnce(ffmpeg, fetchFile, file, attempt.crf, attempt.maxWidth)
-    } catch (err) {
-      throw toError(err, `Error comprimiendo "${file.name}"`)
-    }
-    if (lastData.byteLength <= target) {
-      const out = uint8ToFile(lastData, file.name)
-      onProgress?.(`Listo: ${file.name} quedó en ${(out.size / (1024 * 1024)).toFixed(1)} MB`)
-      return out
+      await ffmpeg.deleteFile(inputName)
+    } catch {
+      /* best-effort */
     }
   }
-
-  if (lastData && lastData.byteLength < file.size) {
-    const out = uint8ToFile(lastData, file.name)
-    const outMb = (out.size / (1024 * 1024)).toFixed(1)
-    if (out.size <= VIDEO_SUPABASE_GLOBAL_DEFAULT_MAX_BYTES) {
-      onProgress?.(`Comprimido a ${outMb} MB (sigue siendo pesado pero debería subir).`)
-      return out
-    }
-  }
-
-  throw new Error(
-    `No se pudo comprimir "${file.name}" por debajo de ~${Math.round(target / (1024 * 1024))} MB. ` +
-      'Prueba un clip más corto o exporta desde el teléfono como "Más compatible" (MP4).'
-  )
 }

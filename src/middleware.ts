@@ -149,6 +149,6 @@ export const config = {
      * - assets
      * - api
      */
-    '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api/|_next/static|_next/image|favicon.ico|ffmpeg/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|wasm)$).*)',
   ],
 }

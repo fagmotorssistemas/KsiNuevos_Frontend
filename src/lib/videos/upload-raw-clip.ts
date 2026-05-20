@@ -32,11 +32,29 @@ function isLikelyStorageSizeError(message: string, status?: number): boolean {
   )
 }
 
-export function formatVideoClipUploadError(file: File, message: string, status?: number): string {
-  const mb = (file.size / (1024 * 1024)).toFixed(1)
+export function formatVideoClipUploadError(
+  file: File,
+  message: string,
+  status?: number,
+  uploadBytes?: number
+): string {
+  const mb = ((uploadBytes ?? file.size) / (1024 * 1024)).toFixed(1)
+  const originalMb = (file.size / (1024 * 1024)).toFixed(1)
+  const sizeNote =
+    uploadBytes != null && uploadBytes !== file.size
+      ? ` (~${mb} MB tras comprimir, original ~${originalMb} MB)`
+      : ` (~${originalMb} MB)`
+
   if (isLikelyStorageSizeError(message, status)) {
+    if (file.size > VIDEO_AUTO_COMPRESS_ABOVE_BYTES && (uploadBytes == null || uploadBytes > VIDEO_STORAGE_UPLOAD_TARGET_BYTES)) {
+      return (
+        `"${file.name}"${sizeNote} no pudo reducirse lo suficiente para Storage (máx. ~50 MB en tu proyecto Supabase). ` +
+        'Comprime en el navegador antes de subir: usa un clip más corto o exporta como MP4 "Más compatible" desde el iPhone. ' +
+        `Detalle: ${message}`
+      )
+    }
     return (
-      `"${file.name}" (~${mb} MB) sigue siendo demasiado pesado para Storage tras comprimir. ` +
+      `"${file.name}"${sizeNote} es demasiado pesado para Storage (tope ~50 MB). ` +
       'Prueba un clip más corto o exporta como MP4 "Más compatible" desde el teléfono.'
     )
   }
@@ -52,23 +70,20 @@ async function prepareFileForUpload(
   }
 
   if (typeof window === 'undefined') {
-    return fileWithResolvedVideoMime(file)
+    throw new Error('Los clips grandes deben comprimirse en el navegador antes de subir.')
   }
 
-  try {
-    const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
-    const compressed = await compressVideoFileForStorage(file, onProgress)
-    return fileWithResolvedVideoMime(compressed)
-  } catch (err) {
-    console.warn(
-      '[videos] compresión en navegador falló, se intentará subida vía servidor:',
-      err
+  const { compressVideoFileForStorage } = await import('@/lib/videos/compress-video-client')
+  const compressed = await compressVideoFileForStorage(file, onProgress)
+
+  if (compressed.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
+    throw new Error(
+      `"${file.name}" sigue pesando ${(compressed.size / (1024 * 1024)).toFixed(1)} MB tras comprimir (máx. ~47 MB). ` +
+        'Usa un clip más corto o baja la calidad al exportar desde el teléfono.'
     )
-    onProgress?.(
-      `No se pudo comprimir en el navegador (${extractErrorMessage(err)}). Subiendo vía servidor…`
-    )
-    return fileWithResolvedVideoMime(file)
   }
+
+  return fileWithResolvedVideoMime(compressed)
 }
 
 async function uploadClipViaSignedUrl(
@@ -98,7 +113,8 @@ async function uploadClipViaApiProxy(
     return { ok: false, message: 'Tipo de video no permitido' }
   }
 
-  const body = file.type === mime ? file : new File([file], file.name, { type: mime, lastModified: file.lastModified })
+  const body =
+    file.type === mime ? file : new File([file], file.name, { type: mime, lastModified: file.lastModified })
   const fd = new FormData()
   fd.append('path', path)
   fd.append('file', body)
@@ -136,19 +152,18 @@ export async function uploadRawVideoClip(
   const prepared = await prepareFileForUpload(file, onProgress)
 
   if (prepared.size > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
-    onProgress?.(`Subiendo ${prepared.name} (archivo grande, vía servidor)…`)
-    const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
-    if (proxy.ok) return
-    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
+    throw new Error(
+      formatVideoClipUploadError(file, 'El archivo comprimido sigue superando el tope de Storage', 413, prepared.size)
+    )
   }
 
   const useProxyFirst = prepared.size > VIDEO_SIGNED_UPLOAD_MAX_BYTES
 
   if (useProxyFirst) {
-    onProgress?.(`Subiendo ${prepared.name}…`)
+    onProgress?.(`Subiendo ${prepared.name} (vía servidor)…`)
     const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
     if (proxy.ok) return
-    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
+    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status, prepared.size))
   }
 
   onProgress?.(`Subiendo ${prepared.name}…`)
@@ -156,10 +171,11 @@ export async function uploadRawVideoClip(
   if (signed.ok) return
 
   if (isLikelyStorageSizeError(signed.message, signed.status)) {
+    onProgress?.(`Reintentando ${prepared.name} vía servidor…`)
     const proxy = await uploadClipViaApiProxy(jobId, path, prepared)
     if (proxy.ok) return
-    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status))
+    throw new Error(formatVideoClipUploadError(file, proxy.message, proxy.status, prepared.size))
   }
 
-  throw new Error(formatVideoClipUploadError(file, signed.message, signed.status))
+  throw new Error(formatVideoClipUploadError(file, signed.message, signed.status, prepared.size))
 }

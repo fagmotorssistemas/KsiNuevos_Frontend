@@ -25,6 +25,7 @@ import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import {
   VIDEO_RAW_BUCKET,
   VIDEO_RAW_BUCKET_MAX_BYTES,
+  VIDEO_AUTO_COMPRESS_ABOVE_BYTES,
   resolveVideoMimeType,
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
@@ -98,6 +99,27 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       clipPreviewUrls.forEach((u) => URL.revokeObjectURL(u))
     }
   }, [clipPreviewUrls])
+
+  const hasLargeClips = useMemo(
+    () => files.some((f) => f.size > VIDEO_AUTO_COMPRESS_ABOVE_BYTES),
+    [files]
+  )
+
+  useEffect(() => {
+    if (!isOpen || !hasLargeClips) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { preloadVideoCompressor } = await import('@/lib/videos/compress-video-client')
+        await preloadVideoCompressor()
+      } catch (err) {
+        if (!cancelled) console.warn('[CreateReelModal] precarga compresor:', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, hasLargeClips])
 
   type InventoryRow = { id: string; brand: string | null; model: string | null; year: number | null }
   const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([])
