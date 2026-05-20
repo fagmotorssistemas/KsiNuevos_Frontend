@@ -59,7 +59,7 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
   await assertFfmpegAssetsReachable()
 
   const { FFmpeg } = await import('@ffmpeg/ffmpeg')
-  const { fetchFile, toBlobURL } = await import('@ffmpeg/util')
+  const { fetchFile } = await import('@ffmpeg/util')
 
   if (!ffmpegLoadPromise) {
     ffmpegLoadPromise = (async () => {
@@ -71,17 +71,18 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
         }
       })
 
+      // URLs directas del mismo origen (evita blob:… que webpack/Next trata como módulo en producción).
       const baseURL = `${window.location.origin}/ffmpeg`
+      const coreURL = `${baseURL}/ffmpeg-core.js`
+      const wasmURL = `${baseURL}/ffmpeg-core.wasm`
+
       try {
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        })
+        await ffmpeg.load({ coreURL, wasmURL })
       } catch (err) {
         resetFfmpegLoader()
         throw toError(
           err,
-          'No se pudo cargar el compresor de video. Recarga la página o ejecuta npm install en el proyecto'
+          'No se pudo cargar el compresor de video (/ffmpeg). Verifica el deploy (npm run build copia los archivos) y recarga'
         )
       }
 

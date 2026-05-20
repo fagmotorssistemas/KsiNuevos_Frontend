@@ -30,6 +30,18 @@ const nextConfig: NextConfig = {
     ],
   },
   
+  // Archivos estáticos de ffmpeg.wasm (compresión en navegador)
+  async headers() {
+    return [
+      {
+        source: "/ffmpeg/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+    ];
+  },
+
   // 2. Redirecciones existentes
   async redirects() {
     return [
