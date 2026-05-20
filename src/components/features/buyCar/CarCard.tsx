@@ -10,7 +10,6 @@ interface CarCardProps {
 }
 
 export const CarCard = ({ car }: CarCardProps) => {
-  // Si no hay imagen principal, no mostramos la tarjeta
   if (!car.img_main_url) {
     return null;
   }
@@ -18,7 +17,7 @@ export const CarCard = ({ car }: CarCardProps) => {
   return (
     <Link 
       href={`/autos/${car.id}`}
-      className="group bg-white rounded-2xl border border-neutral-200 overflow-hidden hover:shadow-xl hover:shadow-neutral-200/40 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1"
+      className="group bg-white rounded-2xl border border-neutral-200 overflow-hidden hover:shadow-xl hover:shadow-neutral-200/40 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1 min-w-0"
     >
       
       {/* Imagen responsive (srcset 400/800/1200), lazy loading, placeholder */}

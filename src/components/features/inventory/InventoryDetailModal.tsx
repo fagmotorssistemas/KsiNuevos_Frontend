@@ -583,12 +583,12 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             <Tag className="h-4 w-4" /> Detalles generales
                                         </div>
                                         <div className="grid grid-cols-1 gap-3">
-                                            <FichaItem label="Marca" value={ficha.marca} />
-                                            <FichaItem label="Modelo" value={ficha.modelo} />
-                                            <FichaItem label="Año" value={ficha.anio} />
-                                            <FichaItem label="Color" value={ficha.color} />
-                                            <FichaItem label="Tipo" value={ficha.tipo} />
-                                            <FichaItem label="Versión" value={ficha.version} />
+                                            <SpecCell label="Marca" value={ficha.marca} />
+                                            <SpecCell label="Modelo" value={ficha.modelo} />
+                                            <SpecCell label="Año" value={ficha.anio} />
+                                            <SpecCell label="Color" value={ficha.color} />
+                                            <SpecCell label="Tipo" value={ficha.tipo} />
+                                            <SpecCell label="Versión" value={ficha.version} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
@@ -596,12 +596,12 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             <Cog className="h-4 w-4" /> Mecánica
                                         </div>
                                         <div className="grid grid-cols-1 gap-3">
-                                            <FichaItem label="Motor" value={ficha.motor} highlight />
-                                            <FichaItem label="Chasis" value={ficha.chasis} highlight />
-                                            <FichaItem label="Cilindraje" value={ficha.cilindraje} />
-                                            <FichaItem label="Combustible" value={ficha.combustible} />
-                                            <FichaItem label="Ejes" value={ficha.ejes} />
-                                            <FichaItem label="Llantas" value={ficha.llantas} />
+                                            <SpecCell label="Motor" value={ficha.motor} highlight />
+                                            <SpecCell label="Chasis" value={ficha.chasis} highlight />
+                                            <SpecCell label="Cilindraje" value={ficha.cilindraje} />
+                                            <SpecCell label="Combustible" value={ficha.combustible} />
+                                            <SpecCell label="Ejes" value={ficha.ejes} />
+                                            <SpecCell label="Llantas" value={ficha.llantas} />
                                         </div>
                                     </div>
                                     <div className="space-y-4">
@@ -609,10 +609,10 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             <MapPin className="h-4 w-4" /> Legal
                                         </div>
                                         <div className="grid grid-cols-1 gap-3">
-                                            <FichaItem label="País origen" value={ficha.paisOrigen} />
-                                            <FichaItem label="Año matrícula" value={ficha.anioMatricula} />
-                                            <FichaItem label="Lugar matrícula" value={ficha.lugarMatricula} />
-                                            <FichaItem label="Proveedor" value={ficha.proveedor} />
+                                            <SpecCell label="País origen" value={ficha.paisOrigen} />
+                                            <SpecCell label="Año matrícula" value={ficha.anioMatricula} />
+                                            <SpecCell label="Lugar matrícula" value={ficha.lugarMatricula} />
+                                            <SpecCell label="Proveedor" value={ficha.proveedor} />
                                         </div>
                                     </div>
                                 </div>

@@ -66,7 +66,7 @@ function BuyCarContent() {
               onClear={clearFilters}
           />
 
-          <div className="flex-grow w-full">
+          <div className="min-w-0 flex-1 w-full">
               <CatalogToolbar 
                   totalCount={totalCount} 
                   sortBy={sortBy} 
@@ -75,15 +75,15 @@ function BuyCarContent() {
 
               {isLoading ? (
                   // Skeleton Loading Neutro
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                          <div key={i} className="h-[420px] bg-neutral-100 rounded-2xl animate-pulse"></div>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-6 md:gap-8">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
+                          <div key={i} className="h-[420px] bg-neutral-100 rounded-2xl animate-pulse min-w-0"></div>
                       ))}
                   </div>
               ) : (
                   <>
-                      {/* Grid de Autos */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+                      {/* Grid de Autos: columnas según ancho del contenedor (no solo viewport) */}
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-6 md:gap-8">
                           {cars.map((car) => (
                               <CarCard key={car.id} car={car} />
                           ))}

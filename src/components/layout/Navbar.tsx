@@ -2,58 +2,43 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image' // Importamos Image
+import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Menu, X } from 'lucide-react'
-
-// Sub-componentes
 import { MainNav } from './MainNav'
 import { UserNav } from './UserNav'
 import {
-  ADMIN_PRIMARY_NAV,
-  mayAccessGpsRoutes,
-  mayAccessLegalRoutes,
-  mayAccessMarketingRoutes,
-  mayAccessSegurosAppRoutes,
-  mayAccessTallerRoutes,
+  buildPrimaryNavItems,
+  resolvePrimaryNavItemHref,
   type PermissionContext,
 } from '@/lib/permissions'
 
 export const Navbar = () => {
-  const { user, profile, permissionMap, hasPermission } = useAuth()
+  const { user, profile, permissionMap } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const permCtx: PermissionContext = useMemo(
     () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
     [profile?.role, permissionMap]
   )
-  const isAppAdmin = profile?.role === 'admin'
-  const showRastreadores = isAppAdmin || mayAccessGpsRoutes(permCtx)
-  const showSeguros = isAppAdmin || mayAccessSegurosAppRoutes(permCtx)
-  const showTallerMobile = isAppAdmin || mayAccessTallerRoutes(permCtx)
-  const showLegal = isAppAdmin || mayAccessLegalRoutes(permCtx)
-  const showWallet = isAppAdmin || hasPermission('cartera-clientes', 'read')
-  const showMarketingExtras = isAppAdmin || mayAccessMarketingRoutes(permCtx)
+  const mobileNavItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
       <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
 
-        {/* --- IZQUIERDA: LOGO --- */}
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center">
-            {/* Usamos el componente Image de Next.js para el logo */}
             <Image
               src="/logo.png"
               alt="Logo de Ksi"
-              width={90}  // Ajusta este ancho según tu imagen
-              height={30} // Ajusta esta altura para mantener proporción
-              priority    // Carga prioritaria para el logo (LCP)
+              width={90}
+              height={30}
+              priority
               className="object-contain"
             />
           </Link>
 
-          {/* Navegación Desktop (Solo si hay usuario) */}
           {user && (
             <div className="hidden md:block">
               <MainNav />
@@ -61,15 +46,10 @@ export const Navbar = () => {
           )}
         </div>
 
-        {/* --- DERECHA: ACCIONES --- */}
         <div className="flex items-center gap-4">
-          
           {user ? (
             <>
-              {/* Menú de Usuario (Avatar + Dropdown) */}
               <UserNav />
-              
-              {/* Botón Menú Móvil */}
               <button
                 className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -87,116 +67,21 @@ export const Navbar = () => {
         </div>
       </div>
 
-      {/* --- MENÚ MÓVIL (Overlay) --- */}
       {isMobileMenuOpen && user && (
         <div className="md:hidden border-t border-slate-100 bg-white absolute w-full left-0 shadow-lg animate-in slide-in-from-top-5 duration-200">
           <div className="p-4 space-y-2">
-            {isAppAdmin ? (
-              ADMIN_PRIMARY_NAV.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))
-            ) : (
-              <>
-            <Link 
-                href="/leads" 
-                className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-            >
-                Leads
-            </Link>
-            <Link 
-                href="/agenda" 
-                className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-            >
-                Agenda
-            </Link>
-            <Link 
-                href="/inventory" 
-                className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                onClick={() => setIsMobileMenuOpen(false)}
-            >
-                Inventario
-            </Link>
-            {showLegal && (
-              <Link 
-                  href="/legal/cases" 
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-              >
-                  Gestión Legal
-              </Link>
-            )}
-            {showRastreadores && (
-              <Link 
-                  href="/rastreadores" 
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-              >
-                  Rastreadores
-              </Link>
-            )}
-            {showSeguros && (
-              <Link 
-                  href="/seguros" 
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-              >
-                  Seguros
-              </Link>
-            )}
-            {showTallerMobile && (
+            {mobileNavItems.map((item) => {
+              const href = resolvePrimaryNavItemHref(item, permCtx) ?? item.href
+              return (
               <Link
-                  href="/taller/dashboard"
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                key={`${item.label}-${href}`}
+                href={href}
+                className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                onClick={() => setIsMobileMenuOpen(false)}
               >
-                  Taller
+                {item.label}
               </Link>
-            )}
-            {showWallet && (
-              <Link
-                  href="/wallet"
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-              >
-                  Contabilidad
-              </Link>
-            )}
-            {showMarketingExtras && (
-              <>
-                <Link
-                  href="/marketing"
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Marketing
-                </Link>
-                <Link
-                  href="/scraper"
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Scraper
-                </Link>
-                <Link
-                  href="/report"
-                  className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Monitoreo
-                </Link>
-              </>
-            )}
-              </>
-            )}
+            )})}
           </div>
         </div>
       )}

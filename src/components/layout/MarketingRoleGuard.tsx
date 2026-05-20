@@ -1,43 +1,41 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { canAccessModule, MODULE_SLUGS, type PermissionContext } from '@/lib/permissions';
 
-const ALLOWED = new Set(['admin', 'marketing', 'contable']);
-
-/**
- * Solo admin, marketing y contable pueden usar el módulo de marketing (misma línea de negocio
- * que antes tenían “Videos IA” en el sidebar de contabilidad para roles con menú completo).
- */
 export function MarketingRoleGuard({ children }: { children: React.ReactNode }) {
-    const { profile, isLoading } = useAuth();
-    const router = useRouter();
+  const { profile, isLoading, permissionMap } = useAuth();
+  const router = useRouter();
 
-    useEffect(() => {
-        if (isLoading) return;
-        if (!profile) {
-            router.replace('/login');
-            return;
-        }
-        const r = (profile.role || '').toLowerCase().trim();
-        if (!ALLOWED.has(r)) {
-            router.replace('/home');
-        }
-    }, [profile?.role, isLoading, profile, router]);
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+    [profile?.role, permissionMap]
+  );
 
-    if (isLoading || !profile) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500 text-sm">
-                Cargando…
-            </div>
-        );
+  useEffect(() => {
+    if (isLoading) return;
+    if (!profile) {
+      router.replace('/login');
+      return;
     }
-
-    const r = (profile.role || '').toLowerCase().trim();
-    if (!ALLOWED.has(r)) {
-        return null;
+    if (!canAccessModule(permCtx, MODULE_SLUGS.marketing)) {
+      router.replace('/home');
     }
+  }, [isLoading, profile, permCtx, router]);
 
-    return <>{children}</>;
+  if (isLoading || !profile) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500 text-sm">
+        Cargando…
+      </div>
+    );
+  }
+
+  if (!canAccessModule(permCtx, MODULE_SLUGS.marketing)) {
+    return null;
+  }
+
+  return <>{children}</>;
 }

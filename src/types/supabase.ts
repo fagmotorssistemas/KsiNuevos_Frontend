@@ -2302,6 +2302,299 @@ export type Database = {
           },
         ]
       }
+      marketing_planner_events: {
+        Row: {
+          all_day: boolean
+          color: string
+          created_at: string
+          created_by: string
+          description: string | null
+          end_at: string
+          event_type: Database["public"]["Enums"]["marketing_planner_event_type"]
+          id: string
+          inventory_id: string | null
+          location: string | null
+          owner_id: string
+          recurrence_parent_id: string | null
+          recurrence_rule: Json | null
+          start_at: string
+          status: Database["public"]["Enums"]["marketing_planner_event_status"]
+          title: string
+          updated_at: string
+          video_plan_item_id: string | null
+          visibility: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Insert: {
+          all_day?: boolean
+          color?: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          end_at: string
+          event_type?: Database["public"]["Enums"]["marketing_planner_event_type"]
+          id?: string
+          inventory_id?: string | null
+          location?: string | null
+          owner_id: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: Json | null
+          start_at: string
+          status?: Database["public"]["Enums"]["marketing_planner_event_status"]
+          title: string
+          updated_at?: string
+          video_plan_item_id?: string | null
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Update: {
+          all_day?: boolean
+          color?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_at?: string
+          event_type?: Database["public"]["Enums"]["marketing_planner_event_type"]
+          id?: string
+          inventory_id?: string | null
+          location?: string | null
+          owner_id?: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: Json | null
+          start_at?: string
+          status?: Database["public"]["Enums"]["marketing_planner_event_status"]
+          title?: string
+          updated_at?: string
+          video_plan_item_id?: string | null
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_planner_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_events_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_events_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_events_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_planner_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_events_video_plan_item_id_fkey"
+            columns: ["video_plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_video_plan_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_planner_resources: {
+        Row: {
+          category: Database["public"]["Enums"]["marketing_planner_resource_category"]
+          created_at: string
+          created_by: string
+          description: string | null
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          mime_type: string | null
+          owner_id: string
+          tags: string[]
+          title: string
+          updated_at: string
+          visibility: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["marketing_planner_resource_category"]
+          created_at?: string
+          created_by: string
+          description?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number
+          id?: string
+          mime_type?: string | null
+          owner_id: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["marketing_planner_resource_category"]
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          mime_type?: string | null
+          owner_id?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_planner_resources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_resources_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_planner_tasks: {
+        Row: {
+          category: string
+          completed_at: string | null
+          completed_by: string | null
+          completion_note: string | null
+          completion_proof_file_path: string | null
+          completion_proof_url: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_at: string | null
+          id: string
+          inventory_id: string | null
+          linked_event_id: string | null
+          owner_id: string
+          parent_id: string | null
+          priority: Database["public"]["Enums"]["marketing_planner_priority"]
+          sort_order: number
+          status: Database["public"]["Enums"]["marketing_planner_task_status"]
+          title: string
+          updated_at: string
+          video_plan_item_id: string | null
+          visibility: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Insert: {
+          category?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          completion_note?: string | null
+          completion_proof_file_path?: string | null
+          completion_proof_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          inventory_id?: string | null
+          linked_event_id?: string | null
+          owner_id: string
+          parent_id?: string | null
+          priority?: Database["public"]["Enums"]["marketing_planner_priority"]
+          sort_order?: number
+          status?: Database["public"]["Enums"]["marketing_planner_task_status"]
+          title: string
+          updated_at?: string
+          video_plan_item_id?: string | null
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Update: {
+          category?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          completion_note?: string | null
+          completion_proof_file_path?: string | null
+          completion_proof_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          inventory_id?: string | null
+          linked_event_id?: string | null
+          owner_id?: string
+          parent_id?: string | null
+          priority?: Database["public"]["Enums"]["marketing_planner_priority"]
+          sort_order?: number
+          status?: Database["public"]["Enums"]["marketing_planner_task_status"]
+          title?: string
+          updated_at?: string
+          video_plan_item_id?: string | null
+          visibility?: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_planner_tasks_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_linked_event_id_fkey"
+            columns: ["linked_event_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_planner_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_planner_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_tasks_video_plan_item_id_fkey"
+            columns: ["video_plan_item_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_video_plan_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_video_plan_items: {
         Row: {
           assigned_seller_id: string | null
@@ -2534,6 +2827,27 @@ export type Database = {
           },
         ]
       }
+      modules: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       music_tracks_v2: {
         Row: {
           created_at: string | null
@@ -2566,21 +2880,193 @@ export type Database = {
       }
       n8n_chat_histories: {
         Row: {
+          created_at: string | null
           id: number | null
           message: Json | null
           session_id: string | null
         }
         Insert: {
+          created_at?: string | null
           id?: number | null
           message?: Json | null
           session_id?: string | null
         }
         Update: {
+          created_at?: string | null
           id?: number | null
           message?: Json | null
           session_id?: string | null
         }
         Relationships: []
+      }
+      noticiero_jobs: {
+        Row: {
+          banner_title: string | null
+          created_at: string
+          created_by: string | null
+          creatomate_render_id: string | null
+          current_step: string | null
+          custom_topic: string | null
+          error_message: string | null
+          final_video_url: string | null
+          heygen_background_url: string | null
+          heygen_video_id: string | null
+          heygen_video_url: string | null
+          id: string
+          job_name: string | null
+          mode: string
+          progress_percentage: number
+          script_text: string | null
+          social_publish_stage: string | null
+          status: string
+          updated_at: string
+          vehicle_id: string | null
+          vehicle_snapshot: Json | null
+        }
+        Insert: {
+          banner_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          custom_topic?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          heygen_background_url?: string | null
+          heygen_video_id?: string | null
+          heygen_video_url?: string | null
+          id?: string
+          job_name?: string | null
+          mode: string
+          progress_percentage?: number
+          script_text?: string | null
+          social_publish_stage?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_snapshot?: Json | null
+        }
+        Update: {
+          banner_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          creatomate_render_id?: string | null
+          current_step?: string | null
+          custom_topic?: string | null
+          error_message?: string | null
+          final_video_url?: string | null
+          heygen_background_url?: string | null
+          heygen_video_id?: string | null
+          heygen_video_url?: string | null
+          id?: string
+          job_name?: string | null
+          mode?: string
+          progress_percentage?: number
+          script_text?: string | null
+          social_publish_stage?: string | null
+          status?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      noticiero_publishing_queue: {
+        Row: {
+          caption: string
+          created_at: string
+          id: string
+          noticiero_job_id: string
+          platforms: string[]
+          scheduled_at: string
+          status: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          caption: string
+          created_at?: string
+          id?: string
+          noticiero_job_id: string
+          platforms: string[]
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          id?: string
+          noticiero_job_id?: string
+          platforms?: string[]
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_publishing_queue_noticiero_job_id_fkey"
+            columns: ["noticiero_job_id"]
+            isOneToOne: false
+            referencedRelation: "noticiero_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noticiero_publishing_queue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      noticiero_publishing_results: {
+        Row: {
+          attempted_at: string
+          error_message: string | null
+          id: string
+          platform: string
+          platform_post_id: string | null
+          queue_id: string
+          status: string
+        }
+        Insert: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform: string
+          platform_post_id?: string | null
+          queue_id: string
+          status: string
+        }
+        Update: {
+          attempted_at?: string
+          error_message?: string | null
+          id?: string
+          platform?: string
+          platform_post_id?: string | null
+          queue_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_publishing_results_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "noticiero_publishing_queue"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_runs: {
         Row: {
@@ -2636,27 +3122,6 @@ export type Database = {
           nombre?: string
           orden?: number
           tipo_proceso?: Database["public"]["Enums"]["tipo_proceso_enum"]
-        }
-        Relationships: []
-      }
-      modules: {
-        Row: {
-          id: string
-          name: string
-          slug: string
-          sort_order: number
-        }
-        Insert: {
-          id?: string
-          name: string
-          slug: string
-          sort_order?: number
-        }
-        Update: {
-          id?: string
-          name?: string
-          slug?: string
-          sort_order?: number
         }
         Relationships: []
       }
@@ -2791,38 +3256,6 @@ export type Database = {
           slug?: string
         }
         Relationships: []
-      }
-      submodules: {
-        Row: {
-          id: string
-          module_id: string
-          name: string
-          slug: string
-          sort_order: number
-        }
-        Insert: {
-          id?: string
-          module_id: string
-          name: string
-          slug: string
-          sort_order?: number
-        }
-        Update: {
-          id?: string
-          module_id?: string
-          name?: string
-          slug?: string
-          sort_order?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "submodules_module_id_fkey"
-            columns: ["module_id"]
-            isOneToOne: false
-            referencedRelation: "modules"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       scraper_sellers: {
         Row: {
@@ -3293,6 +3726,38 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submodules: {
+        Row: {
+          id: string
+          module_id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          id?: string
+          module_id: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          id?: string
+          module_id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submodules_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
             referencedColumns: ["id"]
           },
         ]
@@ -4880,6 +5345,15 @@ export type Database = {
       }
     }
     Functions: {
+      admin_rbac_dashboard: { Args: never; Returns: Json }
+      can_view_planner_row: {
+        Args: {
+          p_created_by: string
+          p_owner: string
+          p_visibility: Database["public"]["Enums"]["marketing_planner_visibility"]
+        }
+        Returns: boolean
+      }
       current_profile_role: { Args: never; Returns: string }
       get_leads_pager: {
         Args: {
@@ -4925,18 +5399,20 @@ export type Database = {
         }[]
       }
       get_my_effective_permissions: {
-        Args: Record<string, never>
+        Args: never
         Returns: {
-          submodule_slug: string
+          can_delete: boolean
           can_read: boolean
           can_write: boolean
-          can_delete: boolean
+          submodule_slug: string
         }[]
       }
-      is_profile_admin: { Args: Record<string, never>; Returns: boolean }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
+      is_marketing_planner_admin: { Args: never; Returns: boolean }
+      is_marketing_planner_member: { Args: never; Returns: boolean }
+      is_profile_admin: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
       leads_sin_respuesta: {
         Args: never
@@ -5291,6 +5767,30 @@ export type Database = {
         | "datos_pedidos"
         | "asesoria_financiamiento"
       lead_temperature: "frio" | "tibio" | "caliente"
+      marketing_planner_event_status:
+        | "scheduled"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+      marketing_planner_event_type:
+        | "event"
+        | "meeting"
+        | "task_reminder"
+        | "content"
+      marketing_planner_priority: "baja" | "media" | "alta"
+      marketing_planner_resource_category:
+        | "document"
+        | "image"
+        | "video"
+        | "brand"
+        | "template"
+        | "other"
+      marketing_planner_task_status:
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+      marketing_planner_visibility: "personal" | "team"
       metodo_pago_rastreador_enum:
         | "EFECTIVO"
         | "TRANSFERENCIA"
@@ -5579,6 +6079,34 @@ export const Constants = {
         "asesoria_financiamiento",
       ],
       lead_temperature: ["frio", "tibio", "caliente"],
+      marketing_planner_event_status: [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ],
+      marketing_planner_event_type: [
+        "event",
+        "meeting",
+        "task_reminder",
+        "content",
+      ],
+      marketing_planner_priority: ["baja", "media", "alta"],
+      marketing_planner_resource_category: [
+        "document",
+        "image",
+        "video",
+        "brand",
+        "template",
+        "other",
+      ],
+      marketing_planner_task_status: [
+        "pending",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ],
+      marketing_planner_visibility: ["personal", "team"],
       metodo_pago_rastreador_enum: [
         "EFECTIVO",
         "TRANSFERENCIA",

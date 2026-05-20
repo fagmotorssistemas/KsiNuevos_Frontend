@@ -3,11 +3,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-// Ajusta esta importación si tu KsButton está en otra ruta, estoy usando la ruta absoluta recomendada
-import { KsButton } from '@/components/ui/Homeksi/KsButton'; 
+import { useMemo } from 'react';
+import { KsButton } from '@/components/ui/Homeksi/KsButton';
+import {
+  getUserDashboardMenuItem,
+  type PermissionContext,
+  type PermissionMap,
+} from '@/lib/permissions';
 
 // --- Sub-componente del Dropdown ---
-const UserDropdown = ({ user, profile, supabase }: any) => {
+const UserDropdown = ({
+  user,
+  profile,
+  supabase,
+  permCtx,
+}: {
+  user: { email: string }
+  profile: { full_name?: string | null; role?: string | null }
+  supabase: { auth: { signOut: () => Promise<void> } }
+  permCtx: PermissionContext
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -41,8 +56,8 @@ const UserDropdown = ({ user, profile, supabase }: any) => {
     };
 
   const userInitial = profile?.full_name ? profile.full_name[0].toUpperCase() : user.email[0].toUpperCase();
-  const userRole = profile?.role === 'cliente' ? 'Cliente' : 'Staff';
-  const firstName = profile?.full_name?.split(' ')[0] || "Usuario";
+  const firstName = profile?.full_name?.split(' ')[0] || 'Usuario'
+  const dashboardMenu = getUserDashboardMenuItem(permCtx)
 
   return (
     <div className="relative" ref={menuRef}>
@@ -66,15 +81,13 @@ const UserDropdown = ({ user, profile, supabase }: any) => {
              <p className="text-sm font-bold text-gray-900 truncate">{profile?.full_name}</p>
           </div>
           <div className="py-1">
-            {profile?.role === 'vendedor' || profile?.role === 'admin' ? (
-              <Link href="/leads" className="block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-black transition-colors" onClick={() => setIsOpen(false)}>
-                Dashboard
-              </Link>
-            ) : (
-              <Link href="/perfil" className="block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-black transition-colors" onClick={() => setIsOpen(false)}>
-                Mis Citas
-              </Link>
-            )}
+            <Link
+              href={dashboardMenu.href}
+              className="block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-black transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              {dashboardMenu.label}
+            </Link>
             <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors">
               Cerrar Sesión
             </button>
@@ -91,15 +104,21 @@ interface NavbarUserAreaProps {
   profile: any;
   isLoading: boolean;
   supabase: any;
+  permissionMap?: PermissionMap;
 }
 
-export const NavbarUserArea = ({ user, profile, isLoading, supabase }: NavbarUserAreaProps) => {
+export const NavbarUserArea = ({ user, profile, isLoading, supabase, permissionMap }: NavbarUserAreaProps) => {
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
+    [profile?.role, permissionMap]
+  )
+
   if (isLoading) {
     return <div className="h-9 w-24 bg-gray-100 rounded animate-pulse"></div>;
   }
 
   if (user) {
-    return <UserDropdown user={user} profile={profile} supabase={supabase} />;
+    return <UserDropdown user={user} profile={profile} supabase={supabase} permCtx={permCtx} />;
   }
 
   return (

@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubmoduleAccess } from "@/hooks/useSubmoduleAccess";
+import { SubmoduleAccessDenied } from "@/components/layout/SubmoduleAccessDenied";
 import { createClient } from "@/lib/supabase/client";
-import { ShieldAlert, ClipboardList, Loader2 } from "lucide-react";
+import { ClipboardList, Loader2 } from "lucide-react";
 import { scraperService } from "@/services/scraper.service";
 import { PedidosRequestCard } from "@/components/features/scraper/pedidos/PedidosRequestCard";
 import { PedidosResultsModal } from "@/components/features/scraper/pedidos/PedidosResultsModal";
@@ -14,6 +16,7 @@ import { toast } from "sonner";
 
 export default function ScraperPedidosPage() {
     const { profile, isLoading: isAuthLoading } = useAuth();
+    const { allowed } = useSubmoduleAccess("scraper-marketing");
     const supabase = createClient();
 
     const [requests, setRequests] = useState<VehicleRequest[]>([]);
@@ -138,14 +141,8 @@ export default function ScraperPedidosPage() {
         []
     );
 
-    if (!isAuthLoading && (!profile || (profile.role !== "admin" && profile.role !== "vendedor" && profile.role !== "marketing"))) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] bg-slate-50 text-slate-600">
-                <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
-                <h1 className="text-xl font-bold">Acceso restringido</h1>
-                <p>No tienes permisos para ver el módulo Scraper.</p>
-            </div>
-        );
+    if (!isAuthLoading && !allowed) {
+        return <SubmoduleAccessDenied moduleLabel="Scraper" />;
     }
 
     return (

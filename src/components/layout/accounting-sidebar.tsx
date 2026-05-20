@@ -26,8 +26,8 @@ import {
 
 import {
     canSeeAccountingSidebarHref,
-    mayAccessSegurosAppRoutes,
-    mayAccessTallerRoutes,
+    canAccessModule,
+    MODULE_SLUGS,
     type PermissionContext,
 } from '@/lib/permissions';
 
@@ -69,10 +69,10 @@ export function AccountingSidebar() {
     const displayedItems = menuItems.filter((item) => canSeeAccountingSidebarHref(item.href, permCtx));
 
     const extraModuleLinks: { name: string; href: string; icon: typeof Wrench }[] = [];
-    if (mayAccessTallerRoutes(permCtx)) {
+    if (canAccessModule(permCtx, MODULE_SLUGS.taller)) {
         extraModuleLinks.push({ name: 'Taller', href: '/taller/dashboard', icon: Wrench });
     }
-    if (mayAccessSegurosAppRoutes(permCtx)) {
+    if (canAccessModule(permCtx, MODULE_SLUGS.seguros)) {
         extraModuleLinks.push({ name: 'Seguros', href: '/seguros', icon: ShieldCheck });
     }
 

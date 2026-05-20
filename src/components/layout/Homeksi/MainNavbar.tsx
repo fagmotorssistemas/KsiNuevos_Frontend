@@ -19,7 +19,7 @@ const NAV_LINKS = [
 
 export const MainNavbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, profile, isLoading, supabase } = useAuth();
+  const { user, profile, isLoading, supabase, permissionMap } = useAuth();
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-lg border-b border-neutral-100 shadow-sm transition-all">
@@ -48,7 +48,8 @@ export const MainNavbar = () => {
             user={user} 
             profile={profile} 
             isLoading={isLoading} 
-            supabase={supabase} 
+            supabase={supabase}
+            permissionMap={permissionMap}
           />
         </div>
 
@@ -86,6 +87,7 @@ export const MainNavbar = () => {
         profile={profile}
         isLoading={isLoading}
         supabase={supabase}
+        permissionMap={permissionMap}
       />
     </nav>
   );

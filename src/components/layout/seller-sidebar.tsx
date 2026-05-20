@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
+import { canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
 
 // Definición de los items del menú de Ventas
 const menuItems = [
@@ -40,7 +41,17 @@ export function SellerSidebar() {
 
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const { supabase, user, profile } = useAuth();
+    const { supabase, user, profile, permissionMap } = useAuth();
+
+    const permCtx: PermissionContext = useMemo(
+        () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+        [profile?.role, permissionMap]
+    );
+
+    const displayedMenuItems = useMemo(
+        () => menuItems.filter((item) => canSeeVentasSidebarHref(item.href, permCtx)),
+        [permCtx]
+    );
 
     const [asesoriaStats, setAsesoriaStats] = useState<{
         pendiente: number;
@@ -192,7 +203,7 @@ export function SellerSidebar() {
                         </p>
                     )}
 
-                    {menuItems.map((item) => {
+                    {displayedMenuItems.map((item) => {
                         const isActive = pathname.startsWith(item.href);
                         return (
                             <Link

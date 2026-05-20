@@ -97,6 +97,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Suscripción en tiempo real: si el rol u otro campo del perfil cambia
     // en la BD (ej. admin cambia el rol del usuario), el menú se actualiza al instante
+    const refreshPerms = async () => {
+      setPermissionsLoading(true)
+      try {
+        setPermissionMap(await fetchPermissionMap(supabase))
+      } catch (e) {
+        console.error('Error al refrescar permisos:', e)
+      } finally {
+        setPermissionsLoading(false)
+      }
+    }
+
     const channel = supabase
       .channel(`profile-changes-${user.id}`)
       .on(
@@ -109,13 +120,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         },
         async (payload) => {
           setProfile(payload.new as Profile)
-          setPermissionsLoading(true)
-          try {
-            setPermissionMap(await fetchPermissionMap(supabase))
-          } catch (e) {
-            console.error('Error al refrescar permisos:', e)
-          } finally {
-            setPermissionsLoading(false)
+          await refreshPerms()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profile_roles',
+          filter: `profile_id=eq.${user.id}`,
+        },
+        async () => {
+          await refreshPerms()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'role_permissions',
+        },
+        async (payload) => {
+          const changedRoleId =
+            (payload.new as { role_id?: string } | undefined)?.role_id ??
+            (payload.old as { role_id?: string } | undefined)?.role_id
+          if (!changedRoleId) return
+          const { data: mine } = await supabase
+            .from('profile_roles')
+            .select('role_id')
+            .eq('profile_id', user.id)
+          if (mine?.some((r) => r.role_id === changedRoleId)) {
+            await refreshPerms()
           }
         }
       )

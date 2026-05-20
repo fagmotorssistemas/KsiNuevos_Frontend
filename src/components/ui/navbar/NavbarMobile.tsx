@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { KsButton } from '@/components/ui/Homeksi/KsButton';
-import { useRouter } from 'next/navigation'; // 1. Importamos el router
+import { useRouter } from 'next/navigation';
+import { getUserDashboardMenuItem, type PermissionContext, type PermissionMap } from '@/lib/permissions';
 
 interface NavbarMobileProps {
   isOpen: boolean;
@@ -11,10 +13,26 @@ interface NavbarMobileProps {
   profile: any;
   isLoading: boolean;
   supabase: any;
+  permissionMap?: PermissionMap;
 }
 
-export const NavbarMobile = ({ isOpen, setIsOpen, links, user, profile, isLoading, supabase }: NavbarMobileProps) => {
-  const router = useRouter(); // 2. Inicializamos el router
+export const NavbarMobile = ({
+  isOpen,
+  setIsOpen,
+  links,
+  user,
+  profile,
+  isLoading,
+  supabase,
+  permissionMap,
+}: NavbarMobileProps) => {
+  const router = useRouter()
+
+  const permCtx: PermissionContext = useMemo(
+    () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
+    [profile?.role, permissionMap]
+  )
+  const dashboardMenu = getUserDashboardMenuItem(permCtx)
 
   // 3. Creamos la función de cierre de sesión
   const handleLogout = async () => {
@@ -55,15 +73,11 @@ export const NavbarMobile = ({ isOpen, setIsOpen, links, user, profile, isLoadin
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
               <p className="font-bold text-gray-900">Hola, {profile?.full_name}</p>
               
-              {profile?.role === 'vendedor' || profile?.role === 'admin' ? (
-                  <Link href="/leads" onClick={() => setIsOpen(false)}>
-                    <KsButton variant="dark" fullWidth size="sm">Dashboard</KsButton>
-                  </Link>
-              ) : (
-                  <Link href="/perfil" onClick={() => setIsOpen(false)}>
-                    <KsButton variant="dark" fullWidth size="sm">Mis Citas</KsButton>
-                  </Link>
-              )}
+              <Link href={dashboardMenu.href} onClick={() => setIsOpen(false)}>
+                <KsButton variant="dark" fullWidth size="sm">
+                  {dashboardMenu.label}
+                </KsButton>
+              </Link>
 
               {/* 4. Usamos la nueva función handleLogout */}
               <button 
