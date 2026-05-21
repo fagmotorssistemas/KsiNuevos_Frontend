@@ -2,24 +2,14 @@ import { useState, useEffect } from "react";
 import { 
     Car, 
     Info, 
-    Tag, 
-    Calendar, 
-    Fuel, 
-    Cog, 
-    MapPin, 
-    User,
     Search,
-    X,
-    History,
-    FileText,
-    ArrowUpRight,
-    ArrowDownLeft,
     Loader2,
-    Pencil,      // <--- NUEVO
-    Save         // <--- NUEVO
+    Pencil,
+    Save
 } from "lucide-react";
 import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
+import { VehicleDetailModal } from "./VehicleDetailModal";
 
 /** Del historial kardex obtiene el precio al que se vendió (NOTA DE ENTREGA o último egreso). Mismo dato que el $ en el modal. */
 function getPrecioVentaFromHistorial(historial: MovimientoKardex[]): number | null {
@@ -45,11 +35,6 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     const [editingVehiculo, setEditingVehiculo] = useState<VehiculoInventario | null>(null);
     const [editForm, setEditForm] = useState({ price: '', mileage: '' });
     const [saving, setSaving] = useState(false);
-
-    // Estados para el Modal de Detalle y el Historial
-    const [activeTab, setActiveTab] = useState<'ficha' | 'historial'>('ficha');
-    const [historial, setHistorial] = useState<MovimientoKardex[]>([]);
-    const [loadingHistorial, setLoadingHistorial] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -132,29 +117,6 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     // --- LÓGICA DE CARGA DE HISTORIAL (DETALLE) ---
     const handleOpenModal = (vehiculo: VehiculoInventario) => {
         setSelectedVehiculo(vehiculo);
-        setActiveTab('ficha'); 
-        setHistorial([]); 
-    };
-
-    const handleTabChange = async (tab: 'ficha' | 'historial') => {
-        setActiveTab(tab);
-        if (tab === 'historial' && selectedVehiculo && historial.length === 0) {
-            try {
-                setLoadingHistorial(true);
-                const data = await inventarioService.getDetalleVehiculo(selectedVehiculo.placa);
-                const movimientos = data.historialMovimientos || [];
-                setHistorial(movimientos);
-                // Mismo dato que el $ del modal: pasarlo a la columna "Vendido en" de la tabla
-                const precioVenta = getPrecioVentaFromHistorial(movimientos);
-                if (precioVenta != null) {
-                    setVehiculos(prev => prev.map(v => v.placa === selectedVehiculo.placa ? { ...v, precioVenta } : v));
-                }
-            } catch (error) {
-                console.error("Error cargando historial", error);
-            } finally {
-                setLoadingHistorial(false);
-            }
-        }
     };
 
     // Filtrado
@@ -364,205 +326,15 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                 </div>
             )}
 
-            {/* === MODAL DE DETALLE (EL ORIGINAL) === */}
             {selectedVehiculo && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                        
-                        {/* Header del Modal */}
-                        <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-blue-200 shadow-lg">
-                                    <Car className="h-6 w-6" />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900">
-                                        {selectedVehiculo.marca} {selectedVehiculo.modelo}
-                                    </h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="bg-slate-800 text-white text-xs font-mono px-2 py-0.5 rounded">
-                                            {selectedVehiculo.placa}
-                                        </span>
-                                        <span className="text-slate-500 text-sm border-l border-slate-300 pl-2">
-                                            {selectedVehiculo.anioModelo}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => setSelectedVehiculo(null)}
-                                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        {/* Tabs */}
-                        <div className="flex border-b border-slate-200 px-6">
-                            <button
-                                onClick={() => handleTabChange('ficha')}
-                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                                    activeTab === 'ficha' 
-                                    ? 'border-blue-600 text-blue-600' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                                }`}
-                            >
-                                <FileText className="h-4 w-4" />
-                                Ficha Técnica
-                            </button>
-                            <button
-                                onClick={() => handleTabChange('historial')}
-                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                                    activeTab === 'historial' 
-                                    ? 'border-blue-600 text-blue-600' 
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                                }`}
-                            >
-                                <History className="h-4 w-4" />
-                                Historial de Movimientos
-                            </button>
-                        </div>
-
-                        {/* Contenido Modal Scrollable */}
-                        <div className="p-6 overflow-y-auto bg-white flex-1">
-                            
-                            {activeTab === 'ficha' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-left-4 duration-300">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
-                                            <Tag className="h-4 w-4" /> Detalles Generales
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            <ItemDetail label="Marca" value={selectedVehiculo.marca} />
-                                            <ItemDetail label="Modelo" value={selectedVehiculo.modelo} />
-                                            <ItemDetail label="Año" value={selectedVehiculo.anioModelo} />
-                                            <ItemDetail label="Color" value={selectedVehiculo.color} />
-                                            <ItemDetail label="Tipo" value={selectedVehiculo.tipo} />
-                                            <ItemDetail label="Versión" value={selectedVehiculo.version} />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
-                                            <Cog className="h-4 w-4" /> Mecánica
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            <ItemDetail label="Motor" value={selectedVehiculo.motor} highlight />
-                                            <ItemDetail label="Chasis" value={selectedVehiculo.chasis} highlight />
-                                            <ItemDetail label="Cilindraje" value={selectedVehiculo.cilindraje} />
-                                            <ItemDetail label="Combustible" value={selectedVehiculo.combustible} />
-                                            <ItemDetail label="Ejes" value={selectedVehiculo.nroEjes} />
-                                            <ItemDetail label="Llantas" value={selectedVehiculo.nroLlantas} />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-2 text-blue-600 font-medium border-b border-blue-50 pb-2">
-                                            <MapPin className="h-4 w-4" /> Legal
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            <ItemDetail label="País Origen" value={selectedVehiculo.paisOrigen} />
-                                            <ItemDetail label="Año Matrícula" value={selectedVehiculo.anioMatricula} />
-                                            <ItemDetail label="Lugar Matrícula" value={selectedVehiculo.lugarMatricula} />
-                                            <ItemDetail label="Proveedor" value={selectedVehiculo.proveedor} />
-                                        </div>
-                                    </div>
-
-                                    <div className="md:col-span-3 mt-2">
-                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                            <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción Sistema</span>
-                                            <p className="text-sm text-slate-700">{selectedVehiculo.descripcion || "Sin descripción"}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'historial' && (
-                                <div className="animate-in slide-in-from-right-4 duration-300 h-full">
-                                    {loadingHistorial ? (
-                                        <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-                                            <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-500" />
-                                            <p className="text-sm">Cargando movimientos contables...</p>
-                                        </div>
-                                    ) : historial.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                                            <History className="h-8 w-8 mb-2 opacity-50" />
-                                            <p>No hay registros de movimientos para este vehículo.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="relative">
-                                            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
-                                            <div className="space-y-6">
-                                                {historial.map((mov, idx) => (
-                                                    <div key={idx} className="relative pl-10 group">
-                                                        <div className={`absolute left-[10px] top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 z-10 
-                                                            ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') ? 'bg-orange-500 ring-orange-200' : 
-                                                              mov.esIngreso ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-200'}`} 
-                                                        />
-                                                        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded border 
-                                                                            ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') 
-                                                                                ? 'bg-orange-50 text-orange-700 border-orange-100' 
-                                                                                : mov.esIngreso 
-                                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                                                    : 'bg-blue-50 text-blue-700 border-blue-100'
-                                                                        }`}>
-                                                                            {mov.tipoTransaccion}
-                                                                        </span>
-                                                                        <span className="text-xs text-slate-400 font-mono">{mov.fecha}</span>
-                                                                    </div>
-                                                                    <h4 className="font-medium text-slate-800 mt-1">{mov.concepto}</h4>
-                                                                    {mov.clienteProveedor && (
-                                                                         <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                                                                            <User className="h-3 w-3" />
-                                                                            {mov.clienteProveedor}
-                                                                         </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <div className={`text-sm font-bold flex items-center justify-end gap-1
-                                                                        ${mov.esIngreso ? 'text-emerald-600' : 'text-slate-700'}`}>
-                                                                        {mov.esIngreso ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                                                                        ${mov.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                                                    </div>
-                                                                    <div className="text-[10px] text-slate-400 mt-1 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
-                                                                        Doc: {mov.documento}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <VehicleDetailModal
+                    vehiculo={selectedVehiculo}
+                    onClose={() => setSelectedVehiculo(null)}
+                    onPrecioVenta={(placa, precioVenta) => {
+                        setVehiculos((prev) => prev.map((v) => (v.placa === placa ? { ...v, precioVenta } : v)))
+                    }}
+                />
             )}
-        </div>
-    );
-}
-
-function ItemDetail({ label, value, highlight = false }: { label: string, value: string | null | undefined, highlight?: boolean }) {
-    const isEmpty = !value || value.trim() === "";
-    return (
-        <div className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase font-bold text-slate-400">{label}</span>
-            <div className={`text-xs p-2 rounded border ${
-                isEmpty 
-                    ? "bg-red-50 text-red-600 border-red-100 italic" 
-                    : highlight 
-                        ? "bg-blue-50 text-blue-800 border-blue-100 font-bold"
-                        : "bg-white text-slate-700 border-slate-200"
-            }`}>
-                {isEmpty ? "No especificado" : value}
-            </div>
         </div>
     );
 }

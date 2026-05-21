@@ -15,10 +15,24 @@ interface DetailProps {
     onPrint: () => void;
     /** Refrescar lista de órdenes (ej. tras cerrar el modal de presupuesto o cambiar estado) */
     onRefreshOrder?: () => void;
+    initialTab?: 'resumen' | 'finanzas' | 'archivos';
+    backLabel?: string;
+    subtitle?: string;
 }
 
-export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload, onUpdateContable, onPrint, onRefreshOrder }: DetailProps) {
-    const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>('resumen');
+export function ExpedienteDetail({
+    orden,
+    onClose,
+    isUploading,
+    onTriggerUpload,
+    onUpdateContable,
+    onPrint,
+    onRefreshOrder,
+    initialTab = 'resumen',
+    backLabel = 'Volver a Carpetas',
+    subtitle,
+}: DetailProps) {
+    const [activeTab, setActiveTab] = useState<'resumen' | 'finanzas' | 'archivos'>(initialTab);
     const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
     const [presupuestoUpdatedCount, setPresupuestoUpdatedCount] = useState(0);
 
@@ -34,7 +48,7 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload,
             <div className="border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
                 <div>
                     <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 mb-4 font-medium transition-colors">
-                        <ArrowLeft className="h-4 w-4" /> Volver a Carpetas
+                        <ArrowLeft className="h-4 w-4" /> {backLabel}
                     </button>
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-slate-200 rounded-lg">
@@ -44,7 +58,10 @@ export function ExpedienteDetail({ orden, onClose, isUploading, onTriggerUpload,
                             <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
                                 {orden.vehiculo_marca} {orden.vehiculo_modelo} <span className="text-slate-400 font-normal">({orden.vehiculo_placa})</span>
                             </h2>
-                            <p className="text-sm text-slate-500 mt-1 font-medium">Expediente #{orden.numero_orden}</p>
+                            <p className="text-sm text-slate-500 mt-1 font-medium">
+                                Expediente #{orden.numero_orden}
+                                {subtitle ? ` · ${subtitle}` : ''}
+                            </p>
                         </div>
                     </div>
                 </div>
