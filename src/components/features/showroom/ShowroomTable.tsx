@@ -3,7 +3,8 @@ import {
     Car,
     CreditCard,
     Pencil,
-    User
+    User,
+    ClipboardCheck
 } from "lucide-react";
 
 import { Table, TableCard } from "@/components/ui/table";
@@ -12,13 +13,15 @@ import { Button } from "@/components/ui/buttontable";
 
 // Importamos los tipos y helpers que ya definiste en la Card para no duplicar lógica
 import { ShowroomVisit, getSourceLabel, getCreditLabel } from "./ShowroomCard";
+import { getLastGestionAuthor } from "./constants";
 
 interface ShowroomTableProps {
     visits: ShowroomVisit[];
     onEdit: (visit: ShowroomVisit) => void;
+    onManage: (visit: ShowroomVisit) => void;
 }
 
-export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
+export function ShowroomTable({ visits, onEdit, onManage }: ShowroomTableProps) {
 
     // Helper para formatear horas en la tabla
     const formatTime = (dateStr: string) => {
@@ -66,6 +69,7 @@ export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
                     {(visit: ShowroomVisit) => {
                         const sourceInfo = getSourceLabel(visit.source);
                         const creditInfo = getCreditLabel(visit.credit_status);
+                        const gestionAuthor = getLastGestionAuthor(visit);
                         
                         return (
                             <Table.Row id={visit.id}>
@@ -83,6 +87,12 @@ export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
                                                 <span className="text-[10px] text-slate-500 flex items-center gap-1">
                                                     <User className="h-3 w-3" />
                                                     {visit.profiles.full_name.split(' ')[0]} (Asesor)
+                                                </span>
+                                            )}
+                                            {gestionAuthor && (
+                                                <span className="text-[10px] text-emerald-700 flex items-center gap-1 mt-0.5">
+                                                    <ClipboardCheck className="h-3 w-3" />
+                                                    Gestionado por {gestionAuthor.split(' ')[0]}
                                                 </span>
                                             )}
                                         </div>
@@ -145,7 +155,14 @@ export function ShowroomTable({ visits, onEdit }: ShowroomTableProps) {
 
                                 {/* Acciones */}
                                 <Table.Cell>
-                                    <div className="flex justify-end">
+                                    <div className="flex justify-end gap-2">
+                                        <Button
+                                            variant="danger"
+                                            size="sm"
+                                            onClick={() => onManage(visit)}
+                                        >
+                                            Gestionar
+                                        </Button>
                                         <Button
                                             variant="link-gray"
                                             size="sm"

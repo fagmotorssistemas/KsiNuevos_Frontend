@@ -3710,6 +3710,51 @@ export type Database = {
           },
         ]
       }
+      showroom_visit_gestiones: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string
+          id: number
+          result: string | null
+          type: string
+          visit_id: number
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          created_at?: string
+          id?: number
+          result?: string | null
+          type?: string
+          visit_id: number
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: number
+          result?: string | null
+          type?: string
+          visit_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "showroom_visit_gestiones_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "showroom_visit_gestiones_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "showroom_visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_weekly_publication: {
         Row: {
           caption: string | null

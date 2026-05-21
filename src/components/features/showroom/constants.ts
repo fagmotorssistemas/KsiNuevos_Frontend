@@ -11,11 +11,23 @@ export interface InventoryItem {
     status: string;
 }
 
+export interface ShowroomVisitGestion {
+    id: number;
+    visit_id: number;
+    author_id: string | null;
+    type: string;
+    content: string;
+    result: string | null;
+    created_at: string;
+    profiles?: { full_name: string };
+}
+
 export interface ShowroomVisit {
     id: number;
     salesperson_id: string;
-    inventoryoracle_id: string | null; // CORRECCIÓN: UUID es string
+    inventoryoracle_id: string | null;
     client_name: string;
+    phone?: string | null;
     visit_start: string;
     visit_end: string | null;
     source: VisitSource;
@@ -23,10 +35,13 @@ export interface ShowroomVisit {
     credit_status: CreditStatus | null;
     observation: string | null;
     created_at: string;
+    manual_vehicle_description?: string | null;
     
     // Relaciones (Joins)
     inventoryoracle?: InventoryItem; // Cambiado de inventory a inventoryoracle
-    profiles?: { full_name: string, email: string };
+    profiles?: { full_name: string, email?: string };
+    /** Última gestión (join limit 1) */
+    showroom_visit_gestiones?: ShowroomVisitGestion[];
 }
 
 // Helpers UI
@@ -39,6 +54,16 @@ export const getSourceLabel = (source: VisitSource) => {
         default: return { label: 'Otro', color: 'bg-slate-100 text-slate-600' };
     }
 };
+
+/** Nombre de quien registró la última gestión (para listados). */
+export function getLastGestionAuthor(visit: ShowroomVisit): string | null {
+    const gestiones = visit.showroom_visit_gestiones;
+    if (!gestiones?.length) return null;
+    const sorted = [...gestiones].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return sorted[0]?.profiles?.full_name ?? null;
+}
 
 export const getCreditLabel = (status: CreditStatus | null) => {
     if (!status) return { label: '-', color: 'text-slate-400' };
