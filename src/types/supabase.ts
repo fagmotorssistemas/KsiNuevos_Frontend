@@ -1897,6 +1897,322 @@ export type Database = {
           },
         ]
       }
+      inventory_vehicle_debts: {
+        Row: {
+          amount: number | null
+          created_at: string
+          debt_type: string
+          detail_text: string | null
+          id: string
+          institution: string | null
+          inventoryoracle_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          debt_type: string
+          detail_text?: string | null
+          id?: string
+          institution?: string | null
+          inventoryoracle_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          debt_type?: string
+          detail_text?: string | null
+          id?: string
+          institution?: string | null
+          inventoryoracle_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_debts_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_documents: {
+        Row: {
+          category: string
+          created_at: string
+          detail_text: string | null
+          doc_type: string
+          expires_at: string | null
+          file_name: string | null
+          file_path: string | null
+          file_url: string | null
+          id: string
+          inventoryoracle_id: string
+          mime_type: string | null
+          status: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          detail_text?: string | null
+          doc_type: string
+          expires_at?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          inventoryoracle_id: string
+          mime_type?: string | null
+          status?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          detail_text?: string | null
+          doc_type?: string
+          expires_at?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          inventoryoracle_id?: string
+          mime_type?: string | null
+          status?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_documents_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string
+          event_type: string
+          id: string
+          inventoryoracle_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          event_type?: string
+          id?: string
+          inventoryoracle_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string
+          event_type?: string
+          id?: string
+          inventoryoracle_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_events_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_fines: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          fine_date: string | null
+          id: string
+          inventoryoracle_id: string
+          location: string | null
+          payer_notes: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          fine_date?: string | null
+          id?: string
+          inventoryoracle_id: string
+          location?: string | null
+          payer_notes?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          fine_date?: string | null
+          id?: string
+          inventoryoracle_id?: string
+          location?: string | null
+          payer_notes?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_fines_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_fines_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_internal_notes: {
+        Row: {
+          author_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          inventoryoracle_id: string
+          note_text: string
+          updated_at: string
+        }
+        Insert: {
+          author_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventoryoracle_id: string
+          note_text: string
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventoryoracle_id?: string
+          note_text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_internal_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_internal_notes_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_owners: {
+        Row: {
+          created_at: string
+          from_date: string | null
+          id: string
+          id_number: string | null
+          inventoryoracle_id: string
+          is_current: boolean
+          notes: string | null
+          owner_name: string
+          sort_order: number
+          to_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          from_date?: string | null
+          id?: string
+          id_number?: string | null
+          inventoryoracle_id: string
+          is_current?: boolean
+          notes?: string | null
+          owner_name: string
+          sort_order?: number
+          to_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          from_date?: string | null
+          id?: string
+          id_number?: string | null
+          inventoryoracle_id?: string
+          is_current?: boolean
+          notes?: string | null
+          owner_name?: string
+          sort_order?: number
+          to_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_owners_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventoryoracle: {
         Row: {
           accident_history: string | null
@@ -2298,6 +2614,42 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_planner_event_vehicles: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          inventory_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          inventory_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          inventory_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_planner_event_vehicles_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_planner_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_event_vehicles_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
@@ -2909,9 +3261,11 @@ export type Database = {
           custom_topic: string | null
           error_message: string | null
           final_video_url: string | null
+          heygen_avatar_id: string | null
           heygen_background_url: string | null
           heygen_video_id: string | null
           heygen_video_url: string | null
+          heygen_voice_id: string | null
           id: string
           job_name: string | null
           mode: string
@@ -2932,9 +3286,11 @@ export type Database = {
           custom_topic?: string | null
           error_message?: string | null
           final_video_url?: string | null
+          heygen_avatar_id?: string | null
           heygen_background_url?: string | null
           heygen_video_id?: string | null
           heygen_video_url?: string | null
+          heygen_voice_id?: string | null
           id?: string
           job_name?: string | null
           mode: string
@@ -2955,9 +3311,11 @@ export type Database = {
           custom_topic?: string | null
           error_message?: string | null
           final_video_url?: string | null
+          heygen_avatar_id?: string | null
           heygen_background_url?: string | null
           heygen_video_id?: string | null
           heygen_video_url?: string | null
+          heygen_voice_id?: string | null
           id?: string
           job_name?: string | null
           mode?: string
@@ -3125,39 +3483,6 @@ export type Database = {
         }
         Relationships: []
       }
-      profile_roles: {
-        Row: {
-          assigned_at: string
-          profile_id: string
-          role_id: string
-        }
-        Insert: {
-          assigned_at?: string
-          profile_id: string
-          role_id: string
-        }
-        Update: {
-          assigned_at?: string
-          profile_id?: string
-          role_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profile_roles_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "profile_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profile_permissions: {
         Row: {
           can_delete: boolean
@@ -3199,6 +3524,39 @@ export type Database = {
             columns: ["submodule_id"]
             isOneToOne: false
             referencedRelation: "submodules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_roles: {
+        Row: {
+          assigned_at: string
+          profile_id: string
+          role_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          profile_id: string
+          role_id: string
+        }
+        Update: {
+          assigned_at?: string
+          profile_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_roles_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
         ]
@@ -3634,6 +3992,51 @@ export type Database = {
           },
         ]
       }
+      showroom_visit_gestiones: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string
+          id: number
+          result: string | null
+          type: string
+          visit_id: number
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          created_at?: string
+          id?: number
+          result?: string | null
+          type?: string
+          visit_id: number
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: number
+          result?: string | null
+          type?: string
+          visit_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "showroom_visit_gestiones_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "showroom_visit_gestiones_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "showroom_visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       showroom_visits: {
         Row: {
           client_name: string
@@ -3706,51 +4109,6 @@ export type Database = {
             columns: ["salesperson_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      showroom_visit_gestiones: {
-        Row: {
-          author_id: string | null
-          content: string
-          created_at: string
-          id: number
-          result: string | null
-          type: string
-          visit_id: number
-        }
-        Insert: {
-          author_id?: string | null
-          content: string
-          created_at?: string
-          id?: number
-          result?: string | null
-          type?: string
-          visit_id: number
-        }
-        Update: {
-          author_id?: string | null
-          content?: string
-          created_at?: string
-          id?: number
-          result?: string | null
-          type?: string
-          visit_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "showroom_visit_gestiones_author_id_fkey"
-            columns: ["author_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "showroom_visit_gestiones_visit_id_fkey"
-            columns: ["visit_id"]
-            isOneToOne: false
-            referencedRelation: "showroom_visits"
             referencedColumns: ["id"]
           },
         ]
@@ -5497,10 +5855,6 @@ export type Database = {
           submodule_slug: string
         }[]
       }
-      seed_profile_permissions_from_role: {
-        Args: { p_profile_id: string; p_role_id: string }
-        Returns: undefined
-      }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
@@ -5774,6 +6128,10 @@ export type Database = {
             }
             Returns: string
           }
+      seed_profile_permissions_from_role: {
+        Args: { p_profile_id: string; p_role_id: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       update_price_statistics: {
