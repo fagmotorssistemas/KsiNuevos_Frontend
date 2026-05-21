@@ -4,8 +4,11 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ExternalLink, MessageSquareText } from 'lucide-react'
 import { GuionTipoBadge, SemanaBadge } from './badges'
+import { ScriptGuionDetail } from './ScriptGuionDetail'
+import { getGuionDisplayTitle, hasStructuredGuion } from '@/types/video-script'
+import type { VideoScriptStructuredFields } from '@/types/video-script'
 
-export type ScriptRow = {
+export type ScriptRow = VideoScriptStructuredFields & {
   id: string
   vendedor_id: string
   vendedor_nombre: string | null
@@ -13,7 +16,6 @@ export type ScriptRow = {
   semana_tipo: number | null
   guion_tipo: string | null
   objecion_tipo: string | null
-  texto_guion: string | null
   palabras_count: number | null
   status: string | null
   facebook_post_id: string | null
@@ -38,6 +40,7 @@ function statusPill(s: string | null) {
 
 export function ScriptCard({ script }: { script: ScriptRow }) {
   const [open, setOpen] = useState(false)
+  const structured = hasStructuredGuion(script)
 
   const fbUrl = useMemo(() => {
     if (!script.facebook_post_id) return null
@@ -45,7 +48,10 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
   }, [script.facebook_post_id])
 
   const car = script.inventoryoracle
-  const title = car ? `${car.brand ?? ''} ${car.model ?? ''} ${car.year ?? ''}`.trim() : script.vehicle_id
+  const vehicleLabel = car
+    ? `${car.brand ?? ''} ${car.model ?? ''} ${car.year ?? ''}`.trim()
+    : script.vehicle_id
+  const guionTitle = getGuionDisplayTitle(script)
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden">
@@ -54,7 +60,7 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
           <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
             {car?.img_main_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={car.img_main_url} alt={title} className="h-full w-full object-cover" loading="lazy" />
+              <img src={car.img_main_url} alt={vehicleLabel} className="h-full w-full object-cover" loading="lazy" />
             ) : (
               <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                 <MessageSquareText className="h-6 w-6 text-gray-400" />
@@ -63,8 +69,9 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-extrabold text-gray-900 truncate">{title}</p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-sm font-extrabold text-gray-900 truncate">{vehicleLabel}</p>
+            <p className="text-xs font-semibold text-violet-800 mt-0.5 line-clamp-2">{guionTitle}</p>
+            <p className="text-xs text-gray-500 truncate mt-1">
               {car?.color ? `${car.color} • ` : ''}
               {script.palabras_count ? `${script.palabras_count} palabras` : '—'}
             </p>
@@ -72,7 +79,9 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <GuionTipoBadge tipo={script.guion_tipo ?? ''} objecionTipo={script.objecion_tipo} />
               <SemanaBadge semanaTipo={script.semana_tipo} />
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${statusPill(script.status)}`}>
+              <span
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${statusPill(script.status)}`}
+              >
                 {(script.status ?? 'generado').toLowerCase()}
               </span>
             </div>
@@ -85,15 +94,15 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
             onClick={() => setOpen((v) => !v)}
             className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
           >
-            <span className="text-sm font-bold text-gray-900">Ver guion completo</span>
-            <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+            <span className="text-sm font-bold text-gray-900">
+              {open ? 'Ocultar guion' : structured ? 'Ver guion estructurado' : 'Ver guion'}
+            </span>
+            <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
           </button>
 
           {open && (
-            <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
-              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
-                {script.texto_guion ?? '—'}
-              </pre>
+            <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4 min-w-0 w-full">
+              <ScriptGuionDetail script={script} />
             </div>
           )}
         </div>
@@ -114,4 +123,3 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
     </div>
   )
 }
-

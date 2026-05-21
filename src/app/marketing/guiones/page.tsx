@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { addDays, format, startOfDay } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { Loader2, ScrollText } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { ScriptCard, type ScriptRow } from '@/components/marketing/ScriptCard'
-import { VendedorHeader } from '@/components/marketing/VendedorHeader'
+import type { ScriptRow } from '@/components/marketing/ScriptCard'
+import { GuionesDayView } from '@/components/marketing/GuionesDayView'
+import { VIDEO_SCRIPT_LIST_SELECT } from '@/lib/marketing/video-script-select'
 
 type Group = {
   vendedorNombre: string
@@ -18,10 +18,8 @@ function ymd(d: Date) {
 }
 
 function parseDateInputLocal(value: string) {
-  // value: "YYYY-MM-DD" from <input type="date">
   const [y, m, d] = value.split('-').map((n) => Number(n))
   if (!y || !m || !d) return new Date()
-  // Important: construct as LOCAL midnight (not UTC)
   return new Date(y, m - 1, d, 0, 0, 0, 0)
 }
 
@@ -32,6 +30,7 @@ export default function MarketingGuionesPage() {
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<ScriptRow[]>([])
   const [hint, setHint] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -44,14 +43,7 @@ export default function MarketingGuionesPage() {
 
     ;(supabase as unknown as { from: (t: string) => any })
       .from('video_scripts')
-      .select(
-        `
-        id, vendedor_id, vendedor_nombre, vehicle_id, semana_tipo, guion_tipo, objecion_tipo,
-        texto_guion, palabras_count, status, facebook_post_id, fecha_generacion, fecha_publicacion,
-        created_at, updated_at, vehicle_data,
-        inventoryoracle:inventoryoracle (brand, model, year, color, img_main_url)
-      `
-      )
+      .select(VIDEO_SCRIPT_LIST_SELECT)
       .gte('created_at', start.toISOString())
       .lt('created_at', end.toISOString())
       .order('vendedor_nombre', { ascending: true })
@@ -62,8 +54,11 @@ export default function MarketingGuionesPage() {
           setRows([])
           return
         }
-        setRows((data ?? []) as ScriptRow[])
+        const list = (data ?? []) as ScriptRow[]
+        setRows(list)
+        setSelectedId(list[0]?.id ?? null)
         if (!data || data.length === 0) {
+          setSelectedId(null)
           ;(supabase as unknown as { from: (t: string) => any })
             .from('video_scripts')
             .select('created_at')
@@ -86,16 +81,13 @@ export default function MarketingGuionesPage() {
       const name = (r.vendedor_nombre ?? 'Sin vendedor').trim() || 'Sin vendedor'
       map.set(name, [...(map.get(name) ?? []), r])
     }
-    const out: Group[] = Array.from(map.entries()).map(([vendedorNombre, items]) => ({ vendedorNombre, items }))
+    const out: Group[] = Array.from(map.entries()).map(([vendedorNombre, items]) => ({
+      vendedorNombre,
+      items,
+    }))
     out.sort((a, b) => a.vendedorNombre.localeCompare(b.vendedorNombre))
     return out
   }, [rows])
-
-  const humanDate = useMemo(() => {
-    const d = new Date(date)
-    if (Number.isNaN(d.getTime())) return date
-    return format(d, "dd/MM/yyyy", { locale: es })
-  }, [date])
 
   return (
     <div className="space-y-6">
@@ -107,9 +99,6 @@ export default function MarketingGuionesPage() {
             </div>
             Guiones del Día
           </h1>
-          <p className="text-sm text-gray-500 mt-2">
-            Fecha: <span className="font-semibold text-gray-700">{humanDate}</span>
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -144,22 +133,8 @@ export default function MarketingGuionesPage() {
           No hay guiones para esta fecha.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-          {groups.map((g) => (
-            <section key={g.vendedorNombre} className="space-y-3">
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                <VendedorHeader nombre={g.vendedorNombre} count={g.items.length} />
-              </div>
-              <div className="space-y-4">
-                {g.items.map((s) => (
-                  <ScriptCard key={s.id} script={s} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        <GuionesDayView groups={groups} selectedId={selectedId} onSelect={setSelectedId} />
       )}
     </div>
   )
 }
-

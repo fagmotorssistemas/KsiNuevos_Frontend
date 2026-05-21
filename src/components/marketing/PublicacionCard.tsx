@@ -2,13 +2,16 @@
 
 import Link from 'next/link'
 import { ExternalLink, Image as ImageIcon } from 'lucide-react'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import {
+  formatPostInstantEcuador,
+  isPostPublished,
+} from '@/lib/marketing/informative-post-dates'
 
 export type InformativePostRow = {
   id: string
   type: string | null
   status: string | null
+  published_at?: string | null
   scheduled_for: string | null
   headline: string | null
   caption_facebook: string | null
@@ -82,10 +85,13 @@ function countUrls(input: unknown): number {
 }
 
 export function PublicacionCard({ post }: { post: InformativePostRow }) {
-  const scheduled =
-    post.scheduled_for && !Number.isNaN(new Date(post.scheduled_for).getTime())
-      ? format(new Date(post.scheduled_for), "dd/MM/yyyy '•' HH:mm", { locale: es })
-      : null
+  const published = isPostPublished(post)
+  const publishedLabel = published
+    ? formatPostInstantEcuador(post.published_at || post.scheduled_for)
+    : null
+  const createdLabel = !published
+    ? formatPostInstantEcuador(post.created_at)
+    : null
 
   const firstFromJson = extractFirstUrl(post.image_urls)
   const thumb = post.image_url || firstFromJson
@@ -114,9 +120,14 @@ export function PublicacionCard({ post }: { post: InformativePostRow }) {
                   Carrusel: {imagesCount}
                 </span>
               )}
-              {scheduled && (
+              {publishedLabel && (
                 <span className="text-xs font-semibold text-gray-500">
-                  Programado: <span className="text-gray-700">{scheduled}</span>
+                  Publicado: <span className="text-gray-700">{publishedLabel}</span>
+                </span>
+              )}
+              {createdLabel && (
+                <span className="text-xs font-semibold text-gray-500">
+                  Generado: <span className="text-gray-700">{createdLabel}</span>
                 </span>
               )}
             </div>

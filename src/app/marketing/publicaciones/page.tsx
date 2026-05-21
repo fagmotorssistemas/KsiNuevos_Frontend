@@ -1,11 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { Loader2, Megaphone, Sparkles } from 'lucide-react'
+import {
+  formatPostDayHeader,
+  getPostDayKeyEcuador,
+  getPostSortTime,
+  isPostPublished,
+} from '@/lib/marketing/informative-post-dates'
 import { useAuth } from '@/hooks/useAuth'
 import { ScriptCard, type ScriptRow } from '@/components/marketing/ScriptCard'
+import { VIDEO_SCRIPT_LIST_SELECT } from '@/lib/marketing/video-script-select'
 import { MetricasRow, type MetaMetricsRow } from '@/components/marketing/MetricasRow'
 import { PublicacionCard, type InformativePostRow } from '@/components/marketing/PublicacionCard'
 
@@ -29,14 +34,7 @@ export default function MarketingPublicacionesPage() {
       if (tab === 'videos') {
         const { data: scripts, error: scriptsError } = await (supabase as unknown as { from: (t: string) => any })
           .from('video_scripts')
-          .select(
-            `
-            id, vendedor_id, vendedor_nombre, vehicle_id, semana_tipo, guion_tipo, objecion_tipo,
-            texto_guion, palabras_count, status, facebook_post_id, fecha_generacion, fecha_publicacion,
-            created_at, updated_at, vehicle_data,
-            inventoryoracle:inventoryoracle (brand, model, year, color, img_main_url)
-          `
-          )
+          .select(VIDEO_SCRIPT_LIST_SELECT)
           .eq('status', 'publicado')
           .order('fecha_publicacion', { ascending: false })
           .limit(200)
@@ -75,12 +73,13 @@ export default function MarketingPublicacionesPage() {
         const { data, error } = await (supabase as unknown as { from: (t: string) => any })
           .from('informative_posts')
           .select(
-            'id, type, status, scheduled_for, headline, caption_facebook, caption_instagram, image_url, image_urls, carousel_format, source_url, source_title, source_snippet, instagram_permalink, facebook_permalink, created_at, story_hash, topic_key'
+            'id, type, status, published_at, scheduled_for, headline, caption_facebook, caption_instagram, image_url, image_urls, carousel_format, source_url, source_title, source_snippet, instagram_permalink, facebook_permalink, created_at, story_hash, topic_key'
           )
           // Solo posts generados por el pipeline de IA
           .not('story_hash', 'is', null)
+          .order('published_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
-          .limit(50)
+          .limit(80)
 
         if (error) {
           setError(error.message)
@@ -103,7 +102,10 @@ export default function MarketingPublicacionesPage() {
     () =>
       tab === 'videos'
         ? { title: 'Videos de Vendedores', subtitle: 'Guiones publicados con métricas de Meta/Facebook.' }
-        : { title: 'Posts (IA)', subtitle: 'Solo posts generados por IA, agrupados por día.' },
+        : {
+            title: 'Posts (IA)',
+            subtitle: 'Agrupados por día de publicación en Meta (hora Ecuador). Pendientes por fecha de generación.',
+          },
     [tab]
   )
 
@@ -111,12 +113,20 @@ export default function MarketingPublicacionesPage() {
     if (tab !== 'posts') return []
     const map = new Map<string, InformativePostRow[]>()
     for (const p of posts) {
-      const dt = p.created_at || p.scheduled_for
-      const key = dt ? format(new Date(dt), 'yyyy-MM-dd') : 'sin-fecha'
+      const key = getPostDayKeyEcuador(p)
       map.set(key, [...(map.get(key) ?? []), p])
     }
-    const keys = Array.from(map.keys()).sort((a, b) => (b === 'sin-fecha' ? -1 : b.localeCompare(a)))
-    return keys.map((k) => ({ day: k, items: map.get(k) ?? [] }))
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (a === 'sin-fecha') return 1
+      if (b === 'sin-fecha') return -1
+      return b.localeCompare(a)
+    })
+    return keys.map((k) => ({
+      day: k,
+      items: (map.get(k) ?? []).sort((a, b) => getPostSortTime(b) - getPostSortTime(a)),
+      publishedCount: (map.get(k) ?? []).filter((p) => isPostPublished(p)).length,
+      pendingCount: (map.get(k) ?? []).filter((p) => !isPostPublished(p)).length,
+    }))
   }, [posts, tab])
 
   return (
@@ -202,22 +212,25 @@ export default function MarketingPublicacionesPage() {
           {/* Posts (IA) agrupados por día */}
           {tab === 'posts' &&
             postsByDay.map((g) => {
-              const human =
-                g.day === 'sin-fecha'
-                  ? 'Sin fecha'
-                  : format(new Date(g.day), "EEEE dd/MM/yyyy", { locale: es })
+              const human = formatPostDayHeader(g.day)
+              const countLabel =
+                g.pendingCount > 0 && g.publishedCount > 0
+                  ? `${g.publishedCount} publicados · ${g.pendingCount} pendientes`
+                  : g.pendingCount > 0
+                    ? `${g.pendingCount} pendiente${g.pendingCount === 1 ? '' : 's'}`
+                    : `${g.items.length} publicado${g.items.length === 1 ? '' : 's'}`
               return (
-                <div key={g.day} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-extrabold text-gray-900">{human}</p>
-                    <span className="text-xs font-semibold text-gray-500">{g.items.length}</span>
+                <section key={g.day} className="space-y-3">
+                  <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-white/95 backdrop-blur-sm border-b border-gray-100 flex items-center justify-between gap-3">
+                    <p className="text-sm font-extrabold text-gray-900 capitalize">{human}</p>
+                    <span className="text-xs font-semibold text-gray-500 shrink-0">{countLabel}</span>
                   </div>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {g.items.map((p) => (
                       <PublicacionCard key={p.id} post={p} />
                     ))}
                   </div>
-                </div>
+                </section>
               )
             })}
         </div>

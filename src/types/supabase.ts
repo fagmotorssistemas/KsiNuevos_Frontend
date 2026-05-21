@@ -1514,6 +1514,7 @@ export type Database = {
           instagram_media_id: string | null
           instagram_permalink: string | null
           next_retry_at: string | null
+          published_at: string | null
           scheduled_for: string | null
           source_snippet: string | null
           source_title: string | null
@@ -1543,6 +1544,7 @@ export type Database = {
           instagram_media_id?: string | null
           instagram_permalink?: string | null
           next_retry_at?: string | null
+          published_at?: string | null
           scheduled_for?: string | null
           source_snippet?: string | null
           source_title?: string | null
@@ -1572,6 +1574,7 @@ export type Database = {
           instagram_media_id?: string | null
           instagram_permalink?: string | null
           next_retry_at?: string | null
+          published_at?: string | null
           scheduled_for?: string | null
           source_snippet?: string | null
           source_title?: string | null
@@ -5425,13 +5428,17 @@ export type Database = {
           facebook_post_id: string | null
           fecha_generacion: string
           fecha_publicacion: string | null
+          guion_escenas: Json | null
+          guion_objetivo: string | null
           guion_tipo: string
+          guion_titulo: string | null
           id: string
           objecion_tipo: string | null
           palabras_count: number
           semana_tipo: number
           status: string
           texto_guion: string
+          texto_hablado: string | null
           texto_hash: string
           updated_at: string
           vehicle_data: Json | null
@@ -5444,13 +5451,17 @@ export type Database = {
           facebook_post_id?: string | null
           fecha_generacion: string
           fecha_publicacion?: string | null
+          guion_escenas?: Json | null
+          guion_objetivo?: string | null
           guion_tipo: string
+          guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
           palabras_count: number
           semana_tipo: number
           status?: string
           texto_guion: string
+          texto_hablado?: string | null
           texto_hash: string
           updated_at?: string
           vehicle_data?: Json | null
@@ -5463,13 +5474,17 @@ export type Database = {
           facebook_post_id?: string | null
           fecha_generacion?: string
           fecha_publicacion?: string | null
+          guion_escenas?: Json | null
+          guion_objetivo?: string | null
           guion_tipo?: string
+          guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
           palabras_count?: number
           semana_tipo?: number
           status?: string
           texto_guion?: string
+          texto_hablado?: string | null
           texto_hash?: string
           updated_at?: string
           vehicle_data?: Json | null
