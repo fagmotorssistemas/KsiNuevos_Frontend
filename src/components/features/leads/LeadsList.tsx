@@ -236,7 +236,7 @@ export function LeadsList({
                                 <Table.Cell>
                                     <div className="flex justify-end gap-2">
                                         <Button
-                                            variant="secondary"
+                                            variant="danger"
                                             size="sm"
                                             onClick={() => onLeadSelect(item)}
                                         >

@@ -1,28 +1,14 @@
-import { Clock, Car, CreditCard, Pencil } from "lucide-react";
+import { Clock, Car, CreditCard, Pencil, ClipboardCheck } from "lucide-react";
+import {
+    getLastGestionAuthor,
+    type ShowroomVisit,
+    type VisitSource,
+    type CreditStatus,
+} from "./constants";
 
-// --- Definiciones Integradas ---
+export type { ShowroomVisit };
 
-export interface ShowroomVisit {
-    id: number;
-    client_name: string;
-    visit_start: string;
-    visit_end: string | null;
-    source: string;
-    test_drive: boolean;
-    credit_status: string;
-    observation?: string;
-    inventoryoracle?: {
-        brand: string;
-        model: string;
-        year: number;
-    };
-    profiles?: {
-        full_name: string;
-    };
-    [key: string]: any; 
-}
-
-export const getSourceLabel = (source: string) => {
+export const getSourceLabel = (source: VisitSource | string) => {
     switch (source?.toLowerCase()) {
         case 'showroom':
             return { label: 'Showroom', color: 'bg-blue-100 text-blue-700' };
@@ -37,7 +23,7 @@ export const getSourceLabel = (source: string) => {
     }
 };
 
-export const getCreditLabel = (status: string) => {
+export const getCreditLabel = (status: CreditStatus | string | null) => {
     switch (status?.toLowerCase()) {
         case 'aplica':
             return { label: 'Aplica', color: 'bg-green-50 border-green-100 text-green-700' };
@@ -55,11 +41,13 @@ export const getCreditLabel = (status: string) => {
 interface ShowroomCardProps {
     visit: ShowroomVisit;
     onEdit?: (visit: ShowroomVisit) => void;
+    onManage?: (visit: ShowroomVisit) => void;
 }
 
-export default function ShowroomCard({ visit, onEdit }: ShowroomCardProps) {
+export default function ShowroomCard({ visit, onEdit, onManage }: ShowroomCardProps) {
     const sourceInfo = getSourceLabel(visit.source);
     const creditInfo = getCreditLabel(visit.credit_status);
+    const gestionAuthor = getLastGestionAuthor(visit);
 
     // 1. Convertimos las fechas string a objetos Date
     // Al venir en formato ISO Z (ej: ...22:10Z), 'new Date' entiende que es UTC.
@@ -114,6 +102,18 @@ export default function ShowroomCard({ visit, onEdit }: ShowroomCardProps) {
                 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
+                    {onManage && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onManage(visit);
+                            }}
+                            className="text-xs font-medium px-2.5 py-1 rounded-lg bg-black text-white hover:bg-slate-900 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                            Gestionar
+                        </button>
+                    )}
                     {onEdit && (
                         <button 
                             onClick={(e) => {
@@ -165,6 +165,13 @@ export default function ShowroomCard({ visit, onEdit }: ShowroomCardProps) {
                         <span>{creditInfo.label}</span>
                     </div>
                 </div>
+
+                {gestionAuthor && (
+                    <div className="text-xs text-emerald-700 flex items-center gap-1.5 font-medium">
+                        <ClipboardCheck className="h-3.5 w-3.5" />
+                        Gestionado por {gestionAuthor}
+                    </div>
+                )}
 
                 {/* Observación */}
                 {visit.observation && (

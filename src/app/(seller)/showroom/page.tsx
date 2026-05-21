@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { Plus, Users, LayoutGrid, List } from "lucide-react";
 import { useShowroom } from "@/hooks/useShowroom";
-import ShowroomCard, { ShowroomVisit } from "../../../components/features/showroom/ShowroomCard";
-// Importamos la nueva tabla
+import ShowroomCard from "../../../components/features/showroom/ShowroomCard";
 import { ShowroomTable } from "../../../components/features/showroom/ShowroomTable";
 import ShowroomToolbar from "../../../components/features/showroom/ShowroomToolbar";
 import VisitFormModal from "../../../components/features/showroom/VisitFormModal";
+import { VisitDetailModal } from "../../../components/features/showroom/Detail/VisitDetailModal";
+import type { ShowroomVisit } from "../../../components/features/showroom/constants";
 
 // Subcomponente Header con Toggle de Vista
 const Header = ({ 
@@ -77,21 +78,40 @@ export default function ShowroomPage() {
         reload 
     } = useShowroom();
 
-    // Estado local para Modal
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isGestionModalOpen, setIsGestionModalOpen] = useState(false);
     const [selectedVisit, setSelectedVisit] = useState<ShowroomVisit | null>(null);
+    const [visitToManage, setVisitToManage] = useState<ShowroomVisit | null>(null);
 
     // NUEVO ESTADO: Control de vista (Por defecto 'table' como pediste)
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
     const handleCreate = () => {
-        setSelectedVisit(null); 
-        setIsModalOpen(true);
+        setSelectedVisit(null);
+        setIsFormModalOpen(true);
     };
 
     const handleEdit = (visit: ShowroomVisit) => {
         setSelectedVisit(visit);
-        setIsModalOpen(true);
+        setIsFormModalOpen(true);
+    };
+
+    const handleManage = (visit: ShowroomVisit) => {
+        setVisitToManage(visit);
+        setIsGestionModalOpen(true);
+    };
+
+    const handleCloseGestion = () => {
+        setVisitToManage(null);
+        setIsGestionModalOpen(false);
+        reload();
+    };
+
+    const handleEditFromGestion = (visit: ShowroomVisit) => {
+        setIsGestionModalOpen(false);
+        setVisitToManage(null);
+        setSelectedVisit(visit);
+        setIsFormModalOpen(true);
     };
 
     return (
@@ -133,7 +153,8 @@ export default function ShowroomPage() {
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <ShowroomTable 
                                 visits={visits as unknown as ShowroomVisit[]} 
-                                onEdit={handleEdit} 
+                                onEdit={handleEdit}
+                                onManage={handleManage}
                             />
                         </div>
                     ) : (
@@ -144,7 +165,8 @@ export default function ShowroomPage() {
                                     <ShowroomCard 
                                         key={visit.id} 
                                         visit={visit} 
-                                        onEdit={handleEdit} 
+                                        onEdit={handleEdit}
+                                        onManage={handleManage}
                                     />
                                 );
                             })}
@@ -154,12 +176,20 @@ export default function ShowroomPage() {
             )}
 
             <VisitFormModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+                isOpen={isFormModalOpen} 
+                onClose={() => setIsFormModalOpen(false)} 
                 onSuccess={reload}
-                // @ts-ignore
                 visitToEdit={selectedVisit} 
             />
+
+            {isGestionModalOpen && visitToManage && (
+                <VisitDetailModal
+                    visit={visitToManage}
+                    onClose={handleCloseGestion}
+                    onEdit={handleEditFromGestion}
+                    onVisitUpdated={reload}
+                />
+            )}
         </div>
     );
 }

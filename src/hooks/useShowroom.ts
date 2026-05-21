@@ -78,9 +78,22 @@ export function useShowroom() {
                 .select(`
                     *,
                     inventoryoracle (id, brand, model, year, price),
-                    profiles (full_name)
+                    profiles (full_name),
+                    showroom_visit_gestiones (
+                        id,
+                        created_at,
+                        type,
+                        content,
+                        author_id,
+                        profiles:author_id (full_name)
+                    )
                 `)
-                .order('visit_start', { ascending: false });
+                .order('visit_start', { ascending: false })
+                .order('created_at', {
+                    ascending: false,
+                    foreignTable: 'showroom_visit_gestiones',
+                })
+                .limit(1, { foreignTable: 'showroom_visit_gestiones' });
 
             // --- APLICAR FILTROS ---
 
