@@ -77,7 +77,10 @@ async function runAvatarStep(job: NoticieroJob): Promise<NoticieroJob> {
       error_message: null,
     })
 
-    videoId = await startHeyGenGeneration(script, job.heygen_background_url ?? null)
+    videoId = await startHeyGenGeneration(script, job.heygen_background_url ?? null, {
+      avatarId: job.heygen_avatar_id,
+      voiceId: job.heygen_voice_id,
+    })
     await updateNoticieroJob(job.id, {
       heygen_video_id: videoId,
       status: 'avatar',

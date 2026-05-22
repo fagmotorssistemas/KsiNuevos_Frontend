@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
   buildPrimaryNavItems,
+  getPrimaryNavLinkSizeClasses,
+  shouldCompactPrimaryNav,
   resolvePrimaryNavItemHref,
   type PermissionContext,
 } from "@/lib/permissions";
@@ -20,9 +22,12 @@ export function MainNav({ className }: { className?: string }) {
   );
 
   const navItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx]);
+  const compact = shouldCompactPrimaryNav(navItems.length);
 
   return (
-    <nav className={`flex items-center space-x-1 ${className || ""}`}>
+    <nav
+      className={`flex min-w-0 flex-1 items-center gap-2 ${className || ""}`}
+    >
       {navItems.map((item) => {
         const href = resolvePrimaryNavItemHref(item, permCtx) ?? item.href;
         const isActive = pathname?.startsWith(href);
@@ -31,7 +36,7 @@ export function MainNav({ className }: { className?: string }) {
           <Link
             key={`${item.label}-${href}`}
             href={href}
-            className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
+            className={`shrink-0 font-medium rounded-full transition-colors whitespace-nowrap ${getPrimaryNavLinkSizeClasses(navItems.length)} ${
               isActive
                 ? "bg-slate-900 text-white shadow-sm"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"

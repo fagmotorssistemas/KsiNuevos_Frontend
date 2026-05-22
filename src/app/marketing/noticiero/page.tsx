@@ -9,6 +9,11 @@ import { VehicleSelector } from './components/VehicleSelector'
 import { CustomTopicInput } from './components/CustomTopicInput'
 import { BannerTitleField } from './components/BannerTitleField'
 import { NoticieroBackgroundPicker } from './components/NoticieroBackgroundPicker'
+import {
+  NoticieroPresenterPicker,
+  type NoticieroPresenterSelection,
+} from './components/NoticieroPresenterPicker'
+import { NOTICIERO_AVATARS } from './config/avatars'
 import { isBannerTitleValid } from '@/lib/noticiero/banner-title'
 import { GenerationProgress } from './components/GenerationProgress'
 import { NoticieroJobList } from './components/NoticieroJobList'
@@ -25,6 +30,14 @@ export default function NoticieroPage() {
   const [customTopic, setCustomTopic] = useState('')
   const [bannerTitle, setBannerTitle] = useState('')
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
+  const [presenter, setPresenter] = useState<NoticieroPresenterSelection>(() => {
+    const defaultAvatar = NOTICIERO_AVATARS[0]
+    return {
+      id: defaultAvatar.id,
+      voice_id: defaultAvatar.voice_id,
+      name: defaultAvatar.name,
+    }
+  })
   const [listRefreshKey, setListRefreshKey] = useState(0)
   const [publishRefreshKey, setPublishRefreshKey] = useState(0)
   const [isStarting, setIsStarting] = useState(false)
@@ -54,14 +67,17 @@ export default function NoticieroPage() {
     try {
       const bannerPayload = isBannerTitleValid(bannerTitle) ? { bannerTitle: bannerTitle.trim() } : {}
 
+      const avatarPayload = { avatarId: presenter.id, voiceId: presenter.voice_id }
+
       const body =
         mode === 'vehicle'
-          ? { mode: 'vehicle' as const, vehicle, backgroundUrl, ...bannerPayload }
+          ? { mode: 'vehicle' as const, vehicle, backgroundUrl, ...bannerPayload, ...avatarPayload }
           : {
               mode: 'custom' as const,
               customTopic: customTopic.trim(),
               backgroundUrl,
               ...bannerPayload,
+              ...avatarPayload,
             }
 
       const res = await fetch('/api/marketing/noticiero/pipeline/start', {
@@ -177,6 +193,12 @@ export default function NoticieroPage() {
               customTopic={customTopic}
               value={bannerTitle}
               onChange={setBannerTitle}
+              disabled={formDisabled}
+            />
+
+            <NoticieroPresenterPicker
+              value={presenter}
+              onChange={setPresenter}
               disabled={formDisabled}
             />
 

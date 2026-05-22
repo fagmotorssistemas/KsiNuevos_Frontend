@@ -19,6 +19,20 @@ export function buildPrimaryNavItems(ctx: PermissionContext): PrimaryNavItem[] {
   return PRIMARY_NAV_ITEMS.filter((item) => canSeePrimaryNavItem(ctx, item))
 }
 
+/** Navbar superior: compactar cuando hay varios módulos visibles (p. ej. admin). */
+export const PRIMARY_NAV_COMPACT_THRESHOLD = 5
+
+export function shouldCompactPrimaryNav(itemCount: number): boolean {
+  return itemCount >= PRIMARY_NAV_COMPACT_THRESHOLD
+}
+
+export function getPrimaryNavLinkSizeClasses(itemCount: number): string {
+  if (itemCount >= PRIMARY_NAV_COMPACT_THRESHOLD) {
+    return 'px-4 py-2 text-sm'
+  }
+  return 'px-4 py-2.5 text-sm'
+}
+
 /** Primera ruta de contabilidad con submódulo activo (orden del catálogo, no /wallet por defecto). */
 export function resolveFirstAccountingHref(ctx: PermissionContext): string | null {
   const finanzasSubs = RBAC_SUBMODULE_DEFINITIONS.filter(

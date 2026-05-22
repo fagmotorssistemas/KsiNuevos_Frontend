@@ -58,7 +58,7 @@ const formatFriendlyDate = (dateString: string) => {
     return dayLabel; // Solo "Hoy" o "Mañana"
 };
 
-export function UserNav() {
+export function UserNav({ compact = false }: { compact?: boolean }) {
     const { user, profile, supabase } = useAuth();
     const { notifications, markAsRead, hasNotifications } = useNotifications();
     
@@ -110,7 +110,7 @@ export function UserNav() {
     };
 
     return (
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3 sm:gap-4'}`}>
             
             {/* --- CAMPANA --- */}
             <div className="relative" ref={notifRef}>
@@ -232,9 +232,13 @@ export function UserNav() {
                     className="flex items-center gap-2 outline-none rounded-full focus:ring-2 focus:ring-slate-200 transition-all"
                 >
                     <Avatar initials={initials} alt="User" size="sm" />
-                    <div className="hidden md:block text-left">
-                        <p className="text-xs font-medium text-slate-700">{profile?.full_name || 'Usuario'}</p>
-                        <p className="text-[10px] text-slate-500 capitalize">{profile?.role || 'Vendedor'}</p>
+                    <div className="hidden text-left md:block">
+                        <p className={`font-medium text-slate-700 ${compact ? 'max-w-[8rem] truncate text-sm' : 'text-xs'}`}>
+                            {profile?.full_name || 'Usuario'}
+                        </p>
+                        <p className={`text-slate-500 capitalize ${compact ? 'text-[11px]' : 'text-[10px]'}`}>
+                            {profile?.role || 'Vendedor'}
+                        </p>
                     </div>
                 </button>
                  {isOpen && (

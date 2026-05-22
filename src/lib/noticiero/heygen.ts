@@ -1,5 +1,6 @@
 import { isAllowedNoticieroBackgroundUrl, NOTICIERO_WHITE_BACKGROUND } from './backgrounds-storage'
 import { getNoticieroEnv } from './env'
+import { resolveHeyGenAvatarAndVoice } from './resolve-avatar'
 import type {
   HeyGenGenerateBody,
   HeyGenGenerateResponse,
@@ -204,20 +205,22 @@ function resolveHeyGenBackground(backgroundUrl?: string | null): HeyGenGenerateB
 
 export async function startHeyGenGeneration(
   script: string,
-  backgroundUrl?: string | null
+  backgroundUrl?: string | null,
+  avatar?: { avatarId?: string | null; voiceId?: string | null }
 ): Promise<string> {
+  const { avatarId, voiceId } = resolveHeyGenAvatarAndVoice(avatar?.avatarId, avatar?.voiceId)
   const background = resolveHeyGenBackground(backgroundUrl)
   const body: HeyGenGenerateBody = {
       video_inputs: [
         {
           character: {
             type: 'avatar',
-            avatar_id: getNoticieroEnv('HEYGEN_AVATAR_ID'),
+            avatar_id: avatarId,
             avatar_style: 'normal',
           },
           voice: {
             type: 'text',
-            voice_id: getNoticieroEnv('HEYGEN_VOICE_ID'),
+            voice_id: voiceId,
             input_text: script,
           },
           background,
@@ -230,7 +233,9 @@ export async function startHeyGenGeneration(
       '[noticiero/heygen] Enviando guión a HeyGen (',
       script.length,
       'caracteres), fondo=',
-      background.type
+      background.type,
+      ', avatar=',
+      avatarId
     )
     const genRes = await fetch(HEYGEN_GENERATE_URL, {
       method: 'POST',
@@ -251,11 +256,19 @@ export async function startHeyGenGeneration(
 
 export async function generateHeyGenAvatar(
   script: string,
-  opts?: { existingVideoId?: string; backgroundUrl?: string | null }
+  opts?: {
+    existingVideoId?: string
+    backgroundUrl?: string | null
+    avatarId?: string | null
+    voiceId?: string | null
+  }
 ): Promise<{ videoId: string; videoUrl: string }> {
   const videoId = opts?.existingVideoId?.trim()
     ? opts.existingVideoId.trim()
-    : await startHeyGenGeneration(script, opts?.backgroundUrl)
+    : await startHeyGenGeneration(script, opts?.backgroundUrl, {
+        avatarId: opts?.avatarId,
+        voiceId: opts?.voiceId,
+      })
 
   if (opts?.existingVideoId) {
     console.log('[noticiero/heygen] Reanudando polling para video_id=', videoId)

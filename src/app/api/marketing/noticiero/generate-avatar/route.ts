@@ -3,6 +3,7 @@ import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { requireNoticieroEnv } from '@/lib/noticiero/env'
 import { isAllowedNoticieroBackgroundUrl } from '@/lib/noticiero/backgrounds-storage'
 import { startHeyGenGeneration, pollHeyGenVideo } from '@/lib/noticiero/heygen'
+import { resolveHeyGenAvatarAndVoice } from '@/lib/noticiero/resolve-avatar'
 import { updateNoticieroJob } from '@/lib/noticiero/jobs'
 import type { GenerateAvatarRequest } from '@/lib/noticiero/types'
 
@@ -40,7 +41,8 @@ export async function POST(request: NextRequest) {
         '[noticiero/generate-avatar] Nuevo video HeyGen (puede tardar 2-5 min), fondo=',
         backgroundUrl ? 'imagen' : 'blanco'
       )
-      videoId = await startHeyGenGeneration(script!, backgroundUrl)
+      const { avatarId, voiceId } = resolveHeyGenAvatarAndVoice(body.avatarId, body.voiceId)
+      videoId = await startHeyGenGeneration(script!, backgroundUrl, { avatarId, voiceId })
       if (body.jobId) {
         await updateNoticieroJob(body.jobId, {
           heygen_video_id: videoId,

@@ -45,6 +45,12 @@ export function canSeeAccountingSidebarHref(href: string, ctx: PermissionContext
   return canAccessSubmodule(ctx, rule.submodule)
 }
 
+export function isAccountingModulePath(pathname: string): boolean {
+  return ACCOUNTING_PATH_ACCESS.some(
+    ({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  )
+}
+
 export function canSeeVentasSidebarHref(href: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
   const rule = firstMatchingPrefix(href, VENTAS_PATH_ACCESS)

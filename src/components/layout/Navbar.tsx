@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Menu, X } from 'lucide-react'
@@ -10,11 +11,13 @@ import { MainNav } from './MainNav'
 import { UserNav } from './UserNav'
 import {
   buildPrimaryNavItems,
+  shouldCompactPrimaryNav,
   resolvePrimaryNavItemHref,
   type PermissionContext,
 } from '@/lib/permissions'
 
 export const Navbar = () => {
+  const pathname = usePathname()
   const { user, profile, permissionMap } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const permCtx: PermissionContext = useMemo(
@@ -22,13 +25,14 @@ export const Navbar = () => {
     [profile?.role, permissionMap]
   )
   const mobileNavItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
+  const compact = shouldCompactPrimaryNav(mobileNavItems.length)
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
-      <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+      <div className={`mx-auto flex w-full max-w-[100vw] items-center justify-between gap-2 h-16 ${compact ? 'px-3 md:px-5' : 'container px-4 md:px-6'}`}>
 
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center">
+        <div className={`flex min-w-0 flex-1 items-center ${compact ? 'gap-5' : 'gap-8'}`}>
+          <Link href="/" className="flex shrink-0 items-center">
             <Image
               src="/logo.png"
               alt="Logo de Ksi"
@@ -40,16 +44,16 @@ export const Navbar = () => {
           </Link>
 
           {user && (
-            <div className="hidden md:block">
+            <div className="hidden min-w-0 flex-1 md:block">
               <MainNav />
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className={`flex shrink-0 items-center ${compact ? 'gap-2' : 'gap-4'}`}>
           {user ? (
             <>
-              <UserNav />
+              <UserNav compact={compact} />
               <button
                 className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -76,7 +80,9 @@ export const Navbar = () => {
               <Link
                 key={`${item.label}-${href}`}
                 href={href}
-                className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                className={`block rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium ${
+                  compact ? 'px-3 py-2 text-sm' : 'px-4 py-3'
+                }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 {item.label}
