@@ -49,6 +49,8 @@ export interface NoticieroJob {
   script_text: string | null
   banner_title: string | null
   heygen_background_url: string | null
+  heygen_avatar_id: string | null
+  heygen_voice_id: string | null
   heygen_video_id: string | null
   heygen_video_url: string | null
   creatomate_render_id: string | null
@@ -62,6 +64,8 @@ export interface StartPipelineRequest {
   customTopic?: string
   bannerTitle?: string
   backgroundUrl?: string | null
+  avatarId?: string
+  voiceId?: string
 }
 
 export interface GenerateScriptRequest {
@@ -90,6 +94,8 @@ export interface GenerateAvatarRequest {
   script: string
   /** URL pública de imagen en bucket noticiero-fondos; null/omitido = fondo blanco */
   backgroundUrl?: string | null
+  avatarId?: string
+  voiceId?: string
 }
 
 export interface GenerateAvatarResponse {

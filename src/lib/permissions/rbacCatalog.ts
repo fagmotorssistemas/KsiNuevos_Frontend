@@ -113,6 +113,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'marketing', slug: 'metricas-campana', name: 'Métricas de campaña', sortOrder: 4 },
   { moduleSlug: 'marketing', slug: 'plan-videos', name: 'Plan de videos', sortOrder: 5 },
   { moduleSlug: 'marketing', slug: 'scraper-marketing', name: 'Scraper', sortOrder: 6 },
+  { moduleSlug: 'marketing', slug: 'solicitudes-desarrollo', name: 'Solicitudes a desarrollo', sortOrder: 7 },
   // Admin — solo pantallas que existen hoy
   { moduleSlug: 'admin', slug: 'permisos-roles', name: 'Permisos y usuarios', sortOrder: 1, routePrefixes: ['/admin/permisos'] },
   { moduleSlug: 'admin', slug: 'monitoreo-reportes', name: 'Monitoreo y reportes', sortOrder: 2, routePrefixes: ['/report'] },

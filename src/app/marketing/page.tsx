@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, ScrollText, Megaphone, BarChart3, CalendarDays, Sparkles } from 'lucide-react';
+import { ArrowRight, ScrollText, Megaphone, BarChart3, CalendarDays, Sparkles, Code2 } from 'lucide-react';
 
 export default function MarketingDashboardPage() {
     return (
@@ -87,6 +87,24 @@ export default function MarketingDashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Link
+                    href="/marketing/solicitudes-desarrollo"
+                    className="group flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-violet-200 hover:shadow-md"
+                >
+                    <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-white shadow-lg">
+                            <Code2 className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900">Solicitudes a Desarrollo</h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Reporta fallas o pide mejoras al equipo de software con evidencia adjunta.
+                            </p>
+                        </div>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-slate-800 shrink-0 transition-transform group-hover:translate-x-1" />
+                </Link>
+
                 <Link
                     href="/marketing/videos"
                     className="group flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-violet-200 hover:shadow-md"

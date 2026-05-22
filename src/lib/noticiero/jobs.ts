@@ -17,6 +17,8 @@ export async function createNoticieroJob(input: {
   customTopic?: string
   bannerTitle?: string
   heygenBackgroundUrl?: string | null
+  heygenAvatarId?: string | null
+  heygenVoiceId?: string | null
   createdBy?: string
 }): Promise<string> {
   const supabase = getServiceClient()
@@ -30,6 +32,8 @@ export async function createNoticieroJob(input: {
       vehicle_snapshot: (input.vehicle ?? null) as unknown as Database['public']['Tables']['noticiero_jobs']['Insert']['vehicle_snapshot'],
       banner_title: input.bannerTitle ?? null,
       heygen_background_url: input.heygenBackgroundUrl ?? null,
+      heygen_avatar_id: input.heygenAvatarId ?? null,
+      heygen_voice_id: input.heygenVoiceId ?? null,
       created_by: input.createdBy ?? null,
       status: 'pending',
       current_step: 'script',
@@ -55,6 +59,8 @@ export async function updateNoticieroJob(
     script_text?: string | null
     banner_title?: string | null
     heygen_background_url?: string | null
+    heygen_avatar_id?: string | null
+    heygen_voice_id?: string | null
     heygen_video_id?: string | null
     heygen_video_url?: string | null
     final_video_url?: string | null

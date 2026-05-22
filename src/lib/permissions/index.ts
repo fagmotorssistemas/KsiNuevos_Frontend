@@ -33,6 +33,9 @@ export {
 export { syncRbacCatalogToSupabase, type SyncRbacCatalogResult } from './syncCatalog'
 export {
   buildPrimaryNavItems,
+  shouldCompactPrimaryNav,
+  getPrimaryNavLinkSizeClasses,
+  PRIMARY_NAV_COMPACT_THRESHOLD,
   canSeePrimaryNavItem,
   resolveDefaultDashboardHref,
   resolveFirstAccountingHref,
@@ -44,6 +47,7 @@ export {
   ventasRouteDenied,
   accountingRouteDenied,
   canSeeAccountingSidebarHref,
+  isAccountingModulePath,
   canSeeVentasSidebarHref,
   moduleRouteDenied,
   isTallerOnlyAccess,

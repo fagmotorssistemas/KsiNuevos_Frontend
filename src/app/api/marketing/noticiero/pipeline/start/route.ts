@@ -5,6 +5,7 @@ import { isAllowedNoticieroBackgroundUrl } from '@/lib/noticiero/backgrounds-sto
 import { buildVehicleHeadlineSync, isBannerTitleValid, normalizeBannerTitle } from '@/lib/noticiero/banner-title'
 import { createNoticieroJob, updateNoticieroJob } from '@/lib/noticiero/jobs'
 import { scheduleNoticieroPipeline } from '@/lib/noticiero/pipeline'
+import { resolveHeyGenAvatarAndVoice } from '@/lib/noticiero/resolve-avatar'
 import type { NoticieroMode, NoticieroVehicle, StartPipelineRequest } from '@/lib/noticiero/types'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +71,8 @@ export async function POST(request: NextRequest) {
           ? buildVehicleHeadlineSync(vehicle)
           : null
 
+    const { avatarId, voiceId } = resolveHeyGenAvatarAndVoice(body.avatarId, body.voiceId)
+
     const jobId = await createNoticieroJob({
       jobName: defaultJobName(body.mode, vehicle ?? undefined, body.customTopic),
       mode: body.mode,
@@ -77,6 +80,8 @@ export async function POST(request: NextRequest) {
       customTopic: body.customTopic?.trim(),
       bannerTitle: bannerTitle ?? undefined,
       heygenBackgroundUrl: backgroundUrl,
+      heygenAvatarId: avatarId,
+      heygenVoiceId: voiceId,
       createdBy: auth.userId,
     })
 
