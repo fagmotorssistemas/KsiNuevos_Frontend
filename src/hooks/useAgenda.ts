@@ -13,11 +13,40 @@ export type BotSuggestionLead = LeadRow & {
 };
 
 export type AppointmentWithDetails = AppointmentRow & {
+    is_completed?: boolean;
     lead: (LeadRow & {
         interested_cars: CarRowWithVehicle[];
     }) | null; 
     responsible?: ProfileRow;
 };
+
+/** Inicio de mayo 2026 (local): abril y meses anteriores no van a Pendientes ni Sugerencias IA */
+export const AGENDA_VISIBLE_FROM = new Date(2026, 4, 1, 0, 0, 0, 0);
+const PENDING_VISIBLE_FROM = AGENDA_VISIBLE_FROM;
+
+/** Sugerencias del bot visibles en agenda (mayo 2026 en adelante) */
+export function isBotSuggestionVisible(lead: BotSuggestionLead): boolean {
+    const ref = getSuggestionReferenceInstant(lead);
+    if (ref && !Number.isNaN(ref.getTime()) && ref < AGENDA_VISIBLE_FROM) return false;
+    if (!ref && lead.created_at) {
+        const created = new Date(lead.created_at);
+        if (!Number.isNaN(created.getTime()) && created < AGENDA_VISIBLE_FROM) return false;
+    }
+    return true;
+}
+
+/** Citas que siguen en la pestaña Pendientes */
+export function isAppointmentPendingActive(
+    appt: Pick<AppointmentRow, 'status' | 'start_time'> & { is_completed?: boolean | null }
+): boolean {
+    if (appt.is_completed === true) return false;
+
+    const start = new Date(appt.start_time);
+    if (!Number.isNaN(start.getTime()) && start < PENDING_VISIBLE_FROM) return false;
+
+    const activeStatuses = ['pendiente', 'confirmada', 'reprogramada'];
+    return activeStatuses.includes(appt.status || 'pendiente');
+}
 
 // CORRECCIÓN AQUÍ: Agregamos 'web_requests' para que coincida con la UI
 export type AgendaTab = 'pending' | 'history' | 'suggestions' | 'web_requests';
@@ -269,11 +298,13 @@ export function useAgenda() {
         // Obtenemos los IDs de leads que tienen citas activas (no canceladas)
         const activeLeadIds = new Set(
             allAppointments
-                .filter(a => a.lead_id && a.status !== 'cancelada' && a.status !== 'no_asistio')
+                .filter(a => a.lead_id && isAppointmentPendingActive(a))
                 .map(a => a.lead_id)
         );
 
-        let filtered = rawSuggestions.filter(lead => !activeLeadIds.has(lead.id));
+        let filtered = rawSuggestions
+            .filter((lead) => !activeLeadIds.has(lead.id))
+            .filter(isBotSuggestionVisible);
 
         // NUEVO: Aplicar filtro de responsable si es admin
         if (isAdmin && filters.responsibleId !== 'all') {
@@ -314,14 +345,12 @@ export function useAgenda() {
 
     // C. Separación Pendientes vs Historial
     const { pendingAppointments, historyAppointments } = useMemo(() => {
-        const activeStatuses = ['pendiente', 'confirmada', 'reprogramada'];
-        
         const pending = filteredAppointments
-            .filter(a => activeStatuses.includes(a.status || 'pendiente'))
+            .filter(isAppointmentPendingActive)
             .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
         const history = filteredAppointments
-            .filter(a => !activeStatuses.includes(a.status || 'pendiente'))
+            .filter((a) => !isAppointmentPendingActive(a))
             .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
         return { pendingAppointments: pending, historyAppointments: history };
@@ -330,9 +359,19 @@ export function useAgenda() {
 
     // 5. ACCIONES
     const markAsCompleted = async (id: number) => {
-        setAllAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'completada' } : a));
-        const { error } = await supabase.from('appointments').update({ status: 'completada' }).eq('id', id);
-        if (error) fetchAppointments();
+        setAllAppointments((prev) =>
+            prev.map((a) =>
+                a.id === id ? { ...a, status: 'completada', is_completed: true } : a
+            )
+        );
+        const { error } = await supabase
+            .from('appointments')
+            .update({ status: 'completada', is_completed: true })
+            .eq('id', id);
+        if (error) {
+            console.error('Error al completar cita:', error.message);
+            await fetchAppointments();
+        }
     };
 
     const cancelAppointment = async (id: number) => {

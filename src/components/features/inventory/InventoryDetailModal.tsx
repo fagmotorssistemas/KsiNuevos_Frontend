@@ -3,7 +3,7 @@ import {
     X, Save, Car, Share2, MapPin, Tag, Cog,
     DollarSign, Gauge, Loader2,
     Image as ImageIcon, UploadCloud, Plus, Trash2,
-    Link, FileText,
+    Link, FileText, ClipboardCheck,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +13,12 @@ import { inventarioService } from "@/services/inventario.service";
 import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
 import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { InventoryListingChecklistTab } from "@/components/features/inventory/InventoryListingChecklistTab";
+import {
+    parseListingChecklist,
+    type ListingChecklist,
+    type ListingChecklistKey,
+} from "@/types/inventory-listing-checklist";
 
 // --- UI unificada (mismo patrón que modal Inventario General) ---
 function SectionTitle({
@@ -167,7 +173,9 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     const isMarketing = currentUserRole?.toLowerCase() === 'marketing';
     const canEdit = isAdmin || isMarketing; // Admin edita todo; marketing edita todo excepto precio
     // Añadimos 'publications' a las pestañas
-    const [activeTab, setActiveTab] = useState<'general' | 'marketing' | 'photos' | 'publications'>('general');
+    const [activeTab, setActiveTab] = useState<
+        'general' | 'marketing' | 'photos' | 'publications' | 'listing'
+    >('general');
     const [isSaving, setIsSaving] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
     const [oracleFicha, setOracleFicha] = useState<VehiculoInventario | null>(null);
@@ -204,11 +212,19 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
         color: car.color || '',
         plate_short: car.plate_short || '',
         year: car.year || new Date().getFullYear(),
-        publication_url: (car as any).publication_url || '' // Nueva columna
+        publication_url: (car as { publication_url?: string | null }).publication_url || '',
     });
+
+    const [listingChecklist, setListingChecklist] = useState<ListingChecklist>(() =>
+        parseListingChecklist((car as { listing_checklist?: unknown }).listing_checklist)
+    );
 
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleListingChecklistChange = (key: ListingChecklistKey, checked: boolean) => {
+        setListingChecklist((prev) => ({ ...prev, [key]: checked }));
     };
 
     useEffect(() => {
@@ -377,34 +393,32 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
             if (error1) throw error1;*/}
 
-            // 2. Actualizar tabla 'inventoryoracle' (por PLATE) - IMPORTANTE para sincronización
-            if (car.plate) {
-                const { error: error2 } = await supabase
-                    .from('inventoryoracle')
-                    .update({
-                        price: Number(formData.price),
-                        mileage: Number(formData.mileage),
-                        status: formData.status as any,
-                        location: formData.location as any,
-                        description: formData.description,
-                        color: formData.color,
-                        year: Number(formData.year),
-                         marketing_in_patio: formData.marketing_in_patio,
-                    marketing_posts_count: Number(formData.marketing_posts_count),
-                    marketing_videos_count: Number(formData.marketing_videos_count),
-                    marketing_stories_count: Number(formData.marketing_stories_count),
-                    
-                    // Actualizamos imágenes
-                    img_main_url: finalMainUrl,
-                    img_gallery_urls: finalGalleryUrls,
-                        publication_url: formData.publication_url, // Guardar nueva columna
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('plate', car.plate.toUpperCase());
+            const oraclePayload = {
+                price: Number(formData.price),
+                mileage: Number(formData.mileage),
+                status: formData.status as any,
+                location: formData.location as any,
+                description: formData.description,
+                color: formData.color,
+                year: Number(formData.year),
+                marketing_in_patio: formData.marketing_in_patio,
+                marketing_posts_count: Number(formData.marketing_posts_count),
+                marketing_videos_count: Number(formData.marketing_videos_count),
+                marketing_stories_count: Number(formData.marketing_stories_count),
+                img_main_url: finalMainUrl,
+                img_gallery_urls: finalGalleryUrls,
+                publication_url: formData.publication_url,
+                listing_checklist: listingChecklist,
+                updated_at: new Date().toISOString(),
+            };
 
-                if (error2) {
-                    console.warn("⚠️ Advertencia al actualizar inventoryoracle:", error2);
-                }
+            const oracleQuery = car.plate
+                ? supabase.from('inventoryoracle').update(oraclePayload).eq('plate', car.plate.toUpperCase())
+                : supabase.from('inventoryoracle').update(oraclePayload).eq('id', car.id);
+
+            const { error: error2 } = await oracleQuery;
+            if (error2) {
+                console.warn("⚠️ Advertencia al actualizar inventoryoracle:", error2);
             }
 
             onUpdate();
@@ -474,10 +488,16 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                         <Share2 className="h-4 w-4" /> Marketing
                     </button>
                     <button
+                        onClick={() => setActiveTab('listing')}
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'listing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <ClipboardCheck className="h-4 w-4" /> Canales
+                    </button>
+                    <button
                         onClick={() => setActiveTab('publications')}
                         className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'publications' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
-                        <Link className="h-4 w-4" /> Publicaciones
+                        <Link className="h-4 w-4" /> Enlaces
                     </button>
                 </div>
 
@@ -820,9 +840,19 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                     )}
 
                     {/* --- PESTAÑA PUBLICACIONES --- */}
+                    {activeTab === 'listing' && (
+                        <ModalPanel>
+                            <InventoryListingChecklistTab
+                                checklist={listingChecklist}
+                                canEdit={canEdit}
+                                onChange={handleListingChecklistChange}
+                            />
+                        </ModalPanel>
+                    )}
+
                     {activeTab === 'publications' && (
                         <ModalPanel>
-                            <SectionTitle icon={Link} title="Publicaciones" />
+                            <SectionTitle icon={Link} title="Enlaces de publicación" />
                             <FormField label="URLs de publicación">
                                 <textarea
                                     className="w-full min-h-[150px] px-2 py-2 bg-white focus:bg-blue-50/30 outline-none text-xs text-slate-800 placeholder:text-slate-400 resize-y font-mono border-0 disabled:opacity-90 disabled:cursor-not-allowed"

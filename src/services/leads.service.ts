@@ -18,6 +18,32 @@ const getEcuadorRange = (dateStr: string) => {
     };
 };
 
+/** IDs de leads con al menos una gestión registrada en interactions (tabla del historial). */
+const fetchLeadIdsWithInteractionsInRange = async (
+    supabase: any,
+    start: string,
+    end: string,
+    assignedTo?: string
+): Promise<number[]> => {
+    let query = supabase
+        .from('interactions')
+        .select('lead_id, leads!inner(assigned_to)')
+        .gte('created_at', start)
+        .lte('created_at', end);
+
+    if (assignedTo && assignedTo !== 'all') {
+        query = query.eq('leads.assigned_to', assignedTo);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.warn('fetchLeadIdsWithInteractionsInRange:', error.message || error);
+        return [];
+    }
+    const ids = (data || []).map((r: { lead_id: number }) => r.lead_id as number);
+    return [...new Set(ids)];
+};
+
 // Tokens de búsqueda (sin espacios) para evitar que el filtro se rompa; "kia st" → ["kia", "st"]
 const searchTokens = (search: string) => search.trim().split(/\s+/).filter(Boolean);
 
@@ -281,6 +307,23 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
+        // Solo gestionados: leads con interactions en el día (antes del intersect).
+        if (filters.onlyInteractions) {
+            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
+            const { start, end } = getEcuadorRange(targetDateStr);
+            const interactionLeadIds = await fetchLeadIdsWithInteractionsInRange(
+                supabase,
+                start,
+                end,
+                filters.assignedTo
+            );
+            if (interactionLeadIds.length > 0) {
+                idFilters.push(interactionLeadIds);
+            } else {
+                idFilters.push([-1]);
+            }
+        }
+
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
@@ -312,18 +355,8 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             query = query.eq('assigned_to', filters.assignedTo);
         }
 
-        // 3. Lógica de Fechas (CORRECCIÓN ZONA HORARIA)
-        // Si activamos "solo interacciones", la fecha SIEMPRE es el día seleccionado (exactDate) o hoy (Ecuador),
-        // igual que la métrica "Gestión de Hoy / Gestión del dd/mm".
-        if (filters.onlyInteractions) {
-            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
-            const { start, end } = getEcuadorRange(targetDateStr);
-            query = query
-                .not('resume', 'is', null)
-                .neq('resume', '')
-                .gte('updated_at', start)
-                .lte('updated_at', end);
-        } else {
+        // Filtros de fecha en listado (no aplican con onlyInteractions; ese filtro va por interactions).
+        if (!filters.onlyInteractions) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
                 query = query.gte('updated_at', start).lte('updated_at', end);
@@ -375,12 +408,8 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
         
-        // Filtros de fecha para el conteo de respondidos (AQUÍ ESTABA EL ERROR - ARREGLADO)
-        if (filters.onlyInteractions) {
-            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
-            const { start, end } = getEcuadorRange(targetDateStr);
-            respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
-        } else {
+        // Respondidos: con onlyInteractions el subconjunto ya viene de idFilters (leads gestionados ese día).
+        if (!filters.onlyInteractions) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
                 respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
@@ -432,29 +461,30 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
     }
 };
 
-// --- GESTIONADOS HOY (Métrica 2) ---
-// Esta query ya estaba correcta usando el campo 'resume', la mantenemos igual.
+// --- GESTIONADOS HOY (Métrica 2): cuenta filas en interactions (historial real del modal).
 export const fetchDailyInteractions = async (supabase: any, assignedTo: string, exactDate: string) => {
     try {
         const targetDateStr = exactDate ? exactDate : getEcuadorDateISO();
         const { start, end } = getEcuadorRange(targetDateStr);
 
         let query = supabase
-            .from('leads')
-            .select('*', { count: 'exact', head: true })
-            .not('resume', 'is', null)
-            .neq('resume', '') 
-            .gte('updated_at', start)
-            .lte('updated_at', end);
+            .from('interactions')
+            .select('id, leads!inner(assigned_to)', { count: 'exact', head: true })
+            .gte('created_at', start)
+            .lte('created_at', end);
 
         if (assignedTo && assignedTo !== 'all') {
-            query = query.eq('assigned_to', assignedTo);
+            query = query.eq('leads.assigned_to', assignedTo);
         }
 
         const { count, error } = await query;
-        if (error) return 0;
+        if (error) {
+            console.warn('fetchDailyInteractions:', error.message || error);
+            return 0;
+        }
         return count || 0;
     } catch (error) {
+        console.warn('fetchDailyInteractions:', error);
         return 0;
     }
 };
