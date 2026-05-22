@@ -10,6 +10,7 @@ Built as a production SaaS used daily by internal teams (sellers, accounting, ma
 
 | Area | What the platform delivers |
 |------|----------------------------|
+| **Sales & CRM** | Lead pipeline synced with **Kommo CRM**, AI-first response via **n8n** (~**3,000 inbound leads/month**), and day-to-day seller workflows in the web app |
 | **Operations** | Inventory, leads, contracts, showroom visits, tasks, and financing workflows in one place |
 | **Finance** | Treasury, wallet, collections, billing, manual portfolio, and integration with a dedicated accounting API |
 | **Marketing** | AI-generated reels, automated news-style clips (“Noticiero”), social publishing to Instagram/Facebook, metrics, and content planning |
@@ -38,7 +39,8 @@ For recruiters and reviewers: this is not a tutorial app — it is a **multi-mod
 | **Backend / data** | [Supabase](https://supabase.com) (PostgreSQL, Auth, Storage, RPC) |
 | **Deployment** | [Vercel](https://vercel.com) (serverless + Cron Jobs) |
 | **AI & media** | Google Gemini, HeyGen, Creatomate, AssemblyAI, FFmpeg (WASM) |
-| **Social APIs** | Meta Graph API (Instagram Reels, Facebook Page Reels) |
+| **CRM & automation** | [Kommo](https://www.kommo.com) (lead CRM), [n8n](https://n8n.io) (workflow orchestration, AI chat, webhooks) |
+| **Social APIs** | Meta Graph API (Instagram Reels, Facebook Page Reels); WhatsApp / WABA and TikTok sources via Kommo |
 | **Documents** | jsPDF, xlsx, browser image compression |
 | **UX utilities** | @dnd-kit (kanban), sonner (toasts), date-fns |
 
@@ -66,25 +68,36 @@ flowchart TB
     AccAPI[Accounting Node API]
   end
 
+  subgraph automation [CRM & automation layer]
+    Kommo[Kommo CRM]
+    N8N[n8n workflows - AI lead response]
+  end
+
   subgraph external [External integrations]
     Gemini[Google Gemini]
     HeyGen[HeyGen Avatars]
     Creatomate[Creatomate Video]
     Meta[Instagram / Facebook]
     Assembly[AssemblyAI]
+    Channels[WhatsApp / TikTok / Meta leads]
   end
 
+  Channels --> Kommo
+  Kommo --> N8N
+  N8N --> SB
   Browser --> MW --> Pages
   Browser --> API
   Cron --> API
   Pages --> SB
   API --> SB
   API --> AccAPI
+  API --> N8N
   API --> Gemini
   API --> HeyGen
   API --> Creatomate
   API --> Meta
   API --> Assembly
+  Pages -. deep link .-> Kommo
 ```
 
 ### Design principles
@@ -105,10 +118,19 @@ flowchart TB
 - Supabase Auth: login, register, password recovery
 - Customer role routed to public experience only
 
-### Sales (`(seller)`)
+### Sales (`(seller)`) — CRM hub & high-volume leads
 
-- Showroom visits, leads pipeline, inventory, contracts, agenda, tasks, finance views
-- Vehicle image handling and Oracle inventory sync patterns
+The sales module is the **operational layer** on top of Kommo and n8n: sellers manage what automation cannot close alone, while AI handles first contact at scale.
+
+| Capability | Description |
+|------------|-------------|
+| **Kommo integration** | Every lead stores `lead_id_kommo` (unique). One-click open in Kommo from lead detail, agenda bot cards, and history. Sources include WhatsApp (WABA), TikTok, Instagram Business, and legacy Kommo channels. |
+| **n8n + AI automation** | Workflows on `n8n.ksinuevos.com` orchestrate AI replies, sync data into Supabase (`leads`, `n8n_chat_histories`, `behavior_signals`), and power other domains (e.g. Marketplace scraper via webhooks). |
+| **Volume** | ~**3,000 inbound leads per month** are handled with **automated AI responses** for initial qualification and follow-up; the web app is where the team assigns, filters, searches, and converts. |
+| **Seller workflows** | Leads list with advanced search (name, phone, Kommo ID, vehicle), temperature/status, trade-in data, interaction history, recovery cadences, showroom visits, contracts, inventory, agenda, and tasks. |
+| **Human-in-the-loop** | Bot suggestions surface in agenda/notifications when AI detects visit intent (`day_detected`, `time_reference`, interested vehicles). Sellers approve, reschedule, or take over in Kommo. |
+
+**Data model highlights:** `leads` (CRM mirror), `interactions` (call/Kommo/manual touchpoints), `interested_cars`, `trade_in_cars`, `lead_recovery` (2d/7d/15d/30d sequences), `behavior_signals` (JSON from Kommo/bots for trade-in hints).
 
 ### Accounting (`(accounting)`)
 
@@ -146,6 +168,45 @@ flowchart TB
 ### Admin
 
 - Permission management (`/admin/permisos`) synced with RBAC catalog
+
+---
+
+## CRM, automation & large-scale data
+
+This platform is built for **real throughput**, not demo datasets.
+
+### Kommo + n8n + Supabase (sales funnel)
+
+```mermaid
+sequenceDiagram
+  participant Ch as WhatsApp / TikTok / Meta
+  participant K as Kommo CRM
+  participant N as n8n workflows
+  participant AI as LLM (OpenAI / Gemini)
+  participant DB as Supabase
+  participant App as Sales module (Next.js)
+
+  Ch->>K: New lead / message
+  K->>N: Webhook / pipeline trigger
+  N->>AI: Generate reply & extract signals
+  AI-->>N: Script + structured hints
+  N->>DB: Upsert leads, chat history, behavior_signals
+  App->>DB: Query, filter, assign, log interactions
+  App->>K: Deep link (lead_id_kommo) for seller takeover
+```
+
+- **Kommo** remains the system of record for omnichannel conversations (WhatsApp, social ads, etc.).
+- **n8n** runs production automations: AI first response, enrichment, scraper ingestion, and integrations that would be fragile if hard-coded only in the frontend.
+- **Supabase** centralizes lead state so the Next.js app can paginate, search, report, and enforce RBAC without hitting Kommo API limits on every page view.
+- **~3,000 leads/month** implies strict attention to indexing (`lead_id_kommo`, `assigned_to`, `status`, dates), audit fields (`updated_at`), and UX for high-cardinality lists.
+
+### Other automation touchpoints
+
+| Flow | Stack |
+|------|--------|
+| Marketplace price scraper | Frontend → Next.js API proxy → n8n webhook → OpenAI extraction → Supabase `scraper_*` tables |
+| Marketing video / Noticiero | Vercel cron + Gemini + HeyGen + Meta publish APIs |
+| Lead recovery | Scheduled follow-up flags in `lead_recovery` + seller visibility in CRM UI |
 
 ---
 
@@ -264,10 +325,12 @@ Never commit `.env` files (see `.gitignore`).
 
 ## What to highlight in an interview
 
+- **High-volume CRM**: Kommo + n8n + Supabase design for ~3k leads/month with AI-first response and human takeover in the sales module.
 - End-to-end ownership of **AI media pipelines** (prompt engineering, idempotent server jobs, failure recovery).
+- **Workflow automation** beyond the UI: n8n as integration bus (CRM, scraper, chat history), not only “a React form”.
 - **RBAC at scale** across 10+ business modules with middleware enforcement.
-- **Hybrid architecture**: Supabase for most domains + dedicated accounting microservice.
-- **Production concerns**: cron auth, Ecuador timezone scheduling, social API polling, large upload patterns (signed URLs).
+- **Hybrid architecture**: Supabase for most domains + dedicated accounting microservice + external CRM.
+- **Production concerns**: cron auth, Ecuador timezone scheduling, social API polling, large upload patterns (signed URLs), paginated lead search at scale.
 - **Team delivery** on a real dealership product, not a demo CRUD.
 
 ---
