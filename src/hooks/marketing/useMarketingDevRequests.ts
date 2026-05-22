@@ -73,6 +73,7 @@ export function useMarketingDevRequests() {
 
       const payload = {
         created_by: user.id,
+        reference_code: `MDR-${Date.now().toString(36).toUpperCase().slice(-8)}`,
         requester_name: profile.full_name?.trim() || user.email?.split('@')[0] || 'Usuario',
         requester_email: user.email ?? null,
         requester_role: profile.role ?? null,

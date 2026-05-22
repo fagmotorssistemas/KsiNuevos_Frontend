@@ -40,8 +40,8 @@ const fetchLeadIdsWithInteractionsInRange = async (
         console.warn('fetchLeadIdsWithInteractionsInRange:', error.message || error);
         return [];
     }
-    const ids = (data || []).map((r: { lead_id: number }) => r.lead_id as number);
-    return [...new Set(ids)];
+    const ids: number[] = (data ?? []).map((r: { lead_id: number }) => Number(r.lead_id));
+    return Array.from(new Set(ids));
 };
 
 // Tokens de búsqueda (sin espacios) para evitar que el filtro se rompa; "kia st" → ["kia", "st"]
