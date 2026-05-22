@@ -40,6 +40,7 @@ export type Database = {
           created_at: string | null
           external_client_name: string | null
           id: number
+          is_completed: boolean
           lead_id: number | null
           location: string | null
           notes: string | null
@@ -53,6 +54,7 @@ export type Database = {
           created_at?: string | null
           external_client_name?: string | null
           id?: number
+          is_completed?: boolean
           lead_id?: number | null
           location?: string | null
           notes?: string | null
@@ -66,6 +68,7 @@ export type Database = {
           created_at?: string | null
           external_client_name?: string | null
           id?: number
+          is_completed?: boolean
           lead_id?: number | null
           location?: string | null
           notes?: string | null
@@ -2245,6 +2248,7 @@ export type Database = {
           img_main_url: string | null
           img_prefix: string | null
           is_featured: boolean | null
+          listing_checklist: Json
           location: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio: boolean | null
           marketing_posts_count: number | null
@@ -2309,6 +2313,7 @@ export type Database = {
           img_main_url?: string | null
           img_prefix?: string | null
           is_featured?: boolean | null
+          listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio?: boolean | null
           marketing_posts_count?: number | null
@@ -2373,6 +2378,7 @@ export type Database = {
           img_main_url?: string | null
           img_prefix?: string | null
           is_featured?: boolean | null
+          listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio?: boolean | null
           marketing_posts_count?: number | null
@@ -2615,6 +2621,178 @@ export type Database = {
           {
             foreignKeyName: "leads_assigned_to_fkey"
             columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_updated_at_audit: {
+        Row: {
+          auth_uid: string | null
+          changed_columns: string[]
+          id: number
+          lead_id: number
+          new_updated_at: string
+          old_updated_at: string | null
+          only_mensajes_enviados: boolean
+          recorded_at: string
+        }
+        Insert: {
+          auth_uid?: string | null
+          changed_columns?: string[]
+          id?: never
+          lead_id: number
+          new_updated_at: string
+          old_updated_at?: string | null
+          only_mensajes_enviados?: boolean
+          recorded_at?: string
+        }
+        Update: {
+          auth_uid?: string | null
+          changed_columns?: string[]
+          id?: never
+          lead_id?: number
+          new_updated_at?: string
+          old_updated_at?: string | null
+          only_mensajes_enviados?: boolean
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_updated_at_audit_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_dev_request_attachments: {
+        Row: {
+          created_at: string
+          created_by: string
+          file_name: string
+          file_path: string
+          id: string
+          mime_type: string
+          request_id: string
+          size_bytes: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          file_name: string
+          file_path: string
+          id?: string
+          mime_type: string
+          request_id: string
+          size_bytes: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          mime_type?: string
+          request_id?: string
+          size_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_dev_request_attachments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_dev_request_attachments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_dev_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_dev_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          created_by: string
+          description: string
+          environment_info: string | null
+          expected_outcome: string | null
+          id: string
+          page_url: string | null
+          priority: Database["public"]["Enums"]["marketing_dev_request_priority"]
+          reference_code: string
+          request_type: Database["public"]["Enums"]["marketing_dev_request_type"]
+          requester_email: string | null
+          requester_name: string
+          requester_phone: string | null
+          requester_role: string | null
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["marketing_dev_request_status"]
+          status_changed_at: string
+          steps_to_reproduce: string | null
+          target_module: Database["public"]["Enums"]["marketing_dev_target_module"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by: string
+          description: string
+          environment_info?: string | null
+          expected_outcome?: string | null
+          id?: string
+          page_url?: string | null
+          priority?: Database["public"]["Enums"]["marketing_dev_request_priority"]
+          reference_code: string
+          request_type?: Database["public"]["Enums"]["marketing_dev_request_type"]
+          requester_email?: string | null
+          requester_name: string
+          requester_phone?: string | null
+          requester_role?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["marketing_dev_request_status"]
+          status_changed_at?: string
+          steps_to_reproduce?: string | null
+          target_module?: Database["public"]["Enums"]["marketing_dev_target_module"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string
+          environment_info?: string | null
+          expected_outcome?: string | null
+          id?: string
+          page_url?: string | null
+          priority?: Database["public"]["Enums"]["marketing_dev_request_priority"]
+          reference_code?: string
+          request_type?: Database["public"]["Enums"]["marketing_dev_request_type"]
+          requester_email?: string | null
+          requester_name?: string
+          requester_phone?: string | null
+          requester_role?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["marketing_dev_request_status"]
+          status_changed_at?: string
+          steps_to_reproduce?: string | null
+          target_module?: Database["public"]["Enums"]["marketing_dev_target_module"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_dev_requests_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -5616,6 +5794,78 @@ export type Database = {
           },
         ]
       }
+      video_scripts_archive: {
+        Row: {
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_escenas: Json | null
+          guion_objetivo: string | null
+          guion_tipo: string
+          guion_titulo: string | null
+          id: string
+          objecion_tipo: string | null
+          palabras_count: number
+          semana_tipo: number
+          status: string
+          texto_guion: string
+          texto_hablado: string | null
+          texto_hash: string
+          updated_at: string
+          vehicle_data: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre: string | null
+        }
+        Insert: {
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json | null
+          guion_objetivo?: string | null
+          guion_tipo: string
+          guion_titulo?: string | null
+          id?: string
+          objecion_tipo?: string | null
+          palabras_count: number
+          semana_tipo: number
+          status?: string
+          texto_guion: string
+          texto_hablado?: string | null
+          texto_hash: string
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre?: string | null
+        }
+        Update: {
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json | null
+          guion_objetivo?: string | null
+          guion_tipo?: string
+          guion_titulo?: string | null
+          id?: string
+          objecion_tipo?: string | null
+          palabras_count?: number
+          semana_tipo?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string | null
+          texto_hash?: string
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id?: string
+          vendedor_id?: string
+          vendedor_nombre?: string | null
+        }
+        Relationships: []
+      }
       web_appointments: {
         Row: {
           appointment_date: string
@@ -5916,6 +6166,7 @@ export type Database = {
     }
     Functions: {
       admin_rbac_dashboard: { Args: never; Returns: Json }
+      can_use_marketing_dev_requests: { Args: never; Returns: boolean }
       can_view_planner_row: {
         Args: {
           p_created_by: string
@@ -5980,6 +6231,7 @@ export type Database = {
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
+      is_marketing_dev_request_admin: { Args: never; Returns: boolean }
       is_marketing_planner_admin: { Args: never; Returns: boolean }
       is_marketing_planner_member: { Args: never; Returns: boolean }
       is_profile_admin: { Args: never; Returns: boolean }
@@ -6341,6 +6593,34 @@ export type Database = {
         | "datos_pedidos"
         | "asesoria_financiamiento"
       lead_temperature: "frio" | "tibio" | "caliente"
+      marketing_dev_request_priority: "low" | "medium" | "high" | "urgent"
+      marketing_dev_request_status:
+        | "new"
+        | "in_review"
+        | "in_progress"
+        | "blocked"
+        | "resolved"
+        | "rejected"
+        | "cancelled"
+      marketing_dev_request_type:
+        | "bug"
+        | "feature"
+        | "improvement"
+        | "support"
+        | "other"
+      marketing_dev_target_module:
+        | "home"
+        | "ventas"
+        | "contabilidad"
+        | "taller"
+        | "legal"
+        | "marketing"
+        | "seguros"
+        | "rastreadores"
+        | "admin"
+        | "auth"
+        | "general"
+        | "other"
       marketing_planner_event_status:
         | "scheduled"
         | "in_progress"
@@ -6653,6 +6933,37 @@ export const Constants = {
         "asesoria_financiamiento",
       ],
       lead_temperature: ["frio", "tibio", "caliente"],
+      marketing_dev_request_priority: ["low", "medium", "high", "urgent"],
+      marketing_dev_request_status: [
+        "new",
+        "in_review",
+        "in_progress",
+        "blocked",
+        "resolved",
+        "rejected",
+        "cancelled",
+      ],
+      marketing_dev_request_type: [
+        "bug",
+        "feature",
+        "improvement",
+        "support",
+        "other",
+      ],
+      marketing_dev_target_module: [
+        "home",
+        "ventas",
+        "contabilidad",
+        "taller",
+        "legal",
+        "marketing",
+        "seguros",
+        "rastreadores",
+        "admin",
+        "auth",
+        "general",
+        "other",
+      ],
       marketing_planner_event_status: [
         "scheduled",
         "in_progress",

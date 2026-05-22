@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Megaphone, Sparkles } from 'lucide-react'
+import { Loader2, Megaphone } from 'lucide-react'
 import {
   formatPostDayHeader,
   getPostDayKeyEcuador,
@@ -12,18 +12,22 @@ import { useAuth } from '@/hooks/useAuth'
 import { ScriptCard, type ScriptRow } from '@/components/marketing/ScriptCard'
 import { VIDEO_SCRIPT_LIST_SELECT } from '@/lib/marketing/video-script-select'
 import { MetricasRow, type MetaMetricsRow } from '@/components/marketing/MetricasRow'
-import { PublicacionCard, type InformativePostRow } from '@/components/marketing/PublicacionCard'
+import type { InformativePostRow } from '@/components/marketing/PublicacionCard'
+import { PublicacionesTabs, type PublicacionesTab } from '@/components/marketing/PublicacionesTabs'
+import { PublicacionPostCard } from '@/components/marketing/PublicacionPostCard'
+import { PublicacionPostModal } from '@/components/marketing/PublicacionPostModal'
 
 type PublishedScript = ScriptRow & { metrics?: MetaMetricsRow | null }
 
 export default function MarketingPublicacionesPage() {
   const { supabase } = useAuth()
-  const [tab, setTab] = useState<'videos' | 'posts'>('videos')
+  const [tab, setTab] = useState<PublicacionesTab>('posts')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [publishedScripts, setPublishedScripts] = useState<PublishedScript[]>([])
   const [posts, setPosts] = useState<InformativePostRow[]>([])
+  const [selectedPost, setSelectedPost] = useState<InformativePostRow | null>(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -68,21 +72,25 @@ export default function MarketingPublicacionesPage() {
         const byId = new Map<string, MetaMetricsRow>()
         ;((metrics ?? []) as MetaMetricsRow[]).forEach((m) => byId.set(m.video_id, m))
 
-        setPublishedScripts(base.map((s) => ({ ...s, metrics: s.facebook_post_id ? byId.get(s.facebook_post_id) ?? null : null })))
+        setPublishedScripts(
+          base.map((s) => ({
+            ...s,
+            metrics: s.facebook_post_id ? byId.get(s.facebook_post_id) ?? null : null,
+          }))
+        )
       } else {
-        const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+        const { data, error: postsError } = await (supabase as unknown as { from: (t: string) => any })
           .from('informative_posts')
           .select(
             'id, type, status, published_at, scheduled_for, headline, caption_facebook, caption_instagram, image_url, image_urls, carousel_format, source_url, source_title, source_snippet, instagram_permalink, facebook_permalink, created_at, story_hash, topic_key'
           )
-          // Solo posts generados por el pipeline de IA
           .not('story_hash', 'is', null)
           .order('published_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .limit(80)
 
-        if (error) {
-          setError(error.message)
+        if (postsError) {
+          setError(postsError.message)
           setPosts([])
           return
         }
@@ -94,20 +102,6 @@ export default function MarketingPublicacionesPage() {
       .catch((e) => setError(String(e?.message ?? e)))
       .finally(() => setLoading(false))
   }, [supabase, tab])
-
-  const videosEmpty = tab === 'videos' && !loading && publishedScripts.length === 0
-  const postsEmpty = tab === 'posts' && !loading && posts.length === 0
-
-  const header = useMemo(
-    () =>
-      tab === 'videos'
-        ? { title: 'Videos de Vendedores', subtitle: 'Guiones publicados con métricas de Meta/Facebook.' }
-        : {
-            title: 'Posts (IA)',
-            subtitle: 'Agrupados por día de publicación en Meta (hora Ecuador). Pendientes por fecha de generación.',
-          },
-    [tab]
-  )
 
   const postsByDay = useMemo(() => {
     if (tab !== 'posts') return []
@@ -129,48 +123,37 @@ export default function MarketingPublicacionesPage() {
     }))
   }, [posts, tab])
 
+  const postStats = useMemo(() => {
+    const published = posts.filter((p) => isPostPublished(p)).length
+    return { total: posts.length, published, pending: posts.length - published }
+  }, [posts])
+
+  const videosEmpty = tab === 'videos' && !loading && publishedScripts.length === 0
+  const postsEmpty = tab === 'posts' && !loading && posts.length === 0
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div className="space-y-6 pb-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
+          <p className="text-xs font-semibold text-violet-600 uppercase tracking-wider">
+            Marketing / Redes
+          </p>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-1 flex items-center gap-3">
+            <span className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
               <Megaphone className="w-5 h-5 text-white" />
-            </div>
+            </span>
             Publicaciones en Redes
           </h1>
-          <p className="text-sm text-gray-500 mt-2">{header.subtitle}</p>
         </div>
+        {loading && (
+          <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-600 shrink-0">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando…
+          </span>
+        )}
+      </header>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('videos')}
-            className={[
-              'px-4 py-2 rounded-xl text-sm font-bold border transition-colors',
-              tab === 'videos' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50',
-            ].join(' ')}
-          >
-            Videos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('posts')}
-            className={[
-              'px-4 py-2 rounded-xl text-sm font-bold border transition-colors',
-              tab === 'posts' ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50',
-            ].join(' ')}
-          >
-            Posts
-          </button>
-          {loading && (
-            <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Cargando…
-            </span>
-          )}
-        </div>
-      </div>
+      <PublicacionesTabs tab={tab} onTabChange={setTab} />
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
@@ -178,40 +161,54 @@ export default function MarketingPublicacionesPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-violet-600" />
-          <h2 className="text-base font-extrabold text-gray-900">{header.title}</h2>
+      {tab === 'posts' && !loading && posts.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+            <p className="text-[10px] font-bold uppercase text-slate-500">Total</p>
+            <p className="text-lg font-extrabold text-slate-900">{postStats.total}</p>
+          </div>
+          <div className="rounded-xl border border-green-200 bg-green-50/50 px-4 py-2.5 shadow-sm">
+            <p className="text-[10px] font-bold uppercase text-green-700">Publicados</p>
+            <p className="text-lg font-extrabold text-green-900">{postStats.published}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-2.5 shadow-sm">
+            <p className="text-[10px] font-bold uppercase text-amber-700">Pendientes</p>
+            <p className="text-lg font-extrabold text-amber-900">{postStats.pending}</p>
+          </div>
         </div>
+      )}
 
-        <div className="p-5 space-y-5">
+      {tab === 'videos' && (
+        <div className="space-y-4">
           {videosEmpty && (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-sm text-gray-500">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500 text-center">
               No hay videos publicados aún.
             </div>
           )}
+          {publishedScripts.map((s) => (
+            <div key={s.id} className="space-y-2">
+              <ScriptCard script={s} />
+              {s.metrics ? (
+                <MetricasRow metrics={s.metrics} />
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  Sin métricas encontradas para este post.
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
+      {tab === 'posts' && (
+        <>
           {postsEmpty && (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-sm text-gray-500">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500 text-center">
               No hay posts informativos todavía.
             </div>
           )}
-
-          {tab === 'videos' &&
-            publishedScripts.map((s) => (
-              <div key={s.id} className="space-y-2">
-                <ScriptCard script={s} />
-                {s.metrics ? <MetricasRow metrics={s.metrics} /> : (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
-                    Sin métricas encontradas para este post.
-                  </div>
-                )}
-              </div>
-            ))}
-
-          {/* Posts (IA) agrupados por día */}
-          {tab === 'posts' &&
-            postsByDay.map((g) => {
+          <div className="space-y-8">
+            {postsByDay.map((g) => {
               const human = formatPostDayHeader(g.day)
               const countLabel =
                 g.pendingCount > 0 && g.publishedCount > 0
@@ -220,22 +217,32 @@ export default function MarketingPublicacionesPage() {
                     ? `${g.pendingCount} pendiente${g.pendingCount === 1 ? '' : 's'}`
                     : `${g.items.length} publicado${g.items.length === 1 ? '' : 's'}`
               return (
-                <section key={g.day} className="space-y-3">
-                  <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-white/95 backdrop-blur-sm border-b border-gray-100 flex items-center justify-between gap-3">
-                    <p className="text-sm font-extrabold text-gray-900 capitalize">{human}</p>
-                    <span className="text-xs font-semibold text-gray-500 shrink-0">{countLabel}</span>
+                <section key={g.day} className="space-y-4">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
+                    <h2 className="text-base font-extrabold text-slate-900 capitalize">{human}</h2>
+                    <span className="text-xs font-semibold text-slate-500 shrink-0">{countLabel}</span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {g.items.map((p) => (
-                      <PublicacionCard key={p.id} post={p} />
+                      <PublicacionPostCard
+                        key={p.id}
+                        post={p}
+                        onOpen={() => setSelectedPost(p)}
+                      />
                     ))}
                   </div>
                 </section>
               )
             })}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
+
+      <PublicacionPostModal
+        post={selectedPost}
+        open={selectedPost != null}
+        onClose={() => setSelectedPost(null)}
+      />
     </div>
   )
 }
-

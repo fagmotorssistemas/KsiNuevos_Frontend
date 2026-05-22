@@ -9,7 +9,7 @@ import {
     CalendarClock,
     Edit3
 } from "lucide-react";
-import type { AppointmentWithDetails } from "@/hooks/useAgenda";
+import { isAppointmentPendingActive, type AppointmentWithDetails } from "@/hooks/useAgenda";
 
 interface AppointmentCardProps {
     appointment: AppointmentWithDetails;
@@ -26,7 +26,7 @@ export function AppointmentCard({ appointment, onComplete, onCancel, onEdit, isA
     const timeStr = dateObj.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
     
     const isPast = new Date() > dateObj;
-    const isPending = status === 'pendiente' || status === 'confirmada' || status === 'reprogramada';
+    const isPending = isAppointmentPendingActive(appointment);
     const isOverdue = isPending && isPast;
 
     // Acentos de estado ultra-sutiles

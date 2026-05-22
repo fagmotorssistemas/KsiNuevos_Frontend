@@ -84,28 +84,3 @@ export const processLeadsLogic = (
         return sortDescriptor.direction === "descending" ? bNum - aNum : aNum - bNum;
     });
 };
-
-/**
- * Lógica exacta de cálculo de interacciones
- */
-export const calculateInteractionsLogic = (leads: LeadWithDetails[], filters: LeadsFilters) => {
-    let interactions = [...leads];
-    
-    if (filters.assignedTo !== 'all') {
-        interactions = interactions.filter(l => l.assigned_to === filters.assignedTo);
-    }
-
-    const targetDate = filters.exactDate 
-        ? new Date(filters.exactDate + 'T12:00:00')
-        : new Date(); 
-
-    interactions = interactions.filter(l => {
-        if (!l.resume || l.resume.trim() === '') return false;
-        if (!l.updated_at) return false;
-        
-        const updateDate = new Date(l.updated_at);
-        return isSameDate(updateDate, targetDate);
-    });
-
-    return interactions.length;
-};
