@@ -1,9 +1,11 @@
 import { randomBytes } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { MUSIC_TRACKS_BUCKET } from '@/lib/videos/music-upload-shared'
 
 const RAW_BUCKET = 'raw-videos-v2'
-const MUSIC_BUCKET = 'music-tracks-v2'
+
+const MUSIC_BUCKET = MUSIC_TRACKS_BUCKET
 const SIGNED_URL_EXPIRY = 60 * 60 * 24 // 24 horas
 
 function assertVideoStorageEnv(): void {
@@ -174,6 +176,14 @@ export async function getSignedUrlForPath(path: string): Promise<string> {
   return createSignedUrlForRawPath(supabase, path)
 }
 
+/** Ruta en Storage para una pista nueva (`tracks/…`). */
+export function buildMusicTrackStoragePath(originalFilename: string): string {
+  const timestamp = Date.now()
+  const rid = randomBytes(4).toString('hex')
+  const safeBase = safeMusicStorageBasename(originalFilename)
+  return `tracks/${timestamp}_${rid}_${safeBase}`
+}
+
 /** Nombre de objeto Storage seguro (evita espacios/Unicode que algunos backends rechazan). */
 function safeMusicStorageBasename(originalFilename: string): string {
   const base = originalFilename.trim().split(/[/\\]/).pop() || 'audio'
@@ -197,10 +207,7 @@ export async function uploadMusicTrack(
   mimeType: string
 ): Promise<{ path: string; publicUrl: string }> {
   const supabase = getServiceClient()
-  const timestamp = Date.now()
-  const rid = randomBytes(4).toString('hex')
-  const safeBase = safeMusicStorageBasename(filename)
-  const path = `tracks/${timestamp}_${rid}_${safeBase}`
+  const path = buildMusicTrackStoragePath(filename)
 
   const { error } = await supabase.storage
     .from(MUSIC_BUCKET)

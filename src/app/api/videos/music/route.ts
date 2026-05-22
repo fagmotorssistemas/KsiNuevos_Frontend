@@ -2,29 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { uploadMusicTrack } from '@/lib/videos/storage'
-
-const ALLOWED_AUDIO_TYPES = new Set([
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/mpeg3',
-  'audio/x-mpeg',
-  'audio/x-mpeg-3',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/aac',
-  'audio/mp4',
-  'audio/x-m4a',
-])
-
-const EXT_TO_MIME: Record<string, string> = {
-  '.mp3': 'audio/mpeg',
-  '.mpeg': 'audio/mpeg',
-  '.wav': 'audio/wav',
-  '.aac': 'audio/aac',
-  '.m4a': 'audio/mp4',
-  '.mp4': 'audio/mp4',
-}
-const MAX_MUSIC_UPLOAD_BYTES = 45 * 1024 * 1024
+import {
+  MAX_MUSIC_UPLOAD_BYTES,
+  musicUploadSizeError,
+  normalizeTrackName,
+  resolveAudioMimeType,
+} from '@/lib/videos/music-upload-shared'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -35,40 +18,6 @@ function getServiceClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   )
-}
-
-function extensionFromFilename(name: string): string {
-  const i = name.lastIndexOf('.')
-  return i >= 0 ? name.slice(i).toLowerCase() : ''
-}
-
-/**
- * Muchos MP3 llegan como `application/octet-stream` o con `type` vacío según SO/navegador.
- */
-function resolveAudioMimeType(file: File): string | null {
-  const t = (file.type || '').trim().toLowerCase()
-  if (ALLOWED_AUDIO_TYPES.has(t)) {
-    if (t === 'audio/x-m4a') return 'audio/mp4'
-    if (t === 'audio/mp3' || t === 'audio/mpeg3' || t === 'audio/x-mpeg' || t === 'audio/x-mpeg-3') {
-      return 'audio/mpeg'
-    }
-    return t
-  }
-  if (
-    t === 'application/octet-stream' ||
-    t === '' ||
-    t === 'application/x-unknown' ||
-    t === 'binary/octet-stream'
-  ) {
-    const ext = extensionFromFilename(file.name)
-    const mapped = EXT_TO_MIME[ext]
-    if (mapped) return mapped
-  }
-  return null
-}
-
-function normalizeTrackName(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 200)
 }
 
 export async function GET() {
@@ -91,6 +40,7 @@ export async function GET() {
   }
 }
 
+/** Subida legacy vía multipart (puede fallar con HTTP 413 en Vercel si el archivo es grande). Preferir prepare + signed URL. */
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -102,18 +52,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El archivo está vacío (0 bytes).' }, { status: 400 })
     }
     if (typeof file.size === 'number' && file.size > MAX_MUSIC_UPLOAD_BYTES) {
-      return NextResponse.json(
-        {
-          error: `El archivo supera el límite permitido (${Math.round(MAX_MUSIC_UPLOAD_BYTES / (1024 * 1024))} MB).`,
-        },
-        { status: 413 }
-      )
+      return NextResponse.json({ error: musicUploadSizeError() }, { status: 413 })
     }
 
     const name = normalizeTrackName(typeof nameRaw === 'string' ? nameRaw : '')
     if (!name) return NextResponse.json({ error: 'Nombre del track requerido' }, { status: 400 })
 
-    const mimeType = resolveAudioMimeType(file)
+    const mimeType = resolveAudioMimeType(file.name, file.type)
     if (!mimeType) {
       const reported = file.type || '(vacío)'
       return NextResponse.json(

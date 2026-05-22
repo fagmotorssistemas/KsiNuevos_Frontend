@@ -128,8 +128,37 @@ REGLAS DE MARCA: Di siempre "${BRAND_SPOKEN}". NUNCA escribas "KSI", "KSI Nuevos
 Devuelve SOLO el texto del guión, sin indicaciones de escena, sin comillas, sin explicaciones adicionales.`
 }
 
+function buildCreativeAutoScriptPrompt(): string {
+  return `Eres el guionista creativo de KSI Nuevos News, un noticiero de un concesionario de autos ubicado en Avenida España y Sevilla, a pocos metros del terminal, en Ecuador.
+
+Inventa un tema creativo y original para el clip de hoy. Puede ser sobre: promociones, financiamiento, variedad de stock, invitación a visitar el concesionario, destacar algún tipo de vehículo (SUVs, camionetas, sedanes), facilidades de compra, garantías, servicio postventa, o cualquier otro tema relacionado con un concesionario de autos.
+
+Genera un guión de máximo 25 segundos (aproximadamente 60-70 palabras) energético, profesional y emocionante como un noticiero real.
+
+Estructura:
+1. Apertura impactante tipo KSI Nuevos News informa...
+2. Desarrollo del tema inventado de forma emocionante  
+3. Llamado a la acción claro
+4. Cierre: Visítanos en Avenida España y Sevilla
+5. Firma: Esto fue KSI Nuevos News
+
+Devuelve SOLO el texto del guión, sin indicaciones de escena, sin comillas, sin explicaciones adicionales.`
+}
+
+export async function generateCreativeAutoScript(): Promise<{ script: string; bannerTitle: string }> {
+  const model = getModel()
+  const prompt = buildCreativeAutoScriptPrompt()
+  console.log('[noticiero/gemini] Generando guión creativo automático')
+  const result = await model.generateContent(prompt)
+  const script = cleanGeminiText(result.response.text())
+  if (!script) throw new Error('Gemini devolvió un guión vacío')
+
+  const bannerTitle = await generateCustomBannerTitle(script.slice(0, 120))
+  return { script, bannerTitle }
+}
+
 export async function generateNoticieroScript(
-  mode: 'vehicle' | 'custom',
+  mode: 'vehicle' | 'custom' | 'creative_auto',
   vehicle?: NoticieroVehicle,
   customTopic?: string,
   bannerTitleOverride?: string
@@ -153,6 +182,10 @@ export async function generateNoticieroScript(
         : await generateVehicleHeadline(vehicle)
 
     return { script, bannerTitle }
+  }
+
+  if (mode === 'creative_auto') {
+    return generateCreativeAutoScript()
   }
 
   const topic = customTopic?.trim()

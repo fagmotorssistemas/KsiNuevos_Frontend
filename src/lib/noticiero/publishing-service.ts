@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { NoticieroPublishingPlatform } from './types'
-import { publishFacebookPageVideo } from '@/lib/videos/facebook'
+import { publishFacebookPageReel } from '@/lib/videos/facebook'
 import { publishInstagramReel } from '@/lib/videos/instagram'
 
 export function getNoticieroPublishingClient() {
@@ -158,7 +158,7 @@ export async function executeNoticieroPublishForQueueRow(
           error_message: null,
         })
       } else {
-        const { postId } = await publishFacebookPageVideo(videoUrl, row.caption)
+        const { postId } = await publishFacebookPageReel(videoUrl, row.caption)
         await upsertResult(supabase, {
           queue_id: queueId,
           platform: 'facebook',

@@ -26,7 +26,7 @@ const menuItems = [
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Planificador', href: '/marketing/planificador', icon: CalendarDays },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
-   // { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
+    { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
     { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
     { name: 'Solicitudes desarrollo', href: '/marketing/solicitudes-desarrollo', icon: Code2 },
 ];

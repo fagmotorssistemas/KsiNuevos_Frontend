@@ -3,8 +3,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { Upload, Loader2, Music, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import type { MusicTrack } from '@/lib/videos/types'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
+import { MAX_MUSIC_UPLOAD_BYTES, MUSIC_TRACKS_BUCKET } from '@/lib/videos/music-upload-shared'
 
 interface MusicUploaderProps {
   tracks: MusicTrack[]
@@ -19,8 +21,7 @@ type PendingItem = {
 }
 
 const ACCEPT_INPUT = '.mp3,.wav,.aac,.m4a,.mpeg,audio/*,application/octet-stream'
-/** Evita 413 en proxys/gateways que rechazan multipart grandes antes de llegar al handler. */
-const MAX_UPLOAD_BYTES = 45 * 1024 * 1024
+const MAX_UPLOAD_BYTES = MAX_MUSIC_UPLOAD_BYTES
 
 function defaultNameFromFile(file: File): string {
   return file.name.replace(/\.[^.]+$/, '')
@@ -60,6 +61,10 @@ function multipartSafeFilename(original: string): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function shouldRetryUpload(err: unknown, attempt: number): boolean {
@@ -108,18 +113,62 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
 
   async function uploadOne(item: PendingItem): Promise<void> {
     const safeName = multipartSafeFilename(item.file.name)
+    const supabase = createClient()
     let lastErr: unknown
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        const formData = new FormData()
-        formData.append('file', item.file, safeName)
-        formData.append('name', item.name.trim())
+        const prepRes = await fetch('/api/videos/music/prepare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: safeName,
+            size: item.file.size,
+            mimeType: item.file.type || '',
+          }),
+        })
+        const prep = await parseJsonOrThrow<{
+          path?: string
+          token?: string
+          publicUrl?: string
+          mimeType?: string
+          error?: string
+        }>(prepRes)
+        if (!prepRes.ok) {
+          throw new Error(prep.error ?? `Error HTTP ${prepRes.status}`)
+        }
+        if (!prep.path || !prep.token || !prep.publicUrl || !prep.mimeType) {
+          throw new Error('Respuesta de preparación incompleta')
+        }
 
-        const res = await fetch('/api/videos/music', { method: 'POST', body: formData })
-        const data = await parseJsonOrThrow<{ track?: MusicTrack; error?: string }>(res)
+        const uploadBody =
+          item.file.type === prep.mimeType
+            ? item.file
+            : new File([item.file], safeName, {
+                type: prep.mimeType,
+                lastModified: item.file.lastModified,
+              })
 
-        if (!res.ok) {
-          throw new Error(data.error ?? `Error HTTP ${res.status}`)
+        const { error: storageError } = await supabase.storage
+          .from(MUSIC_TRACKS_BUCKET)
+          .uploadToSignedUrl(prep.path, prep.token, uploadBody, { cacheControl: '3600' })
+
+        if (storageError) {
+          throw new Error(storageError.message)
+        }
+
+        const completeRes = await fetch('/api/videos/music/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: prep.path,
+            name: item.name.trim(),
+            publicUrl: prep.publicUrl,
+          }),
+        })
+        const data = await parseJsonOrThrow<{ track?: MusicTrack; error?: string }>(completeRes)
+
+        if (!completeRes.ok) {
+          throw new Error(data.error ?? `Error HTTP ${completeRes.status}`)
         }
         if (!data.track) {
           throw new Error('Respuesta sin track')
@@ -237,7 +286,10 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
           />
           <Music className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-500">Arrastra varios MP3/WAV o haz clic para seleccionar muchos a la vez</p>
-          <p className="text-xs text-gray-400 mt-1">mp3, wav, aac, m4a · sin límite artificial de duración en el servidor</p>
+          <p className="text-xs text-gray-400 mt-1">
+            mp3, wav, aac, m4a · hasta {Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB · subida directa a Storage
+            (evita el límite de Vercel en archivos grandes)
+          </p>
         </div>
 
         {pendingItems.length > 0 && (
@@ -266,8 +318,11 @@ export function MusicUploader({ tracks, onTrackAdded, onTrackDeleted }: MusicUpl
                     disabled={isUploading}
                     className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
                   />
-                  <span className="text-xs text-gray-400 truncate max-w-[100px]" title={item.file.name}>
-                    {item.file.name}
+                  <span
+                    className="text-xs text-gray-400 truncate max-w-[120px]"
+                    title={`${item.file.name} (${formatMb(item.file.size)})`}
+                  >
+                    {formatMb(item.file.size)}
                   </span>
                   <button
                     type="button"
