@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import type { VideoJob } from '@/lib/videos/types'
 import { formatUtcForEcuadorDisplay } from '@/lib/videos/ecuador-time'
 import { SchedulePublishModal, type QueueRowLike } from './SchedulePublishModal'
+import { RepublishModal } from './RepublishModal'
 
 type VideoJoin = { job_name: string | null; final_video_url: string | null; flow_type?: string | null }
 type VehicleJoin = { brand: string; model: string; year: number; version: string | null }
@@ -61,7 +62,7 @@ function formatStatusLabel(status: string) {
 function buildDirectPostUrl(platform: string, postId: string | null): string | null {
   if (!postId) return null
   if (/^https?:\/\//i.test(postId)) return postId
-  if (platform === 'facebook') return `https://www.facebook.com/${postId}`
+  if (platform === 'facebook') return `https://www.facebook.com/watch/?v=${postId}`
   return null
 }
 
@@ -112,7 +113,20 @@ function PublishResultsModal({ queueId, onClose }: ResultModalProps) {
                 <div className="font-semibold">{formatPlatformLabel(r.platform)}</div>
                 <div className="text-gray-600">Estado: {formatStatusLabel(r.status)}</div>
                 {r.platform_post_id ? (
-                  <div className="text-xs font-mono break-all mt-1">ID: {r.platform_post_id}</div>
+                  <div className="text-xs font-mono break-all mt-1">
+                    {/^https?:\/\//i.test(r.platform_post_id) ? (
+                      <a
+                        href={r.platform_post_id}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-violet-700 hover:underline"
+                      >
+                        Abrir enlace
+                      </a>
+                    ) : (
+                      <>ID: {r.platform_post_id}</>
+                    )}
+                  </div>
                 ) : null}
                 {r.error_message ? (
                   <div className="text-xs text-red-600 mt-1 break-words">{r.error_message}</div>
@@ -147,6 +161,7 @@ export function PublishingQueueTable({
   const [statusFilter, setStatusFilter] = useState<'published' | 'failed' | 'cancelled'>('published')
   const [query, setQuery] = useState('')
   const [resultsByQueue, setResultsByQueue] = useState<Record<string, PublishResultRow[]>>({})
+  const [republishTarget, setRepublishTarget] = useState<{ queueId: string; platforms: string[] } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -368,7 +383,7 @@ export function PublishingQueueTable({
                         <RefreshCw className="w-3 h-3" /> Reintentar
                       </button>
                     )}
-                    {row.status === 'published' && (
+                    {(row.status === 'published' || row.status === 'failed') && (
                       <>
                         {postLinks.length > 0 ? (
                           <a
@@ -377,9 +392,18 @@ export function PublishingQueueTable({
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold"
                           >
-                            <ExternalLink className="w-3 h-3" /> Abrir publicación
+                            <ExternalLink className="w-3 h-3" /> Abrir
                           </a>
                         ) : null}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRepublishTarget({ queueId: row.id, platforms: row.platforms })
+                          }
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 text-violet-900 hover:bg-violet-100 text-xs font-semibold"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Republicar
+                        </button>
                         <button
                           type="button"
                           onClick={() => setResultQueueId(row.id)}
@@ -402,6 +426,16 @@ export function PublishingQueueTable({
       ) : null}
 
       <PublishResultsModal queueId={resultQueueId} onClose={() => setResultQueueId(null)} />
+
+      <RepublishModal
+        queueId={republishTarget?.queueId ?? null}
+        scheduledPlatforms={republishTarget?.platforms ?? []}
+        onClose={() => setRepublishTarget(null)}
+        onDone={() => {
+          load()
+          onMutate?.()
+        }}
+      />
 
       <SchedulePublishModal
         isOpen={modalOpen}

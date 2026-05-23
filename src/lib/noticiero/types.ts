@@ -68,8 +68,10 @@ export interface StartPipelineRequest {
   voiceId?: string
 }
 
+export type GenerateScriptMode = NoticieroMode | 'creative_auto'
+
 export interface GenerateScriptRequest {
-  mode: NoticieroMode
+  mode: GenerateScriptMode
   vehicle?: NoticieroVehicle
   customTopic?: string
   /** Si el usuario editó el titular en la UI, se respeta al generar el guión. */
@@ -188,3 +190,83 @@ export type NoticieroPublishingQueueStatus =
   | 'cancelled'
 
 export type NoticieroPublishingPlatform = 'instagram' | 'facebook'
+
+// ─── Publicación automática ─────────────────────────────────────────────────
+
+export type NoticieroVehicleOrder =
+  | 'price_desc'
+  | 'price_asc'
+  | 'newest'
+  | 'is_featured'
+  | 'mileage_desc'
+  | 'mileage_asc'
+
+export type NoticieroCreativeMode = 'predefined' | 'gemini_auto' | 'both'
+
+export type NoticieroDayContentType = 'vehicle' | 'creative'
+
+export type NoticieroHistoryStatus = 'pending' | 'completed' | 'error'
+
+export interface NoticieroConfig {
+  id: string
+  publish_days: string[]
+  publish_time: string
+  vehicle_order: NoticieroVehicleOrder
+  creative_mode: NoticieroCreativeMode
+  creative_topics: string[]
+  avatar_rotation: string[]
+  day_type_config: Record<string, NoticieroDayContentType>
+  is_active: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NoticieroHistory {
+  id: string
+  published_at: string
+  day_of_week: string
+  content_type: string
+  avatar_id: string
+  vehicle_id: string | null
+  creative_topic: string | null
+  generated_script: string
+  heygen_video_url: string | null
+  final_video_url: string | null
+  instagram_post_id: string | null
+  facebook_post_id: string | null
+  status: NoticieroHistoryStatus
+  error_message: string | null
+  inventoryoracle?: {
+    brand: string
+    model: string
+    year: number | string | null
+  } | null
+}
+
+export interface NoticieroConfigUpdatePayload {
+  publish_days: string[]
+  publish_time: string
+  vehicle_order: NoticieroVehicleOrder
+  creative_mode: NoticieroCreativeMode
+  creative_topics: string[]
+  avatar_rotation: string[]
+  day_type_config: Record<string, NoticieroDayContentType>
+  is_active: boolean
+}
+
+export interface AutoPublishResult {
+  skipped?: boolean
+  reason?: string
+  historyId?: string
+  contentType?: string
+  avatarId?: string
+  script?: string
+  heygenVideoUrl?: string
+  finalVideoUrl?: string
+  instagramPostId?: string | null
+  facebookPostId?: string | null
+  status?: NoticieroHistoryStatus
+  error?: string
+}

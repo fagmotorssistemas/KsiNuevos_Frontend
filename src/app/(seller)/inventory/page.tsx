@@ -150,6 +150,7 @@ export default function InventoryPage() {
                         rowsPerPage={rowsPerPage}
                         onPageChange={setPage}
                         currentUserRole={profile?.role}
+                        currentUserId={profile?.id}
                     />
                 )}
             </div>

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { PublishingPlatform } from '@/lib/videos/types'
-import { publishFacebookPageVideo } from '@/lib/videos/facebook'
+import { publishFacebookPageReel } from '@/lib/videos/facebook'
 import { publishInstagramReel } from '@/lib/videos/instagram'
 
 export function getPublishingServiceClient() {
@@ -73,13 +73,20 @@ async function finalizeQueueStatusFromResults(
   return queueFinalStatus
 }
 
+export type ExecutePublishOptions = {
+  /** Publicar solo en estas redes (reintento parcial o republicación). */
+  onlyPlatforms?: PublishingPlatform[]
+  /** Permite republicar colas ya marcadas como publicadas o fallidas. */
+  republish?: boolean
+}
+
 /**
  * Ejecuta publicación para un ítem de cola (Meta APIs + resultados en BD).
- * `onlyPlatforms`: reintento solo en esas redes; al final se recalcula el estado con todas las plataformas del job.
+ * `onlyPlatforms`: reintento/republicación solo en esas redes; al final se recalcula el estado con todas las plataformas del job.
  */
 export async function executePublishForQueueRow(
   queueId: string,
-  opts?: { onlyPlatforms?: PublishingPlatform[] }
+  opts?: ExecutePublishOptions
 ): Promise<{
   queueFinalStatus: 'published' | 'failed'
   platformsTried: PublishingPlatform[]
@@ -94,8 +101,17 @@ export async function executePublishForQueueRow(
     throw new Error(qErr?.message ?? 'Cola no encontrada')
   }
 
-  const isPartialRetry = !!(opts?.onlyPlatforms && opts.onlyPlatforms.length > 0)
-  if (isPartialRetry) {
+  const isRepublish = !!opts?.republish
+  const isPartial = !!(opts?.onlyPlatforms && opts.onlyPlatforms.length > 0)
+
+  if (isRepublish) {
+    if (row.status !== 'published' && row.status !== 'failed') {
+      throw new Error('Republicar solo aplica a colas publicadas o fallidas')
+    }
+    if (!opts?.onlyPlatforms?.length) {
+      throw new Error('Selecciona al menos una red para republicar')
+    }
+  } else if (isPartial) {
     if (row.status !== 'failed' && row.status !== 'pending') {
       throw new Error('Reintento solo aplica a cola fallida o pendiente')
     }
@@ -160,7 +176,7 @@ export async function executePublishForQueueRow(
           error_message: null,
         })
       } else {
-        const { postId } = await publishFacebookPageVideo(videoUrl, row.caption)
+        const { postId } = await publishFacebookPageReel(videoUrl, row.caption)
         await upsertResult(supabase, {
           queue_id: queueId,
           platform: 'facebook',

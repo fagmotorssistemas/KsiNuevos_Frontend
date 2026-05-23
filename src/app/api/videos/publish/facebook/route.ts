@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
-import { publishFacebookPageVideo } from '@/lib/videos/facebook'
+import { publishFacebookPageReel } from '@/lib/videos/facebook'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     if (!body.videoUrl?.trim() || !body.caption?.trim()) {
       return NextResponse.json({ error: 'videoUrl y caption son requeridos' }, { status: 400 })
     }
-    const r = await publishFacebookPageVideo(body.videoUrl.trim(), body.caption.trim())
+    const r = await publishFacebookPageReel(body.videoUrl.trim(), body.caption.trim())
     return NextResponse.json(r)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error Facebook'

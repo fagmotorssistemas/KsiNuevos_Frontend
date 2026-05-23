@@ -85,8 +85,21 @@ export async function publishInstagramReel(videoUrl: string, caption: string): P
   const mediaId = String(publishJson.id ?? '')
   if (!mediaId) throw new Error('Instagram no devolvió id del media publicado')
 
-  console.log('[Instagram] Publicado media_id=', mediaId, 'container=', containerId)
-  return { mediaId, containerId }
+  let storedId = mediaId
+  try {
+    const linkRes = await fetch(
+      `${IG_API}/${mediaId}?fields=permalink&access_token=${encodeURIComponent(token)}`
+    )
+    const linkJson = await readJson(linkRes)
+    if (linkRes.ok && typeof linkJson.permalink === 'string' && linkJson.permalink) {
+      storedId = linkJson.permalink
+    }
+  } catch (e) {
+    console.warn('[Instagram] no se obtuvo permalink', e)
+  }
+
+  console.log('[Instagram] Publicado media_id=', mediaId, 'container=', containerId, 'stored=', storedId)
+  return { mediaId: storedId, containerId }
 }
 
 export function isInstagramOAuth190Error(message: string): boolean {

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Newspaper, Loader2, Play, Megaphone } from 'lucide-react'
+import { Newspaper, Loader2, Play, Megaphone, Settings } from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 import type { NoticieroMode, NoticieroVehicle } from '@/lib/noticiero/types'
@@ -133,17 +134,26 @@ export default function NoticieroPage() {
         </button>
       </div>
 
-      <div>
-        <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
-            <Newspaper className="w-5 h-5 text-white" />
-          </div>
-          KSI NUEVOS - NEWS
-        </h1>
-        <p className="text-sm text-gray-500 mt-2 max-w-xl">
-          Noticiero con IA: guión (Gemini), presentadora (HeyGen) y composición (Creatomate). La
-          publicación en redes se programa después de aprobar el video.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/20">
+              <Newspaper className="w-5 h-5 text-white" />
+            </div>
+            KSI NUEVOS - NEWS
+          </h1>
+          <p className="text-sm text-gray-500 mt-2 max-w-xl">
+            Noticiero con IA: guión (Gemini), presentadora (HeyGen) y composición (Creatomate). La
+            publicación en redes se programa después de aprobar el video.
+          </p>
+        </div>
+        <Link
+          href="/marketing/noticiero/configuracion"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-gray-700 hover:text-violet-800 text-sm font-bold rounded-xl shadow-sm transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+          Configuración
+        </Link>
       </div>
 
       {mainTab === 'generacion' ? (

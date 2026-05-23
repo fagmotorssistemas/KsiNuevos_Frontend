@@ -12,6 +12,7 @@ import { PaginationPageMinimalCenter } from "@/components/ui/pagination";
 import { Button } from "@/components/ui/buttontable";
 import { ImageViewerModal } from "@/components/features/inventory/ImageViewerModal";
 import { downloadAllInventoryImages } from "@/lib/download-inventory-images";
+import { canShowInventoryDownloadAllImages } from "@/lib/inventory-download-images-access";
 
 import type { InventoryCar } from "@/hooks/useInventory";
 
@@ -204,6 +205,7 @@ interface InventoryTableProps {
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
     currentUserRole?: string | null;
+    currentUserId?: string | null;
 }
 
 export function InventoryTable({ 
@@ -213,7 +215,8 @@ export function InventoryTable({
     totalCount, 
     rowsPerPage,
     onPageChange,
-    currentUserRole 
+    currentUserRole,
+    currentUserId,
 }: InventoryTableProps) {
 
     const [viewingCar, setViewingCar] = useState<InventoryCar | null>(null);
@@ -222,6 +225,7 @@ export function InventoryTable({
 
     const role = currentUserRole?.toLowerCase() || '';
     const canEdit = role === 'admin' || role === 'marketing'; // Admin y marketing pueden abrir modal; en el modal solo admin edita precio
+    const canDownloadAllImages = canShowInventoryDownloadAllImages(currentUserId);
 
     const formatPrice = (price: number | null) => 
         new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price ?? 0);
@@ -388,7 +392,7 @@ export function InventoryTable({
                                                         )}
                                                     </button>
 
-                                                    {hasImages && (
+                                                    {hasImages && canDownloadAllImages && (
                                                         <button
                                                             type="button"
                                                             onClick={(e) => handleDownloadAllImages(car, e)}

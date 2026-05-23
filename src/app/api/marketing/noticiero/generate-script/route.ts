@@ -59,7 +59,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     }
 
-    return NextResponse.json({ error: 'mode debe ser "vehicle" o "custom"' }, { status: 400 })
+    if (body.mode === 'creative_auto') {
+      const result = await generateNoticieroScript('creative_auto')
+      return NextResponse.json(result)
+    }
+
+    return NextResponse.json({ error: 'mode debe ser "vehicle", "custom" o "creative_auto"' }, { status: 400 })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error generando guión'
     console.error('[noticiero/generate-script]', err)
