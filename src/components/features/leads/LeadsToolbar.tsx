@@ -286,8 +286,8 @@ export function LeadsToolbar({
                         }`}
                         title={
                             filters.onlyInteractions
-                                ? "Filtro activo: mostrando solo leads gestionados (click para quitar)"
-                                : "Click para filtrar: solo leads gestionados en la fecha seleccionada"
+                                ? "Filtro activo: resumen guardado ese día"
+                                : "Gestiones del día: leads con resumen guardado (updated_at solo cambia al guardar resumen)"
                         }
                     >
                         <ClipboardList className="h-3.5 w-3.5 text-orange-500" />

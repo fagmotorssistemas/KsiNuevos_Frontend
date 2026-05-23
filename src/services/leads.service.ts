@@ -18,30 +18,34 @@ const getEcuadorRange = (dateStr: string) => {
     };
 };
 
-/** IDs de leads con al menos una gestión registrada en interactions (tabla del historial). */
-const fetchLeadIdsWithInteractionsInRange = async (
+/**
+ * Gestión del día = resumen con texto y updated_at en el rango.
+ * En BD, updated_at solo se mueve al guardar resume (trigger set_updated_at).
+ */
+const fetchLeadIdsGestionadosInRange = async (
     supabase: any,
     start: string,
     end: string,
     assignedTo?: string
 ): Promise<number[]> => {
     let query = supabase
-        .from('interactions')
-        .select('lead_id, leads!inner(assigned_to)')
-        .gte('created_at', start)
-        .lte('created_at', end);
+        .from('leads')
+        .select('id')
+        .not('resume', 'is', null)
+        .neq('resume', '')
+        .gte('updated_at', start)
+        .lte('updated_at', end);
 
     if (assignedTo && assignedTo !== 'all') {
-        query = query.eq('leads.assigned_to', assignedTo);
+        query = query.eq('assigned_to', assignedTo);
     }
 
     const { data, error } = await query;
     if (error) {
-        console.warn('fetchLeadIdsWithInteractionsInRange:', error.message || error);
+        console.warn('fetchLeadIdsGestionadosInRange:', error.message || error);
         return [];
     }
-    const ids: number[] = (data ?? []).map((r: { lead_id: number }) => Number(r.lead_id));
-    return Array.from(new Set(ids));
+    return (data ?? []).map((r: { id: number }) => Number(r.id));
 };
 
 // Tokens de búsqueda (sin espacios) para evitar que el filtro se rompa; "kia st" → ["kia", "st"]
@@ -307,18 +311,18 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
-        // Solo gestionados: leads con interactions en el día (antes del intersect).
+        // Solo gestionados: resumen guardado ese día (updated_at solo cambia con resume).
         if (filters.onlyInteractions) {
             const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
             const { start, end } = getEcuadorRange(targetDateStr);
-            const interactionLeadIds = await fetchLeadIdsWithInteractionsInRange(
+            const gestionLeadIds = await fetchLeadIdsGestionadosInRange(
                 supabase,
                 start,
                 end,
                 filters.assignedTo
             );
-            if (interactionLeadIds.length > 0) {
-                idFilters.push(interactionLeadIds);
+            if (gestionLeadIds.length > 0) {
+                idFilters.push(gestionLeadIds);
             } else {
                 idFilters.push([-1]);
             }
@@ -461,28 +465,13 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
     }
 };
 
-// --- GESTIONADOS HOY (Métrica 2): cuenta filas en interactions (historial real del modal).
+// --- GESTIONADOS HOY (Métrica 2): leads con resumen ejecutivo guardado ese día.
 export const fetchDailyInteractions = async (supabase: any, assignedTo: string, exactDate: string) => {
     try {
         const targetDateStr = exactDate ? exactDate : getEcuadorDateISO();
         const { start, end } = getEcuadorRange(targetDateStr);
-
-        let query = supabase
-            .from('interactions')
-            .select('id, leads!inner(assigned_to)', { count: 'exact', head: true })
-            .gte('created_at', start)
-            .lte('created_at', end);
-
-        if (assignedTo && assignedTo !== 'all') {
-            query = query.eq('leads.assigned_to', assignedTo);
-        }
-
-        const { count, error } = await query;
-        if (error) {
-            console.warn('fetchDailyInteractions:', error.message || error);
-            return 0;
-        }
-        return count || 0;
+        const ids = await fetchLeadIdsGestionadosInRange(supabase, start, end, assignedTo);
+        return ids.length;
     } catch (error) {
         console.warn('fetchDailyInteractions:', error);
         return 0;

@@ -35,8 +35,8 @@ export type LeadsFilters = {
     /** Solo leads con al menos un registro en trade_in_cars */
     hasTradeIn?: boolean;
     /**
-     * Muestra únicamente leads con al menos una fila en `interactions` el día seleccionado
-     * (misma fuente que "Gestión de Hoy" y el historial del modal).
+     * Solo leads gestionados ese día: resumen con texto y updated_at en el día
+     * (updated_at solo cambia al guardar resume).
      */
     onlyInteractions?: boolean;
 };

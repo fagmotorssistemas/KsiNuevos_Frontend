@@ -2557,6 +2557,7 @@ export type Database = {
           presupuesto_cliente: string | null
           respondio_post_fotos: boolean | null
           resume: string | null
+          resume_updated_at: string | null
           source: Database["public"]["Enums"]["acquisition_source"] | null
           status: Database["public"]["Enums"]["lead_status"] | null
           temperature: Database["public"]["Enums"]["lead_temperature"] | null
@@ -2584,6 +2585,7 @@ export type Database = {
           presupuesto_cliente?: string | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
+          resume_updated_at?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
@@ -2611,6 +2613,7 @@ export type Database = {
           presupuesto_cliente?: string | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
+          resume_updated_at?: string | null
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
@@ -3431,6 +3434,113 @@ export type Database = {
           session_id?: string | null
         }
         Relationships: []
+      }
+      noticiero_config: {
+        Row: {
+          avatar_rotation: string[]
+          created_at: string
+          creative_mode: string
+          creative_topics: string[]
+          day_type_config: Json
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          next_run_at: string | null
+          publish_days: string[]
+          publish_time: string
+          updated_at: string
+          vehicle_order: string
+        }
+        Insert: {
+          avatar_rotation?: string[]
+          created_at?: string
+          creative_mode?: string
+          creative_topics?: string[]
+          day_type_config?: Json
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          next_run_at?: string | null
+          publish_days?: string[]
+          publish_time?: string
+          updated_at?: string
+          vehicle_order?: string
+        }
+        Update: {
+          avatar_rotation?: string[]
+          created_at?: string
+          creative_mode?: string
+          creative_topics?: string[]
+          day_type_config?: Json
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          next_run_at?: string | null
+          publish_days?: string[]
+          publish_time?: string
+          updated_at?: string
+          vehicle_order?: string
+        }
+        Relationships: []
+      }
+      noticiero_history: {
+        Row: {
+          avatar_id: string
+          content_type: string
+          creative_topic: string | null
+          day_of_week: string
+          error_message: string | null
+          facebook_post_id: string | null
+          final_video_url: string | null
+          generated_script: string
+          heygen_video_url: string | null
+          id: string
+          instagram_post_id: string | null
+          published_at: string
+          status: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          avatar_id: string
+          content_type: string
+          creative_topic?: string | null
+          day_of_week: string
+          error_message?: string | null
+          facebook_post_id?: string | null
+          final_video_url?: string | null
+          generated_script?: string
+          heygen_video_url?: string | null
+          id?: string
+          instagram_post_id?: string | null
+          published_at?: string
+          status?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          avatar_id?: string
+          content_type?: string
+          creative_topic?: string | null
+          day_of_week?: string
+          error_message?: string | null
+          facebook_post_id?: string | null
+          final_video_url?: string | null
+          generated_script?: string
+          heygen_video_url?: string | null
+          id?: string
+          instagram_post_id?: string | null
+          published_at?: string
+          status?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "noticiero_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       noticiero_jobs: {
         Row: {
