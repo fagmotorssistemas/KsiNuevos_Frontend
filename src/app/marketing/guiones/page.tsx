@@ -1,93 +1,54 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { addDays, format, startOfDay } from 'date-fns'
+import { useCallback, useEffect, useState } from 'react'
+import { addDays, format } from 'date-fns'
 import { Loader2, ScrollText } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
-import type { ScriptRow } from '@/components/marketing/ScriptCard'
-import { GuionesDayView } from '@/components/marketing/GuionesDayView'
-import { VIDEO_SCRIPT_LIST_SELECT } from '@/lib/marketing/video-script-select'
-
-type Group = {
-  vendedorNombre: string
-  items: ScriptRow[]
-}
+import { GuionesAssignmentsView } from '@/components/marketing/GuionesAssignmentsView'
+import { AUTOMATION_API_PUBLIC_URL } from '@/lib/automation-api'
+import { scriptsService } from '@/services/scripts.service'
+import type {
+  AssignmentsByDateResponse,
+  ScriptAssignmentRow,
+} from '@/types/script-assignment'
 
 function ymd(d: Date) {
   return format(d, 'yyyy-MM-dd')
 }
 
-function parseDateInputLocal(value: string) {
-  const [y, m, d] = value.split('-').map((n) => Number(n))
-  if (!y || !m || !d) return new Date()
-  return new Date(y, m - 1, d, 0, 0, 0, 0)
-}
-
 export default function MarketingGuionesPage() {
-  const { supabase } = useAuth()
-  const [date, setDate] = useState(() => ymd(new Date()))
+  const [date, setDate] = useState(() => ymd(addDays(new Date(), 1)))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [rows, setRows] = useState<ScriptRow[]>([])
-  const [hint, setHint] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [data, setData] = useState<AssignmentsByDateResponse | null>(null)
 
-  useEffect(() => {
-    if (!supabase) return
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    setHint(null)
-
-    const start = startOfDay(parseDateInputLocal(date))
-    const end = addDays(start, 1)
-
-    ;(supabase as unknown as { from: (t: string) => any })
-      .from('video_scripts')
-      .select(VIDEO_SCRIPT_LIST_SELECT)
-      .gte('created_at', start.toISOString())
-      .lt('created_at', end.toISOString())
-      .order('vendedor_nombre', { ascending: true })
-      .order('created_at', { ascending: true })
-      .then(({ data, error }: { data: unknown[] | null; error: { message: string } | null }) => {
-        if (error) {
-          setError(error.message)
-          setRows([])
-          return
-        }
-        const list = (data ?? []) as ScriptRow[]
-        setRows(list)
-        setSelectedId(list[0]?.id ?? null)
-        if (!data || data.length === 0) {
-          setSelectedId(null)
-          ;(supabase as unknown as { from: (t: string) => any })
-            .from('video_scripts')
-            .select('created_at')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .then(({ data: d2 }: { data: Array<{ created_at: string }> | null }) => {
-              const last = d2?.[0]?.created_at
-              if (!last) return
-              const day = format(new Date(last), 'yyyy-MM-dd')
-              setHint(`Tip: el último día con guiones es ${day}. Cambia la fecha para verlos.`)
-            })
-        }
-      })
-      .finally(() => setLoading(false))
-  }, [supabase, date])
-
-  const groups = useMemo(() => {
-    const map = new Map<string, ScriptRow[]>()
-    for (const r of rows) {
-      const name = (r.vendedor_nombre ?? 'Sin vendedor').trim() || 'Sin vendedor'
-      map.set(name, [...(map.get(name) ?? []), r])
+    try {
+      const res = await scriptsService.getAssignmentsByDate(date)
+      setData(res)
+      if (res.fecha && res.fecha !== date) {
+        setDate(res.fecha)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar las asignaciones')
+      setData(null)
+    } finally {
+      setLoading(false)
     }
-    const out: Group[] = Array.from(map.entries()).map(([vendedorNombre, items]) => ({
-      vendedorNombre,
-      items,
-    }))
-    out.sort((a, b) => a.vendedorNombre.localeCompare(b.vendedorNombre))
-    return out
-  }, [rows])
+  }, [date])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const assignments: ScriptAssignmentRow[] = data?.assignments ?? []
+  const summary = {
+    total: data?.total ?? 0,
+    pendiente_keywords: data?.pendiente_keywords ?? 0,
+    keywords_recibidos: data?.keywords_recibidos ?? 0,
+    guion_generado: data?.guion_generado ?? 0,
+  }
 
   return (
     <div className="space-y-6">
@@ -97,8 +58,12 @@ export default function MarketingGuionesPage() {
             <div className="w-10 h-10 bg-gradient-to-br from-slate-800 to-slate-950 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/10">
               <ScrollText className="w-5 h-5 text-white" />
             </div>
-            Guiones del Día
+            Guiones del día
           </h1>
+          <p className="text-sm text-gray-600 mt-2 max-w-xl">
+            Ingresa palabras clave y genera guiones para las asignaciones del día objetivo. El
+            cron selecciona vehículos de domingo a jueves para el siguiente día hábil.
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -120,20 +85,29 @@ export default function MarketingGuionesPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
           {error}
-        </div>
-      )}
-      {hint && !error && (
-        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900 font-semibold">
-          {hint}
+          <p className="mt-2 font-normal text-red-600 text-xs">
+            Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté
+            disponible.
+          </p>
         </div>
       )}
 
-      {groups.length === 0 && !loading ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-sm text-gray-500">
-          No hay guiones para esta fecha.
+      {!error && summary.total === 0 && !loading && (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
+          No hay asignaciones para <strong>{data?.fecha ?? date}</strong>. El cron crea
+          vehículos de domingo a jueves para el siguiente día hábil; prueba otra fecha si
+          buscas un lote anterior.
         </div>
-      ) : (
-        <GuionesDayView groups={groups} selectedId={selectedId} onSelect={setSelectedId} />
+      )}
+
+      {!error && (
+        <GuionesAssignmentsView
+          fecha={data?.fecha ?? date}
+          assignments={assignments}
+          summary={summary}
+          loading={loading}
+          onReload={load}
+        />
       )}
     </div>
   )

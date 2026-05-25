@@ -26,12 +26,12 @@ export function GuionTipoBadge({
                 ? 'bg-red-100 text-red-800 border-red-200'
                 : 'bg-slate-100 text-slate-700 border-slate-200'
 
+  if (!t) return null
+
   const label =
     t === 'objecion' && objecionTipo
       ? `Objeción: ${objecionTipo}`
-      : t
-        ? t.charAt(0).toUpperCase() + t.slice(1)
-        : '—'
+      : t.charAt(0).toUpperCase() + t.slice(1)
 
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>
@@ -69,6 +69,32 @@ export function RetentionBadge({ retentionRate }: { retentionRate: number | null
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>
       {pct === null ? '—' : `${pct}%`}
+    </span>
+  )
+}
+
+export function AssignmentStatusBadge({ status }: { status: string }) {
+  const v = (status ?? '').toLowerCase()
+  const cls =
+    v === 'guion_generado'
+      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      : v === 'keywords_recibidos'
+        ? 'bg-violet-100 text-violet-800 border-violet-200'
+        : v === 'descartado'
+          ? 'bg-gray-100 text-gray-600 border-gray-200'
+          : 'bg-amber-100 text-amber-800 border-amber-200'
+
+  const labels: Record<string, string> = {
+    pendiente_keywords: 'Pendiente keywords',
+    keywords_recibidos: 'Keywords listas',
+    guion_generado: 'Guión generado',
+    descartado: 'Descartado',
+  }
+  const label = labels[v] ?? (v || '—')
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>
+      {label}
     </span>
   )
 }

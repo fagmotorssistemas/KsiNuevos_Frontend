@@ -66,6 +66,7 @@ The accounting/cartera module also calls a separate backend at `NEXT_PUBLIC_API_
 - **Videos** — AssemblyAI, Creatomate, Gemini; rutas en `src/app/api/videos/` y UI en `src/app/marketing/videos/`
 - **Google Gemini AI** (`GEMINI_API_KEY`) — content analysis in marketing/scraper modules and Videos
 - **Custom accounting backend** (`NEXT_PUBLIC_API_URL`) — separate service for financial operations
+- **Automation backend** (`AUTOMATION_API_URL` / `NEXT_PUBLIC_AUTOMATION_API_URL`, default `https://auto.ksinuevos.com`) — guiones vía proxy `/api/scripts/*` → `auto.ksinuevos.com` (solo `scripts.service.ts`)
 
 ### Key Conventions
 
