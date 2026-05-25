@@ -4143,25 +4143,47 @@ export type Database = {
         Row: {
           created_at: string
           fecha_asignacion: string
+          guion_tipo: string | null
           id: string
+          palabras_clave: string[]
+          palabras_clave_at: string | null
+          palabras_clave_por: string | null
+          status: string
           vehicle_id: string
           vendedor_id: string
         }
         Insert: {
           created_at?: string
           fecha_asignacion: string
+          guion_tipo?: string | null
           id?: string
+          palabras_clave?: string[]
+          palabras_clave_at?: string | null
+          palabras_clave_por?: string | null
+          status?: string
           vehicle_id: string
           vendedor_id: string
         }
         Update: {
           created_at?: string
           fecha_asignacion?: string
+          guion_tipo?: string | null
           id?: string
+          palabras_clave?: string[]
+          palabras_clave_at?: string | null
+          palabras_clave_por?: string | null
+          status?: string
           vehicle_id?: string
           vendedor_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "script_vehicle_assignments_palabras_clave_por_fkey"
+            columns: ["palabras_clave_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "script_vehicle_assignments_vehicle_id_fkey"
             columns: ["vehicle_id"]
@@ -4177,6 +4199,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      script_vehicle_assignments_archive: {
+        Row: {
+          created_at: string
+          fecha_asignacion: string
+          guion_tipo: string | null
+          id: string
+          palabras_clave: string[]
+          palabras_clave_at: string | null
+          palabras_clave_por: string | null
+          status: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          fecha_asignacion: string
+          guion_tipo?: string | null
+          id: string
+          palabras_clave?: string[]
+          palabras_clave_at?: string | null
+          palabras_clave_por?: string | null
+          status?: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          fecha_asignacion?: string
+          guion_tipo?: string | null
+          id?: string
+          palabras_clave?: string[]
+          palabras_clave_at?: string | null
+          palabras_clave_por?: string | null
+          status?: string
+          vehicle_id?: string
+          vendedor_id?: string
+        }
+        Relationships: []
       }
       seguros_polizas: {
         Row: {
@@ -5712,6 +5773,7 @@ export type Database = {
       }
       video_scripts: {
         Row: {
+          assignment_id: string | null
           created_at: string
           facebook_post_id: string | null
           fecha_generacion: string
@@ -5722,6 +5784,7 @@ export type Database = {
           guion_titulo: string | null
           id: string
           objecion_tipo: string | null
+          palabras_clave: string[]
           palabras_count: number
           semana_tipo: number
           status: string
@@ -5735,6 +5798,7 @@ export type Database = {
           vendedor_nombre: string | null
         }
         Insert: {
+          assignment_id?: string | null
           created_at?: string
           facebook_post_id?: string | null
           fecha_generacion: string
@@ -5745,6 +5809,7 @@ export type Database = {
           guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
+          palabras_clave?: string[]
           palabras_count: number
           semana_tipo: number
           status?: string
@@ -5758,6 +5823,7 @@ export type Database = {
           vendedor_nombre?: string | null
         }
         Update: {
+          assignment_id?: string | null
           created_at?: string
           facebook_post_id?: string | null
           fecha_generacion?: string
@@ -5768,6 +5834,7 @@ export type Database = {
           guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
+          palabras_clave?: string[]
           palabras_count?: number
           semana_tipo?: number
           status?: string
@@ -5781,6 +5848,13 @@ export type Database = {
           vendedor_nombre?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "video_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "script_vehicle_assignments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "video_scripts_vehicle_id_fkey"
             columns: ["vehicle_id"]
@@ -5799,6 +5873,7 @@ export type Database = {
       }
       video_scripts_archive: {
         Row: {
+          assignment_id: string | null
           created_at: string
           facebook_post_id: string | null
           fecha_generacion: string
@@ -5809,6 +5884,7 @@ export type Database = {
           guion_titulo: string | null
           id: string
           objecion_tipo: string | null
+          palabras_clave: string[]
           palabras_count: number
           semana_tipo: number
           status: string
@@ -5822,6 +5898,7 @@ export type Database = {
           vendedor_nombre: string | null
         }
         Insert: {
+          assignment_id?: string | null
           created_at?: string
           facebook_post_id?: string | null
           fecha_generacion: string
@@ -5832,6 +5909,7 @@ export type Database = {
           guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
+          palabras_clave?: string[]
           palabras_count: number
           semana_tipo: number
           status?: string
@@ -5845,6 +5923,7 @@ export type Database = {
           vendedor_nombre?: string | null
         }
         Update: {
+          assignment_id?: string | null
           created_at?: string
           facebook_post_id?: string | null
           fecha_generacion?: string
@@ -5855,6 +5934,7 @@ export type Database = {
           guion_titulo?: string | null
           id?: string
           objecion_tipo?: string | null
+          palabras_clave?: string[]
           palabras_count?: number
           semana_tipo?: number
           status?: string
