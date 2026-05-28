@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { 
     X, 
     Calendar, 
@@ -9,10 +9,133 @@ import {
     Type,
     Save,
     AlertCircle,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Car,
+    Search,
+    ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { AppointmentWithDetails } from "@/hooks/useAgenda";
+
+export type AppointmentLeadVehicle = {
+    inventoryId: string | null;
+    brand: string;
+    model: string;
+    year: number | string;
+    version?: string | null;
+    plateShort?: string | null;
+    imageUrl?: string | null;
+    status?: string | null;
+};
+
+type InterestedCarInput = {
+    inventory_id?: string | null;
+    brand?: string | null;
+    model?: string | null;
+    year?: number | string | null;
+    inventoryoracle?:
+        | {
+              id?: string;
+              brand?: string;
+              model?: string;
+              year?: number;
+              version?: string | null;
+              plate_short?: string | null;
+              img_main_url?: string | null;
+              status?: string | null;
+          }
+        | {
+              id?: string;
+              brand?: string;
+              model?: string;
+              year?: number;
+              version?: string | null;
+              plate_short?: string | null;
+              img_main_url?: string | null;
+              status?: string | null;
+          }[]
+        | null;
+};
+
+export function mapInterestedCarsToAppointmentVehicles(
+    cars: InterestedCarInput[] | null | undefined
+): AppointmentLeadVehicle[] {
+    if (!cars?.length) return [];
+
+    const seen = new Set<string>();
+    const result: AppointmentLeadVehicle[] = [];
+
+    for (const car of cars) {
+        const rawInv = car.inventoryoracle;
+        const inv = Array.isArray(rawInv) ? rawInv[0] : rawInv;
+        const inventoryId = car.inventory_id ?? inv?.id ?? null;
+        const key = inventoryId ?? `${car.brand}-${car.model}-${car.year}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const brand = inv?.brand ?? car.brand ?? "";
+        const model = inv?.model ?? car.model ?? "";
+        const year = inv?.year ?? car.year ?? "";
+        if (!brand && !model && !year) continue;
+
+        result.push({
+            inventoryId,
+            brand,
+            model,
+            year,
+            version: inv?.version ?? null,
+            plateShort: inv?.plate_short ?? null,
+            imageUrl: inv?.img_main_url ?? null,
+            status: inv?.status ?? null,
+        });
+    }
+
+    return result;
+}
+
+function formatVehicleLabel(v: AppointmentLeadVehicle): string {
+    return [v.brand, v.model, v.year, v.version].filter(Boolean).join(" ").trim();
+}
+
+const VEHICLE_NOTE_MARKER_RE = /\[vehículo:([0-9a-f-]{36})\]/i;
+
+function parseInventoryIdFromNotes(notes: string | null | undefined): string | null {
+    const m = notes?.match(VEHICLE_NOTE_MARKER_RE);
+    return m?.[1] ?? null;
+}
+
+function buildNotesWithVehicle(notes: string, label: string, inventoryId: string): string {
+    const marker = `[vehículo:${inventoryId}]`;
+    const line = `Vehículo de interés: ${label} ${marker}`;
+    const cleaned = notes
+        .split("\n")
+        .filter((l) => !VEHICLE_NOTE_MARKER_RE.test(l) && !l.trim().startsWith("Vehículo de interés:"))
+        .join("\n")
+        .trim();
+    return cleaned ? `${cleaned}\n${line}` : line;
+}
+
+function mapCatalogRow(row: {
+    id: string;
+    brand: string;
+    model: string;
+    year: number;
+    version?: string | null;
+    plate_short?: string | null;
+    img_main_url?: string | null;
+    status?: string | null;
+}): AppointmentLeadVehicle {
+    return {
+        inventoryId: row.id,
+        brand: row.brand,
+        model: row.model,
+        year: row.year,
+        version: row.version ?? null,
+        plateShort: row.plate_short ?? null,
+        imageUrl: row.img_main_url ?? null,
+        status: row.status ?? null,
+    };
+}
 
 interface AppointmentModalProps {
     isOpen: boolean;
@@ -23,6 +146,10 @@ interface AppointmentModalProps {
     initialLeadId?: number | null;
     appointmentToEdit?: AppointmentWithDetails | null; // MODO EDICIÓN
     initialData?: Partial<AppointmentFormData> | null; // MODO PRE-LLENADO (Desde Bot)
+    /** Vehículos del lead (evita recarga si ya vienen de Agenda / sugerencia bot). */
+    initialVehicles?: AppointmentLeadVehicle[] | null;
+    /** Preselección en inventoryoracle. */
+    initialInventoryId?: string | null;
 }
 
 interface AppointmentFormData {
@@ -42,13 +169,23 @@ export function AppointmentModal({
     onSuccess, 
     initialLeadId = null,
     appointmentToEdit = null,
-    initialData = null
+    initialData = null,
+    initialVehicles = null,
+    initialInventoryId = null,
 }: AppointmentModalProps) {
     const { supabase, user } = useAuth();
     
     // Estados
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [leadVehicles, setLeadVehicles] = useState<AppointmentLeadVehicle[]>([]);
+    const [vehiclesLoading, setVehiclesLoading] = useState(false);
+    const [catalogVehicles, setCatalogVehicles] = useState<AppointmentLeadVehicle[]>([]);
+    const [catalogLoading, setCatalogLoading] = useState(false);
+    const [selectedInventoryId, setSelectedInventoryId] = useState<string | null>(null);
+    const [vehicleSearch, setVehicleSearch] = useState("");
+    const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
+    const vehiclePickerRef = useRef<HTMLDivElement>(null);
     
     const [formData, setFormData] = useState<AppointmentFormData>({
         title: "",
@@ -61,6 +198,14 @@ export function AppointmentModal({
 
     const isEditing = !!appointmentToEdit;
     const modalTitle = isEditing ? "Editar Cita" : "Agendar Cita";
+    const hasLeadLinked = Boolean(
+        formData.lead_id ?? initialLeadId ?? appointmentToEdit?.lead_id
+    );
+    /** Sugerencia IA: el lead y el auto ya vienen detectados. */
+    const isFromBotSuggestion = !isEditing && Boolean(initialData && hasLeadLinked);
+    /** Cliente en showroom / cita manual sin lead. */
+    const isWalkInNew = !isEditing && !hasLeadLinked;
+    const [showVehiclePicker, setShowVehiclePicker] = useState(false);
 
     // Validar si todos los campos tienen datos
     const isFormValid = 
@@ -68,12 +213,77 @@ export function AppointmentModal({
         formData.external_client_name.trim().length > 0 &&
         formData.start_time.length > 0 &&
         formData.location.trim().length > 0 &&
-        formData.notes.trim().length > 0;
+        formData.notes.trim().length > 0 &&
+        !!selectedInventoryId;
+
+    const vehicleOptions = useMemo(() => {
+        const byId = new Map<string, AppointmentLeadVehicle>();
+        for (const v of leadVehicles) {
+            if (v.inventoryId) byId.set(v.inventoryId, v);
+        }
+        for (const v of catalogVehicles) {
+            if (v.inventoryId && !byId.has(v.inventoryId)) byId.set(v.inventoryId, v);
+        }
+        return [...byId.values()];
+    }, [leadVehicles, catalogVehicles]);
+
+    const selectedVehicle = useMemo(
+        () => vehicleOptions.find((v) => v.inventoryId === selectedInventoryId) ?? null,
+        [vehicleOptions, selectedInventoryId]
+    );
+
+    const filteredCatalog = useMemo(() => {
+        const q = vehicleSearch.trim().toLowerCase();
+        if (!q) return catalogVehicles;
+        return catalogVehicles.filter((v) => {
+            const hay = [v.brand, v.model, String(v.year), v.version, v.plateShort]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+            return hay.includes(q);
+        });
+    }, [catalogVehicles, vehicleSearch]);
+
+    const pickVehicle = useCallback((v: AppointmentLeadVehicle) => {
+        if (!v.inventoryId) return;
+        setSelectedInventoryId(v.inventoryId);
+        setVehicleSearch(formatVehicleLabel(v));
+        setVehicleDropdownOpen(false);
+    }, []);
+
+    const loadCatalog = useCallback(async () => {
+        setCatalogLoading(true);
+        try {
+            const { data, error: catError } = await supabase
+                .from("inventoryoracle")
+                .select("id, brand, model, year, version, plate_short, img_main_url, status")
+                .in("status", ["disponible", "reservado", "vendido"])
+                .order("updated_at", { ascending: false })
+                .limit(400);
+            if (catError) throw catError;
+            setCatalogVehicles((data ?? []).map((row) => mapCatalogRow(row as Parameters<typeof mapCatalogRow>[0])));
+        } catch (e) {
+            console.error("Error cargando inventario:", e);
+            setCatalogVehicles([]);
+        } finally {
+            setCatalogLoading(false);
+        }
+    }, [supabase]);
 
     // Efectos
     useEffect(() => {
         if (isOpen) {
             setError(null);
+            setVehicleSearch("");
+            setVehicleDropdownOpen(false);
+            setShowVehiclePicker(false);
+
+            const defaultInventoryId =
+                initialInventoryId ??
+                initialVehicles?.find((v) => v.inventoryId)?.inventoryId ??
+                parseInventoryIdFromNotes(appointmentToEdit?.notes) ??
+                null;
+            setSelectedInventoryId(defaultInventoryId);
 
             if (appointmentToEdit) {
                 // MODO EDICIÓN: Cargar datos existentes
@@ -118,7 +328,116 @@ export function AppointmentModal({
                 setDefaultTime();
             }
         }
-    }, [isOpen, appointmentToEdit, initialLeadId, initialData]);
+    }, [isOpen, appointmentToEdit, initialLeadId, initialData, initialInventoryId, initialVehicles]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (isWalkInNew || isEditing || showVehiclePicker) {
+            loadCatalog();
+        }
+    }, [isOpen, isWalkInNew, isEditing, showVehiclePicker, loadCatalog]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const onDocClick = (e: MouseEvent) => {
+            if (vehiclePickerRef.current && !vehiclePickerRef.current.contains(e.target as Node)) {
+                setVehicleDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", onDocClick);
+        return () => document.removeEventListener("mousedown", onDocClick);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || selectedInventoryId) return;
+        const first =
+            initialVehicles?.find((v) => v.inventoryId)?.inventoryId ??
+            leadVehicles.find((v) => v.inventoryId)?.inventoryId ??
+            null;
+        if (first) {
+            setSelectedInventoryId(first);
+            const v = [...leadVehicles, ...catalogVehicles].find((x) => x.inventoryId === first);
+            if (v) setVehicleSearch(formatVehicleLabel(v));
+        }
+    }, [isOpen, selectedInventoryId, initialVehicles, leadVehicles, catalogVehicles]);
+
+    useEffect(() => {
+        if (selectedVehicle) {
+            setVehicleSearch(formatVehicleLabel(selectedVehicle));
+        }
+    }, [selectedVehicle?.inventoryId]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setLeadVehicles([]);
+            setVehiclesLoading(false);
+            return;
+        }
+
+        const leadId =
+            appointmentToEdit?.lead_id ??
+            initialLeadId ??
+            initialData?.lead_id ??
+            formData.lead_id;
+
+        if (!leadId) {
+            setLeadVehicles([]);
+            return;
+        }
+
+        const fromEdit = appointmentToEdit?.lead?.interested_cars;
+        if (fromEdit?.length) {
+            setLeadVehicles(mapInterestedCarsToAppointmentVehicles(fromEdit));
+            return;
+        }
+
+        if (initialVehicles?.length) {
+            setLeadVehicles(initialVehicles);
+            return;
+        }
+
+        let cancelled = false;
+        setVehiclesLoading(true);
+
+        (async () => {
+            const { data, error: fetchError } = await supabase
+                .from("leads")
+                .select(
+                    `interested_cars (
+                        inventory_id,
+                        inventoryoracle (
+                            id, brand, model, year, version, plate_short, img_main_url, status
+                        )
+                    )`
+                )
+                .eq("id", leadId)
+                .maybeSingle();
+
+            if (cancelled) return;
+
+            if (fetchError) {
+                console.error("Error cargando vehículos del lead:", fetchError.message);
+                setLeadVehicles([]);
+            } else {
+                const raw = (data as { interested_cars?: InterestedCarInput[] } | null)
+                    ?.interested_cars;
+                setLeadVehicles(mapInterestedCarsToAppointmentVehicles(raw));
+            }
+            setVehiclesLoading(false);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        isOpen,
+        appointmentToEdit,
+        initialLeadId,
+        initialData?.lead_id,
+        initialVehicles,
+        formData.lead_id,
+        supabase,
+    ]);
 
     const setDefaultTime = () => {
         const now = new Date();
@@ -161,13 +480,45 @@ export function AppointmentModal({
                 throw new Error("La fecha de inicio no es válida.");
             }
 
+            const picked =
+                selectedVehicle ??
+                vehicleOptions.find((v) => v.inventoryId === selectedInventoryId);
+            if (!picked?.inventoryId) {
+                throw new Error("Selecciona el vehículo de interés en inventario.");
+            }
+
+            const vehicleLabel = formatVehicleLabel(picked);
+            const notesWithVehicle = buildNotesWithVehicle(
+                formData.notes,
+                vehicleLabel,
+                picked.inventoryId
+            );
+
+            if (formData.lead_id) {
+                const { data: existing } = await supabase
+                    .from("interested_cars")
+                    .select("id")
+                    .eq("lead_id", formData.lead_id)
+                    .eq("inventory_id", picked.inventoryId)
+                    .maybeSingle();
+                if (!existing) {
+                    const { error: icError } = await supabase.from("interested_cars").insert({
+                        lead_id: formData.lead_id,
+                        inventory_id: picked.inventoryId,
+                    });
+                    if (icError) {
+                        console.warn("No se pudo vincular vehículo al lead:", icError.message);
+                    }
+                }
+            }
+
             // Datos comunes para ambos casos (Insert y Update)
             const commonData = {
                 title: formData.title,
                 lead_id: formData.lead_id ?? null,
                 start_time: startTime.toISOString(),
                 location: formData.location,
-                notes: formData.notes,
+                notes: notesWithVehicle,
                 external_client_name: formData.external_client_name
             };
 
@@ -221,9 +572,15 @@ export function AppointmentModal({
                 location: "",
                 notes: ""
             });
+            setSelectedInventoryId(null);
+            setVehicleSearch("");
+            setVehicleDropdownOpen(false);
+            setShowVehiclePicker(false);
             setError(null);
         }, 300);
     };
+
+    const showInventorySearch = isWalkInNew || isEditing || (isFromBotSuggestion && showVehiclePicker);
 
     if (!isOpen) return null;
 
@@ -298,11 +655,128 @@ export function AppointmentModal({
                                 </div>
                             </div>
 
-                            {/* Lead ID Indicator */}
-                            {(initialLeadId || formData.lead_id) && (
-                                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
-                                    <LinkIcon className="h-3 w-3" />
-                                    <span>Vinculado al Lead #{initialLeadId || formData.lead_id}</span>
+                            {/* Vehículo */}
+                            <div>
+                                <InputLabel label="Vehículo de interés" />
+
+                                {isFromBotSuggestion && selectedVehicle && !showVehiclePicker ? (
+                                    <div className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-3">
+                                        <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                                            <Car className="h-5 w-5 text-indigo-700" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-900 flex-1 min-w-0 truncate">
+                                            {formatVehicleLabel(selectedVehicle)}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowVehiclePicker(true)}
+                                            className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 shrink-0"
+                                        >
+                                            Cambiar
+                                        </button>
+                                    </div>
+                                ) : showInventorySearch ? (
+                                    <>
+                                        {isWalkInNew && (
+                                            <p className="text-xs text-slate-500 mb-2">
+                                                Cliente en showroom: indica qué vehículo desea ver.
+                                            </p>
+                                        )}
+                                        <div ref={vehiclePickerRef} className="relative">
+                                            <div className="relative">
+                                                <div className={iconContainerClass}>
+                                                    {catalogLoading ? (
+                                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                                    ) : (
+                                                        <Search className="h-5 w-5" />
+                                                    )}
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={vehicleSearch}
+                                                    onChange={(e) => {
+                                                        setVehicleSearch(e.target.value);
+                                                        setVehicleDropdownOpen(true);
+                                                        if (!e.target.value.trim()) setSelectedInventoryId(null);
+                                                    }}
+                                                    onFocus={() => setVehicleDropdownOpen(true)}
+                                                    placeholder="Buscar marca, modelo o placa…"
+                                                    className={`${inputClasses} ${error && !selectedInventoryId ? "border-red-300 bg-red-50" : ""}`}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                    onClick={() => setVehicleDropdownOpen((o) => !o)}
+                                                    aria-label="Abrir listado"
+                                                >
+                                                    <ChevronDown className="h-5 w-5" />
+                                                </button>
+                                            </div>
+                                            {vehicleDropdownOpen && (
+                                                <div className="absolute top-full left-0 right-0 z-30 mt-2 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
+                                                    {filteredCatalog.length === 0 ? (
+                                                        <p className="px-4 py-4 text-sm text-slate-500 text-center">
+                                                            {catalogLoading ? "Cargando…" : "Sin resultados"}
+                                                        </p>
+                                                    ) : (
+                                                        <ul className="py-1">
+                                                            {filteredCatalog.slice(0, 80).map((v) => (
+                                                                <li key={v.inventoryId!}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            pickVehicle(v);
+                                                                            if (isFromBotSuggestion) setShowVehiclePicker(false);
+                                                                        }}
+                                                                        className={`w-full px-4 py-2.5 text-left hover:bg-slate-50 flex items-center justify-between gap-2 ${
+                                                                            selectedInventoryId === v.inventoryId
+                                                                                ? "bg-emerald-50"
+                                                                                : ""
+                                                                        }`}
+                                                                    >
+                                                                        <span className="text-sm font-semibold text-slate-900">
+                                                                            {formatVehicleLabel(v)}
+                                                                        </span>
+                                                                        {v.plateShort && (
+                                                                            <span className="text-[10px] text-slate-500 shrink-0">
+                                                                                {v.plateShort}
+                                                                            </span>
+                                                                        )}
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {isFromBotSuggestion && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowVehiclePicker(false);
+                                                    if (selectedVehicle) {
+                                                        setVehicleSearch(formatVehicleLabel(selectedVehicle));
+                                                    }
+                                                }}
+                                                className="mt-2 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                                            >
+                                                Usar vehículo detectado
+                                            </button>
+                                        )}
+                                    </>
+                                ) : vehiclesLoading ? (
+                                    <p className="text-xs text-slate-500 flex items-center gap-1.5 py-2">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Cargando vehículo…
+                                    </p>
+                                ) : null}
+                            </div>
+
+                            {isFromBotSuggestion && hasLeadLinked && (
+                                <div className="flex items-center gap-2 text-xs text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100">
+                                    <LinkIcon className="h-3 w-3 shrink-0" />
+                                    <span>Cita desde detección IA · Lead #{formData.lead_id ?? initialLeadId}</span>
                                 </div>
                             )}
                         </div>

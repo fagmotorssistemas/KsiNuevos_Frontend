@@ -18,7 +18,8 @@ export default function LeadsPageClient() {
     leads,
     totalCount,
     respondedCount, // Métrica 1
-    interactionsCount, // Métrica 2
+    interactionsCount,
+    dayBreakdown,
     budgetCount,
     tradeInLeadsCount,
     requestStats,
@@ -78,6 +79,7 @@ export default function LeadsPageClient() {
         totalResults={totalCount}
         respondedCount={respondedCount}
         interactionsCount={interactionsCount}
+        dayBreakdown={dayBreakdown}
         budgetCount={budgetCount}
         tradeInLeadsCount={tradeInLeadsCount}
         requestStats={requestStats}

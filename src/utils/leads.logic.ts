@@ -54,7 +54,10 @@ export const processLeadsLogic = (
                 case 'today': return leadDate >= todayStart;
                 case '7days': return leadDate >= (todayStart - (7 * 24 * 60 * 60 * 1000));
                 case '15days': return leadDate >= (todayStart - (15 * 24 * 60 * 60 * 1000));
-                case '30days': return leadDate >= (todayStart - (30 * 24 * 60 * 60 * 1000));
+                case 'thisMonth': {
+                    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+                    return leadDate >= monthStart;
+                }
                 default: return true;
             }
         });

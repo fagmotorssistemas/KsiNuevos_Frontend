@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchLeadsAPI, fetchSellersRequest, fetchDailyInteractions, fetchRequestStats, fetchBudgetStats, fetchTradeInLeadsCount } from "@/services/leads.service";
+import {
+    fetchLeadsAPI,
+    fetchSellersRequest,
+    fetchDailyInteractions,
+    fetchLeadDayMetricBreakdown,
+    fetchRequestStats,
+    fetchBudgetStats,
+    fetchTradeInLeadsCount,
+    type LeadDayMetricBreakdown,
+} from "@/services/leads.service";
 import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 
@@ -20,6 +29,7 @@ export function useLeads() {
     const [totalCount, setTotalCount] = useState(0);
     const [respondedCount, setRespondedCount] = useState(0);
     const [interactionsCount, setInteractionsCount] = useState(0);
+    const [dayBreakdown, setDayBreakdown] = useState<LeadDayMetricBreakdown | null>(null);
     
     const [budgetCount, setBudgetCount] = useState(0);
     const [tradeInLeadsCount, setTradeInLeadsCount] = useState(0);
@@ -159,18 +169,24 @@ export function useLeads() {
         else setIsRefetching(true);
 
         try {
-            const [leadsData, interactions, stats, bCount, tradeInCount] = await Promise.all([
+            const breakdownPromise = filters.exactDate
+                ? fetchLeadDayMetricBreakdown(supabase, filters.exactDate, filters.assignedTo)
+                : Promise.resolve(null)
+
+            const [leadsData, interactions, stats, bCount, tradeInCount, breakdown] = await Promise.all([
                 fetchLeadsAPI(supabase, page, rowsPerPage, filters),
                 fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate),
                 fetchRequestStats(supabase, filters.assignedTo),
                 fetchBudgetStats(supabase, filters.assignedTo),
-                fetchTradeInLeadsCount(supabase, filters.assignedTo)
-            ]);
+                fetchTradeInLeadsCount(supabase, filters.assignedTo),
+                breakdownPromise,
+            ])
 
             setLeads(leadsData.data);
             setTotalCount(leadsData.count);
             setRespondedCount(leadsData.respondedCount);
             setInteractionsCount(interactions);
+            setDayBreakdown(breakdown);
             setRequestStats(stats);
             setBudgetCount(bCount);
             setTradeInLeadsCount(tradeInCount);
@@ -253,6 +269,7 @@ export function useLeads() {
         totalCount,
         respondedCount,
         interactionsCount,
+        dayBreakdown,
         budgetCount,
         tradeInLeadsCount,
         requestStats,

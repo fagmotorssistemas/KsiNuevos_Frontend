@@ -1,33 +1,16 @@
 import { NextResponse } from 'next/server'
 
+import { proxyMetricsInternal } from '@/lib/metrics/internal-proxy'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
+
 export async function POST() {
-  const base = process.env.METRICS_INTERNAL_API_URL?.replace(/\/$/, '')
-  const secret = process.env.METRICS_INTERNAL_SECRET
+  const auth = await requireMarketingSession()
+  if (!auth.ok) return auth.response
 
-  if (!base || !secret) {
-    return NextResponse.json(
-      {
-        ok: false,
-        message:
-          'Configura METRICS_INTERNAL_API_URL y METRICS_INTERNAL_SECRET en el servidor para llamar POST /internal/metrics/campaigns/refresh.',
-      },
-      { status: 501 }
-    )
-  }
+  const proxied = await proxyMetricsInternal('/internal/metrics/campaigns/refresh', {
+    method: 'POST',
+  })
+  if (!proxied.ok) return proxied.response
 
-  try {
-    const r = await fetch(`${base}/internal/metrics/campaigns/refresh`, {
-      method: 'POST',
-      headers: { 'x-internal-secret': secret },
-      cache: 'no-store',
-    })
-    const text = await r.text()
-    if (!r.ok) {
-      return NextResponse.json({ ok: false, message: text || r.statusText }, { status: 502 })
-    }
-    return NextResponse.json({ ok: true, message: text })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, message: msg }, { status: 500 })
-  }
+  return NextResponse.json({ ok: true, data: proxied.data })
 }

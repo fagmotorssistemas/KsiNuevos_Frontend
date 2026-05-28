@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Bell, ClipboardList, Film, Package } from 'lucide-react'
+import { BarChart3, Bell, ClipboardList, Package } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { fetchMetaAdAlertsBadgeCount } from '@/app/marketing/metricas/lib/meta-ad-alerts-db'
 import { useAuth } from '@/hooks/useAuth'
 
 type NavItem = {
@@ -19,30 +20,28 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/marketing/metricas', label: 'Resumen', icon: BarChart3 },
   { href: '/marketing/metricas/reporte', label: 'Reporte diario', icon: ClipboardList },
   { href: '/marketing/metricas/inventario', label: 'Inventario', icon: Package },
-  { href: '/marketing/metricas/guiones', label: 'Guiones', icon: Film },
   { href: '/marketing/metricas/alertas', label: 'Alertas', icon: Bell },
 ]
 
 export function MetricasNav() {
   const pathname = usePathname()
   const { supabase } = useAuth()
-  const [criticalCount, setCriticalCount] = useState<number>(0)
+  const [badgeCount, setBadgeCount] = useState<number>(0)
 
   useEffect(() => {
     if (!supabase) return
     let cancelled = false
-    ;(async () => {
+
+    async function loadBadge() {
       try {
-        const db = supabase as unknown as { from: (t: string) => any }
-        const { data, error } = await db.from('metrics_alerts').select('level')
-        if (error || cancelled) return
-        const rows = (data ?? []) as Array<{ level?: string }>
-        const n = rows.filter((r) => String(r.level ?? '').toUpperCase() === 'ROJO').length
-        setCriticalCount(n)
+        const total = await fetchMetaAdAlertsBadgeCount(supabase)
+        if (!cancelled) setBadgeCount(total)
       } catch {
-        /* tabla opcional */
+        if (!cancelled) setBadgeCount(0)
       }
-    })()
+    }
+
+    void loadBadge()
     return () => {
       cancelled = true
     }
@@ -52,14 +51,14 @@ export function MetricasNav() {
 
   return (
     <nav className="rounded-2xl border border-gray-200 bg-white shadow-sm p-2">
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {NAV_ITEMS.map((it) => {
           const active =
             it.href === '/marketing/metricas'
               ? pathname === '/marketing/metricas'
               : pathname === it.href || pathname.startsWith(`${it.href}/`)
           const Icon = it.icon
-          const showBadge = it.href === alertHref && criticalCount > 0
+          const showBadge = it.href === alertHref && badgeCount > 0
           return (
             <Link
               key={it.href}
@@ -73,7 +72,7 @@ export function MetricasNav() {
               <span className="truncate">{it.label}</span>
               {showBadge && (
                 <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-red-500 text-[10px] font-extrabold text-white flex items-center justify-center">
-                  {criticalCount > 9 ? '9+' : criticalCount}
+                  {badgeCount > 9 ? '9+' : badgeCount}
                 </span>
               )}
             </Link>

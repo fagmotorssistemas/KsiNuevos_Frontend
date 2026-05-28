@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { ecuadorCalendarParts, toYmd } from './daily-metrics-report'
 import { metricsDb } from './db'
 
 export type VehicleCategory = 'URGENTE' | 'RESCATE' | 'ROTACION' | 'ESTRELLA'
@@ -38,10 +39,31 @@ export type InventoryRow = {
   created_at?: string | null
 }
 
+export function sinceIsoEcuador(rangeDays: number): string {
+  const { y, m, day } = ecuadorCalendarParts()
+  const d = new Date(Date.UTC(y, m - 1, day, 12, 0, 0))
+  d.setUTCDate(d.getUTCDate() - rangeDays)
+  const ymd = toYmd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())
+  return `${ymd}T00:00:00.000-05:00`
+}
+
+/** Mapea fila de interested_cars al id de inventario (inventory_id o vehicle_uid). */
+function resolveInterestedCarInventoryId(
+  row: { inventory_id?: string | null; vehicle_uid?: string | null },
+  validIds: Set<string>
+): string | null {
+  if (row.inventory_id && validIds.has(String(row.inventory_id))) {
+    return String(row.inventory_id)
+  }
+  if (row.vehicle_uid && validIds.has(String(row.vehicle_uid))) {
+    return String(row.vehicle_uid)
+  }
+  return null
+}
+
 export async function fetchInventoryWithMetrics(supabase: SupabaseClient, rangeDays: 1 | 7 | 30) {
   const db = metricsDb(supabase)
-  const since = new Date()
-  since.setUTCDate(since.getUTCDate() - rangeDays)
+  const sinceIso = sinceIsoEcuador(rangeDays)
 
   const { data: inv, error: invErr } = await db
     .from('inventoryoracle')
@@ -54,13 +76,14 @@ export async function fetchInventoryWithMetrics(supabase: SupabaseClient, rangeD
 
   const inventory = (inv ?? []) as InventoryRow[]
   const ids = inventory.map((r) => r.id)
+  const validIds = new Set(ids)
 
   const [{ data: leadsRows }, { data: metaRows }] = await Promise.all([
     db
       .from('interested_cars')
-      .select('vehicle_uid, created_at')
-      .not('vehicle_uid', 'is', null)
-      .gte('created_at', since.toISOString()),
+      .select('inventory_id, vehicle_uid, created_at')
+      .gte('created_at', sinceIso)
+      .limit(15000),
     db
       .from('meta_video_metrics')
       .select('inventory_vehicle_id, views, retention_rate')
@@ -68,10 +91,14 @@ export async function fetchInventoryWithMetrics(supabase: SupabaseClient, rangeD
   ])
 
   const leadsByVehicle = new Map<string, number>()
-  for (const row of (leadsRows ?? []) as Array<{ vehicle_uid?: string | null }>) {
-    const id = row.vehicle_uid
-    if (!id) continue
-    leadsByVehicle.set(id, (leadsByVehicle.get(id) ?? 0) + 1)
+  for (const id of ids) leadsByVehicle.set(id, 0)
+  for (const row of (leadsRows ?? []) as Array<{
+    inventory_id?: string | null
+    vehicle_uid?: string | null
+  }>) {
+    const invId = resolveInterestedCarInventoryId(row, validIds)
+    if (!invId) continue
+    leadsByVehicle.set(invId, (leadsByVehicle.get(invId) ?? 0) + 1)
   }
 
   type Agg = { views: number; retentionSum: number; retentionN: number }
@@ -105,7 +132,7 @@ export async function fetchInventoryWithMetrics(supabase: SupabaseClient, rangeD
       price: v.price ?? null,
       leads_window: leads7Or30,
       views_video: meta?.views ?? 0,
-      retention_pct: avgRetention == null ? null : avgRetention * 100,
+      retention_pct: avgRetention == null ? null : avgRetention <= 1 ? avgRetention * 100 : avgRetention,
       category,
     }
   })

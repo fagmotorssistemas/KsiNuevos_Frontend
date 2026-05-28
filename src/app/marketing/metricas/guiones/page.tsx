@@ -2,16 +2,43 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { getISOWeek } from 'date-fns'
-import { Loader2 } from 'lucide-react'
+import {
+  BarChart3,
+  Clapperboard,
+  Lightbulb,
+  Loader2,
+  Sparkles,
+  TrendingUp,
+  Trophy,
+} from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
 import { metricsDb } from '@/app/marketing/metricas/lib/db'
 
-const SEMANA_DESC: Record<number, string> = {
-  1: 'Venta / Informativo / Educativo',
-  2: 'Frío',
-  3: 'Comparación',
-  4: 'Objeción',
+const SEMANA_TIPOS: Array<{ n: number; label: string; desc: string; accent: string }> = [
+  { n: 1, label: 'Tipo 1', desc: 'Venta / Informativo / Educativo', accent: 'emerald' },
+  { n: 2, label: 'Tipo 2', desc: 'Frío', accent: 'sky' },
+  { n: 3, label: 'Tipo 3', desc: 'Comparación', accent: 'violet' },
+  { n: 4, label: 'Tipo 4', desc: 'Objeción', accent: 'amber' },
+]
+
+const ACCENT_STYLES: Record<string, { active: string; idle: string }> = {
+  emerald: {
+    active: 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200/50',
+    idle: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:border-emerald-300',
+  },
+  sky: {
+    active: 'bg-sky-600 text-white border-sky-600 shadow-md shadow-sky-200/50',
+    idle: 'bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300',
+  },
+  violet: {
+    active: 'bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-200/50',
+    idle: 'bg-violet-50 text-violet-800 border-violet-200 hover:border-violet-300',
+  },
+  amber: {
+    active: 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200/50',
+    idle: 'bg-amber-50 text-amber-900 border-amber-200 hover:border-amber-300',
+  },
 }
 
 type AggRow = {
@@ -19,6 +46,13 @@ type AggRow = {
   count: number
   avgRetention: number | null
   avgViews: number | null
+}
+
+function rankStyle(idx: number) {
+  if (idx === 0) return 'bg-amber-100 text-amber-800 ring-amber-200'
+  if (idx === 1) return 'bg-slate-200 text-slate-700 ring-slate-300'
+  if (idx === 2) return 'bg-orange-100 text-orange-800 ring-orange-200'
+  return 'bg-slate-100 text-slate-600 ring-slate-200'
 }
 
 export default function MetricasGuionesPerformancePage() {
@@ -66,9 +100,16 @@ export default function MetricasGuionesPerformancePage() {
 
         let metricsByScript = new Map<string, { retention: number | null; views: number | null }>()
         if (ids.length) {
-          const { data: met, error: me } = await db.from('video_script_metrics').select('script_id, retention_rate, views').in('script_id', ids)
+          const { data: met, error: me } = await db
+            .from('video_script_metrics')
+            .select('script_id, retention_rate, views')
+            .in('script_id', ids)
           if (!me && met) {
-            for (const m of met as Array<{ script_id?: string; retention_rate?: number | null; views?: number | null }>) {
+            for (const m of met as Array<{
+              script_id?: string
+              retention_rate?: number | null
+              views?: number | null
+            }>) {
               if (!m.script_id) continue
               metricsByScript.set(m.script_id, {
                 retention: m.retention_rate ?? null,
@@ -130,7 +171,11 @@ export default function MetricasGuionesPerformancePage() {
 
         if (!metaErr && metaB) {
           const tmp = new Map<string, { title: string; views: number }>()
-          for (const row of metaB as Array<{ parsed_brand?: string | null; title?: string | null; views?: number | null }>) {
+          for (const row of metaB as Array<{
+            parsed_brand?: string | null
+            title?: string | null
+            views?: number | null
+          }>) {
             const b = (row.parsed_brand ?? '').trim()
             if (!b) continue
             const key = b.toLowerCase()
@@ -156,8 +201,8 @@ export default function MetricasGuionesPerformancePage() {
         }
         brandsOut.sort((a, b) => a.brand.localeCompare(b.brand))
         setBrandRows(brandsOut.slice(0, 40))
-      } catch (e: any) {
-        setError(String(e?.message ?? e))
+      } catch (e: unknown) {
+        setError(String((e as Error)?.message ?? e))
         setRows([])
       } finally {
         setLoading(false)
@@ -167,7 +212,7 @@ export default function MetricasGuionesPerformancePage() {
 
   const isoWeek = getISOWeek(new Date())
   const semanaTipoActual = ((isoWeek - 1) % 4) + 1
-  const semanaLabel = SEMANA_DESC[semanaTipoActual] ?? '—'
+  const semanaActual = SEMANA_TIPOS.find((s) => s.n === semanaTipoActual)
 
   const insight = useMemo(() => {
     if (rows.length < 2) return null
@@ -176,121 +221,248 @@ export default function MetricasGuionesPerformancePage() {
     const worst = byViews[byViews.length - 1]
     if (!best || !worst || best.tipo === worst.tipo) return null
     const mult =
-      best.avgViews && worst.avgViews && worst.avgViews > 0 ? (best.avgViews / worst.avgViews).toFixed(1) : null
+      best.avgViews && worst.avgViews && worst.avgViews > 0
+        ? (best.avgViews / worst.avgViews).toFixed(1)
+        : null
     return { best: best.tipo, worst: worst.tipo, mult }
   }, [rows])
 
   const maxBar = useMemo(() => Math.max(1, ...rows.map((r) => r.avgViews ?? r.count)), [rows])
 
-  const medals = ['🥇', '🥈', '🥉']
+  const totalGuiones = useMemo(() => rows.reduce((n, r) => n + r.count, 0), [rows])
+  const topTipo = rows[0]?.tipo ?? '—'
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">{error}</div>}
-
-      <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
-        <p className="text-xs font-bold text-violet-700">Semana ISO {isoWeek}</p>
-        <p className="mt-1 text-sm font-extrabold text-gray-900">
-          Esta semana es tipo <span className="text-violet-700">{semanaTipoActual}</span>: {semanaLabel}
-        </p>
-        <p className="text-xs text-gray-500 mt-2">
-          Tipos de contenido por calendario (referencia). Los datos de abajo salen de guiones publicados recientes.
-        </p>
+      {/* Encabezado */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-wider text-violet-600">
+            Performance de guiones
+          </p>
+          <p className="text-sm text-slate-500 mt-0.5 font-medium">
+            Guiones publicados · últimos ~90 días
+          </p>
+        </div>
+        {!loading && (
+          <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-slate-200 px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm">
+              <Clapperboard className="h-3.5 w-3.5 text-violet-600" />
+              {totalGuiones} publicados
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-white border border-slate-200 px-3 py-1.5 text-xs font-extrabold text-slate-700 shadow-sm">
+              <BarChart3 className="h-3.5 w-3.5 text-violet-600" />
+              {rows.length} tipos
+            </span>
+          </div>
+        )}
       </div>
 
-      {insight && (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5 shadow-sm">
-          <p className="text-sm font-extrabold text-gray-900">
-            💡 Los formatos de tipo <span className="text-amber-900">{insight.best}</span>
-            {insight.mult ? (
-              <>
-                {' '}
-                concentran ~<span className="text-amber-900">{insight.mult}x</span> más vistas promedio que{' '}
-                <span className="text-amber-900">{insight.worst}</span> en la ventana analizada.
-              </>
-            ) : (
-              <> muestran mejor promedio de vistas que {insight.worst}.</>
-            )}
-          </p>
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 font-semibold">
+          {error}
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      {/* Calendario semanal */}
+      <div className="rounded-3xl border border-violet-200/70 bg-gradient-to-br from-violet-50/90 via-white to-indigo-50/30 p-5 sm:p-6 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
           <div>
-            <p className="text-xs font-bold text-gray-500">Rendimiento por tipo de guion</p>
-            <p className="text-base font-extrabold text-gray-900">Últimos ~90 días · publicados</p>
+            <div className="inline-flex items-center gap-2 rounded-full bg-violet-600/10 px-2.5 py-1 text-[11px] font-extrabold text-violet-800">
+              <Sparkles className="h-3.5 w-3.5" />
+              Semana ISO {isoWeek}
+            </div>
+            <h2 className="mt-2 text-xl sm:text-2xl font-extrabold text-slate-900 leading-snug">
+              Esta semana:{' '}
+              <span className="text-violet-700">{semanaActual?.desc ?? '—'}</span>
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 font-medium max-w-xl">
+              Calendario de referencia por rotación de 4 semanas. Las métricas inferiores provienen de
+              guiones ya publicados.
+            </p>
           </div>
-          {loading && (
-            <span className="inline-flex items-center gap-2 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Cargando…
-            </span>
-          )}
         </div>
-        <div className="p-5 space-y-4">
-          {rows.map((r, idx) => {
-            const widthPct = Math.round(((r.avgViews ?? r.count) / maxBar) * 100)
-            const medal = idx < 3 ? medals[idx] : null
+
+        <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          {SEMANA_TIPOS.map((st) => {
+            const active = st.n === semanaTipoActual
+            const styles = ACCENT_STYLES[st.accent]
             return (
-              <div key={r.tipo} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2">
-                    {medal && <span className="text-lg shrink-0">{medal}</span>}
-                    <p className="font-extrabold text-gray-900 truncate">{r.tipo}</p>
+              <div
+                key={st.n}
+                className={[
+                  'rounded-2xl border px-3 py-3 transition-all',
+                  active ? styles.active : styles.idle,
+                ].join(' ')}
+              >
+                <p className="text-[10px] font-extrabold uppercase tracking-wide opacity-90">
+                  {st.label}
+                  {active ? ' · ahora' : ''}
+                </p>
+                <p className="mt-1 text-sm font-extrabold leading-tight">{st.desc}</p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Insight */}
+      {insight && (
+        <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/90 to-white p-5 shadow-sm">
+          <div className="flex gap-4">
+            <div className="shrink-0 w-11 h-11 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+              <Lightbulb className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-slate-900">Insight de la ventana</p>
+              <p className="mt-1.5 text-sm text-slate-700 leading-relaxed font-medium">
+                Los formatos de tipo{' '}
+                <span className="font-extrabold text-amber-900">{insight.best}</span>
+                {insight.mult ? (
+                  <>
+                    {' '}
+                    concentran ~<span className="font-extrabold text-amber-900">{insight.mult}×</span> más
+                    vistas promedio que{' '}
+                    <span className="font-extrabold text-amber-900">{insight.worst}</span>.
+                  </>
+                ) : (
+                  <>
+                    {' '}
+                    muestran mejor promedio de vistas que{' '}
+                    <span className="font-extrabold text-amber-900">{insight.worst}</span>.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ranking por tipo */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-slate-900">Rendimiento por tipo de guion</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Ordenado por vistas promedio · top: {topTipo}
+              </p>
+            </div>
+          </div>
+          {loading && <Loader2 className="h-5 w-5 animate-spin text-violet-500" />}
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-3">
+          {rows.map((r, idx) => {
+            const barValue = r.avgViews ?? r.count
+            const widthPct = Math.round((barValue / maxBar) * 100)
+            return (
+              <div
+                key={r.tipo}
+                className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={[
+                        'shrink-0 w-8 h-8 rounded-xl flex items-center justify-center text-xs font-extrabold ring-1 ring-inset',
+                        rankStyle(idx),
+                      ].join(' ')}
+                    >
+                      {idx < 3 ? <Trophy className="h-4 w-4" /> : idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-extrabold text-slate-900 truncate">{r.tipo}</p>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        {r.count} guion{r.count === 1 ? '' : 'es'} publicados
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs font-bold text-gray-500 shrink-0">{r.count} guiones</span>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-extrabold text-slate-900 tabular-nums">
+                      {r.avgViews == null ? '—' : Math.round(r.avgViews).toLocaleString('es-EC')}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase text-slate-500">vistas prom.</p>
+                  </div>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-gray-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-violet-600" style={{ width: `${widthPct}%` }} />
+
+                <div className="mt-3 h-2.5 rounded-full bg-slate-200/80 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 transition-all duration-500"
+                    style={{ width: `${widthPct}%` }}
+                  />
                 </div>
-                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-600">
-                  <span>
-                    Vistas prom.:{' '}
-                    <span className="font-extrabold text-gray-900">{r.avgViews == null ? '—' : Math.round(r.avgViews).toLocaleString('es-EC')}</span>
-                  </span>
-                  <span>
-                    Retención prom.:{' '}
-                    <span className="font-extrabold text-gray-900">{r.avgRetention == null ? '—' : `${Math.round(r.avgRetention)}%`}</span>
+
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <span className="inline-flex rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200/80">
+                    Retención{' '}
+                    <span className="ml-1 font-extrabold text-slate-900">
+                      {r.avgRetention == null ? '—' : `${Math.round(r.avgRetention)}%`}
+                    </span>
                   </span>
                 </div>
               </div>
             )
           })}
+
           {!loading && rows.length === 0 && (
-            <p className="text-sm text-gray-500">No hay guiones publicados en el rango o falló la consulta.</p>
+            <p className="text-sm text-slate-500 text-center py-10">
+              No hay guiones publicados en el rango o falló la consulta.
+            </p>
           )}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-xs font-bold text-gray-500">Comportamiento por marca (orgánico)</p>
-          <p className="text-base font-extrabold text-gray-900">Guiones publicados + marca (Oracle)</p>
+      {/* Por marca */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <Clapperboard className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-extrabold text-slate-900">Comportamiento por marca</p>
+            <p className="text-xs text-slate-500 font-medium">
+              Mejor / peor tipo de guion · hook ganador en video orgánico
+            </p>
+          </div>
         </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
-              <tr>
-                <th className="text-left font-bold px-5 py-3">Marca</th>
-                <th className="text-left font-bold px-5 py-3">Mejor tipo</th>
-                <th className="text-left font-bold px-5 py-3">Peor tipo</th>
-                <th className="text-left font-bold px-5 py-3">Hook ganador (video)</th>
+            <thead>
+              <tr className="bg-slate-50/90 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                <th className="text-left px-5 py-3.5">Marca</th>
+                <th className="text-left px-4 py-3.5">Mejor tipo</th>
+                <th className="text-left px-4 py-3.5">Peor tipo</th>
+                <th className="text-left px-5 py-3.5 min-w-[200px]">Hook ganador</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {brandRows.map((b) => (
-                <tr key={b.brand} className="border-t border-gray-100">
-                  <td className="px-5 py-3 font-extrabold text-gray-900">{b.brand}</td>
-                  <td className="px-5 py-3 text-gray-700">{b.best}</td>
-                  <td className="px-5 py-3 text-gray-700">{b.worst}</td>
-                  <td className="px-5 py-3 text-gray-700 max-w-[280px] truncate">{b.hook}</td>
+                <tr key={b.brand} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-5 py-3.5 font-extrabold text-slate-900">{b.brand}</td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-extrabold text-emerald-800 ring-1 ring-inset ring-emerald-200/60">
+                      {b.best}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-extrabold text-slate-700 ring-1 ring-inset ring-slate-200">
+                      {b.worst}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-slate-600 font-medium max-w-[320px] truncate" title={b.hook}>
+                    {b.hook}
+                  </td>
                 </tr>
               ))}
               {!loading && brandRows.length === 0 && (
-                <tr className="border-t border-gray-100">
-                  <td className="px-5 py-8 text-gray-500 text-center" colSpan={4}>
-                    Sin datos por marca (revisa relación `video_scripts` → `inventoryoracle`).
+                <tr>
+                  <td colSpan={4} className="px-5 py-12 text-center text-slate-500">
+                    Sin datos por marca. Revisa la relación video_scripts → inventario.
                   </td>
                 </tr>
               )}

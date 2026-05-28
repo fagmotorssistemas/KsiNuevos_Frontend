@@ -28,7 +28,11 @@ import { WebAppointmentDetailModal } from "@/components/features/agenda/WebAppoi
 import { WebAppointmentWithDetails as WebApptType } from "@/types/web-appointments";
 
 import { AppointmentCard } from "@/components/features/agenda/AppointmentCard";
-import { AppointmentModal } from "@/components/features/agenda/AppointmentModal";
+import {
+    AppointmentModal,
+    mapInterestedCarsToAppointmentVehicles,
+    type AppointmentLeadVehicle,
+} from "@/components/features/agenda/AppointmentModal";
 import { BotSuggestionCard } from "@/components/features/agenda/BotSuggestionCard";
 
 import { Button } from "@/components/ui/buttontable"; 
@@ -40,7 +44,8 @@ export default function AgendaPage() {
     // -- ESTADOS PARA MODALES --
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAppointment, setEditingAppointment] = useState<AppointmentWithDetails | null>(null);
-    const [suggestionData, setSuggestionData] = useState<any | null>(null); 
+    const [suggestionData, setSuggestionData] = useState<any | null>(null);
+    const [suggestionVehicles, setSuggestionVehicles] = useState<AppointmentLeadVehicle[] | null>(null); 
 
     const [isWebModalOpen, setIsWebModalOpen] = useState(false);
     const [selectedWebAppointment, setSelectedWebAppointment] = useState<WebApptType | null>(null);
@@ -119,12 +124,14 @@ export default function AgendaPage() {
     const handleOpenNew = () => {
         setEditingAppointment(null);
         setSuggestionData(null);
+        setSuggestionVehicles(null);
         setIsModalOpen(true);
     };
 
     const handleEdit = (appointment: AppointmentWithDetails) => {
         setEditingAppointment(appointment);
         setSuggestionData(null);
+        setSuggestionVehicles(null);
         setIsModalOpen(true);
     };
 
@@ -151,14 +158,20 @@ export default function AgendaPage() {
         const tzOffset = finalDateObj.getTimezoneOffset() * 60000; 
         const localISOTime = new Date(finalDateObj.getTime() - tzOffset).toISOString().slice(0, 16);
 
+        const vehicles = mapInterestedCarsToAppointmentVehicles(lead.interested_cars);
+        const vehicleNote = vehicles.length
+            ? vehicles.map((v) => [v.brand, v.model, v.year, v.version].filter(Boolean).join(" ")).join(" · ")
+            : "Sin vehículo en inventario";
+
         setSuggestionData({
             title: `Cita con ${lead.name}`,
             lead_id: lead.id,
             external_client_name: lead.name,
             start_time: localISOTime, 
             location: "Por definir",
-            notes: `Cita detectada automáticamente.\nVehículo de interés: ${lead.interested_cars?.[0]?.brand || ''} ${lead.interested_cars?.[0]?.model || ''}`
+            notes: `Cita detectada automáticamente.\nVehículo de interés: ${vehicleNote}`
         });
+        setSuggestionVehicles(vehicles);
         setEditingAppointment(null);
         setIsModalOpen(true);
     };
@@ -579,7 +592,10 @@ export default function AgendaPage() {
                 onClose={() => setIsModalOpen(false)}
                 onSuccess={refresh}
                 appointmentToEdit={editingAppointment}
-                initialData={suggestionData} 
+                initialData={suggestionData}
+                initialLeadId={suggestionData?.lead_id ?? editingAppointment?.lead_id ?? null}
+                initialVehicles={suggestionVehicles}
+                initialInventoryId={suggestionVehicles?.[0]?.inventoryId ?? null}
             />
 
             <WebAppointmentDetailModal 

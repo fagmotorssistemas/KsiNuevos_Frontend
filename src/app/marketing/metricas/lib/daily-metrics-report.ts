@@ -54,6 +54,12 @@ export function getEcuadorTodayYesterdayYmd() {
   return { todayYmd, yesterdayYmd }
 }
 
+/** Fecha de hoy en Ecuador como `YYYY-MM-DD`. */
+export function getEcuadorTodayYmd() {
+  const { y, m, day } = ecuadorCalendarParts()
+  return toYmd(y, m, day)
+}
+
 /**
  * Etiqueta legible para `report_date` (DATE en Postgres, sin hora).
  * Usamos mediodía UTC para no desfasar el día al formatear en Guayaquil.

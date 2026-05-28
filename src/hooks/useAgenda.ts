@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 import type { CarRowWithVehicle } from "@/types/leads.types";
+import {
+    AGENDA_VISIBLE_FROM,
+    getSuggestionReferenceInstant,
+    isAppointmentPendingActive,
+    isBotSuggestionVisible,
+} from "@/lib/agenda/bot-suggestions";
 
 // --- TIPOS ---
 type AppointmentRow = Database['public']['Tables']['appointments']['Row'];
@@ -20,33 +26,8 @@ export type AppointmentWithDetails = AppointmentRow & {
     responsible?: ProfileRow;
 };
 
-/** Inicio de mayo 2026 (local): abril y meses anteriores no van a Pendientes ni Sugerencias IA */
-export const AGENDA_VISIBLE_FROM = new Date(2026, 4, 1, 0, 0, 0, 0);
+export { AGENDA_VISIBLE_FROM, isAppointmentPendingActive, isBotSuggestionVisible } from "@/lib/agenda/bot-suggestions";
 const PENDING_VISIBLE_FROM = AGENDA_VISIBLE_FROM;
-
-/** Sugerencias del bot visibles en agenda (mayo 2026 en adelante) */
-export function isBotSuggestionVisible(lead: BotSuggestionLead): boolean {
-    const ref = getSuggestionReferenceInstant(lead);
-    if (ref && !Number.isNaN(ref.getTime()) && ref < AGENDA_VISIBLE_FROM) return false;
-    if (!ref && lead.created_at) {
-        const created = new Date(lead.created_at);
-        if (!Number.isNaN(created.getTime()) && created < AGENDA_VISIBLE_FROM) return false;
-    }
-    return true;
-}
-
-/** Citas que siguen en la pestaña Pendientes */
-export function isAppointmentPendingActive(
-    appt: Pick<AppointmentRow, 'status' | 'start_time'> & { is_completed?: boolean | null }
-): boolean {
-    if (appt.is_completed === true) return false;
-
-    const start = new Date(appt.start_time);
-    if (!Number.isNaN(start.getTime()) && start < PENDING_VISIBLE_FROM) return false;
-
-    const activeStatuses = ['pendiente', 'confirmada', 'reprogramada'];
-    return activeStatuses.includes(appt.status || 'pendiente');
-}
 
 // CORRECCIÓN AQUÍ: Agregamos 'web_requests' para que coincida con la UI
 export type AgendaTab = 'pending' | 'history' | 'suggestions' | 'web_requests';
@@ -134,39 +115,6 @@ function appointmentMatchesDateFilter(
         default:
             return true;
     }
-}
-
-/**
- * Fecha/hora de referencia para filtrar sugerencias IA (alineado con BotSuggestionCard).
- * Usa mediodía local en fechas solo-día para evitar desfaces UTC.
- */
-function getSuggestionReferenceInstant(lead: BotSuggestionLead): Date | null {
-    if (lead.time_reference) {
-        const d = new Date(lead.time_reference);
-        return Number.isNaN(d.getTime()) ? null : d;
-    }
-    if (lead.day_detected) {
-        const raw = lead.day_detected.toString().trim();
-        const parts = raw.split(/[-/]/);
-        if (parts.length >= 3) {
-            const y = parseInt(parts[0], 10);
-            const m = parseInt(parts[1], 10);
-            const d = parseInt(parts[2], 10);
-            if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) {
-                const date = new Date(y, m - 1, d, 12, 0, 0, 0);
-                return Number.isNaN(date.getTime()) ? null : date;
-            }
-        }
-    }
-    if (lead.hour_detected) {
-        const t = new Date();
-        return new Date(t.getFullYear(), t.getMonth(), t.getDate(), 12, 0, 0, 0);
-    }
-    if (lead.created_at) {
-        const d = new Date(lead.created_at);
-        return Number.isNaN(d.getTime()) ? null : d;
-    }
-    return null;
 }
 
 export function useAgenda() {

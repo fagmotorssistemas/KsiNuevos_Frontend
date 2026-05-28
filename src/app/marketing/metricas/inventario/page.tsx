@@ -2,17 +2,29 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Car, Loader2, Users, Video } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
-import { fetchInventoryWithMetrics } from '@/app/marketing/metricas/lib/inventory-metrics'
-import type { VehicleCategory } from '@/app/marketing/metricas/lib/inventory-metrics'
+import {
+  categoryBadge,
+  fetchInventoryWithMetrics,
+  type VehicleCategory,
+} from '@/app/marketing/metricas/lib/inventory-metrics'
 import { CategoryChip } from '@/app/marketing/metricas/lib/ui-blocks'
+
+const CATEGORIES = ['TODOS', 'URGENTE', 'RESCATE', 'ROTACION', 'ESTRELLA'] as const
+
+function leadsTone(leads: number, range: 7 | 30) {
+  const star = range >= 30 ? 16 : 5
+  if (leads >= star) return 'text-emerald-700 bg-emerald-50 ring-emerald-200/60'
+  if (leads === 0) return 'text-rose-700 bg-rose-50 ring-rose-200/60'
+  return 'text-amber-800 bg-amber-50 ring-amber-200/60'
+}
 
 export default function MetricasInventarioPage() {
   const { supabase } = useAuth()
   const [range, setRange] = useState<7 | 30>(7)
-  const [category, setCategory] = useState<VehicleCategory | 'TODOS'>('TODOS')
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('TODOS')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchInventoryWithMetrics>>['rows']>([])
@@ -32,101 +44,186 @@ export default function MetricasInventarioPage() {
     return rows.filter((r) => r.category === category)
   }, [rows, category])
 
+  const categoryCounts = useMemo(() => {
+    const c: Record<VehicleCategory, number> = {
+      URGENTE: 0,
+      RESCATE: 0,
+      ROTACION: 0,
+      ESTRELLA: 0,
+    }
+    for (const r of rows) c[r.category]++
+    return c
+  }, [rows])
+
+  const totalLeads = useMemo(
+    () => filtered.reduce((n, r) => n + r.leads_window, 0),
+    [filtered]
+  )
+
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
-        <div className="flex flex-wrap gap-2">
-          {(['TODOS', 'URGENTE', 'RESCATE', 'ROTACION', 'ESTRELLA'] as const).map((c) => (
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">
+            Inventario en patio
+          </p>
+          <p className="text-sm text-slate-500 mt-0.5 font-medium">
+            Intereses registrados en los últimos {range} días (hora Ecuador)
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 border border-slate-200/80">
+          {([7, 30] as const).map((d) => (
             <button
-              key={c}
+              key={d}
               type="button"
-              onClick={() => setCategory(c)}
+              onClick={() => setRange(d)}
               className={[
-                'rounded-xl px-3 py-2 text-xs font-extrabold border transition',
-                category === c ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100',
+                'rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
+                range === d ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
               ].join(' ')}
             >
-              {c === 'TODOS' ? 'TODOS' : c}
+              {d} días
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-gray-500">Rango</span>
-          <select
-            value={range}
-            onChange={(e) => setRange(Number(e.target.value) as 7 | 30)}
-            className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold bg-white"
-          >
-            <option value={7}>7 días</option>
-            <option value={30}>30 días</option>
-          </select>
+      </div>
+
+      {/* Filtros categoría + mini resumen */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-5 shadow-sm space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map((c) => {
+            const active = category === c
+            const count =
+              c === 'TODOS'
+                ? rows.length
+                : categoryCounts[c as VehicleCategory] ?? 0
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(c)}
+                className={[
+                  'inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-extrabold border transition-all',
+                  active
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300',
+                ].join(' ')}
+              >
+                {c === 'TODOS' ? 'Todos' : c}
+                <span
+                  className={[
+                    'tabular-nums rounded-md px-1.5 py-0.5 text-[10px]',
+                    active ? 'bg-white/20 text-white' : 'bg-white text-slate-600',
+                  ].join(' ')}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(['URGENTE', 'RESCATE', 'ROTACION', 'ESTRELLA'] as const).map((cat) => {
+            const s = categoryBadge(cat)
+            return (
+              <div
+                key={cat}
+                className={`rounded-2xl border border-slate-200/60 px-3 py-2.5 ring-1 ring-inset ${s.bg} ${s.text}`}
+              >
+                <p className="text-[10px] font-extrabold uppercase opacity-90">{cat}</p>
+                <p className="text-xl font-extrabold tabular-nums mt-0.5">{categoryCounts[cat]}</p>
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">{error}</div>}
-
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-gray-500">Inventario con estado</p>
-            <p className="text-base font-extrabold text-gray-900">{filtered.length} autos</p>
-          </div>
-          {loading && (
-            <span className="inline-flex items-center gap-2 text-sm text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Cargando…
-            </span>
-          )}
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 font-semibold">
+          {error}
         </div>
+      )}
+
+      <div className="rounded-3xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+              <Car className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-slate-900">
+                {loading ? 'Cargando…' : `${filtered.length} autos`}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                {totalLeads.toLocaleString('es-EC')} leads en ventana · {range} días
+              </p>
+            </div>
+          </div>
+          {loading && <Loader2 className="h-5 w-5 animate-spin text-slate-400" />}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
-              <tr>
-                <th className="text-left font-bold px-5 py-3">Auto</th>
-                <th className="text-left font-bold px-5 py-3">Leads</th>
-                <th className="text-left font-bold px-5 py-3">Views video</th>
-                <th className="text-left font-bold px-5 py-3">Retención</th>
-                <th className="text-left font-bold px-5 py-3">Categoría</th>
-                <th className="text-right font-bold px-5 py-3">Acción</th>
+            <thead>
+              <tr className="bg-slate-50/90 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                <th className="text-left px-5 py-3.5 min-w-[200px]">Vehículo</th>
+                <th className="text-left px-4 py-3.5">
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    Leads
+                  </span>
+                </th>
+                <th className="text-left px-4 py-3.5">
+                  <span className="inline-flex items-center gap-1">
+                    <Video className="h-3.5 w-3.5" />
+                    Views
+                  </span>
+                </th>
+                <th className="text-left px-4 py-3.5">Retención</th>
+                <th className="text-left px-4 py-3.5">Estado</th>
+                <th className="text-right px-5 py-3.5" />
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {filtered.map((r) => (
-                <tr key={r.inventory_id} className="border-t border-gray-100">
-                  <td className="px-5 py-3 font-bold text-gray-900">{r.vehicle_label}</td>
-                  <td className="px-5 py-3">
+                <tr key={r.inventory_id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-5 py-3.5">
+                    <p className="font-extrabold text-slate-900 leading-snug">{r.vehicle_label}</p>
+                  </td>
+                  <td className="px-4 py-3.5">
                     <span
                       className={[
-                        'inline-flex rounded-full px-2 py-0.5 text-[11px] font-extrabold',
-                        r.leads_window >= (range >= 30 ? 16 : 5)
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : r.leads_window === 0
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-amber-50 text-amber-900',
+                        'inline-flex rounded-lg px-2.5 py-1 text-xs font-extrabold tabular-nums ring-1 ring-inset',
+                        leadsTone(r.leads_window, range),
                       ].join(' ')}
                     >
-                      {r.leads_window.toLocaleString('es-EC')} / {range}d
+                      {r.leads_window}
                     </span>
                   </td>
-                  <td className="px-5 py-3">{r.views_video.toLocaleString('es-EC')}</td>
-                  <td className="px-5 py-3">{r.retention_pct == null ? '—' : `${Math.round(r.retention_pct)}%`}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-4 py-3.5 font-semibold text-slate-700 tabular-nums">
+                    {r.views_video.toLocaleString('es-EC')}
+                  </td>
+                  <td className="px-4 py-3.5 font-semibold text-slate-600 tabular-nums">
+                    {r.retention_pct == null ? '—' : `${Math.round(r.retention_pct)}%`}
+                  </td>
+                  <td className="px-4 py-3.5">
                     <CategoryChip category={r.category} />
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-5 py-3.5 text-right">
                     <Link
                       href={`/marketing/metricas/inventario/${r.inventory_id}?range=${range}`}
-                      className="inline-flex rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                      className="inline-flex rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-slate-800 transition"
                     >
-                      Ver detalle
+                      Detalle
                     </Link>
                   </td>
                 </tr>
               ))}
               {!loading && filtered.length === 0 && (
-                <tr className="border-t border-gray-100">
-                  <td className="px-5 py-8 text-gray-500 text-center" colSpan={6}>
-                    No hay autos que coincidan con los filtros.
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                    No hay autos con este filtro.
                   </td>
                 </tr>
               )}
@@ -134,11 +231,6 @@ export default function MetricasInventarioPage() {
           </table>
         </div>
       </div>
-
-      <p className="text-xs text-gray-500">
-        La categoría mostrada es una heurística local (leads en la ventana + antigüedad del registro). Cuando el backend guarde la categoría oficial,
-        podemos sustituir este cálculo por la columna correspondiente.
-      </p>
     </div>
   )
 }

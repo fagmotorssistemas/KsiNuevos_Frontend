@@ -21,7 +21,7 @@ export type SortDescriptor = {
     direction: "ascending" | "descending";
 };
 
-export type DateFilter = 'all' | 'today' | '7days' | '15days' | '30days';
+export type DateFilter = 'all' | 'today' | '7days' | '15days' | 'thisMonth';
 
 export type LeadsFilters = {
     search: string;

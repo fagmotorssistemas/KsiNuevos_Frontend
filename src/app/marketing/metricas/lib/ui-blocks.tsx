@@ -31,24 +31,68 @@ export function ParagraphBlock({ text }: { text: string }) {
   )
 }
 
-/** Lista numerada desde texto multilinea o array */
-export function RecommendationsBlock({ value }: { value: string | string[] | null | undefined }) {
-  if (value == null) return <p className="text-sm text-gray-500">Sin recomendaciones para esta fecha.</p>
-  const items = Array.isArray(value)
-    ? value.map((s) => String(s).trim()).filter(Boolean)
-    : String(value)
-        .split('\n')
-        .map((s) => s.replace(/^\d+[\).\s]+/, '').trim())
-        .filter(Boolean)
+/** Normaliza recomendaciones desde JSON array, jsonb o texto multilínea. */
+export function parseRecommendationsList(value: unknown): string[] {
+  if (value == null) return []
 
-  if (items.length === 0) return <p className="text-sm text-gray-500">Sin recomendaciones para esta fecha.</p>
+  if (Array.isArray(value)) {
+    return value.map((s) => String(s).trim()).filter(Boolean)
+  }
+
+  if (typeof value === 'object') {
+    const o = value as Record<string, unknown>
+    if (Array.isArray(o.items)) return parseRecommendationsList(o.items)
+    if (Array.isArray(o.recomendaciones)) return parseRecommendationsList(o.recomendaciones)
+    return []
+  }
+
+  const str = String(value).trim()
+  if (!str) return []
+
+  if (str.startsWith('[') || str.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(str) as unknown
+      const fromJson = parseRecommendationsList(parsed)
+      if (fromJson.length > 0) return fromJson
+    } catch {
+      /* texto con comillas sueltas */
+    }
+  }
+
+  const quoted = [...str.matchAll(/"((?:\\.|[^"\\])*)"/g)].map((m) =>
+    m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').trim()
+  )
+  if (quoted.length > 1) return quoted.filter(Boolean)
+
+  return str
+    .split(/\n+/)
+    .flatMap((line) => line.split(/,(?=\s*["\w])/))
+    .map((s) => s.replace(/^[\s\[\{,"]+|[\s\]\}",]+$/g, '').replace(/^\d+[\).\s]+/, '').trim())
+    .filter((s) => s.length > 2)
+}
+
+/** Lista de recomendaciones — tipografía clara, sin tarjetas pesadas */
+export function RecommendationsBlock({ value }: { value: string | string[] | null | undefined }) {
+  const items = parseRecommendationsList(value)
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-500">Sin recomendaciones para esta fecha.</p>
+  }
 
   return (
-    <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 leading-relaxed">
-      {items.map((it, i) => (
-        <li key={i}>{it}</li>
+    <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-100 overflow-hidden bg-slate-50/40">
+      {items.map((text, i) => (
+        <li key={`${i}-${text.slice(0, 24)}`} className="flex gap-4 px-4 py-4 bg-white first:rounded-t-2xl last:rounded-b-2xl">
+          <span
+            className="shrink-0 w-6 text-right text-[11px] font-bold text-slate-400 tabular-nums pt-0.5"
+            aria-hidden
+          >
+            {i + 1}.
+          </span>
+          <p className="text-[15px] text-slate-700 leading-relaxed">{text}</p>
+        </li>
       ))}
-    </ol>
+    </ul>
   )
 }
 

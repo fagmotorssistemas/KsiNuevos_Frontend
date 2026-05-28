@@ -18,6 +18,81 @@ const getEcuadorRange = (dateStr: string) => {
     };
 };
 
+/** Filtro de listado por ingreso del lead (alineado a reporte diario / métricas). */
+const applyLeadsCreatedInRange = (query: any, start: string, end: string) =>
+    query.gte('created_at', start).lte('created_at', end);
+
+/** Primer día del mes calendario actual en Ecuador (YYYY-MM-01). */
+const getEcuadorMonthStartISO = () => {
+    const today = getEcuadorDateISO();
+    return `${today.slice(0, 7)}-01`;
+};
+
+/** Rango de días (Ecuador YYYY-MM-DD) del filtro de fechas. null = sin tope. */
+function getActivityDateRangeForLeadsFilter(
+    filters: LeadsFilters
+): { since: string; until: string } | null {
+    const today = getEcuadorDateISO();
+
+    if (filters.exactDate) {
+        return { since: filters.exactDate, until: filters.exactDate };
+    }
+    if (filters.dateRange === 'all') return null;
+
+    if (filters.dateRange === 'today') {
+        return { since: today, until: today };
+    }
+
+    if (filters.dateRange === 'thisMonth') {
+        return { since: getEcuadorMonthStartISO(), until: today };
+    }
+
+    const daysBack = parseInt(filters.dateRange.replace('days', ''), 10) || 7;
+    const past = new Date();
+    past.setDate(past.getDate() - daysBack);
+    const since = past.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
+    return { since, until: today };
+}
+
+/** Filtro Temp: pico del día en lead_temperature_daily (misma lógica que mensual, grano día). */
+async function fetchLeadIdsByDailyTemperature(
+    supabase: any,
+    filters: LeadsFilters
+): Promise<number[] | null> {
+    if (!filters.temperature || filters.temperature === 'all') return null;
+
+    const range = getActivityDateRangeForLeadsFilter(filters);
+    const ids = new Set<number>();
+    const pageSize = 1000;
+    let from = 0;
+
+    while (true) {
+        let query = supabase
+            .from('lead_temperature_daily')
+            .select('lead_id')
+            .eq('temperature_peak', filters.temperature)
+            .order('lead_id', { ascending: true })
+            .range(from, from + pageSize - 1);
+
+        if (range) {
+            query = query.gte('activity_date', range.since).lte('activity_date', range.until);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const batch = data ?? [];
+        for (const row of batch) {
+            ids.add(Number((row as { lead_id: number }).lead_id));
+        }
+        if (batch.length < pageSize) break;
+        from += pageSize;
+    }
+
+    const list = [...ids];
+    return list.length > 0 ? list : [-1];
+}
+
 /**
  * Gestión del día = resumen con texto y updated_at en el rango.
  * En BD, updated_at solo se mueve al guardar resume (trigger set_updated_at).
@@ -211,6 +286,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .range(from, to);
 
         let idFilters: number[][] = [];
+        let dailyTempIds: number[] | null = null;
 
         // 2. Aplicar Filtros a la Query Principal (nombre, teléfono, vehículo marca/modelo)
         let searchMatchIds: number[] = [];
@@ -328,6 +404,11 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
+        if (filters.temperature && filters.temperature !== 'all') {
+            dailyTempIds = await fetchLeadIdsByDailyTemperature(supabase, filters);
+            if (dailyTempIds) idFilters.push(dailyTempIds);
+        }
+
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
@@ -352,30 +433,30 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             query = query.eq('status', filters.status);
         }
-        if (filters.temperature && filters.temperature !== 'all') {
-            query = query.eq('temperature', filters.temperature);
-        }
         if (filters.assignedTo && filters.assignedTo !== 'all') {
             query = query.eq('assigned_to', filters.assignedTo);
         }
 
-        // Filtros de fecha en listado (no aplican con onlyInteractions; ese filtro va por interactions).
-        if (!filters.onlyInteractions) {
+        // Filtros de fecha: ingreso (created_at). Temp activo → lead_temperature_daily. Solo gestionados → updated_at + resume.
+        const useDailyTempDateRange = filters.temperature && filters.temperature !== 'all';
+        if (!filters.onlyInteractions && !useDailyTempDateRange) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
-                query = query.gte('updated_at', start).lte('updated_at', end);
+                query = applyLeadsCreatedInRange(query, start, end);
             } else if (filters.dateRange !== 'all') {
                 const today = getEcuadorDateISO();
 
                 if (filters.dateRange === 'today') {
                     const { start, end } = getEcuadorRange(today);
-                    query = query.gte('updated_at', start).lte('updated_at', end);
+                    query = applyLeadsCreatedInRange(query, start, end);
+                } else if (filters.dateRange === 'thisMonth') {
+                    query = query.gte('created_at', `${getEcuadorMonthStartISO()}T00:00:00-05:00`);
                 } else {
                     const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
                     const pastDate = new Date();
                     pastDate.setDate(pastDate.getDate() - daysBack);
                     const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                    query = query.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+                    query = query.gte('created_at', `${pastDateStr}T00:00:00-05:00`);
                 }
             }
         }
@@ -409,27 +490,29 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
         }
-        if (filters.temperature && filters.temperature !== 'all') respondedQuery = respondedQuery.eq('temperature', filters.temperature);
+        if (dailyTempIds) {
+            respondedQuery = respondedQuery.in('id', dailyTempIds[0] === -1 ? [-1] : dailyTempIds);
+        }
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
         
-        // Respondidos: con onlyInteractions el subconjunto ya viene de idFilters (leads gestionados ese día).
-        if (!filters.onlyInteractions) {
+        if (!filters.onlyInteractions && !useDailyTempDateRange) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
-                respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
+                respondedQuery = applyLeadsCreatedInRange(respondedQuery, start, end);
             } else if (filters.dateRange !== 'all') {
                 const today = getEcuadorDateISO();
 
                 if (filters.dateRange === 'today') {
                     const { start, end } = getEcuadorRange(today);
-                    respondedQuery = respondedQuery.gte('updated_at', start).lte('updated_at', end);
+                    respondedQuery = applyLeadsCreatedInRange(respondedQuery, start, end);
+                } else if (filters.dateRange === 'thisMonth') {
+                    respondedQuery = respondedQuery.gte('created_at', `${getEcuadorMonthStartISO()}T00:00:00-05:00`);
                 } else {
-                    // Faltaba esta lógica en la query de respondidos para 7days, 15days, 30days
                     const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
                     const pastDate = new Date();
                     pastDate.setDate(pastDate.getDate() - daysBack);
                     const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                    respondedQuery = respondedQuery.gte('updated_at', `${pastDateStr}T00:00:00-05:00`);
+                    respondedQuery = respondedQuery.gte('created_at', `${pastDateStr}T00:00:00-05:00`);
                 }
             }
         }
@@ -464,6 +547,90 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         throw err;
     }
 };
+
+export type LeadDayMetricBreakdown = {
+    /** Ingreso y resumen guardado el mismo día. */
+    respondedSameDay: number
+    /** Ingreso ese día; resumen guardado después. */
+    respondedLater: number
+    /** Resumen guardado ese día en clientes que entraron ese día. */
+    gestionIngresoDia: number
+    /** Resumen guardado ese día en clientes de días anteriores. */
+    gestionCartera: number
+}
+
+/** Desglose para tooltips cuando hay fecha exacta (Ecuador). */
+export const fetchLeadDayMetricBreakdown = async (
+    supabase: any,
+    exactDate: string,
+    assignedTo?: string
+): Promise<LeadDayMetricBreakdown> => {
+    const { start, end } = getEcuadorRange(exactDate)
+
+    const withAssignee = (q: ReturnType<typeof supabase.from>) => {
+        if (assignedTo && assignedTo !== 'all') return q.eq('assigned_to', assignedTo)
+        return q
+    }
+
+    const countQuery = async (q: ReturnType<typeof supabase.from>) => {
+        const { count, error } = await q
+        if (error) throw error
+        return count ?? 0
+    }
+
+    const [
+        createdWithResume,
+        createdResumeSameDay,
+        gestionCartera,
+    ] = await Promise.all([
+        countQuery(
+            withAssignee(
+                supabase
+                    .from('leads')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('created_at', start)
+                    .lte('created_at', end)
+                    .not('resume', 'is', null)
+                    .neq('resume', '')
+            )
+        ),
+        countQuery(
+            withAssignee(
+                supabase
+                    .from('leads')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('created_at', start)
+                    .lte('created_at', end)
+                    .gte('updated_at', start)
+                    .lte('updated_at', end)
+                    .not('resume', 'is', null)
+                    .neq('resume', '')
+            )
+        ),
+        countQuery(
+            withAssignee(
+                supabase
+                    .from('leads')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('updated_at', start)
+                    .lte('updated_at', end)
+                    .lt('created_at', start)
+                    .not('resume', 'is', null)
+                    .neq('resume', '')
+            )
+        ),
+    ])
+
+    const respondedLater = Math.max(0, createdWithResume - createdResumeSameDay)
+    const gestionIngresoDia = createdResumeSameDay
+
+    return {
+        respondedSameDay: createdResumeSameDay,
+        respondedLater,
+        gestionIngresoDia,
+        gestionCartera,
+    }
+}
 
 // --- GESTIONADOS HOY (Métrica 2): leads con resumen ejecutivo guardado ese día.
 export const fetchDailyInteractions = async (supabase: any, assignedTo: string, exactDate: string) => {

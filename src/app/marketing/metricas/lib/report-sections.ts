@@ -1,4 +1,5 @@
 import type { DailyMetricsReportRow } from './daily-metrics-report'
+import { parseRecommendationsList } from './ui-blocks'
 
 /** Texto de secciones + objeto auxiliar para sidebar (todo desde columnas planas). */
 export function parseDailyReportSections(row: DailyMetricsReportRow | Record<string, unknown> | null) {
@@ -17,7 +18,8 @@ export function parseDailyReportSections(row: DailyMetricsReportRow | Record<str
   const resumen = typeof r.resumen_ejecutivo === 'string' ? r.resumen_ejecutivo : null
   const guiones = typeof r.analisis_guiones === 'string' ? r.analisis_guiones : null
   const marca = typeof r.analisis_marcas === 'string' ? r.analisis_marcas : null
-  const recomendaciones = typeof r.recomendaciones === 'string' ? r.recomendaciones : null
+  const recParsed = parseRecommendationsList(r.recomendaciones)
+  const recomendaciones = recParsed.length > 0 ? recParsed : null
 
   const datos = {
     leads_total: r.leads_total,

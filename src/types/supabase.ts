@@ -2535,6 +2535,88 @@ export type Database = {
           },
         ]
       }
+      lead_temperature_daily: {
+        Row: {
+          activity_date: string
+          created_at: string
+          first_recorded_at: string
+          id: number
+          lead_id: number
+          states_reached: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak: Database["public"]["Enums"]["lead_temperature"]
+          updated_at: string
+        }
+        Insert: {
+          activity_date: string
+          created_at?: string
+          first_recorded_at?: string
+          id?: never
+          lead_id: number
+          states_reached?: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak?: Database["public"]["Enums"]["lead_temperature"]
+          updated_at?: string
+        }
+        Update: {
+          activity_date?: string
+          created_at?: string
+          first_recorded_at?: string
+          id?: never
+          lead_id?: number
+          states_reached?: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak?: Database["public"]["Enums"]["lead_temperature"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_temperature_daily_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_temperature_monthly: {
+        Row: {
+          campaign_month: string
+          created_at: string
+          first_recorded_at: string
+          id: number
+          lead_id: number
+          states_reached: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak: Database["public"]["Enums"]["lead_temperature"]
+          updated_at: string
+        }
+        Insert: {
+          campaign_month: string
+          created_at?: string
+          first_recorded_at?: string
+          id?: never
+          lead_id: number
+          states_reached?: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak?: Database["public"]["Enums"]["lead_temperature"]
+          updated_at?: string
+        }
+        Update: {
+          campaign_month?: string
+          created_at?: string
+          first_recorded_at?: string
+          id?: never
+          lead_id?: number
+          states_reached?: Database["public"]["Enums"]["lead_temperature"][]
+          temperature_peak?: Database["public"]["Enums"]["lead_temperature"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_temperature_monthly_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           assigned_to: string | null
@@ -3185,6 +3267,124 @@ export type Database = {
           },
           {
             foreignKeyName: "marketing_video_plan_items_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ad_pause_log: {
+        Row: {
+          ad_id: string
+          ad_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          id: number
+          inventory_id: string | null
+          meta_confirmed: boolean
+          meta_response: Json | null
+          paused_at: string
+          paused_by: string
+        }
+        Insert: {
+          ad_id: string
+          ad_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          id?: number
+          inventory_id?: string | null
+          meta_confirmed?: boolean
+          meta_response?: Json | null
+          paused_at?: string
+          paused_by?: string
+        }
+        Update: {
+          ad_id?: string
+          ad_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          id?: number
+          inventory_id?: string | null
+          meta_confirmed?: boolean
+          meta_response?: Json | null
+          paused_at?: string
+          paused_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_pause_log_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ad_vehicle_metrics: {
+        Row: {
+          ad_ids: string[] | null
+          ads_count: number
+          campaign_id: string
+          campaign_name: string | null
+          clicks: number
+          clicks_sum: number
+          cost_per_lead: number
+          created_at: string
+          id: number
+          impressions: number
+          impressions_sum: number
+          inventory_id: string
+          leads_count: number
+          raw_data: Json | null
+          reach: number
+          reach_sum: number
+          spend: number
+          updated_at: string
+        }
+        Insert: {
+          ad_ids?: string[] | null
+          ads_count?: number
+          campaign_id: string
+          campaign_name?: string | null
+          clicks?: number
+          clicks_sum?: number
+          cost_per_lead?: number
+          created_at?: string
+          id?: number
+          impressions?: number
+          impressions_sum?: number
+          inventory_id: string
+          leads_count?: number
+          raw_data?: Json | null
+          reach?: number
+          reach_sum?: number
+          spend?: number
+          updated_at?: string
+        }
+        Update: {
+          ad_ids?: string[] | null
+          ads_count?: number
+          campaign_id?: string
+          campaign_name?: string | null
+          clicks?: number
+          clicks_sum?: number
+          cost_per_lead?: number
+          created_at?: string
+          id?: number
+          impressions?: number
+          impressions_sum?: number
+          inventory_id?: string
+          leads_count?: number
+          raw_data?: Json | null
+          reach?: number
+          reach_sum?: number
+          spend?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ad_vehicle_metrics_inventory_id_fkey"
             columns: ["inventory_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
@@ -6248,7 +6448,17 @@ export type Database = {
       }
     }
     Functions: {
+      activity_date_from_timestamptz: {
+        Args: { p_ts: string }
+        Returns: string
+      }
+      activity_date_now_ecuador: { Args: never; Returns: string }
       admin_rbac_dashboard: { Args: never; Returns: Json }
+      campaign_month_from_timestamptz: {
+        Args: { p_ts: string }
+        Returns: string
+      }
+      campaign_month_now_ecuador: { Args: never; Returns: string }
       can_use_marketing_dev_requests: { Args: never; Returns: boolean }
       can_view_planner_row: {
         Args: {
@@ -6319,6 +6529,50 @@ export type Database = {
       is_marketing_planner_member: { Args: never; Returns: boolean }
       is_profile_admin: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
+      lead_temperature_append_state: {
+        Args: {
+          p_new: Database["public"]["Enums"]["lead_temperature"]
+          p_states: Database["public"]["Enums"]["lead_temperature"][]
+        }
+        Returns: Database["public"]["Enums"]["lead_temperature"][]
+      }
+      lead_temperature_ensure_day_chapter: {
+        Args: { p_activity_at?: string; p_lead_id: number }
+        Returns: undefined
+      }
+      lead_temperature_ensure_month_chapter: {
+        Args: { p_activity_at?: string; p_lead_id: number }
+        Returns: undefined
+      }
+      lead_temperature_max: {
+        Args: {
+          p_a: Database["public"]["Enums"]["lead_temperature"]
+          p_b: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: Database["public"]["Enums"]["lead_temperature"]
+      }
+      lead_temperature_rank: {
+        Args: { p_temp: Database["public"]["Enums"]["lead_temperature"] }
+        Returns: number
+      }
+      lead_temperature_rollup_month: {
+        Args: { p_activity_date: string; p_lead_id: number }
+        Returns: undefined
+      }
+      lead_temperature_sync_day_from_lead: {
+        Args: {
+          p_lead_id: number
+          p_new: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: undefined
+      }
+      lead_temperature_sync_from_lead: {
+        Args: {
+          p_lead_id: number
+          p_new: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: undefined
+      }
       leads_sin_respuesta: {
         Args: never
         Returns: {
@@ -6358,6 +6612,7 @@ export type Database = {
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
       reassign_stale_unmanaged_leads: { Args: never; Returns: number }
+      reset_leads_temperature_monthly: { Args: never; Returns: number }
       rpc_cases_without_gestion: {
         Args: { p_days: number }
         Returns: {
