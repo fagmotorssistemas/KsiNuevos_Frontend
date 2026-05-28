@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import {
     X, Save, Car, Share2, MapPin, Tag, Cog,
     DollarSign, Gauge, Loader2,
-    Image as ImageIcon, UploadCloud, Plus, Trash2,
+    Image as ImageIcon, UploadCloud, Plus, Trash2, Download,
     Link, FileText, ClipboardCheck,
 } from "lucide-react";
+import { downloadImagesAsPngZip, sanitizeDownloadFilename, type DownloadImageItem } from "@/lib/download-image-as-png";
+import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "../../../hooks/useInventory";
@@ -178,6 +180,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     >('general');
     const [isSaving, setIsSaving] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
+    const [downloadingAllPhotos, setDownloadingAllPhotos] = useState(false);
     const [oracleFicha, setOracleFicha] = useState<VehiculoInventario | null>(null);
     const [loadingFicha, setLoadingFicha] = useState(false);
 
@@ -196,6 +199,19 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     // Refs
     const mainInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
+
+    const vehicleDownloadName = useMemo(
+        () => `${car.brand ?? ""} ${car.model ?? ""}`.trim(),
+        [car.brand, car.model]
+    );
+
+    const downloadSlug = useMemo(
+        () =>
+            sanitizeDownloadFilename(
+                vehicleDownloadName || car.plate || car.plate_short || String(car.id)
+            ),
+        [vehicleDownloadName, car.plate, car.plate_short, car.id]
+    );
 
     // Estado del Formulario
     const [formData, setFormData] = useState({
@@ -218,6 +234,44 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     const [listingChecklist, setListingChecklist] = useState<ListingChecklist>(() =>
         parseListingChecklist((car as { listing_checklist?: unknown }).listing_checklist)
     );
+
+    const vehiclePhotoItems = useMemo<DownloadImageItem[]>(() => {
+        const items: DownloadImageItem[] = [];
+        const mainSrc = mainImagePreview || formData.img_main_url;
+        if (mainSrc) {
+            items.push({ src: mainSrc, filename: `${downloadSlug}-portada.png` });
+        }
+        existingGallery.forEach((url, idx) => {
+            items.push({
+                src: url,
+                filename: `${downloadSlug}-galeria-${String(idx + 1).padStart(2, "0")}.png`,
+            });
+        });
+        newGalleryPreviews.forEach((preview, idx) => {
+            items.push({
+                src: preview,
+                filename: `${downloadSlug}-galeria-nueva-${String(idx + 1).padStart(2, "0")}.png`,
+            });
+        });
+        return items;
+    }, [mainImagePreview, formData.img_main_url, existingGallery, newGalleryPreviews, downloadSlug]);
+
+    const handleDownloadAllPhotos = async () => {
+        if (vehiclePhotoItems.length === 0) {
+            toast.error("Este vehículo no tiene fotos para descargar");
+            return;
+        }
+        setDownloadingAllPhotos(true);
+        try {
+            await downloadImagesAsPngZip(vehiclePhotoItems, `${downloadSlug}.zip`);
+            toast.success(`Descargando ${vehiclePhotoItems.length} foto(s) en PNG`);
+        } catch (error) {
+            console.error("Error al descargar fotos del vehículo:", error);
+            toast.error("No se pudieron descargar las fotos");
+        } finally {
+            setDownloadingAllPhotos(false);
+        }
+    };
 
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -663,6 +717,21 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                     {/* --- PESTAÑA FOTOS --- */}
                     {activeTab === 'photos' && (
                         <ModalPanel className="space-y-6">
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadAllPhotos}
+                                    disabled={downloadingAllPhotos || vehiclePhotoItems.length === 0}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {downloadingAllPhotos ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Download className="h-4 w-4" />
+                                    )}
+                                    Descargar todas ({vehiclePhotoItems.length})
+                                </button>
+                            </div>
                             <div className="space-y-2">
                                 <SectionTitle icon={ImageIcon} title="Foto principal" />
                                 <div 
@@ -682,7 +751,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                                     loading="eager"
                                                 />
                                             )}
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                                 <p className="text-white text-sm font-medium flex items-center gap-2">
                                                     <UploadCloud className="w-5 h-5" /> Cambiar Portada
                                                 </p>
