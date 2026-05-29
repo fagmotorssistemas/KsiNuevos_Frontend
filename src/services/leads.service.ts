@@ -28,70 +28,11 @@ const getEcuadorMonthStartISO = () => {
     return `${today.slice(0, 7)}-01`;
 };
 
-/** Rango de días (Ecuador YYYY-MM-DD) del filtro de fechas. null = sin tope. */
-function getActivityDateRangeForLeadsFilter(
-    filters: LeadsFilters
-): { since: string; until: string } | null {
-    const today = getEcuadorDateISO();
-
-    if (filters.exactDate) {
-        return { since: filters.exactDate, until: filters.exactDate };
-    }
-    if (filters.dateRange === 'all') return null;
-
-    if (filters.dateRange === 'today') {
-        return { since: today, until: today };
-    }
-
-    if (filters.dateRange === 'thisMonth') {
-        return { since: getEcuadorMonthStartISO(), until: today };
-    }
-
-    const daysBack = parseInt(filters.dateRange.replace('days', ''), 10) || 7;
-    const past = new Date();
-    past.setDate(past.getDate() - daysBack);
-    const since = past.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-    return { since, until: today };
-}
-
-/** Filtro Temp: pico del día en lead_temperature_daily (misma lógica que mensual, grano día). */
-async function fetchLeadIdsByDailyTemperature(
-    supabase: any,
-    filters: LeadsFilters
-): Promise<number[] | null> {
-    if (!filters.temperature || filters.temperature === 'all') return null;
-
-    const range = getActivityDateRangeForLeadsFilter(filters);
-    const ids = new Set<number>();
-    const pageSize = 1000;
-    let from = 0;
-
-    while (true) {
-        let query = supabase
-            .from('lead_temperature_daily')
-            .select('lead_id')
-            .eq('temperature_peak', filters.temperature)
-            .order('lead_id', { ascending: true })
-            .range(from, from + pageSize - 1);
-
-        if (range) {
-            query = query.gte('activity_date', range.since).lte('activity_date', range.until);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        const batch = data ?? [];
-        for (const row of batch) {
-            ids.add(Number((row as { lead_id: number }).lead_id));
-        }
-        if (batch.length < pageSize) break;
-        from += pageSize;
-    }
-
-    const list = [...ids];
-    return list.length > 0 ? list : [-1];
-}
+/** Filtro Temp en tablero: temperatura actual del lead (columna leads.temperature). */
+const applyLeadsTemperatureFilter = (query: any, temperature: LeadsFilters['temperature']) => {
+    if (!temperature || temperature === 'all') return query;
+    return query.eq('temperature', temperature);
+};
 
 /**
  * Gestión del día = resumen con texto y updated_at en el rango.
@@ -286,7 +227,6 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             .range(from, to);
 
         let idFilters: number[][] = [];
-        let dailyTempIds: number[] | null = null;
 
         // 2. Aplicar Filtros a la Query Principal (nombre, teléfono, vehículo marca/modelo)
         let searchMatchIds: number[] = [];
@@ -404,11 +344,6 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
-        if (filters.temperature && filters.temperature !== 'all') {
-            dailyTempIds = await fetchLeadIdsByDailyTemperature(supabase, filters);
-            if (dailyTempIds) idFilters.push(dailyTempIds);
-        }
-
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
@@ -423,7 +358,7 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
             if (finalIds.length > 0) {
                 query = query.in('id', finalIds);
-                searchMatchIds = finalIds; // Update for respondedCount logic later
+                searchMatchIds = finalIds;
             } else {
                 query = query.eq('id', -1);
                 searchMatchIds = [];
@@ -436,10 +371,10 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.assignedTo && filters.assignedTo !== 'all') {
             query = query.eq('assigned_to', filters.assignedTo);
         }
+        query = applyLeadsTemperatureFilter(query, filters.temperature);
 
-        // Filtros de fecha: ingreso (created_at). Temp activo → lead_temperature_daily. Solo gestionados → updated_at + resume.
-        const useDailyTempDateRange = filters.temperature && filters.temperature !== 'all';
-        if (!filters.onlyInteractions && !useDailyTempDateRange) {
+        // Filtros de fecha: ingreso (created_at). Solo gestionados → updated_at + resume.
+        if (!filters.onlyInteractions) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
                 query = applyLeadsCreatedInRange(query, start, end);
@@ -490,12 +425,10 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
         }
-        if (dailyTempIds) {
-            respondedQuery = respondedQuery.in('id', dailyTempIds[0] === -1 ? [-1] : dailyTempIds);
-        }
+        respondedQuery = applyLeadsTemperatureFilter(respondedQuery, filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
-        
-        if (!filters.onlyInteractions && !useDailyTempDateRange) {
+
+        if (!filters.onlyInteractions) {
             if (filters.exactDate) {
                 const { start, end } = getEcuadorRange(filters.exactDate);
                 respondedQuery = applyLeadsCreatedInRange(respondedQuery, start, end);

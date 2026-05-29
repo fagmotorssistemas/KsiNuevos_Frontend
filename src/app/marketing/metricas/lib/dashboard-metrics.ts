@@ -43,7 +43,7 @@ export type VehicleLeadsRow = {
   reachSum: number
   impressionsSum: number
   clicksSum: number
-  /** Leads en ventana de campaña del auto, pico en lead_temperature_daily (ventana date_start→date_stop). */
+  /** Leads en ventana de campaña del auto, temperatura en lead_temperature_history (mes). */
   leadsCaliente: number
   leadsTibio: number
   leadsFrio: number
@@ -779,6 +779,23 @@ function isYmdInRange(ymd: string, startYmd: string, endYmd: string): boolean {
   return compareYmd(ymd, startYmd) >= 0 && compareYmd(ymd, endYmd) <= 0
 }
 
+function campaignMonthFromYmd(ymd: string): string {
+  return `${ymd.slice(0, 7)}-01`
+}
+
+function lastDayOfCampaignMonth(campaignMonth: string): string {
+  const y = parseInt(campaignMonth.slice(0, 4), 10)
+  const m = parseInt(campaignMonth.slice(5, 7), 10)
+  const lastDay = new Date(y, m, 0).getDate()
+  return `${campaignMonth.slice(0, 7)}-${String(lastDay).padStart(2, '0')}`
+}
+
+function campaignMonthOverlapsRange(campaignMonth: string, startYmd: string, endYmd: string): boolean {
+  const monthStart = campaignMonth.slice(0, 10)
+  const monthEnd = lastDayOfCampaignMonth(campaignMonth)
+  return compareYmd(startYmd, monthEnd) <= 0 && compareYmd(endYmd, monthStart) >= 0
+}
+
 async function fetchCampaignWindows(
   db: ReturnType<typeof metricsDb>,
   campaignIds: string[]
@@ -1023,7 +1040,7 @@ async function countVehicleLeadsFromInterestedCars(
   return { campanas, organicos, campanaLeads: [...campanaLeadByKey.values()] }
 }
 
-/** Pico de temperatura por lead+auto en ventana de campaña (lead_temperature_daily → fallback leads.temperature). */
+/** Temperatura por lead+auto en ventana de campaña (lead_temperature_history → fallback leads.temperature). */
 async function countVehicleLeadTemperatures(
   db: ReturnType<typeof metricsDb>,
   campanaLeads: CampanaLeadRef[]
@@ -1055,29 +1072,31 @@ async function countVehicleLeadTemperatures(
   const peakByKey = new Map<string, LeadTemperaturePeak>()
   const leadIdList = [...leadIds]
   const CHUNK = 200
+  const minMonth = campaignMonthFromYmd(minYmd)
+  const maxMonth = campaignMonthFromYmd(maxYmd)
 
   for (let i = 0; i < leadIdList.length; i += CHUNK) {
     const chunk = leadIdList.slice(i, i + CHUNK)
     const { data, error } = await db
-      .from('lead_temperature_daily')
-      .select('lead_id, activity_date, temperature_peak')
+      .from('lead_temperature_history')
+      .select('lead_id, campaign_month, temperature')
       .in('lead_id', chunk)
-      .gte('activity_date', minYmd)
-      .lte('activity_date', maxYmd)
+      .gte('campaign_month', minMonth)
+      .lte('campaign_month', maxMonth)
       .limit(10000)
     if (error) throw error
 
     for (const row of data ?? []) {
       const leadId = Number((row as { lead_id?: number }).lead_id)
-      const activityDate = String((row as { activity_date?: string }).activity_date ?? '').slice(0, 10)
-      const peak = normalizeLeadTemperature((row as { temperature_peak?: string }).temperature_peak)
-      if (!leadId || !activityDate || !peak) continue
+      const campaignMonth = String((row as { campaign_month?: string }).campaign_month ?? '').slice(0, 10)
+      const temp = normalizeLeadTemperature((row as { temperature?: string }).temperature)
+      if (!leadId || !campaignMonth || !temp) continue
 
       for (const ref of refsByLeadId.get(leadId) ?? []) {
-        if (!isYmdInRange(activityDate, ref.startYmd, ref.endYmd)) continue
+        if (!campaignMonthOverlapsRange(campaignMonth, ref.startYmd, ref.endYmd)) continue
         const key = `${leadId}|${ref.inventoryId}`
         const prev = peakByKey.get(key)
-        peakByKey.set(key, prev ? maxLeadTemperature(prev, peak) : peak)
+        peakByKey.set(key, prev ? maxLeadTemperature(prev, temp) : temp)
       }
     }
   }
