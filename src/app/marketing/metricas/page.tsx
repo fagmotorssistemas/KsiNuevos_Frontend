@@ -52,8 +52,11 @@ import {
 
   type MetricsChannelTab,
 
-  RankingBars,
-
+  OrganicCreativesList,
+  OrganicMetricsTabsBar,
+  OrganicVehicleRanking,
+  type OrganicMetricsSubTab,
+  type OrganicVehicleStatusTab,
   VehicleLeadsTable,
 
 } from '@/app/marketing/metricas/lib/metricas-ui'
@@ -77,6 +80,8 @@ export default function MarketingMetricasPage() {
   const [data, setData] = useState<DashboardMetrics | null>(null)
 
   const [channelTab, setChannelTab] = useState<MetricsChannelTab>('paid')
+  const [organicSubTab, setOrganicSubTab] = useState<OrganicMetricsSubTab>('vehicles')
+  const [organicVehicleStatus, setOrganicVehicleStatus] = useState<OrganicVehicleStatusTab>('available')
 
   const intervalRef = useRef<number | null>(null)
 
@@ -150,19 +155,23 @@ export default function MarketingMetricasPage() {
 
 
 
-  const vehicleBarItems = useMemo(() => {
-    if (!data) return []
-    return data.organic.vehicles.slice(0, 10).map((v) => ({
-      id: v.inventoryId ?? v.vehicleLabel,
-      title: v.vehicleLabel,
-      meta: `${fmtInt(v.videoCount)} video${v.videoCount !== 1 ? 's' : ''} · ret. ${
-        v.retentionAvgPct != null ? `${Math.round(v.retentionAvgPct)}%` : '—'
-      }`,
-      value: v.views,
-    }))
-  }, [data])
+  const organicVehiclesAvailable = useMemo(
+    () => data?.organic.vehicles.filter((v) => !v.isVendido) ?? [],
+    [data]
+  )
+  const organicVehiclesSold = useMemo(
+    () => data?.organic.vehicles.filter((v) => v.isVendido) ?? [],
+    [data]
+  )
+  const organicVehiclesFiltered = useMemo(
+    () => (organicVehicleStatus === 'sold' ? organicVehiclesSold : organicVehiclesAvailable),
+    [organicVehicleStatus, organicVehiclesAvailable, organicVehiclesSold]
+  )
 
-  const maxVehicleViews = Math.max(1, ...vehicleBarItems.map((i) => i.value))
+  const maxVehicleViews = useMemo(
+    () => Math.max(1, ...(organicVehiclesFiltered.map((v) => v.views) ?? [0])),
+    [organicVehiclesFiltered]
+  )
 
   return (
     <div className="space-y-8">
@@ -314,13 +323,13 @@ export default function MarketingMetricasPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
               <KpiTile
                 label="Views en el mes"
-                value={fmtInt(data?.organic.viewsTotal)}
+                value={fmtInt(data?.organic.viewsInMonth)}
                 accent="emerald"
               />
               <KpiTile
                 label="Videos activos"
                 value={fmtInt(data?.organic.activeVideos)}
-                hint="Videos distintos con métricas"
+                hint="Vehículos y creativos con métricas"
               />
               <KpiTile
                 label="Retención prom."
@@ -341,23 +350,53 @@ export default function MarketingMetricasPage() {
                 valueVariant="text"
                 hint={
                   data?.organic.bestVehicle
-                    ? `${fmtInt(data.organic.bestVehicleViews)} views en el mes`
+                    ? `${fmtInt(data.organic.bestVehicleViews)} views acumuladas`
                     : undefined
                 }
                 accent="emerald"
               />
             </div>
 
-            <div className="flex items-center gap-2 mb-3">
-              <Video className="h-4 w-4 text-emerald-600" />
-              <p className="text-sm font-extrabold text-slate-900">Views por vehículo</p>
-            </div>
-            <RankingBars
-              items={vehicleBarItems}
-              maxValue={maxVehicleViews}
-              valueLabel={(n) => `${fmtInt(n)} views`}
-              barClass="bg-emerald-500"
+            <OrganicMetricsTabsBar
+              subTab={organicSubTab}
+              onSubTabChange={setOrganicSubTab}
+              vehicleCount={data?.organic.vehicles.length ?? 0}
+              creativeCount={data?.organic.creatives.videoCount ?? 0}
+              vehicleStatus={organicVehicleStatus}
+              onVehicleStatusChange={setOrganicVehicleStatus}
+              availableCount={organicVehiclesAvailable.length}
+              soldCount={organicVehiclesSold.length}
             />
+
+            {organicSubTab === 'vehicles' ? (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <Video className="h-4 w-4 text-emerald-600" />
+                  <p className="text-sm font-extrabold text-slate-900">
+                    Views por vehículo · {organicVehicleStatus === 'sold' ? 'vendidos' : 'disponibles'}
+                  </p>
+                  {organicVehiclesFiltered[0] && (
+                    <span className="text-xs text-slate-500 font-medium ml-auto">
+                      Top: {organicVehiclesFiltered[0].vehicleLabel} ·{' '}
+                      {fmtInt(organicVehiclesFiltered[0].views)} views
+                    </span>
+                  )}
+                </div>
+                <OrganicVehicleRanking
+                  key={organicVehicleStatus}
+                  vehicles={organicVehiclesFiltered}
+                  maxValue={maxVehicleViews}
+                />
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="h-4 w-4 text-violet-600" />
+                  <p className="text-sm font-extrabold text-slate-900">Creativos sin inventario</p>
+                </div>
+                <OrganicCreativesList group={data?.organic.creatives ?? { label: 'Creativos', views: 0, videoCount: 0, retentionAvgPct: null, posts: [] }} />
+              </>
+            )}
           </>
         }
       />

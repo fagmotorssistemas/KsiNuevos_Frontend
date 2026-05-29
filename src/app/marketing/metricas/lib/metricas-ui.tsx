@@ -1,17 +1,29 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Car,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Megaphone,
   Package,
+  Sparkles,
+  Tag,
   Video,
 } from 'lucide-react'
 
-import type { CampaignRankRow, MetricasCampaignMonth, VehicleLeadsRow } from './dashboard-metrics'
+import type {
+  CampaignRankRow,
+  MetricasCampaignMonth,
+  OrganicCreativesGroup,
+  OrganicVideoPost,
+  VehicleVideoViewsRow,
+  VehicleLeadsRow,
+} from './dashboard-metrics'
 
 function formatCampaignMonthLabel(ym: MetricasCampaignMonth): string {
   const [y, m] = ym.split('-').map(Number)
@@ -320,6 +332,493 @@ export function RankingBars({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function formatOrganicVideoDate(iso: string | null): string {
+  if (!iso) return 'Fecha no disponible'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
+  return new Intl.DateTimeFormat('es-EC', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'America/Guayaquil',
+  }).format(d)
+}
+
+function OrganicVideoPostRow({ post }: { post: OrganicVideoPost }) {
+  const [captionExpanded, setCaptionExpanded] = useState(false)
+  const [captionTruncated, setCaptionTruncated] = useState(false)
+  const captionRef = useRef<HTMLParagraphElement>(null)
+  const label =
+    post.caption?.trim() ||
+    post.title?.trim() ||
+    `Video ${post.videoId.slice(-8)}`
+
+  useEffect(() => {
+    const el = captionRef.current
+    if (!el || captionExpanded) return
+    setCaptionTruncated(el.scrollHeight > el.clientHeight + 1)
+  }, [label, captionExpanded])
+
+  const toggleCaption = () => {
+    if (captionTruncated || captionExpanded) setCaptionExpanded((v) => !v)
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p
+            ref={captionRef}
+            role={captionTruncated || captionExpanded ? 'button' : undefined}
+            tabIndex={captionTruncated || captionExpanded ? 0 : undefined}
+            onClick={toggleCaption}
+            onKeyDown={(e) => {
+              if (!captionTruncated && !captionExpanded) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                toggleCaption()
+              }
+            }}
+            className={`text-xs font-bold text-slate-900 leading-snug ${
+              captionExpanded ? 'whitespace-pre-wrap' : 'line-clamp-1'
+            } ${
+              captionTruncated || captionExpanded
+                ? 'cursor-pointer hover:text-emerald-800 transition-colors'
+                : ''
+            }`}
+          >
+            {label}
+          </p>
+          <p className="text-[11px] font-medium text-slate-500 mt-1">
+            {formatOrganicVideoDate(post.createdTime)}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-extrabold text-slate-900 tabular-nums">
+            {fmtInt(post.views)} views
+          </p>
+          {post.retentionPct != null && (
+            <p className="text-[10px] font-bold text-emerald-700 mt-0.5">
+              Ret. {Math.round(post.retentionPct)}%
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-500">
+        {post.avgTimeWatchedS != null && post.avgTimeWatchedS > 0 && (
+          <span>Tiempo prom. {post.avgTimeWatchedS.toFixed(1)}s</span>
+        )}
+        {post.commentsCount > 0 && <span>{fmtInt(post.commentsCount)} coment.</span>}
+        {post.sharesCount > 0 && <span>{fmtInt(post.sharesCount)} shares</span>}
+      </div>
+      {post.permalinkUrl && (
+        <a
+          href={post.permalinkUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800"
+        >
+          Ver en Meta
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+export type OrganicVehicleStatusTab = 'available' | 'sold'
+
+export type OrganicMetricsSubTab = 'vehicles' | 'creatives'
+
+const ORGANIC_TAB_GROUP_CLASS =
+  'inline-flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-100 border border-slate-200/80'
+
+function OrganicTabButton({
+  active,
+  onClick,
+  label,
+  count,
+  icon: Icon,
+  activeBadgeClass,
+  activeIconClass,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  count: number
+  icon: typeof Video
+  activeBadgeClass: string
+  activeIconClass: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-extrabold transition-all',
+        active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+      ].join(' ')}
+    >
+      <Icon className={['h-3.5 w-3.5 shrink-0', active ? activeIconClass : 'text-slate-400'].join(' ')} />
+      {label}
+      <span
+        className={[
+          'tabular-nums rounded-md px-1.5 py-0.5 text-[10px] font-bold',
+          active ? activeBadgeClass : 'bg-white text-slate-600',
+        ].join(' ')}
+      >
+        {count}
+      </span>
+    </button>
+  )
+}
+
+export function OrganicMetricsTabsBar({
+  subTab,
+  onSubTabChange,
+  vehicleCount,
+  creativeCount,
+  vehicleStatus,
+  onVehicleStatusChange,
+  availableCount,
+  soldCount,
+}: {
+  subTab: OrganicMetricsSubTab
+  onSubTabChange: (tab: OrganicMetricsSubTab) => void
+  vehicleCount: number
+  creativeCount: number
+  vehicleStatus: OrganicVehicleStatusTab
+  onVehicleStatusChange: (tab: OrganicVehicleStatusTab) => void
+  availableCount: number
+  soldCount: number
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <div className={ORGANIC_TAB_GROUP_CLASS}>
+        <OrganicTabButton
+          active={subTab === 'vehicles'}
+          onClick={() => onSubTabChange('vehicles')}
+          label="Por vehículo"
+          count={vehicleCount}
+          icon={Video}
+          activeBadgeClass="bg-emerald-100 text-emerald-800"
+          activeIconClass="text-emerald-600"
+        />
+        <OrganicTabButton
+          active={subTab === 'creatives'}
+          onClick={() => onSubTabChange('creatives')}
+          label="Creativos"
+          count={creativeCount}
+          icon={Sparkles}
+          activeBadgeClass="bg-violet-100 text-violet-800"
+          activeIconClass="text-violet-600"
+        />
+      </div>
+
+      {subTab === 'vehicles' && (
+        <div className={`${ORGANIC_TAB_GROUP_CLASS} sm:ml-auto`}>
+          <OrganicTabButton
+            active={vehicleStatus === 'available'}
+            onClick={() => onVehicleStatusChange('available')}
+            label="Disponibles"
+            count={availableCount}
+            icon={Car}
+            activeBadgeClass="bg-emerald-100 text-emerald-800"
+            activeIconClass="text-emerald-600"
+          />
+          <OrganicTabButton
+            active={vehicleStatus === 'sold'}
+            onClick={() => onVehicleStatusChange('sold')}
+            label="Vendidos"
+            count={soldCount}
+            icon={Tag}
+            activeBadgeClass="bg-slate-200 text-slate-700"
+            activeIconClass="text-slate-600"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function OrganicCreativesList({ group }: { group: OrganicCreativesGroup }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  if (group.posts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+        <p className="text-sm font-medium text-slate-500">
+          Sin creativos (TOP 5, comparativos, quiénes somos, etc.).
+        </p>
+      </div>
+    )
+  }
+
+  const toggle = () => {
+    setIsOpen((prev) => {
+      const next = !prev
+      if (next) {
+        requestAnimationFrame(() => {
+          rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        })
+      }
+      return next
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div
+        ref={rowRef}
+        className={`rounded-2xl border bg-white shadow-sm transition-all ${
+          isOpen
+            ? 'border-emerald-200 ring-2 ring-emerald-100 shadow-md'
+            : 'border-slate-100 hover:shadow-md'
+        }`}
+      >
+        <button type="button" onClick={toggle} className="w-full text-left p-4 cursor-pointer">
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="min-w-0 flex-1 flex items-start gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900">{group.label}</p>
+                <p className="text-xs font-medium text-slate-500 mt-0.5">
+                  {fmtInt(group.videoCount)} video{group.videoCount !== 1 ? 's' : ''} · ret.{' '}
+                  {group.retentionAvgPct != null
+                    ? `${Math.round(group.retentionAvgPct)}%`
+                    : '—'}
+                  <span className="text-emerald-600 font-bold ml-1">
+                    · {isOpen ? 'Ocultar' : 'Ver videos'}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm font-extrabold text-slate-900 tabular-nums bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                {fmtInt(group.views)} views
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              />
+            </div>
+          </div>
+          <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full rounded-full bg-emerald-500 w-full opacity-40" />
+          </div>
+        </button>
+
+        {isOpen && (
+          <div className="px-4 pb-4 pt-0 border-t border-slate-100/80 animate-in slide-in-from-top-2 duration-200">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 pt-3 pb-2">
+              {group.posts.length} video{group.posts.length !== 1 ? 's' : ''} desde ene 2026
+            </p>
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {group.posts.map((post) => (
+                <OrganicVideoPostRow key={post.videoId} post={post} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ORGANIC_VEHICLE_PAGE_SIZE = 10
+
+export function OrganicVehicleRanking({
+  vehicles,
+  maxValue,
+}: {
+  vehicles: VehicleVideoViewsRow[]
+  maxValue: number
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const max = Math.max(1, maxValue)
+  const totalPages = Math.max(1, Math.ceil(vehicles.length / ORGANIC_VEHICLE_PAGE_SIZE))
+
+  useEffect(() => {
+    setPage(1)
+    setExpandedId(null)
+  }, [vehicles.length])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * ORGANIC_VEHICLE_PAGE_SIZE
+    return vehicles.slice(start, start + ORGANIC_VEHICLE_PAGE_SIZE)
+  }, [vehicles, page])
+
+  if (vehicles.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 px-4 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+        <p className="text-sm font-medium text-slate-500">Sin vehículos en esta categoría.</p>
+      </div>
+    )
+  }
+
+  const toggle = (id: string) => {
+    const next = expandedId === id ? null : id
+    setExpandedId(next)
+    if (next) {
+      requestAnimationFrame(() => {
+        rowRefs.current.get(next)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
+  }
+
+  const startIdx = (page - 1) * ORGANIC_VEHICLE_PAGE_SIZE + 1
+  const endIdx = Math.min(page * ORGANIC_VEHICLE_PAGE_SIZE, vehicles.length)
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+      {pageRows.map((vehicle, i) => {
+        const id = vehicle.rowId
+        const isOpen = expandedId === id
+        const rank = startIdx + i
+        const pct = Math.round((vehicle.views / max) * 100)
+        const hasPosts = vehicle.posts.length > 0
+
+        return (
+          <div
+            key={id}
+            ref={(el) => {
+              if (el) rowRefs.current.set(id, el)
+              else rowRefs.current.delete(id)
+            }}
+            className={`rounded-2xl border bg-white shadow-sm transition-all ${
+              isOpen
+                ? 'border-emerald-200 ring-2 ring-emerald-100 shadow-md'
+                : vehicle.isVendido
+                  ? 'border-slate-200 bg-slate-50/40 hover:shadow-md'
+                  : 'border-slate-100 hover:shadow-md'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => hasPosts && toggle(id)}
+              disabled={!hasPosts}
+              className={`w-full text-left p-4 ${hasPosts ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div className="min-w-0 flex-1 flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                    {rank}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p
+                        className={`text-sm font-bold truncate ${
+                          vehicle.isVendido ? 'text-slate-500' : 'text-slate-900'
+                        }`}
+                      >
+                        {vehicle.vehicleLabel}
+                      </p>
+                      {vehicle.isVendido && (
+                        <span className="inline-flex shrink-0 items-center rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                          Vendido
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">
+                      {fmtInt(vehicle.videoCount)} video{vehicle.videoCount !== 1 ? 's' : ''} · ret.{' '}
+                      {vehicle.retentionAvgPct != null
+                        ? `${Math.round(vehicle.retentionAvgPct)}%`
+                        : '—'}
+                      {hasPosts && (
+                        <span className="text-emerald-600 font-bold ml-1">
+                          · {isOpen ? 'Ocultar' : 'Ver videos'}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-extrabold text-slate-900 tabular-nums bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                    {fmtInt(vehicle.views)} views
+                  </span>
+                  {hasPosts && (
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-1000 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </button>
+
+            {isOpen && hasPosts && (
+              <div className="px-4 pb-4 pt-0 border-t border-slate-100/80 animate-in slide-in-from-top-2 duration-200">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 pt-3 pb-2">
+                  {vehicle.posts.length} video{vehicle.posts.length !== 1 ? 's' : ''} desde ene 2026
+                </p>
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {vehicle.posts.map((post) => (
+                    <OrganicVideoPostRow key={post.videoId} post={post} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+          <p className="text-xs font-semibold text-slate-600">
+            Mostrando {startIdx}–{endIdx} de {fmtInt(vehicles.length)} vehículos
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => {
+                setExpandedId(null)
+                setPage((p) => Math.max(1, p - 1))
+              }}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-800 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Anterior
+            </button>
+            <span className="text-xs font-extrabold text-slate-700 tabular-nums px-1">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => {
+                setExpandedId(null)
+                setPage((p) => Math.min(totalPages, p + 1))
+              }}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-800 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              Siguiente
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

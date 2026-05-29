@@ -64,15 +64,40 @@ type CampaignWindowRow = {
   updated_at?: string | null
 }
 
+export type OrganicVideoPost = {
+  videoId: string
+  views: number
+  retentionPct: number | null
+  createdTime: string | null
+  permalinkUrl: string | null
+  title: string | null
+  caption: string | null
+  commentsCount: number
+  sharesCount: number
+  avgTimeWatchedS: number | null
+}
+
 export type VehicleVideoViewsRow = {
+  rowId: string
   inventoryId: string | null
   vehicleLabel: string
   brand: string
   model: string
   year: number | null
+  inventoryStatus: string | null
+  isVendido: boolean
   views: number
   retentionAvgPct: number | null
   videoCount: number
+  posts: OrganicVideoPost[]
+}
+
+export type OrganicCreativesGroup = {
+  label: string
+  views: number
+  videoCount: number
+  retentionAvgPct: number | null
+  posts: OrganicVideoPost[]
 }
 
 /** @deprecated alias */
@@ -116,11 +141,13 @@ export type DashboardMetrics = {
   }
   organic: {
     viewsTotal: number
+    viewsInMonth: number
     activeVideos: number
     retentionAvgPct: number | null
     bestVehicle: string | null
     bestVehicleViews: number
     vehicles: VehicleVideoViewsRow[]
+    creatives: OrganicCreativesGroup
   }
   narrative: {
     reportDate: string | null
@@ -277,116 +304,302 @@ function retentionToDisplayPct(rate: unknown): number {
   return n <= 1 ? n * 100 : n
 }
 
+/** Sincronización orgánica Meta desde esta fecha (Ecuador). */
+export const ORGANIC_VIDEO_SINCE_YMD = '2026-01-01'
+
+function isOrganicVehicleRow(row: VideoMetricsRowDb): boolean {
+  const kind = String(row.content_kind ?? '').toLowerCase()
+  if (kind === 'creative') return false
+  if (kind === 'vehicle') return true
+  return Boolean(row.inventory_vehicle_id)
+}
+
+function isOrganicCreativeRow(row: VideoMetricsRowDb): boolean {
+  const kind = String(row.content_kind ?? '').toLowerCase()
+  if (kind === 'creative') return true
+  if (kind === 'vehicle') return false
+  return !row.inventory_vehicle_id
+}
+
+function sumPostViews(posts: OrganicVideoPost[]): number {
+  return posts.reduce((acc, p) => acc + p.views, 0)
+}
+
+function avgRetentionFromPosts(posts: OrganicVideoPost[]): number | null {
+  const withRet = posts.filter((p) => p.retentionPct != null && p.retentionPct > 0)
+  if (withRet.length === 0) return null
+  return withRet.reduce((acc, p) => acc + (p.retentionPct ?? 0), 0) / withRet.length
+}
+
 type VideoMetricsRowDb = {
   video_id: string
   views: number | null
   retention_rate: number | null
+  created_time: string | null
+  permalink_url: string | null
+  title: string | null
+  caption: string | null
+  comments_count: number | null
+  shares_count: number | null
+  avg_time_watched_s: number | null
+  content_kind: string | null
   inventory_vehicle_id: string | null
   parsed_brand: string | null
   parsed_model: string | null
   parsed_year: number | null
   inventoryoracle?:
-    | { brand: string | null; model: string | null; year: number | null }
-    | Array<{ brand: string | null; model: string | null; year: number | null }>
+    | { brand: string | null; model: string | null; year: number | null; status: string | null }
+    | Array<{ brand: string | null; model: string | null; year: number | null; status: string | null }>
     | null
 }
 
-function resolveVideoVehicle(row: VideoMetricsRowDb): {
+function resolveInventoryStatus(row: VideoMetricsRowDb): {
+  inventoryStatus: string | null
+  isVendido: boolean
+} {
+  const invRaw = row.inventoryoracle
+  const inv = Array.isArray(invRaw) ? invRaw[0] : invRaw
+  const inventoryStatus = inv?.status ?? null
+  const isVendido = String(inventoryStatus ?? '').toLowerCase() === 'vendido'
+  return { inventoryStatus, isVendido }
+}
+
+function videoCreatedYmd(createdTime: string | null | undefined): string | null {
+  if (!createdTime) return null
+  return String(createdTime).slice(0, 10)
+}
+
+function isVideoInCampaignMonth(
+  createdTime: string | null | undefined,
+  sinceReportDate: string,
+  untilReportDate: string
+): boolean {
+  const ymd = videoCreatedYmd(createdTime)
+  if (!ymd) return false
+  return ymd >= sinceReportDate && ymd <= untilReportDate
+}
+
+function mapVideoRowToPost(row: VideoMetricsRowDb): OrganicVideoPost {
+  const ret = retentionToDisplayPct(row.retention_rate)
+  return {
+    videoId: String(row.video_id),
+    views: num(row.views),
+    retentionPct: ret > 0 ? ret : null,
+    createdTime: row.created_time ?? null,
+    permalinkUrl: row.permalink_url ?? null,
+    title: row.title ?? null,
+    caption: row.caption ?? null,
+    commentsCount: num(row.comments_count),
+    sharesCount: num(row.shares_count),
+    avgTimeWatchedS: row.avg_time_watched_s != null ? num(row.avg_time_watched_s) : null,
+  }
+}
+
+function extractYearFromText(text: string | null | undefined): number | null {
+  if (!text?.trim()) return null
+  const match = text.match(/\b(20[1-3]\d)\b/)
+  if (!match) return null
+  const year = Number(match[1])
+  return Number.isFinite(year) ? year : null
+}
+
+function extractCaptionHeadline(caption: string | null | undefined): string | null {
+  if (!caption?.trim()) return null
+  const firstLine = caption.trim().split('\n')[0]?.trim()
+  if (!firstLine) return null
+  const sentence = (firstLine.split(/[.!?…]/)[0] ?? firstLine).trim()
+  if (sentence.length <= 96) return sentence
+  return `${sentence.slice(0, 93)}…`
+}
+
+function resolveOrganicVehicleGroup(row: VideoMetricsRowDb): {
+  groupKey: string
   inventoryId: string | null
   vehicleLabel: string
   brand: string
   model: string
   year: number | null
+  inventoryYear: number | null
 } {
   const invRaw = row.inventoryoracle
   const inv = Array.isArray(invRaw) ? invRaw[0] : invRaw
+  const inventoryId = row.inventory_vehicle_id ? String(row.inventory_vehicle_id) : null
   const brand = String(inv?.brand ?? row.parsed_brand ?? '').trim()
   const model = String(inv?.model ?? row.parsed_model ?? '').trim()
-  const year = inv?.year ?? row.parsed_year ?? null
-  const parts = [brand, model, year != null ? String(year) : ''].filter(Boolean)
-  const vehicleLabel = parts.join(' ').trim() || 'Sin vehículo vinculado'
+  const inventoryYear = inv?.year ?? row.parsed_year ?? null
+  const captionText = [row.caption, row.title].filter(Boolean).join('\n')
+  const captionYear = extractYearFromText(captionText)
+  const captionHeadline = extractCaptionHeadline(row.caption ?? row.title)
+  const yearMismatch =
+    captionYear != null && inventoryYear != null && captionYear !== inventoryYear
+  const groupYear = captionYear ?? inventoryYear
+
+  const groupKey = inventoryId
+    ? `${inventoryId}|y:${groupYear ?? 'na'}`
+    : `__unlinked__${brand.toLowerCase()}|${model.toLowerCase()}|${groupYear ?? ''}`
+
+  let vehicleLabel: string
+  if (yearMismatch && captionHeadline) {
+    vehicleLabel = captionHeadline
+  } else {
+    vehicleLabel =
+      [brand, model, groupYear != null ? String(groupYear) : ''].filter(Boolean).join(' ').trim() ||
+      'Sin vehículo vinculado'
+  }
+
   return {
-    inventoryId: row.inventory_vehicle_id ? String(row.inventory_vehicle_id) : null,
+    groupKey,
+    inventoryId,
     vehicleLabel,
     brand: brand || '—',
     model: model || '—',
-    year: year != null ? Number(year) : null,
+    year: groupYear != null ? Number(groupYear) : null,
+    inventoryYear: inventoryYear != null ? Number(inventoryYear) : null,
   }
 }
 
-function aggregateVideoMetricsByVehicle(rows: VideoMetricsRowDb[]): {
+function vehicleLabelFromTopPost(
+  post: OrganicVideoPost,
+  group: { vehicleLabel: string; inventoryYear: number | null }
+): string {
+  const captionText = post.caption ?? post.title ?? ''
+  const captionYear = extractYearFromText(captionText)
+  const captionHeadline = extractCaptionHeadline(captionText)
+  const yearMismatch =
+    captionYear != null &&
+    group.inventoryYear != null &&
+    captionYear !== group.inventoryYear
+  if (yearMismatch && captionHeadline) return captionHeadline
+  return group.vehicleLabel
+}
+
+function aggregateOrganicVideoMetrics(
+  rows: VideoMetricsRowDb[],
+  sinceReportDate: string,
+  untilReportDate: string
+): {
   viewsTotal: number
+  viewsInMonth: number
   activeVideos: number
   retentionAvgPct: number | null
   vehicles: VehicleVideoViewsRow[]
+  creatives: OrganicCreativesGroup
 } {
+  const vehicleRows = rows.filter(isOrganicVehicleRow)
+  const creativeRows = rows.filter(isOrganicCreativeRow)
+
   const byKey = new Map<
     string,
     {
+      rowId: string
       inventoryId: string | null
       vehicleLabel: string
       brand: string
       model: string
       year: number | null
-      views: number
-      retSum: number
-      retN: number
-      videos: Set<string>
+      inventoryYear: number | null
+      inventoryStatus: string | null
+      isVendido: boolean
+      posts: OrganicVideoPost[]
     }
   >()
   const allVideos = new Set<string>()
-  let viewsTotal = 0
-  let retSum = 0
-  let retN = 0
+  let viewsInMonth = 0
+  let retSumMonth = 0
+  let retNMonth = 0
 
-  for (const row of rows) {
-    const v = resolveVideoVehicle(row)
-    const key = v.inventoryId ?? `__unlinked__${v.brand}|${v.model}|${v.year ?? ''}`
+  for (const row of [...vehicleRows, ...creativeRows]) {
     const views = num(row.views)
-    viewsTotal += views
+    const inMonth = isVideoInCampaignMonth(row.created_time, sinceReportDate, untilReportDate)
+    if (inMonth) {
+      viewsInMonth += views
+      const ret = retentionToDisplayPct(row.retention_rate)
+      if (ret > 0) {
+        retSumMonth += ret
+        retNMonth += 1
+      }
+    }
     if (row.video_id) allVideos.add(String(row.video_id))
+  }
 
-    const cur = byKey.get(key) ?? {
-      inventoryId: v.inventoryId,
-      vehicleLabel: v.vehicleLabel,
-      brand: v.brand,
-      model: v.model,
-      year: v.year,
-      views: 0,
-      retSum: 0,
-      retN: 0,
-      videos: new Set<string>(),
+  for (const row of vehicleRows) {
+    const g = resolveOrganicVehicleGroup(row)
+    const { inventoryStatus, isVendido } = resolveInventoryStatus(row)
+    const cur = byKey.get(g.groupKey) ?? {
+      rowId: g.groupKey,
+      inventoryId: g.inventoryId,
+      vehicleLabel: g.vehicleLabel,
+      brand: g.brand,
+      model: g.model,
+      year: g.year,
+      inventoryYear: g.inventoryYear,
+      inventoryStatus,
+      isVendido,
+      posts: [],
     }
-    cur.views += views
-    if (row.video_id) cur.videos.add(String(row.video_id))
-    const ret = retentionToDisplayPct(row.retention_rate)
-    if (ret > 0) {
-      cur.retSum += ret
-      cur.retN += 1
-      retSum += ret
-      retN += 1
-    }
-    byKey.set(key, cur)
+    cur.posts.push(mapVideoRowToPost(row))
+    byKey.set(g.groupKey, cur)
   }
 
   const vehicles: VehicleVideoViewsRow[] = [...byKey.values()]
-    .map((v) => ({
-      inventoryId: v.inventoryId,
-      vehicleLabel: v.vehicleLabel,
-      brand: v.brand,
-      model: v.model,
-      year: v.year,
-      views: v.views,
-      retentionAvgPct: v.retN > 0 ? v.retSum / v.retN : null,
-      videoCount: v.videos.size,
-    }))
-    .sort((a, b) => b.views - a.views || b.videoCount - a.videoCount)
+    .map((v) => {
+      const posts = [...v.posts].sort((a, b) => {
+        const ta = a.createdTime ? Date.parse(a.createdTime) : 0
+        const tb = b.createdTime ? Date.parse(b.createdTime) : 0
+        return tb - ta
+      })
+      const topByViews = [...posts].sort((a, b) => b.views - a.views)[0]
+      return {
+        rowId: v.rowId,
+        inventoryId: v.inventoryId,
+        vehicleLabel: topByViews
+          ? vehicleLabelFromTopPost(topByViews, v)
+          : v.vehicleLabel,
+        brand: v.brand,
+        model: v.model,
+        year: v.year,
+        inventoryStatus: v.inventoryStatus,
+        isVendido: v.isVendido,
+        views: sumPostViews(posts),
+        retentionAvgPct: avgRetentionFromPosts(posts),
+        videoCount: posts.length,
+        posts,
+      }
+    })
+    .filter((v) => v.posts.length > 0)
+    .sort(
+      (a, b) =>
+        Number(a.isVendido) - Number(b.isVendido) ||
+        b.views - a.views ||
+        b.videoCount - a.videoCount
+    )
+
+  const creativePosts = creativeRows
+    .map(mapVideoRowToPost)
+    .sort((a, b) => {
+      if (b.views !== a.views) return b.views - a.views
+      const ta = a.createdTime ? Date.parse(a.createdTime) : 0
+      const tb = b.createdTime ? Date.parse(b.createdTime) : 0
+      return tb - ta
+    })
+
+  const creatives: OrganicCreativesGroup = {
+    label: 'Creativos',
+    views: sumPostViews(creativePosts),
+    videoCount: creativePosts.length,
+    retentionAvgPct: avgRetentionFromPosts(creativePosts),
+    posts: creativePosts,
+  }
+
+  const viewsTotal = sumPostViews(vehicles.flatMap((v) => v.posts)) + creatives.views
 
   return {
     viewsTotal,
+    viewsInMonth,
     activeVideos: allVideos.size,
-    retentionAvgPct: retN > 0 ? retSum / retN : null,
+    retentionAvgPct: retNMonth > 0 ? retSumMonth / retNMonth : null,
     vehicles,
+    creatives,
   }
 }
 
@@ -1506,10 +1719,10 @@ export async function fetchDashboardMetrics(
     db
       .from('meta_video_metrics')
       .select(
-        'video_id, views, retention_rate, fetched_at, inventory_vehicle_id, parsed_brand, parsed_model, parsed_year, inventoryoracle(brand, model, year)'
+        'video_id, views, retention_rate, created_time, permalink_url, title, caption, comments_count, shares_count, avg_time_watched_s, content_kind, fetched_at, inventory_vehicle_id, parsed_brand, parsed_model, parsed_year, inventoryoracle(brand, model, year, status)'
       )
-      .gte('fetched_at', sinceIso)
-      .lte('fetched_at', periodEndIso)
+      .gte('created_time', `${ORGANIC_VIDEO_SINCE_YMD}T00:00:00-05:00`)
+      .order('created_time', { ascending: false })
       .limit(5000),
     db
       .from('daily_metrics_report')
@@ -1708,8 +1921,12 @@ export async function fetchDashboardMetrics(
     trendVsPrior = num(reportList[0].leads_total) - num(reportList[reportList.length - 1].leads_total)
   }
 
-  const videoAgg = aggregateVideoMetricsByVehicle((videoRows ?? []) as VideoMetricsRowDb[])
-  const bestVehicle = videoAgg.vehicles[0]
+  const videoAgg = aggregateOrganicVideoMetrics(
+    (videoRows ?? []) as VideoMetricsRowDb[],
+    sinceReportDate,
+    untilReportDate
+  )
+  const bestVehicle = videoAgg.vehicles.find((v) => !v.isVendido) ?? videoAgg.vehicles[0]
 
   let excerpt: string | null = null
   if (latestReport?.resumen_ejecutivo) {
@@ -1759,11 +1976,13 @@ export async function fetchDashboardMetrics(
     },
     organic: {
       viewsTotal: videoAgg.viewsTotal,
+      viewsInMonth: videoAgg.viewsInMonth,
       activeVideos: videoAgg.activeVideos,
       retentionAvgPct: videoAgg.retentionAvgPct,
       bestVehicle: bestVehicle?.vehicleLabel ?? null,
       bestVehicleViews: bestVehicle?.views ?? 0,
       vehicles: videoAgg.vehicles,
+      creatives: videoAgg.creatives,
     },
     narrative: {
       reportDate: latestReport?.report_date ?? null,

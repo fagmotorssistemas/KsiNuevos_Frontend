@@ -3412,6 +3412,7 @@ export type Database = {
           avg_time_watched_s: number
           caption: string | null
           comments_count: number
+          content_kind: string
           created_time: string | null
           fetched_at: string
           inventory_vehicle_id: string | null
@@ -3429,6 +3430,7 @@ export type Database = {
           avg_time_watched_s?: number
           caption?: string | null
           comments_count?: number
+          content_kind?: string
           created_time?: string | null
           fetched_at?: string
           inventory_vehicle_id?: string | null
@@ -3446,6 +3448,7 @@ export type Database = {
           avg_time_watched_s?: number
           caption?: string | null
           comments_count?: number
+          content_kind?: string
           created_time?: string | null
           fetched_at?: string
           inventory_vehicle_id?: string | null
