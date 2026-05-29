@@ -23,7 +23,7 @@ export function useInventory() {
 
     // Estado de Paginación y UI
     const [page, setPage] = useState(1);
-    const [rowsPerPage] = useState(10); // Puedes cambiar esto a 5, 20, etc.
+    const [rowsPerPage] = useState(10);
 
     const [sortBy, setSortBy] = useState<SortOption>('newest');
     const [filters, setFilters] = useState<InventoryFilters>({

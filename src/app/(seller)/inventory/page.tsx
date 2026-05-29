@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { FileSpreadsheet, ClipboardList } from "lucide-react";
+import { FileSpreadsheet, ClipboardList, LayoutGrid } from "lucide-react";
 
 import { useInventory, type InventoryCar } from "@/hooks/useInventory";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/features/inventory/InventoryKpiStats";
 import { InventoryToolbar } from "@/components/features/inventory/InventoryToolbar";
 import { InventoryTable } from "@/components/features/inventory/InventoryTable";
+import { InventoryVehicleReportsModal } from "@/components/features/inventory/InventoryVehicleReportsModal";
 import { InventoryDetailModal } from "@/components/features/inventory/InventoryDetailModal";
 import { InventoryCreateModal } from "@/components/features/inventory/InventoryCreateModal";
 import { InventoryExportPrintModal } from "@/components/features/inventory/InventoryExportPrintModal";
@@ -41,6 +42,7 @@ export default function InventoryPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isExportPrintModalOpen, setIsExportPrintModalOpen] = useState(false);
+    const [isVehicleReportsOpen, setIsVehicleReportsOpen] = useState(false);
 
     // Handlers Edición
     const handleEditCar = (car: InventoryCar) => {
@@ -107,7 +109,16 @@ export default function InventoryPage() {
                     </p>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setIsVehicleReportsOpen(true)}
+                    >
+                        <LayoutGrid className="h-4 w-4" />
+                        Reportes Vehiculares
+                    </Button>
                     <Button
                         variant="primary"
                         size="sm"
@@ -172,6 +183,19 @@ export default function InventoryPage() {
                     onSuccess={handleCreateSuccess}
                 />
             )}
+
+            {/* MODAL REPORTES VEHICULARES */}
+            <InventoryVehicleReportsModal
+                isOpen={isVehicleReportsOpen}
+                onClose={() => setIsVehicleReportsOpen(false)}
+                cars={allCars}
+                onEdit={(car) => {
+                    setIsVehicleReportsOpen(false);
+                    handleEditCar(car);
+                }}
+                onReload={reload}
+                currentUserRole={profile?.role}
+            />
 
             {/* MODAL EXPORTAR / IMPRIMIR */}
             <InventoryExportPrintModal
