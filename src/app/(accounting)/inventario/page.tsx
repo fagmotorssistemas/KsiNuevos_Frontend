@@ -1,16 +1,22 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, ClipboardList } from "lucide-react";
+import { RefreshCw, ClipboardList, FileCheck2 } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioKpiStats, FilterType } from "@/components/features/inventario/InventarioKpiStats";
 import { InventarioTable } from "@/components/features/inventario/InventarioTable";
+import { InventarioDocumentReportsModal } from "@/components/features/inventario/InventarioDocumentReportsModal";
+import { VehicleDetailModal, type VehicleDetailTab } from "@/components/features/inventario/VehicleDetailModal";
+import type { VehiculoInventario } from "@/types/inventario.types";
 
 export default function InventarioPage() {
     const { data, loading, refresh } = useInventarioData();
     
     // Estado para el filtro (Por defecto 'all')
     const [filter, setFilter] = useState<FilterType>('all');
+    const [isDocReportOpen, setIsDocReportOpen] = useState(false);
+    const [detailVehicle, setDetailVehicle] = useState<VehiculoInventario | null>(null);
+    const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");
 
     // Debug: ver cuando cambia el filtro
     const handleFilterChange = (newFilter: FilterType) => {
@@ -59,6 +65,14 @@ export default function InventarioPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsDocReportOpen(true)}
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
+                    >
+                        <FileCheck2 className="h-4 w-4" />
+                        Reporte Documentación
+                    </button>
                     <button 
                         onClick={refresh}
                         className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -103,6 +117,25 @@ export default function InventarioPage() {
                     Stock 0 indica vehículos dados de baja o vendidos.
                  </p>
             </div>
+
+            <InventarioDocumentReportsModal
+                isOpen={isDocReportOpen}
+                onClose={() => setIsDocReportOpen(false)}
+                vehiculos={filteredList}
+                onOpenVehicle={(v, tab) => {
+                    setDetailInitialTab(tab ?? "documentos");
+                    setDetailVehicle(v);
+                }}
+            />
+
+            {detailVehicle && (
+                <VehicleDetailModal
+                    key={detailVehicle.placa}
+                    vehiculo={detailVehicle}
+                    initialTab={detailInitialTab}
+                    onClose={() => setDetailVehicle(null)}
+                />
+            )}
         </div>
     );
 }

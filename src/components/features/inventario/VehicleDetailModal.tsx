@@ -47,11 +47,12 @@ type Props = {
   vehiculo: VehiculoInventario
   onClose: () => void
   onPrecioVenta?: (placa: string, precio: number) => void
+  initialTab?: VehicleDetailTab
 }
 
-export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta }: Props) {
+export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTab }: Props) {
   const { profile } = useAuth()
-  const [activeTab, setActiveTab] = useState<VehicleDetailTab>('ficha')
+  const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [historialError, setHistorialError] = useState<string | null>(null)

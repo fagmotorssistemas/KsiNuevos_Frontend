@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
+import { useAuth } from "@/hooks/useAuth";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 
 /** Del historial kardex obtiene el precio al que se vendió (NOTA DE ENTREGA o último egreso). Mismo dato que el $ en el modal. */
@@ -25,6 +26,9 @@ interface InventarioTableProps {
 }
 
 export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTableProps) {
+    const { role } = useAuth();
+    const isAdmin = role === "admin";
+
     // Estado local de vehículos para reflejar cambios sin recargar página
     const [vehiculos, setVehiculos] = useState(initialVehiculos); 
     
@@ -74,6 +78,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
 
     // --- LÓGICA DE EDICIÓN (SUPABASE) ---
     const handleEditClick = (v: VehiculoInventario) => {
+        if (!isAdmin) return;
         setEditingVehiculo(v);
         setEditForm({
             price: v.price ? String(v.price) : '',
@@ -82,7 +87,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     };
 
     const handleSaveCommercial = async () => {
-        if (!editingVehiculo) return;
+        if (!isAdmin || !editingVehiculo) return;
         setSaving(true);
         try {
             // Convertir strings a números (si están vacíos, usar 0)
@@ -219,14 +224,15 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-2">
-                                            {/* BOTÓN EDITAR */}
-                                            <button 
-                                                onClick={() => handleEditClick(v)}
-                                                className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-2 rounded-lg transition-all"
-                                                title="Editar Precio/KM"
-                                            >
-                                                <Pencil className="h-4 w-4" />
-                                            </button>
+                                            {isAdmin && (
+                                                <button 
+                                                    onClick={() => handleEditClick(v)}
+                                                    className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-2 rounded-lg transition-all"
+                                                    title="Editar Precio/KM"
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                </button>
+                                            )}
 
                                             {/* BOTÓN DETALLE */}
                                             <button 
@@ -277,7 +283,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
             )}
 
             {/* === MODAL DE EDICIÓN DE PRECIO/KM === */}
-            {editingVehiculo && (
+            {isAdmin && editingVehiculo && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
                         <h3 className="text-lg font-bold text-slate-800 mb-1">Editar Datos Comerciales</h3>

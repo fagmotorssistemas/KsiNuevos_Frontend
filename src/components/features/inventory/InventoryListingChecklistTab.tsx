@@ -42,7 +42,7 @@ const ITEMS: {
   {
     key: "pagina_web",
     label: "Página web",
-    description: "Visible en el sitio web de K-Si Nuevos",
+    description: "Automático: foto principal o galería cargada",
     icon: Globe,
     accent: "border-blue-200 hover:border-blue-300",
     iconBg: "bg-blue-100 text-blue-600",
@@ -60,12 +60,14 @@ const ITEMS: {
 interface InventoryListingChecklistTabProps {
   checklist: ListingChecklist;
   canEdit: boolean;
+  readOnlyKeys?: ListingChecklistKey[];
   onChange: (key: ListingChecklistKey, checked: boolean) => void;
 }
 
 export function InventoryListingChecklistTab({
   checklist,
   canEdit,
+  readOnlyKeys = [],
   onChange,
 }: InventoryListingChecklistTabProps) {
   const done = countListingChecklistDone(checklist);
@@ -103,6 +105,8 @@ export function InventoryListingChecklistTab({
         {ITEMS.map((item) => {
           const checked = checklist[item.key];
           const Icon = item.icon;
+          const readOnly = readOnlyKeys.includes(item.key);
+          const itemCanEdit = canEdit && !readOnly;
           return (
             <label
               key={item.key}
@@ -110,13 +114,13 @@ export function InventoryListingChecklistTab({
                 checked
                   ? "bg-emerald-50/80 border-emerald-400 shadow-sm"
                   : `bg-white ${item.accent}`
-              } ${canEdit ? "cursor-pointer" : "cursor-default opacity-90"}`}
+              } ${itemCanEdit ? "cursor-pointer" : "cursor-default opacity-90"}`}
             >
               <input
                 type="checkbox"
                 className="sr-only"
                 checked={checked}
-                disabled={!canEdit}
+                disabled={!itemCanEdit}
                 onChange={(e) => onChange(item.key, e.target.checked)}
               />
               <div

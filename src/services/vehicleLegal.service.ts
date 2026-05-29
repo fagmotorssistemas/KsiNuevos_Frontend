@@ -6,6 +6,7 @@ import {
 } from '@/lib/inventario/vehicleDocumentCatalog'
 import type {
   VehicleDebtRow,
+  VehicleDocumentFileRow,
   VehicleDocumentRow,
   VehicleEventRow,
   VehicleFineRow,
@@ -22,6 +23,69 @@ const ACCEPT_UPLOAD = 'application/pdf,image/jpeg,image/png,image/webp,image/hei
 export { ACCEPT_UPLOAD }
 
 import { normalizePlate } from '@/lib/inventario/normalizePlate'
+import { documentHasFiles } from '@/lib/inventario/vehicleLegalUi'
+
+export type VehicleLegalChecklistEntry = {
+  inventoryoracleId: string | null
+  documents: Map<VehicleDocType, VehicleDocumentRow>
+  debts: Map<string, VehicleDebtRow>
+  pendingFinesCount: number
+  totalFinesCount: number
+}
+
+export type VehicleLegalChecklistBulk = {
+  byPlate: Map<string, VehicleLegalChecklistEntry>
+}
+
+const IN_CHUNK = 150
+
+async function fetchInChunks<T>(
+  ids: string[],
+  fetcher: (chunk: string[]) => Promise<T[]>
+): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK)
+    const rows = await fetcher(chunk)
+    out.push(...rows)
+  }
+  return out
+}
+
+async function attachDocumentFiles(
+  supabase: SupabaseClient,
+  documents: VehicleDocumentRow[]
+): Promise<VehicleDocumentRow[]> {
+  if (documents.length === 0) return documents
+
+  try {
+    const docIds = documents.map((d) => d.id)
+    const allFiles = await fetchInChunks(docIds, async (chunk) => {
+      const { data, error } = await supabase
+        .from('inventory_vehicle_document_files')
+        .select('*')
+        .in('document_id', chunk)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as VehicleDocumentFileRow[]
+    })
+
+    const byDoc = new Map<string, VehicleDocumentFileRow[]>()
+    for (const file of allFiles) {
+      const list = byDoc.get(file.document_id) ?? []
+      list.push(file)
+      byDoc.set(file.document_id, list)
+    }
+
+    return documents.map((doc) => ({
+      ...doc,
+      files: byDoc.get(doc.id) ?? [],
+    }))
+  } catch (err) {
+    console.warn('[vehicleLegal] attachDocumentFiles fallback', err)
+    return documents.map((doc) => ({ ...doc, files: [] }))
+  }
+}
 
 export async function resolveInventoryOracleId(
   supabase: SupabaseClient,
@@ -101,6 +165,129 @@ async function seedDebtSlots(supabase: SupabaseClient, inventoryoracleId: string
   if (error) throw error
 }
 
+export async function loadBulkVehicleLegalChecklist(
+  supabase: SupabaseClient,
+  vehicles: { placa: string; proId?: string }[]
+): Promise<VehicleLegalChecklistBulk> {
+  const byPlate = new Map<string, VehicleLegalChecklistEntry>()
+  if (vehicles.length === 0) return { byPlate }
+
+  const plateToNorm = new Map<string, string>()
+  for (const v of vehicles) {
+    const norm = normalizePlate(v.placa)
+    plateToNorm.set(v.placa, norm)
+    byPlate.set(norm, {
+      inventoryoracleId: null,
+      documents: new Map(),
+      debts: new Map(),
+      pendingFinesCount: 0,
+      totalFinesCount: 0,
+    })
+  }
+
+  const uniqueNorms = [...byPlate.keys()]
+  const oracleByNorm = new Map<string, string>()
+
+  for (let i = 0; i < uniqueNorms.length; i += IN_CHUNK) {
+    const batch = uniqueNorms.slice(i, i + IN_CHUNK)
+    const { data: byPlateRows, error: plateErr } = await supabase
+      .from('inventoryoracle')
+      .select('id, plate, plate_short, oracle_id')
+      .in('plate', batch)
+    if (plateErr) throw plateErr
+    for (const row of byPlateRows ?? []) {
+      const norm = normalizePlate(row.plate ?? '')
+      if (norm) oracleByNorm.set(norm, row.id)
+      if (row.plate_short) {
+        const shortNorm = normalizePlate(row.plate_short)
+        if (shortNorm) oracleByNorm.set(shortNorm, row.id)
+      }
+    }
+  }
+
+  const proIds = [...new Set(vehicles.map((v) => v.proId?.toString()).filter(Boolean) as string[])]
+  if (proIds.length > 0) {
+    for (let i = 0; i < proIds.length; i += IN_CHUNK) {
+      const batch = proIds.slice(i, i + IN_CHUNK)
+      const { data: byOracleRows, error: oracleErr } = await supabase
+        .from('inventoryoracle')
+        .select('id, plate, plate_short, oracle_id')
+        .in('oracle_id', batch)
+      if (oracleErr) throw oracleErr
+      for (const row of byOracleRows ?? []) {
+        const norm = normalizePlate(row.plate ?? '')
+        if (norm) oracleByNorm.set(norm, row.id)
+      }
+    }
+  }
+
+  for (const [norm, entry] of byPlate) {
+    const id = oracleByNorm.get(norm) ?? null
+    entry.inventoryoracleId = id
+  }
+
+  const oracleIds = [...new Set([...oracleByNorm.values()])]
+  if (oracleIds.length === 0) return { byPlate }
+
+  const [allDocs, allDebts, allFines] = await Promise.all([
+    fetchInChunks(oracleIds, async (chunk) => {
+      const { data, error } = await supabase
+        .from('inventory_vehicle_documents')
+        .select('*')
+        .in('inventoryoracle_id', chunk)
+      if (error) throw error
+      return (data ?? []) as VehicleDocumentRow[]
+    }),
+    fetchInChunks(oracleIds, async (chunk) => {
+      const { data, error } = await supabase
+        .from('inventory_vehicle_debts')
+        .select('*')
+        .in('inventoryoracle_id', chunk)
+      if (error) throw error
+      return (data ?? []) as VehicleDebtRow[]
+    }),
+    fetchInChunks(oracleIds, async (chunk) => {
+      const { data, error } = await supabase
+        .from('inventory_vehicle_fines')
+        .select('inventoryoracle_id, status')
+        .in('inventoryoracle_id', chunk)
+      if (error) throw error
+      return data ?? []
+    }),
+  ])
+
+  const idToNorm = new Map<string, string>()
+  for (const [norm, id] of oracleByNorm) {
+    if (!idToNorm.has(id)) idToNorm.set(id, norm)
+  }
+
+  const enrichedDocs = await attachDocumentFiles(supabase, allDocs)
+  for (const doc of enrichedDocs) {
+    const norm = idToNorm.get(doc.inventoryoracle_id)
+    if (!norm) continue
+    const entry = byPlate.get(norm)
+    if (entry) entry.documents.set(doc.doc_type, doc)
+  }
+
+  for (const debt of allDebts) {
+    const norm = idToNorm.get(debt.inventoryoracle_id)
+    if (!norm) continue
+    const entry = byPlate.get(norm)
+    if (entry) entry.debts.set(debt.debt_type, debt)
+  }
+
+  for (const fine of allFines) {
+    const norm = idToNorm.get(fine.inventoryoracle_id)
+    if (!norm) continue
+    const entry = byPlate.get(norm)
+    if (!entry) continue
+    entry.totalFinesCount += 1
+    if (fine.status === 'pendiente') entry.pendingFinesCount += 1
+  }
+
+  return { byPlate }
+}
+
 export async function loadVehicleLegalDossier(
   supabase: SupabaseClient,
   placa: string,
@@ -172,9 +359,10 @@ export async function loadVehicleLegalDossier(
       .order('category')
       .order('doc_type')
     if (retryErr) throw retryErr
+    const withFiles = await attachDocumentFiles(supabase, (retryDocs ?? []) as VehicleDocumentRow[])
     return {
       inventoryoracleId,
-      documents: (retryDocs ?? []) as VehicleDocumentRow[],
+      documents: withFiles,
       fines: (finesRes.data ?? []) as VehicleFineRow[],
       debts: (debtsRes.data ?? []) as VehicleDebtRow[],
       owners: (ownersRes.data ?? []) as VehicleOwnerRow[],
@@ -183,9 +371,10 @@ export async function loadVehicleLegalDossier(
     }
   }
 
+  const withFiles = await attachDocumentFiles(supabase, documents)
   return {
     inventoryoracleId,
-    documents,
+    documents: withFiles,
     fines: (finesRes.data ?? []) as VehicleFineRow[],
     debts: (debtsRes.data ?? []) as VehicleDebtRow[],
     owners: (ownersRes.data ?? []) as VehicleOwnerRow[],
@@ -200,7 +389,11 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
   const docsComplete = dossier.documents.filter(
     (d) =>
       required.some((r) => r.docType === d.doc_type) &&
-      (d.status === 'cargado' || d.status === 'vigente' || d.status === 'aprobado' || d.status === 'sin_reportes' || d.file_url)
+      (d.status === 'cargado' ||
+        d.status === 'vigente' ||
+        d.status === 'aprobado' ||
+        d.status === 'sin_reportes' ||
+        documentHasFiles(d))
   ).length
 
   const pendingFines = dossier.fines.filter((f) => f.status === 'pendiente')
@@ -218,7 +411,7 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
   const criticalMissing = ['levantamiento_prendas', 'liberacion_bancaria', 'contrato_compra_venta'].filter(
     (t) => {
       const row = dossier.documents.find((d) => d.doc_type === t)
-      return !row || row.status === 'falta' || (!row.file_url && row.status !== 'pendiente')
+      return !row || row.status === 'falta' || (!documentHasFiles(row) && row.status !== 'pendiente')
     }
   )
 
@@ -251,17 +444,35 @@ export async function uploadVehicleDocument(
   profileId: string | null,
   meta?: { detail_text?: string; expires_at?: string | null; status?: VehicleDocStatus }
 ): Promise<VehicleDocumentRow> {
+  const { data: docRow, error: docErr } = await supabase
+    .from('inventory_vehicle_documents')
+    .select('*')
+    .eq('inventoryoracle_id', inventoryoracleId)
+    .eq('doc_type', docType)
+    .single()
+  if (docErr || !docRow) throw docErr ?? new Error('Documento no encontrado')
+
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
   const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`
   const filePath = `${inventoryoracleId}/${docType}/${safeName}`
 
   const { error: upErr } = await supabase.storage
     .from(INVENTORY_VEHICLE_DOCS_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type || undefined })
+    .upload(filePath, file, { contentType: file.type || undefined })
 
   if (upErr) throw upErr
 
   const { data: urlData } = supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).getPublicUrl(filePath)
+
+  const { error: fileErr } = await supabase.from('inventory_vehicle_document_files').insert({
+    document_id: docRow.id,
+    file_path: filePath,
+    file_url: urlData.publicUrl,
+    file_name: file.name,
+    mime_type: file.type || null,
+    uploaded_by: profileId,
+  })
+  if (fileErr) throw fileErr
 
   const { data, error } = await supabase
     .from('inventory_vehicle_documents')
@@ -271,17 +482,71 @@ export async function uploadVehicleDocument(
       file_url: urlData.publicUrl,
       file_name: file.name,
       mime_type: file.type || null,
-      detail_text: meta?.detail_text ?? null,
-      expires_at: meta?.expires_at ?? null,
+      detail_text: meta?.detail_text ?? docRow.detail_text,
+      expires_at: meta?.expires_at ?? docRow.expires_at,
       uploaded_by: profileId,
     })
-    .eq('inventoryoracle_id', inventoryoracleId)
-    .eq('doc_type', docType)
+    .eq('id', docRow.id)
     .select('*')
     .single()
 
   if (error) throw error
-  return data as VehicleDocumentRow
+  const [withFiles] = await attachDocumentFiles(supabase, [data as VehicleDocumentRow])
+  return withFiles
+}
+
+export async function deleteVehicleDocumentFile(
+  supabase: SupabaseClient,
+  fileId: string
+): Promise<void> {
+  const { data: fileRow, error: readErr } = await supabase
+    .from('inventory_vehicle_document_files')
+    .select('*')
+    .eq('id', fileId)
+    .maybeSingle()
+  if (readErr) throw readErr
+
+  if (fileRow) {
+    await supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).remove([fileRow.file_path])
+    const { error: delErr } = await supabase
+      .from('inventory_vehicle_document_files')
+      .delete()
+      .eq('id', fileId)
+    if (delErr) throw delErr
+
+    const { data: remaining, error: remErr } = await supabase
+      .from('inventory_vehicle_document_files')
+      .select('*')
+      .eq('document_id', fileRow.document_id)
+      .order('created_at', { ascending: false })
+    if (remErr) throw remErr
+
+    const latest = remaining?.[0]
+    const { error: updErr } = await supabase
+      .from('inventory_vehicle_documents')
+      .update(
+        latest
+          ? {
+              status: 'cargado',
+              file_path: latest.file_path,
+              file_url: latest.file_url,
+              file_name: latest.file_name,
+              mime_type: latest.mime_type,
+            }
+          : {
+              status: 'falta',
+              file_path: null,
+              file_url: null,
+              file_name: null,
+              mime_type: null,
+            }
+      )
+      .eq('id', fileRow.document_id)
+    if (updErr) throw updErr
+    return
+  }
+
+  throw new Error('Archivo no encontrado')
 }
 
 export async function updateVehicleDocumentMeta(

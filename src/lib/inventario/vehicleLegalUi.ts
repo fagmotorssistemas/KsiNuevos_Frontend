@@ -1,4 +1,43 @@
-import type { VehicleDocStatus, VehicleDebtStatus } from '@/types/vehicleLegal.types'
+import type { DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
+import type { VehicleDocStatus, VehicleDebtStatus, VehicleDocumentRow, VehicleDebtRow } from '@/types/vehicleLegal.types'
+
+export type ChecklistCellStatus = 'ok' | 'warn' | 'missing' | 'na'
+
+const DOC_OK: VehicleDocStatus[] = ['cargado', 'vigente', 'aprobado', 'sin_reportes', 'completo']
+
+export function documentHasFiles(doc: VehicleDocumentRow | undefined): boolean {
+  if (!doc) return false
+  if (doc.files && doc.files.length > 0) return true
+  return Boolean(doc.file_url)
+}
+
+export function getDocumentCheckStatus(
+  doc: VehicleDocumentRow | undefined,
+  catalog: DocCatalogEntry
+): ChecklistCellStatus {
+  if (!doc) return 'missing'
+  if (DOC_OK.includes(doc.status)) return 'ok'
+  if (catalog.requiresFile && documentHasFiles(doc)) return 'ok'
+  if (!catalog.requiresFile && (doc.status === 'aprobado' || doc.status === 'completo' || doc.detail_text?.trim())) {
+    return 'ok'
+  }
+  if (doc.status === 'vence_pronto' || doc.status === 'pendiente') return 'warn'
+  return 'missing'
+}
+
+export function getDebtCheckStatus(debt: VehicleDebtRow | undefined): ChecklistCellStatus {
+  if (!debt) return 'missing'
+  if (debt.status === 'al_dia' || debt.status === 'sin_reportes') return 'ok'
+  if (debt.status === 'en_tramite' || debt.status === 'pendiente') return 'warn'
+  if (debt.status === 'con_deuda') return 'missing'
+  return 'warn'
+}
+
+export function getFinesCheckStatus(pendingCount: number, totalCount = 0): ChecklistCellStatus {
+  if (pendingCount > 0) return 'missing'
+  if (totalCount === 0) return 'warn'
+  return 'ok'
+}
 
 const STATUS_LABELS: Record<string, string> = {
   falta: 'Falta',

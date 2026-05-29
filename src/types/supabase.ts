@@ -1185,8 +1185,10 @@ export type Database = {
           created_at: string
           generated_at: string
           id: string
+          leads_directo: number
           leads_organico: number
           leads_pagado: number
+          leads_sin_vehiculo: number
           leads_total: number
           leads_vs_ayer: number | null
           mejor_marca: string | null
@@ -1209,8 +1211,10 @@ export type Database = {
           created_at?: string
           generated_at?: string
           id?: string
+          leads_directo?: number
           leads_organico?: number
           leads_pagado?: number
+          leads_sin_vehiculo?: number
           leads_total?: number
           leads_vs_ayer?: number | null
           mejor_marca?: string | null
@@ -1233,8 +1237,10 @@ export type Database = {
           created_at?: string
           generated_at?: string
           id?: string
+          leads_directo?: number
           leads_organico?: number
           leads_pagado?: number
+          leads_sin_vehiculo?: number
           leads_total?: number
           leads_vs_ayer?: number | null
           mejor_marca?: string | null
@@ -1943,6 +1949,54 @@ export type Database = {
             columns: ["inventoryoracle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_document_files: {
+        Row: {
+          created_at: string
+          document_id: string
+          file_name: string
+          file_path: string
+          file_url: string
+          id: string
+          mime_type: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          file_name: string
+          file_path: string
+          file_url: string
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          file_name?: string
+          file_path?: string
+          file_url?: string
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_document_files_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_vehicle_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

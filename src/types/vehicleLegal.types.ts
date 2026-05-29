@@ -26,6 +26,17 @@ export type VehicleDebtType = 'impuesto_predial' | 'banco_financiera' | 'dinarda
 
 export type VehicleDebtStatus = 'al_dia' | 'pendiente' | 'en_tramite' | 'sin_reportes' | 'con_deuda'
 
+export interface VehicleDocumentFileRow {
+  id: string
+  document_id: string
+  file_path: string
+  file_url: string
+  file_name: string
+  mime_type: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface VehicleDocumentRow {
   id: string
   inventoryoracle_id: string
@@ -41,6 +52,8 @@ export interface VehicleDocumentRow {
   uploaded_by: string | null
   created_at: string
   updated_at: string
+  /** Adjuntos adicionales (varios PDF/imágenes por tipo) */
+  files?: VehicleDocumentFileRow[]
 }
 
 export interface VehicleFineRow {

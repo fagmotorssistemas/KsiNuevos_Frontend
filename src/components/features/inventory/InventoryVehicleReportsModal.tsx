@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "@/hooks/useInventory";
 import {
     parseListingChecklist,
+    resolveListingChecklist,
     type ListingChecklistKey,
 } from "@/types/inventory-listing-checklist";
 
@@ -41,10 +42,11 @@ interface InventoryVehicleReportsModalProps {
     currentUserRole?: string | null;
 }
 
-const CHECKLIST_COLUMNS: { key: ListingChecklistKey; label: string; short: string }[] = [
-    { key: "pagina_web", label: "Página web", short: "PC" },
-    { key: "marketplace", label: "Marketplace", short: "MP" },
-    { key: "patio_tuerca", label: "Patio Tuerca", short: "PT" },
+const CHECKLIST_COLUMNS: { key: ListingChecklistKey; label: string }[] = [
+    { key: "patio_tuerca", label: "Patio Tuerca" },
+    { key: "marketplace", label: "Marketplace" },
+    { key: "pagina_web", label: "Página web" },
+    { key: "ficha_tecnica", label: "Ficha técnica" },
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -78,11 +80,11 @@ function SortableHeader({
 }) {
     const active = current === sortKey;
     return (
-        <th className={`px-2 py-2 text-left ${className}`}>
+        <th className={`px-2 py-2.5 text-left ${className}`}>
             <button
                 type="button"
                 onClick={() => onSort(sortKey)}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wide hover:text-red-600 transition-colors"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-600 uppercase tracking-wide hover:text-red-600 transition-colors"
             >
                 {label}
                 <ChevronsUpDown
@@ -330,21 +332,9 @@ export function InventoryVehicleReportsModal({
                         </div>
                     </div>
 
-                    {/* Tabla compacta — sin scroll horizontal */}
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
-                        <table className="w-full table-fixed text-xs">
-                            <colgroup>
-                                <col className="w-[24%]" />
-                                <col className="w-[7%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[4%]" />
-                                <col className="w-[4%]" />
-                                <col className="w-[4%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[10%]" />
-                            </colgroup>
+                    {/* Tabla — scroll horizontal si hace falta */}
+                    <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0">
+                        <table className="min-w-max w-full text-xs">
                             <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
                                 <tr>
                                     <SortableHeader
@@ -361,14 +351,13 @@ export function InventoryVehicleReportsModal({
                                     {CHECKLIST_COLUMNS.map((col) => (
                                         <th
                                             key={col.key}
-                                            className="px-1 py-2 text-center text-[10px] font-semibold text-slate-500 uppercase"
-                                            title={col.label}
+                                            className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 min-w-[96px] max-w-[112px] whitespace-normal leading-snug align-bottom"
                                         >
-                                            {col.short}
+                                            {col.label}
                                         </th>
                                     ))}
                                     <SortableHeader label="Ubic." sortKey="location" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-slate-500 uppercase">
+                                    <th className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase">
                                         Acción
                                     </th>
                                 </tr>
@@ -376,8 +365,12 @@ export function InventoryVehicleReportsModal({
                             <tbody className="divide-y divide-slate-100">
                                 {paginatedCars.length > 0 ? (
                                     paginatedCars.map((car) => {
-                                        const checklist = parseListingChecklist(
-                                            (car as { listing_checklist?: unknown }).listing_checklist
+                                        const checklist = resolveListingChecklist(
+                                            (car as { listing_checklist?: unknown }).listing_checklist,
+                                            {
+                                                img_main_url: car.img_main_url,
+                                                img_gallery_urls: car.img_gallery_urls,
+                                            }
                                         );
                                         const plate = car.plate_short || car.plate || "S/P";
 
@@ -423,16 +416,19 @@ export function InventoryVehicleReportsModal({
                                                 <td className="px-2 py-2 text-[13px] text-slate-500 tabular-nums truncate">
                                                     {formatKm(car.mileage)}
                                                 </td>
-                                                {CHECKLIST_COLUMNS.map((col) => (
-                                                    <td key={col.key} className="px-1 py-2 text-center">
-                                                        <ChecklistToggle
-                                                            checked={checklist[col.key]}
-                                                            disabled={!canEdit}
-                                                            saving={savingCell === `${car.id}-${col.key}`}
-                                                            onChange={(v) => toggleChecklist(car, col.key, v)}
-                                                        />
-                                                    </td>
-                                                ))}
+                                                {CHECKLIST_COLUMNS.map((col) => {
+                                                    const isPaginaWebAuto = col.key === "pagina_web";
+                                                    return (
+                                                        <td key={col.key} className="px-1 py-2 text-center">
+                                                            <ChecklistToggle
+                                                                checked={checklist[col.key]}
+                                                                disabled={!canEdit || isPaginaWebAuto}
+                                                                saving={savingCell === `${car.id}-${col.key}`}
+                                                                onChange={(v) => toggleChecklist(car, col.key, v)}
+                                                            />
+                                                        </td>
+                                                    );
+                                                })}
                                                 <td className="px-2 py-2 text-[13px] text-slate-500 capitalize truncate">
                                                     {car.location || "Patio"}
                                                 </td>
@@ -453,7 +449,7 @@ export function InventoryVehicleReportsModal({
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={10} className="px-4 py-16 text-center text-slate-400">
+                                        <td colSpan={11} className="px-4 py-16 text-center text-slate-400">
                                             {activeView === "disponible"
                                                 ? "No hay vehículos disponibles que coincidan con la búsqueda."
                                                 : "No hay vehículos vendidos que coincidan con la búsqueda."}

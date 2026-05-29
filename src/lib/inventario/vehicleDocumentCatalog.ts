@@ -34,3 +34,25 @@ export const VEHICLE_DEBT_CATALOG: { debtType: 'impuesto_predial' | 'banco_finan
 export function docCatalogByType(docType: VehicleDocType) {
   return VEHICLE_DOCUMENT_CATALOG.find((d) => d.docType === docType)
 }
+
+/** Abreviaturas para columnas del reporte de documentación */
+export const DOCUMENT_SHORT: Record<VehicleDocType, string> = {
+  titulo_propiedad: 'TIT',
+  matricula: 'MAT',
+  soat: 'SOAT',
+  revision_tecnica: 'RTV',
+  factura_compra: 'FAC',
+  levantamiento_prendas: 'PRE',
+  liberacion_bancaria: 'BAN',
+  informe_ant_siat: 'ANT',
+  contrato_compra_venta: 'CV',
+  historial_mantenimiento: 'MAN',
+  informe_peritaje: 'PER',
+  accesorios_llaves: 'LLV',
+}
+
+export const DEBT_SHORT: Record<(typeof VEHICLE_DEBT_CATALOG)[number]['debtType'], string> = {
+  impuesto_predial: 'AME',
+  banco_financiera: 'FIN',
+  dinardap: 'DIN',
+}

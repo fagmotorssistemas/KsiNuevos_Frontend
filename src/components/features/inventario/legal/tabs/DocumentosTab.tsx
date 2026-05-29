@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
 import { findExpedienteFagByPlate, type ExpedienteVinculo } from '@/services/expedienteVinculo.service'
-import { uploadVehicleDocument, updateVehicleDocumentMeta } from '@/services/vehicleLegal.service'
+import { uploadVehicleDocument, updateVehicleDocumentMeta, deleteVehicleDocumentFile } from '@/services/vehicleLegal.service'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VehicleDocumentRow, VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleDocumentCard } from '../VehicleDocumentCard'
@@ -107,6 +107,10 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
               }}
               onUpdateMeta={async (patch) => {
                 await updateVehicleDocumentMeta(supabase, row.id, patch)
+                onRefresh()
+              }}
+              onDeleteFile={async (fileId) => {
+                await deleteVehicleDocumentFile(supabase, fileId)
                 onRefresh()
               }}
             />

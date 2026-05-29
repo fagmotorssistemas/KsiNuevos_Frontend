@@ -17,7 +17,9 @@ import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/veh
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { InventoryListingChecklistTab } from "@/components/features/inventory/InventoryListingChecklistTab";
 import {
-    parseListingChecklist,
+    mergeListingChecklistForSave,
+    hasVehiclePhotos,
+    resolveListingChecklist,
     type ListingChecklist,
     type ListingChecklistKey,
 } from "@/types/inventory-listing-checklist";
@@ -232,8 +234,27 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     });
 
     const [listingChecklist, setListingChecklist] = useState<ListingChecklist>(() =>
-        parseListingChecklist((car as { listing_checklist?: unknown }).listing_checklist)
+        resolveListingChecklist((car as { listing_checklist?: unknown }).listing_checklist, {
+            img_main_url: car.img_main_url,
+            img_gallery_urls: car.img_gallery_urls,
+        })
     );
+
+    const paginaWebFromPhotos = useMemo(
+        () =>
+            hasVehiclePhotos({
+                img_main_url: mainImagePreview || formData.img_main_url || null,
+                img_gallery_urls: [
+                    ...existingGallery,
+                    ...(newGalleryFiles.length > 0 ? ["pending"] : []),
+                ],
+            }),
+        [mainImagePreview, formData.img_main_url, existingGallery, newGalleryFiles.length]
+    );
+
+    useEffect(() => {
+        setListingChecklist((prev) => ({ ...prev, pagina_web: paginaWebFromPhotos }));
+    }, [paginaWebFromPhotos]);
 
     const vehiclePhotoItems = useMemo<DownloadImageItem[]>(() => {
         const items: DownloadImageItem[] = [];
@@ -278,6 +299,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     };
 
     const handleListingChecklistChange = (key: ListingChecklistKey, checked: boolean) => {
+        if (key === "pagina_web") return;
         setListingChecklist((prev) => ({ ...prev, [key]: checked }));
     };
 
@@ -462,7 +484,10 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                 img_main_url: finalMainUrl,
                 img_gallery_urls: finalGalleryUrls,
                 publication_url: formData.publication_url,
-                listing_checklist: listingChecklist,
+                listing_checklist: mergeListingChecklistForSave(listingChecklist, {
+                    img_main_url: finalMainUrl,
+                    img_gallery_urls: finalGalleryUrls,
+                }),
                 updated_at: new Date().toISOString(),
             };
 
@@ -914,6 +939,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             <InventoryListingChecklistTab
                                 checklist={listingChecklist}
                                 canEdit={canEdit}
+                                readOnlyKeys={["pagina_web"]}
                                 onChange={handleListingChecklistChange}
                             />
                         </ModalPanel>

@@ -17,11 +17,17 @@ import {
   Loader2,
   IdCard,
   FolderOpen,
+  Trash2,
 } from 'lucide-react'
 import type { ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import { docStatusClass, formatShortDate, statusLabel } from '@/lib/inventario/vehicleLegalUi'
-import type { VehicleDocumentRow, VehicleDocStatus, VehicleDocType } from '@/types/vehicleLegal.types'
+import type {
+  VehicleDocumentFileRow,
+  VehicleDocumentRow,
+  VehicleDocStatus,
+  VehicleDocType,
+} from '@/types/vehicleLegal.types'
 
 const ICONS: Record<string, typeof FileText> = {
   titulo_propiedad: FileText,
@@ -38,6 +44,25 @@ const ICONS: Record<string, typeof FileText> = {
   accesorios_llaves: Key,
 }
 
+function listDocumentFiles(row: VehicleDocumentRow): VehicleDocumentFileRow[] {
+  if (row.files && row.files.length > 0) return row.files
+  if (row.file_url && row.file_name) {
+    return [
+      {
+        id: `legacy-${row.id}`,
+        document_id: row.id,
+        file_path: row.file_path ?? '',
+        file_url: row.file_url,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        uploaded_by: row.uploaded_by,
+        created_at: row.updated_at,
+      },
+    ]
+  }
+  return []
+}
+
 type Props = {
   row: VehicleDocumentRow
   disabled?: boolean
@@ -45,6 +70,7 @@ type Props = {
   expedienteVinculo?: ExpedienteVinculo | null
   placaInventario?: string
   onUpload: (file: File) => Promise<void>
+  onDeleteFile?: (fileId: string) => Promise<void>
   onUpdateMeta: (patch: { status?: VehicleDocStatus; detail_text?: string | null; expires_at?: string | null }) => Promise<void>
 }
 
@@ -55,6 +81,7 @@ export function VehicleDocumentCard({
   expedienteVinculo,
   placaInventario,
   onUpload,
+  onDeleteFile,
   onUpdateMeta,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -63,19 +90,31 @@ export function VehicleDocumentCard({
   const [editing, setEditing] = useState(false)
   const [detail, setDetail] = useState(row.detail_text ?? '')
   const [expires, setExpires] = useState(row.expires_at ?? '')
+  const [localUploading, setLocalUploading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const files = listDocumentFiles(row)
+  const isUploading = uploading || localUploading
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    await onUpload(file)
-    e.target.value = ''
+    const selected = e.target.files
+    if (!selected?.length) return
+    setLocalUploading(true)
+    try {
+      for (const file of Array.from(selected)) {
+        await onUpload(file)
+      }
+    } finally {
+      setLocalUploading(false)
+      e.target.value = ''
+    }
   }
 
   const saveMeta = async () => {
     await onUpdateMeta({
       detail_text: detail || null,
       expires_at: expires || null,
-      status: row.file_url ? (expires ? 'vigente' : 'cargado') : row.status,
+      status: files.length > 0 ? (expires ? 'vigente' : 'cargado') : row.status,
     })
     setEditing(false)
   }
@@ -91,14 +130,16 @@ export function VehicleDocumentCard({
           <span className={`inline-flex mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${docStatusClass(row.status)}`}>
             {statusLabel(row.status)}
           </span>
+          {files.length > 0 && (
+            <p className="text-[10px] text-slate-500 mt-1.5 font-semibold">
+              {files.length} archivo{files.length !== 1 ? 's' : ''}
+            </p>
+          )}
           {row.detail_text && !editing && (
             <p className="text-xs text-slate-500 mt-2 line-clamp-2">{row.detail_text}</p>
           )}
           {row.expires_at && (
             <p className="text-xs text-slate-500 mt-1">Vence {formatShortDate(row.expires_at)}</p>
-          )}
-          {row.file_name && (
-            <p className="text-[10px] text-slate-400 mt-1 truncate">{row.file_name}</p>
           )}
           {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && (
             <p className="text-[10px] text-violet-700 font-semibold mt-2">
@@ -107,6 +148,49 @@ export function VehicleDocumentCard({
           )}
         </div>
       </div>
+
+      {files.length > 0 && (
+        <ul className="mt-3 space-y-1.5 max-h-28 overflow-y-auto">
+          {files.map((file) => (
+            <li
+              key={file.id}
+              className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5"
+            >
+              <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="text-[11px] text-slate-700 truncate flex-1 min-w-0" title={file.file_name}>
+                {file.file_name}
+              </span>
+              <a
+                href={file.file_url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-blue-600 hover:text-blue-800"
+                title="Ver archivo"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              {onDeleteFile && !file.id.startsWith('legacy-') && (
+                <button
+                  type="button"
+                  disabled={disabled || deletingId === file.id}
+                  onClick={() => {
+                    setDeletingId(file.id)
+                    void onDeleteFile(file.id).finally(() => setDeletingId(null))
+                  }}
+                  className="shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-50"
+                  title="Eliminar archivo"
+                >
+                  {deletingId === file.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && placaInventario && (
         <Link
@@ -131,29 +215,20 @@ export function VehicleDocumentCard({
               ref={inputRef}
               type="file"
               accept="application/pdf,image/*"
+              multiple
               className="hidden"
               onChange={(e) => void handleFile(e)}
-              disabled={disabled || uploading}
+              disabled={disabled || isUploading}
             />
             <button
               type="button"
-              disabled={disabled || uploading}
+              disabled={disabled || isUploading}
               onClick={() => inputRef.current?.click()}
               className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed border-slate-300 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50/50 disabled:opacity-50"
             >
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              {row.file_url ? 'Reemplazar' : 'Subir documento'}
+              {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {files.length > 0 ? 'Agregar documento' : 'Subir documento'}
             </button>
-            {row.file_url && (
-              <a
-                href={row.file_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-200 text-xs font-bold text-blue-700 hover:bg-blue-50"
-              >
-                Ver <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
           </>
         )}
         {!catalog?.requiresFile && (
