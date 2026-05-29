@@ -1,5 +1,11 @@
 import type { DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
-import type { VehicleDocStatus, VehicleDebtStatus, VehicleDocumentRow, VehicleDebtRow } from '@/types/vehicleLegal.types'
+import type {
+  VehicleDocStatus,
+  VehicleDebtStatus,
+  VehicleDocumentFileRow,
+  VehicleDocumentRow,
+  VehicleDebtRow,
+} from '@/types/vehicleLegal.types'
 
 export type ChecklistCellStatus = 'ok' | 'warn' | 'missing' | 'na'
 
@@ -7,8 +13,36 @@ const DOC_OK: VehicleDocStatus[] = ['cargado', 'vigente', 'aprobado', 'sin_repor
 
 export function documentHasFiles(doc: VehicleDocumentRow | undefined): boolean {
   if (!doc) return false
-  if (doc.files && doc.files.length > 0) return true
-  return Boolean(doc.file_url)
+  return listDocumentFiles(doc).length > 0
+}
+
+export function listDocumentFiles(row: VehicleDocumentRow): VehicleDocumentFileRow[] {
+  if (row.files && row.files.length > 0) return row.files
+  if (row.file_url && row.file_name) {
+    return [
+      {
+        id: `legacy-${row.id}`,
+        document_id: row.id,
+        file_path: row.file_path ?? '',
+        file_url: row.file_url,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        uploaded_by: row.uploaded_by,
+        created_at: row.updated_at,
+      },
+    ]
+  }
+  return []
+}
+
+export function isDocumentImageFile(file: Pick<VehicleDocumentFileRow, 'mime_type' | 'file_name'>): boolean {
+  if (file.mime_type?.startsWith('image/')) return true
+  return /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.file_name)
+}
+
+export function isDocumentPdfFile(file: Pick<VehicleDocumentFileRow, 'mime_type' | 'file_name'>): boolean {
+  if (file.mime_type === 'application/pdf') return true
+  return /\.pdf$/i.test(file.file_name)
 }
 
 export function getDocumentCheckStatus(

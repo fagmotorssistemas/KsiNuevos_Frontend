@@ -17,17 +17,26 @@ import {
     ShoppingCart,   // Pedidos
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
+    LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
 import { canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
 
 // Definición de los items del menú de Ventas
-const menuItems = [
+type MenuItem = {
+    name: string;
+    href: string;
+    icon: typeof UserPlus;
+    exact?: boolean;
+};
+
+const menuItems: MenuItem[] = [
     { name: 'Leads', href: '/leads', icon: UserPlus },
     { name: 'Showroom', href: '/showroom', icon: Store },
     { name: 'Agenda', href: '/agenda', icon: CalendarDays },
-    { name: 'Inventario', href: '/inventory', icon: Package },
+    { name: 'Inventario', href: '/inventory', icon: Package, exact: true },
+    { name: 'Reportes Vehiculares', href: '/inventory/reportes-vehiculares', icon: LayoutGrid },
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
@@ -204,7 +213,9 @@ export function SellerSidebar() {
                     )}
 
                     {displayedMenuItems.map((item) => {
-                        const isActive = pathname.startsWith(item.href);
+                        const isActive = item.exact
+                            ? pathname === item.href
+                            : pathname === item.href || pathname.startsWith(`${item.href}/`);
                         return (
                             <Link
                                 key={item.href}
@@ -212,7 +223,7 @@ export function SellerSidebar() {
                                 onClick={() => setIsMobileOpen(false)}
                                 className={`
                                     group flex items-center rounded-xl transition-all duration-200 relative
-                                    ${isCollapsed ? 'justify-center py-3 px-2' : 'justify-between px-4 py-3.5'}
+                                    ${isCollapsed ? 'justify-center py-3 px-2' : 'px-4 py-3.5'}
                                     ${isActive
                                         ? 'bg-red-50 text-red-700 font-medium'
                                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -231,16 +242,6 @@ export function SellerSidebar() {
                                         {item.name}
                                     </span>
                                 </div>
-
-                                {/* Indicador activo (punto) */}
-                                {isActive && !isCollapsed && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-                                )}
-
-                                {/* Indicador activo (borde si está colapsado) */}
-                                {isActive && isCollapsed && (
-                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-red-600" />
-                                )}
                             </Link>
                         );
                     })}

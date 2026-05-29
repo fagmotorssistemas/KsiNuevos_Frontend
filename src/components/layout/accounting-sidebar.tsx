@@ -22,6 +22,7 @@ import {
     Wrench,
     ShieldCheck,
     HandCoins,
+    FileCheck2,
 } from 'lucide-react';
 
 import {
@@ -31,7 +32,14 @@ import {
     type PermissionContext,
 } from '@/lib/permissions';
 
-const menuItems = [
+type MenuItem = {
+    name: string;
+    href: string;
+    icon: typeof Wallet;
+    exact?: boolean;
+};
+
+const menuItems: MenuItem[] = [
     // { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Cartera', href: '/wallet', icon: Wallet },
     { name: 'Cartera manual', href: '/cartera-manual', icon: HandCoins },
@@ -42,7 +50,8 @@ const menuItems = [
     { name: 'Cobros', href: '/cobros', icon: Wallet },
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
-    { name: 'Inventario', href: '/inventario', icon: Box },
+    { name: 'Inventario', href: '/inventario', icon: Box, exact: true },
+    { name: 'Reporte Documentación', href: '/inventario/reporte-documentacion', icon: FileCheck2 },
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
     { name: 'Comprobantes', href: '/comprobantes', icon: Receipt },
 ];
@@ -68,7 +77,7 @@ export function AccountingSidebar() {
 
     const displayedItems = menuItems.filter((item) => canSeeAccountingSidebarHref(item.href, permCtx));
 
-    const extraModuleLinks: { name: string; href: string; icon: typeof Wrench }[] = [];
+    const extraModuleLinks: MenuItem[] = [];
     if (canAccessModule(permCtx, MODULE_SLUGS.taller)) {
         extraModuleLinks.push({ name: 'Taller', href: '/taller/dashboard', icon: Wrench });
     }
@@ -152,7 +161,9 @@ export function AccountingSidebar() {
 
                     {mounted &&
                         [...displayedItems, ...extraModuleLinks].map((item) => {
-                            const isActive = pathname.startsWith(item.href);
+                            const isActive = item.exact
+                                ? pathname === item.href
+                                : pathname === item.href || pathname.startsWith(`${item.href}/`);
                             return (
                                 <Link
                                     key={item.href}
@@ -160,7 +171,7 @@ export function AccountingSidebar() {
                                     onClick={() => setIsMobileOpen(false)}
                                     className={`
                                         group flex items-center rounded-xl transition-all duration-200 relative
-                                        ${isCollapsed ? 'justify-center py-2.5 px-2' : 'justify-between px-3 py-2.5'}
+                                        ${isCollapsed ? 'justify-center py-2.5 px-2' : 'px-3 py-2.5'}
                                         ${isActive
                                             ? 'bg-red-50 text-red-700 font-medium'
                                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -177,14 +188,6 @@ export function AccountingSidebar() {
                                             {item.name}
                                         </span>
                                     </div>
-
-                                    {isActive && !isCollapsed && (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" />
-                                    )}
-
-                                    {isActive && isCollapsed && (
-                                        <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-7 rounded-full bg-red-600" />
-                                    )}
                                 </Link>
                             );
                         })}

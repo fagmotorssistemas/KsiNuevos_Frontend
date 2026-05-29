@@ -21,9 +21,8 @@ import {
 } from 'lucide-react'
 import type { ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
-import { docStatusClass, formatShortDate, statusLabel } from '@/lib/inventario/vehicleLegalUi'
+import { docStatusClass, formatShortDate, statusLabel, listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
 import type {
-  VehicleDocumentFileRow,
   VehicleDocumentRow,
   VehicleDocStatus,
   VehicleDocType,
@@ -42,25 +41,6 @@ const ICONS: Record<string, typeof FileText> = {
   historial_mantenimiento: Wrench,
   informe_peritaje: ClipboardCheck,
   accesorios_llaves: Key,
-}
-
-function listDocumentFiles(row: VehicleDocumentRow): VehicleDocumentFileRow[] {
-  if (row.files && row.files.length > 0) return row.files
-  if (row.file_url && row.file_name) {
-    return [
-      {
-        id: `legacy-${row.id}`,
-        document_id: row.id,
-        file_path: row.file_path ?? '',
-        file_url: row.file_url,
-        file_name: row.file_name,
-        mime_type: row.mime_type,
-        uploaded_by: row.uploaded_by,
-        created_at: row.updated_at,
-      },
-    ]
-  }
-  return []
 }
 
 type Props = {

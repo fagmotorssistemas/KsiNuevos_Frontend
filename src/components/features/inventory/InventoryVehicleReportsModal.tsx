@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useCallback } from "react";
 import {
-    X,
     Search,
     ChevronsUpDown,
     ChevronLeft,
@@ -10,7 +9,6 @@ import {
     Check,
     Loader2,
     Car,
-    LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,9 +31,7 @@ type SortKey =
     | "mileage"
     | "location";
 
-interface InventoryVehicleReportsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
+interface InventoryVehicleReportProps {
     cars: InventoryCar[];
     onEdit?: (car: InventoryCar) => void;
     onReload?: () => void;
@@ -129,14 +125,12 @@ function ChecklistToggle({
     );
 }
 
-export function InventoryVehicleReportsModal({
-    isOpen,
-    onClose,
+export function InventoryVehicleReport({
     cars,
     onEdit,
     onReload,
     currentUserRole,
-}: InventoryVehicleReportsModalProps) {
+}: InventoryVehicleReportProps) {
     const { supabase } = useAuth();
     const [search, setSearch] = useState("");
     const [activeView, setActiveView] = useState<ReportView>("disponible");
@@ -252,40 +246,10 @@ export function InventoryVehicleReportsModal({
         [canEdit, supabase, onReload]
     );
 
-    if (!isOpen) return null;
-
     return (
         <>
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-[98vw] flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200 overflow-hidden">
-                    {/* Header */}
-                    <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-10 w-10 rounded-lg bg-red-600 flex items-center justify-center shrink-0">
-                                <LayoutGrid className="h-5 w-5 text-white" />
-                            </div>
-                            <div className="min-w-0">
-                                <h2 className="text-lg font-bold text-slate-900">Reportes Vehiculares</h2>
-                                <p className="text-sm text-slate-500 truncate">
-                                    {activeView === "disponible"
-                                        ? "Stock disponible para venta"
-                                        : "Historial de vehículos vendidos"}
-                                    <span className="text-slate-400 mx-1.5">·</span>
-                                    <span className="font-medium text-slate-700">{totalCount}</span> vehículos
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-                        >
-                            <X className="h-5 w-5" />
-                        </button>
-                    </div>
-
-                    {/* Tabs + búsqueda */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-3 border-b border-slate-100 bg-slate-50/80">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                         <div className="inline-flex p-0.5 rounded-lg bg-slate-200/60">
                             <button
                                 type="button"
@@ -332,8 +296,7 @@ export function InventoryVehicleReportsModal({
                         </div>
                     </div>
 
-                    {/* Tabla — scroll horizontal si hace falta */}
-                    <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0">
+                <div className="overflow-x-auto">
                         <table className="min-w-max w-full text-xs">
                             <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
                                 <tr>
@@ -458,10 +421,9 @@ export function InventoryVehicleReportsModal({
                                 )}
                             </tbody>
                         </table>
-                    </div>
+                </div>
 
-                    {/* Paginación */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-t border-slate-200 bg-slate-50/50">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50/50">
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                             <select
                                 value={rowsPerPage}
@@ -523,7 +485,6 @@ export function InventoryVehicleReportsModal({
                             {rangeStart} – {rangeEnd} de {totalCount} resultados
                         </p>
                     </div>
-                </div>
             </div>
 
             {viewingCar && (
