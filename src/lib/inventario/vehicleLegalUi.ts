@@ -5,7 +5,15 @@ import type {
   VehicleDocumentFileRow,
   VehicleDocumentRow,
   VehicleDebtRow,
+  VehicleDocType,
 } from '@/types/vehicleLegal.types'
+import { LEGACY_PODER_CONTRATO_TYPES } from '@/types/vehicleLegal.types'
+
+/** Mismos títulos que la pestaña Documentos del modal */
+export const DOCUMENT_SECTION_TITLES = {
+  legal: 'Documentación legal',
+  physical: 'Estado del vehículo',
+} as const
 
 export type ChecklistCellStatus = 'ok' | 'warn' | 'missing' | 'na'
 
@@ -134,4 +142,85 @@ export function formatShortDate(iso: string | null | undefined) {
   const d = new Date(iso.includes('T') ? iso : `${iso}T12:00:00`)
   if (Number.isNaN(d.getTime())) return null
   return d.toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Prenda industrial activa → mostrar levantamiento de prenda */
+export function hasPrendaIndustrial(doc: VehicleDocumentRow | undefined): boolean {
+  if (!doc) return false
+  const t = (doc.detail_text ?? '').toLowerCase().trim()
+  return (
+    t.startsWith('sí') ||
+    t.startsWith('si') ||
+    t.startsWith('yes') ||
+    t.includes('tiene prenda') ||
+    doc.status === 'cargado' ||
+    doc.status === 'completo'
+  )
+}
+
+const DOC_OK_STATUSES: VehicleDocStatus[] = ['cargado', 'vigente', 'aprobado', 'sin_reportes', 'completo']
+
+function pickBestDocStatus(rows: VehicleDocumentRow[]): VehicleDocStatus {
+  for (const s of DOC_OK_STATUSES) {
+    if (rows.some((r) => r.status === s)) return s
+  }
+  return rows[0]?.status ?? 'falta'
+}
+
+/** Fusiona filas legacy (poder + contrato) en una sola para la UI */
+export function mergePoderContratoRow(
+  byType: Map<string, VehicleDocumentRow>
+): VehicleDocumentRow | undefined {
+  const canonical = byType.get('poder_contrato')
+  const legacy = LEGACY_PODER_CONTRATO_TYPES.map((t) => byType.get(t)).filter(
+    (r): r is VehicleDocumentRow => Boolean(r)
+  )
+  const rows = [canonical, ...legacy].filter((r): r is VehicleDocumentRow => Boolean(r))
+  if (rows.length === 0) return undefined
+
+  const primary =
+    canonical ??
+    legacy.find((r) => (r.doc_type as string) === 'contrato_compra_venta') ??
+    legacy[0]
+  const files = rows.flatMap((r) => listDocumentFiles(r))
+
+  return {
+    ...primary,
+    doc_type: 'poder_contrato',
+    status: pickBestDocStatus(rows),
+    files,
+  }
+}
+
+export function getCatalogDocumentRow(
+  documents: Map<string, VehicleDocumentRow>,
+  docType: VehicleDocType
+): VehicleDocumentRow | undefined {
+  if (docType === 'poder_contrato') return mergePoderContratoRow(documents)
+  return documents.get(docType)
+}
+
+export function hasPoderContratoSlot(byType: Map<string, VehicleDocumentRow>): boolean {
+  return Boolean(
+    byType.get('poder_contrato') ||
+      LEGACY_PODER_CONTRATO_TYPES.some((t) => byType.has(t))
+  )
+}
+
+/** Misma visibilidad que DocumentosTab (p. ej. levantamiento solo con prenda) */
+export function isDocumentCatalogItemVisible(
+  docType: VehicleDocType,
+  byType: Map<string, VehicleDocumentRow>
+): boolean {
+  if (docType === 'levantamiento_prendas') {
+    return hasPrendaIndustrial(byType.get('prenda_industrial'))
+  }
+  return true
+}
+
+export function filterVisibleCatalogItems(
+  items: readonly DocCatalogEntry[],
+  byType: Map<string, VehicleDocumentRow>
+): DocCatalogEntry[] {
+  return items.filter((c) => isDocumentCatalogItemVisible(c.docType, byType))
 }

@@ -1953,6 +1953,67 @@ export type Database = {
           },
         ]
       }
+      inventory_vehicle_document_activity: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string | null
+          created_at: string
+          detail: string | null
+          doc_type: string
+          document_id: string
+          file_name: string | null
+          id: string
+          inventoryoracle_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          detail?: string | null
+          doc_type: string
+          document_id: string
+          file_name?: string | null
+          id?: string
+          inventoryoracle_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          detail?: string | null
+          doc_type?: string
+          document_id?: string
+          file_name?: string | null
+          id?: string
+          inventoryoracle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_document_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_activity_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_vehicle_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_activity_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_vehicle_document_files: {
         Row: {
           created_at: string

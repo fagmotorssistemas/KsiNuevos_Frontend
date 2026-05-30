@@ -2,28 +2,21 @@
 
 import { useState } from 'react'
 import { AlertTriangle, Loader2, Plus, Trash2 } from 'lucide-react'
-import { VEHICLE_DEBT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
-import { debtStatusClass, formatShortDate, statusLabel } from '@/lib/inventario/vehicleLegalUi'
-import {
-  addVehicleFine,
-  deleteVehicleFine,
-  updateVehicleDebt,
-  updateVehicleFine,
-} from '@/services/vehicleLegal.service'
+import { formatShortDate } from '@/lib/inventario/vehicleLegalUi'
+import { addVehicleFine, deleteVehicleFine, updateVehicleFine } from '@/services/vehicleLegal.service'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { VehicleDebtRow, VehicleFineRow } from '@/types/vehicleLegal.types'
+import type { VehicleFineRow } from '@/types/vehicleLegal.types'
 
 type Props = {
   supabase: SupabaseClient
   inventoryoracleId: string | null
   fines: VehicleFineRow[]
-  debts: VehicleDebtRow[]
   profileId: string | null
   onRefresh: () => void
   loading?: boolean
 }
 
-export function MultasDeudasTab({ supabase, inventoryoracleId, fines, debts, profileId, onRefresh, loading }: Props) {
+export function MultasDeudasTab({ supabase, inventoryoracleId, fines, profileId, onRefresh, loading }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
@@ -34,7 +27,6 @@ export function MultasDeudasTab({ supabase, inventoryoracleId, fines, debts, pro
 
   const pending = fines.filter((f) => f.status === 'pendiente')
   const totalPending = pending.reduce((s, f) => s + Number(f.amount || 0), 0)
-  const debtByType = new Map(debts.map((d) => [d.debt_type, d]))
 
   const handleAddFine = async () => {
     if (!inventoryoracleId || !title.trim()) return
@@ -68,7 +60,7 @@ export function MultasDeudasTab({ supabase, inventoryoracleId, fines, debts, pro
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
-        <p className="text-sm">Cargando multas y deudas…</p>
+        <p className="text-sm">Cargando multas…</p>
       </div>
     )
   }
@@ -149,50 +141,6 @@ export function MultasDeudasTab({ supabase, inventoryoracleId, fines, debts, pro
             ))}
           </ul>
         )}
-      </div>
-
-      <div className="space-y-3">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Otras deudas asociadas</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {VEHICLE_DEBT_CATALOG.map((cat) => {
-            const row = debtByType.get(cat.debtType)
-            if (!row) return null
-            return (
-              <div key={cat.debtType} className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-bold text-slate-800">{cat.label}</p>
-                <span className={`inline-flex mt-2 px-2 py-0.5 rounded-full text-[10px] font-bold border ${debtStatusClass(row.status)}`}>
-                  {statusLabel(row.status)}
-                </span>
-                {row.institution && <p className="text-xs text-slate-500 mt-2">{row.institution}</p>}
-                {row.amount != null && Number(row.amount) > 0 && (
-                  <p className="text-xs font-bold text-slate-700 mt-1">${Number(row.amount).toLocaleString()} pendiente</p>
-                )}
-                {row.detail_text && <p className="text-xs text-slate-500 mt-1">{row.detail_text}</p>}
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {(['al_dia', 'en_tramite', 'sin_reportes', 'con_deuda', 'pendiente'] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      className={`text-[10px] px-2 py-0.5 rounded border ${row.status === st ? 'bg-slate-800 text-white border-slate-800' : 'border-slate-200 text-slate-500'}`}
-                      onClick={() => void updateVehicleDebt(supabase, row.id, { status: st }).then(onRefresh)}
-                    >
-                      {statusLabel(st)}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  className="mt-2 w-full text-xs border rounded p-1.5"
-                  placeholder="Institución / detalle"
-                  defaultValue={row.institution ?? ''}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim()
-                    if (v !== (row.institution ?? '')) void updateVehicleDebt(supabase, row.id, { institution: v || null }).then(onRefresh)
-                  }}
-                />
-              </div>
-            )
-          })}
-        </div>
       </div>
     </div>
   )

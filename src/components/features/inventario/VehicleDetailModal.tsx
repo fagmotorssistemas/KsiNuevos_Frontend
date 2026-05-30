@@ -90,7 +90,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
     { id: 'ficha', label: 'Ficha técnica', icon: FileText },
     { id: 'movimientos', label: 'Movimientos contables', icon: Cog },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen },
-    { id: 'multas', label: 'Multas y deudas', icon: Scale },
+    { id: 'multas', label: 'Multas', icon: Scale },
     { id: 'historial', label: 'Historial', icon: History },
     { id: 'notas', label: 'Notas internas', icon: StickyNote },
   ]
@@ -169,7 +169,6 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               supabase={supabase}
               inventoryoracleId={dossier.inventoryoracleId}
               fines={dossier.fines}
-              debts={dossier.debts}
               profileId={profile?.id ?? null}
               onRefresh={() => void refresh()}
               loading={loadingLegal}

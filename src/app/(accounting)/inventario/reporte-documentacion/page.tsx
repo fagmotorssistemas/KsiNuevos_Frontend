@@ -11,6 +11,7 @@ export default function ReporteDocumentacionPage() {
     const { data, loading, refresh } = useInventarioData();
     const [detailVehicle, setDetailVehicle] = useState<VehiculoInventario | null>(null);
     const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");
+    const [checklistReloadKey, setChecklistReloadKey] = useState(0);
 
     const vehiculos = useMemo(() => data?.listado ?? [], [data?.listado]);
 
@@ -24,7 +25,7 @@ export default function ReporteDocumentacionPage() {
                     </h1>
                     <p className="text-slate-500 text-sm mt-1 flex items-center gap-1.5">
                         <FileCheck2 className="h-3.5 w-3.5 text-blue-500" />
-                        Checklist legal y documental de toda la flota
+                        Mismas columnas que la pestaña Documentos del detalle del vehículo
                     </p>
                 </div>
                 <button
@@ -39,6 +40,7 @@ export default function ReporteDocumentacionPage() {
 
             <InventarioDocumentReport
                 vehiculos={vehiculos}
+                reloadKey={checklistReloadKey}
                 onOpenVehicle={(v, tab) => {
                     setDetailInitialTab(tab ?? "documentos");
                     setDetailVehicle(v);
@@ -50,7 +52,10 @@ export default function ReporteDocumentacionPage() {
                     key={detailVehicle.placa}
                     vehiculo={detailVehicle}
                     initialTab={detailInitialTab}
-                    onClose={() => setDetailVehicle(null)}
+                    onClose={() => {
+                        setDetailVehicle(null);
+                        setChecklistReloadKey((k) => k + 1);
+                    }}
                 />
             )}
         </div>

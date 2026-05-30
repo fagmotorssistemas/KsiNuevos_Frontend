@@ -13,15 +13,17 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { normalizePlate } from "@/lib/inventario/normalizePlate";
 import {
-    VEHICLE_DEBT_CATALOG,
     VEHICLE_DOCUMENT_CATALOG,
     docCatalogByType,
+    type DocCatalogEntry,
 } from "@/lib/inventario/vehicleDocumentCatalog";
 import {
-    getDebtCheckStatus,
     getDocumentCheckStatus,
+    getCatalogDocumentRow,
     getFinesCheckStatus,
     listDocumentFiles,
+    DOCUMENT_SECTION_TITLES,
+    isDocumentCatalogItemVisible,
     type ChecklistCellStatus,
 } from "@/lib/inventario/vehicleLegalUi";
 import {
@@ -40,6 +42,8 @@ type SortKey = "vehicle" | "plate" | "year" | "progress";
 interface InventarioDocumentReportProps {
     vehiculos: VehiculoInventario[];
     onOpenVehicle?: (vehiculo: VehiculoInventario, tab?: VehicleDetailTab) => void;
+    /** Incrementar para recargar checklist tras editar documentos en el modal */
+    reloadKey?: number;
 }
 
 const LEGAL_COLUMNS = VEHICLE_DOCUMENT_CATALOG.filter((d) => d.category === "legal");
@@ -210,23 +214,32 @@ function countComplete(
     let done = 0;
     let total = 0;
     for (const cat of VEHICLE_DOCUMENT_CATALOG) {
+        if (!isDocumentCatalogItemVisible(cat.docType, entry.documents)) continue;
         total += 1;
-        const doc = entry.documents.get(cat.docType);
+        const doc = getCatalogDocumentRow(entry.documents, cat.docType);
         if (getDocumentCheckStatus(doc, cat) === "ok") done += 1;
-    }
-    for (const cat of VEHICLE_DEBT_CATALOG) {
-        total += 1;
-        const debt = entry.debts.get(cat.debtType);
-        if (getDebtCheckStatus(debt) === "ok") done += 1;
     }
     total += 1;
     if (getFinesCheckStatus(entry.pendingFinesCount, entry.totalFinesCount) === "ok") done += 1;
     return { done, total };
 }
 
+function documentCellStatus(
+    linked: boolean,
+    entry: VehicleLegalChecklistBulk["byPlate"] extends Map<string, infer V> ? V | undefined : never,
+    col: DocCatalogEntry
+): ChecklistCellStatus {
+    if (!linked || !entry) return "na";
+    if (!isDocumentCatalogItemVisible(col.docType, entry.documents)) return "na";
+    const catalog = docCatalogByType(col.docType)!;
+    const doc = getCatalogDocumentRow(entry.documents, col.docType);
+    return getDocumentCheckStatus(doc, catalog);
+}
+
 export function InventarioDocumentReport({
     vehiculos,
     onOpenVehicle,
+    reloadKey = 0,
 }: InventarioDocumentReportProps) {
     const { supabase } = useAuth();
     const [search, setSearch] = useState("");
@@ -264,7 +277,7 @@ export function InventarioDocumentReport({
         return () => {
             cancelled = true;
         };
-    }, [plateKey, supabase, vehiculos]);
+    }, [plateKey, supabase, vehiculos, reloadKey]);
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) setSortAsc((p) => !p);
@@ -340,8 +353,7 @@ export function InventarioDocumentReport({
     const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
     const rangeEnd = Math.min(safePage * rowsPerPage, totalCount);
 
-    const totalCols =
-        4 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + VEHICLE_DEBT_CATALOG.length + 2;
+    const totalCols = 4 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + 2;
 
     return (
         <>
@@ -441,19 +453,20 @@ export function InventarioDocumentReport({
                                     colSpan={LEGAL_COLUMNS.length}
                                     className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
                                 >
-                                    Propiedad y legales
+                                    {DOCUMENT_SECTION_TITLES.legal}
                                 </th>
                                 <th
                                     colSpan={PHYSICAL_COLUMNS.length}
                                     className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
                                 >
-                                    Condición física
+                                    {DOCUMENT_SECTION_TITLES.physical}
                                 </th>
                                 <th
-                                    colSpan={VEHICLE_DEBT_CATALOG.length + 1}
-                                    className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
+                                    rowSpan={2}
+                                    className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase border-l border-slate-200 min-w-[80px] whitespace-normal leading-snug align-bottom"
+                                    title="¿Multas al día? (Sí = revisado sin pendientes)"
                                 >
-                                    Multas y deudas
+                                    Multas
                                 </th>
                                 <th
                                     rowSpan={2}
@@ -475,20 +488,6 @@ export function InventarioDocumentReport({
                                     <th
                                         key={col.docType}
                                         className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[120px] whitespace-normal leading-snug align-bottom"
-                                    >
-                                        {col.label}
-                                    </th>
-                                ))}
-                                <th
-                                    className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[80px] whitespace-normal leading-snug align-bottom"
-                                    title="¿Multas al día? (Sí = revisado sin pendientes)"
-                                >
-                                    Multas
-                                </th>
-                                {VEHICLE_DEBT_CATALOG.map((col) => (
-                                    <th
-                                        key={col.debtType}
-                                        className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[130px] whitespace-normal leading-snug align-bottom"
                                     >
                                         {col.label}
                                     </th>
@@ -541,16 +540,24 @@ export function InventarioDocumentReport({
                                                 )}
                                             </td>
                                             {LEGAL_COLUMNS.map((col) => {
-                                                const catalog = docCatalogByType(col.docType)!;
-                                                const doc = entry?.documents.get(col.docType);
-                                                const status: ChecklistCellStatus = linked
-                                                    ? getDocumentCheckStatus(doc, catalog)
-                                                    : "na";
+                                                const doc = entry
+                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
+                                                    : undefined;
+                                                const applies =
+                                                    linked &&
+                                                    entry &&
+                                                    isDocumentCatalogItemVisible(col.docType, entry.documents);
+                                                const status = documentCellStatus(linked, entry, col);
+                                                const title = applies
+                                                    ? col.label
+                                                    : col.docType === "levantamiento_prendas"
+                                                      ? "No aplica — sin prenda industrial"
+                                                      : col.label;
                                                 return (
                                                     <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
                                                         <DocumentYesNoCell
                                                             doc={doc}
-                                                            catalogLabel={col.label}
+                                                            catalogLabel={title}
                                                             status={status}
                                                             vehicleLabel={vehicleLabel}
                                                             onPreview={setFilePreview}
@@ -559,11 +566,10 @@ export function InventarioDocumentReport({
                                                 );
                                             })}
                                             {PHYSICAL_COLUMNS.map((col) => {
-                                                const catalog = docCatalogByType(col.docType)!;
-                                                const doc = entry?.documents.get(col.docType);
-                                                const status: ChecklistCellStatus = linked
-                                                    ? getDocumentCheckStatus(doc, catalog)
-                                                    : "na";
+                                                const doc = entry
+                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
+                                                    : undefined;
+                                                const status = documentCellStatus(linked, entry, col);
                                                 return (
                                                     <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
                                                         <DocumentYesNoCell
@@ -595,17 +601,6 @@ export function InventarioDocumentReport({
                                                     }
                                                 />
                                             </td>
-                                            {VEHICLE_DEBT_CATALOG.map((col) => {
-                                                const debt = entry?.debts.get(col.debtType);
-                                                const status: ChecklistCellStatus = linked
-                                                    ? getDebtCheckStatus(debt)
-                                                    : "na";
-                                                return (
-                                                    <td key={col.debtType} className="px-2 py-3 text-center border-l border-slate-50">
-                                                        <YesNoCell status={status} title={col.label} />
-                                                    </td>
-                                                );
-                                            })}
                                             <td className="px-3 py-3 text-center border-l border-slate-50">
                                                 <button
                                                     type="button"

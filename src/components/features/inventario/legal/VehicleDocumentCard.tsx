@@ -3,14 +3,12 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import {
-  Building2,
   Car,
   ClipboardCheck,
   FileText,
   Key,
   Lock,
   Search,
-  Shield,
   Upload,
   Wrench,
   ExternalLink,
@@ -18,10 +16,13 @@ import {
   IdCard,
   FolderOpen,
   Trash2,
+  Scale,
 } from 'lucide-react'
 import type { ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import { docStatusClass, formatShortDate, statusLabel, listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
+import { VehicleDocumentActivityLog } from './VehicleDocumentActivityLog'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   VehicleDocumentRow,
   VehicleDocStatus,
@@ -29,22 +30,30 @@ import type {
 } from '@/types/vehicleLegal.types'
 
 const ICONS: Record<string, typeof FileText> = {
-  titulo_propiedad: FileText,
+  poder_contrato: FileText,
   matricula: IdCard,
-  soat: Shield,
   revision_tecnica: ClipboardCheck,
-  factura_compra: FileText,
+  contrato_interno: Car,
+  prenda_industrial: Lock,
   levantamiento_prendas: Lock,
-  liberacion_bancaria: Building2,
   informe_ant_siat: Search,
-  contrato_compra_venta: Car,
   historial_mantenimiento: Wrench,
-  informe_peritaje: ClipboardCheck,
   accesorios_llaves: Key,
+  documentos_pendientes: FolderOpen,
+  procesos_legales: Scale,
+}
+
+const DETAIL_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
+  prenda_industrial: '¿Tiene prenda? Sí/No. Proceso, levantamiento y observaciones…',
+  accesorios_llaves: 'Ej. 2 llaves, control remoto, manual…',
+  documentos_pendientes: 'Lista de documentos que faltan por recibir…',
+  procesos_legales: 'Trámites legales en curso, abogado, fechas…',
 }
 
 type Props = {
   row: VehicleDocumentRow
+  supabase?: SupabaseClient
+  isAdmin?: boolean
   disabled?: boolean
   uploading?: boolean
   expedienteVinculo?: ExpedienteVinculo | null
@@ -56,6 +65,8 @@ type Props = {
 
 export function VehicleDocumentCard({
   row,
+  supabase,
+  isAdmin = false,
   disabled,
   uploading,
   expedienteVinculo,
@@ -91,10 +102,17 @@ export function VehicleDocumentCard({
   }
 
   const saveMeta = async () => {
+    const hasDetail = Boolean(detail.trim())
     await onUpdateMeta({
       detail_text: detail || null,
       expires_at: expires || null,
-      status: files.length > 0 ? (expires ? 'vigente' : 'cargado') : row.status,
+      status: files.length > 0
+        ? expires
+          ? 'vigente'
+          : 'cargado'
+        : !catalog?.requiresFile && hasDetail
+          ? 'completo'
+          : row.status,
     })
     setEditing(false)
   }
@@ -120,6 +138,11 @@ export function VehicleDocumentCard({
           )}
           {row.expires_at && (
             <p className="text-xs text-slate-500 mt-1">Vence {formatShortDate(row.expires_at)}</p>
+          )}
+          {row.doc_type === 'levantamiento_prendas' && (
+            <p className="text-[10px] text-amber-700 font-medium mt-2">
+              Aplica cuando hay prenda industrial registrada
+            </p>
           )}
           {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && (
             <p className="text-[10px] text-violet-700 font-semibold mt-2">
@@ -238,11 +261,11 @@ export function VehicleDocumentCard({
           <textarea
             className="w-full text-xs border border-slate-200 rounded-lg p-2"
             rows={2}
-            placeholder="Detalle (ej. CEMAVIN, banco, 2 llaves…)"
+            placeholder={DETAIL_PLACEHOLDERS[row.doc_type as VehicleDocType] ?? 'Detalle (ej. CEMAVIN, banco, observaciones…)'}
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
           />
-          {(row.doc_type === 'matricula' || row.doc_type === 'soat' || row.doc_type === 'revision_tecnica') && (
+          {(row.doc_type === 'matricula' || row.doc_type === 'revision_tecnica') && (
             <input
               type="date"
               className="w-full text-xs border border-slate-200 rounded-lg p-2"
@@ -258,6 +281,14 @@ export function VehicleDocumentCard({
             Guardar
           </button>
         </div>
+      )}
+
+      {isAdmin && supabase && (
+        <VehicleDocumentActivityLog
+          supabase={supabase}
+          documentId={row.id}
+          docLabel={catalog?.label ?? row.doc_type}
+        />
       )}
     </div>
   )

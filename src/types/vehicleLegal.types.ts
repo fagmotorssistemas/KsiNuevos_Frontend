@@ -1,16 +1,18 @@
 export type VehicleDocType =
-  | 'titulo_propiedad'
+  | 'poder_contrato'
   | 'matricula'
-  | 'soat'
   | 'revision_tecnica'
-  | 'factura_compra'
+  | 'contrato_interno'
+  | 'prenda_industrial'
   | 'levantamiento_prendas'
-  | 'liberacion_bancaria'
   | 'informe_ant_siat'
-  | 'contrato_compra_venta'
   | 'historial_mantenimiento'
-  | 'informe_peritaje'
   | 'accesorios_llaves'
+  | 'documentos_pendientes'
+  | 'procesos_legales'
+
+/** Tipos antiguos fusionados en poder_contrato */
+export const LEGACY_PODER_CONTRATO_TYPES = ['poder', 'contrato_compra_venta'] as const
 
 export type VehicleDocStatus =
   | 'falta'
@@ -35,6 +37,30 @@ export interface VehicleDocumentFileRow {
   mime_type: string | null
   uploaded_by: string | null
   created_at: string
+}
+
+export type VehicleDocumentActivityAction = 'upload' | 'delete_file' | 'update_meta' | 'update_status'
+
+export interface VehicleDocumentActivityRow {
+  id: string
+  document_id: string
+  inventoryoracle_id: string
+  doc_type: string
+  action: VehicleDocumentActivityAction
+  actor_id: string | null
+  actor_name: string | null
+  file_name: string | null
+  detail: string | null
+  created_at: string
+}
+
+export interface DocumentActivityEntry {
+  id: string
+  at: string
+  action: VehicleDocumentActivityAction
+  actorName: string
+  fileName?: string | null
+  detail?: string | null
 }
 
 export interface VehicleDocumentRow {

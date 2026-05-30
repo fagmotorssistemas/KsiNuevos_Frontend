@@ -3,8 +3,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
+import {
+  DOCUMENT_SECTION_TITLES,
+  mergePoderContratoRow,
+  hasPoderContratoSlot,
+  isDocumentCatalogItemVisible,
+} from '@/lib/inventario/vehicleLegalUi'
 import { findExpedienteFagByPlate, type ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { uploadVehicleDocument, updateVehicleDocumentMeta, deleteVehicleDocumentFile } from '@/services/vehicleLegal.service'
+import { useAuth } from '@/hooks/useAuth'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VehicleDocumentRow, VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleDocumentCard } from '../VehicleDocumentCard'
@@ -40,11 +47,23 @@ type Props = {
 }
 
 export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, profileId, onRefresh, loading, disabled }: Props) {
+  const { profile, user } = useAuth()
+  const isAdmin = (profile?.role ?? '').toLowerCase() === 'admin'
+  const actorName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Usuario'
   const [uploadingType, setUploadingType] = useState<string | null>(null)
   const [expedienteVinculo, setExpedienteVinculo] = useState<ExpedienteVinculo | null>(null)
   const [loadingVinculo, setLoadingVinculo] = useState(false)
   const retriedSeed = useRef(false)
-  const expectedCount = VEHICLE_DOCUMENT_CATALOG.length
+
+  const byType = new Map(documents.map((d) => [d.doc_type, d]))
+  const catalogReady = VEHICLE_DOCUMENT_CATALOG.every((c) =>
+    c.docType === 'poder_contrato' ? hasPoderContratoSlot(byType) : byType.has(c.docType)
+  )
+  const legal = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'legal')
+  const physical = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'physical')
+
+  const visibleItems = (items: typeof legal) =>
+    items.filter((cat) => isDocumentCatalogItemVisible(cat.docType, byType))
 
   useEffect(() => {
     if (!supabase || !placa || loading) return
@@ -63,62 +82,72 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
   }, [supabase, placa, loading])
 
   useEffect(() => {
-    if (
-      !loading &&
-      inventoryoracleId &&
-      documents.length < expectedCount &&
-      !retriedSeed.current
-    ) {
+    if (!loading && inventoryoracleId && !catalogReady && !retriedSeed.current) {
       retriedSeed.current = true
       onRefresh()
     }
-  }, [loading, inventoryoracleId, documents.length, expectedCount, onRefresh])
+  }, [loading, inventoryoracleId, catalogReady, onRefresh])
 
-  const byType = new Map(documents.map((d) => [d.doc_type, d]))
-  const legal = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'legal')
-  const physical = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'physical')
-
-  const renderSection = (title: string, items: typeof legal) => (
-    <div className="space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {items.map((cat) => {
-          const row = byType.get(cat.docType)
-          if (!row) return null
-          return (
-            <VehicleDocumentCard
-              key={cat.docType}
-              row={row}
-              disabled={disabled || !inventoryoracleId}
-              uploading={uploadingType === cat.docType}
-              expedienteVinculo={cat.docType === 'historial_mantenimiento' ? expedienteVinculo : null}
-              placaInventario={placa}
-              onUpload={async (file) => {
-                if (!inventoryoracleId) return
-                setUploadingType(cat.docType)
-                try {
+  const renderSection = (title: string, items: typeof legal) => {
+    const visible = visibleItems(items)
+    if (visible.length === 0) return null
+    return (
+      <div className="space-y-3">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {visible.map((cat) => {
+            const row =
+              cat.docType === 'poder_contrato'
+                ? mergePoderContratoRow(byType)
+                : byType.get(cat.docType)
+            if (!row) return null
+            return (
+              <VehicleDocumentCard
+                key={cat.docType}
+                row={row}
+                supabase={supabase}
+                isAdmin={isAdmin}
+                disabled={disabled || !inventoryoracleId}
+                uploading={uploadingType === cat.docType}
+                expedienteVinculo={cat.docType === 'historial_mantenimiento' ? expedienteVinculo : null}
+                placaInventario={placa}
+                onUpload={async (file) => {
+                  if (!inventoryoracleId) return
+                  setUploadingType(cat.docType)
+                  try {
                   await uploadVehicleDocument(supabase, inventoryoracleId, cat.docType as VehicleDocType, file, profileId, {
                     status: 'cargado',
+                    actor_name: actorName,
                   })
-                  onRefresh()
-                } finally {
-                  setUploadingType(null)
-                }
-              }}
+                    onRefresh()
+                  } finally {
+                    setUploadingType(null)
+                  }
+                }}
               onUpdateMeta={async (patch) => {
-                await updateVehicleDocumentMeta(supabase, row.id, patch)
+                await updateVehicleDocumentMeta(supabase, row.id, patch, {
+                  actor_id: profileId,
+                  actor_name: actorName,
+                  inventoryoracle_id: inventoryoracleId ?? undefined,
+                  doc_type: row.doc_type,
+                  previous_status: row.status,
+                })
                 onRefresh()
               }}
               onDeleteFile={async (fileId) => {
-                await deleteVehicleDocumentFile(supabase, fileId)
+                await deleteVehicleDocumentFile(supabase, fileId, {
+                  actor_id: profileId,
+                  actor_name: actorName,
+                })
                 onRefresh()
               }}
-            />
-          )
-        })}
+              />
+            )
+          })}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (loading) {
     return (
@@ -128,12 +157,12 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
           Cargando documentos del vehículo…
         </div>
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Documentos de propiedad y legales</p>
-          <DocumentSkeletonGrid count={9} />
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Documentación legal</p>
+          <DocumentSkeletonGrid count={legal.length} />
         </div>
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Documentos de condición física</p>
-          <DocumentSkeletonGrid count={3} />
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Estado del vehículo</p>
+          <DocumentSkeletonGrid count={physical.length} />
         </div>
       </div>
     )
@@ -147,7 +176,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
     )
   }
 
-  if (documents.length < expectedCount) {
+  if (!catalogReady) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
@@ -169,8 +198,8 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
           No hay expediente de Fabian Aguirre en taller con la placa <strong>{placa}</strong>. Puedes subir el historial de mantenimiento manualmente.
         </p>
       )}
-      {renderSection('Documentos de propiedad y legales', legal)}
-      {renderSection('Documentos de condición física', physical)}
+      {renderSection(DOCUMENT_SECTION_TITLES.legal, legal)}
+      {renderSection(DOCUMENT_SECTION_TITLES.physical, physical)}
       {uploadingType && (
         <div className="fixed bottom-4 right-4 bg-slate-900 text-white text-xs px-3 py-2 rounded-lg flex items-center gap-2 shadow-lg z-[70]">
           <Loader2 className="h-3 w-3 animate-spin" /> Subiendo…

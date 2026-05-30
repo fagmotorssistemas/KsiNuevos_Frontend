@@ -16,6 +16,8 @@ import type {
   VehicleOwnerRow,
   VehicleDocStatus,
   VehicleDocType,
+  DocumentActivityEntry,
+  VehicleDocumentActivityAction,
 } from '@/types/vehicleLegal.types'
 
 const ACCEPT_UPLOAD = 'application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif'
@@ -408,8 +410,15 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
     matriculaDaysUntilExpiry = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   }
 
-  const criticalMissing = ['levantamiento_prendas', 'liberacion_bancaria', 'contrato_compra_venta'].filter(
+  const criticalMissing = ['poder_contrato', 'matricula'].filter(
     (t) => {
+      if (t === 'poder_contrato') {
+        const row =
+          dossier.documents.find((d) => d.doc_type === 'poder_contrato') ??
+          dossier.documents.find((d) => (d.doc_type as string) === 'contrato_compra_venta') ??
+          dossier.documents.find((d) => (d.doc_type as string) === 'poder')
+        return !row || row.status === 'falta' || (!documentHasFiles(row) && row.status !== 'pendiente')
+      }
       const row = dossier.documents.find((d) => d.doc_type === t)
       return !row || row.status === 'falta' || (!documentHasFiles(row) && row.status !== 'pendiente')
     }
@@ -436,25 +445,138 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
   }
 }
 
+const PODER_CONTRATO_ALIASES = ['poder_contrato', 'contrato_compra_venta', 'poder'] as const
+
+async function findVehicleDocumentRow(
+  supabase: SupabaseClient,
+  inventoryoracleId: string,
+  docType: VehicleDocType
+) {
+  const types =
+    docType === 'poder_contrato' ? PODER_CONTRATO_ALIASES : ([docType] as readonly string[])
+  for (const t of types) {
+    const { data, error } = await supabase
+      .from('inventory_vehicle_documents')
+      .select('*')
+      .eq('inventoryoracle_id', inventoryoracleId)
+      .eq('doc_type', t)
+      .maybeSingle()
+    if (error) throw error
+    if (data) return data as VehicleDocumentRow
+  }
+  return null
+}
+
+type ActivityLogInput = {
+  document_id: string
+  inventoryoracle_id: string
+  doc_type: string
+  action: VehicleDocumentActivityAction
+  actor_id?: string | null
+  actor_name?: string | null
+  file_name?: string | null
+  detail?: string | null
+}
+
+async function logDocumentActivity(supabase: SupabaseClient, input: ActivityLogInput) {
+  try {
+    const { error } = await supabase.from('inventory_vehicle_document_activity').insert({
+      document_id: input.document_id,
+      inventoryoracle_id: input.inventoryoracle_id,
+      doc_type: input.doc_type,
+      action: input.action,
+      actor_id: input.actor_id ?? null,
+      actor_name: input.actor_name?.trim() || null,
+      file_name: input.file_name ?? null,
+      detail: input.detail ?? null,
+    })
+    if (error) console.warn('[document-activity]', error.message)
+  } catch (err) {
+    console.warn('[document-activity]', err)
+  }
+}
+
+const ACTION_LABELS: Record<VehicleDocumentActivityAction, string> = {
+  upload: 'Subió archivo',
+  delete_file: 'Eliminó archivo',
+  update_meta: 'Actualizó detalle',
+  update_status: 'Cambió estado',
+}
+
+export function documentActivityActionLabel(action: VehicleDocumentActivityAction): string {
+  return ACTION_LABELS[action]
+}
+
+export async function fetchDocumentActivityLog(
+  supabase: SupabaseClient,
+  documentId: string
+): Promise<DocumentActivityEntry[]> {
+  const entries: DocumentActivityEntry[] = []
+
+  const { data: activities, error: actErr } = await supabase
+    .from('inventory_vehicle_document_activity')
+    .select('*')
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+
+  if (!actErr && activities?.length) {
+    for (const a of activities) {
+      entries.push({
+        id: a.id,
+        at: a.created_at,
+        action: a.action as VehicleDocumentActivityAction,
+        actorName: a.actor_name ?? 'Usuario desconocido',
+        fileName: a.file_name,
+        detail: a.detail,
+      })
+    }
+  }
+
+  const loggedFileNames = new Set(
+    entries.filter((e) => e.action === 'upload' && e.fileName).map((e) => e.fileName!)
+  )
+
+  const { data: files } = await supabase
+    .from('inventory_vehicle_document_files')
+    .select('id, file_name, created_at, uploaded_by, uploader:profiles!uploaded_by(full_name)')
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+
+  for (const f of files ?? []) {
+    if (loggedFileNames.has(f.file_name)) continue
+    const uploader = f.uploader as { full_name?: string | null } | null
+    entries.push({
+      id: `file-${f.id}`,
+      at: f.created_at,
+      action: 'upload',
+      actorName: uploader?.full_name?.trim() || 'Usuario desconocido',
+      fileName: f.file_name,
+    })
+  }
+
+  return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+}
+
 export async function uploadVehicleDocument(
   supabase: SupabaseClient,
   inventoryoracleId: string,
   docType: VehicleDocType,
   file: File,
   profileId: string | null,
-  meta?: { detail_text?: string; expires_at?: string | null; status?: VehicleDocStatus }
+  meta?: {
+    detail_text?: string
+    expires_at?: string | null
+    status?: VehicleDocStatus
+    actor_name?: string | null
+  }
 ): Promise<VehicleDocumentRow> {
-  const { data: docRow, error: docErr } = await supabase
-    .from('inventory_vehicle_documents')
-    .select('*')
-    .eq('inventoryoracle_id', inventoryoracleId)
-    .eq('doc_type', docType)
-    .single()
-  if (docErr || !docRow) throw docErr ?? new Error('Documento no encontrado')
+  const docRow = await findVehicleDocumentRow(supabase, inventoryoracleId, docType)
+  if (!docRow) throw new Error('Documento no encontrado')
 
+  const storageType = docType === 'poder_contrato' ? 'poder_contrato' : docType
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
   const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`
-  const filePath = `${inventoryoracleId}/${docType}/${safeName}`
+  const filePath = `${inventoryoracleId}/${storageType}/${safeName}`
 
   const { error: upErr } = await supabase.storage
     .from(INVENTORY_VEHICLE_DOCS_BUCKET)
@@ -492,12 +614,22 @@ export async function uploadVehicleDocument(
 
   if (error) throw error
   const [withFiles] = await attachDocumentFiles(supabase, [data as VehicleDocumentRow])
+  await logDocumentActivity(supabase, {
+    document_id: docRow.id,
+    inventoryoracle_id: inventoryoracleId,
+    doc_type: docRow.doc_type,
+    action: 'upload',
+    actor_id: profileId,
+    actor_name: meta?.actor_name,
+    file_name: file.name,
+  })
   return withFiles
 }
 
 export async function deleteVehicleDocumentFile(
   supabase: SupabaseClient,
-  fileId: string
+  fileId: string,
+  audit?: { actor_id?: string | null; actor_name?: string | null }
 ): Promise<void> {
   const { data: fileRow, error: readErr } = await supabase
     .from('inventory_vehicle_document_files')
@@ -507,6 +639,12 @@ export async function deleteVehicleDocumentFile(
   if (readErr) throw readErr
 
   if (fileRow) {
+    const { data: docMeta } = await supabase
+      .from('inventory_vehicle_documents')
+      .select('inventoryoracle_id, doc_type')
+      .eq('id', fileRow.document_id)
+      .maybeSingle()
+
     await supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).remove([fileRow.file_path])
     const { error: delErr } = await supabase
       .from('inventory_vehicle_document_files')
@@ -543,6 +681,18 @@ export async function deleteVehicleDocumentFile(
       )
       .eq('id', fileRow.document_id)
     if (updErr) throw updErr
+
+    if (docMeta) {
+      await logDocumentActivity(supabase, {
+        document_id: fileRow.document_id,
+        inventoryoracle_id: docMeta.inventoryoracle_id,
+        doc_type: docMeta.doc_type,
+        action: 'delete_file',
+        actor_id: audit?.actor_id,
+        actor_name: audit?.actor_name,
+        file_name: fileRow.file_name,
+      })
+    }
     return
   }
 
@@ -556,7 +706,14 @@ export async function updateVehicleDocumentMeta(
     status: VehicleDocStatus
     detail_text: string | null
     expires_at: string | null
-  }>
+  }>,
+  audit?: {
+    actor_id?: string | null
+    actor_name?: string | null
+    inventoryoracle_id?: string
+    doc_type?: string
+    previous_status?: string
+  }
 ) {
   const { data, error } = await supabase
     .from('inventory_vehicle_documents')
@@ -565,7 +722,35 @@ export async function updateVehicleDocumentMeta(
     .select('*')
     .single()
   if (error) throw error
-  return data as VehicleDocumentRow
+
+  const row = data as VehicleDocumentRow
+  const detailParts: string[] = []
+  if (patch.detail_text !== undefined) detailParts.push('detalle')
+  if (patch.expires_at !== undefined) detailParts.push('vencimiento')
+  if (patch.status !== undefined && patch.status !== audit?.previous_status) {
+    await logDocumentActivity(supabase, {
+      document_id: documentId,
+      inventoryoracle_id: audit?.inventoryoracle_id ?? row.inventoryoracle_id,
+      doc_type: audit?.doc_type ?? row.doc_type,
+      action: 'update_status',
+      actor_id: audit?.actor_id,
+      actor_name: audit?.actor_name,
+      detail: `Estado: ${patch.status}`,
+    })
+  }
+  if (detailParts.length > 0) {
+    await logDocumentActivity(supabase, {
+      document_id: documentId,
+      inventoryoracle_id: audit?.inventoryoracle_id ?? row.inventoryoracle_id,
+      doc_type: audit?.doc_type ?? row.doc_type,
+      action: 'update_meta',
+      actor_id: audit?.actor_id,
+      actor_name: audit?.actor_name,
+      detail: detailParts.join(', '),
+    })
+  }
+
+  return row
 }
 
 export async function addVehicleFine(
