@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { devRequestsDb } from '@/lib/marketing-dev-requests/db'
+import { isDevRequestsAdmin, getDevRequestRoleScope } from '@/lib/marketing-dev-requests/access'
 
 const OPEN_STATUSES = ['new', 'in_review', 'in_progress', 'blocked'] as const
 
 /** Contador ligero para el badge del sidebar (solicitudes abiertas). */
 export function useDevRequestsOpenCount() {
-  const { supabase, user, profile } = useAuth()
+  const { supabase, profile } = useAuth()
   const [count, setCount] = useState(0)
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = isDevRequestsAdmin(profile?.role)
+  const roleScope = getDevRequestRoleScope(profile?.role)
 
   const refresh = useCallback(async () => {
     if (!supabase) return
@@ -19,8 +21,16 @@ export function useDevRequestsOpenCount() {
       .select('id', { count: 'exact', head: true })
       .in('status', [...OPEN_STATUSES])
 
-    if (!isAdmin && user?.id) {
-      q = q.eq('created_by', user.id)
+    if (!isAdmin && roleScope) {
+      if (roleScope.length === 0) {
+        setCount(0)
+        return
+      }
+      if (roleScope.length === 1) {
+        q = q.eq('requester_role', roleScope[0])
+      } else {
+        q = q.in('requester_role', roleScope)
+      }
     }
 
     const { count: n, error } = await q
@@ -30,7 +40,7 @@ export function useDevRequestsOpenCount() {
     } else {
       setCount(n ?? 0)
     }
-  }, [supabase, isAdmin, user?.id])
+  }, [supabase, isAdmin, roleScope])
 
   useEffect(() => {
     void refresh()

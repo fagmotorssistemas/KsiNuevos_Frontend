@@ -18,6 +18,8 @@ type Props = {
   onSearch: (v: string) => void
   onSelect: (r: MarketingDevRequest) => void
   onNewClick: () => void
+  isAdmin?: boolean
+  areaLabel?: string
 }
 
 function formatDate(iso: string) {
@@ -97,13 +99,21 @@ export function DevRequestList({
   onSearch,
   onSelect,
   onNewClick,
+  isAdmin = false,
+  areaLabel,
 }: Props) {
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Bandeja de solicitudes</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Haz clic en una tarjeta para ver el detalle completo</p>
+          <h2 className="text-lg font-bold text-slate-900">
+            {isAdmin ? 'Bandeja de solicitudes' : `Solicitudes de ${areaLabel ?? 'tu área'}`}
+          </h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {isAdmin
+              ? 'Haz clic en una tarjeta para ver el detalle completo'
+              : 'Tu equipo ve las solicitudes enviadas por personas de la misma área'}
+          </p>
         </div>
         <button
           type="button"
@@ -123,6 +133,8 @@ export function DevRequestList({
         mineOnly={mineOnly}
         onMineOnly={onMineOnly}
         totalCount={requests.length}
+        isAdmin={isAdmin}
+        areaLabel={areaLabel}
       />
 
       {loading ? (

@@ -25,6 +25,7 @@ export default function SolicitudesDesarrolloPage() {
     requests,
     loading,
     isAdmin,
+    areaLabel,
     statusFilter,
     setStatusFilter,
     mineOnly,
@@ -48,7 +49,7 @@ export default function SolicitudesDesarrolloPage() {
     const prefs = loadListPrefs()
     if (prefs) {
       if (prefs.search) setSearch(prefs.search)
-      if (prefs.mineOnly) setMineOnly(true)
+      if (isAdmin && prefs.mineOnly) setMineOnly(true)
       if (prefs.statusFilter && prefs.statusFilter !== 'all') {
         setStatusFilter(prefs.statusFilter as MarketingDevRequestStatus)
       }
@@ -56,7 +57,7 @@ export default function SolicitudesDesarrolloPage() {
     const draft = loadDevRequestDraft()
     if (draft?.tab === 'new') setTab('new')
     setShowDraftDot(hasActiveDraft())
-  }, [setSearch, setMineOnly, setStatusFilter])
+  }, [setSearch, setMineOnly, setStatusFilter, isAdmin])
 
   const persistTab = useCallback((next: DevRequestPageTab) => {
     setTab(next)
@@ -126,7 +127,7 @@ export default function SolicitudesDesarrolloPage() {
           )}
         >
           <List className="h-4 w-4" />
-          Mis solicitudes
+          {isAdmin ? 'Bandeja' : areaLabel}
         </button>
         <button
           type="button"
@@ -158,6 +159,8 @@ export default function SolicitudesDesarrolloPage() {
           onSearch={setSearch}
           onSelect={setSelected}
           onNewClick={() => persistTab('new')}
+          isAdmin={isAdmin}
+          areaLabel={areaLabel}
         />
       </div>
 

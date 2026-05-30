@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { BUCKET } from '@/app/solicitudes-desarrollo/constants'
+import { isDevRequestsAdmin, getDevRequestRoleScope, getDevRequestAreaLabel } from '@/lib/marketing-dev-requests/access'
 import { devRequestsDb } from '@/lib/marketing-dev-requests/db'
 import type {
   MarketingDevRequest,
@@ -24,7 +25,8 @@ export function useMarketingDevRequests() {
   const [mineOnly, setMineOnly] = useState(false)
   const [search, setSearch] = useState('')
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = isDevRequestsAdmin(profile?.role)
+  const roleScope = useMemo(() => getDevRequestRoleScope(profile?.role), [profile?.role])
 
   const fetchRequests = useCallback(async () => {
     if (!supabase) return
@@ -37,8 +39,20 @@ export function useMarketingDevRequests() {
     if (statusFilter !== 'all') {
       q = q.eq('status', statusFilter)
     }
-    if (mineOnly && user?.id) {
+
+    if (isAdmin && mineOnly && user?.id) {
       q = q.eq('created_by', user.id)
+    } else if (!isAdmin && roleScope) {
+      if (roleScope.length === 0) {
+        setRequests([])
+        setLoading(false)
+        return
+      }
+      if (roleScope.length === 1) {
+        q = q.eq('requester_role', roleScope[0])
+      } else {
+        q = q.in('requester_role', roleScope)
+      }
     }
 
     const { data, error } = await q
@@ -49,7 +63,7 @@ export function useMarketingDevRequests() {
       setRequests((data ?? []) as unknown as MarketingDevRequest[])
     }
     setLoading(false)
-  }, [supabase, statusFilter, mineOnly, user?.id])
+  }, [supabase, statusFilter, mineOnly, user?.id, isAdmin, roleScope])
 
   useEffect(() => {
     void fetchRequests()
@@ -135,6 +149,7 @@ export function useMarketingDevRequests() {
   const updateStatus = useCallback(
     async (id: string, status: MarketingDevRequestStatus, adminNotes?: string) => {
       if (!supabase) return { error: 'Sin sesión' }
+      if (!isDevRequestsAdmin(profile?.role)) return { error: 'No autorizado' }
       const patch: Record<string, unknown> = { status }
       if (adminNotes !== undefined) patch.admin_notes = adminNotes.trim() || null
 
@@ -143,7 +158,7 @@ export function useMarketingDevRequests() {
       await fetchRequests()
       return {}
     },
-    [supabase, fetchRequests]
+    [supabase, fetchRequests, profile?.role]
   )
 
   const getSignedUrl = useCallback(
@@ -163,6 +178,7 @@ export function useMarketingDevRequests() {
     requests: filtered,
     loading,
     isAdmin,
+    areaLabel: getDevRequestAreaLabel(profile?.role),
     statusFilter,
     setStatusFilter,
     mineOnly,
