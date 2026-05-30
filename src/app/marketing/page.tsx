@@ -88,7 +88,7 @@ export default function MarketingDashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <Link
-                    href="/marketing/solicitudes-desarrollo"
+                    href="/solicitudes-desarrollo"
                     className="group flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-violet-200 hover:shadow-md"
                 >
                     <div className="flex items-start gap-4">

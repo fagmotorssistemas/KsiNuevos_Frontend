@@ -80,6 +80,11 @@ export function saveListPrefs(prefs: DevRequestListPrefs) {
   }
 }
 
+export function getEnvironmentInfo(): string | null {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return null
+  return `${navigator.userAgent} · ${window.innerWidth}×${window.innerHeight}`
+}
+
 export function defaultForm(pathname = ''): MarketingDevRequestInput {
   return {
     target_module: 'marketing',
@@ -88,9 +93,6 @@ export function defaultForm(pathname = ''): MarketingDevRequestInput {
     title: '',
     description: '',
     page_url: pathname || null,
-    environment_info:
-      typeof navigator !== 'undefined'
-        ? `${navigator.userAgent} · ${window.innerWidth}×${window.innerHeight}`
-        : null,
+    environment_info: getEnvironmentInfo(),
   }
 }

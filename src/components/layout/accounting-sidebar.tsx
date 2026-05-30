@@ -31,6 +31,8 @@ import {
     MODULE_SLUGS,
     type PermissionContext,
 } from '@/lib/permissions';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 
 type MenuItem = {
     name: string;
@@ -65,6 +67,10 @@ export function AccountingSidebar() {
     useEffect(() => {
         const id = window.setTimeout(() => setMounted(true), 0);
         return () => window.clearTimeout(id);
+    }, []);
+
+    useEffect(() => {
+        setSidebarShell('accounting');
     }, []);
 
     const permCtx: PermissionContext = useMemo(
@@ -192,6 +198,11 @@ export function AccountingSidebar() {
                             );
                         })}
                 </nav>
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

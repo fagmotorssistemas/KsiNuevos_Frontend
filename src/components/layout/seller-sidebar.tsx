@@ -22,6 +22,8 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
 import { canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 
 // Definición de los items del menú de Ventas
 type MenuItem = {
@@ -103,6 +105,10 @@ export function SellerSidebar() {
         asesoriaStats.resuelto,
         asesoriaStats.total,
     ]);
+
+    useEffect(() => {
+        setSidebarShell('seller');
+    }, []);
 
     useEffect(() => {
         let isCancelled = false;
@@ -402,6 +408,11 @@ export function SellerSidebar() {
                         )}
                     </div>
                 </div> */}
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

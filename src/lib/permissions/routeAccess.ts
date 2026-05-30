@@ -3,6 +3,7 @@ import {
   ACCOUNTING_PATH_ACCESS,
   MODULE_SLUGS,
   VENTAS_PATH_ACCESS,
+  GLOBAL_STAFF_ROUTE_PREFIXES,
 } from './catalog'
 import { canAccessModule, canAccessSubmodule, hasAccessMap, hasAnyReadPermission } from './access'
 import type { PermissionContext } from './context'
@@ -156,6 +157,13 @@ function staffEnumPathAllowed(pathname: string, ctx: PermissionContext): boolean
 
 export function isRouteAllowed(pathname: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
+  if (
+    GLOBAL_STAFF_ROUTE_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )
+  ) {
+    return true
+  }
   if (staffEnumPathAllowed(pathname, ctx)) return true
 
   if (isTallerOnlyAccess(ctx)) {

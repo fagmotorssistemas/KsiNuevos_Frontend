@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -16,8 +16,9 @@ import {
     ClipboardList,
     CalendarDays,
     Newspaper,
-    Code2,
 } from 'lucide-react';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 
 const menuItems = [
     { name: 'Inicio', href: '/marketing', icon: LayoutDashboard },
@@ -28,7 +29,6 @@ const menuItems = [
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
     { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
     { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
-    { name: 'Solicitudes desarrollo', href: '/marketing/solicitudes-desarrollo', icon: Code2 },
 ];
 
 export function MarketingSidebar() {
@@ -38,6 +38,10 @@ export function MarketingSidebar() {
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        setSidebarShell('marketing');
     }, []);
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
@@ -163,6 +167,11 @@ export function MarketingSidebar() {
                             );
                         })}
                 </nav>
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

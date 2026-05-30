@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import {
     ShieldCheck, Menu, X, ChevronLeft, 
     Truck, Users2, CreditCard, Wrench, 
@@ -61,6 +63,10 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
             (item.id !== 'INVENTARIO' && item.id !== 'FINANCIERO') ||
             profile?.role === 'admin'
     );
+
+    useEffect(() => {
+        setSidebarShell('rastreadores');
+    }, []);
 
     return (
         <>
@@ -150,6 +156,11 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
                         </div>
                     </div>
                 )}
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

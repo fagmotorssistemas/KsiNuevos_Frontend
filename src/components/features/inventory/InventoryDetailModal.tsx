@@ -15,6 +15,7 @@ import { inventarioService } from "@/services/inventario.service";
 import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
 import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { ImageViewerModal } from "@/components/features/inventory/ImageViewerModal";
 import { InventoryListingChecklistTab } from "@/components/features/inventory/InventoryListingChecklistTab";
 import {
     mergeListingChecklistForSave,
@@ -183,6 +184,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     const [isSaving, setIsSaving] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
     const [downloadingAllPhotos, setDownloadingAllPhotos] = useState(false);
+    const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
     const [oracleFicha, setOracleFicha] = useState<VehiculoInventario | null>(null);
     const [loadingFicha, setLoadingFicha] = useState(false);
 
@@ -276,6 +278,16 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
         });
         return items;
     }, [mainImagePreview, formData.img_main_url, existingGallery, newGalleryPreviews, downloadSlug]);
+
+    const photoViewerUrls = useMemo(
+        () => vehiclePhotoItems.map((item) => item.src),
+        [vehiclePhotoItems]
+    );
+
+    const openPhotoViewer = (src: string) => {
+        const idx = photoViewerUrls.indexOf(src);
+        if (idx >= 0) setPhotoViewerIndex(idx);
+    };
 
     const handleDownloadAllPhotos = async () => {
         if (vehiclePhotoItems.length === 0) {
@@ -512,6 +524,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
     };
 
     return (
+        <>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200">
 
@@ -759,40 +772,66 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             </div>
                             <div className="space-y-2">
                                 <SectionTitle icon={ImageIcon} title="Foto principal" />
-                                <div 
-                                    onClick={() => canEdit && mainInputRef.current?.click()}
-                                    className={`relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden group ${canEdit ? 'cursor-pointer hover:border-blue-400' : 'cursor-default opacity-90'}`}
-                                >
-                                    {/* Mostramos la preview nueva O la URL existente (optimizada si es formato vehicle-images) */}
+                                <div className="relative aspect-video w-full rounded-lg border-2 border-dashed border-slate-300 bg-white overflow-hidden group">
                                     {mainImagePreview || formData.img_main_url ? (
                                         <>
-                                            {mainImagePreview ? (
-                                                <img src={mainImagePreview} alt="Principal" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <OptimizedImage
-                                                    src={formData.img_main_url}
-                                                    alt="Principal"
-                                                    className="w-full h-full object-cover"
-                                                    loading="eager"
-                                                />
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    openPhotoViewer(
+                                                        mainImagePreview || formData.img_main_url
+                                                    )
+                                                }
+                                                className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                                                title="Ver imagen ampliada"
+                                            >
+                                                {mainImagePreview ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        src={mainImagePreview}
+                                                        alt="Principal"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <OptimizedImage
+                                                        src={formData.img_main_url}
+                                                        alt="Principal"
+                                                        className="w-full h-full object-cover"
+                                                        loading="eager"
+                                                    />
+                                                )}
+                                            </button>
+                                            {canEdit && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => mainInputRef.current?.click()}
+                                                    className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-lg bg-black/60 px-3 py-2 text-xs font-semibold text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
+                                                >
+                                                    <UploadCloud className="w-4 h-4" />
+                                                    Cambiar portada
+                                                </button>
                                             )}
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                <p className="text-white text-sm font-medium flex items-center gap-2">
-                                                    <UploadCloud className="w-5 h-5" /> Cambiar Portada
-                                                </p>
-                                            </div>
                                         </>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                        <button
+                                            type="button"
+                                            onClick={() => canEdit && mainInputRef.current?.click()}
+                                            disabled={!canEdit}
+                                            className={`flex flex-col items-center justify-center h-full w-full text-slate-400 ${
+                                                canEdit
+                                                    ? "cursor-pointer hover:text-blue-600 hover:border-blue-400"
+                                                    : "cursor-default opacity-90"
+                                            }`}
+                                        >
                                             <ImageIcon className="w-10 h-10 mb-2" />
-                                            <span>Click para subir portada</span>
-                                        </div>
+                                            <span>{canEdit ? "Click para subir portada" : "Sin portada"}</span>
+                                        </button>
                                     )}
-                                    <input 
-                                        type="file" 
-                                        ref={mainInputRef} 
-                                        className="hidden" 
-                                        accept="image/*" 
+                                    <input
+                                        type="file"
+                                        ref={mainInputRef}
+                                        className="hidden"
+                                        accept="image/*"
                                         onChange={handleMainImageSelect}
                                     />
                                 </div>
@@ -823,11 +862,26 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                                     {/* 1. Fotos Existentes */}
                                     {existingGallery.map((url, idx) => (
-                                        <div key={`exist-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
-                                            <OptimizedImage src={url} alt="Galeria" className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                        <div
+                                            key={`exist-${idx}`}
+                                            className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => openPhotoViewer(url)}
+                                                className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                                title="Ver imagen ampliada"
+                                            >
+                                                <OptimizedImage
+                                                    src={url}
+                                                    alt="Galeria"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </button>
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
                                             {canEdit && (
-                                                <button 
+                                                <button
+                                                    type="button"
                                                     onClick={() => removeExistingGalleryImage(idx)}
                                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 transform hover:scale-110"
                                                     title="Eliminar foto"
@@ -835,14 +889,31 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                                     <Trash2 className="w-3 h-3" />
                                                 </button>
                                             )}
-                                            <span className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded opacity-0 group-hover:opacity-100">Guardada</span>
+                                            <span className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none">
+                                                Guardada
+                                            </span>
                                         </div>
                                     ))}
 
                                     {/* 2. Fotos Nuevas (Pendientes) */}
                                     {newGalleryPreviews.map((preview, idx) => (
-                                        <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-blue-200 group">
-                                            <img src={preview} alt="Nueva" className="w-full h-full object-cover" />
+                                        <div
+                                            key={`new-${idx}`}
+                                            className="relative aspect-square rounded-lg overflow-hidden border-2 border-blue-200 group"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => openPhotoViewer(preview)}
+                                                className="block w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                                title="Ver imagen ampliada"
+                                            >
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src={preview}
+                                                    alt="Nueva"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </button>
                                             {canEdit && (
                                                 <button 
                                                     onClick={() => removeNewGalleryImage(idx)}
@@ -1002,5 +1073,15 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
             </div>
         </div>
+
+        {photoViewerIndex != null && (
+            <ImageViewerModal
+                images={photoViewerUrls}
+                title={vehicleDownloadName || "Fotos del vehículo"}
+                initialIndex={photoViewerIndex}
+                onClose={() => setPhotoViewerIndex(null)}
+            />
+        )}
+        </>
     );
 }

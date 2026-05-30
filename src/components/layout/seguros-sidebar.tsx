@@ -1,10 +1,12 @@
 // src/components/seguros-sidebar.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import {
     ShieldCheck,
     LayoutDashboard,
@@ -39,6 +41,10 @@ export function SegurosSidebar() {
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
+
+    useEffect(() => {
+        setSidebarShell('seguros');
+    }, []);
 
     return (
         <>
@@ -186,6 +192,11 @@ export function SegurosSidebar() {
                         </div>
                     </div>
                 )}
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

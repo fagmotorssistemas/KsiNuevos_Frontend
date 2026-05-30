@@ -6,12 +6,12 @@ import { DevInput } from './DevFormPrimitives'
 import { STATUS_LABELS } from '../../constants'
 import type { MarketingDevRequestStatus } from '@/types/marketing-dev-requests'
 
-const FILTER_STATUSES: (MarketingDevRequestStatus | 'all')[] = [
-  'all',
+const FILTER_STATUSES: MarketingDevRequestStatus[] = [
   'new',
   'in_review',
   'in_progress',
   'resolved',
+  'rejected',
 ]
 
 type Props = {
@@ -48,7 +48,7 @@ export function FilterBar({
       <div className="flex flex-wrap items-center gap-2">
         {FILTER_STATUSES.map((s) => {
           const active = statusFilter === s
-          const label = s === 'all' ? 'Todas' : STATUS_LABELS[s]
+          const label = STATUS_LABELS[s]
           return (
             <button
               key={s}

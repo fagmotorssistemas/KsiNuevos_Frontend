@@ -14,6 +14,7 @@ import {
 import {
   clearDevRequestDraft,
   defaultForm,
+  getEnvironmentInfo,
   loadDevRequestDraft,
   saveDevRequestDraft,
 } from '../lib/draftStorage'
@@ -110,10 +111,7 @@ export function DevRequestForm({ onSubmit, onCancel, onSuccess, onDraftChange }:
         ...form,
         request_type: requestType,
         page_url: pathname,
-        environment_info:
-          typeof navigator !== 'undefined'
-            ? `${navigator.userAgent} · ${window.innerWidth}×${window.innerHeight}`
-            : form.environment_info,
+        environment_info: getEnvironmentInfo() ?? form.environment_info,
       },
       files,
     )

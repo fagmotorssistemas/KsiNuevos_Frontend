@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { BUCKET } from '@/app/marketing/solicitudes-desarrollo/constants'
+import { BUCKET } from '@/app/solicitudes-desarrollo/constants'
 import { devRequestsDb } from '@/lib/marketing-dev-requests/db'
 import type {
   MarketingDevRequest,

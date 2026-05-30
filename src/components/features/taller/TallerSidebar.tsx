@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { setSidebarShell } from '@/lib/sidebar-shell';
+import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import {
     LayoutDashboard,
     ClipboardCheck,
@@ -39,6 +41,10 @@ export function TallerSidebar() {
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
+
+    useEffect(() => {
+        setSidebarShell('taller');
+    }, []);
 
     return (
         <>
@@ -153,6 +159,11 @@ export function TallerSidebar() {
                         );
                     })}
                 </nav>
+
+                <SidebarDevRequestsFooter
+                    isCollapsed={isCollapsed}
+                    onNavigate={() => setIsMobileOpen(false)}
+                />
             </aside>
         </>
     );

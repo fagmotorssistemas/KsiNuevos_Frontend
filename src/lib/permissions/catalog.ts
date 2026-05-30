@@ -9,6 +9,7 @@ export {
   VENTAS_PATH_ACCESS,
   ACCOUNTING_PATH_ACCESS,
   getProtectedRoutePrefixes,
+  GLOBAL_STAFF_ROUTE_PREFIXES,
   findSubmoduleByRoutePrefix,
   type ModuleSlug,
   type RbacModuleDef,
