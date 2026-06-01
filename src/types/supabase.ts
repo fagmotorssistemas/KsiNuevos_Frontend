@@ -3470,6 +3470,7 @@ export type Database = {
           impressions: number
           inventory_id: string | null
           leads_count: number
+          metrics_month: string
           raw_data: Json | null
           reach: number
           spend: number
@@ -3488,6 +3489,7 @@ export type Database = {
           impressions?: number
           inventory_id?: string | null
           leads_count?: number
+          metrics_month: string
           raw_data?: Json | null
           reach?: number
           spend?: number
@@ -3506,6 +3508,7 @@ export type Database = {
           impressions?: number
           inventory_id?: string | null
           leads_count?: number
+          metrics_month?: string
           raw_data?: Json | null
           reach?: number
           spend?: number
@@ -6536,7 +6539,63 @@ export type Database = {
         }
         Returns: boolean
       }
+      count_leads_for_temperature_filter:
+        | {
+            Args: {
+              p_campaign_month?: string
+              p_temperature: Database["public"]["Enums"]["lead_temperature"]
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_assigned_to?: string
+              p_campaign_month?: string
+              p_has_budget?: boolean
+              p_status?: string
+              p_temperature: Database["public"]["Enums"]["lead_temperature"]
+            }
+            Returns: number
+          }
+      count_responded_for_temperature_filter: {
+        Args: {
+          p_assigned_to?: string
+          p_campaign_month?: string
+          p_has_budget?: boolean
+          p_status?: string
+          p_temperature: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: number
+      }
       current_profile_role: { Args: never; Returns: string }
+      fetch_leads_board_page: {
+        Args: {
+          p_assigned_to?: string
+          p_created_from?: string
+          p_created_to?: string
+          p_has_budget?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_skip_stats?: boolean
+          p_status?: string
+        }
+        Returns: Json
+      }
+      fetch_leads_board_temperature_page: {
+        Args: {
+          p_assigned_to?: string
+          p_campaign_month?: string
+          p_created_from?: string
+          p_created_to?: string
+          p_has_budget?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_skip_stats?: boolean
+          p_status?: string
+          p_temperature: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: Json
+      }
       get_leads_pager: {
         Args: {
           p_assigned: string
@@ -6597,6 +6656,15 @@ export type Database = {
       is_marketing_planner_member: { Args: never; Returns: boolean }
       is_profile_admin: { Args: never; Returns: boolean }
       is_role: { Args: { required_role: string }; Returns: boolean }
+      lead_ids_for_temperature_filter: {
+        Args: {
+          p_campaign_month?: string
+          p_temperature: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: {
+          lead_id: number
+        }[]
+      }
       lead_temperature_append_state: {
         Args: {
           p_new: Database["public"]["Enums"]["lead_temperature"]
@@ -6614,6 +6682,18 @@ export type Database = {
       lead_temperature_rank: {
         Args: { p_temp: Database["public"]["Enums"]["lead_temperature"] }
         Returns: number
+      }
+      leads_board_temperature_snapshot: {
+        Args: {
+          p_assigned_to?: string
+          p_campaign_month?: string
+          p_has_budget?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_status?: string
+          p_temperature: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: Json
       }
       leads_sin_respuesta: {
         Args: never
@@ -6653,6 +6733,20 @@ export type Database = {
         }[]
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
+      paginated_lead_ids_for_temperature_filter: {
+        Args: {
+          p_assigned_to?: string
+          p_campaign_month?: string
+          p_has_budget?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_status?: string
+          p_temperature: Database["public"]["Enums"]["lead_temperature"]
+        }
+        Returns: {
+          lead_id: number
+        }[]
+      }
       reassign_stale_unmanaged_leads: { Args: never; Returns: number }
       reset_leads_temperature_monthly: { Args: never; Returns: number }
       rpc_cases_without_gestion: {

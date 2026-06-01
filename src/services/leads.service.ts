@@ -153,7 +153,7 @@ const fetchLeadIdsForTemperature = async (
 
     return (data ?? [])
         .map((row: { lead_id?: number | string }) => Number(row.lead_id))
-        .filter((id) => Number.isInteger(id) && id > 0);
+        .filter((id: number) => Number.isInteger(id) && id > 0);
 };
 
 type BoardFilterRpcExtras = {
@@ -788,7 +788,7 @@ export const fetchLeadsAPI = async (
         const { data, count, error } = await query;
         if (error) throw error;
 
-        const rawLeads = data || [];
+        const rawLeads: Array<{ id?: unknown }> = data ?? [];
         const tradeInByLeadPk = tempFilterActive
             ? new Map<number, unknown[]>()
             : await fetchTradeInCarsForLeadPage(supabase, rawLeads);

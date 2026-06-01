@@ -14,7 +14,7 @@ import {
     HelpCircle,
 } from "lucide-react";
 
-import type { LeadsFilters } from "@/types/leads.types";
+import type { DateFilter, LeadsFilters } from "@/types/leads.types";
 import type { LeadDayMetricBreakdown } from "@/services/leads.service";
 
 
@@ -295,7 +295,10 @@ export function LeadsToolbar({
                                         const today = getEcuadorDateISO();
                                         onFilterChange({ exactDate: today, dateRange: 'all' });
                                     } else {
-                                        onFilterChange({ dateRange: e.target.value, exactDate: '' });
+                                        onFilterChange({
+                                            dateRange: e.target.value as DateFilter,
+                                            exactDate: '',
+                                        });
                                     }
                                 }}
                             >
