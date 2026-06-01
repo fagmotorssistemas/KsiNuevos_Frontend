@@ -147,6 +147,12 @@ export function LeadsList({
                         const responsableName = item.profiles?.full_name;
                         const lowerSource = String(item.source || '').toLowerCase();
                         const isSpecialSource = ['waba', 'tiktok_kommo', 'instagram_business'].includes(lowerSource);
+                        const tempDisplay = item.month_temperature ?? item.temperature;
+                        const tempTitle =
+                            item.month_temperature &&
+                            item.month_temperature !== item.temperature
+                                ? `Mes actual: ${item.month_temperature} · operativo: ${item.temperature ?? '—'}`
+                                : undefined;
 
                         return (
                             <Table.Row id={item.id}>
@@ -224,13 +230,15 @@ export function LeadsList({
                                 </Table.Cell>
 
                                 <Table.Cell>
-                                    <BadgeWithIcon
-                                        color={getTempColor(item.temperature) as any}
-                                        iconLeading={Thermometer}
-                                        className="capitalize"
-                                    >
-                                        {item.temperature || '-'}
-                                    </BadgeWithIcon>
+                                    <span title={tempTitle} className="inline-flex">
+                                        <BadgeWithIcon
+                                            color={getTempColor(tempDisplay) as any}
+                                            iconLeading={Thermometer}
+                                            className="capitalize"
+                                        >
+                                            {tempDisplay || '-'}
+                                        </BadgeWithIcon>
+                                    </span>
                                 </Table.Cell>
 
                                 <Table.Cell>

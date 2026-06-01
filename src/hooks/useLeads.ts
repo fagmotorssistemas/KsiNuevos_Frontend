@@ -47,16 +47,13 @@ export function useLeads() {
     const [page, setPage] = useState(1);
     const rowsPerPage = 10;
 
-    // --- 1. AGREGAR ESTO (Estado de ordenamiento) ---
-   // Le decimos explícitamente que 'direction' SOLO puede ser esas dos opciones
-        const [sortDescriptor, setSortDescriptor] = useState<{
+    const [sortDescriptor, setSortDescriptor] = useState<{
             column: string;
             direction: "ascending" | "descending";
         }>({
             column: "updated_at",
             direction: "descending",
         });
-    // ------------------------------------------------
 
     const [filters, setFilters] = useState<LeadsFilters>({
         search: '',
@@ -165,34 +162,46 @@ export function useLeads() {
     const loadLeads = useCallback(async (showLoadingScreen = true) => {
         if (!user) return;
         
-        if (showLoadingScreen) setIsLoading(true);
-        else setIsRefetching(true);
+        if (showLoadingScreen) {
+            setIsLoading(true);
+            setLeads([]);
+        } else {
+            setIsRefetching(true);
+        }
 
         try {
+            const leadsData = await fetchLeadsAPI(supabase, page, rowsPerPage, filters, {
+                cachedTotal: page > 1 ? totalCount : undefined,
+                cachedResponded: page > 1 ? respondedCount : undefined,
+            });
+
+            setLeads(leadsData.data);
+            setTotalCount(leadsData.count);
+            setRespondedCount(leadsData.respondedCount);
+
             const breakdownPromise = filters.exactDate
                 ? fetchLeadDayMetricBreakdown(supabase, filters.exactDate, filters.assignedTo)
-                : Promise.resolve(null)
+                : Promise.resolve(null);
 
-            const [leadsData, interactions, stats, bCount, tradeInCount, breakdown] = await Promise.all([
-                fetchLeadsAPI(supabase, page, rowsPerPage, filters),
+            void Promise.all([
                 fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate),
                 fetchRequestStats(supabase, filters.assignedTo),
                 fetchBudgetStats(supabase, filters.assignedTo),
                 fetchTradeInLeadsCount(supabase, filters.assignedTo),
                 breakdownPromise,
-            ])
-
-            setLeads(leadsData.data);
-            setTotalCount(leadsData.count);
-            setRespondedCount(leadsData.respondedCount);
-            setInteractionsCount(interactions);
-            setDayBreakdown(breakdown);
-            setRequestStats(stats);
-            setBudgetCount(bCount);
-            setTradeInLeadsCount(tradeInCount);
+            ]).then(([interactions, stats, bCount, tradeInCount, breakdown]) => {
+                setInteractionsCount(interactions);
+                setRequestStats(stats);
+                setBudgetCount(bCount);
+                setTradeInLeadsCount(tradeInCount);
+                setDayBreakdown(breakdown);
+            });
             
         } catch (error) {
             console.error("Error cargando leads:", error);
+            setLeads([]);
+            setTotalCount(0);
+            setRespondedCount(0);
         } finally {
             setIsLoading(false);
             setIsRefetching(false);
@@ -256,6 +265,10 @@ export function useLeads() {
             const key = keyOrFilters as keyof LeadsFilters;
             if (key === 'exactDate' && value !== '') {
                 setFilters(prev => ({ ...prev, exactDate: value, dateRange: 'all' }));
+            } else if (key === 'exactDate' && value === '') {
+                setFilters(prev => ({ ...prev, exactDate: '' }));
+            } else if (key === 'dateRange') {
+                setFilters(prev => ({ ...prev, dateRange: value, exactDate: '' }));
             } else if (key === 'status') {
                 setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false }));
             } else {
@@ -280,8 +293,6 @@ export function useLeads() {
         sellers,
         reload: () => loadLeads(true),
         resetFilters,
-        
-        // --- 2. AGREGAR ESTO AL RETURN ---
         sortDescriptor,
         setSortDescriptor
     };

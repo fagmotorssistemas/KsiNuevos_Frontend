@@ -14,6 +14,8 @@ export type LeadWithDetails = Database['public']['Tables']['leads']['Row'] & {
     interested_cars: CarRowWithVehicle[];
     trade_in_cars?: TradeInCarRow[];
     profiles: { full_name: string } | null;
+    /** Temperatura registrada en lead_temperature_history para el mes en curso (Ecuador). */
+    month_temperature?: string | null;
 };
 
 export type SortDescriptor = {

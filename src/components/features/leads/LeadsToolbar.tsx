@@ -255,6 +255,7 @@ export function LeadsToolbar({
                             icon={Flame}
                             value={filters.temperature}
                             onChange={(e) => onFilterChange('temperature', e.target.value)}
+                            selectClassName="pr-9"
                         >
                             <option value="all">Temp: Todas</option>
                             <option value="caliente">🔥 Caliente</option>
@@ -263,7 +264,7 @@ export function LeadsToolbar({
                         </CustomSelect>
                     </div>
 
-                    {/* Filtro Fecha (Exacta o Rango) */}
+                    {/* Fecha: filtra por ingreso del lead (created_at, Ecuador) */}
                     <div className="min-w-[200px] max-w-full shrink-0">
                         {filters.exactDate ? (
                             <div className="relative isolate flex items-center rounded-lg border border-slate-200 bg-slate-50/50 shadow-sm">
@@ -292,9 +293,9 @@ export function LeadsToolbar({
                                 onChange={(e) => {
                                     if (e.target.value === 'custom') {
                                         const today = getEcuadorDateISO();
-                                        onFilterChange('exactDate', today);
+                                        onFilterChange({ exactDate: today, dateRange: 'all' });
                                     } else {
-                                        onFilterChange('dateRange', e.target.value);
+                                        onFilterChange({ dateRange: e.target.value, exactDate: '' });
                                     }
                                 }}
                             >

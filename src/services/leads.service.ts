@@ -23,15 +23,429 @@ const applyLeadsCreatedInRange = (query: any, start: string, end: string) =>
     query.gte('created_at', start).lte('created_at', end);
 
 /** Primer día del mes calendario actual en Ecuador (YYYY-MM-01). */
-const getEcuadorMonthStartISO = () => {
+export const getEcuadorMonthStartISO = () => {
     const today = getEcuadorDateISO();
     return `${today.slice(0, 7)}-01`;
 };
 
-/** Filtro Temp en tablero: temperatura actual del lead (columna leads.temperature). */
-const applyLeadsTemperatureFilter = (query: any, temperature: LeadsFilters['temperature']) => {
-    if (!temperature || temperature === 'all') return query;
-    return query.eq('temperature', temperature);
+/** Suma días a una fecha YYYY-MM-DD (calendario, sin depender del huso del navegador). */
+const addDaysToYmd = (ymd: string, deltaDays: number): string => {
+    const [y, m, d] = ymd.split('-').map(Number);
+    const utc = new Date(Date.UTC(y, m - 1, d));
+    utc.setUTCDate(utc.getUTCDate() + deltaDays);
+    return utc.toISOString().slice(0, 10);
+};
+
+type LeadsTemperatureHistoryScope =
+    | { mode: 'all' }
+    | { mode: 'month'; campaignMonth: string };
+
+/**
+ * Alcance del historial de temperatura (independiente del ingreso created_at).
+ * - Todo el tiempo / últimos N días / hoy → cualquier mes en historial.
+ * - Este mes / fecha exacta → mes calendario Ecuador de referencia.
+ */
+const getTemperatureHistoryScope = (filters: LeadsFilters): LeadsTemperatureHistoryScope => {
+    if (filters.exactDate) {
+        return { mode: 'month', campaignMonth: `${filters.exactDate.slice(0, 7)}-01` };
+    }
+    if (filters.dateRange === 'all') {
+        return { mode: 'all' };
+    }
+    if (filters.dateRange === 'thisMonth') {
+        return { mode: 'month', campaignMonth: getEcuadorMonthStartISO() };
+    }
+    return { mode: 'all' };
+};
+
+/** Rango de ingreso del lead (created_at, Ecuador). Null = sin filtro por fecha de ingreso. */
+const getLeadsCreatedAtRangeFromFilters = (
+    filters: LeadsFilters
+): { start: string; end: string } | null => {
+    if (filters.onlyInteractions) return null;
+    if (filters.exactDate) {
+        return getEcuadorRange(filters.exactDate);
+    }
+    if (filters.dateRange === 'all') return null;
+
+    const today = getEcuadorDateISO();
+    if (filters.dateRange === 'today') {
+        return getEcuadorRange(today);
+    }
+    if (filters.dateRange === 'thisMonth') {
+        return {
+            start: `${getEcuadorMonthStartISO()}T00:00:00-05:00`,
+            end: getEcuadorRange(today).end,
+        };
+    }
+    const daysBack = parseInt(filters.dateRange.replace('days', ''), 10) || 7;
+    const startYmd = addDaysToYmd(today, -daysBack);
+    return {
+        start: `${startYmd}T00:00:00-05:00`,
+        end: getEcuadorRange(today).end,
+    };
+};
+
+const applyLeadsCreatedAtRangeFromFilters = (query: any, filters: LeadsFilters) => {
+    const range = getLeadsCreatedAtRangeFromFilters(filters);
+    if (!range) return query;
+    return applyLeadsCreatedInRange(query, range.start, range.end);
+};
+
+const isLeadsTemperatureFilterActive = (filters: LeadsFilters) =>
+    Boolean(filters.temperature && filters.temperature !== 'all');
+
+/** PostgREST limita tamaño de `in.(...)` en URL; trocear si hay muchos IDs. */
+const LEAD_ID_IN_CHUNK = 400;
+
+type LeadTemperatureFilter = Exclude<LeadsFilters['temperature'], 'all'>;
+
+type ResolvedTemperatureFilter =
+    | { mode: 'include'; ids: number[] }
+    | { mode: 'exclude'; ids: number[] }
+    | { mode: 'none' };
+
+const applyLeadIdInFilter = (query: any, ids: number[]) => {
+    if (ids.length === 0) return query.eq('id', -1);
+    if (ids.length <= LEAD_ID_IN_CHUNK) return query.in('id', ids);
+    const parts: string[] = [];
+    for (let i = 0; i < ids.length; i += LEAD_ID_IN_CHUNK) {
+        parts.push(`id.in.(${ids.slice(i, i + LEAD_ID_IN_CHUNK).join(',')})`);
+    }
+    return query.or(parts.join(','));
+};
+
+const applyLeadIdNotInFilter = (query: any, ids: number[]) => {
+    if (ids.length === 0) return query;
+    if (ids.length <= LEAD_ID_IN_CHUNK) return query.not('id', 'in', `(${ids.join(',')})`);
+    let q = query;
+    for (let i = 0; i < ids.length; i += LEAD_ID_IN_CHUNK) {
+        const chunk = ids.slice(i, i + LEAD_ID_IN_CHUNK);
+        q = q.not('id', 'in', `(${chunk.join(',')})`);
+    }
+    return q;
+};
+
+const applyResolvedTemperatureFilter = (query: any, resolved: ResolvedTemperatureFilter) => {
+    if (resolved.mode === 'none') return query;
+    if (resolved.mode === 'include') {
+        if (resolved.ids.length === 1 && resolved.ids[0] === -1) return query.eq('id', -1);
+        return applyLeadIdInFilter(query, resolved.ids);
+    }
+    return applyLeadIdNotInFilter(query, resolved.ids);
+};
+
+/** Filtro de temperatura en Postgres (índice + DISTINCT ON). Requiere migración lead_ids_for_temperature_filter. */
+const fetchLeadIdsForTemperature = async (
+    supabase: any,
+    temperature: LeadTemperatureFilter,
+    scope: LeadsTemperatureHistoryScope
+): Promise<number[]> => {
+    const { data, error } = await supabase.rpc('lead_ids_for_temperature_filter', {
+        p_temperature: temperature,
+        p_campaign_month: scope.mode === 'month' ? scope.campaignMonth : null,
+    });
+
+    if (error) {
+        console.warn('lead_ids_for_temperature_filter:', error.message || error);
+        return [];
+    }
+
+    return (data ?? [])
+        .map((row: { lead_id?: number | string }) => Number(row.lead_id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+};
+
+type BoardFilterRpcExtras = {
+    assignedTo?: string;
+    status?: string;
+    hasBudget?: boolean;
+};
+
+const boardFilterRpcParams = (
+    extras?: BoardFilterRpcExtras,
+    skipStats = false,
+    createdRange?: { start: string; end: string } | null
+) => {
+    const params: Record<string, unknown> = {
+        p_limit: 10,
+        p_offset: 0,
+        p_has_budget: Boolean(extras?.hasBudget),
+        p_skip_stats: skipStats,
+    };
+    if (createdRange) {
+        params.p_created_from = createdRange.start;
+        params.p_created_to = createdRange.end;
+    }
+    if (extras?.assignedTo && extras.assignedTo !== 'all') {
+        params.p_assigned_to = extras.assignedTo;
+    }
+    if (
+        extras?.status &&
+        extras.status !== 'all' &&
+        extras.status !== 'datos_pedidos' &&
+        extras.status !== 'asesoria_financiamiento'
+    ) {
+        params.p_status = extras.status;
+    }
+    return params;
+};
+
+const temperatureFilterRpcParams = (
+    temperature: LeadTemperatureFilter,
+    scope: LeadsTemperatureHistoryScope,
+    extras?: BoardFilterRpcExtras,
+    skipStats = false,
+    createdRange?: { start: string; end: string } | null
+) => {
+    const params: Record<string, unknown> = {
+        ...boardFilterRpcParams(extras, skipStats, createdRange),
+        p_temperature: temperature,
+    };
+    if (scope.mode === 'month') {
+        params.p_campaign_month = scope.campaignMonth;
+    }
+    return params;
+};
+
+const isBoardFastPathEligible = (filters: LeadsFilters) =>
+    !filters.search?.trim() &&
+    !filters.hasTradeIn &&
+    !filters.onlyInteractions &&
+    filters.status !== 'datos_pedidos' &&
+    filters.status !== 'asesoria_financiamiento';
+
+/** Temp activa + filtros simples (fecha de ingreso vía RPC). */
+const isTemperatureOnlyLeadsFilter = (filters: LeadsFilters) =>
+    isLeadsTemperatureFilterActive(filters) && isBoardFastPathEligible(filters);
+
+/** Sin temperatura pero con filtro de ingreso (hoy, 7/15 días, este mes, fecha exacta). */
+const isDateFilteredLeadsBoardFastPath = (filters: LeadsFilters) =>
+    !isLeadsTemperatureFilterActive(filters) &&
+    isBoardFastPathEligible(filters) &&
+    getLeadsCreatedAtRangeFromFilters(filters) != null;
+
+export type FetchLeadsAPIOptions = {
+    /** En página 2+ evita recomputar COUNT en BD. */
+    cachedTotal?: number;
+    cachedResponded?: number;
+};
+
+const LEADS_SELECT_WITH_RELATIONS = `
+    *,
+    interested_cars(*, inventoryoracle(brand, model, year)),
+    profiles:assigned_to(full_name)
+`;
+
+const mapLeadsPageRows = (
+    rawLeads: any[],
+    tradeInByLeadPk: Map<number, unknown[]>,
+    monthTempByLead: Map<number, string>
+): LeadWithDetails[] =>
+    rawLeads.map((item: any) => {
+        const pk = Number(item.id);
+        const tradeRows = tradeInByLeadPk.get(pk);
+        const scopedTemp = monthTempByLead.get(pk);
+        return {
+            ...item,
+            month_temperature: scopedTemp ?? item.temperature ?? null,
+            interested_cars: (item.interested_cars || []).map((c: any) => ({
+                ...c,
+                brand: c.inventoryoracle?.brand || c.brand,
+                model: c.inventoryoracle?.model || c.model,
+                year: c.inventoryoracle?.year || c.year,
+            })),
+            trade_in_cars: dedupeTradeInRows(tradeRows || []) as TradeInCarRow[],
+            profiles: item.profiles || { full_name: "" },
+        };
+    });
+
+type BoardPagePayload = {
+    total?: number | string;
+    responded?: number | string;
+    rows?: LeadWithDetails[];
+};
+
+const mapBoardPagePayload = (
+    payload: BoardPagePayload,
+    cache?: Pick<FetchLeadsAPIOptions, 'cachedTotal' | 'cachedResponded'>,
+    monthTemperature?: LeadTemperatureFilter
+): { data: LeadWithDetails[]; count: number; respondedCount: number } => {
+    const totalCount =
+        payload.total != null ? Number(payload.total) : Number(cache?.cachedTotal ?? 0);
+    const respondedCount =
+        payload.responded != null
+            ? Number(payload.responded)
+            : Number(cache?.cachedResponded ?? 0);
+    const rows = (payload.rows ?? []) as LeadWithDetails[];
+
+    const data = rows.map((row) => ({
+        ...row,
+        month_temperature: monthTemperature ?? row.month_temperature ?? row.temperature ?? null,
+        interested_cars: row.interested_cars ?? [],
+        trade_in_cars: row.trade_in_cars ?? [],
+        profiles: row.profiles ?? { full_name: "" },
+    }));
+
+    return { data, count: totalCount, respondedCount };
+};
+
+/** Filtro de ingreso (sin temperatura): 1 RPC paginado. */
+const fetchLeadsDateBoardFastPath = async (
+    supabase: any,
+    page: number,
+    rowsPerPage: number,
+    filters: LeadsFilters,
+    cache?: Pick<FetchLeadsAPIOptions, 'cachedTotal' | 'cachedResponded'>
+) => {
+    const from = (page - 1) * rowsPerPage;
+    const createdRange = getLeadsCreatedAtRangeFromFilters(filters);
+    const rpcExtras: BoardFilterRpcExtras = {
+        assignedTo: filters.assignedTo,
+        status: filters.status,
+        hasBudget: filters.hasBudget,
+    };
+    const skipStats =
+        page > 1 && cache?.cachedTotal != null && cache.cachedTotal >= 0;
+
+    const rpcParams = boardFilterRpcParams(rpcExtras, skipStats, createdRange);
+    rpcParams.p_limit = rowsPerPage;
+    rpcParams.p_offset = from;
+
+    const { data: payloadRaw, error } = await supabase.rpc('fetch_leads_board_page', rpcParams);
+
+    if (error) {
+        console.error('[leads] fetch_leads_board_page:', error.message || error);
+        throw error;
+    }
+
+    return mapBoardPagePayload((payloadRaw ?? {}) as BoardPagePayload, cache);
+};
+
+/**
+ * Filtro solo temperatura: 1 RPC en Postgres (conteo + página de 10 filas con relaciones).
+ * Sin descargar listas de IDs ni segunda petición PostgREST con embeds.
+ */
+const fetchLeadsTemperatureFastPath = async (
+    supabase: any,
+    page: number,
+    rowsPerPage: number,
+    filters: LeadsFilters,
+    scope: LeadsTemperatureHistoryScope,
+    cache?: Pick<FetchLeadsAPIOptions, 'cachedTotal' | 'cachedResponded'>
+) => {
+    const from = (page - 1) * rowsPerPage;
+    const temperature = filters.temperature as LeadTemperatureFilter;
+    const rpcExtras: BoardFilterRpcExtras = {
+        assignedTo: filters.assignedTo,
+        status: filters.status,
+        hasBudget: filters.hasBudget,
+    };
+    const createdRange = getLeadsCreatedAtRangeFromFilters(filters);
+    const skipStats =
+        page > 1 &&
+        cache?.cachedTotal != null &&
+        cache.cachedTotal >= 0 &&
+        !createdRange;
+
+    const rpcParams = temperatureFilterRpcParams(
+        temperature,
+        scope,
+        rpcExtras,
+        skipStats,
+        createdRange
+    );
+    rpcParams.p_limit = rowsPerPage;
+    rpcParams.p_offset = from;
+
+    const { data: payloadRaw, error } = await supabase.rpc(
+        'fetch_leads_board_temperature_page',
+        rpcParams
+    );
+
+    if (error) {
+        console.error('[leads] fetch_leads_board_temperature_page:', error.message || error);
+        return null;
+    }
+
+    return mapBoardPagePayload(
+        (payloadRaw ?? {}) as BoardPagePayload,
+        cache,
+        temperature
+    );
+};
+
+/**
+ * Ruta lenta (búsqueda + temperatura, etc.): frío excluye caliente/tibio; resto incluye IDs.
+ */
+const resolveTemperatureFilter = async (
+    supabase: any,
+    temperature: LeadTemperatureFilter,
+    scope: LeadsTemperatureHistoryScope
+): Promise<ResolvedTemperatureFilter> => {
+    if (temperature === 'frio') {
+        const [calienteIds, tibioIds] = await Promise.all([
+            fetchLeadIdsForTemperature(supabase, 'caliente', scope),
+            fetchLeadIdsForTemperature(supabase, 'tibio', scope),
+        ]);
+        const excludeIds = [...new Set([...calienteIds, ...tibioIds])];
+        if (excludeIds.length === 0) {
+            return { mode: 'none' };
+        }
+        return { mode: 'exclude', ids: excludeIds };
+    }
+
+    const includeIds = await fetchLeadIdsForTemperature(supabase, temperature, scope);
+    if (includeIds.length === 0) {
+        return { mode: 'include', ids: [-1] };
+    }
+    return { mode: 'include', ids: includeIds };
+};
+
+/** Temperatura en columna Temp (página actual). */
+const fetchEffectiveTemperatureForLeads = async (
+    supabase: any,
+    leadIds: number[],
+    scope: LeadsTemperatureHistoryScope,
+    activeFilterTemperature?: LeadTemperatureFilter
+): Promise<Map<number, string>> => {
+    const map = new Map<number, string>();
+    if (leadIds.length === 0) return map;
+
+    if (scope.mode === 'all' && activeFilterTemperature) {
+        const { data, error } = await supabase
+            .from('lead_temperature_history')
+            .select('lead_id')
+            .in('lead_id', leadIds)
+            .eq('temperature', activeFilterTemperature);
+
+        if (!error) {
+            for (const row of data ?? []) {
+                const id = Number((row as { lead_id?: number }).lead_id);
+                if (id) map.set(id, activeFilterTemperature);
+            }
+        }
+        return map;
+    }
+
+    if (scope.mode === 'month') {
+        const { data, error } = await supabase
+            .from('lead_temperature_history')
+            .select('lead_id, temperature')
+            .eq('campaign_month', scope.campaignMonth)
+            .in('lead_id', leadIds);
+
+        if (!error) {
+            for (const row of data ?? []) {
+                const id = Number((row as { lead_id?: number }).lead_id);
+                const temp = String((row as { temperature?: string }).temperature ?? '');
+                if (id && temp) map.set(id, temp);
+            }
+        }
+        return map;
+    }
+
+    return map;
 };
 
 /**
@@ -90,9 +504,6 @@ const parseLeadPk = (raw: unknown): number | null => {
     return n;
 };
 
-/** Consola del navegador: filtra por "trade_in_debug" */
-const TI = "[trade_in_debug]";
-
 const fetchTradeInCarsForLeadPage = async (supabase: any, rawLeads: any[]) => {
     const tradeInByLeadPk = new Map<number, unknown[]>();
 
@@ -102,39 +513,18 @@ const fetchTradeInCarsForLeadPage = async (supabase: any, rawLeads: any[]) => {
         ),
     ];
 
-    console.info(TI, "fetchLeadsAPI → tabla trade_in_cars", {
-        paso: "inicio",
-        leadsEnPagina: rawLeads.length,
-        leadIdsParaConsulta: leadPks,
-    });
-
     if (leadPks.length === 0) {
-        console.warn(TI, "No hay lead.id válidos en esta página: NO se llama a trade_in_cars (revisa datos del listado)");
+        return tradeInByLeadPk;
     }
 
     try {
         if (leadPks.length > 0) {
-            console.info(TI, "Llamada Supabase: from('trade_in_cars').select('*').in('lead_id', …)", {
-                lead_id_in: leadPks,
-            });
-
             const { data: byInternalId, error: err1 } = await supabase
                 .from("trade_in_cars")
                 .select("*")
                 .in("lead_id", leadPks);
 
-            if (err1) {
-                console.warn(TI, "Respuesta trade_in_cars (por leads.id): ERROR", {
-                    code: (err1 as { code?: string }).code,
-                    message: (err1 as { message?: string }).message,
-                    details: err1,
-                });
-                console.warn("[fetchLeadsAPI] trade_in_cars por leads.id:", err1.message || err1);
-            } else {
-                console.info(TI, "Respuesta trade_in_cars (por leads.id): OK", {
-                    filasDevueltas: (byInternalId || []).length,
-                    muestra: (byInternalId || []).slice(0, 3),
-                });
+            if (!err1) {
                 for (const row of byInternalId || []) {
                     const lid = Number((row as { lead_id: number }).lead_id);
                     if (!tradeInByLeadPk.has(lid)) tradeInByLeadPk.set(lid, []);
@@ -161,22 +551,12 @@ const fetchTradeInCarsForLeadPage = async (supabase: any, rawLeads: any[]) => {
         const kommoOnlyIds = kommoIds.filter((k) => !pkSet.has(k));
 
         if (kommoOnlyIds.length > 0) {
-            console.info(TI, "Llamada Supabase fallback: trade_in_cars.in('lead_id', lead_id_kommo)", {
-                lead_id_in: kommoOnlyIds,
-            });
-
             const { data: byKommoAsLeadId, error: err2 } = await supabase
                 .from("trade_in_cars")
                 .select("*")
                 .in("lead_id", kommoOnlyIds);
 
-            if (err2) {
-                console.warn(TI, "Respuesta trade_in_cars (fallback kommo): ERROR", err2);
-                console.warn("[fetchLeadsAPI] trade_in_cars fallback lead_id_kommo:", err2.message || err2);
-            } else {
-                console.info(TI, "Respuesta trade_in_cars (fallback kommo): OK", {
-                    filasDevueltas: (byKommoAsLeadId || []).length,
-                });
+            if (!err2) {
                 for (const row of byKommoAsLeadId || []) {
                     const stored = Number((row as { lead_id: number }).lead_id);
                     for (const lead of rawLeads) {
@@ -191,38 +571,51 @@ const fetchTradeInCarsForLeadPage = async (supabase: any, rawLeads: any[]) => {
                 }
             }
         }
-    } catch (e) {
-        console.warn(TI, "Excepción al consultar trade_in_cars:", e);
-        console.warn("[fetchLeadsAPI] trade_in_cars (excepción, se omite):", e);
+    } catch {
+        /* trade-in es opcional en la grilla */
     }
-
-    const resumen = Object.fromEntries(
-        [...tradeInByLeadPk.entries()].map(([id, rows]) => [id, (rows as unknown[]).length])
-    );
-    const totalFilas = [...tradeInByLeadPk.values()].reduce((acc, r) => acc + r.length, 0);
-    console.info(TI, "Resumen merge en fetchLeadsAPI", {
-        leadsConAlMenosUnTradeIn: tradeInByLeadPk.size,
-        totalFilasTradeIn: totalFilas,
-        porLeadId: resumen,
-    });
 
     return tradeInByLeadPk;
 };
 
 // --- FETCH PRINCIPAL (GRID & CONTADORES) ---
-export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: number, filters: LeadsFilters) => {
+export const fetchLeadsAPI = async (
+    supabase: any,
+    page: number,
+    rowsPerPage: number,
+    filters: LeadsFilters,
+    options?: FetchLeadsAPIOptions
+) => {
     try {
+        const temperatureScope = getTemperatureHistoryScope(filters);
+
+        if (isDateFilteredLeadsBoardFastPath(filters)) {
+            return fetchLeadsDateBoardFastPath(supabase, page, rowsPerPage, filters, options);
+        }
+
+        if (isTemperatureOnlyLeadsFilter(filters)) {
+            const fast = await fetchLeadsTemperatureFastPath(
+                supabase,
+                page,
+                rowsPerPage,
+                filters,
+                temperatureScope,
+                options
+            );
+            if (fast) return fast;
+            console.warn(
+                '[leads] RPC temperatura no disponible; usando filtro en cliente (más lento).'
+            );
+        }
+
         const from = (page - 1) * rowsPerPage;
         const to = from + rowsPerPage - 1;
+        const tempFilterActive = isLeadsTemperatureFilterActive(filters);
 
         // 1. Construcción de la Query Base (DATOS)
         let query = supabase
             .from('leads')
-            .select(`
-                *,
-                interested_cars(*, inventoryoracle(brand, model, year)),
-                profiles:assigned_to(full_name)
-            `, { count: 'exact' })
+            .select(LEADS_SELECT_WITH_RELATIONS, { count: 'exact' })
             .order('updated_at', { ascending: false })
             .range(from, to);
 
@@ -344,12 +737,22 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
             }
         }
 
+        let resolvedTemperatureFilter: ResolvedTemperatureFilter | null = null;
+
+        if (tempFilterActive) {
+            resolvedTemperatureFilter = await resolveTemperatureFilter(
+                supabase,
+                filters.temperature as LeadTemperatureFilter,
+                temperatureScope
+            );
+        }
+
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
 
-        // Intersect all idFilters
+        // Intersect all idFilters (búsqueda, trade-in, etc.; temperatura va aparte)
         if (idFilters.length > 0) {
             let finalIds = idFilters[0];
             for (let i = 1; i < idFilters.length; i++) {
@@ -357,12 +760,16 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
                 finalIds = finalIds.filter(id => set.has(id));
             }
             if (finalIds.length > 0) {
-                query = query.in('id', finalIds);
+                query = applyLeadIdInFilter(query, finalIds);
                 searchMatchIds = finalIds;
             } else {
                 query = query.eq('id', -1);
                 searchMatchIds = [];
             }
+        }
+
+        if (resolvedTemperatureFilter) {
+            query = applyResolvedTemperatureFilter(query, resolvedTemperatureFilter);
         }
 
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
@@ -371,29 +778,10 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.assignedTo && filters.assignedTo !== 'all') {
             query = query.eq('assigned_to', filters.assignedTo);
         }
-        query = applyLeadsTemperatureFilter(query, filters.temperature);
 
-        // Filtros de fecha: ingreso (created_at). Solo gestionados → updated_at + resume.
+        // Filtro de fecha por ingreso (created_at), también con temperatura activa.
         if (!filters.onlyInteractions) {
-            if (filters.exactDate) {
-                const { start, end } = getEcuadorRange(filters.exactDate);
-                query = applyLeadsCreatedInRange(query, start, end);
-            } else if (filters.dateRange !== 'all') {
-                const today = getEcuadorDateISO();
-
-                if (filters.dateRange === 'today') {
-                    const { start, end } = getEcuadorRange(today);
-                    query = applyLeadsCreatedInRange(query, start, end);
-                } else if (filters.dateRange === 'thisMonth') {
-                    query = query.gte('created_at', `${getEcuadorMonthStartISO()}T00:00:00-05:00`);
-                } else {
-                    const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
-                    const pastDate = new Date();
-                    pastDate.setDate(pastDate.getDate() - daysBack);
-                    const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                    query = query.gte('created_at', `${pastDateStr}T00:00:00-05:00`);
-                }
-            }
+            query = applyLeadsCreatedAtRangeFromFilters(query, filters);
         }
 
         // 4. Ejecutar Query de Datos
@@ -401,7 +789,9 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (error) throw error;
 
         const rawLeads = data || [];
-        const tradeInByLeadPk = await fetchTradeInCarsForLeadPage(supabase, rawLeads);
+        const tradeInByLeadPk = tempFilterActive
+            ? new Map<number, unknown[]>()
+            : await fetchTradeInCarsForLeadPage(supabase, rawLeads);
 
         // 5. Query Secundaria para "Respondidos" (Métrica 1)
         // CORRECCIÓN: Ahora contamos como respondido si 'resume' NO es nulo y NO está vacío.
@@ -414,10 +804,13 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         // Re-aplicamos los mismos filtros para que el porcentaje sea sobre lo que el usuario ve
         if (idFilters.length > 0) {
             if (searchMatchIds.length > 0) {
-                respondedQuery = respondedQuery.in('id', searchMatchIds);
+                respondedQuery = applyLeadIdInFilter(respondedQuery, searchMatchIds);
             } else {
                 respondedQuery = respondedQuery.eq('id', -1);
             }
+        }
+        if (resolvedTemperatureFilter) {
+            respondedQuery = applyResolvedTemperatureFilter(respondedQuery, resolvedTemperatureFilter);
         }
         if (filters.hasBudget) {
             respondedQuery = respondedQuery.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
@@ -425,49 +818,33 @@ export const fetchLeadsAPI = async (supabase: any, page: number, rowsPerPage: nu
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
         }
-        respondedQuery = applyLeadsTemperatureFilter(respondedQuery, filters.temperature);
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
 
         if (!filters.onlyInteractions) {
-            if (filters.exactDate) {
-                const { start, end } = getEcuadorRange(filters.exactDate);
-                respondedQuery = applyLeadsCreatedInRange(respondedQuery, start, end);
-            } else if (filters.dateRange !== 'all') {
-                const today = getEcuadorDateISO();
-
-                if (filters.dateRange === 'today') {
-                    const { start, end } = getEcuadorRange(today);
-                    respondedQuery = applyLeadsCreatedInRange(respondedQuery, start, end);
-                } else if (filters.dateRange === 'thisMonth') {
-                    respondedQuery = respondedQuery.gte('created_at', `${getEcuadorMonthStartISO()}T00:00:00-05:00`);
-                } else {
-                    const daysBack = parseInt(filters.dateRange.replace('days', '')) || 7;
-                    const pastDate = new Date();
-                    pastDate.setDate(pastDate.getDate() - daysBack);
-                    const pastDateStr = pastDate.toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
-                    respondedQuery = respondedQuery.gte('created_at', `${pastDateStr}T00:00:00-05:00`);
-                }
-            }
+            respondedQuery = applyLeadsCreatedAtRangeFromFilters(respondedQuery, filters);
         }
 
         const { count: respondedCount } = await respondedQuery;
 
-        // 6. Mapeo de Datos
-        const mappedData: LeadWithDetails[] = rawLeads.map((item: any) => {
-            const pk = Number(item.id);
-            const tradeRows = tradeInByLeadPk.get(pk);
-            return {
-                ...item,
-                interested_cars: (item.interested_cars || []).map((c: any) => ({
-                    ...c,
-                    brand: c.inventoryoracle?.brand || c.brand,
-                    model: c.inventoryoracle?.model || c.model,
-                    year: c.inventoryoracle?.year || c.year,
-                })),
-                trade_in_cars: dedupeTradeInRows(tradeRows || []) as TradeInCarRow[],
-                profiles: item.profiles || { full_name: "" },
-            };
-        });
+        const pageLeadPks = rawLeads
+            .map((r) => parseLeadPk(r?.id))
+            .filter((n): n is number => n != null);
+
+        const monthTempByLead =
+            pageLeadPks.length > 0
+                ? await fetchEffectiveTemperatureForLeads(
+                      supabase,
+                      pageLeadPks,
+                      tempFilterActive
+                          ? temperatureScope
+                          : { mode: 'month', campaignMonth: getEcuadorMonthStartISO() },
+                      tempFilterActive
+                          ? (filters.temperature as LeadTemperatureFilter)
+                          : undefined
+                  )
+                : new Map<number, string>();
+
+        const mappedData = mapLeadsPageRows(rawLeads, tradeInByLeadPk, monthTempByLead);
 
         return { 
             data: mappedData, 

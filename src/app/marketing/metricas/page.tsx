@@ -91,7 +91,9 @@ export default function MarketingMetricasPage() {
     if (!supabase) return
     fetchCampaignMonthOptions(supabase)
       .then((opts) => {
-        setMonthOptions(opts.length > 0 ? opts : [getCurrentCampaignMonthYmd()])
+        const list = opts.length > 0 ? opts : [getCurrentCampaignMonthYmd()]
+        setMonthOptions(list)
+        setCampaignMonth((prev) => (list.includes(prev) ? prev : list[0]))
       })
       .catch(() => setMonthOptions([getCurrentCampaignMonthYmd()]))
   }, [supabase])

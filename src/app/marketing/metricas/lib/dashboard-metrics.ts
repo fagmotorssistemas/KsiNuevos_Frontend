@@ -185,6 +185,25 @@ export function campaignMonthRange(
   return { sinceIso, periodEndIso, sinceReportDate, untilReportDate, monthLabel }
 }
 
+/** YYYY-MM del mes calendario de inicio de campaña en Meta (`date_start`). */
+export function campaignMonthFromDateStart(dateStart: string | null | undefined): MetricasCampaignMonth | null {
+  if (!dateStart) return null
+  const ym = String(dateStart).slice(0, 7)
+  return /^\d{4}-\d{2}$/.test(ym) ? ym : null
+}
+
+/**
+ * Mes de campaña en métricas = mes de `date_start` (no solapamiento con date_stop).
+ * Evita mostrar campañas "MAYO 2026" en junio solo porque siguen activas hasta fin de mes.
+ */
+export function campaignBelongsToMonth(
+  dateStart: string | null | undefined,
+  campaignMonth: MetricasCampaignMonth
+): boolean {
+  return campaignMonthFromDateStart(dateStart) === campaignMonth
+}
+
+/** @deprecated Usar campaignBelongsToMonth (mes = date_start). */
 export function campaignOverlapsMonth(
   dateStart: string | null,
   dateStop: string | null,
@@ -238,10 +257,11 @@ export async function fetchPaidCampaignLevelMetrics(
   let impressionsTotal = 0
   let clicksTotal = 0
 
+  const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
   for (const row of latestByCampaign) {
     const cid = String(row.campaign_id ?? '')
     if (!cid) continue
-    if (!campaignOverlapsMonth(row.date_start, row.date_stop, sinceReportDate, untilReportDate)) {
+    if (!campaignBelongsToMonth(row.date_start, campaignMonth)) {
       continue
     }
     const metrics: CampaignLevelMetrics = {
@@ -270,25 +290,32 @@ export async function fetchPaidCampaignReachTotal(
   return { reachTotal: r.reachTotal, reachByCampaignId }
 }
 
-/** Meses con campañas o snapshots en BD (más reciente primero). */
+/** Meses con al menos una campaña cuyo `date_start` cae en ese mes (más reciente primero). */
 export async function fetchCampaignMonthOptions(
   supabase: SupabaseClient
 ): Promise<MetricasCampaignMonth[]> {
   const db = metricsDb(supabase)
   const { data, error } = await db
     .from('meta_campaign_metrics')
-    .select('date_start, updated_at')
+    .select('campaign_id, date_start, updated_at')
     .limit(10000)
   if (error) throw error
 
+  const latest = latestSnapshotPerCampaign(
+    (data ?? []) as Array<{
+      campaign_id: string
+      date_start?: string | null
+      updated_at?: string | null
+    }>
+  )
   const months = new Set<MetricasCampaignMonth>()
-  months.add(getCurrentCampaignMonthYmd())
-  for (const row of data ?? []) {
-    const ds = (row as { date_start?: string | null }).date_start
-    const ua = (row as { updated_at?: string | null }).updated_at
-    if (ds) months.add(String(ds).slice(0, 7))
-    if (ua) months.add(String(ua).slice(0, 7))
+  for (const row of latest) {
+    const ym = campaignMonthFromDateStart(row.date_start)
+    if (ym) months.add(ym)
   }
+  const current = getCurrentCampaignMonthYmd()
+  if (months.size === 0) months.add(current)
+  else months.add(current)
   return [...months].sort((a, b) => b.localeCompare(a))
 }
 
@@ -697,19 +724,12 @@ async function loadGeneralCampaignMetricsInMonth(
     ads_count: null,
   })
 
-  let rows = latest
-    .filter((row) =>
-      campaignOverlapsMonth(row.date_start, row.date_stop, sinceReportDate, untilReportDate)
-    )
+  const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
+  const rows = latest
+    .filter((row) => campaignBelongsToMonth(row.date_start, campaignMonth))
     .map(mapRow)
 
-  let usedFallbackSnapshot = false
-  if (rows.length === 0 && latest.length > 0) {
-    rows = latest.map(mapRow)
-    usedFallbackSnapshot = true
-  }
-
-  return { rows, usedFallbackSnapshot }
+  return { rows, usedFallbackSnapshot: false }
 }
 
 type VehicleRowDb = {
@@ -812,10 +832,8 @@ async function fetchSpendByInventoryForMonth(
     const cid = String((row as { campaign_id?: string }).campaign_id ?? '')
     if (!id || !cid) continue
     const w = campaignWindows.get(cid)
-    if (
-      w &&
-      !campaignOverlapsMonth(w.dateStart, w.dateStop, sinceReportDate, untilReportDate)
-    ) {
+    const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
+    if (w && !campaignBelongsToMonth(w.dateStart, campaignMonth)) {
       continue
     }
     map.set(id, (map.get(id) ?? 0) + num((row as { spend?: unknown }).spend))
@@ -851,34 +869,21 @@ async function loadVehicleMetricsInMonth(
     .limit(5000)
   if (error) throw error
 
-  let raw = (data ?? []) as VehicleRowDbRaw[]
-  let usedFallbackSnapshot = false
-  if (raw.length === 0) {
-    const { data: all, error: e2 } = await db
-      .from('meta_ad_vehicle_metrics')
-      .select(VEHICLE_SELECT)
-      .lte('updated_at', periodEndIso)
-      .order('updated_at', { ascending: false })
-      .limit(5000)
-    if (e2) throw e2
-    raw = (all ?? []) as VehicleRowDbRaw[]
-    usedFallbackSnapshot = raw.length > 0
-  }
+  const raw = (data ?? []) as VehicleRowDbRaw[]
 
   const labels = await fetchVehicleLabels(db, raw.map((r) => String(r.inventory_id)))
-  return { rows: mapVehicleRows(raw, labels), usedFallbackSnapshot }
+  return { rows: mapVehicleRows(raw, labels), usedFallbackSnapshot: false }
 }
 
 function filterVehicleRowsByCampaignMonth(
   rows: VehicleRowDb[],
   campaignWindows: Map<string, { dateStart: string | null; dateStop: string | null }>,
-  sinceReportDate: string,
-  untilReportDate: string
+  campaignMonth: MetricasCampaignMonth
 ): VehicleRowDb[] {
   return rows.filter((row) => {
     const w = campaignWindows.get(String(row.campaign_id ?? ''))
-    if (!w) return true
-    return campaignOverlapsMonth(w.dateStart, w.dateStop, sinceReportDate, untilReportDate)
+    if (!w?.dateStart) return false
+    return campaignBelongsToMonth(w.dateStart, campaignMonth)
   })
 }
 
@@ -1754,18 +1759,17 @@ export async function fetchDashboardMetrics(
     ].filter(Boolean)),
   ]
   const campaignWindows = await fetchCampaignWindows(db, campaignIdsForWindows)
+  const selectedCampaignMonth = campaignMonth
 
   const vehicleRowsInMonth = filterVehicleRowsByCampaignMonth(
     allVehicleRows,
     campaignWindows,
-    sinceReportDate,
-    untilReportDate
+    selectedCampaignMonth
   )
   const vehicleSnapshotsInMonth = filterVehicleRowsByCampaignMonth(
     vehicleSnapshots,
     campaignWindows,
-    sinceReportDate,
-    untilReportDate
+    selectedCampaignMonth
   )
   const autoLabels = buildAutoLabelsByCampaign(vehicleSnapshotsInMonth)
 
