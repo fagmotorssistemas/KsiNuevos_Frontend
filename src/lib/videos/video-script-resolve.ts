@@ -182,8 +182,7 @@ export async function resolveAndLinkVideoScriptForJob(
     return null
   }
 
-  // Guardamos video_script_id Y script_text con los diálogos del guión
-  // para que Gemini pueda usarlo como guía de ordenamiento.
+  // Guardamos video_script_id + script_text para guiar a Gemini
   const guidance = buildScriptGuidanceFromEscenas(resolved.escenas)
   const updatePayload: Record<string, unknown> = { video_script_id: resolved.scriptId }
   if (guidance.length > 0) {
@@ -192,6 +191,69 @@ export async function resolveAndLinkVideoScriptForJob(
       `[VideoScriptResolve][${jobId}] Guía de guión enviada a Gemini (${guidance.length} chars, score=${resolved.score.toFixed(3)})`
     )
   }
+
+  // Si el job no tiene brand config, auto-poblar desde el vehículo del guión
+  try {
+    const { data: jobRow } = await supabase
+      .from('video_jobs_v2')
+      .select('show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_4')
+      .eq('id', jobId)
+      .single()
+
+    const needsBrandConfig =
+      !jobRow?.show_brand_overlays &&
+      !jobRow?.vehicle_line_1?.trim() &&
+      !jobRow?.vehicle_line_2?.trim()
+
+    if (needsBrandConfig) {
+      // Obtener vehicle_id del guión enlazado
+      const { data: scriptRow } = await supabase
+        .from('video_scripts')
+        .select('vehicle_id, vehicle_data')
+        .eq('id', resolved.scriptId)
+        .single()
+
+      let brand = ''
+      let model = ''
+      let year = ''
+
+      // Intentar desde vehicle_data (JSONB en video_scripts)
+      if (scriptRow?.vehicle_data && typeof scriptRow.vehicle_data === 'object') {
+        const vd = scriptRow.vehicle_data as Record<string, unknown>
+        brand = String(vd.brand ?? '').trim()
+        model = String(vd.model ?? '').trim()
+        year  = vd.year != null ? String(vd.year).trim() : ''
+      }
+
+      // Si no hay vehicle_data, consultar inventoryoracle
+      if ((!brand || !model) && scriptRow?.vehicle_id) {
+        const { data: inv } = await supabase
+          .from('inventoryoracle')
+          .select('brand, model, year')
+          .eq('id', scriptRow.vehicle_id)
+          .single()
+        if (inv) {
+          brand = brand || String(inv.brand ?? '').trim()
+          model = model || String(inv.model ?? '').trim()
+          year  = year  || (inv.year != null ? String(inv.year).trim() : '')
+        }
+      }
+
+      if (brand || model) {
+        updatePayload.show_brand_overlays = true
+        if (brand) updatePayload.vehicle_line_1 = brand
+        if (model) updatePayload.vehicle_line_2 = model
+        if (year)  updatePayload.vehicle_line_4 = year
+        console.log(
+          `[VideoScriptResolve][${jobId}] Brand config auto-poblado desde guión: ` +
+            `L1="${brand}" L2="${model}" L4="${year}"`
+        )
+      }
+    }
+  } catch (brandErr) {
+    console.warn(`[VideoScriptResolve][${jobId}] No se pudo auto-poblar brand config: ${brandErr}`)
+  }
+
   const { error } = await supabase
     .from('video_jobs_v2')
     .update(updatePayload)

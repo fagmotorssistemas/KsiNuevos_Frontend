@@ -17,8 +17,8 @@ const MONTSERRAT_BLACK_TTF =
 
 const CLOSING_LOGO_LEN_SEC = 3.5
 const DEFAULT_CLOSING_LOGO_PATH = '/logol.png'
-const CLOSING_LOGO_WIDTH_PX = 280
-const CLOSING_LOGO_HEIGHT_PX = 32
+const CLOSING_LOGO_WIDTH_PX = 290
+const CLOSING_LOGO_HEIGHT_PX = 40
 const CLOSING_LOGO_ENTRANCE_SEC = 0.45
 
 function buildTimelineFonts(): { src: string }[] {
@@ -188,19 +188,31 @@ function htmlEscape(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/** Duración del bloque de marca al inicio del Reel (segundos). */
+const BRAND_OVERLAY_INTRO_SEC = 3.5
+
 /**
- * Construye el bloque de overlays de marca.
+ * Construye los overlays de marca usando rich-text (soporta stroke + shadow nativos).
  *
- * Sistema de coordenadas Shotstack (frame 720×1280):
- *   position:'top'    + offset.y positivo → empuja el clip HACIA ABAJO (dentro del frame).
- *   position:'bottom' + offset.y positivo → empuja el clip HACIA ARRIBA (dentro del frame).
- *   offset normalizado: 1.0 = dimensión completa del frame.
+ * Layout:
+ *   L1 (marca,   52px, blanco) — position:'top', cerca del borde superior
+ *   L2 (modelo,  96px, rojo)   — position:'top', debajo de L1
+ *   L3 (tagline, 52px, blanco) — position:'top', debajo de L2  (si existe)
+ *   L4 (año,     84px, blanco) — position:'center', zona inferior
  *
- * L1 (marca,  52 px, blanco) ─┐
- * L2 (modelo,100 px, rojo)    ├─ bloque único arriba · 3.5 s
- * L3 (tagline,52 px, blanco) ─┘
- * L4 (año,    72 px, rojo)      anclado abajo todo el reel
+ * L2 se trunca a las dos primeras palabras.
  */
+function cleanVehicleText(text: string): string {
+  return text
+    .replace(/\b(AC|TM|TA|MT|AT)\b/gi, '')
+    .replace(/\b(4X4|4X2|2X4|AWD|FWD|RWD)\b/gi, '')
+    .replace(/\b\d+P\b/gi, '')
+    .replace(/\b\d+\.\d+\b/g, '')
+    .replace(/\b(FSI|TSI|TDI|TFSI|C|DSG|CVT|HYBRID|PHEV|EV|TURBO)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 function buildBrandOverlayTracks(
   brandConfig: BrandConfig | null | undefined,
   totalDuration: number
@@ -208,125 +220,179 @@ function buildBrandOverlayTracks(
   if (!brandConfig?.show_brand_overlays) return []
 
   const tracks: ShotstackTrack[] = []
-  const line1 = brandConfig.vehicle_line_1?.trim() || ''
-  const line2 = brandConfig.vehicle_line_2?.trim() || ''
-  const line3 = brandConfig.vehicle_line_3?.trim() || ''
-  const line4 = brandConfig.vehicle_line_4?.trim() || ''
+  const line1 = cleanVehicleText(brandConfig.vehicle_line_1?.trim() || '')
+  const line2Raw = (brandConfig.vehicle_line_2?.trim() || '').split(/\s+/).slice(0, 2).join(' ')
+  const line2 = cleanVehicleText(line2Raw)
+  const line3 = cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
+  const line4 = cleanVehicleText(brandConfig.vehicle_line_4?.trim() || '')
   const cta   = brandConfig.cta_text?.trim() || ''
   const wa    = brandConfig.whatsapp_number?.trim() || ''
 
-  // Altura de frame de salida (px)
-  const FRAME_H = 1280
+  const introLen = Number(Math.min(BRAND_OVERLAY_INTRO_SEC, totalDuration).toFixed(3))
 
-  const fontBase =
-    "font-family:'Montserrat',sans-serif;font-weight:900;" +
-    'text-transform:uppercase;text-align:center;margin:0;padding:0;'
+  const brandStyle = { textTransform: 'uppercase' }
+  const brandAlign = { horizontal: 'center', vertical: 'middle' }
 
-  // ── BLOQUE SUPERIOR: L1 / L2 / L3 agrupados ──────────────────────────
-  // Alturas aproximadas de cada línea renderizada (px)
-  const H_SM  = 64   // texto 52 px, line-height 1.1 → ~57 px + holgura
-  const H_LG  = 118  // texto 100 px, line-height 1.05 → ~105 px + holgura
-  const GAP   = 6    // separación vertical entre líneas (px)
-  const PAD_V = 20   // padding arriba + abajo del contenedor (px)
+  // Tamaño dinámico de L2 según cantidad de palabras
+  const line2Words = line2 ? line2.split(/\s+/).length : 0
+  const l2RealSize = line2Words <= 1 ? 96 : line2Words === 2 ? 80 : 64
 
-  const topParts: string[] = []
-  let blockH = PAD_V
+  // Patrón de doble capa para simular sombra difusa en rich-text (beta):
+  //   CAPA 2 (texto real) — color real + stroke, sin shadow → pushed FIRST (frente)
+  //   CAPA 1 (sombra)     — negro opaco + shadow.blur:30, misma geometría → pushed SECOND (fondo)
+  const shadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
 
+  // ── L1: MARCA (blanco, 52px) ─────────────────────────────────────────
   if (line1) {
-    if (topParts.length > 0) blockH += GAP
-    blockH += H_SM
-    topParts.push(
-      `<p style="${fontBase}font-size:52px;color:#FFFFFF;` +
-      `-webkit-text-stroke:2px #000000;text-shadow:2px 2px 6px rgba(0,0,0,0.9);` +
-      `line-height:1.1;">${htmlEscape(line1.toUpperCase())}</p>`
-    )
-  }
-  if (line2) {
-    if (topParts.length > 0) blockH += GAP
-    blockH += H_LG
-    topParts.push(
-      `<p style="${fontBase}font-size:100px;color:#E63333;` +
-      `-webkit-text-stroke:3px #000000;text-shadow:2px 2px 8px rgba(0,0,0,0.95);` +
-      `line-height:1.05;">${htmlEscape(line2.toUpperCase())}</p>`
-    )
-  }
-  if (line3) {
-    if (topParts.length > 0) blockH += GAP
-    blockH += H_SM
-    topParts.push(
-      `<p style="${fontBase}font-size:52px;color:#FFFFFF;` +
-      `-webkit-text-stroke:2px #000000;text-shadow:2px 2px 6px rgba(0,0,0,0.9);` +
-      `line-height:1.1;">${htmlEscape(line3.toUpperCase())}</p>`
-    )
-  }
-
-  if (topParts.length > 0) {
-    blockH = Math.max(blockH, 80)
-
-    // Para position:'top', offset.y positivo empuja hacia abajo.
-    // Queremos que el borde superior del bloque quede ~0 px del borde superior del frame.
-    // → centro del bloque a blockH/2 px desde arriba → offset = (blockH/2) / FRAME_H
-    const offsetY = Number(((blockH / 2) / FRAME_H).toFixed(3))
-
-    const html =
-      `<div style="display:flex;flex-direction:column;align-items:center;` +
-      `justify-content:center;gap:${GAP}px;padding:10px;box-sizing:border-box;">` +
-      topParts.join('') +
-      '</div>'
-
     tracks.push({
-      clips: [
-        {
-          asset: {
-            type: 'html',
-            html,
-            width: 700,
-            height: blockH,
-            background: 'transparent',
-            css: 'p{margin:0;}',
-          },
-          start: 0,
-          length: Number(Math.min(3.5, totalDuration).toFixed(3)),
-          position: 'top',
-          offset: { x: 0, y: offsetY },
-          transition: { in: 'slideDown', out: 'fade' },
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line1.toUpperCase(),
+          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: 1, color: '#000000', opacity: 1 },
+          style:  brandStyle,
+          align:  brandAlign,
         },
-      ],
+        start: 0, length: introLen,
+        width: 700, height: 90,
+        position: 'top', offset: { x: 0, y: -0.08 },
+        transition: { in: 'slideDown', out: 'fade' },
+      }],
+    })
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line1.toUpperCase(),
+          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: 14, color: '#000000', opacity: 1 },
+          shadow: shadowEffect,
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 760, height: 120,
+        position: 'top', offset: { x: 0, y: -0.08 },
+        transition: { in: 'fade', out: 'fade' },
+      }],
     })
   }
 
-  // ── L4: AÑO — toda la duración, pegado al fondo ───────────────────────
-  // El logo cierre tiene su centro ~61 px desde el fondo (offset 0.048).
-  // L4 se coloca encima: centro a ~140 px desde el fondo.
-  if (line4) {
-    const l4H = 100
-    const l4OffsetY = Number(((l4H / 2 + 90) / FRAME_H).toFixed(3)) // ≈ 0.109
+  // ── L2: MODELO (rojo, tamaño dinámico) ───────────────────────────────
+  if (line2) {
     tracks.push({
-      clips: [
-        {
-          asset: {
-            type: 'html',
-            html:
-              `<p style="${fontBase}font-size:72px;color:#E63333;` +
-              `-webkit-text-stroke:3px #000000;text-shadow:2px 2px 8px rgba(0,0,0,0.9);` +
-              `line-height:1.1;">${htmlEscape(line4.toUpperCase())}</p>`,
-            width: 400,
-            height: l4H,
-            background: 'transparent',
-            css: 'p{margin:0;}',
-          },
-          start: 0,
-          length: Number(totalDuration.toFixed(3)),
-          position: 'bottom',
-          offset: { x: 0, y: l4OffsetY },
-          transition: { in: 'fade', out: 'fade' },
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line2.toUpperCase(),
+          font:   { family: 'Montserrat', size: l2RealSize, weight: 900, color: '#E63333', opacity: 1 },
+          stroke: { width: 2, color: '#000000', opacity: 1 },
+          style:  brandStyle,
+          align:  brandAlign,
         },
-      ],
+        start: 0, length: introLen,
+        width: 700, height: 140,
+        position: 'top', offset: { x: 0, y: -0.13 },
+        transition: { in: 'slideDown', out: 'fade' },
+      }],
+    })
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line2.toUpperCase(),
+          font:   { family: 'Montserrat', size: l2RealSize, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: 18, color: '#000000', opacity: 1 },
+          shadow: shadowEffect,
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 760, height: 180,
+        position: 'top', offset: { x: 0, y: -0.13 },
+        transition: { in: 'fade', out: 'fade' },
+      }],
+    })
+  }
+
+  // ── L3: TAGLINE (blanco, 52px) — solo si existe ───────────────────────
+  if (line3) {
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line3.toUpperCase(),
+          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: 4, color: '#000000', opacity: 1 },
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 700, height: 90,
+        position: 'top', offset: { x: 0, y: -0.25 },
+        transition: { in: 'slideDown', out: 'fade' },
+      }],
+    })
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line3.toUpperCase(),
+          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: 14, color: '#000000', opacity: 1 },
+          shadow: shadowEffect,
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 760, height: 130,
+        position: 'top', offset: { x: 0, y: -0.25 },
+        transition: { in: 'fade', out: 'fade' },
+      }],
+    })
+  }
+
+  // ── L4: AÑO (blanco, 84px) — zona inferior ────────────────────────────
+  if (line4) {
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line4.toUpperCase(),
+          font:   { family: 'Montserrat', size: 84, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: 5, color: '#000000', opacity: 1 },
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 400, height: 120,
+        position: 'center', offset: { x: 0, y: -0.22 },
+        transition: { in: 'fade', out: 'fade' },
+      }],
+    })
+    tracks.push({
+      clips: [{
+        asset: {
+          type: 'rich-text',
+          text: line4.toUpperCase(),
+          font:   { family: 'Montserrat', size: 84, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: 16, color: '#000000', opacity: 1 },
+          shadow: shadowEffect,
+          style:  brandStyle,
+          align:  brandAlign,
+        },
+        start: 0, length: introLen,
+        width: 480, height: 170,
+        position: 'center', offset: { x: 0, y: -0.22 },
+        transition: { in: 'fade', out: 'fade' },
+      }],
     })
   }
 
   // ── CTA (opcional) ────────────────────────────────────────────────────
   if (cta) {
+    const FRAME_H = 1280
     const ctaH = 160
     // Centrado en la parte superior del frame, aparece tarde en el reel
     const ctaOffsetY = Number(((ctaH / 2 + 40) / FRAME_H).toFixed(3)) // ≈ 0.094
@@ -414,8 +480,8 @@ function buildBrandLogoTrack(logoUrl: string, start: number, length: number): Sh
           x: 0,
           y: [
             {
-              from: 0.12,
-              to: 0.048,
+              from: 0.20,
+              to: 0.080,
               start: 0,
               length: entrance,
               interpolation: 'bezier',
@@ -551,46 +617,64 @@ function buildCaptionHtmlTracks(
 ): ShotstackTrack[] {
   void totalDuration
   const safe = jobId ? dropOverlappingSubtitleBlocks(blocks, jobId) : blocks
-  const clips: ShotstackClip[] = safe
-    .filter((b) => b.text?.trim() && b.duration > 0.01)
-    .map((b) => {
-      const text = b.text.trim().toUpperCase()
-      const fontSize = captionFontSize(text)
-      // A mayor font, más altura necesaria; a menor, menos.
-      const lineH = Math.ceil(fontSize * 1.15)
-      const boxH = lineH * 2 + 30 // máx 2 líneas + holgura
-      return {
-        asset: {
-          type: 'html',
-          html:
-            `<p style="` +
-            `font-family:'Montserrat',sans-serif;` +
-            `font-weight:900;` +
-            `font-size:${fontSize}px;` +
-            `color:#FFFFFF;` +
-            `-webkit-text-stroke:${fontSize >= 60 ? 6 : 4}px #000000;` +
-            `text-transform:uppercase;` +
-            `text-align:center;` +
-            `margin:0;` +
-            `padding:0 12px;` +
-            `line-height:1.15;` +
-            `letter-spacing:-0.5px;` +
-            `word-break:break-word;` +
-            `">${htmlEscape(text)}</p>`,
-          width: 700,
-          height: boxH,
-          background: 'transparent',
-          css: 'p{margin:0;}',
-        },
-        start: Number(b.time.toFixed(3)),
-        length: Number(b.duration.toFixed(3)),
-        position: 'bottom',
-        offset: { x: 0, y: 0.35 },
-        transition: { in: 'fade', out: 'fade' },
-      }
-    })
+  const validBlocks = safe.filter((b) => b.text?.trim() && b.duration > 0.01)
+  if (validBlocks.length === 0) return []
 
-  return clips.length > 0 ? [{ clips }] : []
+  const captionStyle = { textTransform: 'uppercase' }
+  const captionAlign = { horizontal: 'center', vertical: 'middle' }
+
+  function captionRealSize(text: string): number {
+    const len = text.length
+    if (len <= 8) return 80
+    if (len <= 14) return 72
+    if (len <= 20) return 60
+    return 48
+  }
+
+  const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
+
+  // CAPA 2 (texto real) — blanco + stroke negro, sin shadow → frente
+  const realClips: ShotstackClip[] = validBlocks.map((b) => {
+    const text = b.text.trim().toUpperCase()
+    const sz = captionRealSize(text)
+    return {
+      asset: {
+        type: 'rich-text',
+        text,
+        font:   { family: 'Montserrat', size: sz, weight: 900, color: '#FFFFFF', opacity: 1 },
+        style:  captionStyle,
+        align:  captionAlign,
+      },
+      start: Number(b.time.toFixed(3)),
+      length: Number(b.duration.toFixed(3)),
+      width: 700, height: 200,
+      position: 'bottom', offset: { x: 0, y: 0.35 },
+      transition: { in: 'fade', out: 'fade' },
+    }
+  })
+
+  // CAPA 1 (sombra) — negro opaco + shadow.blur:30, misma geometría → fondo
+  const shadowClips: ShotstackClip[] = validBlocks.map((b) => {
+    const text = b.text.trim().toUpperCase()
+    const sz = captionRealSize(text)
+    return {
+      asset: {
+        type: 'rich-text',
+        text,
+        font:   { family: 'Montserrat', size: sz, weight: 900, color: '#000000', opacity: 1 },
+        shadow: captionShadowEffect,
+        style:  captionStyle,
+        align:  captionAlign,
+      },
+      start: Number(b.time.toFixed(3)),
+      length: Number(b.duration.toFixed(3)),
+      width: 700, height: 200,
+      position: 'bottom', offset: { x: 0, y: 0.35 },
+      transition: { in: 'fade', out: 'fade' },
+    }
+  })
+
+  return [{ clips: realClips }, { clips: shadowClips }]
 }
 
 async function postShotstackRender(apiKey: string, baseUrl: string, body: unknown): Promise<string> {
@@ -658,10 +742,26 @@ export async function renderSegmentsV2(
 
   const tracks: ShotstackTrack[] = []
 
-  tracks.push(...buildCaptionHtmlTracks(subtitleBlocks, totalDuration, jobId))
-  const captionCount = subtitleBlocks.filter((b) => b.text?.trim() && b.duration > 0.01).length
+  // Cuando hay overlay de marca activo los primeros BRAND_OVERLAY_INTRO_SEC segundos
+  // no se muestran captions para evitar duplicar info en pantalla.
+  const hasBrandOverlays =
+    opts?.brandConfig?.show_brand_overlays === true &&
+    (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
+  const captionBlocksToRender = hasBrandOverlays
+    ? subtitleBlocks.filter((b) => b.time >= BRAND_OVERLAY_INTRO_SEC - 0.08)
+    : subtitleBlocks
+
+  if (hasBrandOverlays) {
+    const skipped = subtitleBlocks.length - captionBlocksToRender.length
+    console.log(
+      `[Shotstack][${jobId}] Suprimiendo ${skipped} caption(s) del intro de marca (0–${BRAND_OVERLAY_INTRO_SEC}s)`
+    )
+  }
+
+  tracks.push(...buildCaptionHtmlTracks(captionBlocksToRender, totalDuration, jobId))
+  const captionCount = captionBlocksToRender.filter((b) => b.text?.trim() && b.duration > 0.01).length
   if (captionCount > 0) {
-    const safe = dropOverlappingSubtitleBlocks(subtitleBlocks, jobId)
+    const safe = dropOverlappingSubtitleBlocks(captionBlocksToRender, jobId)
     console.log(`[Shotstack][${jobId}] Subtítulos HTML (${safe.length} frases, sin solapar)`)
     for (const b of safe) {
       console.log(
@@ -671,16 +771,45 @@ export async function renderSegmentsV2(
     }
   }
 
+  // ── DEBUG brand config ─────────────────────────────────────────────────
+  {
+    const bc = opts?.brandConfig
+    console.log(`[Shotstack][${jobId}] brandConfig recibido:`, JSON.stringify({
+      show_brand_overlays: bc?.show_brand_overlays ?? null,
+      vehicle_line_1:      bc?.vehicle_line_1     ?? null,
+      vehicle_line_2:      bc?.vehicle_line_2     ?? null,
+      vehicle_line_3:      bc?.vehicle_line_3     ?? null,
+      vehicle_line_4:      bc?.vehicle_line_4     ?? null,
+      cta_text:            bc?.cta_text           ?? null,
+      logo_url:            bc?.logo_url           ?? null,
+    }))
+  }
+
   const brandOverlayTracks = buildBrandOverlayTracks(opts?.brandConfig ?? null, totalDuration)
   if (brandOverlayTracks.length > 0) {
     const bc = opts?.brandConfig
     console.log(
-      `[Shotstack][${jobId}] Brand overlays: L1="${bc?.vehicle_line_1 ?? ''}" ` +
+      `[Shotstack][${jobId}] Brand overlays ACTIVOS: L1="${bc?.vehicle_line_1 ?? ''}" ` +
         `L2="${bc?.vehicle_line_2 ?? ''}" L3="${bc?.vehicle_line_3 ?? ''}" ` +
         `L4="${bc?.vehicle_line_4 ?? ''}" (${brandOverlayTracks.length} tracks)`
     )
+    // Log del clip de marca para verificar position/offset/html actuales
+    const topClip = brandOverlayTracks[0]?.clips?.[0]
+    if (topClip) {
+      console.log(
+        `[Shotstack][${jobId}] Brand top clip → position=${JSON.stringify((topClip as any).position)} ` +
+          `offset=${JSON.stringify((topClip as any).offset)} ` +
+          `htmlSnippet="${((topClip as any).asset?.html ?? '').slice(0, 250)}"`
+      )
+    }
   } else {
-    console.log(`[Shotstack][${jobId}] Brand overlays: desactivados (show_brand_overlays=false o sin líneas)`)
+    const bc = opts?.brandConfig
+    console.log(
+      `[Shotstack][${jobId}] Brand overlays DESACTIVADOS — ` +
+        `show_brand_overlays=${JSON.stringify(bc?.show_brand_overlays)}, ` +
+        `líneas: L1="${bc?.vehicle_line_1 ?? ''}" L2="${bc?.vehicle_line_2 ?? ''}" ` +
+        `L3="${bc?.vehicle_line_3 ?? ''}" L4="${bc?.vehicle_line_4 ?? ''}"`
+    )
   }
   tracks.push(...brandOverlayTracks)
 
@@ -718,6 +847,23 @@ export async function renderSegmentsV2(
     },
     callback: callbackUrl,
   }
+
+  // ── DEBUG payload completo ─────────────────────────────────────────────
+  console.log(
+    `[Shotstack][${jobId}] Enviando ${tracks.length} tracks a Shotstack ` +
+      `(${sequence.length} clips, ${totalDuration.toFixed(1)}s)`
+  )
+  tracks.forEach((t, i) => {
+    const types = (t.clips ?? []).map((c) => {
+      const a = c.asset as Record<string, unknown>
+      return `${a.type ?? '?'}@t${(c.start as number)?.toFixed(2) ?? '?'}s`
+    })
+    console.log(`[Shotstack][${jobId}]   track[${i}]: ${types.join(', ')}`)
+  })
+  const payloadJson = JSON.stringify(edit)
+  console.log(
+    `[Shotstack][${jobId}] Payload size: ${payloadJson.length} bytes — snippet: ${payloadJson.slice(0, 300)}`
+  )
 
   const renderId = await postShotstackRender(apiKey, baseUrl, edit)
 

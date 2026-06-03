@@ -349,13 +349,23 @@ const BRAND_CONFIG_SELECT =
 
 async function loadBrandConfigForJob(jobId: string) {
   const supabase = getServiceClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('video_jobs_v2')
     .select(BRAND_CONFIG_SELECT)
     .eq('id', jobId)
     .single()
-  if (!data) return null
-  return brandConfigFromJobRow(data as BrandConfigJobRow)
+  if (error) {
+    console.error(`[BrandConfig][${jobId}] Error leyendo DB: ${error.message}`)
+    return null
+  }
+  if (!data) {
+    console.warn(`[BrandConfig][${jobId}] Sin datos de brandConfig en DB`)
+    return null
+  }
+  console.log(`[BrandConfig][${jobId}] DB row:`, JSON.stringify(data))
+  const config = brandConfigFromJobRow(data as BrandConfigJobRow)
+  console.log(`[BrandConfig][${jobId}] brandConfigFromJobRow resultado:`, JSON.stringify(config))
+  return config
 }
 
 async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
