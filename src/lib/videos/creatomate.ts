@@ -1006,3 +1006,44 @@ export async function renderSegmentsV2(
   console.log(`[VideoV2Pipeline][${jobId}][Creatomate] Render iniciado. ID=${renderId}`)
   return renderId
 }
+
+// ─── Brand overlays (Shotstack + tipos compartidos) ───────────────────────────
+
+export type BrandConfig = {
+  show_brand_overlays: boolean
+  vehicle_line_1?: string
+  vehicle_line_2?: string
+  vehicle_line_3?: string
+  vehicle_line_4?: string
+  cta_text?: string
+  whatsapp_number?: string
+  logo_url?: string
+  show_watermark?: boolean
+}
+
+export type BrandConfigJobRow = {
+  show_brand_overlays?: boolean | null
+  vehicle_line_1?: string | null
+  vehicle_line_2?: string | null
+  vehicle_line_3?: string | null
+  vehicle_line_4?: string | null
+  cta_text?: string | null
+  whatsapp_number?: string | null
+  logo_url?: string | null
+  show_watermark?: boolean | null
+}
+
+export function brandConfigFromJobRow(job: BrandConfigJobRow): BrandConfig | null {
+  if (!job.show_brand_overlays) return null
+  return {
+    show_brand_overlays: true,
+    vehicle_line_1: job.vehicle_line_1?.trim() || undefined,
+    vehicle_line_2: job.vehicle_line_2?.trim() || undefined,
+    vehicle_line_3: job.vehicle_line_3?.trim() || undefined,
+    vehicle_line_4: job.vehicle_line_4?.trim() || undefined,
+    cta_text: job.cta_text?.trim() || undefined,
+    whatsapp_number: job.whatsapp_number?.trim() || undefined,
+    logo_url: job.logo_url?.trim() || undefined,
+    show_watermark: job.show_watermark ?? undefined,
+  }
+}

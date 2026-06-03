@@ -111,6 +111,39 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   /** Orden macro de clips en el Reel (permutación de índices elegibles). */
   const [manualFullClipOrderEnabled, setManualFullClipOrderEnabled] = useState(false)
   const [manualClipOrderIndices, setManualClipOrderIndices] = useState<number[]>([])
+  const [showBrandOverlays, setShowBrandOverlays] = useState(false)
+  const [vehicleLine1, setVehicleLine1] = useState('')
+  const [vehicleLine2, setVehicleLine2] = useState('')
+  const [vehicleLine3, setVehicleLine3] = useState('')
+  const [vehicleLine4, setVehicleLine4] = useState('')
+  const [ctaText, setCtaText] = useState('')
+  const [whatsappNumber, setWhatsappNumber] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [showWatermark, setShowWatermark] = useState(false)
+
+  function brandOverlaysCreatePayload(): Record<string, unknown> {
+    const t1 = vehicleLine1.trim()
+    const t2 = vehicleLine2.trim()
+    const t3 = vehicleLine3.trim()
+    const t4 = vehicleLine4.trim()
+    const cta = ctaText.trim()
+    const wa = whatsappNumber.trim()
+    const logo = logoUrl.trim()
+    // Si tiene contenido en alguna línea, activar overlays aunque el checkbox esté desmarcado
+    const hasContent = !!(t1 || t2 || t3 || t4)
+    const active = showBrandOverlays || hasContent
+    const payload: Record<string, unknown> = { show_brand_overlays: active }
+    if (!active) return payload
+    if (t1) payload.vehicle_line_1 = t1
+    if (t2) payload.vehicle_line_2 = t2
+    if (t3) payload.vehicle_line_3 = t3
+    if (t4) payload.vehicle_line_4 = t4
+    if (cta) payload.cta_text = cta
+    if (wa) payload.whatsapp_number = wa
+    if (logo) payload.logo_url = logo
+    if (showWatermark) payload.show_watermark = true
+    return payload
+  }
 
   function reset() {
     setStep(1)
@@ -141,6 +174,15 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setManualIntroSlots([null, null, null])
     setManualFullClipOrderEnabled(false)
     setManualClipOrderIndices([])
+    setShowBrandOverlays(false)
+    setVehicleLine1('')
+    setVehicleLine2('')
+    setVehicleLine3('')
+    setVehicleLine4('')
+    setCtaText('')
+    setWhatsappNumber('')
+    setLogoUrl('')
+    setShowWatermark(false)
   }
 
   useEffect(() => {
@@ -166,9 +208,17 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     if (!inventoryPickId) return
     const row = inventoryRows.find((r) => r.id === inventoryPickId)
     if (!row) return
-    setVehicleBrand(row.brand?.trim() ?? '')
-    setVehicleModel(row.model?.trim() ?? '')
-    setVehicleYear(row.year != null ? String(row.year) : '')
+    const brand = row.brand?.trim() ?? ''
+    const model = row.model?.trim() ?? ''
+    const year = row.year != null ? String(row.year) : ''
+    setVehicleBrand(brand)
+    setVehicleModel(model)
+    setVehicleYear(year)
+    if (brand) setVehicleLine1(brand)
+    if (model) setVehicleLine2(model)
+    if (year) setVehicleLine4(year)
+    // Al elegir un vehículo del inventario, activar overlays automáticamente
+    if (brand || model || year) setShowBrandOverlays(true)
   }, [inventoryPickId, inventoryRows])
 
   const clipIndexBlockedForNarrative = useCallback((i: number): boolean => {
@@ -268,6 +318,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           flowType,
           files: files.map((f) => ({ filename: f.name, mimeType: f.type || 'video/mp4' })),
           musicTrackId: selectedMusicId,
+          ...brandOverlaysCreatePayload(),
         }),
       })
 
@@ -415,6 +466,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             ? { manualClipOrderIndices: manualClipOrderIndices }
             : {}),
           ...(canonV ? { canonicalVehicle: canonV } : {}),
+          ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
           ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         }),
       })
@@ -1108,6 +1160,91 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                   )}
                 </div>
               )}
+
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-violet-600"
+                    checked={showBrandOverlays}
+                    onChange={(e) => setShowBrandOverlays(e.target.checked)}
+                  />
+                  <span className="text-sm text-gray-900">
+                    <span className="font-semibold text-violet-950">Activar overlays de marca K-SI</span>
+                    <span className="block text-xs text-gray-600 mt-0.5">
+                      Título del vehículo, año, CTA, WhatsApp y logo (Shotstack).
+                    </span>
+                  </span>
+                </label>
+                {showBrandOverlays && (
+                  <div className="space-y-3 pt-1 border-t border-violet-100">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Línea 1 del título</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={vehicleLine1}
+                        onChange={(e) => setVehicleLine1(e.target.value)}
+                        placeholder="ej. FORD"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Línea 2 — principal</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={vehicleLine2}
+                        onChange={(e) => setVehicleLine2(e.target.value)}
+                        placeholder="ej. ECOSPORT"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Línea 3 — opcional</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={vehicleLine3}
+                        onChange={(e) => setVehicleLine3(e.target.value)}
+                        placeholder="ej. HEAVY DUTY"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Línea 4 — Año</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={vehicleLine4}
+                        onChange={(e) => setVehicleLine4(e.target.value)}
+                        placeholder="ej. 2023"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">Texto CTA</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={ctaText}
+                        onChange={(e) => setCtaText(e.target.value)}
+                        placeholder="ej. COMENTA ECOSPORT"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">WhatsApp</label>
+                      <input
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={whatsappNumber}
+                        onChange={(e) => setWhatsappNumber(e.target.value)}
+                        placeholder="ej. +593 98 333 5555"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">URL del logo (opcional)</label>
+                      <input
+                        type="url"
+                        className="mt-0.5 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                        value={logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                        placeholder="https://… (vacío = logol.png del sitio)"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

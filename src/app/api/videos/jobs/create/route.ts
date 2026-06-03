@@ -55,12 +55,60 @@ interface CreateJobBody {
   files: FileInfo[]
   musicTrackId: string
   jobName?: string
+  show_brand_overlays?: boolean | null
+  vehicle_line_1?: string | null
+  vehicle_line_2?: string | null
+  vehicle_line_3?: string | null
+  vehicle_line_4?: string | null
+  cta_text?: string | null
+  whatsapp_number?: string | null
+  logo_url?: string | null
+  show_watermark?: boolean | null
+}
+
+function pickBrandInsertFields(
+  body: CreateJobBody
+): Partial<{
+  show_brand_overlays: boolean
+  vehicle_line_1: string
+  vehicle_line_2: string
+  vehicle_line_3: string
+  vehicle_line_4: string
+  cta_text: string
+  whatsapp_number: string
+  logo_url: string
+  show_watermark: boolean
+}> {
+  const out: ReturnType<typeof pickBrandInsertFields> = {}
+  if (body.show_brand_overlays !== undefined && body.show_brand_overlays !== null) {
+    out.show_brand_overlays = body.show_brand_overlays
+  }
+  if (body.show_watermark !== undefined && body.show_watermark !== null) {
+    out.show_watermark = body.show_watermark
+  }
+  const textKeys = [
+    'vehicle_line_1',
+    'vehicle_line_2',
+    'vehicle_line_3',
+    'vehicle_line_4',
+    'cta_text',
+    'whatsapp_number',
+    'logo_url',
+  ] as const
+  for (const key of textKeys) {
+    const v = body[key]
+    if (v !== undefined && v !== null) {
+      out[key] = String(v)
+    }
+  }
+  return out
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateJobBody
     const { flowType, files, musicTrackId, jobName } = body
+    const brandInsertFields = pickBrandInsertFields(body)
 
     if (!flowType || !files?.length || !musicTrackId) {
       return NextResponse.json(
@@ -113,6 +161,7 @@ export async function POST(request: NextRequest) {
       current_step: 'Esperando subida de archivos...',
       progress_percentage: 0,
       music_track_url: musicTrack.public_url,
+      ...brandInsertFields,
     }
 
     let job: { id: string } | null = null

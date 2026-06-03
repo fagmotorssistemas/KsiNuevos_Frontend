@@ -1053,6 +1053,8 @@ interface ValidateGeminiSequenceOptions {
   manualIntroClipIndices?: number[]
   /** Permutación de clips: el montaje final agrupa cortes por clip en este orden (no aplica con intro fija). */
   manualClipOrderIndices?: number[]
+  /** Secuencia ya ordenada por diálogos del guión: no aplicar intro/outro editorial ni inyección de apertura. */
+  guionDeterministicOrder?: boolean
 }
 
 function coerceVoiceOverInsertAfterCount(raw: GeminiSegmentAnalysis, sequenceLength: number): number {
@@ -1460,6 +1462,12 @@ function validateSequence(
       excluded,
       segmentLookup,
       jobId
+    )
+    sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+  } else if (opts?.guionDeterministicOrder) {
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Gemini] Orden GUION determinista: se conserva la secuencia ` +
+        `(sin enforceEditorialOrder ni inyección de apertura)`
     )
     sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
   } else {
@@ -2075,4 +2083,26 @@ export async function analyzeSegments(
   }
 
   throw new Error('Gemini no pudo analizar los segmentos')
+}
+
+/**
+ * Valida una secuencia ya armada por diálogos del guión (sin llamar a Gemini ni reordenar editorialmente).
+ */
+export function buildValidatedAnalysisFromGuionSequence(
+  sequence: SequenceItem[],
+  allSegments: Segment[],
+  jobId: string,
+  clipKinds: VideoClipKind[] = [],
+  opts?: ValidateGeminiSequenceOptions
+): GeminiSegmentAnalysis {
+  const total = Number(sequence.reduce((sum, it) => sum + it.trim_duration, 0).toFixed(3))
+  const raw: GeminiSegmentAnalysis = {
+    sequence,
+    total_duration: total,
+    overall_strategy: 'Montaje por orden de diálogos del guión (tabla guion_escenas)',
+  }
+  return validateSequence(raw, allSegments, jobId, clipKinds, {
+    ...opts,
+    guionDeterministicOrder: true,
+  })
 }
