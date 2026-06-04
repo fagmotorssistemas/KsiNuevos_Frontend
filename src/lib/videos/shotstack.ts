@@ -801,6 +801,105 @@ function buildCaptionHtmlTracks(
     tracks.push({ clips: lpWord1Clips })
     tracks.push({ clips: lpWord2Clips })
   }
+
+  // Brillitos detrás del texto, mismo lugar y tamaño aproximado (contorno, no tapa palabras)
+  const sparkleUrl = process.env.SPARKLE_OVERLAY_URL?.trim()
+  if (sparkleUrl) {
+    function isMotorOrNumberSubtitle(text: string): boolean {
+      const t = text.trim().toUpperCase()
+      return /\bMOTOR\b/.test(t) || /\b\d+[\.,]\d+\b/.test(t)
+    }
+
+    function isTransmisionGearSubtitle(text: string): boolean {
+      const words = text.trim().toUpperCase().split(/\s+/)
+      if (words.length !== 2) return false
+      return TRANSMISION_RE.test(words[0]!) && GEAR_TYPE_RE.test(words[1]!)
+    }
+
+    function sparkleBoxForText(text: string, fontSize: number): { width: number; height: number } {
+      const len = text.trim().length
+      const textW = Math.ceil(len * fontSize * 0.52)
+      const textH = Math.ceil(fontSize * 1.25)
+      return {
+        width: Math.min(700, Math.max(150, Math.ceil(textW * 1.45))),
+        height: Math.max(85, Math.ceil(textH * 1.55)),
+      }
+    }
+
+    function sparkleBoxForWord(word: string, fontSize: number): { width: number; height: number } {
+      const len = word.length
+      const textW = Math.ceil(len * fontSize * 0.58)
+      const textH = Math.ceil(fontSize * 1.2)
+      return {
+        width: Math.min(520, Math.max(160, Math.ceil(textW * 1.5))),
+        height: Math.max(90, Math.ceil(textH * 1.6)),
+      }
+    }
+
+    function buildSparkleClip(
+      start: number,
+      length: number,
+      offset: { x: number; y: unknown },
+      box: { width: number; height: number }
+    ): ShotstackClip {
+      return {
+        asset: {
+          type: 'video' as const,
+          src: sparkleUrl,
+          trim: 0,
+          volume: 0,
+        },
+        start: Number(start.toFixed(3)),
+        length: Number(length.toFixed(3)),
+        fit: 'contain' as const,
+        width: box.width,
+        height: box.height,
+        position: 'bottom' as const,
+        offset,
+        opacity: 0.88,
+      }
+    }
+
+    const sparkleClips: ShotstackClip[] = []
+
+    for (const [idx, b] of regularBlocks.entries()) {
+      const text = b.text.trim()
+      if (!isMotorOrNumberSubtitle(text)) continue
+      const upper = text.toUpperCase()
+      sparkleClips.push(
+        buildSparkleClip(
+          b.time,
+          b.duration,
+          { x: 0, y: captionOffsetY(upper, idx, b.duration) },
+          sparkleBoxForText(upper, captionRealSize(upper))
+        )
+      )
+    }
+
+    for (const b of longPairBlocks) {
+      if (!isTransmisionGearSubtitle(b.text)) continue
+      const words = b.text.trim().toUpperCase().split(/\s+/)
+      const w1 = words[0]!
+      const w2 = words[1]!
+      const start = b.time
+      const length = b.duration
+      const y1 = 0.20
+      const y2 = 0.15
+      const y1Offset = buildJumpThenFixed(y1, length)
+      const y2Offset = buildJumpThenFixed(y2, length)
+
+      sparkleClips.push(
+        buildSparkleClip(start, length, { x: -0.10, y: y1Offset }, sparkleBoxForWord(w1, longPairFontSize(w1))),
+        buildSparkleClip(start, length, { x: 0.10, y: y2Offset }, sparkleBoxForWord(w2, longPairFontSize(w2)))
+      )
+    }
+
+    if (sparkleClips.length > 0) {
+      // Detrás del texto (primera capa) para que se vea en el contorno sin tapar
+      tracks.unshift({ clips: sparkleClips })
+    }
+  }
+
   return tracks
 }
 
