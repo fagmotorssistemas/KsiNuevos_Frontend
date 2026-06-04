@@ -761,30 +761,47 @@ export async function renderSegmentsV2(
     (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
 
   // Timing del overlay de marca: viene del pipeline (dialogo+Assembly) o fallback t=0
-  let brandStart  = opts?.brandMentionTimeSec  ?? 0
-  let brandLength = opts?.brandMentionLengthSec ?? BRAND_OVERLAY_INTRO_SEC
+  const brandStart  = opts?.brandMentionTimeSec  ?? 0
+  // +1 segundo extra de visibilidad cuando el timing viene de Assembly
+  const brandLength = opts?.brandMentionTimeSec != null
+    ? (opts.brandMentionLengthSec ?? BRAND_OVERLAY_INTRO_SEC) + 1
+    : (opts?.brandMentionLengthSec ?? BRAND_OVERLAY_INTRO_SEC)
 
   if (hasBrandOverlays) {
     if (opts?.brandMentionTimeSec != null) {
       console.log(
         `[Shotstack][${jobId}] Brand overlay → t=${brandStart.toFixed(2)}s +${brandLength.toFixed(2)}s ` +
-        `(timing desde dialogo+Assembly)`
+        `(timing desde dialogo+Assembly, +1s extra)`
       )
     } else {
       console.log(`[Shotstack][${jobId}] Brand overlay → t=0 +${brandLength}s (sin timing de dialogo)`)
     }
   }
 
+  // Cortar 0.5s antes el último subtítulo que termina demasiado cerca del título
+  const SUBTITLE_PRE_BRAND_GAP = 0.5
+  const brandEnd = brandStart + brandLength
+  const subtitleBlocksAdjusted = hasBrandOverlays
+    ? subtitleBlocks.map(b => {
+        const blockEnd = b.time + b.duration
+        // Si el bloque termina dentro del "gap" antes del brand overlay → truncar
+        if (b.time < brandStart && blockEnd > brandStart - SUBTITLE_PRE_BRAND_GAP) {
+          const newDuration = Number(Math.max(0.1, brandStart - SUBTITLE_PRE_BRAND_GAP - b.time).toFixed(3))
+          return { ...b, duration: newDuration }
+        }
+        return b
+      })
+    : subtitleBlocks
+
   // Los captions ya vienen filtrados desde pipeline (no contienen el bloque de marca)
   // Si por algún motivo aún hay overlap temporal con el overlay, suprimirlos
-  const brandEnd = brandStart + brandLength
   const captionBlocksToRender = hasBrandOverlays
-    ? subtitleBlocks.filter(b => {
+    ? subtitleBlocksAdjusted.filter(b => {
         const blockEnd = b.time + b.duration
         // Suprimir solo si el bloque está completamente dentro del overlay de marca
         return !(b.time >= brandStart - 0.05 && blockEnd <= brandEnd + 0.05)
       })
-    : subtitleBlocks
+    : subtitleBlocksAdjusted
 
   tracks.push(...buildCaptionHtmlTracks(captionBlocksToRender, totalDuration, jobId))
   const captionCount = captionBlocksToRender.filter((b) => b.text?.trim() && b.duration > 0.01).length
