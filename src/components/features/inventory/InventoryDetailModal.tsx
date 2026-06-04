@@ -174,9 +174,9 @@ interface InventoryDetailModalProps {
 
 export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }: InventoryDetailModalProps) {
     const { supabase } = useAuth();
-    const isAdmin = currentUserRole?.toLowerCase() === 'admin'; // Solo admin puede editar precio
-    const isMarketing = currentUserRole?.toLowerCase() === 'marketing';
-    const canEdit = isAdmin || isMarketing; // Admin edita todo; marketing edita todo excepto precio
+    const role = currentUserRole?.toLowerCase() || '';
+    const isAdmin = role === 'admin'; // Solo admin puede editar precio
+    const canEdit = isAdmin || role === 'marketing' || role === 'vendedor';
     // Añadimos 'publications' a las pestañas
     const [activeTab, setActiveTab] = useState<
         'general' | 'marketing' | 'photos' | 'publications' | 'listing'
@@ -482,7 +482,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
             if (error1) throw error1;*/}
 
             const oraclePayload = {
-                price: Number(formData.price),
+                price: isAdmin ? Number(formData.price) : (car.price ?? 0),
                 mileage: Number(formData.mileage),
                 status: formData.status as any,
                 location: formData.location as any,

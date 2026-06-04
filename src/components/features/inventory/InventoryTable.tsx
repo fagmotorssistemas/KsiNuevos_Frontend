@@ -224,7 +224,7 @@ export function InventoryTable({
     const [downloadingImagesId, setDownloadingImagesId] = useState<string | null>(null);
 
     const role = currentUserRole?.toLowerCase() || '';
-    const canEdit = role === 'admin' || role === 'marketing'; // Admin y marketing pueden abrir modal; en el modal solo admin edita precio
+    const canEdit = role === 'admin' || role === 'marketing' || role === 'vendedor'; // Vendedor gestiona sin editar precio (solo admin)
     const canDownloadAllImages = canShowInventoryDownloadAllImages(currentUserId);
 
     const formatPrice = (price: number | null) => 

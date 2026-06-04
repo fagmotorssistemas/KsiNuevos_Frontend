@@ -142,7 +142,7 @@ export function InventoryVehicleReport({
     const [savingCell, setSavingCell] = useState<string | null>(null);
 
     const role = currentUserRole?.toLowerCase() || "";
-    const canEdit = role === "admin" || role === "marketing";
+    const canEdit = role === "admin" || role === "marketing" || role === "vendedor";
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) setSortAsc((p) => !p);
