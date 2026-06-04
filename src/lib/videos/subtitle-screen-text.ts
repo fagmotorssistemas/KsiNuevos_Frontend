@@ -192,6 +192,50 @@ function chunkTokens(arr: string[], size: number): string[][] {
   return result
 }
 
+/**
+ * Chunking inteligente que mantiene pares técnicos juntos:
+ * TRANSMISIÓN+MANUAL, TRANSMISIÓN+AUTOMÁTICA, MOTOR+[número], etc.
+ * El word antes o después del par puede quedar solo.
+ */
+function smartChunkTokens(tokens: string[], size: number): string[][] {
+  // Token que "abre" un par técnico bloqueado
+  const PAIR_TRIGGER  = /^(transmis|motor)/i
+  // Token que puede "cerrar" un par técnico (va después del trigger)
+  const PAIR_FOLLOW   = /^(manual|autom[aá]t|\d+[\.,]\d+|\d{3,4}cc)/i
+
+  // Paso 1: agrupar tokens en "unidades" (par bloqueado = 1 unidad de 2 tokens)
+  const units: string[][] = []
+  let i = 0
+  while (i < tokens.length) {
+    const tok = tokens[i]!
+    if (
+      PAIR_TRIGGER.test(tok) &&
+      i + 1 < tokens.length &&
+      PAIR_FOLLOW.test(tokens[i + 1]!)
+    ) {
+      units.push([tok, tokens[i + 1]!])
+      i += 2
+    } else {
+      units.push([tok])
+      i++
+    }
+  }
+
+  // Paso 2: agrupar unidades en chunks de `size` tokens (sin romper unidades)
+  const chunks: string[][] = []
+  let current: string[] = []
+  for (const unit of units) {
+    if (current.length > 0 && current.length + unit.length > size) {
+      chunks.push(current)
+      current = [...unit]
+    } else {
+      current.push(...unit)
+    }
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
 /** Coincidencia difusa por prefijo de 4 caracteres (maneja errores de Assembly). */
 function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean {
   const a = normalizeForMatch(assemblyWord)
@@ -221,7 +265,7 @@ function addKeywordCaptionBlocks(
   out: SubtitleBlock[]
 ): void {
   if (keywords.length === 0) return
-  const chunks = chunkTokens(keywords, 2)
+  const chunks = smartChunkTokens(keywords, 2)
 
   if (asmWords.length === 0) {
     // Sin Assembly → distribuir uniformemente en la escena

@@ -213,6 +213,21 @@ function cleanVehicleText(text: string): string {
     .trim()
 }
 
+function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
+  const A = 0.055
+  const S = 0.08
+  const settle = 4 * S
+  const frames: unknown[] = [
+    { from: baseY + A,        to: baseY - A,        start: 0,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+    { from: baseY - A,        to: baseY + A * 0.5,  start: S,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+    { from: baseY + A * 0.5,  to: baseY - A * 0.25, start: S * 2,     length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+    { from: baseY - A * 0.25, to: baseY,             start: S * 3,     length: S,   interpolation: 'bezier', easing: 'easeOutSine'   },
+  ]
+  const restLen = Number(Math.max(0.05, totalLen - settle).toFixed(3))
+  frames.push({ from: baseY, to: baseY, start: Number(settle.toFixed(3)), length: restLen })
+  return frames
+}
+
 function buildBrandOverlayTracks(
   brandConfig: BrandConfig | null | undefined,
   totalDuration: number,
@@ -248,21 +263,6 @@ function buildBrandOverlayTracks(
    * Genera keyframes de "salto rápido al entrar, luego fijo".
    * 3 oscilaciones de amplitud decreciente en ~0.24s, después posición fija.
    */
-  function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
-    const A = 0.055  // amplitud inicial
-    const S = 0.08   // duración de cada medio ciclo (segundos)
-    const settle = 4 * S // tiempo total de animación de entrada
-    const frames: unknown[] = [
-      { from: baseY + A,        to: baseY - A,        start: 0,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-      { from: baseY - A,        to: baseY + A * 0.5,  start: S,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-      { from: baseY + A * 0.5,  to: baseY - A * 0.25, start: S * 2,     length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-      { from: baseY - A * 0.25, to: baseY,             start: S * 3,     length: S,   interpolation: 'bezier', easing: 'easeOutSine'   },
-    ]
-    const restLen = Number(Math.max(0.05, totalLen - settle).toFixed(3))
-    frames.push({ from: baseY, to: baseY, start: Number(settle.toFixed(3)), length: restLen })
-    return frames
-  }
-
   // ── L1: MARCA (blanco, 52px) ─────────────────────────────────────────
   if (line1) {
     tracks.push({
@@ -692,8 +692,25 @@ function buildCaptionHtmlTracks(
     return baseY
   }
 
+  // Detecta si un bloque tiene exactamente 2 palabras largas (ambas >= 5 chars)
+  function isLongPair(text: string): boolean {
+    const words = text.trim().split(/\s+/)
+    return words.length === 2 && words.every(w => w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').length >= 5)
+  }
+
+  function longPairFontSize(word: string): number {
+    const len = word.length
+    if (len <= 6)  return 88
+    if (len <= 9)  return 78
+    if (len <= 12) return 68
+    return 58
+  }
+
+  const regularBlocks = validBlocks.filter(b => !isLongPair(b.text.trim().toUpperCase()))
+  const longPairBlocks = validBlocks.filter(b => isLongPair(b.text.trim().toUpperCase()))
+
   // CAPA 2 (texto real) — blanco, sin transition para que aparezca instantáneamente
-  const realClips: ShotstackClip[] = validBlocks.map((b, idx) => {
+  const realClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
     const sz = captionRealSize(text)
     return {
@@ -712,7 +729,7 @@ function buildCaptionHtmlTracks(
   })
 
   // CAPA 1 (sombra) — misma posición alterna que la capa real
-  const shadowClips: ShotstackClip[] = validBlocks.map((b, idx) => {
+  const shadowClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
     const sz = captionRealSize(text)
     return {
@@ -731,7 +748,60 @@ function buildCaptionHtmlTracks(
     }
   })
 
-  return [{ clips: realClips }, { clips: shadowClips }]
+  // PARES LARGOS — amarillo, word1 arriba-izquierda, word2 abajo-derecha, sin sombra
+  // Si es TRANSMISIÓN + MANUAL/AUTOMÁTICO → brinco al entrar (igual que el título)
+  const TRANSMISION_RE = /^TRANSMIS/i
+  const GEAR_TYPE_RE   = /^(MANUAL|AUTOM[AÁ]T)/i
+
+  const lpWord1Clips: ShotstackClip[] = []
+  const lpWord2Clips: ShotstackClip[] = []
+
+  for (const b of longPairBlocks) {
+    const words = b.text.trim().toUpperCase().split(/\s+/)
+    const w1 = words[0]!
+    const w2 = words[1]!
+    const start  = Number(b.time.toFixed(3))
+    const length = Number(b.duration.toFixed(3))
+
+    const isTransmisionPair = TRANSMISION_RE.test(w1) && GEAR_TYPE_RE.test(w2)
+    const y1 = 0.20
+    const y2 = 0.15
+
+    lpWord1Clips.push({
+      asset: {
+        type: 'rich-text',
+        text: w1,
+        font:  { family: 'Montserrat', size: longPairFontSize(w1), weight: 900, color: '#FFE100', opacity: 1 },
+        style: captionStyle,
+        align: captionAlign,
+      },
+      start, length,
+      width: 680, height: 180,
+      position: 'bottom',
+      offset: { x: -0.10, y: isTransmisionPair ? buildJumpThenFixed(y1, length) : y1 },
+    })
+
+    lpWord2Clips.push({
+      asset: {
+        type: 'rich-text',
+        text: w2,
+        font:  { family: 'Montserrat', size: longPairFontSize(w2), weight: 900, color: '#FFE100', opacity: 1 },
+        style: captionStyle,
+        align: captionAlign,
+      },
+      start, length,
+      width: 680, height: 180,
+      position: 'bottom',
+      offset: { x: 0.10, y: isTransmisionPair ? buildJumpThenFixed(y2, length) : y2 },
+    })
+  }
+
+  const tracks: ShotstackTrack[] = [{ clips: realClips }, { clips: shadowClips }]
+  if (lpWord1Clips.length > 0) {
+    tracks.push({ clips: lpWord1Clips })
+    tracks.push({ clips: lpWord2Clips })
+  }
+  return tracks
 }
 
 async function postShotstackRender(apiKey: string, baseUrl: string, body: unknown): Promise<string> {
