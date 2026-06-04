@@ -215,7 +215,9 @@ function cleanVehicleText(text: string): string {
 
 function buildBrandOverlayTracks(
   brandConfig: BrandConfig | null | undefined,
-  totalDuration: number
+  totalDuration: number,
+  brandStart = 0,
+  brandLength = BRAND_OVERLAY_INTRO_SEC
 ): ShotstackTrack[] {
   if (!brandConfig?.show_brand_overlays) return []
 
@@ -228,7 +230,7 @@ function buildBrandOverlayTracks(
   const cta   = brandConfig.cta_text?.trim() || ''
   const wa    = brandConfig.whatsapp_number?.trim() || ''
 
-  const introLen = Number(Math.min(BRAND_OVERLAY_INTRO_SEC, totalDuration).toFixed(3))
+  const introLen = Number(Math.min(brandLength, totalDuration - brandStart).toFixed(3))
 
   const brandStyle = { textTransform: 'uppercase' }
   const brandAlign = { horizontal: 'center', vertical: 'middle' }
@@ -237,10 +239,10 @@ function buildBrandOverlayTracks(
   const line2Words = line2 ? line2.split(/\s+/).length : 0
   const l2RealSize = line2Words <= 1 ? 96 : line2Words === 2 ? 80 : 64
 
-  // Patrón de doble capa para simular sombra difusa en rich-text (beta):
-  //   CAPA 2 (texto real) — color real + stroke, sin shadow → pushed FIRST (frente)
-  //   CAPA 1 (sombra)     — negro opaco + shadow.blur:30, misma geometría → pushed SECOND (fondo)
+  // Sombra difusa simulada con blur:30 (rich-text beta)
   const shadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
+
+  const bs = Number(brandStart.toFixed(3))
 
   // ── L1: MARCA (blanco, 52px) ─────────────────────────────────────────
   if (line1) {
@@ -254,7 +256,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 700, height: 90,
         position: 'top', offset: { x: 0, y: -0.08 },
         transition: { in: 'slideDown', out: 'fade' },
@@ -271,7 +273,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 760, height: 120,
         position: 'top', offset: { x: 0, y: -0.08 },
         transition: { in: 'fade', out: 'fade' },
@@ -291,7 +293,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 700, height: 140,
         position: 'top', offset: { x: 0, y: -0.13 },
         transition: { in: 'slideDown', out: 'fade' },
@@ -308,7 +310,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 760, height: 180,
         position: 'top', offset: { x: 0, y: -0.13 },
         transition: { in: 'fade', out: 'fade' },
@@ -328,7 +330,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 700, height: 90,
         position: 'top', offset: { x: 0, y: -0.25 },
         transition: { in: 'slideDown', out: 'fade' },
@@ -345,7 +347,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 760, height: 130,
         position: 'top', offset: { x: 0, y: -0.25 },
         transition: { in: 'fade', out: 'fade' },
@@ -365,7 +367,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 400, height: 120,
         position: 'center', offset: { x: 0, y: -0.22 },
         transition: { in: 'fade', out: 'fade' },
@@ -382,7 +384,7 @@ function buildBrandOverlayTracks(
           style:  brandStyle,
           align:  brandAlign,
         },
-        start: 0, length: introLen,
+        start: bs, length: introLen,
         width: 480, height: 170,
         position: 'center', offset: { x: 0, y: -0.22 },
         transition: { in: 'fade', out: 'fade' },
@@ -590,20 +592,25 @@ function captionFontSize(text: string): number {
   return best % 2 === 0 ? best : best - 1
 }
 
-/** Elimina subtítulos cuyo inicio cae dentro del bloque anterior (evita texto amontonado en Shotstack). */
+/**
+ * Cuando dos subtítulos se solapan, TRUNCA el anterior para que el siguiente pueda aparecer.
+ * Nunca descarta ningún subtítulo — solo recorta duración si es necesario.
+ */
 function dropOverlappingSubtitleBlocks(blocks: SubtitleBlock[], jobId: string): SubtitleBlock[] {
   const sorted = [...blocks]
     .filter((b) => b.text?.trim() && b.duration > 0.01)
     .sort((a, b) => a.time - b.time)
   const out: SubtitleBlock[] = []
   for (const b of sorted) {
-    const prev = out[out.length - 1]
-    if (prev && b.time < prev.time + prev.duration - 0.08) {
-      console.warn(
-        `[Shotstack][${jobId}] Subtítulo solapado omitido t=${b.time.toFixed(2)}s ` +
-          `(prev termina ${(prev.time + prev.duration).toFixed(2)}s): "${b.text.trim().slice(0, 40)}…"`
+    const prev = out.length > 0 ? out[out.length - 1]! : null
+    if (prev && b.time < prev.time + prev.duration) {
+      // Truncar el anterior para que termine justo antes de que empiece éste
+      const trimmedDur = Number(Math.max(0.08, b.time - prev.time - 0.02).toFixed(3))
+      out[out.length - 1] = { ...prev, duration: trimmedDur }
+      console.log(
+        `[Shotstack][${jobId}] Subtítulo anterior truncado t=${prev.time.toFixed(2)}s ` +
+          `${prev.duration.toFixed(2)}s → ${trimmedDur.toFixed(2)}s para dar paso a "${b.text.trim().slice(0, 30)}"`
       )
-      continue
     }
     out.push(b)
   }
@@ -634,6 +641,8 @@ function buildCaptionHtmlTracks(
   const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
 
   // CAPA 2 (texto real) — blanco + stroke negro, sin shadow → frente
+  // Sin transition: los subtítulos aparecen/desaparecen instantáneamente
+  // (con fade, clips cortos <1s nunca alcanzan opacidad completa)
   const realClips: ShotstackClip[] = validBlocks.map((b) => {
     const text = b.text.trim().toUpperCase()
     const sz = captionRealSize(text)
@@ -649,7 +658,6 @@ function buildCaptionHtmlTracks(
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
       position: 'bottom', offset: { x: 0, y: 0.35 },
-      transition: { in: 'fade', out: 'fade' },
     }
   })
 
@@ -670,7 +678,6 @@ function buildCaptionHtmlTracks(
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
       position: 'bottom', offset: { x: 0, y: 0.35 },
-      transition: { in: 'fade', out: 'fade' },
     }
   })
 
@@ -726,7 +733,14 @@ export async function renderSegmentsV2(
   subtitleBlocks: SubtitleBlock[],
   musicUrl: string,
   voiceOverIntro?: VoiceOverIntroRenderInput | null,
-  opts?: { musicTrimStartSecOverride?: number; brandConfig?: BrandConfig | null }
+  opts?: {
+    musicTrimStartSecOverride?: number
+    brandConfig?: BrandConfig | null
+    /** Tiempo (s) en que el dialogo menciona la marca por primera vez (de Assembly) */
+    brandMentionTimeSec?: number
+    /** Duración (s) del overlay de marca */
+    brandMentionLengthSec?: number
+  }
 ): Promise<string> {
   if (voiceOverIntro != null) {
     throw new Error(
@@ -742,21 +756,35 @@ export async function renderSegmentsV2(
 
   const tracks: ShotstackTrack[] = []
 
-  // Cuando hay overlay de marca activo los primeros BRAND_OVERLAY_INTRO_SEC segundos
-  // no se muestran captions para evitar duplicar info en pantalla.
   const hasBrandOverlays =
     opts?.brandConfig?.show_brand_overlays === true &&
     (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
-  const captionBlocksToRender = hasBrandOverlays
-    ? subtitleBlocks.filter((b) => b.time >= BRAND_OVERLAY_INTRO_SEC - 0.08)
-    : subtitleBlocks
+
+  // Timing del overlay de marca: viene del pipeline (dialogo+Assembly) o fallback t=0
+  let brandStart  = opts?.brandMentionTimeSec  ?? 0
+  let brandLength = opts?.brandMentionLengthSec ?? BRAND_OVERLAY_INTRO_SEC
 
   if (hasBrandOverlays) {
-    const skipped = subtitleBlocks.length - captionBlocksToRender.length
-    console.log(
-      `[Shotstack][${jobId}] Suprimiendo ${skipped} caption(s) del intro de marca (0–${BRAND_OVERLAY_INTRO_SEC}s)`
-    )
+    if (opts?.brandMentionTimeSec != null) {
+      console.log(
+        `[Shotstack][${jobId}] Brand overlay → t=${brandStart.toFixed(2)}s +${brandLength.toFixed(2)}s ` +
+        `(timing desde dialogo+Assembly)`
+      )
+    } else {
+      console.log(`[Shotstack][${jobId}] Brand overlay → t=0 +${brandLength}s (sin timing de dialogo)`)
+    }
   }
+
+  // Los captions ya vienen filtrados desde pipeline (no contienen el bloque de marca)
+  // Si por algún motivo aún hay overlap temporal con el overlay, suprimirlos
+  const brandEnd = brandStart + brandLength
+  const captionBlocksToRender = hasBrandOverlays
+    ? subtitleBlocks.filter(b => {
+        const blockEnd = b.time + b.duration
+        // Suprimir solo si el bloque está completamente dentro del overlay de marca
+        return !(b.time >= brandStart - 0.05 && blockEnd <= brandEnd + 0.05)
+      })
+    : subtitleBlocks
 
   tracks.push(...buildCaptionHtmlTracks(captionBlocksToRender, totalDuration, jobId))
   const captionCount = captionBlocksToRender.filter((b) => b.text?.trim() && b.duration > 0.01).length
@@ -785,7 +813,7 @@ export async function renderSegmentsV2(
     }))
   }
 
-  const brandOverlayTracks = buildBrandOverlayTracks(opts?.brandConfig ?? null, totalDuration)
+  const brandOverlayTracks = buildBrandOverlayTracks(opts?.brandConfig ?? null, totalDuration, brandStart, brandLength)
   if (brandOverlayTracks.length > 0) {
     const bc = opts?.brandConfig
     console.log(

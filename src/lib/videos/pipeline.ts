@@ -36,6 +36,7 @@ import { extractQuotedDialoguesFromScript } from './script-dialogues'
 import {
   applyScreenTextFromGuion,
   applyScreenTextFromGuionSequence,
+  buildCaptionBlocksFromDialogoAssembly,
   parseEscenaNumberFromSequenceReason,
 } from './subtitle-screen-text'
 import {
@@ -1220,7 +1221,7 @@ async function runMultipleClipsPipelineFromStorage(
     // B4 — Construir subtítulos (incluye bloque VO + overlays manuales si vinieron en el job)
     console.log(`[VideoV2Pipeline][${jobId}][B4] Construyendo subtítulos`)
     const clipFilenames = files.map((f) => f.filename || '')
-    const { subtitleBlocks, adjustedSrt, voiceOverIntro } = await computeAutomaticSubtitlePayload({
+    let { subtitleBlocks, adjustedSrt, voiceOverIntro } = await computeAutomaticSubtitlePayload({
       jobId,
       paths,
       analysis,
@@ -1275,6 +1276,36 @@ async function runMultipleClipsPipelineFromStorage(
     const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
     const brandConfig = await loadBrandConfigForJob(jobId)
 
+    // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
+    let brandMentionTimeSec: number | undefined
+    let brandMentionLengthSec: number | undefined
+    if (escenasMulti.length > 0) {
+      const brandKws = [
+        brandConfig?.vehicle_line_1?.trim(),
+        brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
+      ].filter((k): k is string => !!k && k.length >= 2)
+
+      const { captionBlocks, brandTimeSec, brandLengthSec } =
+        buildCaptionBlocksFromDialogoAssembly(
+          analysis.sequence,
+          allSegments,
+          escenasMulti,
+          brandKws,
+          jobId
+        )
+
+      if (captionBlocks.length > 0) {
+        subtitleBlocks = captionBlocks
+        console.log(
+          `[VideoV2Pipeline][${jobId}][B4] Subtítulos dialogo+Assembly: ${captionBlocks.length} bloques`
+        )
+      }
+      if (brandTimeSec != null) {
+        brandMentionTimeSec = brandTimeSec
+        brandMentionLengthSec = brandLengthSec ?? 3.5
+      }
+    }
+
     const renderId = await renderSegmentsV2(
       jobId,
       analysis.sequence,
@@ -1282,7 +1313,7 @@ async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       musicTrackUrl,
       voIntroForRender,
-      { musicTrimStartSecOverride, brandConfig }
+      { musicTrimStartSecOverride, brandConfig, brandMentionTimeSec, brandMentionLengthSec }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
