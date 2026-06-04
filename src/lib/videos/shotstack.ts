@@ -640,10 +640,12 @@ function buildCaptionHtmlTracks(
 
   const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
 
-  // CAPA 2 (texto real) — blanco + stroke negro, sin shadow → frente
-  // Sin transition: los subtítulos aparecen/desaparecen instantáneamente
-  // (con fade, clips cortos <1s nunca alcanzan opacidad completa)
-  const realClips: ShotstackClip[] = validBlocks.map((b) => {
+  // Posición alterna: par → abajo (y: 0.28), impar → arriba/centro (y: 0.52)
+  // Crea movimiento visual entre bloques de 2 palabras
+  const captionPositionY = (idx: number) => (idx % 2 === 0 ? 0.15 : 0.70)
+
+  // CAPA 2 (texto real) — blanco, sin transition para que aparezca instantáneamente
+  const realClips: ShotstackClip[] = validBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
     const sz = captionRealSize(text)
     return {
@@ -657,12 +659,12 @@ function buildCaptionHtmlTracks(
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
-      position: 'bottom', offset: { x: 0, y: 0.35 },
+      position: 'bottom', offset: { x: 0, y: captionPositionY(idx) },
     }
   })
 
-  // CAPA 1 (sombra) — negro opaco + shadow.blur:30, misma geometría → fondo
-  const shadowClips: ShotstackClip[] = validBlocks.map((b) => {
+  // CAPA 1 (sombra) — misma posición alterna que la capa real
+  const shadowClips: ShotstackClip[] = validBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
     const sz = captionRealSize(text)
     return {
@@ -677,7 +679,7 @@ function buildCaptionHtmlTracks(
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
-      position: 'bottom', offset: { x: 0, y: 0.35 },
+      position: 'bottom', offset: { x: 0, y: captionPositionY(idx) },
     }
   })
 

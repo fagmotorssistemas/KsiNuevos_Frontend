@@ -221,7 +221,7 @@ function addKeywordCaptionBlocks(
   out: SubtitleBlock[]
 ): void {
   if (keywords.length === 0) return
-  const chunks = chunkTokens(keywords, 3)
+  const chunks = chunkTokens(keywords, 2)
 
   if (asmWords.length === 0) {
     // Sin Assembly → distribuir uniformemente en la escena
