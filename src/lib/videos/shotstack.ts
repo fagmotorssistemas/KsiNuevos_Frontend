@@ -244,6 +244,25 @@ function buildBrandOverlayTracks(
 
   const bs = Number(brandStart.toFixed(3))
 
+  /**
+   * Genera keyframes de "salto rápido al entrar, luego fijo".
+   * 3 oscilaciones de amplitud decreciente en ~0.24s, después posición fija.
+   */
+  function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
+    const A = 0.055  // amplitud inicial
+    const S = 0.08   // duración de cada medio ciclo (segundos)
+    const settle = 4 * S // tiempo total de animación de entrada
+    const frames: unknown[] = [
+      { from: baseY + A,        to: baseY - A,        start: 0,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+      { from: baseY - A,        to: baseY + A * 0.5,  start: S,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+      { from: baseY + A * 0.5,  to: baseY - A * 0.25, start: S * 2,     length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
+      { from: baseY - A * 0.25, to: baseY,             start: S * 3,     length: S,   interpolation: 'bezier', easing: 'easeOutSine'   },
+    ]
+    const restLen = Number(Math.max(0.05, totalLen - settle).toFixed(3))
+    frames.push({ from: baseY, to: baseY, start: Number(settle.toFixed(3)), length: restLen })
+    return frames
+  }
+
   // ── L1: MARCA (blanco, 52px) ─────────────────────────────────────────
   if (line1) {
     tracks.push({
@@ -258,8 +277,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 700, height: 90,
-        position: 'top', offset: { x: 0, y: -0.08 },
-        transition: { in: 'slideDown', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.08, introLen) },
+        transition: { out: 'fade' },
       }],
     })
     tracks.push({
@@ -275,8 +294,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 760, height: 120,
-        position: 'top', offset: { x: 0, y: -0.08 },
-        transition: { in: 'fade', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.08, introLen) },
+        transition: { out: 'fade' },
       }],
     })
   }
@@ -295,8 +314,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 700, height: 140,
-        position: 'top', offset: { x: 0, y: -0.13 },
-        transition: { in: 'slideDown', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.13, introLen) },
+        transition: { out: 'fade' },
       }],
     })
     tracks.push({
@@ -312,8 +331,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 760, height: 180,
-        position: 'top', offset: { x: 0, y: -0.13 },
-        transition: { in: 'fade', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.13, introLen) },
+        transition: { out: 'fade' },
       }],
     })
   }
@@ -332,8 +351,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 700, height: 90,
-        position: 'top', offset: { x: 0, y: -0.25 },
-        transition: { in: 'slideDown', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
+        transition: { out: 'fade' },
       }],
     })
     tracks.push({
@@ -349,8 +368,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 760, height: 130,
-        position: 'top', offset: { x: 0, y: -0.25 },
-        transition: { in: 'fade', out: 'fade' },
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
+        transition: { out: 'fade' },
       }],
     })
   }
@@ -369,8 +388,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 400, height: 120,
-        position: 'center', offset: { x: 0, y: -0.22 },
-        transition: { in: 'fade', out: 'fade' },
+        position: 'center', offset: { x: 0, y: buildJumpThenFixed(-0.22, introLen) },
+        transition: { out: 'fade' },
       }],
     })
     tracks.push({
@@ -386,8 +405,8 @@ function buildBrandOverlayTracks(
         },
         start: bs, length: introLen,
         width: 480, height: 170,
-        position: 'center', offset: { x: 0, y: -0.22 },
-        transition: { in: 'fade', out: 'fade' },
+        position: 'center', offset: { x: 0, y: buildJumpThenFixed(-0.22, introLen) },
+        transition: { out: 'fade' },
       }],
     })
   }
@@ -640,9 +659,38 @@ function buildCaptionHtmlTracks(
 
   const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
 
-  // Posición alterna: par → abajo (y: 0.28), impar → arriba/centro (y: 0.52)
-  // Crea movimiento visual entre bloques de 2 palabras
+  // Posición alterna: par → abajo (y: 0.15), impar → arriba/centro (y: 0.70)
   const captionPositionY = (idx: number) => (idx % 2 === 0 ? 0.15 : 0.70)
+
+  // Palabras técnicas del vehículo que reciben animación de ola
+  const TECH_SPEC_RE = /\b(MOTOR|TRANSMIS|MANUAL|AUTOM[AÁ]T|TURBO|D[IÍ]ESEL|GASOLINA|TURBO|HP|CV|CC|\d+[\.,]\d+|\d{4}CC)\b/i
+
+  // Genera keyframes de ola (oscilación suave) alrededor de la posición base
+  function buildWaveOffset(baseY: number, durationSec: number): unknown[] {
+    const HALF_PERIOD = 0.35  // segundos por medio ciclo
+    const AMPLITUDE   = 0.025 // ±2.5% del frame height
+    const frames: unknown[] = []
+    let t = 0
+    let phase = 0 // 0 = sube, 1 = baja
+    while (t < durationSec - 0.05) {
+      const len = Number(Math.min(HALF_PERIOD, durationSec - t).toFixed(3))
+      const from = phase === 0 ? baseY          : baseY + AMPLITUDE
+      const to   = phase === 0 ? baseY + AMPLITUDE : baseY
+      frames.push({ from, to, start: Number(t.toFixed(3)), length: len, interpolation: 'bezier', easing: 'easeInOutSine' })
+      t += HALF_PERIOD
+      phase = 1 - phase
+    }
+    return frames
+  }
+
+  function captionOffsetY(text: string, idx: number, durationSec: number): unknown {
+    const baseY = captionPositionY(idx)
+    if (TECH_SPEC_RE.test(text)) {
+      const frames = buildWaveOffset(baseY, durationSec)
+      if (frames.length >= 2) return frames
+    }
+    return baseY
+  }
 
   // CAPA 2 (texto real) — blanco, sin transition para que aparezca instantáneamente
   const realClips: ShotstackClip[] = validBlocks.map((b, idx) => {
@@ -659,7 +707,7 @@ function buildCaptionHtmlTracks(
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
-      position: 'bottom', offset: { x: 0, y: captionPositionY(idx) },
+      position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
     }
   })
 
@@ -679,7 +727,7 @@ function buildCaptionHtmlTracks(
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
       width: 700, height: 200,
-      position: 'bottom', offset: { x: 0, y: captionPositionY(idx) },
+      position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
     }
   })
 
