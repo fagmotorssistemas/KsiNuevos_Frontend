@@ -32,6 +32,37 @@ const CLOSING_LOGO_WIDTH_PX = 400
 const CLOSING_LOGO_HEIGHT_PX = 100
 const CLOSING_LOGO_ENTRANCE_SEC = 0.45
 
+/** Solapamiento por transición (*Fast ≈ 0.5 s) para evitar flash negro */
+const CLIP_TRANSITION_OVERLAP_SEC = 0.5
+/** boundary index → transition.out del clip que sale (el entrante no lleva in) */
+const CLIP_BOUNDARY_TRANSITIONS: Record<number, string> = {
+  0: 'slideUp', // clip 1→2: lento, un poco más notorio que slideUpFast
+  1: 'wipeRightFast',
+}
+/** Intro clip 1: zoomOut (empieza cerca, se aleja) — igual que Creatomate índice par */
+const FIRST_CLIP_INTRO_EFFECT = 'zoomOutFast' as const
+const FIRST_CLIP_INTRO_PULL_SEC = 0.28
+
+/** Destello amarillo-naranja al entrar el 4º clip (índice 3) */
+const CLIP_FLASH_AT_CLIP_INDEX = 3
+const CLIP_FLASH_LENGTH_SEC = 0.55
+const CLIP_FLASH_LEAD_SEC = 0.15
+const CLIP_FLASH_FADE_IN_SEC = 0.12
+const CLIP_FLASH_HOLD_SEC = 0.08
+const CLIP_FLASH_FADE_OUT_SEC = 0.35
+const CLIP_FLASH_PEAK_OPACITY = 0.65
+const CLIP_FLASH_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">' +
+  '<defs>' +
+  '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
+  '<stop offset="0%" stop-color="#FFE94A" stop-opacity="1"/>' +
+  '<stop offset="60%" stop-color="#FF8C00" stop-opacity="1"/>' +
+  '<stop offset="100%" stop-color="#FF4500" stop-opacity="0.8"/>' +
+  '</radialGradient>' +
+  '</defs>' +
+  '<rect width="720" height="1280" fill="url(#flash)"/>' +
+  '</svg>'
+
 function buildTimelineFonts(): { src: string }[] {
   return [{ src: MONTSERRAT_BLACK_TTF }]
 }
@@ -120,26 +151,193 @@ function computeLinearStarts(sequence: SequenceItem[]): number[] {
   return starts
 }
 
-function buildVideoTrack(sequence: SequenceItem[], clipUrls: string[]): ShotstackTrack {
-  const starts = computeLinearStarts(sequence)
-  const clips: ShotstackClip[] = []
-  for (let i = 0; i < sequence.length; i++) {
+function buildFirstClipIntroClips(
+  item: SequenceItem,
+  src: string,
+  withSlideOut: boolean
+): ShotstackClip[] {
+  const trimStart = Number(item.trim_start.toFixed(3))
+  const totalLen = Number(item.trim_duration.toFixed(3))
+  const introDur = Number(FIRST_CLIP_INTRO_PULL_SEC.toFixed(3))
+
+  const mk = (
+    timelineStart: number,
+    playLength: number,
+    sourceOffset: number,
+    extra: Partial<ShotstackClip> = {}
+  ): ShotstackClip => ({
+    asset: {
+      type: 'video',
+      src,
+      trim: Number((trimStart + sourceOffset).toFixed(3)),
+      volume: 1,
+    },
+    start: Number(timelineStart.toFixed(3)),
+    length: Number(Math.max(0.05, playLength).toFixed(3)),
+    fit: 'cover',
+    ...extra,
+  })
+
+  const clips: ShotstackClip[] = [
+    mk(0, introDur, 0, { effect: FIRST_CLIP_INTRO_EFFECT }),
+  ]
+
+  const remain = Number((totalLen - introDur).toFixed(3))
+  if (remain >= 0.12) {
+    clips.push(mk(introDur, remain, introDur))
+  }
+
+  if (withSlideOut) {
+    const last = clips[clips.length - 1]!
+    last.transition = { out: CLIP_BOUNDARY_TRANSITIONS[0]! }
+  }
+
+  return clips
+}
+
+function countActiveClipTransitions(sequenceLength: number): number {
+  let n = 0
+  for (const boundary of Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number)) {
+    if (boundary + 1 < sequenceLength) n++
+  }
+  return n
+}
+
+function countOverlapsBeforeClip(clipIndex: number, sequenceLength: number): number {
+  let n = 0
+  for (const boundary of Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number)) {
+    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
+  }
+  return n
+}
+
+function computeClipVideoStartSec(sequence: SequenceItem[], clipIndex: number): number {
+  const linearStarts = computeLinearStarts(sequence)
+  return Number(
+    (
+      linearStarts[clipIndex]! -
+      CLIP_TRANSITION_OVERLAP_SEC * countOverlapsBeforeClip(clipIndex, sequence.length)
+    ).toFixed(3)
+  )
+}
+
+function buildClipFlashTransitionTrack(
+  sequence: SequenceItem[],
+  jobId?: string
+): ShotstackTrack | null {
+  if (sequence.length <= CLIP_FLASH_AT_CLIP_INDEX) return null
+
+  const cutSec = computeClipVideoStartSec(sequence, CLIP_FLASH_AT_CLIP_INDEX)
+  const start = Number(Math.max(0, cutSec - CLIP_FLASH_LEAD_SEC).toFixed(3))
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] Flash clip 4 → cut≈${cutSec.toFixed(2)}s ` +
+        `start=${start.toFixed(2)}s len=${CLIP_FLASH_LENGTH_SEC}s (SVG overlay)`
+    )
+  }
+
+  return {
+    clips: [
+      {
+        asset: { type: 'svg', src: CLIP_FLASH_SVG },
+        start,
+        length: CLIP_FLASH_LENGTH_SEC,
+        fit: 'none',
+        width: 720,
+        height: 1280,
+        position: 'center',
+        opacity: [
+          { from: 0, to: CLIP_FLASH_PEAK_OPACITY, start: 0, length: CLIP_FLASH_FADE_IN_SEC },
+          {
+            from: CLIP_FLASH_PEAK_OPACITY,
+            to: CLIP_FLASH_PEAK_OPACITY,
+            start: CLIP_FLASH_FADE_IN_SEC,
+            length: CLIP_FLASH_HOLD_SEC,
+          },
+          {
+            from: CLIP_FLASH_PEAK_OPACITY,
+            to: 0,
+            start: CLIP_FLASH_FADE_IN_SEC + CLIP_FLASH_HOLD_SEC,
+            length: CLIP_FLASH_FADE_OUT_SEC,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+function buildClipBoundaryTransition(
+  clipIndex: number,
+  sequenceLength: number
+): { out?: string } {
+  const out = CLIP_BOUNDARY_TRANSITIONS[clipIndex]
+  if (out && clipIndex + 1 < sequenceLength) {
+    return { out }
+  }
+  return {}
+}
+
+function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): ShotstackTrack[] {
+  const linearStarts = computeLinearStarts(sequence)
+  const overlap = CLIP_TRANSITION_OVERLAP_SEC
+  const transitionCount = countActiveClipTransitions(sequence.length)
+
+  if (sequence.length === 0) return []
+
+  const buildMainClip = (i: number, start: number, extra?: Partial<ShotstackClip>): ShotstackClip => {
     const item = sequence[i]!
     const src = clipUrls[item.clip_index] ?? clipUrls[0]
-    clips.push({
+    let length = Number(item.trim_duration.toFixed(3))
+    if (i === sequence.length - 1 && sequence.length > 1) {
+      length = Number((length + overlap * transitionCount).toFixed(3))
+    }
+    return {
       asset: {
         type: 'video',
         src,
         trim: Number(item.trim_start.toFixed(3)),
         volume: 1,
       },
-      start: starts[i],
-      length: Number(item.trim_duration.toFixed(3)),
+      start: Number(start.toFixed(3)),
+      length,
       fit: 'cover',
-      effect: 'zoomIn',
-    })
+      ...(i > 0 ? { effect: 'zoomIn' as const } : {}),
+      ...extra,
+    }
   }
-  return { clips }
+
+  if (sequence.length === 1) {
+    const item = sequence[0]!
+    const src = clipUrls[item.clip_index] ?? clipUrls[0]
+    return [{ clips: buildFirstClipIntroClips(item, src, false) }]
+  }
+
+  const topClips: ShotstackClip[] = []
+  const bottomClips: ShotstackClip[] = []
+
+  const item0 = sequence[0]!
+  const src0 = clipUrls[item0.clip_index] ?? clipUrls[0]
+  topClips.push(...buildFirstClipIntroClips(item0, src0, !!CLIP_BOUNDARY_TRANSITIONS[0]))
+
+  for (let i = 1; i < sequence.length; i++) {
+    const start = linearStarts[i]! - overlap * countOverlapsBeforeClip(i, sequence.length)
+    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length)
+
+    let extras: Partial<ShotstackClip> = {}
+    if (Object.keys(boundaryTransition).length > 0) {
+      extras.transition = boundaryTransition
+    }
+
+    const clip = buildMainClip(i, start, extras)
+    if (i % 2 === 0) topClips.push(clip)
+    else bottomClips.push(clip)
+  }
+
+  const tracks: ShotstackTrack[] = []
+  if (topClips.length > 0) tracks.push({ clips: topClips })
+  if (bottomClips.length > 0) tracks.push({ clips: bottomClips })
+  return tracks
 }
 
 function buildBrollOverlayTracks(sequence: SequenceItem[], clipUrls: string[]): ShotstackTrack[] {
@@ -1241,7 +1439,13 @@ export async function renderSegmentsV2(
   }
 
   tracks.push(...buildBrollOverlayTracks(sequence, clipUrls))
-  tracks.push(buildVideoTrack(sequence, clipUrls))
+  tracks.push(...buildVideoTracks(sequence, clipUrls))
+
+  const flashTrack = buildClipFlashTransitionTrack(sequence, jobId)
+  if (flashTrack) {
+    const insertAt = opts?.comentaMentionTimeSec != null ? 1 : 0
+    tracks.splice(insertAt, 0, flashTrack)
+  }
 
   const musicTrim = opts?.musicTrimStartSecOverride ?? 0
   const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim)
