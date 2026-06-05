@@ -1279,19 +1279,25 @@ async function runMultipleClipsPipelineFromStorage(
     // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
     let brandMentionTimeSec: number | undefined
     let brandMentionLengthSec: number | undefined
+    let comentaMentionTimeSec: number | undefined
+    let comentaOverlayText: string | undefined
     if (escenasMulti.length > 0) {
       const brandKws = [
         brandConfig?.vehicle_line_1?.trim(),
         brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
       ].filter((k): k is string => !!k && k.length >= 2)
 
-      const { captionBlocks, brandTimeSec, brandLengthSec } =
+      const { captionBlocks, brandTimeSec, brandLengthSec, comentaTimeSec, comentaOverlayText: comentaText } =
         buildCaptionBlocksFromDialogoAssembly(
           analysis.sequence,
           allSegments,
           escenasMulti,
           brandKws,
-          jobId
+          jobId,
+          {
+            modelLine: brandConfig?.vehicle_line_2,
+            yearLine: brandConfig?.vehicle_line_4,
+          }
         )
 
       if (captionBlocks.length > 0) {
@@ -1304,6 +1310,12 @@ async function runMultipleClipsPipelineFromStorage(
         brandMentionTimeSec = brandTimeSec
         brandMentionLengthSec = brandLengthSec ?? 3.5
       }
+      if (comentaTimeSec != null) {
+        comentaMentionTimeSec = comentaTimeSec
+      }
+      if (comentaText?.trim()) {
+        comentaOverlayText = comentaText.trim()
+      }
     }
 
     const renderId = await renderSegmentsV2(
@@ -1313,7 +1325,7 @@ async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       musicTrackUrl,
       voIntroForRender,
-      { musicTrimStartSecOverride, brandConfig, brandMentionTimeSec, brandMentionLengthSec }
+      { musicTrimStartSecOverride, brandConfig, brandMentionTimeSec, brandMentionLengthSec, comentaMentionTimeSec, comentaOverlayText }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,

@@ -17,8 +17,19 @@ const MONTSERRAT_BLACK_TTF =
 
 const CLOSING_LOGO_LEN_SEC = 3.5
 const DEFAULT_CLOSING_LOGO_PATH = '/logol.png'
-const CLOSING_LOGO_WIDTH_PX = 290
-const CLOSING_LOGO_HEIGHT_PX = 40
+const WHATSAPP_CTA_WIDTH_PX = 450
+const WHATSAPP_CTA_HEIGHT_PX = 210
+/** Más alto que el logo de cierre (y≈0.08 + 100px) para no taparlo */
+/** Más alto que el logo de cierre (y≈0.08 + 100px) para no taparlo */
+const WHATSAPP_CTA_OFFSET_Y = 0.10
+const DEFAULT_WHATSAPP_CTA_URL =
+  'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/iconos-videos-edicion/10CA864A-21FC-4375-ADA6-3ED381695675(1).png'
+const COMENTA_TEXT_FONT_SIZE = 34
+const COMENTA_TEXT_WIDTH_PX = 640
+const COMENTA_TEXT_HEIGHT_PX = 88
+const COMENTA_TEXT_OFFSET_Y = -0.04
+const CLOSING_LOGO_WIDTH_PX = 400
+const CLOSING_LOGO_HEIGHT_PX = 100
 const CLOSING_LOGO_ENTRANCE_SEC = 0.45
 
 function buildTimelineFonts(): { src: string }[] {
@@ -483,6 +494,70 @@ function resolveClosingLogoUrl(
   return `${callbackBase}${DEFAULT_CLOSING_LOGO_PATH}`
 }
 
+function resolveWhatsAppCtaUrl(): string {
+  return process.env.WHATSAPP_CTA_URL?.trim() || DEFAULT_WHATSAPP_CTA_URL
+}
+
+function logComentaOverlayDebug(
+  jobId: string | undefined,
+  trackIndex: number,
+  clip: ShotstackClip,
+  meta: { text: string; startSec: number }
+): void {
+  const tag = `[Shotstack]${jobId ? `[${jobId}]` : ''}[COMENTA-DEBUG]`
+  const asset = clip.asset as Record<string, unknown>
+  const assetW = asset.width as number | undefined
+  const assetH = asset.height as number | undefined
+  console.log(
+    `${tag} track[${trackIndex}] asset=${String(asset.type)} ` +
+      `start=${clip.start}s len=${clip.length}s ` +
+      `position=${JSON.stringify(clip.position)} offset=${JSON.stringify(clip.offset)} ` +
+      `box=${assetW ?? clip.width}x${assetH ?? clip.height}`
+  )
+  console.log(
+    `${tag} text="${meta.text}" startSec=${meta.startSec} ` +
+      `font=${COMENTA_TEXT_FONT_SIZE}px offsetY=${COMENTA_TEXT_OFFSET_Y}`
+  )
+}
+
+function buildComentaOverlayTracks(
+  text: string,
+  startSec: number,
+  totalDuration: number
+): ShotstackTrack[] {
+  const displayText = text.trim().toUpperCase()
+  if (!displayText) return []
+
+  const start = Number(Math.max(0, startSec).toFixed(3))
+  const length = Number(Math.max(0.4, totalDuration - start).toFixed(3))
+  if (length < 0.4) return []
+
+  return [{
+    clips: [{
+      asset: {
+        type: 'rich-text',
+        text: displayText,
+        font: {
+          family: 'Montserrat',
+          size: COMENTA_TEXT_FONT_SIZE,
+          weight: 900,
+          color: '#FFFFFF',
+          opacity: 1,
+        },
+        style: { textTransform: 'uppercase' as const },
+        align: { horizontal: 'center' as const, vertical: 'middle' as const },
+      },
+      start,
+      length,
+      width: COMENTA_TEXT_WIDTH_PX,
+      height: COMENTA_TEXT_HEIGHT_PX,
+      position: 'top',
+      offset: { x: 0, y: COMENTA_TEXT_OFFSET_Y },
+      opacity: [{ from: 0, to: 1, start: 0, length: 0.2 }],
+    }],
+  }]
+}
+
 function buildBrandLogoTrack(logoUrl: string, start: number, length: number): ShotstackTrack | null {
   const url = logoUrl.trim()
   if (!url || length < 0.4) return null
@@ -544,6 +619,34 @@ function buildClosingLogoTrack(logoUrl: string, totalDuration: number): Shotstac
   const length = Number(Math.min(CLOSING_LOGO_LEN_SEC, totalDuration).toFixed(3))
   const start = Number(Math.max(0, totalDuration - length).toFixed(3))
   return buildBrandLogoTrack(logoUrl, start, length)
+}
+
+function buildWhatsAppCtaTrack(
+  imageUrl: string,
+  startSec: number,
+  totalDuration: number
+): ShotstackTrack | null {
+  const url = imageUrl.trim()
+  if (!url) return null
+  const start = Number(Math.max(0, startSec).toFixed(3))
+  const length = Number(Math.max(0.4, totalDuration - start).toFixed(3))
+  if (length < 0.4) return null
+  return {
+    clips: [
+      {
+        asset: { type: 'image', src: url },
+        start,
+        length,
+        fit: 'contain',
+        width: WHATSAPP_CTA_WIDTH_PX,
+        height: WHATSAPP_CTA_HEIGHT_PX,
+        position: 'bottom',
+        offset: { x: 0, y: WHATSAPP_CTA_OFFSET_Y },
+        opacity: [{ from: 0, to: 1, start: 0, length: 0.25 }],
+        transition: { in: 'fade' },
+      },
+    ],
+  }
 }
 
 /**
@@ -959,6 +1062,10 @@ export async function renderSegmentsV2(
     brandMentionTimeSec?: number
     /** Duración (s) del overlay de marca */
     brandMentionLengthSec?: number
+    /** Tiempo (s) en que el dialogo dice "comenta" (WhatsApp CTA) */
+    comentaMentionTimeSec?: number
+    /** Texto del dialogo de la escena "comenta" (overlay superior) */
+    comentaOverlayText?: string
   }
 ): Promise<string> {
   if (voiceOverIntro != null) {
@@ -1076,6 +1183,49 @@ export async function renderSegmentsV2(
     )
   }
   tracks.push(...brandOverlayTracks)
+
+  if (opts?.comentaMentionTimeSec != null) {
+    if (opts.comentaOverlayText?.trim()) {
+      const comentaTracks = buildComentaOverlayTracks(
+        opts.comentaOverlayText,
+        opts.comentaMentionTimeSec,
+        totalDuration
+      )
+      if (comentaTracks.length > 0) {
+        for (let i = comentaTracks.length - 1; i >= 0; i--) {
+          tracks.unshift(comentaTracks[i]!)
+        }
+        const comentaClip = comentaTracks[0]?.clips?.[0]
+        if (comentaClip) {
+          logComentaOverlayDebug(jobId, 0, comentaClip, {
+            text: opts.comentaOverlayText.trim(),
+            startSec: opts.comentaMentionTimeSec,
+          })
+        }
+        console.log(
+          `[Shotstack][${jobId}] Comenta overlay → t=${opts.comentaMentionTimeSec.toFixed(2)}s ` +
+          `"${opts.comentaOverlayText.trim().slice(0, 40)}" (solo texto)`
+        )
+      }
+    }
+
+    const whatsappUrl = resolveWhatsAppCtaUrl()
+    const whatsappTrack = buildWhatsAppCtaTrack(whatsappUrl, opts.comentaMentionTimeSec, totalDuration)
+    if (whatsappTrack) {
+      tracks.push(whatsappTrack)
+      const waClip = whatsappTrack.clips?.[0]
+      console.log(
+        `[Shotstack][${jobId}][COMENTA-DEBUG] WhatsApp CTA track[${tracks.length - 1}] ` +
+          `start=${waClip?.start}s position=${JSON.stringify(waClip?.position)} ` +
+          `offset=${JSON.stringify(waClip?.offset)} ` +
+          `box=${waClip?.width}x${waClip?.height} offsetY=${WHATSAPP_CTA_OFFSET_Y}`
+      )
+      console.log(
+        `[Shotstack][${jobId}] WhatsApp CTA → t=${opts.comentaMentionTimeSec.toFixed(2)}s ` +
+        `hasta fin (${(totalDuration - opts.comentaMentionTimeSec).toFixed(2)}s) ${whatsappUrl}`
+      )
+    }
+  }
 
   const logoUrl = resolveClosingLogoUrl(callbackBase, opts?.brandConfig ?? null)
   const openingLogo = buildOpeningLogoTrack(logoUrl, totalDuration)

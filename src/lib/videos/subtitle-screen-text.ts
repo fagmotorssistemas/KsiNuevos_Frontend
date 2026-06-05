@@ -322,14 +322,30 @@ function addKeywordCaptionBlocks(
  *   - Dentro de esa misma escena, las palabras clave restantes (no-marca) siguen como subtítulos normales
  * - Menciones posteriores de marca+modelo → subtítulos normales
  */
+/** Texto del overlay superior en escena "comenta": COMENTA + 1ª palabra modelo + año */
+export function buildComentaOverlayText(
+  modelLine?: string | null,
+  yearLine?: string | null
+): string {
+  const parts = ['COMENTA']
+  const modelWord = modelLine?.trim().split(/\s+/)[0]
+  if (modelWord) parts.push(modelWord.toUpperCase())
+  const yearRaw = yearLine?.trim() ?? ''
+  const yearMatch = yearRaw.match(/\b(19|20)\d{2}\b/)
+  if (yearMatch) parts.push(yearMatch[0]!)
+  else if (/^\d{4}$/.test(yearRaw)) parts.push(yearRaw)
+  return parts.join(' ')
+}
+
 export function buildCaptionBlocksFromDialogoAssembly(
   sequence: SequenceItem[],
   allSegments: Segment[],
   escenas: GuionEscena[],
   /** Palabras clave de la marca/modelo, ej: ['ford', 'ecosport'] */
   brandKeywords: string[],
-  jobId?: string
-): { captionBlocks: SubtitleBlock[]; brandTimeSec: number | null; brandLengthSec: number | null } {
+  jobId?: string,
+  comentaVehicle?: { modelLine?: string | null; yearLine?: string | null }
+): { captionBlocks: SubtitleBlock[]; brandTimeSec: number | null; brandLengthSec: number | null; comentaTimeSec: number | null; comentaOverlayText: string | null } {
   const segLookup = new Map<string, Segment>()
   for (const s of allSegments) segLookup.set(s.segment_id, s)
 
@@ -349,6 +365,9 @@ export function buildCaptionBlocksFromDialogoAssembly(
   let brandTimeSec: number | null = null
   let brandLengthSec: number | null = null
   let brandFoundOnce = false
+  let comentaTimeSec: number | null = null
+  let comentaOverlayText: string | null = null
+  let pastComentaScene = false
   let timelineOffsetMs = 0
 
   for (let si = 0; si < sequence.length; si++) {
@@ -374,6 +393,26 @@ export function buildCaptionBlocksFromDialogoAssembly(
       : []
 
     const sceneLabelForLog = `escena ${escNum ?? si + 1}`
+    const isComentaScene = /\bcomenta\b/i.test(dialogo)
+
+    if (comentaTimeSec == null && isComentaScene) {
+      if (asmWords.length > 0) {
+        const comentaIdx = findFirstMatchingWordIdx(asmWords, ['comenta'])
+        comentaTimeSec = comentaIdx >= 0
+          ? Number(((timelineOffsetMs + (asmWords[comentaIdx]!.start - trimStartMs)) / 1000).toFixed(3))
+          : Number((timelineOffsetMs / 1000).toFixed(3))
+      } else {
+        comentaTimeSec = Number((timelineOffsetMs / 1000).toFixed(3))
+      }
+      comentaOverlayText = buildComentaOverlayText(
+        comentaVehicle?.modelLine,
+        comentaVehicle?.yearLine
+      )
+      console.log(
+        `[SubtitleDialogo]${jobId ? `[${jobId}]` : ''} ${sceneLabelForLog} → ` +
+        `COMENTA overlay t=${comentaTimeSec.toFixed(2)}s "${comentaOverlayText}"`
+      )
+    }
 
     if (hasBrand(keywords) && !brandFoundOnce) {
       // ── PRIMERA mención de marca: overlay de título ──────────────────────
@@ -427,8 +466,8 @@ export function buildCaptionBlocksFromDialogoAssembly(
         `BRAND OVERLAY t=${brandTimeSec.toFixed(2)}s +${brandLengthSec.toFixed(2)}s ` +
         `dialogo="${dialogo.slice(0, 60)}"`
       )
-    } else if (keywords.length > 0) {
-      // ── Subtítulo normal ─────────────────────────────────────────────────
+    } else if (keywords.length > 0 && !pastComentaScene) {
+      // ── Subtítulo normal (hasta escena comenta; luego se corta en comentaTimeSec) ──
       const prevLen = captionBlocks.length
       addKeywordCaptionBlocks(keywords, asmWords, trimStartMs, timelineOffsetMs, sceneDurMs, captionBlocks)
       const newBlocks = captionBlocks.slice(prevLen)
@@ -440,8 +479,32 @@ export function buildCaptionBlocksFromDialogoAssembly(
       }
     }
 
+    if (isComentaScene && comentaTimeSec != null) {
+      pastComentaScene = true
+    }
+
     timelineOffsetMs += sceneDurMs
   }
 
-  return { captionBlocks, brandTimeSec, brandLengthSec }
+  // Desde "comenta" en adelante: sin subtítulos normales
+  let finalCaptionBlocks = captionBlocks
+  if (comentaTimeSec != null) {
+    const cutSec = comentaTimeSec - 0.02
+    finalCaptionBlocks = captionBlocks
+      .filter((b) => b.time < cutSec)
+      .map((b) => {
+        const blockEnd = b.time + b.duration
+        if (blockEnd <= cutSec) return b
+        return {
+          ...b,
+          duration: Number(Math.max(0.08, cutSec - b.time).toFixed(3)),
+        }
+      })
+    console.log(
+      `[SubtitleDialogo]${jobId ? `[${jobId}]` : ''} Subtítulos cortados en t=${comentaTimeSec.toFixed(2)}s ` +
+        `(${captionBlocks.length} → ${finalCaptionBlocks.length} bloques)`
+    )
+  }
+
+  return { captionBlocks: finalCaptionBlocks, brandTimeSec, brandLengthSec, comentaTimeSec, comentaOverlayText }
 }
