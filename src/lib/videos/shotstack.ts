@@ -24,10 +24,38 @@ const WHATSAPP_CTA_HEIGHT_PX = 210
 const WHATSAPP_CTA_OFFSET_Y = 0.10
 const DEFAULT_WHATSAPP_CTA_URL =
   'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/iconos-videos-edicion/10CA864A-21FC-4375-ADA6-3ED381695675(1).png'
-const COMENTA_TEXT_FONT_SIZE = 34
-const COMENTA_TEXT_WIDTH_PX = 640
-const COMENTA_TEXT_HEIGHT_PX = 88
-const COMENTA_TEXT_OFFSET_Y = -0.04
+const DEFAULT_MOTOR_MENTION_SFX_URL =
+  'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/mixkit-correct-answer-tone-2870.wav'
+const DEFAULT_CLIP_TRANSITION_WHOOSH_URL =
+  'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/dragon-studio-whoosh-effect-382717.mp3'
+/** Volumen equilibrado vs música (0.17) y diálogo del clip (1.0) */
+const MOTOR_MENTION_SFX_VOLUME = 0.4
+const MOTOR_MENTION_SFX_LENGTH_SEC = 0.45
+const MOTOR_MENTION_SFX_MIN_GAP_SEC = 0.25
+/** 2º y 4º clip (índices 1 y 3): whoosh al entrar */
+const CLIP_WHOOSH_AT_CLIP_INDICES = [1, 3] as const
+const CLIP_TRANSITION_WHOOSH_VOLUME = 0.4
+const CLIP_TRANSITION_WHOOSH_LENGTH_SEC = 0.55
+const CLIP_TRANSITION_WHOOSH_LEAD_SEC = 0.02
+const DEFAULT_BRAND_TITLE_POP_SFX_URL =
+  'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/dragon-studio-pop-402324.mp3'
+const BRAND_TITLE_POP_SFX_VOLUME = 0.4
+const BRAND_TITLE_POP_SFX_LENGTH_SEC = 0.35
+const DEFAULT_TRANSMISSION_GEAR_SFX_URL =
+  'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/universfield-new-notification-040-493469.mp3'
+const TRANSMISSION_GEAR_SFX_VOLUME = 0.4
+const TRANSMISSION_GEAR_SFX_LENGTH_SEC = 0.45
+const COMENTA_LINE1_FONT_SIZE = 60
+const COMENTA_LINE2_FONT_SIZE = 56
+const COMENTA_TEXT_WIDTH_PX = 700
+const COMENTA_LINE1_HEIGHT_PX = 90
+const COMENTA_LINE2_HEIGHT_PX = 140
+const COMENTA_LINE1_OFFSET_Y = -0.08
+const COMENTA_LINE2_OFFSET_Y = -0.13
+const COMENTA_FONT_FAMILY = 'Playfair Display'
+const COMENTA_ENTRANCE_SLIDE_SEC = 0.28
+const PLAYFAIR_DISPLAY_SEMIBOLD_TTF =
+  'https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-600-normal.ttf'
 const CLOSING_LOGO_WIDTH_PX = 400
 const CLOSING_LOGO_HEIGHT_PX = 100
 const CLOSING_LOGO_ENTRANCE_SEC = 0.45
@@ -38,7 +66,12 @@ const CLIP_TRANSITION_OVERLAP_SEC = 0.5
 const CLIP_BOUNDARY_TRANSITIONS: Record<number, string> = {
   0: 'slideUp', // clip 1→2: lento, un poco más notorio que slideUpFast
   1: 'wipeRightFast',
+  4: 'fadeFast', // clip 5→6: suelta la capa superior mientras el 6 entra con wipeLeft abajo
 }
+/** 6º clip (índice 5): wipeLeft sobre underlay del clip 5 (evita negro del timeline) */
+const CLIP_6_AT_INDEX = 5
+const CLIP_6_ENTER_TRANSITION_IN = 'wipeLeft'
+const CLIP_6_WIPE_UNDERLAY_SEC = 1.0
 /** Intro clip 1: zoomOut (empieza cerca, se aleja) — igual que Creatomate índice par */
 const FIRST_CLIP_INTRO_EFFECT = 'zoomOutFast' as const
 const FIRST_CLIP_INTRO_PULL_SEC = 0.28
@@ -64,7 +97,7 @@ const CLIP_FLASH_SVG =
   '</svg>'
 
 function buildTimelineFonts(): { src: string }[] {
-  return [{ src: MONTSERRAT_BLACK_TTF }]
+  return [{ src: MONTSERRAT_BLACK_TTF }, { src: PLAYFAIR_DISPLAY_SEMIBOLD_TTF }]
 }
 
 function assertShotstackEnv(): { apiKey: string; baseUrl: string; callbackBase: string } {
@@ -223,17 +256,33 @@ function computeClipVideoStartSec(sequence: SequenceItem[], clipIndex: number): 
 
 function buildClipFlashTransitionTrack(
   sequence: SequenceItem[],
-  jobId?: string
+  clipIndex: number,
+  jobId?: string,
+  opts?: {
+    label?: string
+    leadSec?: number
+    lengthSec?: number
+    fadeInSec?: number
+    holdSec?: number
+    fadeOutSec?: number
+    peakOpacity?: number
+  }
 ): ShotstackTrack | null {
-  if (sequence.length <= CLIP_FLASH_AT_CLIP_INDEX) return null
+  if (sequence.length <= clipIndex) return null
 
-  const cutSec = computeClipVideoStartSec(sequence, CLIP_FLASH_AT_CLIP_INDEX)
-  const start = Number(Math.max(0, cutSec - CLIP_FLASH_LEAD_SEC).toFixed(3))
+  const cutSec = computeClipVideoStartSec(sequence, clipIndex)
+  const leadSec = opts?.leadSec ?? CLIP_FLASH_LEAD_SEC
+  const lengthSec = opts?.lengthSec ?? CLIP_FLASH_LENGTH_SEC
+  const fadeInSec = opts?.fadeInSec ?? CLIP_FLASH_FADE_IN_SEC
+  const holdSec = opts?.holdSec ?? CLIP_FLASH_HOLD_SEC
+  const fadeOutSec = opts?.fadeOutSec ?? CLIP_FLASH_FADE_OUT_SEC
+  const peakOpacity = opts?.peakOpacity ?? CLIP_FLASH_PEAK_OPACITY
+  const start = Number(Math.max(0, cutSec - leadSec).toFixed(3))
 
   if (jobId) {
     console.log(
-      `[Shotstack][${jobId}] Flash clip 4 → cut≈${cutSec.toFixed(2)}s ` +
-        `start=${start.toFixed(2)}s len=${CLIP_FLASH_LENGTH_SEC}s (SVG overlay)`
+      `[Shotstack][${jobId}] Flash ${opts?.label ?? `clip ${clipIndex + 1}`} → cut≈${cutSec.toFixed(2)}s ` +
+        `start=${start.toFixed(2)}s len=${lengthSec}s peak=${peakOpacity} (SVG overlay)`
     )
   }
 
@@ -242,24 +291,24 @@ function buildClipFlashTransitionTrack(
       {
         asset: { type: 'svg', src: CLIP_FLASH_SVG },
         start,
-        length: CLIP_FLASH_LENGTH_SEC,
+        length: lengthSec,
         fit: 'none',
         width: 720,
         height: 1280,
         position: 'center',
         opacity: [
-          { from: 0, to: CLIP_FLASH_PEAK_OPACITY, start: 0, length: CLIP_FLASH_FADE_IN_SEC },
+          { from: 0, to: peakOpacity, start: 0, length: fadeInSec },
           {
-            from: CLIP_FLASH_PEAK_OPACITY,
-            to: CLIP_FLASH_PEAK_OPACITY,
-            start: CLIP_FLASH_FADE_IN_SEC,
-            length: CLIP_FLASH_HOLD_SEC,
+            from: peakOpacity,
+            to: peakOpacity,
+            start: fadeInSec,
+            length: holdSec,
           },
           {
-            from: CLIP_FLASH_PEAK_OPACITY,
+            from: peakOpacity,
             to: 0,
-            start: CLIP_FLASH_FADE_IN_SEC + CLIP_FLASH_HOLD_SEC,
-            length: CLIP_FLASH_FADE_OUT_SEC,
+            start: fadeInSec + holdSec,
+            length: fadeOutSec,
           },
         ],
       },
@@ -292,6 +341,7 @@ function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): Shotsta
     if (i === sequence.length - 1 && sequence.length > 1) {
       length = Number((length + overlap * transitionCount).toFixed(3))
     }
+
     return {
       asset: {
         type: 'video',
@@ -322,11 +372,45 @@ function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): Shotsta
 
   for (let i = 1; i < sequence.length; i++) {
     const start = linearStarts[i]! - overlap * countOverlapsBeforeClip(i, sequence.length)
-    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length)
+    const item = sequence[i]!
+    const src = clipUrls[item.clip_index] ?? clipUrls[0]
+    let length = Number(item.trim_duration.toFixed(3))
+    if (i === sequence.length - 1 && sequence.length > 1) {
+      length = Number((length + overlap * transitionCount).toFixed(3))
+    }
 
     let extras: Partial<ShotstackClip> = {}
+    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length)
     if (Object.keys(boundaryTransition).length > 0) {
       extras.transition = boundaryTransition
+    }
+
+    // Clip 5: alargar hasta cubrir el wipe del 6º (fadeFast arriba)
+    if (i === CLIP_6_AT_INDEX - 1 && sequence.length > CLIP_6_AT_INDEX) {
+      const clip6Start = computeClipVideoStartSec(sequence, CLIP_6_AT_INDEX)
+      const holdThrough = Number((clip6Start + CLIP_6_WIPE_UNDERLAY_SEC - start).toFixed(3))
+      length = Number(Math.max(length, holdThrough).toFixed(3))
+    }
+
+    // Clip 6: underlay del 5 + wipeLeft in (sin negro bajo el wipe)
+    if (i === CLIP_6_AT_INDEX && sequence.length > CLIP_6_AT_INDEX) {
+      const clip5Item = sequence[CLIP_6_AT_INDEX - 1]!
+      const clip5Src = clipUrls[clip5Item.clip_index] ?? clipUrls[0]
+      const clip5Start = computeClipVideoStartSec(sequence, CLIP_6_AT_INDEX - 1)
+      const elapsed = Math.max(0, start - clip5Start)
+      const underlayTrim = Number((clip5Item.trim_start + elapsed).toFixed(3))
+      bottomClips.push({
+        asset: {
+          type: 'video',
+          src: clip5Src,
+          trim: underlayTrim,
+          volume: 0,
+        },
+        start: Number(start.toFixed(3)),
+        length: CLIP_6_WIPE_UNDERLAY_SEC,
+        fit: 'cover',
+      })
+      extras.transition = { in: CLIP_6_ENTER_TRANSITION_IN }
     }
 
     const clip = buildMainClip(i, start, extras)
@@ -383,6 +467,302 @@ function buildMusicTrack(
         },
         start: 0,
         length: Number(totalDuration.toFixed(3)),
+      },
+    ],
+  }
+}
+
+function resolveMotorMentionSfxUrl(): string {
+  return (process.env.VIDEO_SFX_MOTOR_URL?.trim() || DEFAULT_MOTOR_MENTION_SFX_URL).trim()
+}
+
+function isMotorWord(text: string): boolean {
+  return /^motor$/i.test(text.replace(/^[.,;:!?¡¿"'()\-]+|[.,;:!?¡¿"'()\-]+$/g, '').trim())
+}
+
+function blockMentionsMotor(block: SubtitleBlock): boolean {
+  return block.text.trim().split(/\s+/).some(isMotorWord)
+}
+
+function collectMotorMentionTimes(blocks: SubtitleBlock[], totalDuration: number): number[] {
+  const raw: number[] = []
+
+  for (const block of blocks) {
+    if (!block.text?.trim() || block.time >= totalDuration) continue
+
+    if (block.words?.length) {
+      for (const w of block.words) {
+        if (w.start >= totalDuration) continue
+        if (isMotorWord(w.text)) raw.push(Number(w.start.toFixed(3)))
+      }
+      continue
+    }
+
+    if (blockMentionsMotor(block)) {
+      raw.push(Number(block.time.toFixed(3)))
+    }
+  }
+
+  raw.sort((a, b) => a - b)
+  const deduped: number[] = []
+  for (const t of raw) {
+    if (deduped.length === 0 || t - deduped[deduped.length - 1]! >= MOTOR_MENTION_SFX_MIN_GAP_SEC) {
+      deduped.push(t)
+    }
+  }
+  return deduped
+}
+
+function buildMotorMentionSfxTrack(
+  subtitleBlocks: SubtitleBlock[],
+  totalDuration: number,
+  jobId?: string
+): ShotstackTrack | null {
+  const url = resolveMotorMentionSfxUrl()
+  if (!url) return null
+
+  const times = collectMotorMentionTimes(subtitleBlocks, totalDuration)
+  if (times.length === 0) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX motor → ${times.length} hit(s) vol=${MOTOR_MENTION_SFX_VOLUME} ` +
+        times.map((t) => `t=${t.toFixed(2)}s`).join(', ')
+    )
+  }
+
+  return {
+    clips: times.map((start) => ({
+      asset: {
+        type: 'audio',
+        src: url,
+        trim: 0,
+        volume: MOTOR_MENTION_SFX_VOLUME,
+      },
+      start,
+      length: MOTOR_MENTION_SFX_LENGTH_SEC,
+    })),
+  }
+}
+
+function resolveTransmissionGearSfxUrl(): string {
+  return (process.env.VIDEO_SFX_TRANSMISSION_URL?.trim() || DEFAULT_TRANSMISSION_GEAR_SFX_URL).trim()
+}
+
+function normalizeSubtitleToken(text: string): string {
+  return text.replace(/^[.,;:!?¡¿"'()\-]+|[.,;:!?¡¿"'()\-]+$/g, '').trim()
+}
+
+function isTransmissionWord(text: string): boolean {
+  return /^transmis/i.test(normalizeSubtitleToken(text))
+}
+
+function isGearTypeWord(text: string): boolean {
+  return /^(manual|autom[aá]t)/i.test(normalizeSubtitleToken(text))
+}
+
+function blockMentionsTransmissionGear(text: string): boolean {
+  const words = text.trim().toUpperCase().split(/\s+/).filter(Boolean)
+  for (let i = 0; i < words.length - 1; i++) {
+    if (isTransmissionWord(words[i]!) && isGearTypeWord(words[i + 1]!)) return true
+  }
+  return false
+}
+
+function collectTransmissionGearTimes(blocks: SubtitleBlock[], totalDuration: number): number[] {
+  const raw: number[] = []
+
+  for (const block of blocks) {
+    if (!block.text?.trim() || block.time >= totalDuration) continue
+
+    if (block.words?.length) {
+      let matched = false
+      for (let i = 0; i < block.words.length - 1; i++) {
+        const w1 = block.words[i]!
+        const w2 = block.words[i + 1]!
+        if (w2.start >= totalDuration) continue
+        if (isTransmissionWord(w1.text) && isGearTypeWord(w2.text)) {
+          raw.push(Number(w2.start.toFixed(3)))
+          matched = true
+        }
+      }
+      if (matched) continue
+    }
+
+    if (blockMentionsTransmissionGear(block.text)) {
+      raw.push(Number(block.time.toFixed(3)))
+    }
+  }
+
+  raw.sort((a, b) => a - b)
+  const deduped: number[] = []
+  for (const t of raw) {
+    if (deduped.length === 0 || t - deduped[deduped.length - 1]! >= MOTOR_MENTION_SFX_MIN_GAP_SEC) {
+      deduped.push(t)
+    }
+  }
+  return deduped
+}
+
+function buildTransmissionGearSfxTrack(
+  subtitleBlocks: SubtitleBlock[],
+  totalDuration: number,
+  jobId?: string
+): ShotstackTrack | null {
+  const url = resolveTransmissionGearSfxUrl()
+  if (!url) return null
+
+  const times = collectTransmissionGearTimes(subtitleBlocks, totalDuration)
+  if (times.length === 0) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX transmisión → ${times.length} hit(s) vol=${TRANSMISSION_GEAR_SFX_VOLUME} ` +
+        times.map((t) => `t=${t.toFixed(2)}s`).join(', ')
+    )
+  }
+
+  return {
+    clips: times.map((start) => ({
+      asset: {
+        type: 'audio',
+        src: url,
+        trim: 0,
+        volume: TRANSMISSION_GEAR_SFX_VOLUME,
+      },
+      start,
+      length: TRANSMISSION_GEAR_SFX_LENGTH_SEC,
+    })),
+  }
+}
+
+function resolveClipTransitionWhooshUrl(): string {
+  return (
+    process.env.VIDEO_SFX_WHOOSH_URL?.trim() ||
+    process.env.VIDEO_SFX_TRANSITION_WHOOSH_URL?.trim() ||
+    DEFAULT_CLIP_TRANSITION_WHOOSH_URL
+  ).trim()
+}
+
+function buildClipTransitionWhooshTrack(
+  sequence: SequenceItem[],
+  jobId?: string
+): ShotstackTrack | null {
+  const url = resolveClipTransitionWhooshUrl()
+  if (!url) return null
+
+  const clips: ShotstackClip[] = []
+
+  for (const clipIndex of CLIP_WHOOSH_AT_CLIP_INDICES) {
+    if (sequence.length <= clipIndex) continue
+    const cutSec = computeClipVideoStartSec(sequence, clipIndex)
+    const start = Number(Math.max(0, cutSec - CLIP_TRANSITION_WHOOSH_LEAD_SEC).toFixed(3))
+    clips.push({
+      asset: {
+        type: 'audio',
+        src: url,
+        trim: 0,
+        volume: CLIP_TRANSITION_WHOOSH_VOLUME,
+      },
+      start,
+      length: CLIP_TRANSITION_WHOOSH_LENGTH_SEC,
+    })
+  }
+
+  if (clips.length === 0) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX whoosh clip 2/4 → ${clips.length} hit(s) vol=${CLIP_TRANSITION_WHOOSH_VOLUME} ` +
+        clips.map((c) => `t=${(c.start as number).toFixed(2)}s`).join(', ')
+    )
+  }
+
+  return { clips }
+}
+
+function resolveBrandTitlePopSfxUrl(): string {
+  return (
+    process.env.VIDEO_SFX_BRAND_POP_URL?.trim() ||
+    process.env.VIDEO_SFX_POP_URL?.trim() ||
+    DEFAULT_BRAND_TITLE_POP_SFX_URL
+  ).trim()
+}
+
+function buildBrandTitlePopSfxTrack(
+  brandStartSec: number,
+  totalDuration: number,
+  enabled: boolean,
+  jobId?: string
+): ShotstackTrack | null {
+  if (!enabled) return null
+
+  const url = resolveBrandTitlePopSfxUrl()
+  if (!url) return null
+
+  const start = Number(Math.max(0, Math.min(brandStartSec, totalDuration)).toFixed(3))
+  if (start >= totalDuration) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX pop título → t=${start.toFixed(2)}s vol=${BRAND_TITLE_POP_SFX_VOLUME}`
+    )
+  }
+
+  return {
+    clips: [
+      {
+        asset: {
+          type: 'audio',
+          src: url,
+          trim: 0,
+          volume: BRAND_TITLE_POP_SFX_VOLUME,
+        },
+        start,
+        length: BRAND_TITLE_POP_SFX_LENGTH_SEC,
+      },
+    ],
+  }
+}
+
+function resolveComentaMentionSfxUrl(): string {
+  return (
+    process.env.VIDEO_SFX_COMENTA_URL?.trim() ||
+    process.env.VIDEO_SFX_MOTOR_URL?.trim() ||
+    DEFAULT_MOTOR_MENTION_SFX_URL
+  ).trim()
+}
+
+function buildComentaMentionSfxTrack(
+  comentaTimeSec: number | undefined,
+  totalDuration: number,
+  jobId?: string
+): ShotstackTrack | null {
+  if (comentaTimeSec == null) return null
+
+  const url = resolveComentaMentionSfxUrl()
+  if (!url) return null
+
+  const start = Number(Math.max(0, Math.min(comentaTimeSec, totalDuration)).toFixed(3))
+  if (start >= totalDuration) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX comenta → t=${start.toFixed(2)}s vol=${MOTOR_MENTION_SFX_VOLUME}`
+    )
+  }
+
+  return {
+    clips: [
+      {
+        asset: {
+          type: 'audio',
+          src: url,
+          trim: 0,
+          volume: MOTOR_MENTION_SFX_VOLUME,
+        },
+        start,
+        length: MOTOR_MENTION_SFX_LENGTH_SEC,
       },
     ],
   }
@@ -714,8 +1094,44 @@ function logComentaOverlayDebug(
   )
   console.log(
     `${tag} text="${meta.text}" startSec=${meta.startSec} ` +
-      `font=${COMENTA_TEXT_FONT_SIZE}px offsetY=${COMENTA_TEXT_OFFSET_Y}`
+      `font=${COMENTA_FONT_FAMILY} L1=${COMENTA_LINE1_FONT_SIZE}px y=${COMENTA_LINE1_OFFSET_Y} L2=${COMENTA_LINE2_FONT_SIZE}px y=${COMENTA_LINE2_OFFSET_Y}`
   )
+}
+
+function buildComentaSlideX(totalLen: number): unknown[] {
+  const slideSec = COMENTA_ENTRANCE_SLIDE_SEC
+  const bounceSec = 0.08
+  const restX = Number(Math.max(0.05, totalLen - slideSec - bounceSec).toFixed(3))
+  return [
+    { from: -0.85, to: 0.06, start: 0, length: slideSec, interpolation: 'bezier', easing: 'easeOutCubic' },
+    { from: 0.06, to: 0, start: slideSec, length: bounceSec, interpolation: 'bezier', easing: 'easeInOutSine' },
+    { from: 0, to: 0, start: slideSec + bounceSec, length: restX },
+  ]
+}
+
+function buildComentaEntranceScale(totalLen: number): unknown[] {
+  const popUpSec = 0.14
+  const settleSec = 0.1
+  const endPop = popUpSec + settleSec
+  return [
+    {
+      from: 0.6,
+      to: 1.12,
+      start: 0,
+      length: popUpSec,
+      interpolation: 'bezier',
+      easing: 'easeOutBack',
+    },
+    {
+      from: 1.12,
+      to: 1,
+      start: popUpSec,
+      length: settleSec,
+      interpolation: 'bezier',
+      easing: 'easeOutSine',
+    },
+    { from: 1, to: 1, start: endPop, length: Number(Math.max(0.05, totalLen - endPop).toFixed(3)) },
+  ]
 }
 
 function buildComentaOverlayTracks(
@@ -730,30 +1146,56 @@ function buildComentaOverlayTracks(
   const length = Number(Math.max(0.4, totalDuration - start).toFixed(3))
   if (length < 0.4) return []
 
-  return [{
-    clips: [{
-      asset: {
-        type: 'rich-text',
-        text: displayText,
-        font: {
-          family: 'Montserrat',
-          size: COMENTA_TEXT_FONT_SIZE,
-          weight: 900,
-          color: '#FFFFFF',
-          opacity: 1,
-        },
-        style: { textTransform: 'uppercase' as const },
-        align: { horizontal: 'center' as const, vertical: 'middle' as const },
+  const comentaLead = displayText.startsWith('COMENTA') ? 'COMENTA' : displayText.split(/\s+/)[0] ?? displayText
+  const comentaRest = displayText.startsWith('COMENTA')
+    ? displayText.slice('COMENTA'.length).trim()
+    : displayText.split(/\s+/).slice(1).join(' ')
+
+  const slideX = buildComentaSlideX(length)
+  const scale = buildComentaEntranceScale(length)
+  const align = { horizontal: 'center' as const, vertical: 'middle' as const }
+  const style = { textTransform: 'uppercase' as const }
+
+  const buildLineClip = (
+    lineText: string,
+    offsetY: number,
+    height: number,
+    fontSize: number,
+    color: string
+  ): ShotstackClip => ({
+    asset: {
+      type: 'rich-text',
+      text: lineText,
+      font: {
+        family: COMENTA_FONT_FAMILY,
+        size: fontSize,
+        weight: 600,
+        color,
+        opacity: 1,
       },
-      start,
-      length,
-      width: COMENTA_TEXT_WIDTH_PX,
-      height: COMENTA_TEXT_HEIGHT_PX,
-      position: 'top',
-      offset: { x: 0, y: COMENTA_TEXT_OFFSET_Y },
-      opacity: [{ from: 0, to: 1, start: 0, length: 0.2 }],
-    }],
+      style,
+      align,
+    },
+    start,
+    length,
+    width: COMENTA_TEXT_WIDTH_PX,
+    height,
+    position: 'top',
+    offset: { x: slideX, y: buildJumpThenFixed(offsetY, length) },
+    scale,
+  })
+
+  const tracks: ShotstackTrack[] = [{
+    clips: [buildLineClip(comentaLead, COMENTA_LINE1_OFFSET_Y, COMENTA_LINE1_HEIGHT_PX, COMENTA_LINE1_FONT_SIZE, '#E63333')],
   }]
+
+  if (comentaRest) {
+    tracks.push({
+      clips: [buildLineClip(comentaRest, COMENTA_LINE2_OFFSET_Y, COMENTA_LINE2_HEIGHT_PX, COMENTA_LINE2_FONT_SIZE, '#FFFFFF')],
+    })
+  }
+
+  return tracks
 }
 
 function buildBrandLogoTrack(logoUrl: string, start: number, length: number): ShotstackTrack | null {
@@ -1280,9 +1722,10 @@ export async function renderSegmentsV2(
 
   const tracks: ShotstackTrack[] = []
 
-  const hasBrandOverlays =
+  const hasBrandOverlays = Boolean(
     opts?.brandConfig?.show_brand_overlays === true &&
-    (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
+      (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
+  )
 
   // Timing del overlay de marca: viene del pipeline (dialogo+Assembly) o fallback t=0
   const brandStart  = opts?.brandMentionTimeSec  ?? 0
@@ -1441,15 +1884,29 @@ export async function renderSegmentsV2(
   tracks.push(...buildBrollOverlayTracks(sequence, clipUrls))
   tracks.push(...buildVideoTracks(sequence, clipUrls))
 
-  const flashTrack = buildClipFlashTransitionTrack(sequence, jobId)
-  if (flashTrack) {
-    const insertAt = opts?.comentaMentionTimeSec != null ? 1 : 0
-    tracks.splice(insertAt, 0, flashTrack)
-  }
+  const flashTrack = buildClipFlashTransitionTrack(sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
+    label: 'clip 4',
+  })
+  if (flashTrack) tracks.unshift(flashTrack)
 
   const musicTrim = opts?.musicTrimStartSecOverride ?? 0
   const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim)
   if (musicTrack) tracks.push(musicTrack)
+
+  const motorSfxTrack = buildMotorMentionSfxTrack(captionBlocksToRender, totalDuration, jobId)
+  if (motorSfxTrack) tracks.push(motorSfxTrack)
+
+  const transmissionSfxTrack = buildTransmissionGearSfxTrack(captionBlocksToRender, totalDuration, jobId)
+  if (transmissionSfxTrack) tracks.push(transmissionSfxTrack)
+
+  const whooshSfxTrack = buildClipTransitionWhooshTrack(sequence, jobId)
+  if (whooshSfxTrack) tracks.push(whooshSfxTrack)
+
+  const brandPopSfxTrack = buildBrandTitlePopSfxTrack(brandStart, totalDuration, hasBrandOverlays, jobId)
+  if (brandPopSfxTrack) tracks.push(brandPopSfxTrack)
+
+  const comentaSfxTrack = buildComentaMentionSfxTrack(opts?.comentaMentionTimeSec, totalDuration, jobId)
+  if (comentaSfxTrack) tracks.push(comentaSfxTrack)
 
   const callbackUrl = `${callbackBase}/api/videos/webhook/shotstack?jobId=${encodeURIComponent(jobId)}`
   const edit = {
