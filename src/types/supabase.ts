@@ -5828,6 +5828,7 @@ export type Database = {
           assemblyai_transcript_id: string | null
           created_at: string | null
           creatomate_render_id: string | null
+          cta_text: string | null
           current_step: string | null
           error_message: string | null
           final_video_duration: number | null
@@ -5836,6 +5837,7 @@ export type Database = {
           gemini_analysis: Json | null
           id: string
           job_name: string | null
+          logo_url: string | null
           music_track_url: string | null
           progress_percentage: number | null
           raw_video_paths: string[]
@@ -5843,17 +5845,26 @@ export type Database = {
           script_text: string | null
           segment_map: Json | null
           selected_clips: Json | null
+          show_brand_overlays: boolean | null
+          show_watermark: boolean | null
           social_publish_stage: string | null
           srt_content: string | null
           status: string
           subtitle_blocks_override: Json | null
           updated_at: string | null
+          vehicle_line_1: string | null
+          vehicle_line_2: string | null
+          vehicle_line_3: string | null
+          vehicle_line_4: string | null
+          video_script_id: string | null
+          whatsapp_number: string | null
         }
         Insert: {
           adjusted_srt?: string | null
           assemblyai_transcript_id?: string | null
           created_at?: string | null
           creatomate_render_id?: string | null
+          cta_text?: string | null
           current_step?: string | null
           error_message?: string | null
           final_video_duration?: number | null
@@ -5862,6 +5873,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           job_name?: string | null
+          logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths: string[]
@@ -5869,17 +5881,26 @@ export type Database = {
           script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
+          show_brand_overlays?: boolean | null
+          show_watermark?: boolean | null
           social_publish_stage?: string | null
           srt_content?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
+          vehicle_line_1?: string | null
+          vehicle_line_2?: string | null
+          vehicle_line_3?: string | null
+          vehicle_line_4?: string | null
+          video_script_id?: string | null
+          whatsapp_number?: string | null
         }
         Update: {
           adjusted_srt?: string | null
           assemblyai_transcript_id?: string | null
           created_at?: string | null
           creatomate_render_id?: string | null
+          cta_text?: string | null
           current_step?: string | null
           error_message?: string | null
           final_video_duration?: number | null
@@ -5888,6 +5909,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           job_name?: string | null
+          logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
           raw_video_paths?: string[]
@@ -5895,13 +5917,29 @@ export type Database = {
           script_text?: string | null
           segment_map?: Json | null
           selected_clips?: Json | null
+          show_brand_overlays?: boolean | null
+          show_watermark?: boolean | null
           social_publish_stage?: string | null
           srt_content?: string | null
           status?: string
           subtitle_blocks_override?: Json | null
           updated_at?: string | null
+          vehicle_line_1?: string | null
+          vehicle_line_2?: string | null
+          vehicle_line_3?: string | null
+          vehicle_line_4?: string | null
+          video_script_id?: string | null
+          whatsapp_number?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "video_jobs_v2_video_script_id_fkey"
+            columns: ["video_script_id"]
+            isOneToOne: false
+            referencedRelation: "video_scripts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       video_publishing_queue: {
         Row: {

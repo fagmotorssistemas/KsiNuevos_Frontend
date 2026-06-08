@@ -76,6 +76,8 @@ interface StartJobBody {
   manualClipOrderIndices?: number[] | null
   /** Vehículo canónico para contexto en Gemini (inventario o captura manual). */
   canonicalVehicle?: { brand?: string; model?: string; year?: string } | null
+  /** ID inventario (`inventoryoracle.id`) para detectar `video_scripts` del mismo vehículo. */
+  vehicleId?: string | null
   /** Inicio manual del track musical en segundos (opcional). */
   musicTrimStartSec?: number | null
 }
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest) {
       manualIntroClipIndices: manualIntroRaw,
       manualClipOrderIndices: manualClipOrderRaw,
       canonicalVehicle: canonicalVehicleRaw,
+      vehicleId: vehicleIdRaw,
       musicTrimStartSec: musicTrimStartRaw,
     } = body
 
@@ -321,6 +324,10 @@ export async function POST(request: NextRequest) {
     }
 
     const canonicalVehicle = normalizeCanonicalVehicle(canonicalVehicleRaw ?? undefined)
+    const vehicleId =
+      vehicleIdRaw != null && String(vehicleIdRaw).trim() !== ''
+        ? String(vehicleIdRaw).trim()
+        : undefined
     const musicTrimStartSec = normalizeMusicTrimStartSec(musicTrimStartRaw ?? undefined)
 
     const supabase = getServiceClient()
@@ -380,6 +387,7 @@ export async function POST(request: NextRequest) {
       (manualIntroClipIndices !== undefined && manualIntroClipIndices.length > 0) ||
       (manualClipOrderIndices !== undefined && manualClipOrderIndices.length > 0) ||
       canonicalVehicle !== undefined ||
+      vehicleId !== undefined ||
       musicTrimStartSec !== undefined
         ? ({
             _v2_pipeline_input: true,
@@ -398,6 +406,7 @@ export async function POST(request: NextRequest) {
               ? { manualClipOrderIndices }
               : {}),
             ...(canonicalVehicle ? { canonicalVehicle } : {}),
+            ...(vehicleId ? { vehicleId } : {}),
             ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),
           } as unknown as Json)
         : undefined

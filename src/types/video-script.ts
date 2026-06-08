@@ -70,6 +70,13 @@ export function parseGuionEscenas(raw: unknown): GuionEscena[] {
   return rows.sort((a, b) => a.esc - b.esc)
 }
 
+/** Líneas de diálogo en orden de escena (para alinear Assembly / secuencia Gemini). */
+export function dialogueLinesFromGuionEscenas(escenas: GuionEscena[]): string[] {
+  return escenas
+    .map((e) => e.dialogo?.trim())
+    .filter((d): d is string => Boolean(d && d.length > 0))
+}
+
 export function hasStructuredGuion(script: VideoScriptStructuredFields): boolean {
   const escenas = parseGuionEscenas(script.guion_escenas)
   if (escenas.length > 0) return true

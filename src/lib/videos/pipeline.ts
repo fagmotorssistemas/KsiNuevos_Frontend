@@ -33,19 +33,46 @@ import {
   normalizeManualClipOrderIndices,
 } from './clip-config'
 import { extractQuotedDialoguesFromScript } from './script-dialogues'
+import {
+  applyScreenTextFromGuion,
+  applyScreenTextFromGuionSequence,
+  buildCaptionBlocksFromDialogoAssembly,
+  parseEscenaNumberFromSequenceReason,
+} from './subtitle-screen-text'
+import {
+  loadGuionEscenasForJob,
+  resolveAndLinkVideoScriptForJob,
+} from './video-script-resolve'
+import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
+import { fetchDriveBadgeForJob } from './drive-badge'
+import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
+import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
+import { applyCaptionHighlights } from './highlight-engine'
+import type { BrandConfig } from './creatomate'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
-import { analyzeSegments, type AnalyzeSegmentsOptions } from './gemini'
+import {
+  analyzeSegments,
+  buildValidatedAnalysisFromGuionSequence,
+  type AnalyzeSegmentsOptions,
+} from './gemini'
+import {
+  logGuionDialogueMatchMatrix,
+  tryBuildSequenceFromGuionDialogues,
+} from './guion-sequence'
+import { dialogueLinesFromGuionEscenas, type GuionEscena } from '@/types/video-script'
 import {
   buildCreatomateRenderScript,
   computeReelTimelineMeta,
   getCreatomateRenderStatus,
-  renderSegmentsV2,
   submitCreatomateRenderForJob,
+  brandConfigFromJobRow,
+  type BrandConfigJobRow,
   type CreatomateFlatRenderScript,
   VOICE_OVER_EXTERNAL_CLIP_INDEX,
   type VoiceOverIntroRenderInput,
 } from './creatomate'
+import { renderSegmentsV2, getShotstackRenderStatus } from './shotstack'
 import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import {
@@ -64,9 +91,16 @@ function getServiceClient() {
   )
 }
 
+function vehicleIdFromPipelineMeta(selectedClips: unknown): string | null {
+  if (!isPipelineInputMeta(selectedClips)) return null
+  const id = selectedClips.vehicleId?.trim()
+  return id || null
+}
+
 async function fetchJobGeminiContext(jobId: string): Promise<{
   scriptText: string | null
   canonicalVehicle?: CanonicalVehicleMeta
+  vehicleId?: string | null
   manualIntroClipIndicesRaw?: number[]
   manualClipOrderIndicesRaw?: number[]
 }> {
@@ -81,6 +115,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   let canonicalVehicle: CanonicalVehicleMeta | undefined
   let manualIntroClipIndicesRaw: number[] | undefined
   let manualClipOrderIndicesRaw: number[] | undefined
+  const vehicleId = vehicleIdFromPipelineMeta(data.selected_clips)
   const sc = data.selected_clips
   if (isPipelineInputMeta(sc)) {
     canonicalVehicle = normalizeCanonicalVehicle(sc.canonicalVehicle)
@@ -97,7 +132,156 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
       if (coercedOrder.length > 0) manualClipOrderIndicesRaw = coercedOrder
     }
   }
-  return { scriptText, canonicalVehicle, manualIntroClipIndicesRaw, manualClipOrderIndicesRaw }
+  return {
+    scriptText,
+    canonicalVehicle,
+    vehicleId,
+    manualIntroClipIndicesRaw,
+    manualClipOrderIndicesRaw,
+  }
+}
+
+async function loadGuionEscenasForPipelineJob(
+  jobId: string,
+  allSegments: Segment[]
+): Promise<GuionEscena[]> {
+  const supabase = getServiceClient()
+  const { data: jobRow } = await supabase
+    .from('video_jobs_v2')
+    .select('video_script_id, selected_clips, script_text')
+    .eq('id', jobId)
+    .single()
+
+  let escenas = await loadGuionEscenasForJob(supabase, jobRow?.video_script_id)
+  if (escenas.length === 0 && !jobRow?.script_text?.trim()) {
+    const vehicleId = vehicleIdFromPipelineMeta(jobRow?.selected_clips)
+    const resolved = await resolveAndLinkVideoScriptForJob(
+      supabase,
+      jobId,
+      allSegments,
+      vehicleId
+    )
+    escenas = resolved?.escenas ?? []
+  }
+  return escenas
+}
+
+type GuionSequenceAttemptOpts = {
+  excludedClipIndices: number[]
+  clipKinds: VideoClipKind[]
+  manualClipOrder: number[] | null | undefined
+  manualIntro: number[] | null | undefined
+  voiceOverBaseClipIndex?: number | null
+  voiceOverFromMp3?: boolean
+}
+
+/**
+ * Orden determinista: cada diálogo del guión (tabla) → segment_id Assembly, en orden de escena.
+ * Evita que validateSequence reordene con heurísticas de "apertura" / intro / CTA.
+ */
+function tryAnalysisFromGuionDialogues(
+  jobId: string,
+  allSegments: Segment[],
+  escenas: GuionEscena[],
+  opts: GuionSequenceAttemptOpts
+): GeminiSegmentAnalysisResult | null {
+  if (opts.manualClipOrder && opts.manualClipOrder.length > 0) {
+    console.log(`[VideoV2Pipeline][${jobId}][GuionSeq] Omitido: orden manual de clips activo`)
+    return null
+  }
+  if (opts.manualIntro && opts.manualIntro.length > 0) {
+    console.log(`[VideoV2Pipeline][${jobId}][GuionSeq] Omitido: intro manual activa`)
+    return null
+  }
+
+  const dialogues = dialogueLinesFromGuionEscenas(escenas)
+  console.log(
+    `[VideoV2Pipeline][${jobId}][GuionSeq] ${escenas.length} escenas, ${dialogues.length} diálogos con texto`
+  )
+
+  const guionSequence = tryBuildSequenceFromGuionDialogues(escenas, allSegments, {
+    excludedClipIndices: opts.excludedClipIndices,
+    jobId,
+  })
+  if (!guionSequence || guionSequence.length === 0) {
+    console.warn(`[VideoV2Pipeline][${jobId}][GuionSeq] No se pudo armar secuencia → fallback Gemini`)
+    return null
+  }
+
+  const validateOpts: Parameters<typeof buildValidatedAnalysisFromGuionSequence>[4] = {}
+  if (opts.voiceOverBaseClipIndex != null) {
+    validateOpts.excludeClipIndicesFromSequence = [opts.voiceOverBaseClipIndex]
+    validateOpts.disableVisualOverlayNormalization = true
+    validateOpts.manualVoiceOverBaseClipIndex = opts.voiceOverBaseClipIndex
+  } else if (opts.voiceOverFromMp3) {
+    validateOpts.excludeClipIndicesFromSequence = opts.excludedClipIndices
+    validateOpts.disableVisualOverlayNormalization = true
+    validateOpts.manualVoiceOverFromExternalAudio = true
+  }
+
+  const analysis = buildValidatedAnalysisFromGuionSequence(
+    guionSequence,
+    allSegments,
+    jobId,
+    opts.clipKinds,
+    validateOpts
+  )
+  console.log(
+    `[VideoV2Pipeline][${jobId}][GuionSeq] Montaje final por guión: ${analysis.sequence.length} cortes, ` +
+      `${analysis.total_duration.toFixed(1)}s — ${analysis.sequence.map((s) => `clip${s.clip_index}`).join(' → ')}`
+  )
+  return analysis
+}
+
+async function finalizeSubtitleBlocksForJob(
+  jobId: string,
+  blocks: SubtitleBlock[],
+  allSegments: Segment[],
+  sequence?: SequenceItem[]
+): Promise<SubtitleBlock[]> {
+  const supabase = getServiceClient()
+  const { data: jobRow } = await supabase
+    .from('video_jobs_v2')
+    .select('video_script_id, selected_clips')
+    .eq('id', jobId)
+    .single()
+
+  const vehicleId = vehicleIdFromPipelineMeta(jobRow?.selected_clips)
+  let escenas = await loadGuionEscenasForJob(supabase, jobRow?.video_script_id)
+  if (escenas.length === 0) {
+    const resolved = await resolveAndLinkVideoScriptForJob(
+      supabase,
+      jobId,
+      allSegments,
+      vehicleId
+    )
+    escenas = resolved?.escenas ?? []
+  }
+  if (escenas.length === 0) return blocks
+
+  const sequenceFromGuion =
+    sequence &&
+    sequence.length > 0 &&
+    sequence.some((s) => parseEscenaNumberFromSequenceReason(s.reason) != null)
+
+  if (sequenceFromGuion && sequence) {
+    const aligned = applyScreenTextFromGuionSequence(sequence, escenas, jobId)
+    if (aligned.length > 0) {
+      console.log(
+        `[VideoV2Pipeline][${jobId}] Subtítulos: ${aligned.length} texto_pantalla alineados al montaje (sin solapar)`
+      )
+      return aligned
+    }
+    console.warn(
+      `[VideoV2Pipeline][${jobId}] Subtítulos: secuencia por guión sin texto_pantalla aplicable, fallback jaccard`
+    )
+  }
+
+  const finalBlocks = applyScreenTextFromGuion(blocks, escenas)
+  console.log(
+    `[VideoV2Pipeline][${jobId}] Subtítulos: ${blocks.length} bloques Assembly → ${finalBlocks.length} con texto_pantalla del guión`
+  )
+  return finalBlocks.length > 0 ? finalBlocks : blocks
 }
 
 async function updateJob(
@@ -165,6 +349,139 @@ async function getJobStatus(jobId: string): Promise<VideoJobStatus | null> {
 
   if (error || !data) return null
   return data.status as VideoJobStatus
+}
+
+const BRAND_CONFIG_SELECT =
+  'show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_3, vehicle_line_4, cta_text, whatsapp_number, logo_url, show_watermark'
+
+async function applyDriveSubtitleNormalization(
+  jobId: string,
+  blocks: SubtitleBlock[]
+): Promise<SubtitleBlock[]> {
+  const supabase = getServiceClient()
+  const badge = await fetchDriveBadgeForJob(supabase, jobId)
+  return normalizeDriveSubtitleBlocks(blocks, badge, jobId)
+}
+
+function applyComentaWhenNoGuion(
+  subtitleBlocks: SubtitleBlock[],
+  sequence: SequenceItem[],
+  allSegments: Segment[],
+  hasGuionEscenas: boolean,
+  brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
+  jobId: string
+): {
+  subtitleBlocks: SubtitleBlock[]
+  comentaMentionTimeSec?: number
+  comentaOverlayText?: string
+} {
+  if (hasGuionEscenas || !brandConfig) {
+    return { subtitleBlocks }
+  }
+
+  const result = applyComentaFromAssembly(subtitleBlocks, sequence, allSegments, {
+    modelLine: brandConfig.vehicle_line_2,
+    yearLine: brandConfig.vehicle_line_4,
+    jobId,
+  })
+
+  return {
+    subtitleBlocks: result.subtitleBlocks,
+    ...(result.comentaTimeSec != null ? { comentaMentionTimeSec: result.comentaTimeSec } : {}),
+    ...(result.comentaOverlayText ? { comentaOverlayText: result.comentaOverlayText } : {}),
+  }
+}
+
+async function applyShowcaseCaptionHighlights(
+  jobId: string,
+  subtitleBlocks: SubtitleBlock[],
+  sequence: SequenceItem[],
+  brandConfig: BrandConfig | null,
+  brandMentionTimeSec?: number
+): Promise<SubtitleBlock[]> {
+  return applyCaptionHighlights({
+    jobId,
+    blocks: subtitleBlocks,
+    sequence,
+    brandMentionTimeSec,
+    vehicleContext: {
+      brand: brandConfig?.vehicle_line_1 ?? null,
+      model: brandConfig?.vehicle_line_2 ?? null,
+      year: brandConfig?.vehicle_line_4 ?? null,
+    },
+    useGemini: true,
+  })
+}
+
+async function loadBrandConfigForJob(jobId: string) {
+  const supabase = getServiceClient()
+  const { data, error } = await supabase
+    .from('video_jobs_v2')
+    .select(BRAND_CONFIG_SELECT)
+    .eq('id', jobId)
+    .single()
+  if (error) {
+    console.error(`[BrandConfig][${jobId}] Error leyendo DB: ${error.message}`)
+    return null
+  }
+  if (!data) {
+    console.warn(`[BrandConfig][${jobId}] Sin datos de brandConfig en DB`)
+    return null
+  }
+  console.log(`[BrandConfig][${jobId}] DB row:`, JSON.stringify(data))
+  const config = brandConfigFromJobRow(data as BrandConfigJobRow)
+  console.log(`[BrandConfig][${jobId}] brandConfigFromJobRow resultado:`, JSON.stringify(config))
+  return config
+}
+
+async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
+  const MAX_WAIT_MS = 20 * 60 * 1000
+  const POLL_MS = 15_000
+  const started = Date.now()
+
+  console.log(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Fallback monitor para render ${renderId}`)
+
+  while (Date.now() - started < MAX_WAIT_MS) {
+    await new Promise((r) => setTimeout(r, POLL_MS))
+
+    const current = await getJobStatus(jobId)
+    if (current === 'completed' || current === 'failed') {
+      console.log(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Job ya cerrado (status=${current}).`)
+      return
+    }
+
+    try {
+      const render = await getShotstackRenderStatus(renderId)
+      console.log(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] status=${render.status}`)
+
+      if (render.status === 'done') {
+        await updateJob(jobId, {
+          status: 'completed',
+          final_video_url: render.url ?? undefined,
+          progress_percentage: 100,
+          current_step: 'Video listo (confirmado por polling Shotstack)',
+        })
+        return
+      }
+
+      if (render.status === 'failed') {
+        await updateJob(jobId, {
+          status: 'failed',
+          error_message: render.error ?? 'Shotstack reportó fallo (polling fallback).',
+          current_step: 'Error en renderizado',
+        })
+        return
+      }
+    } catch (err) {
+      console.warn(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Error consultando render: ${err}`)
+    }
+  }
+
+  await updateJob(jobId, {
+    status: 'failed',
+    error_message: 'Timeout esperando confirmación final de Shotstack (20 minutos).',
+    current_step: 'Timeout de renderizado',
+  })
 }
 
 async function monitorCreatomateRenderFallback(jobId: string, renderId: string) {
@@ -282,6 +599,21 @@ async function runSingleVideoPipelineFromStorage(
     await updateJob(jobId, { segment_map: segments })
     console.log(`[VideoV2Pipeline][${jobId}][A2] ${segments.length} segmentos detectados`)
 
+    // Detectar guión ANTES de Gemini para que lo use como guía de orden
+    {
+      const supabaseScript = getServiceClient()
+      const { data: metaRow } = await supabaseScript
+        .from('video_jobs_v2')
+        .select('selected_clips, script_text')
+        .eq('id', jobId)
+        .single()
+      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+      // Solo buscamos guión si el usuario no subió un PDF (script_text vacío)
+      if (!metaRow?.script_text?.trim()) {
+        await resolveAndLinkVideoScriptForJob(supabaseScript, jobId, segments, vId)
+      }
+    }
+
     if (segments.length === 0) {
       await updateJob(jobId, {
         status: 'failed',
@@ -311,15 +643,30 @@ async function runSingleVideoPipelineFromStorage(
     if (scriptDialogues.length > 0) geminiOpts.scriptDialogueLines = scriptDialogues
     geminiOpts.assemblyTranscriptDump = assemblyDump
     if (ctx.canonicalVehicle) geminiOpts.canonicalVehicle = ctx.canonicalVehicle
-    const analysis = await analyzeSegments(
-      formattedMap,
-      segments,
-      jobId,
-      googleRefs,
-      useVisualAnalysis,
-      [],
-      Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
-    )
+
+    const escenasSingle = await loadGuionEscenasForPipelineJob(jobId, segments)
+    let analysis =
+      tryAnalysisFromGuionDialogues(jobId, segments, escenasSingle, {
+        excludedClipIndices: [],
+        clipKinds: [],
+        manualClipOrder: null,
+        manualIntro: null,
+      }) ?? null
+
+    if (!analysis) {
+      console.log(`[VideoV2Pipeline][${jobId}][A3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+      analysis = await analyzeSegments(
+        formattedMap,
+        segments,
+        jobId,
+        googleRefs,
+        useVisualAnalysis,
+        [],
+        Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+      )
+    } else {
+      console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada Gemini para orden)`)
+    }
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 
     // A3b — Limpiar archivo de Google inmediatamente después del análisis
@@ -334,38 +681,98 @@ async function runSingleVideoPipelineFromStorage(
 
     // A4 — Construir subtítulos
     console.log(`[VideoV2Pipeline][${jobId}][A4] Construyendo subtítulos`)
-    const subtitleBlocks = buildSubtitleBlocks(analysis.sequence, segments)
+    let subtitleBlocks = buildSubtitleBlocks(analysis.sequence, segments)
+    subtitleBlocks = await finalizeSubtitleBlocksForJob(
+      jobId,
+      subtitleBlocks,
+      segments,
+      analysis.sequence
+    )
     const adjustedSrt = buildAdjustedSRT(analysis.sequence, segments)
     await updateJob(jobId, { adjusted_srt: adjustedSrt, progress_percentage: 75 })
     console.log(`[VideoV2Pipeline][${jobId}][A4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
-    // A5 — Renderizado Creatomate
-    console.log(`[VideoV2Pipeline][${jobId}][A5] Enviando a Creatomate`)
+    // A5 — Renderizado Shotstack
+    console.log(`[VideoV2Pipeline][${jobId}][A5] Enviando a Shotstack`)
     await updateJob(jobId, {
       status: 'rendering',
-      current_step: 'Creatomate está renderizando el Reel en alta calidad...',
+      current_step: 'Shotstack está renderizando el Reel en alta calidad...',
       progress_percentage: 80,
     })
 
     const freshSignedUrl = await getSignedUrlForPath(storagePath)
     const clipUrls = [freshSignedUrl]
 
+    let brandMentionTimeSec: number | undefined
+    {
+      const supabaseInv = getServiceClient()
+      const { data: metaRow } = await supabaseInv
+        .from('video_jobs_v2')
+        .select('selected_clips, video_script_id')
+        .eq('id', jobId)
+        .single()
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          segments,
+          { vehicleIdHint: vId }
+        )
+        if (resolved?.brandMentionTimeSec != null) {
+          brandMentionTimeSec = resolved.brandMentionTimeSec
+        }
+      }
+    }
+
+    const brandConfig = await loadBrandConfigForJob(jobId)
+
+    subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+    let comentaMentionTimeSecA: number | undefined
+    let comentaOverlayTextA: string | undefined
+    {
+      const comenta = applyComentaWhenNoGuion(
+        subtitleBlocks,
+        analysis.sequence,
+        segments,
+        escenasSingle.length > 0,
+        brandConfig,
+        jobId
+      )
+      subtitleBlocks = comenta.subtitleBlocks
+      comentaMentionTimeSecA = comenta.comentaMentionTimeSec
+      comentaOverlayTextA = comenta.comentaOverlayText
+    }
+
+    subtitleBlocks = await applyShowcaseCaptionHighlights(
+      jobId,
+      subtitleBlocks,
+      analysis.sequence,
+      brandConfig,
+      brandMentionTimeSec
+    )
+
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
+      brandConfig,
+      brandMentionTimeSec,
+      comentaMentionTimeSec: comentaMentionTimeSecA,
+      comentaOverlayText: comentaOverlayTextA,
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
       progress_percentage: 85,
-      current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado...`,
+      current_step: `Render enviado a Shotstack (ID: ${renderId}). Esperando resultado...`,
     })
 
     setImmediate(() => {
-      monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
-        console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal: ${e}`)
+      monitorShotstackRenderFallback(jobId, renderId).catch((e) =>
+        console.error(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Error fatal: ${e}`)
       )
     })
 
-    console.log(`[VideoV2Pipeline][${jobId}] Pipeline A completado. Esperando Creatomate.`)
+    console.log(`[VideoV2Pipeline][${jobId}] Pipeline A completado. Esperando Shotstack.`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (single): ${msg}`)
@@ -705,6 +1112,21 @@ async function runMultipleClipsPipelineFromStorage(
     await updateJob(jobId, { segment_map: allSegments })
     console.log(`[VideoV2Pipeline][${jobId}][B2] ${allSegments.length} segmentos totales de ${files.length} clips`)
 
+    // Detectar guión ANTES de Gemini para que lo use como guía de orden
+    {
+      const supabaseScript = getServiceClient()
+      const { data: metaRow } = await supabaseScript
+        .from('video_jobs_v2')
+        .select('selected_clips, script_text')
+        .eq('id', jobId)
+        .single()
+      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+      // Solo buscamos guión si el usuario no subió un PDF (script_text vacío)
+      if (!metaRow?.script_text?.trim()) {
+        await resolveAndLinkVideoScriptForJob(supabaseScript, jobId, allSegments, vId)
+      }
+    }
+
     const spokenSegments = allSegments.filter((s) => s.source_kind !== 'visual_only')
     if (spokenSegments.length === 0) {
       await updateJob(jobId, {
@@ -828,15 +1250,37 @@ async function runMultipleClipsPipelineFromStorage(
       console.log(`[VideoV2Pipeline][${jobId}][B3] Intro fija manual activa: clips ${normIntro.join(' → ')}`)
     }
 
-    let analysis = await analyzeSegments(
-      formattedMap,
-      allSegments,
-      jobId,
-      googleFileRefs,
-      useVisualAnalysis,
-      kinds,
-      Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
-    )
+    const escenasMulti = await loadGuionEscenasForPipelineJob(jobId, allSegments)
+    const excludeForGuion = [...excludeFromNarrative]
+    let analysis =
+      tryAnalysisFromGuionDialogues(jobId, allSegments, escenasMulti, {
+        excludedClipIndices: excludeForGuion,
+        clipKinds: kinds,
+        manualClipOrder: normClipOrder,
+        manualIntro: normIntro,
+        voiceOverBaseClipIndex: voiceOverBaseClipIndex ?? null,
+        voiceOverFromMp3: voiceOverAudioPath != null,
+      }) ?? null
+
+    if (!analysis) {
+      console.log(
+        `[VideoV2Pipeline][${jobId}][B3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
+      )
+      if (escenasMulti.length > 0) {
+        logGuionDialogueMatchMatrix(escenasMulti, allSegments, jobId, excludeForGuion)
+      }
+      analysis = await analyzeSegments(
+        formattedMap,
+        allSegments,
+        jobId,
+        googleFileRefs,
+        useVisualAnalysis,
+        kinds,
+        Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+      )
+    } else {
+      console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada Gemini para orden)`)
+    }
     if (voiceOverBaseClipIndex != null) {
       const sanitizedSequence = sanitizeSequenceForManualVoiceOver(
         analysis.sequence,
@@ -894,7 +1338,7 @@ async function runMultipleClipsPipelineFromStorage(
     // B4 — Construir subtítulos (incluye bloque VO + overlays manuales si vinieron en el job)
     console.log(`[VideoV2Pipeline][${jobId}][B4] Construyendo subtítulos`)
     const clipFilenames = files.map((f) => f.filename || '')
-    const { subtitleBlocks, adjustedSrt, voiceOverIntro } = await computeAutomaticSubtitlePayload({
+    let { subtitleBlocks, adjustedSrt, voiceOverIntro } = await computeAutomaticSubtitlePayload({
       jobId,
       paths,
       analysis,
@@ -934,11 +1378,11 @@ async function runMultipleClipsPipelineFromStorage(
     })
     console.log(`[VideoV2Pipeline][${jobId}][B4] ${subtitleBlocks.length} bloques de subtítulos generados`)
 
-    // B5 — Renderizado Creatomate
-    console.log(`[VideoV2Pipeline][${jobId}][B5] Enviando a Creatomate`)
+    // B5 — Renderizado Shotstack
+    console.log(`[VideoV2Pipeline][${jobId}][B5] Enviando a Shotstack`)
     await updateJob(jobId, {
       status: 'rendering',
-      current_step: 'Creatomate está renderizando el Reel en alta calidad...',
+      current_step: 'Shotstack está renderizando el Reel en alta calidad...',
       progress_percentage: 80,
     })
 
@@ -948,6 +1392,101 @@ async function runMultipleClipsPipelineFromStorage(
 
     const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
 
+    let brandMentionTimeSec: number | undefined
+    let brandMentionLengthSec: number | undefined
+    let comentaMentionTimeSec: number | undefined
+    let comentaOverlayText: string | undefined
+
+    if (escenasMulti.length === 0) {
+      const supabaseInv = getServiceClient()
+      const { data: metaRow } = await supabaseInv
+        .from('video_jobs_v2')
+        .select('selected_clips, video_script_id')
+        .eq('id', jobId)
+        .single()
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          allSegments,
+          { vehicleIdHint: vId }
+        )
+        if (resolved?.brandMentionTimeSec != null) {
+          brandMentionTimeSec = resolved.brandMentionTimeSec
+          brandMentionLengthSec = 3.5
+        }
+      }
+    }
+
+    const brandConfig = await loadBrandConfigForJob(jobId)
+
+    // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
+    if (escenasMulti.length > 0) {
+      const brandKws = [
+        brandConfig?.vehicle_line_1?.trim(),
+        brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
+      ].filter((k): k is string => !!k && k.length >= 2)
+
+      const { captionBlocks, brandTimeSec, brandLengthSec, comentaTimeSec, comentaOverlayText: comentaText } =
+        buildCaptionBlocksFromDialogoAssembly(
+          analysis.sequence,
+          allSegments,
+          escenasMulti,
+          brandKws,
+          jobId,
+          {
+            modelLine: brandConfig?.vehicle_line_2,
+            yearLine: brandConfig?.vehicle_line_4,
+          }
+        )
+
+      if (captionBlocks.length > 0) {
+        subtitleBlocks = captionBlocks
+        console.log(
+          `[VideoV2Pipeline][${jobId}][B4] Subtítulos dialogo+Assembly: ${captionBlocks.length} bloques`
+        )
+      }
+      if (brandTimeSec != null) {
+        brandMentionTimeSec = brandTimeSec
+        brandMentionLengthSec = brandLengthSec ?? 3.5
+      }
+      if (comentaTimeSec != null) {
+        comentaMentionTimeSec = comentaTimeSec
+      }
+      if (comentaText?.trim()) {
+        comentaOverlayText = comentaText.trim()
+      }
+    }
+
+    subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+    if (escenasMulti.length === 0) {
+      const comenta = applyComentaWhenNoGuion(
+        subtitleBlocks,
+        analysis.sequence,
+        allSegments,
+        false,
+        brandConfig,
+        jobId
+      )
+      subtitleBlocks = comenta.subtitleBlocks
+      if (comenta.comentaMentionTimeSec != null) {
+        comentaMentionTimeSec = comenta.comentaMentionTimeSec
+      }
+      if (comenta.comentaOverlayText) {
+        comentaOverlayText = comenta.comentaOverlayText
+      }
+    }
+
+    subtitleBlocks = await applyShowcaseCaptionHighlights(
+      jobId,
+      subtitleBlocks,
+      analysis.sequence,
+      brandConfig,
+      brandMentionTimeSec
+    )
+
     const renderId = await renderSegmentsV2(
       jobId,
       analysis.sequence,
@@ -955,21 +1494,21 @@ async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       musicTrackUrl,
       voIntroForRender,
-      { musicTrimStartSecOverride }
+      { musicTrimStartSecOverride, brandConfig, brandMentionTimeSec, brandMentionLengthSec, comentaMentionTimeSec, comentaOverlayText }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
       progress_percentage: 85,
-      current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado...`,
+      current_step: `Render enviado a Shotstack (ID: ${renderId}). Esperando resultado...`,
     })
 
     setImmediate(() => {
-      monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
-        console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal: ${e}`)
+      monitorShotstackRenderFallback(jobId, renderId).catch((e) =>
+        console.error(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Error fatal: ${e}`)
       )
     })
 
-    console.log(`[VideoV2Pipeline][${jobId}] Pipeline B completado. Esperando Creatomate.`)
+    console.log(`[VideoV2Pipeline][${jobId}] Pipeline B completado. Esperando Shotstack.`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (multiple): ${msg}`)
@@ -1356,6 +1895,13 @@ async function computeAutomaticSubtitlePayload(params: {
       `[VideoV2Pipeline][${jobId}][B4] Modo VO MP3: bloque ${voDur}s tras ${insertAfter} cortes; ${overlayNoteMp3}`
     )
   }
+
+  subtitleBlocks = await finalizeSubtitleBlocksForJob(
+    jobId,
+    subtitleBlocks,
+    allSegments,
+    analysisForRender.sequence
+  )
 
   return { subtitleBlocks, adjustedSrt, voiceOverIntro }
 }
@@ -1844,7 +2390,7 @@ export async function rerunCreatomateRenderForJob(
         }
       : {}),
     status: 'rendering',
-    current_step: 'Re-render: enviando a Creatomate…',
+    current_step: 'Re-render: enviando a Shotstack…',
     progress_percentage: 82,
     final_video_url: null,
     final_video_duration: null,
@@ -1852,6 +2398,33 @@ export async function rerunCreatomateRenderForJob(
   })
 
   const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
+  const brandConfig = brandConfigFromJobRow(job)
+
+  subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+  const escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
+  let comentaMentionTimeSecRerun: number | undefined
+  let comentaOverlayTextRerun: string | undefined
+  {
+    const comenta = applyComentaWhenNoGuion(
+      subtitleBlocks,
+      analysis.sequence,
+      allSegments,
+      escenasRerun.length > 0,
+      brandConfig,
+      jobId
+    )
+    subtitleBlocks = comenta.subtitleBlocks
+    comentaMentionTimeSecRerun = comenta.comentaMentionTimeSec
+    comentaOverlayTextRerun = comenta.comentaOverlayText
+  }
+
+  subtitleBlocks = await applyShowcaseCaptionHighlights(
+    jobId,
+    subtitleBlocks,
+    analysis.sequence,
+    brandConfig
+  )
 
   const renderId = await renderSegmentsV2(
     jobId,
@@ -1860,22 +2433,27 @@ export async function rerunCreatomateRenderForJob(
     subtitleBlocks,
     musicTrackUrl,
     voIntroForRender,
-    { musicTrimStartSecOverride: effectiveMusicTrimStartSec }
+    {
+      musicTrimStartSecOverride: effectiveMusicTrimStartSec,
+      brandConfig,
+      comentaMentionTimeSec: comentaMentionTimeSecRerun,
+      comentaOverlayText: comentaOverlayTextRerun,
+    }
   )
 
   await updateJob(jobId, {
     creatomate_render_id: renderId,
     progress_percentage: 85,
-    current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado…`,
+    current_step: `Render enviado a Shotstack (ID: ${renderId}). Esperando resultado…`,
   })
 
   setImmediate(() => {
-    monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
-      console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal (re-render): ${e}`)
+    monitorShotstackRenderFallback(jobId, renderId).catch((e) =>
+      console.error(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Error fatal (re-render): ${e}`)
     )
   })
 
-  console.log(`[VideoV2Pipeline][${jobId}] Re-render iniciado. Creatomate ID=${renderId}`)
+  console.log(`[VideoV2Pipeline][${jobId}] Re-render iniciado. Shotstack ID=${renderId}`)
   return { renderId }
 }
 

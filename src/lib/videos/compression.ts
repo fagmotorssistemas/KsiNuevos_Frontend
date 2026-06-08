@@ -8,7 +8,7 @@ const MAX_SIZE_SINGLE_BYTES = 500 * 1024 * 1024 // 500 MB
 const MAX_SIZE_CLIP_BYTES = 200 * 1024 * 1024 // 200 MB
 /** Tope Supabase con spend cap (~50 MB global). */
 export const STORAGE_UPLOAD_CAP_BYTES = 47 * 1024 * 1024
-const MAX_WIDTH = 1280 // 720p
+const MAX_WIDTH = 1080 // 1080p vertical (alineado con export Shotstack)
 
 export interface CompressionResult {
   buffer: Buffer
@@ -69,8 +69,8 @@ export async function compressVideoForStorageCap(
   }
 
   const attempts = [
-    { crf: 28, width: 1280 },
-    { crf: 30, width: 1280 },
+    { crf: 28, width: 1080 },
+    { crf: 30, width: 1080 },
     { crf: 32, width: 960 },
     { crf: 35, width: 720 },
   ]

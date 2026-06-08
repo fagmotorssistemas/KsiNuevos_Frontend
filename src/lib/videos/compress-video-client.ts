@@ -160,8 +160,8 @@ async function encodeFromInput(
 }
 
 const ENCODE_ATTEMPTS: EncodeAttempt[] = [
-  { crf: 28, maxWidth: 1280, audioK: 96 },
-  { crf: 30, maxWidth: 1280, audioK: 80 },
+  { crf: 28, maxWidth: 1080, audioK: 96 },
+  { crf: 30, maxWidth: 1080, audioK: 80 },
   { crf: 32, maxWidth: 960, audioK: 80 },
   { crf: 34, maxWidth: 720, audioK: 64 },
   { crf: 36, maxWidth: 640, audioK: 64 },
