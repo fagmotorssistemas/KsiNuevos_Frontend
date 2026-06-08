@@ -9,16 +9,29 @@ import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './creatomate'
 import { getSignedUrlForPath } from './storage'
+import { isDriveBadgeText } from './drive-badge'
 
 const RAW_BUCKET = 'raw-videos-v2'
+
+/** Salida vertical 1080p (9:16). */
+const OUTPUT_WIDTH = 1080
+const OUTPUT_HEIGHT = 1920
+/** Canvas base (720p) donde se calibraron px de overlays y tipografía. */
+const DESIGN_WIDTH = 720
+const LAYOUT_SCALE = OUTPUT_WIDTH / DESIGN_WIDTH
+
+/** Convierte px definidos en 720p al canvas actual (1080p, factor 1.5×). */
+function s720(px: number): number {
+  return Math.round(px * LAYOUT_SCALE)
+}
 
 const MONTSERRAT_BLACK_TTF =
   'https://cdn.jsdelivr.net/fontsource/fonts/montserrat@5.2.5/latin-900-normal.ttf'
 
 const CLOSING_LOGO_LEN_SEC = 3.5
 const DEFAULT_CLOSING_LOGO_PATH = '/logol.png'
-const WHATSAPP_CTA_WIDTH_PX = 450
-const WHATSAPP_CTA_HEIGHT_PX = 210
+const WHATSAPP_CTA_WIDTH_PX = s720(450)
+const WHATSAPP_CTA_HEIGHT_PX = s720(210)
 /** Más alto que el logo de cierre (y≈0.08 + 100px) para no taparlo */
 /** Más alto que el logo de cierre (y≈0.08 + 100px) para no taparlo */
 const WHATSAPP_CTA_OFFSET_Y = 0.10
@@ -45,25 +58,44 @@ const DEFAULT_TRANSMISSION_GEAR_SFX_URL =
   'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/universfield-new-notification-040-493469.mp3'
 const TRANSMISSION_GEAR_SFX_VOLUME = 0.4
 const TRANSMISSION_GEAR_SFX_LENGTH_SEC = 0.45
-const COMENTA_TEXT_WIDTH_PX = 700
-const COMENTA_LINE_HEIGHT_PX = 200
+const COMENTA_TEXT_WIDTH_PX = s720(700)
+const COMENTA_LINE_HEIGHT_PX = s720(200)
 const COMENTA_LINE1_OFFSET_Y = -0.08
 const COMENTA_LINE2_OFFSET_Y = -0.13
 const COMENTA_FONT_FAMILY = 'Montserrat'
 
-/** Misma escala tipográfica que `captionRealSize` en subtítulos HTML. */
-function comentaCaptionFontSize(text: string): number {
+/** Subtítulos y COMENTA: escala calibrada en 720p, aplicada a 1080p. */
+function overlayCaptionFontSize(text: string): number {
   const len = text.length
-  if (len <= 8) return 80
-  if (len <= 14) return 72
-  if (len <= 20) return 60
-  return 48
+  if (len <= 8) return s720(80)
+  if (len <= 14) return s720(72)
+  if (len <= 20) return s720(60)
+  return s720(48)
 }
+
+function comentaCaptionFontSize(text: string): number {
+  return overlayCaptionFontSize(text)
+}
+
+function longPairFontSize(word: string): number {
+  const len = word.length
+  if (len <= 6) return s720(88)
+  if (len <= 9) return s720(78)
+  if (len <= 12) return s720(68)
+  return s720(58)
+}
+
+function brandL2FontSize(wordCount: number): number {
+  if (wordCount <= 1) return s720(96)
+  if (wordCount === 2) return s720(80)
+  return s720(64)
+}
+
 const COMENTA_ENTRANCE_SLIDE_SEC = 0.28
 const PLAYFAIR_DISPLAY_SEMIBOLD_TTF =
   'https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-600-normal.ttf'
-const CLOSING_LOGO_WIDTH_PX = 400
-const CLOSING_LOGO_HEIGHT_PX = 100
+const CLOSING_LOGO_WIDTH_PX = s720(400)
+const CLOSING_LOGO_HEIGHT_PX = s720(100)
 const CLOSING_LOGO_ENTRANCE_SEC = 0.45
 
 /** Solapamiento por transición (*Fast ≈ 0.5 s) para evitar flash negro */
@@ -85,9 +117,6 @@ const FIRST_CLIP_INTRO_PULL_SEC = 0.28
 /** Destello amarillo-naranja al entrar el 4º clip (índice 3) */
 const CLIP_FLASH_AT_CLIP_INDEX = 3
 const CLIP_FLASH_LENGTH_SEC = 0.55
-/** Salida vertical 1080p (9:16) */
-const OUTPUT_WIDTH = 1080
-const OUTPUT_HEIGHT = 1920
 
 const CLIP_FLASH_LEAD_SEC = 0.15
 const CLIP_FLASH_FADE_IN_SEC = 0.12
@@ -849,33 +878,36 @@ function buildBrandOverlayTracks(
   const brandStyle = { textTransform: 'uppercase' }
   const brandAlign = { horizontal: 'center', vertical: 'middle' }
 
-  // Tamaño dinámico de L2 según cantidad de palabras
+  // Tamaño dinámico de L2 según cantidad de palabras (base 720p → s720)
   const line2Words = line2 ? line2.split(/\s+/).length : 0
-  const l2RealSize = line2Words <= 1 ? 96 : line2Words === 2 ? 80 : 64
+  const l2RealSize = brandL2FontSize(line2Words)
 
   // Sombra difusa simulada con blur:30 (rich-text beta)
-  const shadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
+  const shadowEffect = { offsetX: 0, offsetY: 0, blur: s720(30), color: '#000000', opacity: 1 }
 
   const bs = Number(brandStart.toFixed(3))
+  const brandL1Size = s720(52)
+  const brandL3Size = s720(52)
+  const brandL4Size = s720(84)
 
   /**
    * Genera keyframes de "salto rápido al entrar, luego fijo".
    * 3 oscilaciones de amplitud decreciente en ~0.24s, después posición fija.
    */
-  // ── L1: MARCA (blanco, 52px) ─────────────────────────────────────────
+  // ── L1: MARCA (blanco) ─────────────────────────────────────────
   if (line1) {
     tracks.push({
       clips: [{
         asset: {
           type: 'rich-text',
           text: line1.toUpperCase(),
-          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#FFFFFF', opacity: 1 },
-          stroke: { width: 1, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL1Size, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: s720(1), color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 700, height: 90,
+        width: s720(700), height: s720(90),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.08, introLen) },
         transition: { out: 'fade' },
       }],
@@ -885,14 +917,14 @@ function buildBrandOverlayTracks(
         asset: {
           type: 'rich-text',
           text: line1.toUpperCase(),
-          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#000000', opacity: 0.2 },
-          stroke: { width: 14, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL1Size, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: s720(14), color: '#000000', opacity: 1 },
           shadow: shadowEffect,
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 760, height: 120,
+        width: s720(760), height: s720(120),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.08, introLen) },
         transition: { out: 'fade' },
       }],
@@ -907,12 +939,12 @@ function buildBrandOverlayTracks(
           type: 'rich-text',
           text: line2.toUpperCase(),
           font:   { family: 'Montserrat', size: l2RealSize, weight: 900, color: '#E63333', opacity: 1 },
-          stroke: { width: 2, color: '#000000', opacity: 1 },
+          stroke: { width: s720(2), color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 700, height: 140,
+        width: s720(700), height: s720(140),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.13, introLen) },
         transition: { out: 'fade' },
       }],
@@ -923,33 +955,33 @@ function buildBrandOverlayTracks(
           type: 'rich-text',
           text: line2.toUpperCase(),
           font:   { family: 'Montserrat', size: l2RealSize, weight: 900, color: '#000000', opacity: 0.2 },
-          stroke: { width: 18, color: '#000000', opacity: 1 },
+          stroke: { width: s720(18), color: '#000000', opacity: 1 },
           shadow: shadowEffect,
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 760, height: 180,
+        width: s720(760), height: s720(180),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.13, introLen) },
         transition: { out: 'fade' },
       }],
     })
   }
 
-  // ── L3: TAGLINE (blanco, 52px) — solo si existe ───────────────────────
+  // ── L3: TAGLINE (blanco) — solo si existe ───────────────────────
   if (line3) {
     tracks.push({
       clips: [{
         asset: {
           type: 'rich-text',
           text: line3.toUpperCase(),
-          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#FFFFFF', opacity: 1 },
-          stroke: { width: 4, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL3Size, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: s720(4), color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 700, height: 90,
+        width: s720(700), height: s720(90),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
         transition: { out: 'fade' },
       }],
@@ -959,34 +991,34 @@ function buildBrandOverlayTracks(
         asset: {
           type: 'rich-text',
           text: line3.toUpperCase(),
-          font:   { family: 'Montserrat', size: 52, weight: 900, color: '#000000', opacity: 0.2 },
-          stroke: { width: 14, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL3Size, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: s720(14), color: '#000000', opacity: 1 },
           shadow: shadowEffect,
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 760, height: 130,
+        width: s720(760), height: s720(130),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
         transition: { out: 'fade' },
       }],
     })
   }
 
-  // ── L4: AÑO (blanco, 84px) — zona inferior ────────────────────────────
+  // ── L4: AÑO (blanco) — zona inferior ────────────────────────────
   if (line4) {
     tracks.push({
       clips: [{
         asset: {
           type: 'rich-text',
           text: line4.toUpperCase(),
-          font:   { family: 'Montserrat', size: 84, weight: 900, color: '#FFFFFF', opacity: 1 },
-          stroke: { width: 5, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL4Size, weight: 900, color: '#FFFFFF', opacity: 1 },
+          stroke: { width: s720(5), color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 400, height: 120,
+        width: s720(400), height: s720(120),
         position: 'center', offset: { x: 0, y: buildJumpThenFixed(-0.22, introLen) },
         transition: { out: 'fade' },
       }],
@@ -996,14 +1028,14 @@ function buildBrandOverlayTracks(
         asset: {
           type: 'rich-text',
           text: line4.toUpperCase(),
-          font:   { family: 'Montserrat', size: 84, weight: 900, color: '#000000', opacity: 0.2 },
-          stroke: { width: 16, color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL4Size, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: s720(16), color: '#000000', opacity: 1 },
           shadow: shadowEffect,
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: 480, height: 170,
+        width: s720(480), height: s720(170),
         position: 'center', offset: { x: 0, y: buildJumpThenFixed(-0.22, introLen) },
         transition: { out: 'fade' },
       }],
@@ -1013,9 +1045,13 @@ function buildBrandOverlayTracks(
   // ── CTA (opcional) ────────────────────────────────────────────────────
   if (cta) {
     const FRAME_H = OUTPUT_HEIGHT
-    const ctaH = 160
+    const ctaH = s720(160)
+    const ctaFontPx = s720(55)
+    const ctaPadV = s720(18)
+    const ctaPadH = s720(35)
+    const ctaRadius = s720(25)
     // Centrado en la parte superior del frame, aparece tarde en el reel
-    const ctaOffsetY = Number(((ctaH / 2 + 40) / FRAME_H).toFixed(3)) // ≈ 0.094
+    const ctaOffsetY = Number(((ctaH / 2 + s720(40)) / FRAME_H).toFixed(3))
     const timeStart = totalDuration >= 10 ? Math.max(0, totalDuration - 8) : 2
     tracks.push({
       clips: [
@@ -1023,11 +1059,11 @@ function buildBrandOverlayTracks(
           asset: {
             type: 'html',
             html:
-              `<div style="background:#CC0000;border-radius:25px;padding:18px 35px;` +
-              `font-family:'Montserrat',sans-serif;font-weight:900;font-size:55px;` +
+              `<div style="background:#CC0000;border-radius:${ctaRadius}px;padding:${ctaPadV}px ${ctaPadH}px;` +
+              `font-family:'Montserrat',sans-serif;font-weight:900;font-size:${ctaFontPx}px;` +
               `color:#FFFFFF;text-transform:uppercase;text-align:center;line-height:1.2;">` +
               `${htmlEscape(cta)}</div>`,
-            width: 580,
+            width: s720(580),
             height: ctaH,
             background: 'transparent',
           },
@@ -1043,6 +1079,11 @@ function buildBrandOverlayTracks(
 
   // ── WhatsApp (opcional) ───────────────────────────────────────────────
   if (wa) {
+    const waLabelPx = s720(28)
+    const waNumberPx = s720(52)
+    const waPadV = s720(12)
+    const waPadH = s720(25)
+    const waRadius = s720(18)
     const timeStart = totalDuration >= 8 ? Math.max(0, totalDuration - 6) : 2
     tracks.push({
       clips: [
@@ -1050,14 +1091,14 @@ function buildBrandOverlayTracks(
           asset: {
             type: 'html',
             html:
-              `<div style="background:#CC0000;border-radius:18px;padding:12px 25px;` +
+              `<div style="background:#CC0000;border-radius:${waRadius}px;padding:${waPadV}px ${waPadH}px;` +
               `font-family:'Montserrat',sans-serif;color:#FFFFFF;text-align:center;` +
               `display:flex;flex-direction:column;align-items:center;">\n` +
-              `<span style="font-size:28px;font-weight:700;letter-spacing:2px;">WHATSAPP</span>\n` +
-              `<span style="font-size:52px;font-weight:900;letter-spacing:1px;">${htmlEscape(wa)}</span>\n` +
+              `<span style="font-size:${waLabelPx}px;font-weight:700;letter-spacing:2px;">WHATSAPP</span>\n` +
+              `<span style="font-size:${waNumberPx}px;font-weight:900;letter-spacing:1px;">${htmlEscape(wa)}</span>\n` +
               `</div>`,
-            width: 660,
-            height: 140,
+            width: s720(660),
+            height: s720(140),
             background: 'transparent',
           },
           start: Number(timeStart.toFixed(3)),
@@ -1300,21 +1341,17 @@ function buildWhatsAppCtaTrack(
 }
 
 /**
- * Calcula el font-size para el subtítulo según el texto.
+ * Calcula el font-size para el subtítulo según el texto (legacy HTML; base 720p escalada).
  *
  * Montserrat Black: ~0.68em por carácter (mayúsculas).
- * Objetivo: que la línea CSS más larga (greedy word-wrap) quepa en 680px,
- * y que haya ≤ 2 líneas en total.
- *
- * Frame 720px, padding 20px → ancho útil 680px.
+ * Objetivo: que la línea CSS más larga quepa en el ancho útil del frame 1080p.
  */
 function captionFontSize(text: string): number {
-  const USEFUL_W = 680
+  const USEFUL_W = s720(680)
   const EM = 0.68
 
   const words = text.trim().split(/\s+/)
 
-  // Simula el greedy word-wrap CSS para calcular la línea más larga.
   function longestLineChars(targetFontPx: number): number {
     const maxPx = USEFUL_W
     let maxLine = 0
@@ -1332,12 +1369,10 @@ function captionFontSize(text: string): number {
     return Math.max(maxLine, cur)
   }
 
-  // Búsqueda binaria: mayor fontSize donde longestLine ≤ USEFUL_W y lines ≤ 2.
-  let lo = 36, hi = 75, best = 36
+  let lo = s720(36), hi = s720(75), best = s720(36)
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2)
 
-    // Contar líneas y comprobar que la más ancha quepa
     const maxPx = USEFUL_W
     let lines = 1
     let cur = 0
@@ -1402,21 +1437,17 @@ function buildCaptionHtmlTracks(
   const captionStyle = { textTransform: 'uppercase' }
   const captionAlign = { horizontal: 'center', vertical: 'middle' }
 
-  function captionRealSize(text: string): number {
-    const len = text.length
-    if (len <= 8) return 80
-    if (len <= 14) return 72
-    if (len <= 20) return 60
-    return 48
-  }
-
-  const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: 30, color: '#000000', opacity: 1 }
+  const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: s720(30), color: '#000000', opacity: 1 }
+  const captionBoxW = s720(700)
+  const captionBoxH = s720(200)
+  const longPairBoxW = s720(680)
+  const longPairBoxH = s720(180)
 
   // Posición alterna: par → abajo (y: 0.15), impar → arriba/centro (y: 0.70)
   const captionPositionY = (idx: number) => (idx % 2 === 0 ? 0.15 : 0.70)
 
   // Palabras técnicas del vehículo que reciben animación de ola
-  const TECH_SPEC_RE = /\b(MOTOR|TRANSMIS|MANUAL|AUTOM[AÁ]T|TURBO|D[IÍ]ESEL|GASOLINA|TURBO|HP|CV|CC|\d+[\.,]\d+|\d{4}CC)\b/i
+  const TECH_SPEC_RE = /\b(MOTOR|TRANSMIS|MANUAL|AUTOM[AÁ]T|TURBO|D[IÍ]ESEL|GASOLINA|TURBO|HP|CV|CC|4X[24]|\d+[\.,]\d+|\d{4}CC)\b/i
 
   // Genera keyframes de ola (oscilación suave) alrededor de la posición base
   function buildWaveOffset(baseY: number, durationSec: number): unknown[] {
@@ -1445,27 +1476,41 @@ function buildCaptionHtmlTracks(
     return baseY
   }
 
-  // Detecta si un bloque tiene exactamente 2 palabras largas (ambas >= 5 chars)
   function isLongPair(text: string): boolean {
+    if (isDriveBadgeText(text)) return false
     const words = text.trim().split(/\s+/)
     return words.length === 2 && words.every(w => w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').length >= 5)
   }
 
-  function longPairFontSize(word: string): number {
-    const len = word.length
-    if (len <= 6)  return 88
-    if (len <= 9)  return 78
-    if (len <= 12) return 68
-    return 58
-  }
+  const driveBadgeBlocks = validBlocks.filter((b) => isDriveBadgeText(b.text))
+  const nonDriveBlocks = validBlocks.filter((b) => !isDriveBadgeText(b.text))
+  const regularBlocks = nonDriveBlocks.filter(b => !isLongPair(b.text.trim().toUpperCase()))
+  const longPairBlocks = nonDriveBlocks.filter(b => isLongPair(b.text.trim().toUpperCase()))
 
-  const regularBlocks = validBlocks.filter(b => !isLongPair(b.text.trim().toUpperCase()))
-  const longPairBlocks = validBlocks.filter(b => isLongPair(b.text.trim().toUpperCase()))
+  const driveBadgeClips: ShotstackClip[] = driveBadgeBlocks.map((b, idx) => {
+    const text = b.text.trim().toUpperCase()
+    const sz = overlayCaptionFontSize(text)
+    return {
+      asset: {
+        type: 'rich-text',
+        text,
+        font: { family: 'Montserrat', size: sz, weight: 900, color: '#FFE100', opacity: 1 },
+        style: captionStyle,
+        align: captionAlign,
+      },
+      start: Number(b.time.toFixed(3)),
+      length: Number(b.duration.toFixed(3)),
+      width: captionBoxW,
+      height: captionBoxH,
+      position: 'bottom',
+      offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
+    }
+  })
 
   // CAPA 2 (texto real) — blanco, sin transition para que aparezca instantáneamente
   const realClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
-    const sz = captionRealSize(text)
+    const sz = overlayCaptionFontSize(text)
     return {
       asset: {
         type: 'rich-text',
@@ -1476,7 +1521,7 @@ function buildCaptionHtmlTracks(
       },
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
-      width: 700, height: 200,
+      width: captionBoxW, height: captionBoxH,
       position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
     }
   })
@@ -1484,7 +1529,7 @@ function buildCaptionHtmlTracks(
   // CAPA 1 (sombra) — misma posición alterna que la capa real
   const shadowClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
-    const sz = captionRealSize(text)
+    const sz = overlayCaptionFontSize(text)
     return {
       asset: {
         type: 'rich-text',
@@ -1496,7 +1541,7 @@ function buildCaptionHtmlTracks(
       },
       start: Number(b.time.toFixed(3)),
       length: Number(b.duration.toFixed(3)),
-      width: 700, height: 200,
+      width: captionBoxW, height: captionBoxH,
       position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
     }
   })
@@ -1529,7 +1574,7 @@ function buildCaptionHtmlTracks(
         align: captionAlign,
       },
       start, length,
-      width: 680, height: 180,
+      width: longPairBoxW, height: longPairBoxH,
       position: 'bottom',
       offset: { x: -0.10, y: isTransmisionPair ? buildJumpThenFixed(y1, length) : y1 },
     })
@@ -1543,13 +1588,16 @@ function buildCaptionHtmlTracks(
         align: captionAlign,
       },
       start, length,
-      width: 680, height: 180,
+      width: longPairBoxW, height: longPairBoxH,
       position: 'bottom',
       offset: { x: 0.10, y: isTransmisionPair ? buildJumpThenFixed(y2, length) : y2 },
     })
   }
 
   const tracks: ShotstackTrack[] = [{ clips: realClips }, { clips: shadowClips }]
+  if (driveBadgeClips.length > 0) {
+    tracks.push({ clips: driveBadgeClips })
+  }
   if (lpWord1Clips.length > 0) {
     tracks.push({ clips: lpWord1Clips })
     tracks.push({ clips: lpWord2Clips })
@@ -1563,6 +1611,10 @@ function buildCaptionHtmlTracks(
       return /\bMOTOR\b/.test(t) || /\b\d+[\.,]\d+\b/.test(t)
     }
 
+    function isSparkleSubtitle(text: string): boolean {
+      return isMotorOrNumberSubtitle(text) || isDriveBadgeText(text)
+    }
+
     function isTransmisionGearSubtitle(text: string): boolean {
       const words = text.trim().toUpperCase().split(/\s+/)
       if (words.length !== 2) return false
@@ -1574,8 +1626,8 @@ function buildCaptionHtmlTracks(
       const textW = Math.ceil(len * fontSize * 0.52)
       const textH = Math.ceil(fontSize * 1.25)
       return {
-        width: Math.min(700, Math.max(150, Math.ceil(textW * 1.45))),
-        height: Math.max(85, Math.ceil(textH * 1.55)),
+        width: Math.min(s720(700), Math.max(s720(150), Math.ceil(textW * 1.45))),
+        height: Math.max(s720(85), Math.ceil(textH * 1.55)),
       }
     }
 
@@ -1584,8 +1636,8 @@ function buildCaptionHtmlTracks(
       const textW = Math.ceil(len * fontSize * 0.58)
       const textH = Math.ceil(fontSize * 1.2)
       return {
-        width: Math.min(520, Math.max(160, Math.ceil(textW * 1.5))),
-        height: Math.max(90, Math.ceil(textH * 1.6)),
+        width: Math.min(s720(520), Math.max(s720(160), Math.ceil(textW * 1.5))),
+        height: Math.max(s720(90), Math.ceil(textH * 1.6)),
       }
     }
 
@@ -1617,14 +1669,26 @@ function buildCaptionHtmlTracks(
 
     for (const [idx, b] of regularBlocks.entries()) {
       const text = b.text.trim()
-      if (!isMotorOrNumberSubtitle(text)) continue
+      if (!isSparkleSubtitle(text)) continue
       const upper = text.toUpperCase()
       sparkleClips.push(
         buildSparkleClip(
           b.time,
           b.duration,
           { x: 0, y: captionOffsetY(upper, idx, b.duration) },
-          sparkleBoxForText(upper, captionRealSize(upper))
+          sparkleBoxForText(upper, overlayCaptionFontSize(upper))
+        )
+      )
+    }
+
+    for (const [idx, b] of driveBadgeBlocks.entries()) {
+      const text = b.text.trim().toUpperCase()
+      sparkleClips.push(
+        buildSparkleClip(
+          b.time,
+          b.duration,
+          { x: 0, y: captionOffsetY(text, idx, b.duration) },
+          sparkleBoxForText(text, overlayCaptionFontSize(text))
         )
       )
     }

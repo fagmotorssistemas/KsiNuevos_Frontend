@@ -44,6 +44,9 @@ import {
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
 import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
+import { fetchDriveBadgeForJob } from './drive-badge'
+import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
+import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import {
@@ -348,6 +351,44 @@ async function getJobStatus(jobId: string): Promise<VideoJobStatus | null> {
 
 const BRAND_CONFIG_SELECT =
   'show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_3, vehicle_line_4, cta_text, whatsapp_number, logo_url, show_watermark'
+
+async function applyDriveSubtitleNormalization(
+  jobId: string,
+  blocks: SubtitleBlock[]
+): Promise<SubtitleBlock[]> {
+  const supabase = getServiceClient()
+  const badge = await fetchDriveBadgeForJob(supabase, jobId)
+  return normalizeDriveSubtitleBlocks(blocks, badge, jobId)
+}
+
+function applyComentaWhenNoGuion(
+  subtitleBlocks: SubtitleBlock[],
+  sequence: SequenceItem[],
+  allSegments: Segment[],
+  hasGuionEscenas: boolean,
+  brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
+  jobId: string
+): {
+  subtitleBlocks: SubtitleBlock[]
+  comentaMentionTimeSec?: number
+  comentaOverlayText?: string
+} {
+  if (hasGuionEscenas || !brandConfig) {
+    return { subtitleBlocks }
+  }
+
+  const result = applyComentaFromAssembly(subtitleBlocks, sequence, allSegments, {
+    modelLine: brandConfig.vehicle_line_2,
+    yearLine: brandConfig.vehicle_line_4,
+    jobId,
+  })
+
+  return {
+    subtitleBlocks: result.subtitleBlocks,
+    ...(result.comentaTimeSec != null ? { comentaMentionTimeSec: result.comentaTimeSec } : {}),
+    ...(result.comentaOverlayText ? { comentaOverlayText: result.comentaOverlayText } : {}),
+  }
+}
 
 async function loadBrandConfigForJob(jobId: string) {
   const supabase = getServiceClient()
@@ -663,10 +704,30 @@ async function runSingleVideoPipelineFromStorage(
 
     const brandConfig = await loadBrandConfigForJob(jobId)
 
+    subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+    let comentaMentionTimeSecA: number | undefined
+    let comentaOverlayTextA: string | undefined
+    {
+      const comenta = applyComentaWhenNoGuion(
+        subtitleBlocks,
+        analysis.sequence,
+        segments,
+        escenasSingle.length > 0,
+        brandConfig,
+        jobId
+      )
+      subtitleBlocks = comenta.subtitleBlocks
+      comentaMentionTimeSecA = comenta.comentaMentionTimeSec
+      comentaOverlayTextA = comenta.comentaOverlayText
+    }
+
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
       brandConfig,
       brandMentionTimeSec,
+      comentaMentionTimeSec: comentaMentionTimeSecA,
+      comentaOverlayText: comentaOverlayTextA,
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1364,6 +1425,26 @@ async function runMultipleClipsPipelineFromStorage(
       }
       if (comentaText?.trim()) {
         comentaOverlayText = comentaText.trim()
+      }
+    }
+
+    subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+    if (escenasMulti.length === 0) {
+      const comenta = applyComentaWhenNoGuion(
+        subtitleBlocks,
+        analysis.sequence,
+        allSegments,
+        false,
+        brandConfig,
+        jobId
+      )
+      subtitleBlocks = comenta.subtitleBlocks
+      if (comenta.comentaMentionTimeSec != null) {
+        comentaMentionTimeSec = comenta.comentaMentionTimeSec
+      }
+      if (comenta.comentaOverlayText) {
+        comentaOverlayText = comenta.comentaOverlayText
       }
     }
 
@@ -2280,6 +2361,25 @@ export async function rerunCreatomateRenderForJob(
   const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
   const brandConfig = brandConfigFromJobRow(job)
 
+  subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
+
+  const escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
+  let comentaMentionTimeSecRerun: number | undefined
+  let comentaOverlayTextRerun: string | undefined
+  {
+    const comenta = applyComentaWhenNoGuion(
+      subtitleBlocks,
+      analysis.sequence,
+      allSegments,
+      escenasRerun.length > 0,
+      brandConfig,
+      jobId
+    )
+    subtitleBlocks = comenta.subtitleBlocks
+    comentaMentionTimeSecRerun = comenta.comentaMentionTimeSec
+    comentaOverlayTextRerun = comenta.comentaOverlayText
+  }
+
   const renderId = await renderSegmentsV2(
     jobId,
     analysis.sequence,
@@ -2287,7 +2387,12 @@ export async function rerunCreatomateRenderForJob(
     subtitleBlocks,
     musicTrackUrl,
     voIntroForRender,
-    { musicTrimStartSecOverride: effectiveMusicTrimStartSec, brandConfig }
+    {
+      musicTrimStartSecOverride: effectiveMusicTrimStartSec,
+      brandConfig,
+      comentaMentionTimeSec: comentaMentionTimeSecRerun,
+      comentaOverlayText: comentaOverlayTextRerun,
+    }
   )
 
   await updateJob(jobId, {
