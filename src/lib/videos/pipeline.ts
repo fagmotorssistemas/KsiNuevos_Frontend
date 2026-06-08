@@ -43,6 +43,7 @@ import {
   loadGuionEscenasForJob,
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
+import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import {
@@ -637,11 +638,35 @@ async function runSingleVideoPipelineFromStorage(
 
     const freshSignedUrl = await getSignedUrlForPath(storagePath)
     const clipUrls = [freshSignedUrl]
+
+    let brandMentionTimeSec: number | undefined
+    {
+      const supabaseInv = getServiceClient()
+      const { data: metaRow } = await supabaseInv
+        .from('video_jobs_v2')
+        .select('selected_clips, video_script_id')
+        .eq('id', jobId)
+        .single()
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          segments,
+          { vehicleIdHint: vId }
+        )
+        if (resolved?.brandMentionTimeSec != null) {
+          brandMentionTimeSec = resolved.brandMentionTimeSec
+        }
+      }
+    }
+
     const brandConfig = await loadBrandConfigForJob(jobId)
 
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
       brandConfig,
+      brandMentionTimeSec,
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1274,13 +1299,37 @@ async function runMultipleClipsPipelineFromStorage(
     )
 
     const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
-    const brandConfig = await loadBrandConfigForJob(jobId)
 
-    // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
     let brandMentionTimeSec: number | undefined
     let brandMentionLengthSec: number | undefined
     let comentaMentionTimeSec: number | undefined
     let comentaOverlayText: string | undefined
+
+    if (escenasMulti.length === 0) {
+      const supabaseInv = getServiceClient()
+      const { data: metaRow } = await supabaseInv
+        .from('video_jobs_v2')
+        .select('selected_clips, video_script_id')
+        .eq('id', jobId)
+        .single()
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          allSegments,
+          { vehicleIdHint: vId }
+        )
+        if (resolved?.brandMentionTimeSec != null) {
+          brandMentionTimeSec = resolved.brandMentionTimeSec
+          brandMentionLengthSec = 3.5
+        }
+      }
+    }
+
+    const brandConfig = await loadBrandConfigForJob(jobId)
+
+    // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
     if (escenasMulti.length > 0) {
       const brandKws = [
         brandConfig?.vehicle_line_1?.trim(),
