@@ -1,6 +1,40 @@
 import type { GuionEscena } from '@/types/video-script'
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
 
+/** Debe coincidir con `CLIP_TRANSITION_OVERLAP_SEC` / boundaries en shotstack.ts */
+const CLIP_TRANSITION_OVERLAP_SEC = 0.5
+const CLIP_BOUNDARY_INDICES = [0, 1, 4] as const
+
+/** Escenas 0–2: apertura, marca/motor y transmisión — mantienen timeline lineal (título + SFX). */
+const SUBTITLE_LINEAR_TIMELINE_UNTIL_SCENE_INDEX = 3
+
+function countClipTransitionOverlapsBefore(clipIndex: number, sequenceLength: number): number {
+  let n = 0
+  for (const boundary of CLIP_BOUNDARY_INDICES) {
+    if (clipIndex > boundary && boundary + 1 < sequenceLength) n++
+  }
+  return n
+}
+
+/** Inicio real del clip en la timeline de Shotstack (resta solapamientos de transición). */
+function computeVideoTimelineStartMs(sequence: SequenceItem[], clipIndex: number): number {
+  let linearMs = 0
+  for (let i = 0; i < clipIndex; i++) {
+    linearMs += sequence[i]!.trim_duration * 1000
+  }
+  const overlapMs = CLIP_TRANSITION_OVERLAP_SEC * 1000 * countClipTransitionOverlapsBefore(clipIndex, sequence.length)
+  return Number(Math.max(0, linearMs - overlapMs).toFixed(3))
+}
+
+function sceneSubtitleTimelineMs(
+  sequence: SequenceItem[],
+  sceneIndex: number,
+  linearTimelineMs: number
+): number {
+  if (sceneIndex < SUBTITLE_LINEAR_TIMELINE_UNTIL_SCENE_INDEX) return linearTimelineMs
+  return computeVideoTimelineStartMs(sequence, sceneIndex)
+}
+
 /** Umbral para alinear bloque Assembly ↔ escena usando solo `dialogo` (nunca se muestra en pantalla). */
 const MIN_DIALOGUE_ALIGN = 0.18
 
@@ -394,15 +428,16 @@ export function buildCaptionBlocksFromDialogoAssembly(
 
     const sceneLabelForLog = `escena ${escNum ?? si + 1}`
     const isComentaScene = /\bcomenta\b/i.test(dialogo)
+    const sceneTimelineMs = sceneSubtitleTimelineMs(sequence, si, timelineOffsetMs)
 
     if (comentaTimeSec == null && isComentaScene) {
       if (asmWords.length > 0) {
         const comentaIdx = findFirstMatchingWordIdx(asmWords, ['comenta'])
         comentaTimeSec = comentaIdx >= 0
-          ? Number(((timelineOffsetMs + (asmWords[comentaIdx]!.start - trimStartMs)) / 1000).toFixed(3))
-          : Number((timelineOffsetMs / 1000).toFixed(3))
+          ? Number(((sceneTimelineMs + (asmWords[comentaIdx]!.start - trimStartMs)) / 1000).toFixed(3))
+          : Number((sceneTimelineMs / 1000).toFixed(3))
       } else {
-        comentaTimeSec = Number((timelineOffsetMs / 1000).toFixed(3))
+        comentaTimeSec = Number((sceneTimelineMs / 1000).toFixed(3))
       }
       comentaOverlayText = buildComentaOverlayText(
         comentaVehicle?.modelLine,
@@ -469,7 +504,7 @@ export function buildCaptionBlocksFromDialogoAssembly(
     } else if (keywords.length > 0 && !pastComentaScene) {
       // ── Subtítulo normal (hasta escena comenta; luego se corta en comentaTimeSec) ──
       const prevLen = captionBlocks.length
-      addKeywordCaptionBlocks(keywords, asmWords, trimStartMs, timelineOffsetMs, sceneDurMs, captionBlocks)
+      addKeywordCaptionBlocks(keywords, asmWords, trimStartMs, sceneTimelineMs, sceneDurMs, captionBlocks)
       const newBlocks = captionBlocks.slice(prevLen)
       for (const b of newBlocks) {
         console.log(

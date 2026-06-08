@@ -45,14 +45,20 @@ const DEFAULT_TRANSMISSION_GEAR_SFX_URL =
   'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/universfield-new-notification-040-493469.mp3'
 const TRANSMISSION_GEAR_SFX_VOLUME = 0.4
 const TRANSMISSION_GEAR_SFX_LENGTH_SEC = 0.45
-const COMENTA_LINE1_FONT_SIZE = 60
-const COMENTA_LINE2_FONT_SIZE = 56
 const COMENTA_TEXT_WIDTH_PX = 700
-const COMENTA_LINE1_HEIGHT_PX = 90
-const COMENTA_LINE2_HEIGHT_PX = 140
+const COMENTA_LINE_HEIGHT_PX = 200
 const COMENTA_LINE1_OFFSET_Y = -0.08
 const COMENTA_LINE2_OFFSET_Y = -0.13
-const COMENTA_FONT_FAMILY = 'Playfair Display'
+const COMENTA_FONT_FAMILY = 'Montserrat'
+
+/** Misma escala tipográfica que `captionRealSize` en subtítulos HTML. */
+function comentaCaptionFontSize(text: string): number {
+  const len = text.length
+  if (len <= 8) return 80
+  if (len <= 14) return 72
+  if (len <= 20) return 60
+  return 48
+}
 const COMENTA_ENTRANCE_SLIDE_SEC = 0.28
 const PLAYFAIR_DISPLAY_SEMIBOLD_TTF =
   'https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-600-normal.ttf'
@@ -79,13 +85,17 @@ const FIRST_CLIP_INTRO_PULL_SEC = 0.28
 /** Destello amarillo-naranja al entrar el 4º clip (índice 3) */
 const CLIP_FLASH_AT_CLIP_INDEX = 3
 const CLIP_FLASH_LENGTH_SEC = 0.55
+/** Salida vertical 1080p (9:16) */
+const OUTPUT_WIDTH = 1080
+const OUTPUT_HEIGHT = 1920
+
 const CLIP_FLASH_LEAD_SEC = 0.15
 const CLIP_FLASH_FADE_IN_SEC = 0.12
 const CLIP_FLASH_HOLD_SEC = 0.08
 const CLIP_FLASH_FADE_OUT_SEC = 0.35
 const CLIP_FLASH_PEAK_OPACITY = 0.65
 const CLIP_FLASH_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">' +
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}">` +
   '<defs>' +
   '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
   '<stop offset="0%" stop-color="#FFE94A" stop-opacity="1"/>' +
@@ -93,7 +103,7 @@ const CLIP_FLASH_SVG =
   '<stop offset="100%" stop-color="#FF4500" stop-opacity="0.8"/>' +
   '</radialGradient>' +
   '</defs>' +
-  '<rect width="720" height="1280" fill="url(#flash)"/>' +
+  `<rect width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" fill="url(#flash)"/>` +
   '</svg>'
 
 function buildTimelineFonts(): { src: string }[] {
@@ -293,8 +303,8 @@ function buildClipFlashTransitionTrack(
         start,
         length: lengthSec,
         fit: 'none',
-        width: 720,
-        height: 1280,
+        width: OUTPUT_WIDTH,
+        height: OUTPUT_HEIGHT,
         position: 'center',
         opacity: [
           { from: 0, to: peakOpacity, start: 0, length: fadeInSec },
@@ -1002,7 +1012,7 @@ function buildBrandOverlayTracks(
 
   // ── CTA (opcional) ────────────────────────────────────────────────────
   if (cta) {
-    const FRAME_H = 1280
+    const FRAME_H = OUTPUT_HEIGHT
     const ctaH = 160
     // Centrado en la parte superior del frame, aparece tarde en el reel
     const ctaOffsetY = Number(((ctaH / 2 + 40) / FRAME_H).toFixed(3)) // ≈ 0.094
@@ -1094,7 +1104,7 @@ function logComentaOverlayDebug(
   )
   console.log(
     `${tag} text="${meta.text}" startSec=${meta.startSec} ` +
-      `font=${COMENTA_FONT_FAMILY} L1=${COMENTA_LINE1_FONT_SIZE}px y=${COMENTA_LINE1_OFFSET_Y} L2=${COMENTA_LINE2_FONT_SIZE}px y=${COMENTA_LINE2_OFFSET_Y}`
+      `font=${COMENTA_FONT_FAMILY} y=${COMENTA_LINE1_OFFSET_Y}/${COMENTA_LINE2_OFFSET_Y} (misma escala que captions)`
   )
 }
 
@@ -1169,7 +1179,7 @@ function buildComentaOverlayTracks(
       font: {
         family: COMENTA_FONT_FAMILY,
         size: fontSize,
-        weight: 600,
+        weight: 900,
         color,
         opacity: 1,
       },
@@ -1186,12 +1196,12 @@ function buildComentaOverlayTracks(
   })
 
   const tracks: ShotstackTrack[] = [{
-    clips: [buildLineClip(comentaLead, COMENTA_LINE1_OFFSET_Y, COMENTA_LINE1_HEIGHT_PX, COMENTA_LINE1_FONT_SIZE, '#E63333')],
+    clips: [buildLineClip(comentaLead, COMENTA_LINE1_OFFSET_Y, COMENTA_LINE_HEIGHT_PX, comentaCaptionFontSize(comentaLead), '#E63333')],
   }]
 
   if (comentaRest) {
     tracks.push({
-      clips: [buildLineClip(comentaRest, COMENTA_LINE2_OFFSET_Y, COMENTA_LINE2_HEIGHT_PX, COMENTA_LINE2_FONT_SIZE, '#FFFFFF')],
+      clips: [buildLineClip(comentaRest, COMENTA_LINE2_OFFSET_Y, COMENTA_LINE_HEIGHT_PX, comentaCaptionFontSize(comentaRest), '#FFFFFF')],
     })
   }
 
@@ -1916,9 +1926,9 @@ export async function renderSegmentsV2(
     },
     output: {
       format: 'mp4',
-      size: { width: 720, height: 1280 },
+      size: { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT },
       fps: 30,
-      quality: 'medium',
+      quality: 'high',
     },
     callback: callbackUrl,
   }
