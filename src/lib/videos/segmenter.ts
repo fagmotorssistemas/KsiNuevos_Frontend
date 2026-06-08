@@ -299,12 +299,17 @@ export interface SubtitleWordTiming {
   end: number
 }
 
+/** Efecto editorial showcase (relleno); no altera montaje base — ver highlight-engine.ts */
+export type SubtitleHighlightFx = 'pop' | 'yellow_whoosh' | 'yellow_pop'
+
 export interface SubtitleBlock {
   time: number     // segundos desde el inicio del Reel
   duration: number // segundos
   text: string     // 2-3 palabras
   /** Tiempos por palabra (karaoke); si hay varias, el render puede resaltar en rojo palabra a palabra */
   words?: SubtitleWordTiming[]
+  /** Pop / amarillo+whoosh en zona showcase (capa de relleno) */
+  highlightFx?: SubtitleHighlightFx
 }
 
 /**

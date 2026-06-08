@@ -807,6 +807,69 @@ function buildComentaMentionSfxTrack(
   }
 }
 
+/** SFX de relleno showcase: pop / whoosh según highlightFx en subtítulos (capa editorial). */
+function buildHighlightSfxTrack(
+  subtitleBlocks: SubtitleBlock[],
+  totalDuration: number,
+  jobId?: string
+): ShotstackTrack | null {
+  const popUrl = resolveBrandTitlePopSfxUrl()
+  const whooshUrl = resolveClipTransitionWhooshUrl()
+  if (!popUrl && !whooshUrl) return null
+
+  const hits = subtitleBlocks
+    .filter((b) => b.highlightFx && b.time < totalDuration)
+    .sort((a, b) => a.time - b.time)
+
+  if (hits.length === 0) return null
+
+  const clips: ShotstackClip[] = []
+  const logParts: string[] = []
+
+  for (const b of hits) {
+    const start = Number(Math.max(0, Math.min(b.time, totalDuration)).toFixed(3))
+    if (start >= totalDuration) continue
+
+    if ((b.highlightFx === 'pop' || b.highlightFx === 'yellow_pop') && popUrl) {
+      clips.push({
+        asset: {
+          type: 'audio',
+          src: popUrl,
+          trim: 0,
+          volume: BRAND_TITLE_POP_SFX_VOLUME,
+        },
+        start,
+        length: BRAND_TITLE_POP_SFX_LENGTH_SEC,
+      })
+      logParts.push(`pop@t=${start.toFixed(2)}s`)
+    }
+
+    if (b.highlightFx === 'yellow_whoosh' && whooshUrl) {
+      clips.push({
+        asset: {
+          type: 'audio',
+          src: whooshUrl,
+          trim: 0,
+          volume: CLIP_TRANSITION_WHOOSH_VOLUME,
+        },
+        start,
+        length: CLIP_TRANSITION_WHOOSH_LENGTH_SEC,
+      })
+      logParts.push(`whoosh@t=${start.toFixed(2)}s`)
+    }
+  }
+
+  if (clips.length === 0) return null
+
+  if (jobId) {
+    console.log(
+      `[Shotstack][${jobId}] SFX showcase → ${clips.length} hit(s) (${logParts.join(', ')})`
+    )
+  }
+
+  return { clips }
+}
+
 function htmlEscape(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -1482,12 +1545,39 @@ function buildCaptionHtmlTracks(
     return words.length === 2 && words.every(w => w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').length >= 5)
   }
 
+  function isYellowHighlightBlock(b: SubtitleBlock): boolean {
+    return b.highlightFx === 'yellow_whoosh' || b.highlightFx === 'yellow_pop'
+  }
+
   const driveBadgeBlocks = validBlocks.filter((b) => isDriveBadgeText(b.text))
   const nonDriveBlocks = validBlocks.filter((b) => !isDriveBadgeText(b.text))
-  const regularBlocks = nonDriveBlocks.filter(b => !isLongPair(b.text.trim().toUpperCase()))
   const longPairBlocks = nonDriveBlocks.filter(b => isLongPair(b.text.trim().toUpperCase()))
+  const highlightYellowBlocks = nonDriveBlocks.filter((b) => isYellowHighlightBlock(b))
+  const regularBlocks = nonDriveBlocks.filter(
+    (b) => !isLongPair(b.text.trim().toUpperCase()) && !isYellowHighlightBlock(b)
+  )
 
   const driveBadgeClips: ShotstackClip[] = driveBadgeBlocks.map((b, idx) => {
+    const text = b.text.trim().toUpperCase()
+    const sz = overlayCaptionFontSize(text)
+    return {
+      asset: {
+        type: 'rich-text',
+        text,
+        font: { family: 'Montserrat', size: sz, weight: 900, color: '#FFE100', opacity: 1 },
+        style: captionStyle,
+        align: captionAlign,
+      },
+      start: Number(b.time.toFixed(3)),
+      length: Number(b.duration.toFixed(3)),
+      width: captionBoxW,
+      height: captionBoxH,
+      position: 'bottom',
+      offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
+    }
+  })
+
+  const highlightYellowClips: ShotstackClip[] = highlightYellowBlocks.map((b, idx) => {
     const text = b.text.trim().toUpperCase()
     const sz = overlayCaptionFontSize(text)
     return {
@@ -1598,6 +1688,9 @@ function buildCaptionHtmlTracks(
   if (driveBadgeClips.length > 0) {
     tracks.push({ clips: driveBadgeClips })
   }
+  if (highlightYellowClips.length > 0) {
+    tracks.push({ clips: highlightYellowClips })
+  }
   if (lpWord1Clips.length > 0) {
     tracks.push({ clips: lpWord1Clips })
     tracks.push({ clips: lpWord2Clips })
@@ -1677,6 +1770,18 @@ function buildCaptionHtmlTracks(
           b.duration,
           { x: 0, y: captionOffsetY(upper, idx, b.duration) },
           sparkleBoxForText(upper, overlayCaptionFontSize(upper))
+        )
+      )
+    }
+
+    for (const [idx, b] of highlightYellowBlocks.entries()) {
+      const text = b.text.trim().toUpperCase()
+      sparkleClips.push(
+        buildSparkleClip(
+          b.time,
+          b.duration,
+          { x: 0, y: captionOffsetY(text, idx, b.duration) },
+          sparkleBoxForText(text, overlayCaptionFontSize(text))
         )
       )
     }
@@ -1972,6 +2077,9 @@ export async function renderSegmentsV2(
 
   const transmissionSfxTrack = buildTransmissionGearSfxTrack(captionBlocksToRender, totalDuration, jobId)
   if (transmissionSfxTrack) tracks.push(transmissionSfxTrack)
+
+  const highlightSfxTrack = buildHighlightSfxTrack(captionBlocksToRender, totalDuration, jobId)
+  if (highlightSfxTrack) tracks.push(highlightSfxTrack)
 
   const whooshSfxTrack = buildClipTransitionWhooshTrack(sequence, jobId)
   if (whooshSfxTrack) tracks.push(whooshSfxTrack)

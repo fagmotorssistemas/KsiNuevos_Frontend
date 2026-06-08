@@ -47,6 +47,8 @@ import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from
 import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
 import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
+import { applyCaptionHighlights } from './highlight-engine'
+import type { BrandConfig } from './creatomate'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import {
@@ -390,6 +392,27 @@ function applyComentaWhenNoGuion(
   }
 }
 
+async function applyShowcaseCaptionHighlights(
+  jobId: string,
+  subtitleBlocks: SubtitleBlock[],
+  sequence: SequenceItem[],
+  brandConfig: BrandConfig | null,
+  brandMentionTimeSec?: number
+): Promise<SubtitleBlock[]> {
+  return applyCaptionHighlights({
+    jobId,
+    blocks: subtitleBlocks,
+    sequence,
+    brandMentionTimeSec,
+    vehicleContext: {
+      brand: brandConfig?.vehicle_line_1 ?? null,
+      model: brandConfig?.vehicle_line_2 ?? null,
+      year: brandConfig?.vehicle_line_4 ?? null,
+    },
+    useGemini: true,
+  })
+}
+
 async function loadBrandConfigForJob(jobId: string) {
   const supabase = getServiceClient()
   const { data, error } = await supabase
@@ -721,6 +744,14 @@ async function runSingleVideoPipelineFromStorage(
       comentaMentionTimeSecA = comenta.comentaMentionTimeSec
       comentaOverlayTextA = comenta.comentaOverlayText
     }
+
+    subtitleBlocks = await applyShowcaseCaptionHighlights(
+      jobId,
+      subtitleBlocks,
+      analysis.sequence,
+      brandConfig,
+      brandMentionTimeSec
+    )
 
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
@@ -1447,6 +1478,14 @@ async function runMultipleClipsPipelineFromStorage(
         comentaOverlayText = comenta.comentaOverlayText
       }
     }
+
+    subtitleBlocks = await applyShowcaseCaptionHighlights(
+      jobId,
+      subtitleBlocks,
+      analysis.sequence,
+      brandConfig,
+      brandMentionTimeSec
+    )
 
     const renderId = await renderSegmentsV2(
       jobId,
@@ -2379,6 +2418,13 @@ export async function rerunCreatomateRenderForJob(
     comentaMentionTimeSecRerun = comenta.comentaMentionTimeSec
     comentaOverlayTextRerun = comenta.comentaOverlayText
   }
+
+  subtitleBlocks = await applyShowcaseCaptionHighlights(
+    jobId,
+    subtitleBlocks,
+    analysis.sequence,
+    brandConfig
+  )
 
   const renderId = await renderSegmentsV2(
     jobId,
