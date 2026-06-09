@@ -1053,6 +1053,8 @@ interface ValidateGeminiSequenceOptions {
   manualIntroClipIndices?: number[]
   /** Permutación de clips: el montaje final agrupa cortes por clip en este orden (no aplica con intro fija). */
   manualClipOrderIndices?: number[]
+  /** Checklist: un corte obligatorio por clip del orden; sin recorte por duración (~35 s). */
+  forceAllManualOrderClips?: boolean
   /** Secuencia ya ordenada por diálogos del guión: no aplicar intro/outro editorial ni inyección de apertura. */
   guionDeterministicOrder?: boolean
 }
@@ -1451,19 +1453,27 @@ function validateSequence(
   const manualOrder = manualOrderMode ? opts.manualClipOrderIndices : null
 
   if (manualOrderMode && manualOrder) {
-    console.log(
-      `[VideoV2Pipeline][${jobId}][Gemini] Orden manual de clips: ${manualOrder.join(' → ')} ` +
-        '(macro-orden fijo; sin dedupe global ni reorden editorial automático entre clips)'
-    )
-    sequence = reorderSequenceByManualClipOrder(
-      sequence,
-      manualOrder,
-      allSegments,
-      excluded,
-      segmentLookup,
-      jobId
-    )
-    sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+    if (opts?.forceAllManualOrderClips) {
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Checklist] Orden manual con todos los clips obligatorios: ${manualOrder.join(' → ')} ` +
+          '(sin recorte por duración ~35s)'
+      )
+      sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+    } else {
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Gemini] Orden manual de clips: ${manualOrder.join(' → ')} ` +
+          '(macro-orden fijo; sin dedupe global ni reorden editorial automático entre clips)'
+      )
+      sequence = reorderSequenceByManualClipOrder(
+        sequence,
+        manualOrder,
+        allSegments,
+        excluded,
+        segmentLookup,
+        jobId
+      )
+      sequence = dedupeConsecutiveNearDuplicates(sequence, segmentLookup, jobId)
+    }
   } else if (opts?.guionDeterministicOrder) {
     console.log(
       `[VideoV2Pipeline][${jobId}][Gemini] Orden GUION determinista: se conserva la secuencia ` +
@@ -1536,52 +1546,58 @@ function validateSequence(
   const REEL_TRIM_TARGET_SEC = 88
   const REEL_LAST_SEGMENT_MIN_SEC = 0.22
 
-  if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
-    for (let i = sequence.length - 1; i >= 0 && totalDuration > REEL_TRIM_TARGET_SEC; i--) {
-      const seg = segmentLookup.get(sequence[i].segment_id)
-      if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
-        totalDuration -= sequence[i].trim_duration
-        sequence.splice(i, 1)
-      }
-    }
-    totalDuration = Number(totalDuration.toFixed(3))
-
+  if (!opts?.forceAllManualOrderClips) {
     if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
-      const last = sequence[sequence.length - 1]
-      const excess = totalDuration - REEL_TRIM_TARGET_SEC
-      last.trim_duration = Number(Math.max(REEL_LAST_SEGMENT_MIN_SEC, last.trim_duration - excess).toFixed(3))
-      last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
-      if (last.visual_overlay) {
-        last.visual_overlay = {
-          ...last.visual_overlay,
-          trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
+      for (let i = sequence.length - 1; i >= 0 && totalDuration > REEL_TRIM_TARGET_SEC; i--) {
+        const seg = segmentLookup.get(sequence[i].segment_id)
+        if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
+          totalDuration -= sequence[i].trim_duration
+          sequence.splice(i, 1)
         }
       }
-      totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
-    }
-  } else if (totalDuration > shortHardCap && sequence.length > 0) {
-    for (let i = sequence.length - 1; i >= 0 && totalDuration > shortSoftCap; i--) {
-      const seg = segmentLookup.get(sequence[i].segment_id)
-      if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
-        totalDuration -= sequence[i].trim_duration
-        sequence.splice(i, 1)
-      }
-    }
-    totalDuration = Number(totalDuration.toFixed(3))
+      totalDuration = Number(totalDuration.toFixed(3))
 
-    if (totalDuration > shortHardCap && sequence.length > 0) {
-      const last = sequence[sequence.length - 1]
-      const excess = totalDuration - shortSoftCap
-      last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
-      last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
-      if (last.visual_overlay) {
-        last.visual_overlay = {
-          ...last.visual_overlay,
-          trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
+      if (totalDuration > REEL_TRIM_TRIGGER_SEC && sequence.length > 0) {
+        const last = sequence[sequence.length - 1]
+        const excess = totalDuration - REEL_TRIM_TARGET_SEC
+        last.trim_duration = Number(Math.max(REEL_LAST_SEGMENT_MIN_SEC, last.trim_duration - excess).toFixed(3))
+        last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
+        if (last.visual_overlay) {
+          last.visual_overlay = {
+            ...last.visual_overlay,
+            trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
+          }
+        }
+        totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+      }
+    } else if (totalDuration > shortHardCap && sequence.length > 0) {
+      for (let i = sequence.length - 1; i >= 0 && totalDuration > shortSoftCap; i--) {
+        const seg = segmentLookup.get(sequence[i].segment_id)
+        if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
+          totalDuration -= sequence[i].trim_duration
+          sequence.splice(i, 1)
         }
       }
-      totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+      totalDuration = Number(totalDuration.toFixed(3))
+
+      if (totalDuration > shortHardCap && sequence.length > 0) {
+        const last = sequence[sequence.length - 1]
+        const excess = totalDuration - shortSoftCap
+        last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
+        last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
+        if (last.visual_overlay) {
+          last.visual_overlay = {
+            ...last.visual_overlay,
+            trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
+          }
+        }
+        totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
+      }
     }
+  } else {
+    console.log(
+      `[VideoV2Pipeline][${jobId}][Checklist] Duración total ${totalDuration.toFixed(1)}s — sin recorte automático (~35s)`
+    )
   }
 
   if (!manualOrderMode && opts?.manualIntroClipIndices && opts.manualIntroClipIndices.length > 0) {
@@ -2083,6 +2099,80 @@ export async function analyzeSegments(
   }
 
   throw new Error('Gemini no pudo analizar los segmentos')
+}
+
+/**
+ * Montaje determinista: un corte por cada clip en `manualOrder`, sin llamar a Gemini ni recortar ~35 s.
+ */
+export function buildForcedManualOrderClipAnalysis(
+  allSegments: Segment[],
+  manualOrder: number[],
+  excluded: number[],
+  jobId: string,
+  clipKinds: VideoClipKind[] = [],
+  extraOpts?: Omit<ValidateGeminiSequenceOptions, 'manualClipOrderIndices' | 'forceAllManualOrderClips'>
+): GeminiSegmentAnalysis {
+  const excludedSet = new Set(excluded)
+  const sequence: SequenceItem[] = []
+
+  for (const clipIdx of manualOrder) {
+    if (excludedSet.has(clipIdx)) {
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][Checklist] Se omite clip ${clipIdx} (reservado / excluido del montaje).`
+      )
+      continue
+    }
+    const candidates = allSegments
+      .filter(
+        (s) =>
+          s.clip_index === clipIdx && s.source_kind !== 'visual_only' && !isMistakeSegment(s)
+      )
+      .sort((a, b) => a.start_s - b.start_s || a.segment_id.localeCompare(b.segment_id))
+    const seg = pickBestSegmentForManualIntroClip(candidates) ?? candidates[0]
+    if (seg) {
+      sequence.push(sequenceItemFromSegment(seg, 0, `checklist: clip ${clipIdx} obligatorio`))
+      continue
+    }
+    const visualFallback = allSegments
+      .filter((s) => s.clip_index === clipIdx && !isMistakeSegment(s))
+      .sort((a, b) => a.start_s - b.start_s || b.duration_s - a.duration_s)[0]
+    if (visualFallback) {
+      sequence.push(
+        sequenceItemFromSegment(visualFallback, 0, `checklist: clip ${clipIdx} obligatorio (plano)`)
+      )
+      continue
+    }
+    console.warn(`[VideoV2Pipeline][${jobId}][Checklist] clip ${clipIdx} sin segmento usable — se omite.`)
+  }
+
+  if (sequence.length === 0) {
+    throw new Error(
+      `[VideoV2Pipeline][${jobId}][Checklist] No se pudo armar secuencia: ningún clip del orden tiene segmento usable.`
+    )
+  }
+
+  console.log(
+    `[VideoV2Pipeline][${jobId}][Checklist] Montaje obligatorio: ${sequence.length} clip(s) — ` +
+      sequence.map((s) => `clip${s.clip_index}`).join(' → ')
+  )
+
+  return validateSequence(
+    {
+      sequence,
+      total_duration: Number(sequence.reduce((sum, it) => sum + it.trim_duration, 0).toFixed(3)),
+      overall_strategy:
+        'Checklist: todos los clips del orden manual (sin recorte automático por duración ~35s)',
+    },
+    allSegments,
+    jobId,
+    clipKinds,
+    {
+      ...extraOpts,
+      manualClipOrderIndices: manualOrder,
+      forceAllManualOrderClips: true,
+      guionDeterministicOrder: true,
+    }
+  )
 }
 
 /**

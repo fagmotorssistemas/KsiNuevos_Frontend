@@ -111,6 +111,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   /** Orden macro de clips en el Reel (permutación de índices elegibles). */
   const [manualFullClipOrderEnabled, setManualFullClipOrderEnabled] = useState(false)
   const [manualClipOrderIndices, setManualClipOrderIndices] = useState<number[]>([])
+  /** Checklist: un corte por clip del orden, sin recorte ~35 s. */
+  const [forceAllManualOrderClips, setForceAllManualOrderClips] = useState(false)
   const [showBrandOverlays, setShowBrandOverlays] = useState(false)
   const [vehicleLine1, setVehicleLine1] = useState('')
   const [vehicleLine2, setVehicleLine2] = useState('')
@@ -174,6 +176,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setManualIntroSlots([null, null, null])
     setManualFullClipOrderEnabled(false)
     setManualClipOrderIndices([])
+    setForceAllManualOrderClips(false)
     setShowBrandOverlays(false)
     setVehicleLine1('')
     setVehicleLine2('')
@@ -463,7 +466,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           ...(manualFullClipOrderEnabled &&
           flowType === 'multiple' &&
           manualClipOrderIndices.length > 0
-            ? { manualClipOrderIndices: manualClipOrderIndices }
+            ? {
+                manualClipOrderIndices: manualClipOrderIndices,
+                ...(forceAllManualOrderClips ? { forceAllManualOrderClips: true } : {}),
+              }
             : {}),
           ...(canonV ? { canonicalVehicle: canonV } : {}),
           ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
@@ -973,17 +979,37 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                             setManualIntroSlots([null, null, null])
                             const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
                             setManualClipOrderIndices(eligible.slice().sort((a, b) => a - b))
+                          } else {
+                            setForceAllManualOrderClips(false)
                           }
                         }}
                       />
                       <span className="text-sm text-gray-900">
                         <span className="font-semibold text-emerald-950">Ordenar clips manualmente</span>
                         <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
-                          Elige el orden de los clips en el Reel (arrastra la lista). Dentro de cada clip siguen valiendo
-                          los cortes automáticos, subtítulos y música. No se combina con Intro fija (emergencia).
+                          {forceAllManualOrderClips
+                            ? 'Lista obligatoria: un corte de cada clip en el orden de abajo (arrastra la lista). Sin recorte automático por duración.'
+                            : 'Elige el orden de los clips en el Reel (arrastra la lista). Gemini elige qué cortes entran dentro de cada clip. No se combina con Intro fija (emergencia).'}
                         </span>
                       </span>
                     </label>
+                    {manualFullClipOrderEnabled && (
+                      <label className="flex items-start gap-2 cursor-pointer pl-1">
+                        <input
+                          type="checkbox"
+                          className="mt-1 accent-emerald-600"
+                          checked={forceAllManualOrderClips}
+                          onChange={(e) => setForceAllManualOrderClips(e.target.checked)}
+                        />
+                        <span className="text-sm text-gray-900">
+                          <span className="font-semibold text-emerald-950">Ignorar límite de tiempo (~35 s)</span>
+                          <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
+                            Todos los clips del orden entran obligatoriamente, sin recorte por duración. (Úsalo si el
+                            reel debe durar más del límite habitual de ~35 s.)
+                          </span>
+                        </span>
+                      </label>
+                    )}
                     {manualFullClipOrderEnabled && manualClipOrderIndices.length > 0 && (
                       <ManualClipOrderSortable
                         order={manualClipOrderIndices}

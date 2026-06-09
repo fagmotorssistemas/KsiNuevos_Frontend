@@ -53,6 +53,7 @@ import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-pro
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import {
   analyzeSegments,
+  buildForcedManualOrderClipAnalysis,
   buildValidatedAnalysisFromGuionSequence,
   type AnalyzeSegmentsOptions,
 } from './gemini'
@@ -103,6 +104,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   vehicleId?: string | null
   manualIntroClipIndicesRaw?: number[]
   manualClipOrderIndicesRaw?: number[]
+  forceAllManualOrderClips?: boolean
 }> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
@@ -115,10 +117,12 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
   let canonicalVehicle: CanonicalVehicleMeta | undefined
   let manualIntroClipIndicesRaw: number[] | undefined
   let manualClipOrderIndicesRaw: number[] | undefined
+  let forceAllManualOrderClips = false
   const vehicleId = vehicleIdFromPipelineMeta(data.selected_clips)
   const sc = data.selected_clips
   if (isPipelineInputMeta(sc)) {
     canonicalVehicle = normalizeCanonicalVehicle(sc.canonicalVehicle)
+    forceAllManualOrderClips = sc.forceAllManualOrderClips === true
     if (Array.isArray(sc.manualIntroClipIndices) && sc.manualIntroClipIndices.length > 0) {
       const coerced = sc.manualIntroClipIndices
         .map((x) => (typeof x === 'number' ? x : typeof x === 'string' ? Number(x) : NaN))
@@ -138,6 +142,7 @@ async function fetchJobGeminiContext(jobId: string): Promise<{
     vehicleId,
     manualIntroClipIndicesRaw,
     manualClipOrderIndicesRaw,
+    forceAllManualOrderClips,
   }
 }
 
@@ -1252,34 +1257,73 @@ async function runMultipleClipsPipelineFromStorage(
 
     const escenasMulti = await loadGuionEscenasForPipelineJob(jobId, allSegments)
     const excludeForGuion = [...excludeFromNarrative]
-    let analysis =
-      tryAnalysisFromGuionDialogues(jobId, allSegments, escenasMulti, {
-        excludedClipIndices: excludeForGuion,
-        clipKinds: kinds,
-        manualClipOrder: normClipOrder,
-        manualIntro: normIntro,
-        voiceOverBaseClipIndex: voiceOverBaseClipIndex ?? null,
-        voiceOverFromMp3: voiceOverAudioPath != null,
-      }) ?? null
 
-    if (!analysis) {
-      console.log(
-        `[VideoV2Pipeline][${jobId}][B3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
+    const forceChecklist =
+      ctx.forceAllManualOrderClips === true &&
+      normClipOrder != null &&
+      normClipOrder.length > 0
+
+    if (ctx.forceAllManualOrderClips === true && !forceChecklist) {
+      console.warn(
+        `[VideoV2Pipeline][${jobId}][B3] forceAllManualOrderClips en job pero orden manual inválido — se ignora checklist`
       )
-      if (escenasMulti.length > 0) {
-        logGuionDialogueMatchMatrix(escenasMulti, allSegments, jobId, excludeForGuion)
+    }
+
+    let analysis: Awaited<ReturnType<typeof analyzeSegments>> | null = null
+
+    if (forceChecklist) {
+      const checklistOpts: Parameters<typeof buildForcedManualOrderClipAnalysis>[5] = {}
+      if (voiceOverBaseClipIndex != null) {
+        checklistOpts.excludeClipIndicesFromSequence = [voiceOverBaseClipIndex]
+        checklistOpts.disableVisualOverlayNormalization = true
+        checklistOpts.manualVoiceOverBaseClipIndex = voiceOverBaseClipIndex
+      } else if (voiceOverAudioPath != null) {
+        checklistOpts.excludeClipIndicesFromSequence = voiceOverOverlayClipIndicesInput ?? []
+        checklistOpts.disableVisualOverlayNormalization = true
+        checklistOpts.manualVoiceOverFromExternalAudio = true
       }
-      analysis = await analyzeSegments(
-        formattedMap,
+      console.log(
+        `[VideoV2Pipeline][${jobId}][B3] Checklist: ${normClipOrder!.length} clip(s) obligatorios en orden ` +
+          `${normClipOrder!.join(' → ')} (sin recorte ~35s, sin Gemini para montaje)`
+      )
+      analysis = buildForcedManualOrderClipAnalysis(
         allSegments,
+        normClipOrder!,
+        excludeForGuion,
         jobId,
-        googleFileRefs,
-        useVisualAnalysis,
         kinds,
-        Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+        checklistOpts
       )
     } else {
-      console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada Gemini para orden)`)
+      analysis =
+        tryAnalysisFromGuionDialogues(jobId, allSegments, escenasMulti, {
+          excludedClipIndices: excludeForGuion,
+          clipKinds: kinds,
+          manualClipOrder: normClipOrder,
+          manualIntro: normIntro,
+          voiceOverBaseClipIndex: voiceOverBaseClipIndex ?? null,
+          voiceOverFromMp3: voiceOverAudioPath != null,
+        }) ?? null
+
+      if (!analysis) {
+        console.log(
+          `[VideoV2Pipeline][${jobId}][B3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
+        )
+        if (escenasMulti.length > 0) {
+          logGuionDialogueMatchMatrix(escenasMulti, allSegments, jobId, excludeForGuion)
+        }
+        analysis = await analyzeSegments(
+          formattedMap,
+          allSegments,
+          jobId,
+          googleFileRefs,
+          useVisualAnalysis,
+          kinds,
+          Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
+        )
+      } else {
+        console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada Gemini para orden)`)
+      }
     }
     if (voiceOverBaseClipIndex != null) {
       const sanitizedSequence = sanitizeSequenceForManualVoiceOver(

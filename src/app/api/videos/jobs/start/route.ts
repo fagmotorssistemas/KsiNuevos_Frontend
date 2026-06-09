@@ -74,6 +74,8 @@ interface StartJobBody {
   manualIntroClipIndices?: number[] | null
   /** Permutación de índices de clip narrativos: orden macro del Reel (excluye VO y planos reservados). */
   manualClipOrderIndices?: number[] | null
+  /** Con orden manual: un corte obligatorio por clip, sin recorte automático ~35 s. */
+  forceAllManualOrderClips?: boolean | null
   /** Vehículo canónico para contexto en Gemini (inventario o captura manual). */
   canonicalVehicle?: { brand?: string; model?: string; year?: string } | null
   /** ID inventario (`inventoryoracle.id`) para detectar `video_scripts` del mismo vehículo. */
@@ -97,6 +99,7 @@ export async function POST(request: NextRequest) {
       voiceOverMp3DurationSec: voiceOverMp3DurationRaw,
       manualIntroClipIndices: manualIntroRaw,
       manualClipOrderIndices: manualClipOrderRaw,
+      forceAllManualOrderClips: forceAllManualOrderClipsRaw,
       canonicalVehicle: canonicalVehicleRaw,
       vehicleId: vehicleIdRaw,
       musicTrimStartSec: musicTrimStartRaw,
@@ -323,6 +326,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let forceAllManualOrderClips = false
+    if (forceAllManualOrderClipsRaw === true) {
+      if (!manualClipOrderIndices || manualClipOrderIndices.length === 0) {
+        return NextResponse.json(
+          { error: 'forceAllManualOrderClips requiere manualClipOrderIndices activo' },
+          { status: 400 }
+        )
+      }
+      forceAllManualOrderClips = true
+    }
+
     const canonicalVehicle = normalizeCanonicalVehicle(canonicalVehicleRaw ?? undefined)
     const vehicleId =
       vehicleIdRaw != null && String(vehicleIdRaw).trim() !== ''
@@ -386,6 +400,7 @@ export async function POST(request: NextRequest) {
       (voiceOverOverlayClipIndices !== undefined && voiceOverOverlayClipIndices.length > 0) ||
       (manualIntroClipIndices !== undefined && manualIntroClipIndices.length > 0) ||
       (manualClipOrderIndices !== undefined && manualClipOrderIndices.length > 0) ||
+      forceAllManualOrderClips ||
       canonicalVehicle !== undefined ||
       vehicleId !== undefined ||
       musicTrimStartSec !== undefined
@@ -405,6 +420,7 @@ export async function POST(request: NextRequest) {
             ...(manualClipOrderIndices && manualClipOrderIndices.length > 0
               ? { manualClipOrderIndices }
               : {}),
+            ...(forceAllManualOrderClips ? { forceAllManualOrderClips: true } : {}),
             ...(canonicalVehicle ? { canonicalVehicle } : {}),
             ...(vehicleId ? { vehicleId } : {}),
             ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),

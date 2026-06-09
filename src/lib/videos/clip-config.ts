@@ -47,6 +47,11 @@ export interface VideoJobPipelineInputMeta {
    * El pipeline reagrupa los cortes de Gemini en ese orden; el resto (cortes, subtítulos, música) sigue igual.
    */
   manualClipOrderIndices?: number[] | null
+  /**
+   * Con `manualClipOrderIndices`: incluye obligatoriamente un corte por cada clip del orden y no aplica
+   * el recorte automático por duración (~35 s). Útil cuando el reel debe usar todos los clips ordenados.
+   */
+  forceAllManualOrderClips?: boolean | null
   /** Marca, modelo y año exactos del inventario (o captura manual) para contexto en Gemini. */
   canonicalVehicle?: CanonicalVehicleMeta | null
   /** ID inventario (`inventoryoracle.id`) para detectar `video_scripts` del mismo vehículo. */
@@ -72,6 +77,7 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     (typeof o.musicTrimStartSec === 'number' && Number.isFinite(o.musicTrimStartSec) && o.musicTrimStartSec >= 0) ||
     (Array.isArray(o.manualIntroClipIndices) && o.manualIntroClipIndices.length > 0) ||
     (Array.isArray(o.manualClipOrderIndices) && o.manualClipOrderIndices.length > 0) ||
+    o.forceAllManualOrderClips === true ||
     hasVehicle ||
     (typeof o.vehicleId === 'string' && o.vehicleId.trim().length > 0)
   )
