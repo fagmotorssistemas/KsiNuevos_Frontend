@@ -32,6 +32,10 @@ export type CampaignRankRow = {
 export type VehicleLeadsRow = {
   inventoryId: string
   vehicleLabel: string
+  brand: string
+  model: string
+  plate: string | null
+  plateShort: string | null
   leadsCampanas: number
   leadsOrganicos: number
   leadsTotal: number
@@ -755,7 +759,14 @@ type VehicleRowDbRaw = Omit<VehicleRowDb, 'vehicle_label' | 'report_date'> & {
 const VEHICLE_SELECT =
   'inventory_id, campaign_id, campaign_name, spend, leads_count, reach_sum, impressions_sum, clicks_sum, cost_per_lead, ads_count, updated_at'
 
-type InventoryMeta = { label: string; status: string | null }
+type InventoryMeta = {
+  label: string
+  status: string | null
+  brand: string
+  model: string
+  plate: string | null
+  plateShort: string | null
+}
 
 async function fetchInventoryMeta(
   db: ReturnType<typeof metricsDb>,
@@ -766,14 +777,16 @@ async function fetchInventoryMeta(
 
   const { data, error } = await db
     .from('inventoryoracle')
-    .select('id, brand, model, year, status')
+    .select('id, brand, model, year, status, plate, plate_short')
     .in('id', unique)
   if (error) throw error
 
   const map = new Map<string, InventoryMeta>()
   for (const row of data ?? []) {
     const id = String((row as { id?: string }).id ?? '')
-    const label = [(row as { brand?: string }).brand, (row as { model?: string }).model, (row as { year?: string | number }).year]
+    const brand = String((row as { brand?: string }).brand ?? '').trim()
+    const model = String((row as { model?: string }).model ?? '').trim()
+    const label = [brand, model, (row as { year?: string | number }).year]
       .filter((x) => x != null && String(x).trim() !== '')
       .join(' ')
       .trim()
@@ -781,6 +794,10 @@ async function fetchInventoryMeta(
     map.set(id, {
       label: label || 'Sin etiqueta',
       status: (row as { status?: string | null }).status ?? null,
+      brand: brand || '—',
+      model: model || '—',
+      plate: (row as { plate?: string | null }).plate ?? null,
+      plateShort: (row as { plate_short?: string | null }).plate_short ?? null,
     })
   }
   return map
@@ -1583,6 +1600,10 @@ function buildVehicleLeadsTable(
     result.push({
       inventoryId,
       vehicleLabel: meta?.label ?? 'Sin etiqueta',
+      brand: meta?.brand ?? '—',
+      model: meta?.model ?? '—',
+      plate: meta?.plate ?? null,
+      plateShort: meta?.plateShort ?? null,
       leadsCampanas,
       leadsOrganicos,
       leadsTotal: leadsCampanas + leadsOrganicos,
@@ -1674,6 +1695,10 @@ function buildNeutralInventoryVehicleRows(
     result.push({
       inventoryId,
       vehicleLabel: meta?.label ?? 'Sin etiqueta',
+      brand: meta?.brand ?? '—',
+      model: meta?.model ?? '—',
+      plate: meta?.plate ?? null,
+      plateShort: meta?.plateShort ?? null,
       leadsCampanas: 0,
       leadsOrganicos: org,
       leadsTotal: org,

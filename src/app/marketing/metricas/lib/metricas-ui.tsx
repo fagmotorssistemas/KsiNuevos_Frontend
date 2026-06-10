@@ -11,9 +11,11 @@ import {
   ExternalLink,
   Megaphone,
   Package,
+  Search,
   Sparkles,
   Tag,
   Video,
+  X,
 } from 'lucide-react'
 
 import type {
@@ -990,6 +992,28 @@ const VEHICLE_LEADS_PAGE_SIZE = 10
 
 type VehicleLeadsTab = 'campaign' | 'neutral'
 
+function normalizeVehicleSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+}
+
+function matchesVehicleLeadsSearch(row: VehicleLeadsRow, query: string): boolean {
+  const q = normalizeVehicleSearchText(query.trim())
+  if (!q) return true
+  const haystack = [
+    row.vehicleLabel,
+    row.brand,
+    row.model,
+    row.plate,
+    row.plateShort,
+  ]
+    .filter((part) => part != null && String(part).trim() !== '')
+    .map((part) => normalizeVehicleSearchText(String(part)))
+  return haystack.some((part) => part.includes(q))
+}
+
 function VehicleLeadsTableBody({
   rows,
   mode,
@@ -1253,12 +1277,19 @@ export function VehicleLeadsTable({
   neutralRows: VehicleLeadsRow[]
 }) {
   const [tab, setTab] = useState<VehicleLeadsTab>('campaign')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const activeRows = tab === 'campaign' ? campaignRows : neutralRows
+  const filteredRows = useMemo(
+    () => activeRows.filter((row) => matchesVehicleLeadsSearch(row, searchQuery)),
+    [activeRows, searchQuery]
+  )
+  const hasSearch = searchQuery.trim().length > 0
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200/80 w-fit">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200/80 w-fit">
         <button
           type="button"
           onClick={() => setTab('campaign')}
@@ -1301,7 +1332,40 @@ export function VehicleLeadsTable({
             {neutralRows.length}
           </span>
         </button>
+        </div>
+
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por marca, modelo o placa..."
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-9 text-sm font-medium text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            aria-label="Buscar vehículos por marca, modelo o placa"
+          />
+          {hasSearch && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              aria-label="Limpiar búsqueda"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {hasSearch && (
+        <p className="text-xs font-semibold text-slate-500 -mt-1">
+          {filteredRows.length === 0
+            ? 'Sin coincidencias para tu búsqueda.'
+            : `${fmtInt(filteredRows.length)} de ${fmtInt(activeRows.length)} vehículo${
+                activeRows.length !== 1 ? 's' : ''
+              }`}
+        </p>
+      )}
 
       {tab === 'neutral' && (
         <p className="text-xs text-slate-500 font-medium -mt-1">
@@ -1311,13 +1375,15 @@ export function VehicleLeadsTable({
       )}
 
       <VehicleLeadsTableBody
-        key={tab}
-        rows={activeRows}
+        key={`${tab}-${searchQuery}`}
+        rows={filteredRows}
         mode={tab}
         emptyMessage={
-          tab === 'campaign'
-            ? 'Sin vehículos con campaña o gasto Meta mapeado en este mes.'
-            : 'No hay autos disponibles en patio sin campaña en este mes.'
+          hasSearch
+            ? 'Ningún vehículo coincide con marca, modelo o placa.'
+            : tab === 'campaign'
+              ? 'Sin vehículos con campaña o gasto Meta mapeado en este mes.'
+              : 'No hay autos disponibles en patio sin campaña en este mes.'
         }
       />
     </div>
