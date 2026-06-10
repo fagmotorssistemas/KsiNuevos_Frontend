@@ -270,13 +270,40 @@ function smartChunkTokens(tokens: string[], size: number): string[][] {
   return chunks
 }
 
-/** Coincidencia difusa por prefijo de 4 caracteres (maneja errores de Assembly). */
-function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean {
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i]![0] = i
+  for (let j = 0; j <= n; j++) dp[0]![j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i]![j] = Math.min(dp[i - 1]![j]! + 1, dp[i]![j - 1]! + 1, dp[i - 1]![j - 1]! + cost)
+    }
+  }
+  return dp[m]![n]!
+}
+
+/** Coincidencia difusa por prefijo + Levenshtein (ASR: getur↔jetour, travaller↔traveller). */
+export function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean {
   const a = normalizeForMatch(assemblyWord)
   const k = normalizeForMatch(keyword)
   if (a.length < 2 || k.length < 2) return false
   const pLen = Math.min(4, Math.min(a.length, k.length))
-  return a.slice(0, pLen) === k.slice(0, pLen)
+  if (a.slice(0, pLen) === k.slice(0, pLen)) return true
+
+  const minLen = Math.min(a.length, k.length)
+  const maxLen = Math.max(a.length, k.length)
+  if (maxLen - minLen <= 2) {
+    const threshold = minLen >= 5 ? 2 : 1
+    if (levenshteinDistance(a, k) <= threshold) return true
+  }
+
+  if (minLen >= 5 && a.slice(0, 5) === k.slice(0, 5)) return true
+  return false
 }
 
 function findFirstMatchingWordIdx(

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { Segment } from './segmenter'
-import { jaccardSimilarity, normalizeForMatch } from './subtitle-screen-text'
+import { jaccardSimilarity, normalizeForMatch, wordFuzzyMatches } from './subtitle-screen-text'
 
 const MIN_INVENTORY_MATCH = 0.12
 const MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT = 0.08
@@ -34,14 +34,6 @@ function transcriptFromSegments(segments: Segment[]): string {
     }
   }
   return parts.join(' ')
-}
-
-function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean {
-  const a = normalizeForMatch(assemblyWord)
-  const k = normalizeForMatch(keyword)
-  if (a.length < 2 || k.length < 2) return false
-  const pLen = Math.min(4, Math.min(a.length, k.length))
-  return a.slice(0, pLen) === k.slice(0, pLen)
 }
 
 function modelSearchTokens(model: string): string[] {
