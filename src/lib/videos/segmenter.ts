@@ -6,6 +6,7 @@
 
 import type { RawWord } from './assemblyai'
 import type { VideoClipKind } from './clip-config'
+import { computeReelClipStartMs } from './reel-timeline'
 import { extractQuotedDialoguesFromScript } from './script-dialogues'
 
 // Pausa mínima entre palabras para considerar un separador de segmento.
@@ -327,12 +328,12 @@ export function buildSubtitleBlocks(
   }
 
   const blocks: SubtitleBlock[] = []
-  let timelineOffsetMs = 0
 
-  for (const item of sequence) {
+  for (let seqIdx = 0; seqIdx < sequence.length; seqIdx++) {
+    const item = sequence[seqIdx]!
+    const timelineOffsetMs = computeReelClipStartMs(sequence, seqIdx)
     const seg = segmentLookup.get(item.segment_id)
     if (!seg) {
-      timelineOffsetMs += item.trim_duration * 1000
       continue
     }
 
@@ -344,7 +345,6 @@ export function buildSubtitleBlocks(
 
     if (wordsInRange.length === 0) {
       if (seg.source_kind === 'visual_only') {
-        timelineOffsetMs += item.trim_duration * 1000
         continue
       }
       blocks.push({
@@ -352,7 +352,6 @@ export function buildSubtitleBlocks(
         duration: Number(item.trim_duration.toFixed(3)),
         text: seg.text,
       })
-      timelineOffsetMs += item.trim_duration * 1000
       continue
     }
 
@@ -390,8 +389,6 @@ export function buildSubtitleBlocks(
         words,
       })
     }
-
-    timelineOffsetMs += item.trim_duration * 1000
   }
 
   return blocks

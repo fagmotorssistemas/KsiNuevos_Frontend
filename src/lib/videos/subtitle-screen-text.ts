@@ -454,12 +454,12 @@ export function buildCaptionBlocksFromDialogoAssembly(
       : []
 
     const sceneLabelForLog = `escena ${escNum ?? si + 1}`
-    const isComentaScene = /\bcomenta\b/i.test(dialogo)
+    const isComentaScene = /\b(?:comenta|menciona)\b/i.test(dialogo)
     const sceneTimelineMs = sceneSubtitleTimelineMs(sequence, si, timelineOffsetMs)
 
     if (comentaTimeSec == null && isComentaScene) {
       if (asmWords.length > 0) {
-        const comentaIdx = findFirstMatchingWordIdx(asmWords, ['comenta'])
+        const comentaIdx = findFirstMatchingWordIdx(asmWords, ['comenta', 'menciona'])
         comentaTimeSec = comentaIdx >= 0
           ? Number(((sceneTimelineMs + (asmWords[comentaIdx]!.start - trimStartMs)) / 1000).toFixed(3))
           : Number((sceneTimelineMs / 1000).toFixed(3))

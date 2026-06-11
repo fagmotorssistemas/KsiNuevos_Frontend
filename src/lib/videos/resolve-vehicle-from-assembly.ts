@@ -6,6 +6,13 @@ import { jaccardSimilarity, normalizeForMatch, wordFuzzyMatches } from './subtit
 const MIN_INVENTORY_MATCH = 0.12
 const MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT = 0.08
 
+/** Artículos/preposiciones: no deben sumar score contra tokens de modelo (la→land). */
+const INVENTORY_STOPWORDS = new Set([
+  'a', 'al', 'con', 'de', 'del', 'e', 'el', 'en', 'es', 'la', 'las', 'le', 'les',
+  'lo', 'los', 'me', 'mi', 'no', 'o', 'para', 'por', 'que', 'se', 'si', 'su', 'sus',
+  'te', 'tu', 'u', 'un', 'una', 'unos', 'unas', 'y', 'ya',
+])
+
 type InventoryCandidate = {
   id: string
   brand: string
@@ -36,16 +43,94 @@ function transcriptFromSegments(segments: Segment[]): string {
   return parts.join(' ')
 }
 
+function isInventoryStopword(word: string): boolean {
+  return INVENTORY_STOPWORDS.has(normalizeForMatch(word))
+}
+
+/**
+ * Fuzzy estricto solo para inventario (no usar en subtítulos).
+ * Evita "la"→"land" y exige coincidencia exacta en tokens numéricos de modelo (2008).
+ */
+function inventoryModelTokenMatches(assemblyWord: string, modelToken: string): boolean {
+  const a = normalizeForMatch(assemblyWord)
+  const k = normalizeForMatch(modelToken)
+  if (!a || !k) return false
+  if (isInventoryStopword(a)) return false
+
+  if (/^\d{3,4}$/.test(k)) return a === k
+
+  if (a === k) return true
+  if (a.length < 3) return false
+  if (a.length < k.length * 0.6 && (a.length < 4 || !k.includes(a))) return false
+
+  return wordFuzzyMatches(a, k)
+}
+
+function brandMentionedInTranscript(brandNorm: string, transcriptWords: string[]): boolean {
+  if (brandNorm.length < 3) return false
+  for (const w of transcriptWords) {
+    if (isInventoryStopword(w)) continue
+    if (wordFuzzyMatches(w, brandNorm)) return true
+  }
+  return false
+}
+
+/** Tokens de modelo: incluye números (2008, 3008) + primeras palabras alfabéticas. */
 function modelSearchTokens(model: string): string[] {
-  const parts = normalizeForMatch(model)
-    .split(' ')
-    .filter((w) => w.length >= 3 && !/^\d/.test(w))
-  return parts.slice(0, 2)
+  const raw = normalizeForMatch(model).split(' ').filter(Boolean)
+  const tokens: string[] = []
+
+  for (const w of raw) {
+    if (/^\d{3,4}$/.test(w)) {
+      tokens.push(w)
+      break
+    }
+  }
+
+  for (const w of raw) {
+    if (w.length >= 3 && !/^\d/.test(w)) tokens.push(w)
+    if (tokens.length >= 3) break
+  }
+
+  return [...new Set(tokens)]
+}
+
+function brandsMentionedInTranscript(
+  transcriptWords: string[],
+  candidates: InventoryCandidate[]
+): Set<string> {
+  const mentioned = new Set<string>()
+  const uniqueBrands = [
+    ...new Set(candidates.map((c) => normalizeForMatch(c.brand)).filter((b) => b.length >= 3)),
+  ]
+
+  for (const brandNorm of uniqueBrands) {
+    if (brandMentionedInTranscript(brandNorm, transcriptWords)) {
+      mentioned.add(brandNorm)
+    }
+  }
+  return mentioned
+}
+
+function transcriptYearTokens(words: string[]): string[] {
+  return words.filter((w) => /^(19|20)\d{2}$/.test(w))
+}
+
+function candidateBrandInMentionedSet(
+  brandNorm: string,
+  mentionedBrands: Set<string>
+): boolean {
+  if (mentionedBrands.has(brandNorm)) return true
+  for (const mb of mentionedBrands) {
+    if (wordFuzzyMatches(brandNorm, mb)) return true
+  }
+  return false
 }
 
 function scoreVehicleAgainstTranscript(
   transcript: string,
   vehicle: InventoryCandidate,
+  mentionedBrands: Set<string>,
   vehicleIdHint?: string | null
 ): number {
   const normTranscript = normalizeForMatch(transcript)
@@ -62,14 +147,24 @@ function scoreVehicleAgainstTranscript(
 
   if (brandNorm.length >= 2) {
     for (const w of transcriptWords) {
+      if (isInventoryStopword(w)) continue
       if (wordFuzzyMatches(w, brandNorm)) score += 0.18
     }
   }
 
   for (const token of modelSearchTokens(model)) {
     for (const w of transcriptWords) {
-      if (wordFuzzyMatches(w, token)) score += 0.28
-      if (token.length >= 4 && w.length >= 4 && (token.includes(w) || w.includes(token))) {
+      if (isInventoryStopword(w)) continue
+      if (/^\d{3,4}$/.test(token)) {
+        if (w === token) score += 0.38
+        continue
+      }
+      if (inventoryModelTokenMatches(w, token)) score += 0.28
+      if (
+        token.length >= 4 &&
+        w.length >= 4 &&
+        (token.includes(w) || w.includes(token))
+      ) {
         score += 0.12
       }
     }
@@ -83,9 +178,21 @@ function scoreVehicleAgainstTranscript(
     }
   }
 
+  const yearTokens = transcriptYearTokens(transcriptWords)
   if (vehicle.year != null) {
     const yearStr = String(vehicle.year)
-    if (transcriptWords.includes(yearStr)) score += 0.08
+    if (yearTokens.length > 0) {
+      if (yearTokens.includes(yearStr)) score += 0.12
+      else score -= 0.25
+    } else if (transcriptWords.includes(yearStr)) {
+      score += 0.08
+    }
+  }
+
+  if (mentionedBrands.size > 0 && brandNorm.length >= 3) {
+    if (!candidateBrandInMentionedSet(brandNorm, mentionedBrands)) {
+      score -= 0.55
+    }
   }
 
   if (vehicleIdHint && vehicle.id === vehicleIdHint) score += 0.45
@@ -98,29 +205,37 @@ function findBrandMentionTimeSec(
   brand: string,
   model: string
 ): number | undefined {
-  const keywords = [
-    brand.trim(),
-    modelSearchTokens(model)[0] ?? '',
-    model.trim().split(/\s+/)[0] ?? '',
-  ].filter((k) => k.length >= 2)
-
-  if (keywords.length === 0) return undefined
+  const brandNorm = normalizeForMatch(brand)
+  const modelTokens = modelSearchTokens(model)
 
   for (const seg of segments) {
     if (seg.source_kind === 'visual_only') continue
     for (const w of seg.words ?? []) {
-      if (keywords.some((k) => wordFuzzyMatches(w.text, k))) {
+      const wt = w.text?.trim()
+      if (!wt || isInventoryStopword(wt)) continue
+      if (brandNorm.length >= 3 && wordFuzzyMatches(wt, brandNorm)) {
         return Number((w.start / 1000).toFixed(3))
       }
     }
   }
 
-  const firstSpoken = segments.find(
-    (s) => s.source_kind !== 'visual_only' && (s.words?.length ?? 0) > 0
-  )
-  if (firstSpoken?.words?.[0]) {
-    return Number((firstSpoken.words[0].start / 1000).toFixed(3))
+  for (const seg of segments) {
+    if (seg.source_kind === 'visual_only') continue
+    for (const w of seg.words ?? []) {
+      const wt = w.text?.trim()
+      if (!wt || isInventoryStopword(wt)) continue
+      for (const token of modelTokens) {
+        if (/^\d{3,4}$/.test(token)) {
+          if (normalizeForMatch(wt) === token) {
+            return Number((w.start / 1000).toFixed(3))
+          }
+        } else if (inventoryModelTokenMatches(wt, token)) {
+          return Number((w.start / 1000).toFixed(3))
+        }
+      }
+    }
   }
+
   return undefined
 }
 
@@ -202,11 +317,19 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
     return null
   }
 
+  const transcriptWords = normalizeForMatch(transcript).split(' ').filter(Boolean)
+  const mentionedBrands = brandsMentionedInTranscript(transcriptWords, candidates)
+
   let best: InventoryCandidate | null = null
   let bestScore = 0
 
   for (const candidate of candidates) {
-    const score = scoreVehicleAgainstTranscript(transcript, candidate, vehicleIdHint)
+    const score = scoreVehicleAgainstTranscript(
+      transcript,
+      candidate,
+      mentionedBrands,
+      vehicleIdHint
+    )
     if (score > bestScore) {
       bestScore = score
       best = candidate
@@ -243,10 +366,12 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
     return null
   }
 
+  const mentionedList = [...mentionedBrands].join(', ') || 'ninguna'
   console.log(
     `[InventoryMatch][${jobId}] Vehículo desde Assembly→inventario: ` +
       `"${brand}" "${model}"${year ? ` (${year})` : ''} score=${bestScore.toFixed(3)}` +
-      (brandMentionTimeSec != null ? ` t=${brandMentionTimeSec}s` : '')
+      (brandMentionTimeSec != null ? ` t=${brandMentionTimeSec}s` : '') +
+      ` marcas_en_audio=[${mentionedList}]`
   )
 
   return {

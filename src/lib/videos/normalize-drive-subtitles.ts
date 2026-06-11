@@ -1,9 +1,26 @@
 import type { SubtitleBlock } from './segmenter'
 import {
   type DriveBadge,
+  fixTraccionXDriveText,
   isDriveBadgeText,
   isGarbledDriveSubtitleText,
+  isTraccionXLoneDriveText,
 } from './drive-badge'
+
+function wordsMatchTraccionX(block: SubtitleBlock): boolean {
+  if (!block.words?.length) return false
+  const tokens = block.words.map((w) =>
+    w.text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '')
+  )
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (tokens[i] === 'traccion' && tokens[i + 1] === 'x') return true
+  }
+  return false
+}
 
 function shouldNormalizeBlock(block: SubtitleBlock, badge: DriveBadge): boolean {
   const text = block.text?.trim() ?? ''
@@ -60,6 +77,23 @@ export function normalizeDriveSubtitleBlocks(
         return { ...block, text: badge }
       }
       return block
+    }
+
+    const needsTraccionFix = isTraccionXLoneDriveText(text) || wordsMatchTraccionX(block)
+    if (needsTraccionFix) {
+      const traccionFixed = fixTraccionXDriveText(text, badge)
+      if (traccionFixed && traccionFixed !== text) {
+        if (jobId) {
+          console.log(
+            `[DriveSubtitle][${jobId}] "${text.slice(0, 40)}" → "${traccionFixed.slice(0, 40)}" (tracción X→${badge})`
+          )
+        }
+        return {
+          ...block,
+          text: traccionFixed,
+          words: undefined,
+        }
+      }
     }
 
     if (!shouldNormalizeBlock(block, badge)) return block

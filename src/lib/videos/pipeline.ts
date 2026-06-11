@@ -733,15 +733,12 @@ async function runSingleVideoPipelineFromStorage(
         .single()
       if (!metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+        await resolveAndApplyVehicleFromAssemblyForJob(
           supabaseInv,
           jobId,
           segments,
           { vehicleIdHint: vId }
         )
-        if (resolved?.brandMentionTimeSec != null) {
-          brandMentionTimeSec = resolved.brandMentionTimeSec
-        }
       }
     }
 
@@ -1472,16 +1469,12 @@ async function runMultipleClipsPipelineFromStorage(
         .single()
       if (!metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        const resolved = await resolveAndApplyVehicleFromAssemblyForJob(
+        await resolveAndApplyVehicleFromAssemblyForJob(
           supabaseInv,
           jobId,
           allSegments,
           { vehicleIdHint: vId }
         )
-        if (resolved?.brandMentionTimeSec != null) {
-          brandMentionTimeSec = resolved.brandMentionTimeSec
-          brandMentionLengthSec = 3.5
-        }
       }
     }
 

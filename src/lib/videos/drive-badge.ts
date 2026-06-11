@@ -71,6 +71,21 @@ export function isGarbledDriveSubtitleText(text: string, badge: DriveBadge): boo
   return false
 }
 
+/** Assembly transcribe "tracción 4x4" como "Tracción X" (X suelta tras tracción). */
+export function isTraccionXLoneDriveText(text: string): boolean {
+  const raw = text.trim()
+  if (!raw) return false
+  return /\btracci[oó]n\s+x\b/i.test(raw)
+}
+
+/** Sustituye la X suelta tras "tracción" por el badge del inventario (in-place). */
+export function fixTraccionXDriveText(text: string, badge: DriveBadge): string | null {
+  if (!isTraccionXLoneDriveText(text)) return null
+  return text.replace(/\b(tracci[oó]n)(\s+)(x)\b([.,!?]?)/i, (_, traccion, space, _x, punct) =>
+    `${traccion}${space}${badge}${punct}`
+  )
+}
+
 function wordsMatchGarbledDrive(
   words: { text: string }[] | undefined,
   badge: DriveBadge

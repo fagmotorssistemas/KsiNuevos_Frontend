@@ -891,7 +891,7 @@ const BRAND_OVERLAY_INTRO_SEC = 3.5
  *   L3 (tagline, 52px, blanco) — position:'top', debajo de L2  (si existe)
  *   L4 (año,     84px, blanco) — position:'center', zona inferior
  *
- * L2 se trunca a las dos primeras palabras.
+ * L2 se trunca a la primera palabra del modelo (p. ej. "wrangler rubicom …" → "wrangler").
  */
 function cleanVehicleText(text: string): string {
   return text
@@ -929,7 +929,7 @@ function buildBrandOverlayTracks(
 
   const tracks: ShotstackTrack[] = []
   const line1 = cleanVehicleText(brandConfig.vehicle_line_1?.trim() || '')
-  const line2Raw = (brandConfig.vehicle_line_2?.trim() || '').split(/\s+/).slice(0, 2).join(' ')
+  const line2Raw = (brandConfig.vehicle_line_2?.trim() || '').split(/\s+/).slice(0, 1).join(' ')
   const line2 = cleanVehicleText(line2Raw)
   const line3 = cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
   const line4 = cleanVehicleText(brandConfig.vehicle_line_4?.trim() || '')

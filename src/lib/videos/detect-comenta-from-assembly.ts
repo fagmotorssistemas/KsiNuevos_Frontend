@@ -1,4 +1,5 @@
 import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
+import { computeReelClipStartMs } from './reel-timeline'
 import { buildComentaOverlayText } from './subtitle-screen-text'
 
 export type ComentaFromAssemblyResult = {
@@ -11,8 +12,13 @@ function normalizeWord(text: string): string {
   return text.replace(/^[.,;:!?¡¿"'()\-]+|[.,;:!?¡¿"'()\-]+$/g, '').trim()
 }
 
-function isComentaWord(text: string): boolean {
-  return /^comenta$/i.test(normalizeWord(text))
+/** Palabras de cierre en voz: "comenta" o "menciona" (overlay sigue siendo COMENTA). */
+const COMENTA_CTA_WORDS = ['comenta', 'menciona'] as const
+const COMENTA_CTA_TEXT_RE = /\b(?:comenta|menciona)\b/i
+
+function isComentaTriggerWord(text: string): boolean {
+  const w = normalizeWord(text).toLowerCase()
+  return COMENTA_CTA_WORDS.some((cta) => cta === w)
 }
 
 function findComentaTimeInSequence(
@@ -22,9 +28,9 @@ function findComentaTimeInSequence(
   const segLookup = new Map<string, Segment>()
   for (const s of allSegments) segLookup.set(s.segment_id, s)
 
-  let timelineOffsetMs = 0
-
-  for (const item of sequence) {
+  for (let seqIdx = 0; seqIdx < sequence.length; seqIdx++) {
+    const item = sequence[seqIdx]!
+    const timelineOffsetMs = computeReelClipStartMs(sequence, seqIdx)
     const seg = segLookup.get(item.segment_id)
     const trimStartMs = item.trim_start * 1000
     const trimEndMs = item.trim_end * 1000
@@ -32,14 +38,12 @@ function findComentaTimeInSequence(
     if (seg?.words?.length) {
       for (const w of seg.words) {
         if (w.start < trimStartMs - 50 || w.end > trimEndMs + 50) continue
-        if (isComentaWord(w.text)) {
+        if (isComentaTriggerWord(w.text)) {
           const timeSec = (timelineOffsetMs + (w.start - trimStartMs)) / 1000
           return Number(Math.max(0, timeSec).toFixed(3))
         }
       }
     }
-
-    timelineOffsetMs += item.trim_duration * 1000
   }
 
   return null
@@ -47,10 +51,10 @@ function findComentaTimeInSequence(
 
 function findComentaTimeInSubtitleBlocks(blocks: SubtitleBlock[]): number | null {
   for (const b of blocks) {
-    if (!/\bcomenta\b/i.test(b.text)) continue
+    if (!COMENTA_CTA_TEXT_RE.test(b.text)) continue
     if (b.words?.length) {
       for (const w of b.words) {
-        if (isComentaWord(w.text)) {
+        if (isComentaTriggerWord(w.text)) {
           return Number(Math.max(0, w.start).toFixed(3))
         }
       }
@@ -78,7 +82,7 @@ function cutSubtitleBlocksAtComenta(
 }
 
 /**
- * Modo sin guión: Assembly es el guión. Detecta "comenta" en la transcripción,
+ * Modo sin guión: Assembly es el guión. Detecta "comenta" o "menciona" en la transcripción,
  * arma overlay COMENTA + modelo/año y corta subtítiles posteriores.
  */
 export function applyComentaFromAssembly(

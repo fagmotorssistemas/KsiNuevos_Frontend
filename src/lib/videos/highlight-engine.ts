@@ -225,7 +225,7 @@ function isExcludedBlock(block: SubtitleBlock, showcaseStart: number): boolean {
   if (isDriveBadgeText(block.text)) return true
   if (isTransmisionGearBlock(block.text)) return true
   if (isLongPairBlock(block.text)) return true
-  if (/\bcomenta\b/i.test(block.text)) return true
+  if (/\b(?:comenta|menciona)\b/i.test(block.text)) return true
   if (block.highlightFx) return true
   return false
 }
