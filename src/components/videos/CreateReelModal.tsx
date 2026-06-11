@@ -398,6 +398,35 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
         scriptPdfPath = scriptUpload.path
       }
 
+      // ── PASO 2.5: Comprimir clips grandes en el servidor (>30 MB) ──────────
+      const COMPRESS_THRESHOLD = 30 * 1024 * 1024
+      const largeClipPaths = uploads
+        .filter((u, i) => files[i].size > COMPRESS_THRESHOLD)
+        .map((u) => u.path)
+
+      if (largeClipPaths.length > 0) {
+        setUploadProgress(
+          `Optimizando ${largeClipPaths.length} clip(s) grande(s) para el renderizador (puede tardar 2-3 min)…`
+        )
+        try {
+          const compressRes = await fetch(`/api/videos/jobs/${newJobId}/compress-clips`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths: largeClipPaths }),
+          })
+          if (compressRes.ok) {
+            const { compressedCount } = (await compressRes.json()) as { compressedCount: number }
+            if (compressedCount > 0) {
+              setUploadProgress(`${compressedCount} clip(s) optimizado(s). Continuando…`)
+            }
+          }
+        } catch {
+          // Si la compresión server-side falla, continuamos con los clips originales.
+          // Shotstack puede fallar, pero no debemos bloquear el flujo por eso.
+          console.warn('[compress-clips] La compresión server-side no estuvo disponible; usando clips originales.')
+        }
+      }
+
       // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)
       let clipDurations: (number | null)[] | undefined
       if (flowType === 'multiple') {
