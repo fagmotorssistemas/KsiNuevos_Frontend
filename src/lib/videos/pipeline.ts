@@ -44,7 +44,10 @@ import {
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
 import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
-import { suppressDuplicateBrandMentionSubtitles } from './suppress-duplicate-brand-subtitles'
+import {
+  stripTitleYearFromSubtitleBlocks,
+  suppressDuplicateBrandMentionSubtitles,
+} from './suppress-duplicate-brand-subtitles'
 import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
 import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
@@ -430,7 +433,15 @@ function applyBrandSubtitleDedupWhenNoGuion(
   const brand = brandConfig.vehicle_line_1?.trim()
   const modelLine = brandConfig.vehicle_line_2?.trim()
   if (!brand || !modelLine) return subtitleBlocks
-  return suppressDuplicateBrandMentionSubtitles(subtitleBlocks, { jobId, brand, modelLine })
+  const withoutBrandDup = suppressDuplicateBrandMentionSubtitles(subtitleBlocks, {
+    jobId,
+    brand,
+    modelLine,
+  })
+  return stripTitleYearFromSubtitleBlocks(withoutBrandDup, {
+    jobId,
+    yearLine: brandConfig.vehicle_line_4,
+  })
 }
 
 async function loadBrandConfigForJob(jobId: string) {

@@ -89,3 +89,81 @@ export function suppressDuplicateBrandMentionSubtitles(
   }
   return filtered
 }
+
+function parseTitleYear(yearLine?: string | null): string | null {
+  const raw = yearLine?.trim() ?? ''
+  if (!raw) return null
+  const m = raw.match(/\b(19|20)\d{2}\b/)
+  if (m) return m[0]!
+  if (/^\d{4}$/.test(raw)) return raw
+  return null
+}
+
+/** Quita el año del título (L4) al inicio del subtítulo: "2022 con diseño" → "con diseño". */
+function stripLeadingTitleYear(text: string, year: string): string | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+
+  if (new RegExp(`^a[nñ]o\\s+${year}\\s*[.,!?]?$`, 'i').test(trimmed)) return null
+  if (new RegExp(`^${year}\\s*[.,!?]?$`).test(trimmed)) return null
+
+  const withAno = trimmed.replace(new RegExp(`^a[nñ]o\\s+${year}(\\s+|[.,]\\s*)`, 'i'), '').trim()
+  if (withAno !== trimmed) return withAno || null
+
+  const withYear = trimmed.replace(new RegExp(`^${year}(\\s+|[.,]\\s*)`), '').trim()
+  if (withYear !== trimmed) return withYear || null
+
+  return trimmed
+}
+
+export interface StripTitleYearSubsOpts {
+  jobId?: string
+  yearLine?: string | null
+}
+
+/**
+ * Si el overlay de título ya muestra el año (vehicle_line_4), no repetirlo en subtítulos.
+ */
+export function stripTitleYearFromSubtitleBlocks(
+  blocks: SubtitleBlock[],
+  opts: StripTitleYearSubsOpts
+): SubtitleBlock[] {
+  const year = parseTitleYear(opts.yearLine)
+  if (!year || blocks.length === 0) return blocks
+
+  const out: SubtitleBlock[] = []
+  let changed = 0
+
+  for (const block of blocks) {
+    const stripped = stripLeadingTitleYear(block.text, year)
+    if (stripped == null) {
+      changed++
+      if (opts.jobId) {
+        console.log(
+          `[BrandSubtitleDedup][${opts.jobId}] Bloque año de título eliminado: "${block.text.trim().slice(0, 40)}"`
+        )
+      }
+      continue
+    }
+    if (stripped !== block.text.trim()) {
+      changed++
+      if (opts.jobId) {
+        console.log(
+          `[BrandSubtitleDedup][${opts.jobId}] Año de título suprimido en subtítulo: ` +
+            `"${block.text.trim().slice(0, 40)}" → "${stripped.slice(0, 40)}"`
+        )
+      }
+      out.push({ ...block, text: stripped, words: undefined })
+    } else {
+      out.push(block)
+    }
+  }
+
+  if (changed > 0 && opts.jobId) {
+    console.log(
+      `[BrandSubtitleDedup][${opts.jobId}] Año título L4=${year} (${blocks.length} → ${out.length} bloques)`
+    )
+  }
+
+  return out
+}
