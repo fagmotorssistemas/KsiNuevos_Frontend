@@ -10,8 +10,11 @@ const ALLOWED_MIME = new Set([
   'video/x-msvideo', 'video/webm', 'video/x-matroska',
 ])
 const WARN_SIZE_MB = 500
-/** Aviso en UI: clips grandes requieren límite global de Storage ≥500 MB en Supabase. */
-const CLIP_WARN_SIZE_MB = 45
+/**
+ * Clips por encima de ~32 MB se comprimen automáticamente antes de subir
+ * para evitar fallos "Downloading assets failed" en Shotstack.
+ */
+const CLIP_WARN_SIZE_MB = 32
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -104,7 +107,7 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
             <p className="text-xs text-gray-400">
               {flowType === 'single'
                 ? 'Máximo 2 GB. Archivos >500 MB se comprimirán automáticamente.'
-                : `Hasta ${VIDEO_MAX_CLIPS} clips. Se suben tal cual; solo se comprimen si Storage rechaza el tamaño.`}
+                : `Hasta ${VIDEO_MAX_CLIPS} clips. Clips >32 MB se comprimen automáticamente para el renderizador.`}
             </p>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -141,9 +144,9 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
                     <p className="text-xs text-gray-400">{formatSize(file.size)}</p>
                   </div>
                   {willCompress && (
-                    <div className="flex items-center gap-1 text-amber-600 shrink-0" title="Solo si Storage rechaza la subida por tamaño">
+                    <div className="flex items-center gap-1 text-amber-600 shrink-0" title="Se comprimirá automáticamente antes de subir para compatibilidad con el renderizador">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      <span className="text-xs font-medium">Comprimir si falla</span>
+                      <span className="text-xs font-medium">Se comprimirá</span>
                     </div>
                   )}
                   <button

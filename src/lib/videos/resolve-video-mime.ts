@@ -16,6 +16,15 @@ export const VIDEO_STORAGE_UPLOAD_TARGET_BYTES = 47 * 1024 * 1024
 /** Clips por encima de esto pueden necesitar compresión si Storage rechaza la subida. */
 export const VIDEO_AUTO_COMPRESS_ABOVE_BYTES = 44 * 1024 * 1024
 
+/**
+ * Clips de más de ~32 MB causan fallos "Downloading assets failed" en Shotstack.
+ * Los clips por encima de este umbral se comprimen ANTES de subir (no solo tras rechazo).
+ */
+export const VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES = 32 * 1024 * 1024
+
+/** Objetivo de compresión proactiva para Shotstack (debe quedar bien por debajo de 34 MB). */
+export const VIDEO_SHOTSTACK_PRE_COMPRESS_TARGET_BYTES = 28 * 1024 * 1024
+
 /** Objetivo al comprimir tras rechazo con spend cap bajo (~4 MB en algunos proyectos). */
 export const VIDEO_STORAGE_SPEND_CAP_TARGET_BYTES = Math.floor(3.5 * 1024 * 1024)
 
