@@ -188,7 +188,8 @@ export async function POST(
     }
 
     // Re-subir el archivo comprimido al mismo path (con upsert)
-    const compressedFile = new File([compressed], clipPath.split('/').pop()!, {
+    // Usar Uint8Array para evitar incompatibilidad de tipos ArrayBuffer vs SharedArrayBuffer
+    const compressedFile = new File([new Uint8Array(compressed)], clipPath.split('/').pop()!, {
       type: 'video/mp4',
     })
 
