@@ -153,8 +153,12 @@ export async function uploadRawVideoClip(
   let uploadFile = fileWithResolvedVideoMime(file)
   let compressionAttempted = false
 
-  // Compresión proactiva: clips > 32 MB causan "Downloading assets failed" en Shotstack.
-  if (file.size > VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES) {
+  // Compresión proactiva client-side desactivada: el PASO 2.5 en CreateReelModal.tsx
+  // delega la compresión al backend NestJS después del upload, y transcode:true en
+  // Shotstack re-codifica los clips en sus servidores. El WASM se colgaba en navegación
+  // SPA por falta de SharedArrayBuffer (COOP/COEP no se re-aplican sin recarga completa).
+  const SKIP_CLIENT_COMPRESSION = true
+  if (!SKIP_CLIENT_COMPRESSION && file.size > VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES) {
     const originalMb = (file.size / (1024 * 1024)).toFixed(0)
     onProgress?.(
       `Clip grande (~${originalMb} MB): comprimiendo antes de subir para que el renderizador lo procese correctamente…`

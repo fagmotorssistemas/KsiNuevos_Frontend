@@ -415,9 +415,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
             body: JSON.stringify({ paths: largeClipPaths }),
           })
           if (compressRes.ok) {
-            const { compressedCount } = (await compressRes.json()) as { compressedCount: number }
-            if (compressedCount > 0) {
-              setUploadProgress(`${compressedCount} clip(s) optimizado(s). Continuando…`)
+            const data = (await compressRes.json()) as { compressed?: string[]; compressedCount?: number }
+            const count = data.compressed?.length ?? data.compressedCount ?? 0
+            if (count > 0) {
+              setUploadProgress(`${count} clip(s) optimizado(s). Continuando…`)
             }
           }
         } catch {
