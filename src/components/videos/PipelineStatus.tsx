@@ -8,11 +8,31 @@ import { parseJsonOrThrow } from '@/lib/safe-fetch-json'
 const POLL_INTERVAL_MS = 5_000
 const STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutos
 
+/** Rangos realistas por etapa (el % no refleja bien el tiempo de Shotstack). */
+function estimatedRemainingLabel(status: VideoJob['status'], progressPct: number): string {
+  switch (status) {
+    case 'pending':
+    case 'uploading':
+      return '8–12 minutos'
+    case 'transcribing':
+      return '6–10 minutos'
+    case 'analyzing':
+      return '4–8 minutos'
+    case 'rendering':
+      if (progressPct >= 95) return '2–6 minutos'
+      return '5–12 minutos'
+    case 'completed':
+      return 'Listo'
+    default:
+      return '10–15 minutos'
+  }
+}
+
 const STEPS = [
   { key: 'uploading', label: 'Subida', description: 'Subiendo video a Storage...', icon: Upload },
   { key: 'transcribing', label: 'Audio + Visual', description: 'Transcribiendo audio y preparando análisis visual en paralelo...', icon: Mic2 },
   { key: 'analyzing', label: 'Análisis IA', description: 'Gemini analizando el video y seleccionando los mejores momentos...', icon: Brain },
-  { key: 'rendering', label: 'Renderizado', description: 'Creatomate está generando el Reel...', icon: Clapperboard },
+  { key: 'rendering', label: 'Renderizado', description: 'Shotstack está generando el Reel (esta etapa suele tardar varios minutos)...', icon: Clapperboard },
   { key: 'completed', label: 'Listo', description: 'Tu video está listo', icon: CheckCircle2 },
 ]
 
@@ -65,10 +85,6 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
 
   const currentStatusIdx = job ? (STATUS_ORDER[job.status] ?? 0) : 0
 
-  const estimatedMinutes = job?.progress_percentage
-    ? Math.ceil((100 - job.progress_percentage) / 20)
-    : 5
-
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16">
@@ -92,6 +108,8 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
     )
   }
 
+  const remainingEstimate = estimatedRemainingLabel(job.status, job.progress_percentage ?? 0)
+
   return (
     <div className="flex flex-col gap-8">
       {/* Barra de progreso */}
@@ -108,8 +126,16 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
             style={{ width: `${job.progress_percentage}%` }}
           />
         </div>
-        <p className="text-xs text-gray-400">
-          Tiempo estimado restante: ~{estimatedMinutes} minuto{estimatedMinutes !== 1 ? 's' : ''}
+        <p className="text-xs text-gray-500">
+          Tiempo estimado restante: <span className="font-medium text-gray-600">{remainingEstimate}</span>
+        </p>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          La creación del Reel toma su tiempo; el renderizado puede demorar varios minutos aunque la barra
+          avance rápido.{' '}
+          <span className="text-gray-600">
+            Puedes cerrar esta ventana y seguir navegando en la página sin problema: el proceso continúa en
+            el servidor. Revisa el avance en la lista de videos de marketing.
+          </span>
         </p>
       </div>
 
@@ -161,8 +187,8 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
 
       {isStale && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-          Esto está tardando más de lo usual. Puedes cerrar esta ventana y el proceso continuará
-          en segundo plano. Vuelve más tarde para ver el resultado.
+          Esto está tardando más de lo usual. Puedes cerrar esta ventana y navegar por el sitio: el Reel
+          sigue generándose. Vuelve a Marketing → Videos para ver el estado.
         </div>
       )}
     </div>

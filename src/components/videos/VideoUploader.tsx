@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { Film, Layers, X, Upload, AlertTriangle } from 'lucide-react'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
+import { sortVideoFilesByNameSequence } from './sort-video-files-by-name'
 
 const ALLOWED_EXTENSIONS = ['mp4', 'mov', 'avi', 'webm', 'mkv']
 const ALLOWED_MIME = new Set([
@@ -54,7 +55,7 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
     }
 
     if (flowType === 'multiple') {
-      const combined = [...files, ...valid].slice(0, VIDEO_MAX_CLIPS)
+      const combined = sortVideoFilesByNameSequence([...files, ...valid]).slice(0, VIDEO_MAX_CLIPS)
       onFilesChange(combined)
     }
   }, [flowType, files, onFilesChange])
@@ -120,6 +121,12 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
       {/* Lista de archivos seleccionados */}
       {files.length > 0 && (
         <div className="space-y-2">
+          {flowType === 'multiple' && files.length >= 2 && (
+            <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 leading-relaxed">
+              Clips ordenados por secuencia del nombre (ej. IMG_5114 → IMG_5115 → IMG_5118). Si falta un
+              número en la serie, se usa solo lo que subiste.
+            </p>
+          )}
           {files.map((file, i) => {
             const sizeMB = file.size / 1024 / 1024
             const willCompress = sizeMB > warnThresh

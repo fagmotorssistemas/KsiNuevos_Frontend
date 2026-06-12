@@ -29,6 +29,7 @@ import {
   resolveVideoMimeType,
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
+import { buildFilenameClipOrderIndices, sortClipIndicesByFileName } from './sort-video-files-by-name'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
@@ -236,8 +237,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
     setManualClipOrderIndices((prev) => {
       const kept = prev.filter((i) => eligible.includes(i))
-      const missing = eligible.filter((i) => !kept.includes(i)).sort((a, b) => a - b)
-      return [...kept, ...missing]
+      const missing = eligible.filter((i) => !kept.includes(i))
+      return sortClipIndicesByFileName(files, [...kept, ...missing])
     })
   }, [
     files,
@@ -471,16 +472,29 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
       const introIdx = manualFullClipOrderEnabled ? undefined : manualIntroPayload()
       const canonV = canonicalVehiclePayload()
 
-      if (manualFullClipOrderEnabled && flowType === 'multiple' && files.length >= 2) {
-        const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+      let clipOrderPayload: Record<string, unknown> = {}
+      if (flowType === 'multiple' && files.length >= 2 && !(introIdx && introIdx.length > 0)) {
+        const eligible = buildFilenameClipOrderIndices(files, clipIndexBlockedForNarrative)
+        const order =
+          manualFullClipOrderEnabled && manualClipOrderIndices.length > 0
+            ? manualClipOrderIndices
+            : eligible
+
         const ok =
           eligible.length > 0 &&
-          eligible.length === manualClipOrderIndices.length &&
-          eligible.every((i) => manualClipOrderIndices.includes(i))
+          eligible.length === order.length &&
+          eligible.every((i) => order.includes(i))
         if (!ok) {
           throw new Error(
-            'Orden manual de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
+            'Orden de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
           )
+        }
+
+        clipOrderPayload = {
+          manualClipOrderIndices: order,
+          ...(manualFullClipOrderEnabled && forceAllManualOrderClips
+            ? { forceAllManualOrderClips: true }
+            : {}),
         }
       }
 
@@ -494,14 +508,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           ...voiceOverPayload,
           ...(scriptPdfPath ? { scriptPdfPath } : {}),
           ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
-          ...(manualFullClipOrderEnabled &&
-          flowType === 'multiple' &&
-          manualClipOrderIndices.length > 0
-            ? {
-                manualClipOrderIndices: manualClipOrderIndices,
-                ...(forceAllManualOrderClips ? { forceAllManualOrderClips: true } : {}),
-              }
-            : {}),
+          ...clipOrderPayload,
           ...(canonV ? { canonicalVehicle: canonV } : {}),
           ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
           ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
@@ -652,6 +659,13 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {step === 2 && (
             <div className="space-y-6">
               <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} previewUrls={clipPreviewUrls} />
+
+              {flowType === 'multiple' && files.length >= 2 && (
+                <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 leading-relaxed">
+                  El Reel usará los clips en este orden de secuencia (por nombre de archivo). Ese orden se envía
+                  automáticamente al crear el video.
+                </p>
+              )}
 
               {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
@@ -1009,7 +1023,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                             setManualIntroEnabled(false)
                             setManualIntroSlots([null, null, null])
                             const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
-                            setManualClipOrderIndices(eligible.slice().sort((a, b) => a - b))
+                            setManualClipOrderIndices(sortClipIndicesByFileName(files, eligible))
                           } else {
                             setForceAllManualOrderClips(false)
                           }
@@ -1020,7 +1034,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                         <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
                           {forceAllManualOrderClips
                             ? 'Lista obligatoria: un corte de cada clip en el orden de abajo (arrastra la lista). Sin recorte automático por duración.'
-                            : 'Elige el orden de los clips en el Reel (arrastra la lista). Gemini elige qué cortes entran dentro de cada clip. No se combina con Intro fija (emergencia).'}
+                            : 'El Reel ya usa el orden por nombre (IMG_…). Marca esto solo si quieres arrastrar y cambiar la secuencia. No se combina con Intro fija (emergencia).'}
                         </span>
                       </span>
                     </label>
