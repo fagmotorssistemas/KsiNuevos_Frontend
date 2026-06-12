@@ -126,17 +126,9 @@ const CLIP_FLASH_FADE_IN_SEC = 0.12
 const CLIP_FLASH_HOLD_SEC = 0.08
 const CLIP_FLASH_FADE_OUT_SEC = 0.35
 const CLIP_FLASH_PEAK_OPACITY = 0.65
-const CLIP_FLASH_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}">` +
-  '<defs>' +
-  '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
-  '<stop offset="0%" stop-color="#FFE94A" stop-opacity="1"/>' +
-  '<stop offset="60%" stop-color="#FF8C00" stop-opacity="1"/>' +
-  '<stop offset="100%" stop-color="#FF4500" stop-opacity="0.8"/>' +
-  '</radialGradient>' +
-  '</defs>' +
-  `<rect width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" fill="url(#flash)"/>` +
-  '</svg>'
+// URL del SVG del destello subido a Supabase Storage (iconos-videos-edicion/flash-destello.svg).
+// Ejecutar src/scripts/upload-flash-svg.ts una vez para generarla y añadirla al .env.
+const CLIP_FLASH_SVG_URL = process.env.FLASH_SVG_URL ?? ''
 
 function buildTimelineFonts(): { src: string }[] {
   return [{ src: MONTSERRAT_BLACK_TTF }, { src: PLAYFAIR_DISPLAY_SEMIBOLD_TTF }]
@@ -332,7 +324,7 @@ function buildClipFlashTransitionTrack(
   return {
     clips: [
       {
-        asset: { type: 'svg', src: CLIP_FLASH_SVG },
+        asset: { type: 'image', src: CLIP_FLASH_SVG_URL },
         start,
         length: lengthSec,
         fit: 'none',
