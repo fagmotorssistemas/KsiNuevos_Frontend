@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         console.error(`[VideoV2Webhook][Shotstack] Error actualizando job ${jobId}: ${error.message}`)
       }
     } else if (status === 'failed') {
+      console.error('[Shotstack][webhook] Render failed body:', JSON.stringify(payload))
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({

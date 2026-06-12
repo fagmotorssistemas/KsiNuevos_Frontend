@@ -496,6 +496,10 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
       }
 
       if (render.status === 'failed') {
+        console.error(
+          `[VideoV2Pipeline][${jobId}][ShotstackMonitor] Render fallido — detalle completo:`,
+          JSON.stringify(render, null, 2)
+        )
         await updateJob(jobId, {
           status: 'failed',
           error_message: render.error ?? 'Shotstack reportó fallo (polling fallback).',
