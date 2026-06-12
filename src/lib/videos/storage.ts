@@ -4,6 +4,8 @@ import type { Database } from '@/types/supabase'
 import { MUSIC_TRACKS_BUCKET } from '@/lib/videos/music-upload-shared'
 
 const RAW_BUCKET = 'raw-videos-v2'
+/** Bucket público solo para reels finales (preview, descarga, Instagram). */
+const REELS_FINAL_BUCKET = 'reels-v2'
 
 const MUSIC_BUCKET = MUSIC_TRACKS_BUCKET
 const SIGNED_URL_EXPIRY = 60 * 60 * 24 // 24 horas
@@ -174,6 +176,59 @@ export async function uploadRawVideoClipV2(
 export async function getSignedUrlForPath(path: string): Promise<string> {
   const supabase = getServiceClient()
   return createSignedUrlForRawPath(supabase, path)
+}
+
+/** MP4 final del reel en bucket público `reels-v2`. */
+export function finalReelStoragePath(jobId: string): string {
+  return `${jobId}.mp4`
+}
+
+export function finalReelPublicUrl(jobId: string): string {
+  const supabase = getServiceClient()
+  const { data } = supabase.storage.from(REELS_FINAL_BUCKET).getPublicUrl(finalReelStoragePath(jobId))
+  return data.publicUrl
+}
+
+export async function downloadShotstackVideoAndStoreFinalReel(
+  shotstackUrl: string,
+  jobId: string
+): Promise<string> {
+  const supabase = getServiceClient()
+  const storagePath = finalReelStoragePath(jobId)
+
+  const response = await fetch(shotstackUrl)
+  if (!response.ok) {
+    throw new Error(`Error descargando video Shotstack: HTTP ${response.status}`)
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+
+  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(storagePath, buffer, {
+    contentType: 'video/mp4',
+    upsert: true,
+    cacheControl: '31536000',
+  })
+  if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
+
+  return finalReelPublicUrl(jobId)
+}
+
+/** Persiste el reel en Storage; si falla, devuelve la URL temporal de Shotstack. */
+export async function resolveFinalReelVideoUrl(
+  shotstackUrl: string | null | undefined,
+  jobId: string
+): Promise<string | null> {
+  const url = shotstackUrl?.trim()
+  if (!url) return null
+  try {
+    const stored = await downloadShotstackVideoAndStoreFinalReel(url, jobId)
+    console.log(`[VideoStorage][${jobId}] Reel guardado en Storage: ${stored}`)
+    return stored
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[VideoStorage][${jobId}] Error guardando reel, usando URL Shotstack: ${msg}`)
+    return url
+  }
 }
 
 /** Ruta en Storage para una pista nueva (`tracks/…`). */

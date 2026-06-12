@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { resolveFinalReelVideoUrl } from '@/lib/videos/storage'
+
+export const runtime = 'nodejs'
+export const maxDuration = 300
 
 function getServiceClient() {
   return createClient<Database>(
@@ -41,11 +45,13 @@ export async function POST(request: NextRequest) {
         .eq('id', jobId)
         .single()
 
+      const finalUrl = await resolveFinalReelVideoUrl(payload.url, jobId)
+
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({
           status: 'completed',
-          final_video_url: payload.url ?? null,
+          final_video_url: finalUrl,
           progress_percentage: 100,
           current_step: 'Video listo',
           social_publish_stage: prev?.social_publish_stage ?? 'generado',
@@ -54,6 +60,8 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error(`[VideoV2Webhook][Shotstack] Error actualizando job ${jobId}: ${error.message}`)
+      } else {
+        console.log(`[VideoV2Webhook][Shotstack] Job ${jobId} completado. final_video_url=${finalUrl}`)
       }
     } else if (status === 'failed') {
       console.error('[Shotstack][webhook] Render failed body:', JSON.stringify(payload))

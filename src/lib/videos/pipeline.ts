@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType, GeminiSegmentAnalysisResult, VideoJobStatus } from './types'
-import { getSignedUrlForPath, resolveVoiceOverAudioUrl } from './storage'
+import { getSignedUrlForPath, resolveFinalReelVideoUrl, resolveVoiceOverAudioUrl } from './storage'
 import { transcribeVideoV2, type RawWord } from './assemblyai'
 import {
   buildAdjustedSRT,
@@ -486,9 +486,10 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
       console.log(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] status=${render.status}`)
 
       if (render.status === 'done') {
+        const finalUrl = await resolveFinalReelVideoUrl(render.url, jobId)
         await updateJob(jobId, {
           status: 'completed',
-          final_video_url: render.url ?? undefined,
+          final_video_url: finalUrl ?? undefined,
           progress_percentage: 100,
           current_step: 'Video listo (confirmado por polling Shotstack)',
         })
