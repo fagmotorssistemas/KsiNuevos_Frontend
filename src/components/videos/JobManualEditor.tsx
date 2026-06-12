@@ -5,6 +5,7 @@ import { Clapperboard, Loader2, Pencil, RotateCcw, Save, X } from 'lucide-react'
 import type { SequenceItem, SubtitleBlock } from '@/lib/videos/segmenter'
 import type { GeminiSegmentAnalysisResult } from '@/lib/videos/types'
 import { MusicSelector } from './MusicSelector'
+import { MusicTrimStartField } from './MusicTrimStartField'
 
 type EditorStateResponse = {
   gemini_analysis: GeminiSegmentAnalysisResult
@@ -577,30 +578,14 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
 
                             {rerenderMusicTrimMode === 'manual' && (
                               <div className="space-y-2 rounded-lg border border-violet-200/70 bg-violet-50/40 p-2.5">
-                                <label className="text-[11px] font-medium text-gray-700">
-                                  Inicio manual del track (segundos)
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="range"
-                                    min={0}
-                                    step={0.1}
-                                    max={Math.max(0, (rerenderMusicDurationSec ?? 300) - 1)}
-                                    value={rerenderMusicTrimStartSec}
-                                    onChange={(e) => setRerenderMusicTrimStartSec(Number(e.target.value))}
-                                    className="flex-1 accent-violet-600"
-                                    disabled={rerenderMusicDurationSec == null}
-                                  />
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step={0.1}
-                                    max={Math.max(0, (rerenderMusicDurationSec ?? 300) - 1)}
-                                    value={rerenderMusicTrimStartSec}
-                                    onChange={(e) => setRerenderMusicTrimStartSec(Math.max(0, Number(e.target.value) || 0))}
-                                    className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
-                                  />
-                                </div>
+                                <MusicTrimStartField
+                                  valueSec={rerenderMusicTrimStartSec}
+                                  maxSec={Math.max(0, (rerenderMusicDurationSec ?? 300) - 1)}
+                                  disabled={rerenderMusicDurationSec == null}
+                                  onChangeSec={setRerenderMusicTrimStartSec}
+                                  labelClassName="text-[11px] font-medium text-gray-700"
+                                  inputClassName="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-center font-mono tabular-nums"
+                                />
                                 {rerenderMusicUrl && (
                                   <audio
                                     controls

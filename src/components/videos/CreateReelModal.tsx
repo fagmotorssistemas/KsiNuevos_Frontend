@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { VideoUploader } from './VideoUploader'
 import { ManualClipOrderSortable } from './ManualClipOrderSortable'
 import { MusicSelector } from './MusicSelector'
+import { MusicTrimStartField } from './MusicTrimStartField'
 import { PipelineStatus } from './PipelineStatus'
 import { VideoPlayer } from './VideoPlayer'
 import type { VideoJob, GeminiSegmentAnalysisResult } from '@/lib/videos/types'
@@ -1161,30 +1162,14 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                   </div>
                   {musicTrimMode === 'manual' && (
                     <div className="space-y-2 rounded-lg border border-violet-200/70 bg-white/70 p-3">
-                      <label className="text-xs font-medium text-gray-700">Inicio manual del track (segundos)</label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="range"
-                          min={0}
-                          step={0.1}
-                          max={Math.max(0, (selectedMusicDurationSec ?? 300) - 1)}
-                          value={manualMusicTrimStartSec}
-                          onChange={(e) => setManualMusicTrimStartSec(Number(e.target.value))}
-                          className="flex-1 accent-violet-600"
-                          disabled={selectedMusicDurationSec == null}
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.1}
-                          max={Math.max(0, (selectedMusicDurationSec ?? 300) - 1)}
-                          value={manualMusicTrimStartSec}
-                          onChange={(e) => setManualMusicTrimStartSec(Math.max(0, Number(e.target.value) || 0))}
-                          className="w-24 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
-                        />
-                      </div>
+                      <MusicTrimStartField
+                        valueSec={manualMusicTrimStartSec}
+                        maxSec={Math.max(0, (selectedMusicDurationSec ?? 300) - 1)}
+                        disabled={selectedMusicDurationSec == null}
+                        onChangeSec={setManualMusicTrimStartSec}
+                      />
                       <p className="text-xs text-gray-500 leading-relaxed">
-                        El Reel usará este segundo como arranque y tomará la duración necesaria del clip final.
+                        El Reel usará este punto como arranque y tomará la duración necesaria del clip final.
                         {selectedMusicDurationSec == null
                           ? ' Esta pista aún no tiene duración calculada en la base; se usa un rango temporal aproximado.'
                           : ''}

@@ -91,6 +91,9 @@ function brandL2FontSize(wordCount: number): number {
   return s720(64)
 }
 
+/** Máx. caracteres en L2 con 2 palabras de modelo; si excede, 2.ª palabra pasa a L3. */
+const BRAND_L2_TWO_WORD_MAX_CHARS = 14
+
 const COMENTA_ENTRANCE_SLIDE_SEC = 0.28
 const PLAYFAIR_DISPLAY_SEMIBOLD_TTF =
   'https://cdn.jsdelivr.net/fontsource/fonts/playfair-display@5.2.5/latin-600-normal.ttf'
@@ -891,11 +894,9 @@ const BRAND_OVERLAY_INTRO_SEC = 3.5
  *
  * Layout:
  *   L1 (marca,   52px, blanco) — position:'top', cerca del borde superior
- *   L2 (modelo,  96px, rojo)   — position:'top', debajo de L1
- *   L3 (tagline, 52px, blanco) — position:'top', debajo de L2  (si existe)
- *   L4 (año,     84px, blanco) — position:'center', zona inferior
- *
- * L2 se trunca a la primera palabra del modelo (p. ej. "wrangler rubicom …" → "wrangler").
+ *   L2 (modelo,  rojo)   — solo las 2 primeras palabras del modelo (limpio)
+ *   L3 (modelo)           — solo la 2.ª palabra si no cabe en L2; nunca 3.ª palabra+
+ *   L4 (año,     blanco) — position:'center', zona inferior
  */
 function cleanVehicleText(text: string): string {
   return text
@@ -906,6 +907,27 @@ function cleanVehicleText(text: string): string {
     .replace(/\b(FSI|TSI|TDI|TFSI|C|DSG|CVT|HYBRID|PHEV|EV|TURBO)\b/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/**
+ * L2: solo las 2 primeras palabras del modelo (p. ej. "grand vitara sz …" → "GRAND VITARA").
+ * L3: únicamente si esas 2 palabras no caben en L2 → L2=1.ª, L3=2.ª. Nunca palabra 3+ (SZ, etc.).
+ */
+function splitModelLinesForBrandOverlay(modelRaw: string): { line2: string; line3Model: string } {
+  const cleaned = cleanVehicleText(modelRaw)
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (words.length === 0) return { line2: '', line3Model: '' }
+  if (words.length === 1) return { line2: words[0]!, line3Model: '' }
+
+  const word1 = words[0]!
+  const word2 = words[1]!
+  const twoWordLine = `${word1} ${word2}`
+
+  if (twoWordLine.length <= BRAND_L2_TWO_WORD_MAX_CHARS) {
+    return { line2: twoWordLine, line3Model: '' }
+  }
+
+  return { line2: word1, line3Model: word2 }
 }
 
 function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
@@ -933,9 +955,12 @@ function buildBrandOverlayTracks(
 
   const tracks: ShotstackTrack[] = []
   const line1 = cleanVehicleText(brandConfig.vehicle_line_1?.trim() || '')
-  const line2Raw = (brandConfig.vehicle_line_2?.trim() || '').split(/\s+/).slice(0, 1).join(' ')
-  const line2 = cleanVehicleText(line2Raw)
-  const line3 = cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
+  const { line2, line3Model } = splitModelLinesForBrandOverlay(
+    brandConfig.vehicle_line_2?.trim() || ''
+  )
+  const line3Tagline = cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
+  const line3 = [line3Model, line3Tagline].filter(Boolean).join(' ')
+  const line3IsModelOverflow = !!line3Model
   const line4 = cleanVehicleText(brandConfig.vehicle_line_4?.trim() || '')
   const cta   = brandConfig.cta_text?.trim() || ''
   const wa    = brandConfig.whatsapp_number?.trim() || ''
@@ -1035,20 +1060,25 @@ function buildBrandOverlayTracks(
     })
   }
 
-  // ── L3: TAGLINE (blanco) — solo si existe ───────────────────────
+  // ── L3: resto del modelo (rojo) o tagline (blanco) ─────────────────
   if (line3) {
+    const line3Words = line3.split(/\s+/).length
+    const l3FontSize = line3IsModelOverflow ? brandL2FontSize(line3Words) : brandL3Size
+    const l3Color = line3IsModelOverflow ? '#E63333' : '#FFFFFF'
+    const l3StrokeWidth = line3IsModelOverflow ? s720(2) : s720(4)
+    const l3ShadowStroke = line3IsModelOverflow ? s720(18) : s720(14)
     tracks.push({
       clips: [{
         asset: {
           type: 'rich-text',
           text: line3.toUpperCase(),
-          font:   { family: 'Montserrat', size: brandL3Size, weight: 900, color: '#FFFFFF', opacity: 1 },
-          stroke: { width: s720(4), color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: l3FontSize, weight: 900, color: l3Color, opacity: 1 },
+          stroke: { width: l3StrokeWidth, color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: s720(700), height: s720(90),
+        width: s720(700), height: s720(line3IsModelOverflow ? 140 : 90),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
         transition: { out: 'fade' },
       }],
@@ -1058,14 +1088,14 @@ function buildBrandOverlayTracks(
         asset: {
           type: 'rich-text',
           text: line3.toUpperCase(),
-          font:   { family: 'Montserrat', size: brandL3Size, weight: 900, color: '#000000', opacity: 0.2 },
-          stroke: { width: s720(14), color: '#000000', opacity: 1 },
+          font:   { family: 'Montserrat', size: l3FontSize, weight: 900, color: '#000000', opacity: 0.2 },
+          stroke: { width: l3ShadowStroke, color: '#000000', opacity: 1 },
           shadow: shadowEffect,
           style:  brandStyle,
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: s720(760), height: s720(130),
+        width: s720(760), height: s720(line3IsModelOverflow ? 180 : 130),
         position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
         transition: { out: 'fade' },
       }],
