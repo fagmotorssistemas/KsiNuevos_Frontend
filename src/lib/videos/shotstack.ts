@@ -93,6 +93,8 @@ function brandL2FontSize(wordCount: number): number {
 
 /** Máx. caracteres en L2 con 2 palabras de modelo; si excede, 2.ª palabra pasa a L3. */
 const BRAND_L2_TWO_WORD_MAX_CHARS = 14
+/** Si L3 es overflow del modelo y el texto supera esto, usar tamaño marca (evita recorte visual). */
+const BRAND_L3_LONG_TEXT_MAX_CHARS = 10
 
 const COMENTA_ENTRANCE_SLIDE_SEC = 0.28
 const PLAYFAIR_DISPLAY_SEMIBOLD_TTF =
@@ -888,6 +890,7 @@ const BRAND_OVERLAY_INTRO_SEC = 3.5
  *   L1 (marca,   52px, blanco) — position:'top', cerca del borde superior
  *   L2 (modelo,  rojo)   — solo las 2 primeras palabras del modelo (limpio)
  *   L3 (modelo)           — solo la 2.ª palabra si no cabe en L2; nunca 3.ª palabra+
+ *                           (>10 letras en L3 → tamaño marca para que no se recorte)
  *   L4 (año,     blanco) — position:'center', zona inferior
  */
 function cleanVehicleText(text: string): string {
@@ -1055,10 +1058,20 @@ function buildBrandOverlayTracks(
   // ── L3: resto del modelo (rojo) o tagline (blanco) ─────────────────
   if (line3) {
     const line3Words = line3.split(/\s+/).length
-    const l3FontSize = line3IsModelOverflow ? brandL2FontSize(line3Words) : brandL3Size
-    const l3Color = line3IsModelOverflow ? '#E63333' : '#FFFFFF'
+    const line3CharCount = line3.replace(/\s/g, '').length
+    const l3FontSize =
+      line3IsModelOverflow && line3CharCount > BRAND_L3_LONG_TEXT_MAX_CHARS
+        ? brandL1Size
+        : line3IsModelOverflow
+          ? brandL2FontSize(line3Words)
+          : brandL3Size
+    const l3ClipHeight = line3IsModelOverflow && line3CharCount > BRAND_L3_LONG_TEXT_MAX_CHARS ? 90 : line3IsModelOverflow ? 140 : 90
+    const l3ShadowClipHeight = line3IsModelOverflow && line3CharCount > BRAND_L3_LONG_TEXT_MAX_CHARS ? 130 : line3IsModelOverflow ? 180 : 130
+    const l3Color = line3IsModelOverflow ? '#FFFFFF' : '#FFFFFF'
     const l3StrokeWidth = line3IsModelOverflow ? s720(2) : s720(4)
     const l3ShadowStroke = line3IsModelOverflow ? s720(18) : s720(14)
+    const l3OffsetY =
+      line3IsModelOverflow && line3CharCount > BRAND_L3_LONG_TEXT_MAX_CHARS ? -0.23 : -0.25
     tracks.push({
       clips: [{
         asset: {
@@ -1070,8 +1083,8 @@ function buildBrandOverlayTracks(
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: s720(700), height: s720(line3IsModelOverflow ? 140 : 90),
-        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
+        width: s720(700), height: s720(l3ClipHeight),
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(l3OffsetY, introLen) },
         transition: { out: 'fade' },
       }],
     })
@@ -1087,21 +1100,22 @@ function buildBrandOverlayTracks(
           align:  brandAlign,
         },
         start: bs, length: introLen,
-        width: s720(760), height: s720(line3IsModelOverflow ? 180 : 130),
-        position: 'top', offset: { x: 0, y: buildJumpThenFixed(-0.25, introLen) },
+        width: s720(760), height: s720(l3ShadowClipHeight),
+        position: 'top', offset: { x: 0, y: buildJumpThenFixed(l3OffsetY, introLen) },
         transition: { out: 'fade' },
       }],
     })
   }
 
-  // ── L4: AÑO (blanco) — zona inferior ────────────────────────────
+  // ── L4: AÑO (blanco; rojo si hay L3) — zona inferior ───────────────
   if (line4) {
+    const l4Color = line3 ? '#E63333' : '#FFFFFF'
     tracks.push({
       clips: [{
         asset: {
           type: 'rich-text',
           text: line4.toUpperCase(),
-          font:   { family: 'Montserrat', size: brandL4Size, weight: 900, color: '#FFFFFF', opacity: 1 },
+          font:   { family: 'Montserrat', size: brandL4Size, weight: 900, color: l4Color, opacity: 1 },
           stroke: { width: s720(5), color: '#000000', opacity: 1 },
           style:  brandStyle,
           align:  brandAlign,
