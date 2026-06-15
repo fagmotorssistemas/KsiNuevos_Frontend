@@ -287,7 +287,7 @@ function levenshteinDistance(a: string, b: string): number {
   return dp[m]![n]!
 }
 
-/** Coincidencia difusa por prefijo + Levenshtein (ASR: getur↔jetour, travaller↔traveller). */
+/** Coincidencia difusa por prefijo + Levenshtein (ASR: getur↔jetour, rush↔rouge, rav↔rav4). */
 export function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean {
   const a = normalizeForMatch(assemblyWord)
   const k = normalizeForMatch(keyword)
@@ -297,10 +297,14 @@ export function wordFuzzyMatches(assemblyWord: string, keyword: string): boolean
 
   const minLen = Math.min(a.length, k.length)
   const maxLen = Math.max(a.length, k.length)
+  if (minLen >= 3 && maxLen - minLen <= 2 && (k.startsWith(a) || a.startsWith(k))) return true
+
   if (maxLen - minLen <= 2) {
-    const threshold = minLen >= 5 ? 2 : 1
+    const threshold = minLen >= 5 ? 2 : minLen >= 4 ? 2 : 1
     if (levenshteinDistance(a, k) <= threshold) return true
   }
+
+  if (minLen >= 4 && maxLen <= 6 && a[0] === k[0] && levenshteinDistance(a, k) <= 3) return true
 
   if (minLen >= 5 && a.slice(0, 5) === k.slice(0, 5)) return true
   return false

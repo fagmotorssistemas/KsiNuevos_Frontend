@@ -44,10 +44,7 @@ import {
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
 import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
-import {
-  stripTitleYearFromSubtitleBlocks,
-  suppressDuplicateBrandMentionSubtitles,
-} from './suppress-duplicate-brand-subtitles'
+import { suppressIntroClipVehicleSubtitleDuplicates } from './suppress-duplicate-brand-subtitles'
 import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
 import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
@@ -422,25 +419,27 @@ async function applyShowcaseCaptionHighlights(
   })
 }
 
-/** Sin guión: quita subtítulo amarillo duplicado de la 1.ª mención oral si ya hay overlay de título. */
-function applyBrandSubtitleDedupWhenNoGuion(
+/** Clip 0–1: quita subtítulos que repiten marca/modelo/año ya en overlay de título. */
+function applyBrandSubtitleDedup(
   subtitleBlocks: SubtitleBlock[],
   brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
-  hasGuionEscenas: boolean,
-  jobId: string
+  sequence: SequenceItem[],
+  allSegments: Segment[],
+  jobId: string,
+  guionSubtitleTimeline: boolean
 ): SubtitleBlock[] {
-  if (hasGuionEscenas || !brandConfig?.show_brand_overlays) return subtitleBlocks
+  if (!brandConfig?.show_brand_overlays) return subtitleBlocks
   const brand = brandConfig.vehicle_line_1?.trim()
   const modelLine = brandConfig.vehicle_line_2?.trim()
   if (!brand || !modelLine) return subtitleBlocks
-  const withoutBrandDup = suppressDuplicateBrandMentionSubtitles(subtitleBlocks, {
+  return suppressIntroClipVehicleSubtitleDuplicates(subtitleBlocks, {
     jobId,
     brand,
     modelLine,
-  })
-  return stripTitleYearFromSubtitleBlocks(withoutBrandDup, {
-    jobId,
     yearLine: brandConfig.vehicle_line_4,
+    sequence,
+    allSegments,
+    guionSubtitleTimeline,
   })
 }
 
@@ -762,11 +761,13 @@ async function runSingleVideoPipelineFromStorage(
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-    subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
+    subtitleBlocks = applyBrandSubtitleDedup(
       subtitleBlocks,
       brandConfig,
-      escenasSingle.length > 0,
-      jobId
+      analysis.sequence,
+      segments,
+      jobId,
+      escenasSingle.length > 0
     )
 
     let comentaMentionTimeSecA: number | undefined
@@ -1536,11 +1537,13 @@ async function runMultipleClipsPipelineFromStorage(
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-    subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
+    subtitleBlocks = applyBrandSubtitleDedup(
       subtitleBlocks,
       brandConfig,
-      escenasMulti.length > 0,
-      jobId
+      analysis.sequence,
+      allSegments,
+      jobId,
+      escenasMulti.length > 0
     )
 
     if (escenasMulti.length === 0) {
@@ -2485,11 +2488,13 @@ export async function rerunCreatomateRenderForJob(
 
   subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-  subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
+  subtitleBlocks = applyBrandSubtitleDedup(
     subtitleBlocks,
     brandConfig,
-    escenasRerun.length > 0,
-    jobId
+    analysis.sequence,
+    allSegments,
+    jobId,
+    escenasRerun.length > 0
   )
 
   let comentaMentionTimeSecRerun: number | undefined
