@@ -40,6 +40,8 @@ export {
   resolveDefaultDashboardHref,
   resolveFirstAccountingHref,
   resolvePrimaryNavItemHref,
+  resolveActivePrimaryNavItem,
+  pathnameBelongsToPrimaryNavItem,
   getUserDashboardMenuItem,
 } from './nav'
 export {

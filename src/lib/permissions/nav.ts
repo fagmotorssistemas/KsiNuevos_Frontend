@@ -2,10 +2,65 @@ import {
   MODULE_SLUGS,
   PRIMARY_NAV_ITEMS,
   RBAC_SUBMODULE_DEFINITIONS,
+  VENTAS_PATH_ACCESS,
   type PrimaryNavItem,
 } from './catalog'
 import { canAccessModule, canAccessSubmodule, isAppAdminRole } from './access'
 import type { PermissionContext } from './context'
+import { isAccountingModulePath } from './routeAccess'
+
+function pathMatchesPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+}
+
+/** Indica si la ruta actual pertenece a un ítem del nav principal (p. ej. /showroom → Ventas). */
+export function pathnameBelongsToPrimaryNavItem(pathname: string, item: PrimaryNavItem): boolean {
+  const path = pathname.split('?')[0].replace(/\/$/, '') || '/'
+
+  if (item.module === MODULE_SLUGS.ventas) {
+    return VENTAS_PATH_ACCESS.some(({ prefix }) => pathMatchesPrefix(path, prefix))
+  }
+  if (item.module === MODULE_SLUGS.finanzas) {
+    return isAccountingModulePath(path)
+  }
+  if (item.module === MODULE_SLUGS.taller) {
+    return pathMatchesPrefix(path, '/taller')
+  }
+  if (item.module === MODULE_SLUGS.legal) {
+    return pathMatchesPrefix(path, '/legal')
+  }
+  if (item.module === MODULE_SLUGS.marketing) {
+    return pathMatchesPrefix(path, '/marketing')
+  }
+  if (item.module === MODULE_SLUGS.gps) {
+    return pathMatchesPrefix(path, '/rastreadores')
+  }
+  if (item.module === MODULE_SLUGS.seguros) {
+    return pathMatchesPrefix(path, '/seguros')
+  }
+  if (item.submodule === 'scraper-marketing') {
+    return pathMatchesPrefix(path, '/scraper')
+  }
+  if (item.submodule === 'monitoreo-reportes') {
+    return pathMatchesPrefix(path, '/report')
+  }
+  if (item.submodule === 'permisos-roles') {
+    return pathMatchesPrefix(path, '/admin/permisos')
+  }
+
+  const href = item.href.replace(/\/$/, '') || '/'
+  return path === href || path.startsWith(`${href}/`)
+}
+
+export function resolveActivePrimaryNavItem(
+  pathname: string,
+  ctx: PermissionContext
+): PrimaryNavItem | null {
+  for (const item of buildPrimaryNavItems(ctx)) {
+    if (pathnameBelongsToPrimaryNavItem(pathname, item)) return item
+  }
+  return null
+}
 
 export function canSeePrimaryNavItem(ctx: PermissionContext, item: PrimaryNavItem): boolean {
   if (isAppAdminRole(ctx)) return true

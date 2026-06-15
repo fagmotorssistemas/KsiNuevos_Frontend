@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
+import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
 import {
     ShieldCheck, Menu, X, ChevronLeft, 
     Truck, Users2, CreditCard, Wrench, 
@@ -71,24 +72,33 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
     return (
         <>
             {/* --- HEADER MÓVIL --- */}
-            <div className="md:hidden fixed top-0 left-0 w-full bg-white border-b border-slate-200 z-50 px-4 py-3 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold">R</div>
-                    <span className="font-bold text-slate-900">Módulo GPS</span>
-                </div>
-                <button onClick={() => setIsMobileOpen(!isMobileOpen)} className="p-2 text-slate-700 hover:bg-slate-100 rounded-md">
+            <div className="md:hidden fixed top-0 left-0 w-full bg-white border-b border-slate-200 z-[70] px-4 py-3 flex items-center justify-between shadow-sm">
+                <MobileStaffModuleSwitcher
+                    fallbackLabel="Módulo GPS"
+                    icon={
+                        <div className="w-8 h-8 bg-blue-700 rounded-lg flex items-center justify-center text-white font-bold">
+                            R
+                        </div>
+                    }
+                />
+                <button
+                    type="button"
+                    onClick={() => setIsMobileOpen(!isMobileOpen)}
+                    className="p-2 text-slate-700 hover:bg-slate-100 rounded-md"
+                    aria-expanded={isMobileOpen}
+                    aria-label={isMobileOpen ? 'Cerrar menú del módulo' : 'Abrir menú del módulo'}
+                >
                     {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
             </div>
 
             {isMobileOpen && (
-                <div className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)} />
+                <div className="fixed inset-0 bg-black/50 z-[60] md:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)} aria-hidden />
             )}
 
-            {/* --- ASIDE PRINCIPAL --- */}
             <aside className={`
-                fixed md:static inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col transition-all duration-300
-                ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:flex
+                fixed md:static inset-y-0 left-0 z-[65] bg-white border-r border-slate-200 flex flex-col overflow-hidden transition-all duration-300 max-md:max-h-[100dvh]
+                ${isMobileOpen ? 'translate-x-0 max-md:pointer-events-auto' : '-translate-x-full max-md:pointer-events-none'} md:translate-x-0 md:pointer-events-auto md:flex
                 ${isCollapsed ? 'md:w-20' : 'md:w-72'}
             `}>
                 {/* Logo Area */}
@@ -108,7 +118,7 @@ export function RastreadoresSidebar({ currentView, onNavigate }: SidebarProps) {
                 </div>
 
                 {/* Navegación */}
-                <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+                <nav className="flex-1 min-h-0 overflow-y-auto py-6 px-3 space-y-1">
                     {!isCollapsed && (
                         <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                             Operaciones

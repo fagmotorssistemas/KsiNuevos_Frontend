@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
+import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
 import {
     LayoutDashboard,
     ClipboardCheck,
@@ -49,16 +50,21 @@ export function TallerSidebar() {
     return (
         <>
             {/* AGREGADO: print:hidden para ocultar en impresión */}
-            <div className="md:hidden fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 px-4 py-3 flex items-center justify-between shadow-sm print:hidden">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                        <Wrench size={18} />
-                    </div>
-                    <span className="font-bold text-gray-900">Taller Nova</span>
-                </div>
+            <div className="md:hidden fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-[70] px-4 py-3 flex items-center justify-between shadow-sm print:hidden">
+                <MobileStaffModuleSwitcher
+                    fallbackLabel="Taller Nova"
+                    icon={
+                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
+                            <Wrench size={18} />
+                        </div>
+                    }
+                />
                 <button
+                    type="button"
                     onClick={toggleMobileSidebar}
                     className="p-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                    aria-expanded={isMobileOpen}
+                    aria-label={isMobileOpen ? 'Cerrar menú del módulo' : 'Abrir menú del módulo'}
                 >
                     {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
@@ -66,19 +72,19 @@ export function TallerSidebar() {
 
             {isMobileOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm print:hidden"
+                    className="fixed inset-0 bg-black/50 z-[60] md:hidden backdrop-blur-sm print:hidden"
                     onClick={() => setIsMobileOpen(false)}
+                    aria-hidden
                 />
             )}
 
-            {/* AGREGADO: print:hidden en el aside principal */}
             <aside
                 className={`
-                    fixed md:static inset-y-0 left-0 z-50
+                    fixed md:static inset-y-0 left-0 z-[65]
                     bg-white border-r border-gray-200
-                    flex flex-col transition-all duration-300 ease-in-out
-                    ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-                    md:translate-x-0 md:flex
+                    flex flex-col overflow-hidden transition-all duration-300 ease-in-out
+                    ${isMobileOpen ? 'translate-x-0 max-md:pointer-events-auto' : '-translate-x-full max-md:pointer-events-none'}
+                    md:translate-x-0 md:pointer-events-auto md:flex max-md:max-h-[100dvh]
                     w-72 ${isCollapsed ? 'md:w-20' : 'md:w-72'}
                     print:hidden
                 `}
@@ -114,7 +120,7 @@ export function TallerSidebar() {
                     </div>
                 )}
 
-                <nav className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-3 space-y-1">
+                <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-6 px-3 space-y-1">
                     {!isCollapsed && (
                         <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 whitespace-nowrap transition-opacity">
                             Módulos Operativos
