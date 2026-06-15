@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { Session, User, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [permissionMap, setPermissionMap] = useState<PermissionMap>({})
   const [permissionsLoading, setPermissionsLoading] = useState(false)
+  const loadedProfileUserIdRef = useRef<string | null>(null)
 
   // useEffect 1: Sesión inicial + cambios de auth
   useEffect(() => {
@@ -66,26 +67,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // useEffect 2: Carga el perfil y suscribe cambios en tiempo real
   useEffect(() => {
-    setIsLoading(true)
-
     if (!user) {
+      loadedProfileUserIdRef.current = null
       setProfile(null)
       setPermissionMap({})
       setIsLoading(false)
       return
     }
 
+    const userId = user.id
+    let cancelled = false
+    const isNewUser = loadedProfileUserIdRef.current !== userId
+
+    if (isNewUser) {
+      setIsLoading(true)
+      if (loadedProfileUserIdRef.current !== null) {
+        setProfile(null)
+        setPermissionMap({})
+      }
+    }
+
     supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
       .then(async ({ data, error }) => {
+        if (cancelled) return
         if (error) {
           console.error('Error al obtener el perfil:', error)
+          loadedProfileUserIdRef.current = null
           setProfile(null)
           setPermissionMap({})
         } else {
+          loadedProfileUserIdRef.current = userId
           setProfile(data)
           setPermissionsLoading(true)
           try {
@@ -114,14 +129,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const channel = supabase
-      .channel(`profile-changes-${user.id}`)
+      .channel(`profile-changes-${userId}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'profiles',
-          filter: `id=eq.${user.id}`,
+          filter: `id=eq.${userId}`,
         },
         async (payload) => {
           setProfile(payload.new as Profile)
@@ -134,7 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           event: '*',
           schema: 'public',
           table: 'profile_roles',
-          filter: `profile_id=eq.${user.id}`,
+          filter: `profile_id=eq.${userId}`,
         },
         async () => {
           await refreshPerms()
@@ -146,7 +161,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           event: '*',
           schema: 'public',
           table: 'profile_permissions',
-          filter: `profile_id=eq.${user.id}`,
+          filter: `profile_id=eq.${userId}`,
         },
         async () => {
           await refreshPerms()
@@ -155,9 +170,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .subscribe()
 
     return () => {
+      cancelled = true
       supabase.removeChannel(channel)
     }
-  }, [user, supabase])
+  }, [user?.id, supabase])
 
   const refreshPermissions = useCallback(async () => {
     if (!user) {

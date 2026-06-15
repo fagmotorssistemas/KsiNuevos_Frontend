@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { canAccessModule, MODULE_SLUGS, type PermissionContext } from '@/lib/permissions';
+import {
+  isRouteAllowed,
+  type PermissionContext,
+} from '@/lib/permissions';
 
 export function MarketingRoleGuard({ children }: { children: React.ReactNode }) {
-  const { profile, isLoading, permissionMap } = useAuth();
+  const pathname = usePathname();
+  const { profile, isLoading, permissionMap, permissionsLoading } = useAuth();
   const router = useRouter();
 
   const permCtx: PermissionContext = useMemo(
@@ -14,18 +18,35 @@ export function MarketingRoleGuard({ children }: { children: React.ReactNode }) 
     [profile?.role, permissionMap]
   );
 
+  const canAccessMarketingRoute = useMemo(() => {
+    if (!profile || !pathname) return false;
+    return isRouteAllowed(pathname, permCtx);
+  }, [profile, pathname, permCtx]);
+
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || permissionsLoading) return;
+
     if (!profile) {
-      router.replace('/login');
+      const redirect = pathname
+        ? `?redirect=${encodeURIComponent(pathname)}`
+        : '';
+      router.replace(`/login${redirect}`);
       return;
     }
-    if (!canAccessModule(permCtx, MODULE_SLUGS.marketing)) {
+
+    if (!canAccessMarketingRoute) {
       router.replace('/home');
     }
-  }, [isLoading, profile, permCtx, router]);
+  }, [
+    isLoading,
+    permissionsLoading,
+    profile,
+    canAccessMarketingRoute,
+    pathname,
+    router,
+  ]);
 
-  if (isLoading || !profile) {
+  if ((isLoading || permissionsLoading) && !profile) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500 text-sm">
         Cargando…
@@ -33,7 +54,11 @@ export function MarketingRoleGuard({ children }: { children: React.ReactNode }) 
     );
   }
 
-  if (!canAccessModule(permCtx, MODULE_SLUGS.marketing)) {
+  if (!profile) {
+    return null;
+  }
+
+  if (!permissionsLoading && !canAccessMarketingRoute) {
     return null;
   }
 

@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { addDays, format } from 'date-fns'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
 import { Loader2, ScrollText } from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { GuionesAssignmentsView } from '@/components/marketing/GuionesAssignmentsView'
 import { AUTOMATION_API_PUBLIC_URL } from '@/lib/automation-api'
 import { scriptsService } from '@/services/scripts.service'
@@ -15,11 +16,50 @@ function ymd(d: Date) {
   return format(d, 'yyyy-MM-dd')
 }
 
-export default function MarketingGuionesPage() {
-  const [date, setDate] = useState(() => ymd(addDays(new Date(), 1)))
+function defaultTargetDate() {
+  return ymd(new Date())
+}
+
+function isValidYmd(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T12:00:00`)
+  return !Number.isNaN(parsed.getTime())
+}
+
+function resolveDateFromSearchParams(searchParams: URLSearchParams) {
+  const raw = searchParams.get('fecha')
+  if (raw && isValidYmd(raw)) return raw
+  return defaultTargetDate()
+}
+
+function MarketingGuionesPageInner() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const date = useMemo(() => resolveDateFromSearchParams(searchParams), [searchParams])
+  const fechaParam = searchParams.get('fecha')
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<AssignmentsByDateResponse | null>(null)
+
+  useEffect(() => {
+    if (fechaParam && isValidYmd(fechaParam)) return
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('fecha', defaultTargetDate())
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [fechaParam, pathname, router, searchParams])
+
+  const setDate = useCallback(
+    (nextDate: string) => {
+      if (!isValidYmd(nextDate)) return
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('fecha', nextDate)
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    },
+    [pathname, router, searchParams]
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -27,9 +67,6 @@ export default function MarketingGuionesPage() {
     try {
       const res = await scriptsService.getAssignmentsByDate(date)
       setData(res)
-      if (res.fecha && res.fecha !== date) {
-        setDate(res.fecha)
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar las asignaciones')
       setData(null)
@@ -110,5 +147,20 @@ export default function MarketingGuionesPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function MarketingGuionesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20 text-sm text-gray-500">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+          Cargando guiones…
+        </div>
+      }
+    >
+      <MarketingGuionesPageInner />
+    </Suspense>
   )
 }
