@@ -341,12 +341,6 @@ export function GuionesAssignmentsView({
         map[aid] = sortScriptsForAssignment(map[aid]!, assignment?.guion_tipo)
       }
       setScriptsByAssignment(map)
-      const totalScripts = Object.values(map).reduce((n, arr) => n + arr.length, 0)
-      if (totalScripts === 0) {
-        setScriptsLoadError(
-          'No se encontró el guión en la base de datos. Recarga la página o contacta soporte.'
-        )
-      }
     } catch (e) {
       setScriptsLoadError(
         e instanceof Error ? e.message : 'Error al cargar guiones generados'
@@ -719,19 +713,10 @@ export function GuionesAssignmentsView({
                       />
                     </div>
                   </div>
-                ) : selectedScripts.length > 0 ? null : selectedScriptMissing ||
-                  selected.status === 'guion_generado' ? (
+                ) : selectedScripts.length > 0 ? null : selected.status === 'guion_generado' &&
+                  !selectedScriptMissing ? (
                   <div className="text-sm space-y-3">
-                    {selectedScriptMissing ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-                        <p className="font-bold">Guión no encontrado</p>
-                        <p className="mt-1 text-amber-800">
-                          {canGenerate
-                            ? 'El guión fue eliminado de la base de datos. Puedes generarlo de nuevo.'
-                            : 'El guión fue eliminado. Agrega al menos 4 keywords y vuelve a generar.'}
-                        </p>
-                      </div>
-                    ) : loadingScripts ? (
+                    {loadingScripts ? (
                       <p className="flex items-center gap-2 text-gray-500">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Cargando guión…

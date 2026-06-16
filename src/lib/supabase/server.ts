@@ -29,9 +29,11 @@ export async function createServerSupabaseClient() {
 }
 
 export function createServiceRoleClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false } }
-  )
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!key) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY no configurada')
+  }
+  return createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
 }

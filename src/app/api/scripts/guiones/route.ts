@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { VIDEO_SCRIPT_LIST_SELECT } from '@/lib/marketing/video-script-select'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +19,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ scripts: [] })
   }
 
-  const supabase = await createServerSupabaseClient()
+  // Tras validar sesión + plan-videos, leer como marketing (sin RLS por vendedor).
+  let supabase
+  try {
+    supabase = createServiceRoleClient()
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Error de configuración del servidor'
+    return NextResponse.json({ message }, { status: 500 })
+  }
+
   const { data, error } = await supabase
     .from('video_scripts')
     .select(VIDEO_SCRIPT_LIST_SELECT)
