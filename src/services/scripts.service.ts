@@ -3,6 +3,7 @@ import { SCRIPTS_API_BASE } from '@/lib/automation-api'
 import type {
   AssignmentsByDateResponse,
   GeneratedScriptApi,
+  MonthOverviewResponse,
   ScriptAssignmentRow,
 } from '@/types/script-assignment'
 
@@ -24,6 +25,15 @@ export const scriptsService = {
     const res = await fetch(`${SCRIPTS_API_BASE}/assignments${qs}`, {
       cache: 'no-store',
     })
+    if (!res.ok) throw new Error(await parseError(res))
+    return res.json()
+  },
+
+  async getMonthOverview(mes: string): Promise<MonthOverviewResponse> {
+    const res = await fetch(
+      `${SCRIPTS_API_BASE}/month-overview?mes=${encodeURIComponent(mes)}`,
+      { cache: 'no-store' }
+    )
     if (!res.ok) throw new Error(await parseError(res))
     return res.json()
   },

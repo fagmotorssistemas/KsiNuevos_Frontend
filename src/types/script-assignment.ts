@@ -28,6 +28,19 @@ export type AssignmentsByDateResponse = {
   assignments: ScriptAssignmentRow[]
 }
 
+export type MonthOverviewItem = {
+  fecha: string
+  assignment_id: string
+  vehicle_label: string
+  guion_generado: boolean
+  status: string
+}
+
+export type MonthOverviewResponse = {
+  mes: string
+  items: MonthOverviewItem[]
+}
+
 export type GeneratedScriptApi = {
   id: string
   guion_tipo?: string | null
