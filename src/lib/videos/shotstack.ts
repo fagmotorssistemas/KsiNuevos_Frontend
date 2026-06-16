@@ -10,7 +10,6 @@ import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './creatomate'
 import { getSignedUrlForPath } from './storage'
 import { isDriveBadgeText } from './drive-badge'
-import { cleanVehicleText, splitModelLinesForBrandOverlay } from './vehicle-title-identity'
 
 const RAW_BUCKET = 'raw-videos-v2'
 
@@ -92,6 +91,8 @@ function brandL2FontSize(wordCount: number): number {
   return s720(64)
 }
 
+/** Máx. caracteres en L2 con 2 palabras de modelo; si excede, 2.ª palabra pasa a L3. */
+const BRAND_L2_TWO_WORD_MAX_CHARS = 14
 /** Si L3 es overflow del modelo y el texto supera esto, usar tamaño marca (evita recorte visual). */
 const BRAND_L3_LONG_TEXT_MAX_CHARS = 10
 
@@ -892,6 +893,38 @@ const BRAND_OVERLAY_INTRO_SEC = 3.5
  *                           (>10 letras en L3 → tamaño marca para que no se recorte)
  *   L4 (año,     blanco) — position:'center', zona inferior
  */
+function cleanVehicleText(text: string): string {
+  return text
+    .replace(/\b(AC|TM|TA|MT|AT)\b/gi, '')
+    .replace(/\b(4X4|4X2|2X4|AWD|FWD|RWD)\b/gi, '')
+    .replace(/\b\d+P\b/gi, '')
+    .replace(/\b\d+\.\d+\b/g, '')
+    .replace(/\b(FSI|TSI|TDI|TFSI|C|DSG|CVT|HYBRID|PHEV|EV|TURBO)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/**
+ * L2: solo las 2 primeras palabras del modelo (p. ej. "grand vitara sz …" → "GRAND VITARA").
+ * L3: únicamente si esas 2 palabras no caben en L2 → L2=1.ª, L3=2.ª. Nunca palabra 3+ (SZ, etc.).
+ */
+function splitModelLinesForBrandOverlay(modelRaw: string): { line2: string; line3Model: string } {
+  const cleaned = cleanVehicleText(modelRaw)
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (words.length === 0) return { line2: '', line3Model: '' }
+  if (words.length === 1) return { line2: words[0]!, line3Model: '' }
+
+  const word1 = words[0]!
+  const word2 = words[1]!
+  const twoWordLine = `${word1} ${word2}`
+
+  if (twoWordLine.length <= BRAND_L2_TWO_WORD_MAX_CHARS) {
+    return { line2: twoWordLine, line3Model: '' }
+  }
+
+  return { line2: word1, line3Model: word2 }
+}
+
 function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
   const A = 0.055
   const S = 0.08

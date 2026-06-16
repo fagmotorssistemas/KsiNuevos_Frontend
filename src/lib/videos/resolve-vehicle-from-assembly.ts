@@ -2,16 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { Segment } from './segmenter'
 import { jaccardSimilarity, normalizeForMatch, wordFuzzyMatches } from './subtitle-screen-text'
-import {
-  brandsMentionedInTranscript,
-  inventoryModelTokenMatches,
-  modelSearchTokens,
-  transcriptMatchesVehicleIdentity,
-} from './transcript-vehicle-identity'
 
 const MIN_INVENTORY_MATCH = 0.12
 const MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT = 0.08
 
+/** Artículos/preposiciones: no deben sumar score contra tokens de modelo (la→land). */
 const INVENTORY_STOPWORDS = new Set([
   'a', 'al', 'con', 'de', 'del', 'e', 'el', 'en', 'es', 'la', 'las', 'le', 'les',
   'lo', 'los', 'me', 'mi', 'no', 'o', 'para', 'por', 'que', 'se', 'si', 'su', 'sus',
@@ -50,6 +45,71 @@ function transcriptFromSegments(segments: Segment[]): string {
 
 function isInventoryStopword(word: string): boolean {
   return INVENTORY_STOPWORDS.has(normalizeForMatch(word))
+}
+
+/**
+ * Fuzzy estricto solo para inventario (no usar en subtítulos).
+ * Evita "la"→"land" y exige coincidencia exacta en tokens numéricos de modelo (2008).
+ */
+function inventoryModelTokenMatches(assemblyWord: string, modelToken: string): boolean {
+  const a = normalizeForMatch(assemblyWord)
+  const k = normalizeForMatch(modelToken)
+  if (!a || !k) return false
+  if (isInventoryStopword(a)) return false
+
+  if (/^\d{3,4}$/.test(k)) return a === k
+
+  if (a === k) return true
+  if (a.length < 3) return false
+  if (a.length < k.length * 0.6 && (a.length < 4 || !k.includes(a))) return false
+
+  return wordFuzzyMatches(a, k)
+}
+
+function brandMentionedInTranscript(brandNorm: string, transcriptWords: string[]): boolean {
+  if (brandNorm.length < 3) return false
+  for (const w of transcriptWords) {
+    if (isInventoryStopword(w)) continue
+    if (wordFuzzyMatches(w, brandNorm)) return true
+  }
+  return false
+}
+
+/** Tokens de modelo: incluye números (2008, 3008) + primeras palabras alfabéticas. */
+function modelSearchTokens(model: string): string[] {
+  const raw = normalizeForMatch(model).split(' ').filter(Boolean)
+  const tokens: string[] = []
+
+  for (const w of raw) {
+    if (/^\d{3,4}$/.test(w)) {
+      tokens.push(w)
+      break
+    }
+  }
+
+  for (const w of raw) {
+    if (w.length >= 3 && !/^\d/.test(w)) tokens.push(w)
+    if (tokens.length >= 3) break
+  }
+
+  return [...new Set(tokens)]
+}
+
+function brandsMentionedInTranscript(
+  transcriptWords: string[],
+  candidates: InventoryCandidate[]
+): Set<string> {
+  const mentioned = new Set<string>()
+  const uniqueBrands = [
+    ...new Set(candidates.map((c) => normalizeForMatch(c.brand)).filter((b) => b.length >= 3)),
+  ]
+
+  for (const brandNorm of uniqueBrands) {
+    if (brandMentionedInTranscript(brandNorm, transcriptWords)) {
+      mentioned.add(brandNorm)
+    }
+  }
+  return mentioned
 }
 
 function transcriptYearTokens(words: string[]): string[] {
@@ -179,46 +239,6 @@ function findBrandMentionTimeSec(
   return undefined
 }
 
-async function loadScriptVehicleIdentity(
-  supabase: SupabaseClient<Database>,
-  scriptId: string
-): Promise<{ brand: string; model: string; year: string | null } | null> {
-  const { data: scriptRow } = await supabase
-    .from('video_scripts')
-    .select('vehicle_id, vehicle_data')
-    .eq('id', scriptId)
-    .maybeSingle()
-
-  if (!scriptRow) return null
-
-  let brand = ''
-  let model = ''
-  let year: string | null = null
-
-  if (scriptRow.vehicle_data && typeof scriptRow.vehicle_data === 'object') {
-    const vd = scriptRow.vehicle_data as Record<string, unknown>
-    brand = String(vd.brand ?? '').trim()
-    model = String(vd.model ?? '').trim()
-    year = vd.year != null ? String(vd.year).trim() : null
-  }
-
-  if ((!brand || !model) && scriptRow.vehicle_id) {
-    const { data: inv } = await supabase
-      .from('inventoryoracle')
-      .select('brand, model, year')
-      .eq('id', scriptRow.vehicle_id)
-      .maybeSingle()
-    if (inv) {
-      brand = brand || String(inv.brand ?? '').trim()
-      model = model || String(inv.model ?? '').trim()
-      year = year ?? (inv.year != null ? String(inv.year).trim() : null)
-    }
-  }
-
-  if (!brand || !model) return null
-  return { brand, model, year }
-}
-
 async function fetchInventoryCandidates(
   supabase: SupabaseClient<Database>,
   vehicleIdHint?: string | null
@@ -249,91 +269,6 @@ async function fetchInventoryCandidates(
 
   if (hinted) return [hinted as InventoryCandidate, ...rows]
   return rows
-}
-
-async function resolveBestInventoryVehicle(
-  supabase: SupabaseClient<Database>,
-  segments: Segment[],
-  vehicleIdHint?: string | null
-): Promise<{ vehicle: InventoryCandidate; score: number } | null> {
-  const transcript = transcriptFromSegments(segments)
-  if (!transcript.trim()) return null
-
-  const candidates = await fetchInventoryCandidates(supabase, vehicleIdHint)
-  if (candidates.length === 0) return null
-
-  const transcriptWords = normalizeForMatch(transcript).split(' ').filter(Boolean)
-  const brandNorms = [
-    ...new Set(candidates.map((c) => normalizeForMatch(c.brand)).filter((b) => b.length >= 3)),
-  ]
-  const mentionedBrands = brandsMentionedInTranscript(transcriptWords, brandNorms)
-
-  let best: InventoryCandidate | null = null
-  let bestScore = 0
-
-  for (const candidate of candidates) {
-    const score = scoreVehicleAgainstTranscript(
-      transcript,
-      candidate,
-      mentionedBrands,
-      vehicleIdHint
-    )
-    if (score > bestScore) {
-      bestScore = score
-      best = candidate
-    }
-  }
-
-  const minScore = vehicleIdHint ? MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT : MIN_INVENTORY_MATCH
-  if (!best || bestScore < minScore) return null
-
-  return { vehicle: best, score: bestScore }
-}
-
-async function applyInventoryVehicleToJob(
-  supabase: SupabaseClient<Database>,
-  jobId: string,
-  segments: Segment[],
-  match: { vehicle: InventoryCandidate; score: number }
-): Promise<ResolvedInventoryVehicle | null> {
-  const brand = match.vehicle.brand.trim()
-  const model = match.vehicle.model.trim()
-  const year = match.vehicle.year != null ? String(match.vehicle.year).trim() : ''
-  const brandMentionTimeSec = findBrandMentionTimeSec(segments, brand, model)
-
-  const updatePayload: Record<string, unknown> = {
-    show_brand_overlays: true,
-    vehicle_line_1: brand,
-    vehicle_line_2: model,
-  }
-  if (year) updatePayload.vehicle_line_4 = year
-
-  const { error: updateErr } = await supabase
-    .from('video_jobs_v2')
-    .update(updatePayload)
-    .eq('id', jobId)
-
-  if (updateErr) {
-    console.warn(`[InventoryMatch][${jobId}] No se pudo guardar brand config: ${updateErr.message}`)
-    return null
-  }
-
-  const mentionedList = [...new Set([normalizeForMatch(brand)])].join(', ')
-  console.log(
-    `[InventoryMatch][${jobId}] Vehículo desde Assembly→inventario: ` +
-      `"${brand}" "${model}"${year ? ` (${year})` : ''} score=${match.score.toFixed(3)}` +
-      (brandMentionTimeSec != null ? ` t=${brandMentionTimeSec}s` : '') +
-      ` marcas_en_audio=[${mentionedList}]`
-  )
-
-  return {
-    vehicleId: match.vehicle.id,
-    brand,
-    model,
-    year,
-    score: match.score,
-    brandMentionTimeSec,
-  }
 }
 
 /**
@@ -370,112 +305,81 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
     return null
   }
 
-  const match = await resolveBestInventoryVehicle(supabase, segments, opts?.vehicleIdHint)
-  if (!match) {
-    console.warn(`[InventoryMatch][${jobId}] Sin match confiable en inventario`)
+  const transcript = transcriptFromSegments(segments)
+  if (!transcript.trim()) {
     return null
   }
 
-  return applyInventoryVehicleToJob(supabase, jobId, segments, match)
-}
-
-export type ReconcileVehicleResult = {
-  corrected: boolean
-  guionRevoked: boolean
-  vehicle: ResolvedInventoryVehicle | null
-}
-
-/**
- * Valida que el brand config / guión coincida con lo dicho en el audio.
- * Si no: corrige desde inventario y revoca el guión enlazado.
- */
-export async function reconcileBrandConfigWithAssemblyForJob(
-  supabase: SupabaseClient<Database>,
-  jobId: string,
-  segments: Segment[],
-  opts?: { vehicleIdHint?: string | null }
-): Promise<ReconcileVehicleResult> {
-  const transcript = transcriptFromSegments(segments)
-  if (!transcript.trim()) {
-    return { corrected: false, guionRevoked: false, vehicle: null }
+  const vehicleIdHint = opts?.vehicleIdHint?.trim() || null
+  const candidates = await fetchInventoryCandidates(supabase, vehicleIdHint)
+  if (candidates.length === 0) {
+    console.warn(`[InventoryMatch][${jobId}] Inventario vacío para match`)
+    return null
   }
 
-  const { data: jobRow } = await supabase
-    .from('video_jobs_v2')
-    .select(
-      'video_script_id, show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_4'
+  const transcriptWords = normalizeForMatch(transcript).split(' ').filter(Boolean)
+  const mentionedBrands = brandsMentionedInTranscript(transcriptWords, candidates)
+
+  let best: InventoryCandidate | null = null
+  let bestScore = 0
+
+  for (const candidate of candidates) {
+    const score = scoreVehicleAgainstTranscript(
+      transcript,
+      candidate,
+      mentionedBrands,
+      vehicleIdHint
     )
-    .eq('id', jobId)
-    .single()
-
-  if (!jobRow) {
-    return { corrected: false, guionRevoked: false, vehicle: null }
+    if (score > bestScore) {
+      bestScore = score
+      best = candidate
+    }
   }
 
-  const brand = jobRow.vehicle_line_1?.trim() ?? ''
-  const model = jobRow.vehicle_line_2?.trim() ?? ''
-  const year = jobRow.vehicle_line_4?.trim() || null
-  const hasBrandConfig = Boolean(jobRow.show_brand_overlays && brand && model)
-
-  if (hasBrandConfig) {
-    const check = transcriptMatchesVehicleIdentity(transcript, { brand, model, year })
-    if (check.ok) {
-      return { corrected: false, guionRevoked: false, vehicle: null }
-    }
-
+  const minScore = vehicleIdHint ? MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT : MIN_INVENTORY_MATCH
+  if (!best || bestScore < minScore) {
     console.warn(
-      `[InventoryMatch][${jobId}] Brand/guion no coincide con audio: ${check.reason ?? 'conflicto'} — ` +
-        `config="${brand}" "${model}"${year ? ` ${year}` : ''}`
+      `[InventoryMatch][${jobId}] Sin match confiable (best=${bestScore.toFixed(3)}, min=${minScore})`
     )
-  } else if (jobRow.video_script_id) {
-    const scriptVehicle = await loadScriptVehicleIdentity(supabase, jobRow.video_script_id)
-    if (scriptVehicle) {
-      const check = transcriptMatchesVehicleIdentity(transcript, scriptVehicle)
-      if (check.ok) {
-        return { corrected: false, guionRevoked: false, vehicle: null }
-      }
-      console.warn(
-        `[InventoryMatch][${jobId}] Guión enlazado no coincide con audio: ${check.reason ?? 'conflicto'}`
-      )
-    }
-  } else if (!brand && !model) {
-    const matchOnly = await resolveBestInventoryVehicle(supabase, segments, opts?.vehicleIdHint)
-    if (!matchOnly) {
-      return { corrected: false, guionRevoked: false, vehicle: null }
-    }
-    const vehicle = await applyInventoryVehicleToJob(supabase, jobId, segments, matchOnly)
-    return { corrected: Boolean(vehicle), guionRevoked: false, vehicle }
-  } else {
-    return { corrected: false, guionRevoked: false, vehicle: null }
+    return null
   }
 
-  const match = await resolveBestInventoryVehicle(supabase, segments, opts?.vehicleIdHint)
-  if (!match) {
-    console.warn(`[InventoryMatch][${jobId}] No se pudo corregir vehículo desde audio`)
-    return { corrected: false, guionRevoked: false, vehicle: null }
+  const brand = best.brand.trim()
+  const model = best.model.trim()
+  const year = best.year != null ? String(best.year).trim() : ''
+  const brandMentionTimeSec = findBrandMentionTimeSec(segments, brand, model)
+
+  const updatePayload: Record<string, unknown> = {
+    show_brand_overlays: true,
+    vehicle_line_1: brand,
+    vehicle_line_2: model,
+  }
+  if (year) updatePayload.vehicle_line_4 = year
+
+  const { error: updateErr } = await supabase
+    .from('video_jobs_v2')
+    .update(updatePayload)
+    .eq('id', jobId)
+
+  if (updateErr) {
+    console.warn(`[InventoryMatch][${jobId}] No se pudo guardar brand config: ${updateErr.message}`)
+    return null
   }
 
-  const vehicle = await applyInventoryVehicleToJob(supabase, jobId, segments, match)
-  if (!vehicle) {
-    return { corrected: false, guionRevoked: false, vehicle: null }
+  const mentionedList = [...mentionedBrands].join(', ') || 'ninguna'
+  console.log(
+    `[InventoryMatch][${jobId}] Vehículo desde Assembly→inventario: ` +
+      `"${brand}" "${model}"${year ? ` (${year})` : ''} score=${bestScore.toFixed(3)}` +
+      (brandMentionTimeSec != null ? ` t=${brandMentionTimeSec}s` : '') +
+      ` marcas_en_audio=[${mentionedList}]`
+  )
+
+  return {
+    vehicleId: best.id,
+    brand,
+    model,
+    year,
+    score: bestScore,
+    brandMentionTimeSec,
   }
-
-  let guionRevoked = false
-  if (jobRow.video_script_id) {
-    const { error: revokeErr } = await supabase
-      .from('video_jobs_v2')
-      .update({ video_script_id: null, script_text: null })
-      .eq('id', jobId)
-
-    if (revokeErr) {
-      console.warn(`[InventoryMatch][${jobId}] No se pudo revocar guión: ${revokeErr.message}`)
-    } else {
-      guionRevoked = true
-      console.warn(
-        `[InventoryMatch][${jobId}] Guión revocado: audio no coincide con vehículo del guión enlazado`
-      )
-    }
-  }
-
-  return { corrected: true, guionRevoked, vehicle }
 }

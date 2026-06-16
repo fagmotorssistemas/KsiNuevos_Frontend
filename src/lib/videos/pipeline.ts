@@ -43,8 +43,11 @@ import {
   loadGuionEscenasForJob,
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
-import { reconcileBrandConfigWithAssemblyForJob } from './resolve-vehicle-from-assembly'
-import { suppressIntroClipVehicleSubtitleDuplicates } from './suppress-duplicate-brand-subtitles'
+import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
+import {
+  stripTitleYearFromSubtitleBlocks,
+  suppressDuplicateBrandMentionSubtitles,
+} from './suppress-duplicate-brand-subtitles'
 import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
 import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
@@ -84,6 +87,12 @@ import {
   cleanupMultipleGoogleFiles,
 } from './google-file-api'
 import type { GoogleFileRef } from './google-file-api'
+
+/**
+ * false = pipeline usa solo lo dicho en el audio (Assembly). No enlaza guión de marketing
+ * ni mezcla dialogo/texto_pantalla del guión con la transcripción.
+ */
+const USE_MARKETING_SCRIPT_IN_PIPELINE = false
 
 function getServiceClient() {
   return createClient<Database>(
@@ -151,6 +160,10 @@ async function loadGuionEscenasForPipelineJob(
   jobId: string,
   allSegments: Segment[]
 ): Promise<GuionEscena[]> {
+  if (!USE_MARKETING_SCRIPT_IN_PIPELINE) {
+    return []
+  }
+
   const supabase = getServiceClient()
   const { data: jobRow } = await supabase
     .from('video_jobs_v2')
@@ -245,6 +258,10 @@ async function finalizeSubtitleBlocksForJob(
   allSegments: Segment[],
   sequence?: SequenceItem[]
 ): Promise<SubtitleBlock[]> {
+  if (!USE_MARKETING_SCRIPT_IN_PIPELINE) {
+    return blocks
+  }
+
   const supabase = getServiceClient()
   const { data: jobRow } = await supabase
     .from('video_jobs_v2')
@@ -419,27 +436,25 @@ async function applyShowcaseCaptionHighlights(
   })
 }
 
-/** Clip 0–1: quita subtítulos que repiten marca/modelo/año ya en overlay de título. */
-function applyBrandSubtitleDedup(
+/** Sin guión: quita subtítulo amarillo duplicado de la 1.ª mención oral si ya hay overlay de título. */
+function applyBrandSubtitleDedupWhenNoGuion(
   subtitleBlocks: SubtitleBlock[],
   brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
-  sequence: SequenceItem[],
-  allSegments: Segment[],
-  jobId: string,
-  guionSubtitleTimeline: boolean
+  hasGuionEscenas: boolean,
+  jobId: string
 ): SubtitleBlock[] {
-  if (!brandConfig?.show_brand_overlays) return subtitleBlocks
+  if (hasGuionEscenas || !brandConfig?.show_brand_overlays) return subtitleBlocks
   const brand = brandConfig.vehicle_line_1?.trim()
   const modelLine = brandConfig.vehicle_line_2?.trim()
   if (!brand || !modelLine) return subtitleBlocks
-  return suppressIntroClipVehicleSubtitleDuplicates(subtitleBlocks, {
+  const withoutBrandDup = suppressDuplicateBrandMentionSubtitles(subtitleBlocks, {
     jobId,
     brand,
     modelLine,
+  })
+  return stripTitleYearFromSubtitleBlocks(withoutBrandDup, {
+    jobId,
     yearLine: brandConfig.vehicle_line_4,
-    sequence,
-    allSegments,
-    guionSubtitleTimeline,
   })
 }
 
@@ -634,8 +649,8 @@ async function runSingleVideoPipelineFromStorage(
     await updateJob(jobId, { segment_map: segments })
     console.log(`[VideoV2Pipeline][${jobId}][A2] ${segments.length} segmentos detectados`)
 
-    // Detectar guión ANTES de Gemini para que lo use como guía de orden
-    {
+    // Enlace guión ↔ audio (desactivado: USE_MARKETING_SCRIPT_IN_PIPELINE)
+    if (USE_MARKETING_SCRIPT_IN_PIPELINE) {
       const supabaseScript = getServiceClient()
       const { data: metaRow } = await supabaseScript
         .from('video_jobs_v2')
@@ -643,10 +658,13 @@ async function runSingleVideoPipelineFromStorage(
         .eq('id', jobId)
         .single()
       const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-      // Solo buscamos guión si el usuario no subió un PDF (script_text vacío)
       if (!metaRow?.script_text?.trim()) {
         await resolveAndLinkVideoScriptForJob(supabaseScript, jobId, segments, vId)
       }
+    } else {
+      console.log(
+        `[VideoV2Pipeline][${jobId}] Guión desactivado: montaje y subtítulos solo desde Assembly (audio)`
+      )
     }
 
     if (segments.length === 0) {
@@ -670,8 +688,13 @@ async function runSingleVideoPipelineFromStorage(
     const formattedMap = formatSegmentMapForPrompt(segments)
     const googleRefs = googleFileRef ? [googleFileRef] : []
     const ctx = await fetchJobGeminiContext(jobId)
-    const scriptGuidanceText = ctx.scriptText ?? undefined
-    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
+    const scriptGuidanceText = USE_MARKETING_SCRIPT_IN_PIPELINE
+      ? (ctx.scriptText ?? undefined)
+      : undefined
+    const scriptDialogues =
+      USE_MARKETING_SCRIPT_IN_PIPELINE && ctx.scriptText
+        ? extractQuotedDialoguesFromScript(ctx.scriptText)
+        : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(segments)
     const geminiOpts: AnalyzeSegmentsOptions = {}
     if (scriptGuidanceText) geminiOpts.scriptGuidanceText = scriptGuidanceText
@@ -743,26 +766,29 @@ async function runSingleVideoPipelineFromStorage(
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
         .from('video_jobs_v2')
-        .select('selected_clips')
+        .select('selected_clips, video_script_id')
         .eq('id', jobId)
         .single()
-      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-      await reconcileBrandConfigWithAssemblyForJob(supabaseInv, jobId, segments, {
-        vehicleIdHint: vId,
-      })
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          segments,
+          { vehicleIdHint: vId }
+        )
+      }
     }
 
     const brandConfig = await loadBrandConfigForJob(jobId)
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-    subtitleBlocks = applyBrandSubtitleDedup(
+    subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
       subtitleBlocks,
       brandConfig,
-      analysis.sequence,
-      segments,
-      jobId,
-      escenasSingle.length > 0
+      escenasSingle.length > 0,
+      jobId
     )
 
     let comentaMentionTimeSecA: number | undefined
@@ -1148,8 +1174,8 @@ async function runMultipleClipsPipelineFromStorage(
     await updateJob(jobId, { segment_map: allSegments })
     console.log(`[VideoV2Pipeline][${jobId}][B2] ${allSegments.length} segmentos totales de ${files.length} clips`)
 
-    // Detectar guión ANTES de Gemini para que lo use como guía de orden
-    {
+    // Enlace guión ↔ audio (desactivado: USE_MARKETING_SCRIPT_IN_PIPELINE)
+    if (USE_MARKETING_SCRIPT_IN_PIPELINE) {
       const supabaseScript = getServiceClient()
       const { data: metaRow } = await supabaseScript
         .from('video_jobs_v2')
@@ -1157,10 +1183,13 @@ async function runMultipleClipsPipelineFromStorage(
         .eq('id', jobId)
         .single()
       const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-      // Solo buscamos guión si el usuario no subió un PDF (script_text vacío)
       if (!metaRow?.script_text?.trim()) {
         await resolveAndLinkVideoScriptForJob(supabaseScript, jobId, allSegments, vId)
       }
+    } else {
+      console.log(
+        `[VideoV2Pipeline][${jobId}] Guión desactivado: montaje y subtítulos solo desde Assembly (audio)`
+      )
     }
 
     const spokenSegments = allSegments.filter((s) => s.source_kind !== 'visual_only')
@@ -1230,8 +1259,13 @@ async function runMultipleClipsPipelineFromStorage(
     )
     const formattedMap = formatSegmentMapForPrompt(segmentsForGeminiPrompt)
     const ctx = await fetchJobGeminiContext(jobId)
-    const scriptGuidanceText = ctx.scriptText ?? undefined
-    const scriptDialogues = ctx.scriptText ? extractQuotedDialoguesFromScript(ctx.scriptText) : []
+    const scriptGuidanceText = USE_MARKETING_SCRIPT_IN_PIPELINE
+      ? (ctx.scriptText ?? undefined)
+      : undefined
+    const scriptDialogues =
+      USE_MARKETING_SCRIPT_IN_PIPELINE && ctx.scriptText
+        ? extractQuotedDialoguesFromScript(ctx.scriptText)
+        : []
     const assemblyDump = formatAssemblyTranscriptDumpForPrompt(allSegments)
     const normIntro = normalizeManualIntroClipIndices(
       ctx.manualIntroClipIndicesRaw,
@@ -1426,7 +1460,9 @@ async function runMultipleClipsPipelineFromStorage(
       voiceOverMp3DurationSec: voiceOverMp3DurationSecInput,
       clipFilenames,
       signedClipUrls: signedUrls,
-      scriptTextForSubtitles: scriptGuidanceText ?? null,
+      scriptTextForSubtitles: USE_MARKETING_SCRIPT_IN_PIPELINE
+        ? (scriptGuidanceText ?? null)
+        : null,
     })
 
     let geminiAnalysisPatch: typeof analysis | undefined
@@ -1472,25 +1508,20 @@ async function runMultipleClipsPipelineFromStorage(
     let comentaMentionTimeSec: number | undefined
     let comentaOverlayText: string | undefined
 
-    let escenasForSubs = escenasMulti
-    {
+    if (escenasMulti.length === 0) {
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
         .from('video_jobs_v2')
-        .select('selected_clips')
+        .select('selected_clips, video_script_id')
         .eq('id', jobId)
         .single()
-      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-      const reconcile = await reconcileBrandConfigWithAssemblyForJob(
-        supabaseInv,
-        jobId,
-        allSegments,
-        { vehicleIdHint: vId }
-      )
-      if (reconcile.guionRevoked) {
-        escenasForSubs = []
-        console.warn(
-          `[VideoV2Pipeline][${jobId}][B5] Subtítulos sin guión: audio no coincide con vehículo del guión`
+      if (!metaRow?.video_script_id) {
+        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+        await resolveAndApplyVehicleFromAssemblyForJob(
+          supabaseInv,
+          jobId,
+          allSegments,
+          { vehicleIdHint: vId }
         )
       }
     }
@@ -1498,7 +1529,7 @@ async function runMultipleClipsPipelineFromStorage(
     const brandConfig = await loadBrandConfigForJob(jobId)
 
     // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
-    if (escenasForSubs.length > 0) {
+    if (escenasMulti.length > 0) {
       const brandKws = [
         brandConfig?.vehicle_line_1?.trim(),
         brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
@@ -1508,7 +1539,7 @@ async function runMultipleClipsPipelineFromStorage(
         buildCaptionBlocksFromDialogoAssembly(
           analysis.sequence,
           allSegments,
-          escenasForSubs,
+          escenasMulti,
           brandKws,
           jobId,
           {
@@ -1537,16 +1568,14 @@ async function runMultipleClipsPipelineFromStorage(
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-    subtitleBlocks = applyBrandSubtitleDedup(
+    subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
       subtitleBlocks,
       brandConfig,
-      analysis.sequence,
-      allSegments,
-      jobId,
-      escenasForSubs.length > 0
+      escenasMulti.length > 0,
+      jobId
     )
 
-    if (escenasForSubs.length === 0) {
+    if (escenasMulti.length === 0) {
       const comenta = applyComentaWhenNoGuion(
         subtitleBlocks,
         analysis.sequence,
@@ -2483,27 +2512,16 @@ export async function rerunCreatomateRenderForJob(
   })
 
   const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
-
-  {
-    const supabaseRerun = getServiceClient()
-    const vId = vehicleIdFromPipelineMeta(job.selected_clips)
-    await reconcileBrandConfigWithAssemblyForJob(supabaseRerun, jobId, allSegments, {
-      vehicleIdHint: vId,
-    })
-  }
-
-  const brandConfig = (await loadBrandConfigForJob(jobId)) ?? brandConfigFromJobRow(job)
-  let escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
+  const brandConfig = brandConfigFromJobRow(job)
+  const escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
 
   subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
-  subtitleBlocks = applyBrandSubtitleDedup(
+  subtitleBlocks = applyBrandSubtitleDedupWhenNoGuion(
     subtitleBlocks,
     brandConfig,
-    analysis.sequence,
-    allSegments,
-    jobId,
-    escenasRerun.length > 0
+    escenasRerun.length > 0,
+    jobId
   )
 
   let comentaMentionTimeSecRerun: number | undefined

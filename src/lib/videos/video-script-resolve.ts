@@ -3,10 +3,6 @@ import type { Database } from '@/types/supabase'
 import { parseGuionEscenas, type GuionEscena } from '@/types/video-script'
 import { jaccardSimilarity } from './subtitle-screen-text'
 import type { Segment } from './segmenter'
-import {
-  transcriptMatchesVehicleIdentity,
-  type VehicleIdentityInput,
-} from './transcript-vehicle-identity'
 
 const MIN_SCRIPT_MATCH_WITH_VEHICLE = 0.1
 const MIN_SCRIPT_MATCH_GLOBAL = 0.14
@@ -17,8 +13,6 @@ type ScriptCandidate = {
   texto_hablado: string | null
   texto_guion: string
   guion_titulo: string | null
-  vehicle_id: string | null
-  vehicle_data: unknown
 }
 
 function transcriptFromSegments(segments: Segment[]): string {
@@ -53,52 +47,14 @@ function scoreScriptAgainstTranscript(transcript: string, script: ScriptCandidat
   return jaccardSimilarity(transcript, ref)
 }
 
-function vehicleIdentityFromScriptRow(script: ScriptCandidate): VehicleIdentityInput | null {
-  let brand = ''
-  let model = ''
-  let year: string | null = null
-
-  if (script.vehicle_data && typeof script.vehicle_data === 'object') {
-    const vd = script.vehicle_data as Record<string, unknown>
-    brand = String(vd.brand ?? '').trim()
-    model = String(vd.model ?? '').trim()
-    year = vd.year != null ? String(vd.year).trim() : null
-  }
-
-  if (!brand || !model) return null
-  return { brand, model, year }
-}
-
-async function enrichVehicleIdentityFromInventory(
-  supabase: SupabaseClient<Database>,
-  script: ScriptCandidate
-): Promise<VehicleIdentityInput | null> {
-  const fromRow = vehicleIdentityFromScriptRow(script)
-  if (fromRow) return fromRow
-
-  const vehicleId = script.vehicle_id?.trim()
-  if (!vehicleId) return null
-
-  const { data: inv } = await supabase
-    .from('inventoryoracle')
-    .select('brand, model, year')
-    .eq('id', vehicleId)
-    .maybeSingle()
-
-  if (!inv) return null
-  const brand = String(inv.brand ?? '').trim()
-  const model = String(inv.model ?? '').trim()
-  if (!brand || !model) return null
-  const year = inv.year != null ? String(inv.year).trim() : null
-  return { brand, model, year }
-}
-
 export function buildScriptGuidanceFromEscenas(escenas: GuionEscena[]): string {
   const lines = escenas
     .sort((a, b) => a.esc - b.esc)
     .map((e) => {
       const d = e.dialogo?.trim()
       const p = e.texto_pantalla?.trim()
+      // Las comillas permiten que extractQuotedDialoguesFromScript las recoja
+      // como scriptDialogueLines para la lista priorizada de Gemini.
       if (d && p) return `Escena ${e.esc} — Diálogo: "${d}"\nTexto en pantalla: ${p}`
       if (d) return `Escena ${e.esc} — "${d}"`
       if (p) return `Escena ${e.esc} — Pantalla: ${p}`
@@ -114,7 +70,7 @@ async function fetchScriptCandidates(
 ): Promise<ScriptCandidate[]> {
   let q = supabase
     .from('video_scripts')
-    .select('id, guion_escenas, texto_hablado, texto_guion, guion_titulo, vehicle_id, vehicle_data')
+    .select('id, guion_escenas, texto_hablado, texto_guion, guion_titulo')
     .not('guion_escenas', 'is', null)
     .order('created_at', { ascending: false })
     .limit(vehicleId ? 20 : 40)
@@ -140,7 +96,7 @@ export type ResolvedVideoScript = {
 
 /**
  * Identifica el video_scripts más probable comparando la transcripción Assembly
- * con diálogos del guión. Solo enlaza si el audio menciona el mismo vehículo (marca+modelo+año).
+ * con diálogos del guión. Opcionalmente acota por vehicle_id del inventario.
  */
 export async function resolveVideoScriptFromTranscript(
   supabase: SupabaseClient<Database>,
@@ -154,50 +110,25 @@ export async function resolveVideoScriptFromTranscript(
   const candidates = await fetchScriptCandidates(supabase, vehicleId)
   if (candidates.length === 0 && vehicleId) {
     const fallback = await fetchScriptCandidates(supabase, null)
-    return pickBestScript(supabase, transcript, fallback, false, opts?.jobId)
+    return pickBestScript(transcript, fallback, false, opts?.jobId)
   }
-  return pickBestScript(supabase, transcript, candidates, Boolean(vehicleId), opts?.jobId)
+  return pickBestScript(transcript, candidates, Boolean(vehicleId), opts?.jobId)
 }
 
-async function pickBestScript(
-  supabase: SupabaseClient<Database>,
+function pickBestScript(
   transcript: string,
   candidates: ScriptCandidate[],
   scopedToVehicle: boolean,
   jobId?: string
-): Promise<ResolvedVideoScript | null> {
+): ResolvedVideoScript | null {
   const minScore = scopedToVehicle ? MIN_SCRIPT_MATCH_WITH_VEHICLE : MIN_SCRIPT_MATCH_GLOBAL
   let best: ResolvedVideoScript | null = null
 
   for (const c of candidates) {
     const escenas = parseGuionEscenas(c.guion_escenas)
     if (escenas.length === 0) continue
-
     const score = scoreScriptAgainstTranscript(transcript, c)
     if (score < minScore) continue
-
-    const vehicleIdentity = await enrichVehicleIdentityFromInventory(supabase, c)
-    if (!vehicleIdentity) {
-      if (jobId) {
-        console.warn(
-          `[VideoScriptResolve][${jobId}] Guión ${c.id} omitido: sin datos de vehículo para validar audio`
-        )
-      }
-      continue
-    }
-
-    const vehicleCheck = transcriptMatchesVehicleIdentity(transcript, vehicleIdentity)
-    if (!vehicleCheck.ok) {
-      if (jobId) {
-        console.warn(
-          `[VideoScriptResolve][${jobId}] Guión ${c.id} rechazado (score=${score.toFixed(3)}): ` +
-            `${vehicleCheck.reason ?? 'vehículo no coincide con audio'}` +
-            (c.guion_titulo ? ` titulo="${c.guion_titulo}"` : '')
-        )
-      }
-      continue
-    }
-
     if (!best || score > best.score) {
       best = {
         scriptId: c.id,
@@ -212,7 +143,7 @@ async function pickBestScript(
     console.log(
       `[VideoScriptResolve][${jobId}] Guión enlazado id=${best.scriptId} score=${best.score.toFixed(3)}` +
         (best.guionTitulo ? ` titulo="${best.guionTitulo}"` : '') +
-        ` escenas=${best.escenas.length} (vehículo confirmado en audio)`
+        ` escenas=${best.escenas.length}`
     )
   }
 
@@ -245,12 +176,13 @@ export async function resolveAndLinkVideoScriptForJob(
   })
   if (!resolved) {
     console.warn(
-      `[VideoScriptResolve][${jobId}] No se encontró guión compatible con el audio` +
+      `[VideoScriptResolve][${jobId}] No se encontró guión de marketing compatible` +
         (vehicleId ? ` (vehicle_id=${vehicleId})` : '')
     )
     return null
   }
 
+  // Guardamos video_script_id + script_text para guiar a Gemini
   const guidance = buildScriptGuidanceFromEscenas(resolved.escenas)
   const updatePayload: Record<string, unknown> = { video_script_id: resolved.scriptId }
   if (guidance.length > 0) {
@@ -260,6 +192,7 @@ export async function resolveAndLinkVideoScriptForJob(
     )
   }
 
+  // Si el job no tiene brand config, auto-poblar desde el vehículo del guión
   try {
     const { data: jobRow } = await supabase
       .from('video_jobs_v2')
@@ -273,6 +206,7 @@ export async function resolveAndLinkVideoScriptForJob(
       !jobRow?.vehicle_line_2?.trim()
 
     if (needsBrandConfig) {
+      // Obtener vehicle_id del guión enlazado
       const { data: scriptRow } = await supabase
         .from('video_scripts')
         .select('vehicle_id, vehicle_data')
@@ -283,13 +217,15 @@ export async function resolveAndLinkVideoScriptForJob(
       let model = ''
       let year = ''
 
+      // Intentar desde vehicle_data (JSONB en video_scripts)
       if (scriptRow?.vehicle_data && typeof scriptRow.vehicle_data === 'object') {
         const vd = scriptRow.vehicle_data as Record<string, unknown>
         brand = String(vd.brand ?? '').trim()
         model = String(vd.model ?? '').trim()
-        year = vd.year != null ? String(vd.year).trim() : ''
+        year  = vd.year != null ? String(vd.year).trim() : ''
       }
 
+      // Si no hay vehicle_data, consultar inventoryoracle
       if ((!brand || !model) && scriptRow?.vehicle_id) {
         const { data: inv } = await supabase
           .from('inventoryoracle')
@@ -299,7 +235,7 @@ export async function resolveAndLinkVideoScriptForJob(
         if (inv) {
           brand = brand || String(inv.brand ?? '').trim()
           model = model || String(inv.model ?? '').trim()
-          year = year || (inv.year != null ? String(inv.year).trim() : '')
+          year  = year  || (inv.year != null ? String(inv.year).trim() : '')
         }
       }
 
@@ -307,9 +243,9 @@ export async function resolveAndLinkVideoScriptForJob(
         updatePayload.show_brand_overlays = true
         if (brand) updatePayload.vehicle_line_1 = brand
         if (model) updatePayload.vehicle_line_2 = model
-        if (year) updatePayload.vehicle_line_4 = year
+        if (year)  updatePayload.vehicle_line_4 = year
         console.log(
-          `[VideoScriptResolve][${jobId}] Brand config auto-poblado desde guión validado: ` +
+          `[VideoScriptResolve][${jobId}] Brand config auto-poblado desde guión: ` +
             `L1="${brand}" L2="${model}" L4="${year}"`
         )
       }
