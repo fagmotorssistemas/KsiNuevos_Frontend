@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ['@react-pdf/renderer'],
+
   // Aumentar límite de body para uploads de video en API routes y Server Actions
   experimental: {
     serverActions: {

@@ -1,5 +1,6 @@
 'use client'
 
+import { Download } from 'lucide-react'
 import type { GuionEscena } from '@/types/video-script'
 
 type ColKey = keyof GuionEscena
@@ -23,11 +24,32 @@ function cellValue(e: GuionEscena, key: ColKey): string {
   return typeof v === 'string' && v ? v : '—'
 }
 
-export function ScriptGuionEscenasTable({ escenas }: { escenas: GuionEscena[] }) {
+export function ScriptGuionEscenasTable({
+  escenas,
+  onDownload,
+}: {
+  escenas: GuionEscena[]
+  onDownload?: () => void
+}) {
   if (escenas.length === 0) return null
 
   return (
     <div className="rounded-xl border border-emerald-900/20 overflow-hidden shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-emerald-50/80 border-b border-emerald-900/10">
+        <p className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-900">
+          Escenas · diálogo y dirección
+        </p>
+        {onDownload && (
+          <button
+            type="button"
+            onClick={onDownload}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-white text-emerald-900 text-[10px] font-bold hover:bg-emerald-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Descargar
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1280px] border-collapse text-xs leading-snug">
           <thead>

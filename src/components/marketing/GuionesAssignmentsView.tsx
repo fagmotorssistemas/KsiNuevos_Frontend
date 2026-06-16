@@ -27,12 +27,150 @@ import {
 } from '@/types/script-assignment'
 type VehicleImage = { id: string; img_main_url: string | null; color: string | null }
 
-function guionTipoForAssignment(
+const GUION_TIPO_ORDER = ['informativo', 'educativo', 'venta', 'frio', 'comparacion', 'objecion']
+
+function sortScriptsForAssignment(
+  scripts: ScriptRow[],
+  assignmentTipo: string | null | undefined
+): ScriptRow[] {
+  const primary = (assignmentTipo ?? '').trim().toLowerCase()
+  return [...scripts].sort((a, b) => {
+    const ta = (a.guion_tipo ?? '').trim().toLowerCase()
+    const tb = (b.guion_tipo ?? '').trim().toLowerCase()
+    if (primary) {
+      if (ta === primary && tb !== primary) return -1
+      if (tb === primary && ta !== primary) return 1
+    }
+    const ia = GUION_TIPO_ORDER.indexOf(ta)
+    const ib = GUION_TIPO_ORDER.indexOf(tb)
+    const ra = ia === -1 ? 99 : ia
+    const rb = ib === -1 ? 99 : ib
+    if (ra !== rb) return ra - rb
+    return ta.localeCompare(tb)
+  })
+}
+
+function scriptTiposForAssignment(
   assignment: ScriptAssignmentRow,
-  scriptsByAssignment: Record<string, ScriptRow>
-): string {
-  const fromScript = scriptsByAssignment[assignment.assignment_id]?.guion_tipo
-  return (fromScript ?? assignment.guion_tipo ?? '').trim()
+  scripts: ScriptRow[]
+): string[] {
+  const primary = (assignment.guion_tipo ?? '').trim().toLowerCase()
+  const tipos = new Set<string>()
+  if (assignment.guion_tipo?.trim()) tipos.add(assignment.guion_tipo.trim())
+  for (const s of scripts) {
+    const t = (s.guion_tipo ?? '').trim()
+    if (t) tipos.add(t)
+  }
+  return [...tipos].sort((a, b) => {
+    const al = a.toLowerCase()
+    const bl = b.toLowerCase()
+    if (primary) {
+      if (al === primary && bl !== primary) return -1
+      if (bl === primary && al !== primary) return 1
+    }
+    const ia = GUION_TIPO_ORDER.indexOf(al)
+    const ib = GUION_TIPO_ORDER.indexOf(bl)
+    const ra = ia === -1 ? 99 : ia
+    const rb = ib === -1 ? 99 : ib
+    if (ra !== rb) return ra - rb
+    return al.localeCompare(bl)
+  })
+}
+
+function enrichScriptRow(
+  script: ScriptRow & { assignment_id?: string | null },
+  row: ScriptAssignmentRow,
+  vehicleImages: Record<string, VehicleImage>
+): ScriptRow {
+  return {
+    ...script,
+    vendedor_nombre: row.vendedor_nombre,
+    inventoryoracle: script.inventoryoracle ?? {
+      brand: row.vehicle_marca,
+      model: row.vehicle_modelo,
+      year: row.vehicle_año,
+      color: vehicleImages[row.vehicle_id]?.color ?? null,
+      img_main_url: vehicleImages[row.vehicle_id]?.img_main_url ?? null,
+    },
+  }
+}
+
+function mergeScriptRows(existing: ScriptRow[], incoming: ScriptRow[]): ScriptRow[] {
+  const byId = new Map<string, ScriptRow>()
+  for (const s of existing) byId.set(s.id, s)
+  for (const s of incoming) byId.set(s.id, s)
+  return [...byId.values()]
+}
+
+/** Asignación marcada generada pero sin filas en video_scripts (guión borrado). */
+function isMissingGeneratedScript(
+  assignment: ScriptAssignmentRow,
+  scripts: ScriptRow[],
+  loadingScripts: boolean
+): boolean {
+  return (
+    assignment.status === 'guion_generado' &&
+    !loadingScripts &&
+    scripts.length === 0
+  )
+}
+
+function effectiveAssignmentStatus(
+  assignment: ScriptAssignmentRow,
+  scripts: ScriptRow[],
+  loadingScripts: boolean
+): ScriptAssignmentRow['status'] {
+  if (!isMissingGeneratedScript(assignment, scripts, loadingScripts)) {
+    return assignment.status
+  }
+  return assignment.palabras_clave.length >= 4 ? 'keywords_recibidos' : 'pendiente_keywords'
+}
+
+function guionTipoTabLabel(tipo: string | null | undefined): string {
+  const t = (tipo ?? 'Guión').trim()
+  if (!t) return 'Guión'
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+function AssignmentScriptsTabs({
+  scripts,
+  activeId,
+  onSelect,
+}: {
+  scripts: ScriptRow[]
+  activeId: string
+  onSelect: (id: string) => void
+}) {
+  if (scripts.length <= 1) return null
+
+  return (
+    <div
+      className="flex flex-wrap gap-1 border-b border-gray-200"
+      role="tablist"
+      aria-label="Guiones de la asignación"
+    >
+      {scripts.map((script) => {
+        const active = script.id === activeId
+        return (
+          <button
+            key={script.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(script.id)}
+            className={[
+              'px-4 py-2.5 text-sm font-bold rounded-t-xl border border-b-0 transition-colors',
+              active
+                ? 'bg-white border-gray-200 text-violet-800 -mb-px relative z-10'
+                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50',
+            ].join(' ')}
+          >
+            {guionTipoTabLabel(script.guion_tipo)}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function mapApiScriptToRow(
@@ -153,11 +291,12 @@ export function GuionesAssignmentsView({
   const [generatingAll, setGeneratingAll] = useState(false)
   const [rows, setRows] = useState(assignments)
   const [scriptsByAssignment, setScriptsByAssignment] = useState<
-    Record<string, ScriptRow>
+    Record<string, ScriptRow[]>
   >({})
   const [scriptsLoadError, setScriptsLoadError] = useState<string | null>(null)
   const [loadingScripts, setLoadingScripts] = useState(false)
   const [vehicleImages, setVehicleImages] = useState<Record<string, VehicleImage>>({})
+  const [activeScriptId, setActiveScriptId] = useState<string | null>(null)
 
   useEffect(() => {
     setRows(assignments)
@@ -185,26 +324,25 @@ export function GuionesAssignmentsView({
     setScriptsLoadError(null)
     try {
       const data = await scriptsService.fetchScriptsByAssignmentIds(ids)
-      const map: Record<string, ScriptRow> = {}
+      const map: Record<string, ScriptRow[]> = {}
       for (const script of data) {
         const aid = script.assignment_id
         if (!aid) continue
         const row = rows.find((r) => r.assignment_id === aid)
         if (!row) continue
-        map[aid] = {
-          ...script,
-          vendedor_nombre: row.vendedor_nombre,
-          inventoryoracle: script.inventoryoracle ?? {
-            brand: row.vehicle_marca,
-            model: row.vehicle_modelo,
-            year: row.vehicle_año,
-            color: vehicleImages[row.vehicle_id]?.color ?? null,
-            img_main_url: vehicleImages[row.vehicle_id]?.img_main_url ?? null,
-          },
+        const enriched = enrichScriptRow(script, row, vehicleImages)
+        if (!map[aid]) map[aid] = []
+        if (!map[aid].some((s) => s.id === enriched.id)) {
+          map[aid].push(enriched)
         }
       }
+      for (const aid of Object.keys(map)) {
+        const assignment = rows.find((r) => r.assignment_id === aid)
+        map[aid] = sortScriptsForAssignment(map[aid]!, assignment?.guion_tipo)
+      }
       setScriptsByAssignment(map)
-      if (Object.keys(map).length === 0) {
+      const totalScripts = Object.values(map).reduce((n, arr) => n + arr.length, 0)
+      if (totalScripts === 0) {
         setScriptsLoadError(
           'No se encontró el guión en la base de datos. Recarga la página o contacta soporte.'
         )
@@ -249,8 +387,32 @@ export function GuionesAssignmentsView({
   }, [rows])
 
   const selected = rows.find((r) => r.assignment_id === selectedId) ?? null
-  const selectedScript = selectedId ? scriptsByAssignment[selectedId] : null
+  const selectedScripts = selectedId ? (scriptsByAssignment[selectedId] ?? []) : []
   const img = selected ? vehicleImages[selected.vehicle_id] : null
+
+  const selectedScriptIdsKey = selectedScripts.map((s) => s.id).join(',')
+
+  useEffect(() => {
+    if (!selectedScriptIdsKey) {
+      setActiveScriptId(null)
+      return
+    }
+    const ids = selectedScriptIdsKey.split(',')
+    setActiveScriptId((prev) => {
+      if (prev && ids.includes(prev)) return prev
+      return ids[0]!
+    })
+  }, [selectedId, selectedScriptIdsKey])
+
+  const activeScript =
+    selectedScripts.find((s) => s.id === activeScriptId) ?? selectedScripts[0] ?? null
+
+  const selectedScriptMissing =
+    selected != null &&
+    isMissingGeneratedScript(selected, selectedScripts, loadingScripts)
+  const selectedEffectiveStatus = selected
+    ? effectiveAssignmentStatus(selected, selectedScripts, loadingScripts)
+    : null
 
   const handleSaveKeywords = async (assignmentId: string, keywords: string[]) => {
     setSavingKeywordsId(assignmentId)
@@ -279,21 +441,25 @@ export function GuionesAssignmentsView({
   const runGenerate = async (assignmentId: string, opts?: { silent?: boolean }) => {
     const res = await scriptsService.generateForAssignment(assignmentId)
     const assignment = rows.find((r) => r.assignment_id === assignmentId)
-    const apiScript = res.scripts[0]
-    if (assignment && apiScript) {
+    if (assignment && res.scripts.length > 0) {
+      const incoming = res.scripts.map((apiScript) =>
+        mapApiScriptToRow(apiScript, assignment, vehicleImages[assignment.vehicle_id])
+      )
       setScriptsByAssignment((prev) => ({
         ...prev,
-        [assignmentId]: mapApiScriptToRow(
-          apiScript,
-          assignment,
-          vehicleImages[assignment.vehicle_id]
+        [assignmentId]: sortScriptsForAssignment(
+          mergeScriptRows(prev[assignmentId] ?? [], incoming),
+          assignment.guion_tipo
         ),
       }))
     }
     setRows((prev) =>
       patchAssignmentRow(prev, assignmentId, { status: 'guion_generado' })
     )
-    if (!opts?.silent) toast.success('Guión generado')
+    const count = res.scripts.length
+    if (!opts?.silent) {
+      toast.success(count > 1 ? `${count} guiones generados` : 'Guión generado')
+    }
   }
 
   const handleGenerate = async (assignmentId: string) => {
@@ -333,9 +499,11 @@ export function GuionesAssignmentsView({
   }
 
   const canGenerate =
-    selected &&
-    selected.status !== 'guion_generado' &&
-    selected.status !== 'descartado'
+    selected != null &&
+    selectedEffectiveStatus !== 'guion_generado' &&
+    selectedEffectiveStatus !== 'descartado' &&
+    (selectedEffectiveStatus !== 'keywords_recibidos' ||
+      selected.palabras_clave.length >= 4)
   const readyCount = rows.filter((r) => r.status === 'keywords_recibidos').length
 
   if (rows.length === 0 && !loading) {
@@ -395,6 +563,9 @@ export function GuionesAssignmentsView({
                   {g.items.map((a) => {
                     const active = a.assignment_id === selectedId
                     const vehicle = getAssignmentVehicleLabel(a)
+                    const scripts = scriptsByAssignment[a.assignment_id] ?? []
+                    const tipos = scriptTiposForAssignment(a, scripts)
+                    const displayStatus = effectiveAssignmentStatus(a, scripts, loadingScripts)
                     return (
                       <li key={a.assignment_id}>
                         <button
@@ -411,13 +582,21 @@ export function GuionesAssignmentsView({
                             {vehicle}
                           </p>
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            <GuionTipoBadge
-                              tipo={guionTipoForAssignment(a, scriptsByAssignment)}
-                              objecionTipo={
-                                scriptsByAssignment[a.assignment_id]?.objecion_tipo
-                              }
-                            />
-                            <AssignmentStatusBadge status={a.status} />
+                            {tipos.map((tipo) => (
+                              <GuionTipoBadge
+                                key={tipo}
+                                tipo={tipo}
+                                objecionTipo={
+                                  scripts.find((s) => s.guion_tipo === tipo)?.objecion_tipo
+                                }
+                              />
+                            ))}
+                            {scripts.length > 1 && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                {scripts.length} guiones
+                              </span>
+                            )}
+                            <AssignmentStatusBadge status={displayStatus} />
                           </div>
                         </button>
                       </li>
@@ -459,17 +638,29 @@ export function GuionesAssignmentsView({
                   </p>
                   <p className="text-sm text-gray-600">{selected.vendedor_nombre}</p>
                   <div className="flex flex-wrap gap-2">
-                    <GuionTipoBadge
-                      tipo={guionTipoForAssignment(selected, scriptsByAssignment)}
-                      objecionTipo={selectedScript?.objecion_tipo}
-                    />
-                    <AssignmentStatusBadge status={selected.status} />
+                    {scriptTiposForAssignment(selected, selectedScripts).map((tipo) => (
+                      <GuionTipoBadge
+                        key={tipo}
+                        tipo={tipo}
+                        objecionTipo={
+                          selectedScripts.find((s) => s.guion_tipo === tipo)?.objecion_tipo
+                        }
+                      />
+                    ))}
+                    {selectedScripts.length > 1 && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {selectedScripts.length} guiones
+                      </span>
+                    )}
+                    <AssignmentStatusBadge status={selectedEffectiveStatus ?? selected.status} />
                   </div>
                 </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                {selected.status !== 'guion_generado' && selected.status !== 'descartado' && (
+                {(selectedEffectiveStatus !== 'guion_generado' &&
+                  selectedEffectiveStatus !== 'descartado') ||
+                selectedScriptMissing ? (
                   <KeywordsEditor
                     assignmentId={selected.assignment_id}
                     initial={selected.palabras_clave}
@@ -477,18 +668,22 @@ export function GuionesAssignmentsView({
                     saving={savingKeywordsId === selected.assignment_id}
                     onSave={handleSaveKeywords}
                   />
-                )}
+                ) : null}
 
-                {selected.palabras_clave.length > 0 && selected.status === 'guion_generado' && (
+                {selected.palabras_clave.length > 0 &&
+                  selectedEffectiveStatus === 'guion_generado' &&
+                  !selectedScriptMissing && (
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>
                       <span className="font-bold">Keywords: </span>
                       {selected.palabras_clave.join(' · ')}
                     </p>
-                    {selectedScript?.palabras_count != null && (
+                    {activeScript?.palabras_count != null && (
                       <p>
-                        <span className="font-bold">Palabras: </span>
-                        {selectedScript.palabras_count}
+                        <span className="font-bold capitalize">
+                          {guionTipoTabLabel(activeScript.guion_tipo)}:{' '}
+                        </span>
+                        {activeScript.palabras_count} palabras
                       </p>
                     )}
                   </div>
@@ -510,21 +705,41 @@ export function GuionesAssignmentsView({
                   </button>
                 )}
 
-                {selectedScript ? (
-                  <div className="border-t border-gray-100 pt-6">
-                    <ScriptGuionDetail script={selectedScript} />
+                {activeScript ? (
+                  <div className="border-t border-gray-100 pt-4 min-w-0 flex flex-col min-h-0">
+                    <AssignmentScriptsTabs
+                      scripts={selectedScripts}
+                      activeId={activeScript.id}
+                      onSelect={setActiveScriptId}
+                    />
+                    <div className="pt-6 min-w-0" role="tabpanel">
+                      <ScriptGuionDetail
+                        script={activeScript}
+                        vehiculoLabel={selected ? getAssignmentVehicleLabel(selected) : undefined}
+                      />
+                    </div>
                   </div>
-                ) : selected.status === 'guion_generado' ? (
-                  <div className="text-sm text-gray-500">
-                    {loadingScripts ? (
-                      <p className="flex items-center gap-2">
+                ) : selectedScripts.length > 0 ? null : selectedScriptMissing ||
+                  selected.status === 'guion_generado' ? (
+                  <div className="text-sm space-y-3">
+                    {selectedScriptMissing ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+                        <p className="font-bold">Guión no encontrado</p>
+                        <p className="mt-1 text-amber-800">
+                          {canGenerate
+                            ? 'El guión fue eliminado de la base de datos. Puedes generarlo de nuevo.'
+                            : 'El guión fue eliminado. Agrega al menos 4 keywords y vuelve a generar.'}
+                        </p>
+                      </div>
+                    ) : loadingScripts ? (
+                      <p className="flex items-center gap-2 text-gray-500">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Cargando guión…
                       </p>
                     ) : scriptsLoadError ? (
                       <p className="text-red-700 font-semibold">{scriptsLoadError}</p>
                     ) : (
-                      <p>No se pudo cargar el detalle del guión.</p>
+                      <p className="text-gray-500">No se pudo cargar el detalle del guión.</p>
                     )}
                   </div>
                 ) : null}
