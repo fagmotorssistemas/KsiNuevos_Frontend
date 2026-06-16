@@ -43,7 +43,7 @@ import {
   loadGuionEscenasForJob,
   resolveAndLinkVideoScriptForJob,
 } from './video-script-resolve'
-import { resolveAndApplyVehicleFromAssemblyForJob } from './resolve-vehicle-from-assembly'
+import { reconcileBrandConfigWithAssemblyForJob } from './resolve-vehicle-from-assembly'
 import { suppressIntroClipVehicleSubtitleDuplicates } from './suppress-duplicate-brand-subtitles'
 import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
@@ -743,18 +743,13 @@ async function runSingleVideoPipelineFromStorage(
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
         .from('video_jobs_v2')
-        .select('selected_clips, video_script_id')
+        .select('selected_clips')
         .eq('id', jobId)
         .single()
-      if (!metaRow?.video_script_id) {
-        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        await resolveAndApplyVehicleFromAssemblyForJob(
-          supabaseInv,
-          jobId,
-          segments,
-          { vehicleIdHint: vId }
-        )
-      }
+      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+      await reconcileBrandConfigWithAssemblyForJob(supabaseInv, jobId, segments, {
+        vehicleIdHint: vId,
+      })
     }
 
     const brandConfig = await loadBrandConfigForJob(jobId)
@@ -1477,20 +1472,25 @@ async function runMultipleClipsPipelineFromStorage(
     let comentaMentionTimeSec: number | undefined
     let comentaOverlayText: string | undefined
 
-    if (escenasMulti.length === 0) {
+    let escenasForSubs = escenasMulti
+    {
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
         .from('video_jobs_v2')
-        .select('selected_clips, video_script_id')
+        .select('selected_clips')
         .eq('id', jobId)
         .single()
-      if (!metaRow?.video_script_id) {
-        const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
-        await resolveAndApplyVehicleFromAssemblyForJob(
-          supabaseInv,
-          jobId,
-          allSegments,
-          { vehicleIdHint: vId }
+      const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
+      const reconcile = await reconcileBrandConfigWithAssemblyForJob(
+        supabaseInv,
+        jobId,
+        allSegments,
+        { vehicleIdHint: vId }
+      )
+      if (reconcile.guionRevoked) {
+        escenasForSubs = []
+        console.warn(
+          `[VideoV2Pipeline][${jobId}][B5] Subtítulos sin guión: audio no coincide con vehículo del guión`
         )
       }
     }
@@ -1498,7 +1498,7 @@ async function runMultipleClipsPipelineFromStorage(
     const brandConfig = await loadBrandConfigForJob(jobId)
 
     // ── Subtítulos desde dialogo + Assembly (reemplaza texto_pantalla) ─────
-    if (escenasMulti.length > 0) {
+    if (escenasForSubs.length > 0) {
       const brandKws = [
         brandConfig?.vehicle_line_1?.trim(),
         brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
@@ -1508,7 +1508,7 @@ async function runMultipleClipsPipelineFromStorage(
         buildCaptionBlocksFromDialogoAssembly(
           analysis.sequence,
           allSegments,
-          escenasMulti,
+          escenasForSubs,
           brandKws,
           jobId,
           {
@@ -1543,10 +1543,10 @@ async function runMultipleClipsPipelineFromStorage(
       analysis.sequence,
       allSegments,
       jobId,
-      escenasMulti.length > 0
+      escenasForSubs.length > 0
     )
 
-    if (escenasMulti.length === 0) {
+    if (escenasForSubs.length === 0) {
       const comenta = applyComentaWhenNoGuion(
         subtitleBlocks,
         analysis.sequence,
@@ -2483,8 +2483,17 @@ export async function rerunCreatomateRenderForJob(
   })
 
   const voIntroForRender = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
-  const brandConfig = brandConfigFromJobRow(job)
-  const escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
+
+  {
+    const supabaseRerun = getServiceClient()
+    const vId = vehicleIdFromPipelineMeta(job.selected_clips)
+    await reconcileBrandConfigWithAssemblyForJob(supabaseRerun, jobId, allSegments, {
+      vehicleIdHint: vId,
+    })
+  }
+
+  const brandConfig = (await loadBrandConfigForJob(jobId)) ?? brandConfigFromJobRow(job)
+  let escenasRerun = await loadGuionEscenasForPipelineJob(jobId, allSegments)
 
   subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 

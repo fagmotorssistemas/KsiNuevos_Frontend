@@ -8,9 +8,13 @@ import {
   type PermissionContext,
 } from '@/lib/permissions';
 
+/**
+ * Igual que AccountingRoleGuard: no desmonta hijos mientras revalida auth/permisos.
+ * Evita que un F5 en marketing “reinicie” sidebar + página.
+ */
 export function MarketingRoleGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { profile, isLoading, permissionMap, permissionsLoading } = useAuth();
+  const { profile, user, isLoading, permissionMap, permissionsLoading } = useAuth();
   const router = useRouter();
 
   const permCtx: PermissionContext = useMemo(
@@ -26,7 +30,7 @@ export function MarketingRoleGuard({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (isLoading || permissionsLoading) return;
 
-    if (!profile) {
+    if (!user) {
       const redirect = pathname
         ? `?redirect=${encodeURIComponent(pathname)}`
         : '';
@@ -34,33 +38,20 @@ export function MarketingRoleGuard({ children }: { children: React.ReactNode }) 
       return;
     }
 
+    if (!profile) return;
+
     if (!canAccessMarketingRoute) {
       router.replace('/home');
     }
   }, [
     isLoading,
     permissionsLoading,
+    user,
     profile,
     canAccessMarketingRoute,
     pathname,
     router,
   ]);
-
-  if ((isLoading || permissionsLoading) && !profile) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500 text-sm">
-        Cargando…
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return null;
-  }
-
-  if (!permissionsLoading && !canAccessMarketingRoute) {
-    return null;
-  }
 
   return <>{children}</>;
 }

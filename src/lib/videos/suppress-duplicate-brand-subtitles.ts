@@ -4,17 +4,9 @@ import {
   resolveClipIndexForReelTime,
 } from './reel-timeline'
 import { wordFuzzyMatches } from './subtitle-screen-text'
+import { resolveTitleIdentity, type TitleIdentity } from './vehicle-title-identity'
 
 const MAX_INTRO_SOURCE_CLIP_INDEX = 1
-
-function modelFirstToken(modelLine: string): string {
-  return (
-    modelLine
-      .trim()
-      .split(/\s+/)[0]
-      ?.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '') ?? ''
-  )
-}
 
 function wordCore(raw: string): string {
   return raw.replace(/^[.,;:!?¡¿"'()\-]+|[.,;:!?¡¿"'()\-]+$/g, '').trim()
@@ -33,15 +25,23 @@ function tokenMatchesBrand(token: string, brand: string): boolean {
   return wordFuzzyMatches(core, brand)
 }
 
-/** Solo el nombre del modelo (L2 1.ª palabra). Nunca números técnicos (1500, etc.). */
-function tokenMatchesModel(token: string, modelToken: string): boolean {
+function tokenMatchesModelKeyword(token: string, modelKeywords: string[]): boolean {
   const core = wordCore(token)
-  if (modelToken.length < 3 || core.length < 2) return false
-  if (/\d/.test(core)) return false
-  if (wordFuzzyMatches(core, modelToken)) return true
-  const a = core.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const k = modelToken.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  return a.length >= 3 && k.length >= 3 && (k.startsWith(a) || a.startsWith(k))
+  if (core.length < 2 || modelKeywords.length === 0) return false
+
+  for (const kw of modelKeywords) {
+    if (kw.length < 2) continue
+    const kwHasDigits = /\d/.test(kw)
+    if (/\d/.test(core) && !kwHasDigits) continue
+
+    if (wordFuzzyMatches(core, kw)) return true
+
+    const a = core.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const k = kw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    if (a.length >= 2 && k.length >= 2 && (k.startsWith(a) || a.startsWith(k))) return true
+  }
+
+  return false
 }
 
 function tokenMatchesTitleYearWord(token: string, year: string): boolean {
@@ -52,8 +52,8 @@ function blockMentionsBrand(text: string, brand: string): boolean {
   return tokensFromBlockText(text).some((t) => tokenMatchesBrand(t, brand))
 }
 
-function blockMentionsModel(text: string, modelToken: string): boolean {
-  return tokensFromBlockText(text).some((t) => tokenMatchesModel(t, modelToken))
+function blockMentionsModel(text: string, modelKeywords: string[]): boolean {
+  return tokensFromBlockText(text).some((t) => tokenMatchesModelKeyword(t, modelKeywords))
 }
 
 function blockMentionsTitleYear(text: string, year: string): boolean {
@@ -62,35 +62,37 @@ function blockMentionsTitleYear(text: string, year: string): boolean {
   return new RegExp(`\\ba[nñ]o\\s+${year}\\b`, 'i').test(trimmed)
 }
 
-function blockKey(b: SubtitleBlock): string {
-  return `${b.time.toFixed(3)}|${b.text.trim()}`
-}
-
-function parseTitleYear(yearLine?: string | null): string | null {
-  const raw = yearLine?.trim() ?? ''
-  if (!raw) return null
-  const m = raw.match(/\b(19|20)\d{2}\b/)
-  if (m) return m[0]!
-  if (/^\d{4}$/.test(raw)) return raw
-  return null
-}
-
 function hasMeaningfulText(text: string): boolean {
   return text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').length >= 2
 }
 
+function normalizeToken(core: string): string {
+  return core.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+function isLaOrEl(core: string): boolean {
+  const n = normalizeToken(core)
+  return n === 'la' || n === 'el'
+}
+
+function isOnlyLaOrElText(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  if (words.length !== 1) return false
+  return isLaOrEl(wordCore(words[0]!))
+}
+
 /**
- * Quita solo palabras de marca, modelo (L2) y año (L4) del título.
- * Ej: "flamante Toyota Rouge" → "flamante"; "Motor 1500 BBTI" sin cambios.
+ * Quita solo palabras de marca, modelo (keywords del título L2/L3) y año (L4).
  */
-function stripTitleIdentityWordsFromText(
+export function stripTitleIdentityWordsFromText(
   text: string,
-  brand: string,
-  modelToken: string,
-  year: string | null
+  identity: TitleIdentity
 ): string | null {
+  const { brand, modelKeywords, year } = identity
   const words = text.trim().split(/\s+/).filter(Boolean)
   const kept: string[] = []
+  let removedBrandOrModel = false
+  let articleBeforeStrippedBrandOrModel = false
 
   for (let i = 0; i < words.length; i++) {
     const w = words[i]!
@@ -106,22 +108,35 @@ function stripTitleIdentityWordsFromText(
     }
 
     if (year && tokenMatchesTitleYearWord(w, year)) continue
-    if (tokenMatchesBrand(w, brand)) continue
-    if (tokenMatchesModel(w, modelToken)) continue
+
+    if (tokenMatchesBrand(w, brand) || tokenMatchesModelKeyword(w, modelKeywords)) {
+      removedBrandOrModel = true
+      if (i > 0 && isLaOrEl(wordCore(words[i - 1]!))) {
+        articleBeforeStrippedBrandOrModel = true
+      }
+      continue
+    }
 
     kept.push(w)
   }
 
   const joined = kept.join(' ').replace(/\s+([.,!?])/g, '$1').trim()
   if (!joined || !hasMeaningfulText(joined)) return null
+
+  if (
+    removedBrandOrModel &&
+    articleBeforeStrippedBrandOrModel &&
+    isOnlyLaOrElText(joined)
+  ) {
+    return null
+  }
+
   return joined
 }
 
 function introSourceClipsMentionVehicle(
   segments: Segment[],
-  brand: string,
-  modelToken: string,
-  year: string | null
+  identity: TitleIdentity
 ): boolean {
   const introSegs = segments.filter(
     (s) => s.clip_index <= MAX_INTRO_SOURCE_CLIP_INDEX && s.source_kind !== 'visual_only'
@@ -129,10 +144,10 @@ function introSourceClipsMentionVehicle(
   if (introSegs.length === 0) return false
 
   const combined = introSegs.map((s) => s.text).join(' ')
-  if (!blockMentionsBrand(combined, brand)) return false
+  if (!blockMentionsBrand(combined, identity.brand)) return false
 
-  const hasModel = blockMentionsModel(combined, modelToken)
-  const hasYear = year ? blockMentionsTitleYear(combined, year) : false
+  const hasModel = blockMentionsModel(combined, identity.modelKeywords)
+  const hasYear = identity.year ? blockMentionsTitleYear(combined, identity.year) : false
   return hasModel || hasYear
 }
 
@@ -156,20 +171,19 @@ export interface SuppressIntroClipVehicleSubsOpts {
 
 /**
  * Clip 0–1: quita del subtítulo solo las palabras que repiten marca, modelo o año del título.
- * El resto del bloque se mantiene; si queda vacío, se elimina el bloque.
  */
 export function suppressIntroClipVehicleSubtitleDuplicates(
   blocks: SubtitleBlock[],
   opts: SuppressIntroClipVehicleSubsOpts
 ): SubtitleBlock[] {
-  const brand = opts.brand.trim()
-  const modelLine = opts.modelLine.trim()
-  if (!brand || brand.length < 2 || !modelLine || blocks.length === 0) return blocks
+  const identity = resolveTitleIdentity({
+    vehicle_line_1: opts.brand,
+    vehicle_line_2: opts.modelLine,
+    vehicle_line_4: opts.yearLine,
+  })
+  if (!identity || blocks.length === 0) return blocks
 
-  const modelToken = modelFirstToken(modelLine)
-  const year = parseTitleYear(opts.yearLine)
-
-  if (!introSourceClipsMentionVehicle(opts.allSegments, brand, modelToken, year)) {
+  if (!introSourceClipsMentionVehicle(opts.allSegments, identity)) {
     if (opts.jobId) {
       console.log(
         `[BrandSubtitleDedup][${opts.jobId}] Clip 0–1 sin vehículo identificado; dedup omitida`
@@ -192,7 +206,7 @@ export function suppressIntroClipVehicleSubtitleDuplicates(
       continue
     }
 
-    const stripped = stripTitleIdentityWordsFromText(block.text, brand, modelToken, year)
+    const stripped = stripTitleIdentityWordsFromText(block.text, identity)
     if (stripped == null) {
       removed++
       if (opts.jobId) {
@@ -221,7 +235,8 @@ export function suppressIntroClipVehicleSubtitleDuplicates(
     console.log(
       `[BrandSubtitleDedup][${opts.jobId}] Intro clips 0–1: solo marca/modelo/año del título ` +
         `(${blocks.length} → ${out.length} bloques, ${trimmed} recortados, ${removed} eliminados) ` +
-        `marca="${brand}" modelo≈"${modelToken}"${year ? ` año=${year}` : ''}`
+        `marca="${identity.brand}" modelo=[${identity.modelKeywords.join(', ')}]` +
+        (identity.year ? ` año=${identity.year}` : '')
     )
   }
 

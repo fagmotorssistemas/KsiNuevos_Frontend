@@ -39,26 +39,36 @@ function MarketingGuionesPageInner() {
 
   const date = useMemo(() => resolveDateFromSearchParams(searchParams), [searchParams])
   const fechaParam = searchParams.get('fecha')
+  const [draftDate, setDraftDate] = useState(date)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<AssignmentsByDateResponse | null>(null)
 
   useEffect(() => {
+    setDraftDate(date)
+  }, [date])
+
+  useEffect(() => {
     if (fechaParam && isValidYmd(fechaParam)) return
     const params = new URLSearchParams(searchParams.toString())
     params.set('fecha', defaultTargetDate())
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [fechaParam, pathname, router, searchParams])
+    const next = `${pathname}?${params.toString()}`
+    router.replace(next, { scroll: false })
+  }, [fechaParam, pathname, router])
 
-  const setDate = useCallback(
+  const commitDate = useCallback(
     (nextDate: string) => {
-      if (!isValidYmd(nextDate)) return
+      if (!isValidYmd(nextDate)) {
+        setDraftDate(date)
+        return
+      }
+      if (nextDate === date) return
       const params = new URLSearchParams(searchParams.toString())
       params.set('fecha', nextDate)
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     },
-    [pathname, router, searchParams]
+    [date, pathname, router, searchParams]
   )
 
   const load = useCallback(async () => {
@@ -106,8 +116,14 @@ function MarketingGuionesPageInner() {
         <div className="flex items-center gap-3">
           <input
             type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            value={draftDate}
+            onChange={(e) => setDraftDate(e.target.value)}
+            onBlur={() => commitDate(draftDate)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
             className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white"
           />
           {loading && (

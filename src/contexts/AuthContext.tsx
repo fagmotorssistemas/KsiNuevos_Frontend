@@ -71,20 +71,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loadedProfileUserIdRef.current = null
       setProfile(null)
       setPermissionMap({})
-      setIsLoading(false)
+      // No poner isLoading=false aquí: getSession puede no haber terminado aún.
+      // Eso provocaba redirect a /login → login devolvía a marketing → bucle.
       return
     }
 
     const userId = user.id
     let cancelled = false
-    const isNewUser = loadedProfileUserIdRef.current !== userId
+    const isUserSwitch =
+      loadedProfileUserIdRef.current !== null &&
+      loadedProfileUserIdRef.current !== userId
 
-    if (isNewUser) {
+    if (isUserSwitch) {
       setIsLoading(true)
-      if (loadedProfileUserIdRef.current !== null) {
-        setProfile(null)
-        setPermissionMap({})
-      }
+      setProfile(null)
+      setPermissionMap({})
     }
 
     supabase
