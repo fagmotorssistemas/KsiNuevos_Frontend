@@ -5,7 +5,7 @@ import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const fecha = request.nextUrl.searchParams.get('fecha')

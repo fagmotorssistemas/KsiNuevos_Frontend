@@ -10,8 +10,8 @@ import {
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-export async function GET() {
-  const auth = await requireMarketingSession()
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {
@@ -25,7 +25,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {

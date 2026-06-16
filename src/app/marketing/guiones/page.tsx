@@ -138,10 +138,12 @@ function MarketingGuionesPageInner() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
           {error}
-          <p className="mt-2 font-normal text-red-600 text-xs">
-            Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté
-            disponible.
-          </p>
+          {!/permiso|autorizado|403/i.test(error) && (
+            <p className="mt-2 font-normal text-red-600 text-xs">
+              Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté
+              disponible.
+            </p>
+          )}
         </div>
       )}
 

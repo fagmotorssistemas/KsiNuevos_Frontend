@@ -8,7 +8,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const { id } = await params

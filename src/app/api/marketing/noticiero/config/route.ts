@@ -16,8 +16,8 @@ function validatePayload(body: Partial<NoticieroConfigUpdatePayload>): string | 
   return null
 }
 
-export async function GET() {
-  const auth = await requireMarketingSession()
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {
@@ -45,7 +45,7 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {

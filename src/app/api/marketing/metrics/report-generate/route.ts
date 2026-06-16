@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server'
 import { proxyMetricsInternal } from '@/lib/metrics/internal-proxy'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
-export async function POST() {
-  const auth = await requireMarketingSession()
+export async function POST(request: Request) {
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const proxied = await proxyMetricsInternal('/internal/metrics/report/generate', {

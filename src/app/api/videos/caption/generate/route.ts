@@ -5,7 +5,7 @@ import { generateCaption, type VehicleCaptionInput } from '@/lib/videos/caption'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {

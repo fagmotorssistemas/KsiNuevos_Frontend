@@ -10,7 +10,7 @@ function isPlatform(x: string): x is NoticieroPublishingPlatform {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   try {

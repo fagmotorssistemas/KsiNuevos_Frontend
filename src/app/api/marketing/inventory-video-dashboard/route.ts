@@ -73,7 +73,7 @@ function escapeIlike(q: string) {
  * Query: page, pageSize, q (búsqueda), inventoryStatus, coverage (all|with_published|without_published), sort
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const url = new URL(request.url)

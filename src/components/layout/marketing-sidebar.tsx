@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import {
     Menu,
     X,
@@ -17,6 +18,10 @@ import {
     CalendarDays,
     Newspaper,
 } from 'lucide-react';
+import {
+    canSeeMarketingSidebarHref,
+    type PermissionContext,
+} from '@/lib/permissions';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
@@ -33,6 +38,7 @@ const menuItems = [
 ];
 
 export function MarketingSidebar() {
+    const { profile, permissionMap } = useAuth();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
@@ -44,6 +50,15 @@ export function MarketingSidebar() {
     useEffect(() => {
         setSidebarShell('marketing');
     }, []);
+
+    const permCtx: PermissionContext = useMemo(
+        () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
+        [profile?.role, permissionMap]
+    );
+
+    const displayedItems = menuItems.filter((item) =>
+        canSeeMarketingSidebarHref(item.href, permCtx)
+    );
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);
@@ -131,7 +146,7 @@ export function MarketingSidebar() {
                     )}
 
                     {mounted &&
-                        menuItems.map((item) => {
+                        displayedItems.map((item) => {
                             const isActive =
                                 item.href === '/marketing'
                                     ? pathname === '/marketing'

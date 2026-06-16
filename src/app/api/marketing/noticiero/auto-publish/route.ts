@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const isCron = Boolean(cronSecret && authHeader === `Bearer ${cronSecret}`)
 
   if (!isCron) {
-    const auth = await requireMarketingSession()
+    const auth = await requireMarketingSession(request)
     if (!auth.ok) return auth.response
   }
 

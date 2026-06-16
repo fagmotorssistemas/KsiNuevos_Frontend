@@ -1,6 +1,7 @@
 import type { PermissionMap } from './types'
 import {
   ACCOUNTING_PATH_ACCESS,
+  MARKETING_PATH_ACCESS,
   MODULE_SLUGS,
   VENTAS_PATH_ACCESS,
   GLOBAL_STAFF_ROUTE_PREFIXES,
@@ -59,6 +60,41 @@ export function canSeeVentasSidebarHref(href: string, ctx: PermissionContext): b
   return canAccessSubmodule(ctx, rule.submodule)
 }
 
+export function marketingRouteDenied(pathname: string, ctx: PermissionContext): string | null {
+  if (isAppAdminRole(ctx)) return null
+  if (!pathMatchesPrefix(pathname, '/marketing')) return null
+
+  const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
+  if (pathMatchesPrefix(pathname, '/marketing/planificador') && role === 'contable') {
+    return 'planificador'
+  }
+
+  if (pathname === '/marketing') {
+    return canAccessModule(ctx, MODULE_SLUGS.marketing) ? null : MODULE_SLUGS.marketing
+  }
+
+  const rule = firstMatchingPrefix(pathname, MARKETING_PATH_ACCESS)
+  if (!rule) {
+    return canAccessModule(ctx, MODULE_SLUGS.marketing) ? null : MODULE_SLUGS.marketing
+  }
+  if (canAccessSubmodule(ctx, rule.submodule)) return null
+  return rule.submodule
+}
+
+export function canSeeMarketingSidebarHref(href: string, ctx: PermissionContext): boolean {
+  if (isAppAdminRole(ctx)) return true
+  if (href === '/marketing') {
+    return canAccessModule(ctx, MODULE_SLUGS.marketing)
+  }
+  const rule = firstMatchingPrefix(href, MARKETING_PATH_ACCESS)
+  if (!rule) return canAccessModule(ctx, MODULE_SLUGS.marketing)
+  return canAccessSubmodule(ctx, rule.submodule)
+}
+
+export function isMarketingModulePath(pathname: string): boolean {
+  return pathname === '/marketing' || pathname.startsWith('/marketing/')
+}
+
 /** Bloqueo de ruta por módulo del nav (taller, legal, marketing, gps, seguros, admin tools) */
 export function moduleRouteDenied(pathname: string, ctx: PermissionContext): string | null {
   if (isAppAdminRole(ctx)) return null
@@ -68,15 +104,6 @@ export function moduleRouteDenied(pathname: string, ctx: PermissionContext): str
   }
   if (pathname === '/legal' || pathname.startsWith('/legal/')) {
     return canAccessModule(ctx, MODULE_SLUGS.legal) ? null : MODULE_SLUGS.legal
-  }
-  if (pathname === '/marketing/planificador' || pathname.startsWith('/marketing/planificador/')) {
-    if (!canAccessModule(ctx, MODULE_SLUGS.marketing)) return MODULE_SLUGS.marketing
-    const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
-    if (role === 'contable') return 'planificador'
-    return null
-  }
-  if (pathname === '/marketing' || pathname.startsWith('/marketing/')) {
-    return canAccessModule(ctx, MODULE_SLUGS.marketing) ? null : MODULE_SLUGS.marketing
   }
   if (pathname === '/scraper' || pathname.startsWith('/scraper/')) {
     return canAccessSubmodule(ctx, 'scraper-marketing') ? null : 'scraper-marketing'
@@ -174,6 +201,7 @@ export function isRouteAllowed(pathname: string, ctx: PermissionContext): boolea
   const checks = [
     ventasRouteDenied(pathname, ctx),
     accountingRouteDenied(pathname, ctx),
+    marketingRouteDenied(pathname, ctx),
     moduleRouteDenied(pathname, ctx),
   ]
 

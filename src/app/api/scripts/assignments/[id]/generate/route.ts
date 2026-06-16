@@ -5,10 +5,10 @@ import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 export const dynamic = 'force-dynamic'
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const { id } = await params

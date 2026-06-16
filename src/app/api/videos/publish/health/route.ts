@@ -5,8 +5,8 @@ import { isInstagramTokenExpiringSoon } from '@/lib/videos/publish-flow'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const auth = await requireMarketingSession()
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const facebook = await getFacebookPublishDiagnostics().catch((e) => {

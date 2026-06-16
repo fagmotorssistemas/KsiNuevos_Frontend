@@ -110,11 +110,11 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'seguros', slug: 'aseguradoras', name: 'Aseguradoras', sortOrder: 2 },
   { moduleSlug: 'seguros', slug: 'brokers', name: 'Brokers', sortOrder: 3 },
   // Marketing
-  { moduleSlug: 'marketing', slug: 'publicaciones-sociales', name: 'Publicaciones sociales', sortOrder: 1 },
-  { moduleSlug: 'marketing', slug: 'video-automation', name: 'Video automation', sortOrder: 2 },
-  { moduleSlug: 'marketing', slug: 'blog-posts', name: 'Blog posts', sortOrder: 3 },
-  { moduleSlug: 'marketing', slug: 'metricas-campana', name: 'Métricas de campaña', sortOrder: 4 },
-  { moduleSlug: 'marketing', slug: 'plan-videos', name: 'Plan de videos', sortOrder: 5 },
+  { moduleSlug: 'marketing', slug: 'publicaciones-sociales', name: 'Publicaciones sociales', sortOrder: 1, routePrefixes: ['/marketing/publicaciones'] },
+  { moduleSlug: 'marketing', slug: 'video-automation', name: 'Video automation', sortOrder: 2, routePrefixes: ['/marketing/videos'] },
+  { moduleSlug: 'marketing', slug: 'blog-posts', name: 'Blog posts', sortOrder: 3, routePrefixes: ['/marketing/noticiero'] },
+  { moduleSlug: 'marketing', slug: 'metricas-campana', name: 'Métricas de campaña', sortOrder: 4, routePrefixes: ['/marketing/metricas', '/marketing/inventariado-marketing'] },
+  { moduleSlug: 'marketing', slug: 'plan-videos', name: 'Plan de videos', sortOrder: 5, routePrefixes: ['/marketing/guiones', '/marketing/planificador'] },
   { moduleSlug: 'marketing', slug: 'scraper-marketing', name: 'Scraper', sortOrder: 6 },
   // Admin — solo pantallas que existen hoy
   { moduleSlug: 'admin', slug: 'permisos-roles', name: 'Permisos y usuarios', sortOrder: 1, routePrefixes: ['/admin/permisos'] },
@@ -148,6 +148,8 @@ export const MODULE_SUBMODULES = buildModuleSubmodules()
 export const VENTAS_PATH_ACCESS = buildPathAccess('ventas')
 
 export const ACCOUNTING_PATH_ACCESS = buildPathAccess('finanzas')
+
+export const MARKETING_PATH_ACCESS = buildPathAccess('marketing')
 
 /** Prefijos para middleware y documentación */
 export function getProtectedRoutePrefixes(): string[] {

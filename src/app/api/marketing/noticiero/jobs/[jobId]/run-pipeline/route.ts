@@ -7,10 +7,10 @@ import { scheduleNoticieroPipeline } from '@/lib/noticiero/pipeline'
 export const dynamic = 'force-dynamic'
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const auth = await requireMarketingSession()
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
   const { jobId } = await params

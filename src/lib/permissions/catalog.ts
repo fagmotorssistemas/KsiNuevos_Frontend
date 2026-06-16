@@ -8,6 +8,7 @@ export {
   MODULE_SUBMODULES,
   VENTAS_PATH_ACCESS,
   ACCOUNTING_PATH_ACCESS,
+  MARKETING_PATH_ACCESS,
   getProtectedRoutePrefixes,
   GLOBAL_STAFF_ROUTE_PREFIXES,
   findSubmoduleByRoutePrefix,

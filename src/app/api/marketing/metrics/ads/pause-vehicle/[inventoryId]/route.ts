@@ -1,15 +1,16 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 import { proxyMetricsInternal } from '@/lib/metrics/internal-proxy'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
-type RouteContext = { params: Promise<{ inventoryId: string }> }
-
-export async function POST(_request: Request, context: RouteContext) {
-  const auth = await requireMarketingSession()
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ inventoryId: string }> }
+) {
+  const auth = await requireMarketingSession(request)
   if (!auth.ok) return auth.response
 
-  const { inventoryId } = await context.params
+  const { inventoryId } = await params
   if (!inventoryId?.trim()) {
     return NextResponse.json({ ok: false, message: 'inventory_id requerido' }, { status: 400 })
   }
