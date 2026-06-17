@@ -1,0 +1,620 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import {
+  ArrowLeft,
+  ChevronRight,
+  Film,
+  Folder,
+  FolderOpen,
+  HardDrive,
+  Layers,
+  Loader2,
+  Play,
+  Search,
+  SlidersHorizontal,
+  ExternalLink,
+} from 'lucide-react'
+import type {
+  RawClipItem,
+  RawClipsFolderSummary,
+  RawClipsLibraryStats,
+} from '@/lib/videos/raw-clips-types'
+import { formatBytes } from '@/lib/videos/resolve-job-vehicle'
+
+type LibraryResponse = {
+  folders: RawClipsFolderSummary[]
+  stats: RawClipsLibraryStats
+  page: number
+  pageSize: number
+  total: number
+}
+
+type DetailResponse = {
+  folder: RawClipsFolderSummary
+  clips: RawClipItem[]
+}
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'completed', label: 'Completados' },
+  { value: 'failed', label: 'Errores' },
+  { value: 'rendering', label: 'Renderizando' },
+  { value: 'uploading', label: 'Subiendo' },
+] as const
+
+const STATUS_BADGE: Record<string, { label: string; className: string; dot: string }> = {
+  completed: { label: 'Completado', className: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+  failed: { label: 'Error', className: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+  uploading: { label: 'Subiendo', className: 'bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
+  transcribing: { label: 'Transcribiendo', className: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  analyzing: { label: 'Analizando', className: 'bg-orange-50 text-orange-700', dot: 'bg-orange-500' },
+  rendering: { label: 'Renderizando', className: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
+  pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
+}
+
+function formatDate(iso: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso)
+  )
+}
+
+function statusBadge(status: string) {
+  return STATUS_BADGE[status] ?? {
+    label: status,
+    className: 'bg-gray-100 text-gray-600',
+    dot: 'bg-gray-400',
+  }
+}
+
+function FolderCard({
+  folder,
+  selected,
+  onSelect,
+}: {
+  folder: RawClipsFolderSummary
+  selected: boolean
+  onSelect: () => void
+}) {
+  const badge = statusBadge(folder.status)
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`group text-left rounded-2xl border p-5 transition-all duration-200 ${
+        selected
+          ? 'border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-500/25 scale-[1.01]'
+          : 'border-gray-200 bg-white hover:border-violet-200 hover:shadow-md'
+      }`}
+    >
+      <div
+        className={`mb-4 flex h-24 items-center justify-center rounded-xl ${
+          selected ? 'bg-violet-500/40' : 'bg-slate-50 group-hover:bg-violet-50'
+        }`}
+      >
+        {selected ? (
+          <FolderOpen className="h-14 w-14 text-white/90" strokeWidth={1.25} />
+        ) : (
+          <Folder className="h-14 w-14 text-slate-300 group-hover:text-violet-400" strokeWidth={1.25} />
+        )}
+      </div>
+      <h3
+        className={`line-clamp-2 text-sm font-bold leading-snug ${
+          selected ? 'text-white' : 'text-gray-900'
+        }`}
+      >
+        {folder.title}
+      </h3>
+      {folder.subtitle ? (
+        <p className={`mt-1 text-xs ${selected ? 'text-violet-100' : 'text-gray-500'}`}>
+          {folder.subtitle}
+        </p>
+      ) : null}
+      <div
+        className={`mt-3 flex items-center justify-between text-xs font-medium ${
+          selected ? 'text-violet-100' : 'text-gray-500'
+        }`}
+      >
+        <span>{folder.clipCount} clips</span>
+        <span>{formatBytes(folder.totalBytes)}</span>
+      </div>
+      {!selected && (
+        <span
+          className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
+          {badge.label}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function InfoSidebar({
+  folder,
+  clips,
+  loadingClips,
+}: {
+  folder: RawClipsFolderSummary | null
+  clips: RawClipItem[]
+  loadingClips: boolean
+}) {
+  if (!folder) {
+    return (
+      <aside className="hidden w-80 shrink-0 flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm xl:flex">
+        <h2 className="text-sm font-bold text-gray-900">Info</h2>
+        <p className="mt-4 text-sm text-gray-500">
+          Selecciona una carpeta para ver propiedades, clips en bruto y enlace al reel editado.
+        </p>
+        <div className="mt-8 space-y-4">
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Clips en bruto</p>
+            <p className="mt-1 text-sm text-gray-600">
+              Material fuente subido para la fábrica de Reels, antes de Creatomate.
+            </p>
+          </div>
+        </div>
+      </aside>
+    )
+  }
+
+  const badge = statusBadge(folder.status)
+  const tags: { label: string; color: string }[] = [
+    { label: badge.label, color: 'bg-violet-500' },
+    { label: folder.flowType === 'multiple' ? 'Multi-clip' : 'Single', color: 'bg-sky-500' },
+  ]
+  if (folder.inventory?.status) {
+    tags.push({ label: folder.inventory.status, color: 'bg-emerald-500' })
+  }
+  if (folder.socialPublishStage) {
+    tags.push({ label: folder.socialPublishStage, color: 'bg-amber-500' })
+  }
+
+  return (
+    <aside className="flex w-full shrink-0 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm xl:w-80">
+      <div className="border-b border-gray-100 p-5">
+        <h2 className="text-sm font-bold text-gray-900">Info</h2>
+      </div>
+
+      <div className="flex-1 space-y-6 overflow-y-auto p-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Carpeta</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{folder.title}</p>
+          {folder.subtitle ? (
+            <p className="text-xs text-gray-500">{folder.subtitle}</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Tamaño</span>
+            <span className="font-medium text-gray-900">{formatBytes(folder.totalBytes)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Clips</span>
+            <span className="font-medium text-gray-900">{folder.clipCount}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Creado</span>
+            <span className="text-right font-medium text-gray-900">{formatDate(folder.createdAt)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Última modificación</span>
+            <span className="text-right font-medium text-gray-900">{formatDate(folder.updatedAt)}</span>
+          </div>
+        </div>
+
+        {folder.inventory ? (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Inventario</p>
+            <p className="mt-1 text-sm font-semibold text-gray-900">
+              {folder.inventory.brand} {folder.inventory.model} {folder.inventory.year}
+            </p>
+            {folder.inventory.plate ? (
+              <p className="text-xs text-gray-600">{folder.inventory.plate}</p>
+            ) : null}
+          </div>
+        ) : folder.vehicleLine2 ? (
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Vehículo (texto)</p>
+            <p className="mt-1 text-sm text-gray-800">{folder.vehicleLine2}</p>
+          </div>
+        ) : null}
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Etiquetas</p>
+          <div className="flex flex-wrap gap-2">
+            {tags.map((t) => (
+              <span
+                key={t.label}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${t.color}`} />
+                {t.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Link
+            href={`/marketing/videos/${folder.id}`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <Film className="h-4 w-4" />
+            Ver job / reel
+          </Link>
+          {folder.finalVideoUrl ? (
+            <a
+              href={folder.finalVideoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Reel editado
+            </a>
+          ) : null}
+        </div>
+
+        {loadingClips ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando clips…
+          </div>
+        ) : clips.length > 0 ? (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Archivos ({clips.length})
+            </p>
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-gray-600">
+              {clips.map((c) => (
+                <li key={c.path} className="truncate rounded-lg bg-gray-50 px-2 py-1.5">
+                  {c.clipIndex != null ? `#${c.clipIndex + 1} · ` : ''}
+                  {c.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  )
+}
+
+function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
+  const [playing, setPlaying] = useState(false)
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="relative aspect-[9/16] max-h-[320px] w-full bg-black">
+        <video
+          src={clip.signedUrl}
+          className="h-full w-full object-contain"
+          controls={playing}
+          preload="metadata"
+          playsInline
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+        />
+        {!playing && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+              <Play className="h-5 w-5 text-violet-600" fill="currentColor" />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="space-y-1 p-3">
+        <p className="truncate text-xs font-semibold text-gray-900" title={clip.name}>
+          {clip.clipIndex != null ? `Clip ${clip.clipIndex + 1}` : 'Clip'} · {clip.name}
+        </p>
+        <p className="text-[11px] text-gray-500">{formatBytes(clip.sizeBytes)}</p>
+      </div>
+    </div>
+  )
+}
+
+export function RawClipsLibraryDashboard() {
+  const [folders, setFolders] = useState<RawClipsFolderSummary[]>([])
+  const [stats, setStats] = useState<RawClipsLibraryStats | null>(null)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(24)
+  const [q, setQ] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [status, setStatus] = useState<string>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<RawClipsFolderSummary | null>(null)
+  const [clips, setClips] = useState<RawClipItem[]>([])
+  const [loadingClips, setLoadingClips] = useState(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'folder'>('grid')
+
+  const selectedFromList = useMemo(
+    () => folders.find((f) => f.id === selectedId) ?? null,
+    [folders, selectedId]
+  )
+
+  const loadLibrary = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        status,
+      })
+      if (q.trim()) params.set('q', q.trim())
+
+      const res = await fetch(`/api/videos/raw-clips/library?${params}`)
+      const data = (await res.json()) as LibraryResponse & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Error cargando biblioteca')
+
+      setFolders(data.folders)
+      setStats(data.stats)
+      setTotal(data.total)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
+    }
+  }, [page, pageSize, q, status])
+
+  const loadFolderDetail = useCallback(async (jobId: string) => {
+    setLoadingClips(true)
+    try {
+      const res = await fetch(`/api/videos/raw-clips/library/${jobId}`)
+      const data = (await res.json()) as DetailResponse & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'Error cargando carpeta')
+      setSelectedFolder(data.folder)
+      setClips(data.clips)
+    } catch (err) {
+      console.error(err)
+      setClips([])
+    } finally {
+      setLoadingClips(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadLibrary()
+  }, [loadLibrary])
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedFolder(null)
+      setClips([])
+      return
+    }
+    void loadFolderDetail(selectedId)
+  }, [selectedId, loadFolderDetail])
+
+  function handleSelectFolder(folder: RawClipsFolderSummary) {
+    setSelectedId(folder.id)
+    setSelectedFolder(folder)
+    setViewMode('folder')
+  }
+
+  function handleBackToGrid() {
+    setViewMode('grid')
+    setSelectedId(null)
+    setSelectedFolder(null)
+    setClips([])
+  }
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setPage(1)
+    setQ(searchInput)
+  }
+
+  const activeFolder = selectedFolder ?? selectedFromList
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  return (
+    <div className="-mx-4 flex min-h-[calc(100vh-8rem)] flex-col md:-mx-8">
+      <div className="flex flex-1 flex-col gap-6 px-4 md:px-8 xl:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          {/* Breadcrumbs */}
+          <nav className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+            <Link href="/marketing" className="hover:text-violet-600">
+              Marketing
+            </Link>
+            <ChevronRight className="h-4 w-4 shrink-0" />
+            {viewMode === 'folder' && activeFolder ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBackToGrid}
+                  className="hover:text-violet-600"
+                >
+                  Biblioteca de clips
+                </button>
+                <ChevronRight className="h-4 w-4 shrink-0" />
+                <span className="font-medium text-gray-900 line-clamp-1">{activeFolder.title}</span>
+              </>
+            ) : (
+              <span className="font-medium text-gray-900">Biblioteca de clips</span>
+            )}
+          </nav>
+
+          {/* Header */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">
+                {viewMode === 'folder' && activeFolder ? activeFolder.title : 'Biblioteca de clips'}
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Clips en bruto subidos para la fábrica de Reels. Cada carpeta corresponde a un job de{' '}
+                <Link href="/marketing/videos" className="font-medium text-violet-600 hover:underline">
+                  Videos
+                </Link>
+                .
+              </p>
+            </div>
+
+            {viewMode === 'folder' ? (
+              <button
+                type="button"
+                onClick={handleBackToGrid}
+                className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Todas las carpetas
+              </button>
+            ) : null}
+          </div>
+
+          {/* Stats */}
+          {stats && viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
+                    <Folder className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-extrabold text-gray-900">{stats.totalFolders}</p>
+                    <p className="text-xs text-gray-500">carpetas</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100">
+                    <Layers className="h-5 w-5 text-sky-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-extrabold text-gray-900">{stats.totalClips}</p>
+                    <p className="text-xs text-gray-500">clips en bruto</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+                    <HardDrive className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-extrabold text-gray-900">{formatBytes(stats.totalBytes)}</p>
+                    <p className="text-xs text-gray-500">almacenamiento</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Toolbar */}
+          {viewMode === 'grid' ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <form onSubmit={handleSearchSubmit} className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Buscar por vehículo, placa, nombre o estado…"
+                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                />
+              </form>
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="hidden h-4 w-4 text-gray-400 sm:block" />
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    setStatus(e.target.value)
+                    setPage(1)
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 shadow-sm focus:border-violet-400 focus:outline-none"
+                >
+                  {STATUS_FILTERS.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Content */}
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+              {error}
+            </div>
+          ) : viewMode === 'grid' ? (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                {folders.map((folder) => (
+                  <FolderCard
+                    key={folder.id}
+                    folder={folder}
+                    selected={selectedId === folder.id}
+                    onSelect={() => handleSelectFolder(folder)}
+                  />
+                ))}
+              </div>
+
+              {folders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center text-sm text-gray-500">
+                  No hay carpetas que coincidan con la búsqueda.
+                </div>
+              ) : null}
+
+              {totalPages > 1 ? (
+                <div className="flex items-center justify-center gap-3 pb-8">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    Página {page} de {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="pb-8">
+              {loadingClips ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+                </div>
+              ) : clips.length === 0 ? (
+                <p className="text-sm text-gray-500">No se encontraron clips en esta carpeta.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  {clips.map((clip) => (
+                    <ClipPreviewCard key={clip.path} clip={clip} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <InfoSidebar folder={activeFolder} clips={clips} loadingClips={loadingClips} />
+      </div>
+    </div>
+  )
+}

@@ -17,6 +17,7 @@ import {
     ClipboardList,
     CalendarDays,
     Newspaper,
+    FolderOpen,
 } from 'lucide-react';
 import {
     canSeeMarketingSidebarHref,
@@ -33,6 +34,7 @@ const menuItems = [
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Planificador', href: '/marketing/planificador', icon: CalendarDays },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
+    { name: 'Biblioteca de clips', href: '/marketing/biblioteca-clips', icon: FolderOpen },
     { name: 'Noticiero', href: '/marketing/noticiero', icon: Newspaper },
     { name: 'Inventariado marketing', href: '/marketing/inventariado-marketing', icon: ClipboardList },
 ];
