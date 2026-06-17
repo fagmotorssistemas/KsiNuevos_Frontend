@@ -48,9 +48,11 @@ type Props = {
   onClose: () => void
   onPrecioVenta?: (placa: string, precio: number) => void
   initialTab?: VehicleDetailTab
+  /** Llamado tras cambios en documentos o multas (p. ej. recargar reporte) */
+  onLegalChange?: () => void
 }
 
-export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTab }: Props) {
+export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTab, onLegalChange }: Props) {
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
@@ -65,6 +67,11 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
   const legalTabActive = activeTab !== 'ficha' && activeTab !== 'movimientos'
 
   const authorName = profile?.full_name?.trim() || 'Equipo KSI'
+
+  const handleLegalRefresh = () => {
+    void refresh()
+    onLegalChange?.()
+  }
 
   const handleTabChange = async (tab: VehicleDetailTab) => {
     setActiveTab(tab)
@@ -158,7 +165,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               inventoryoracleId={dossier.inventoryoracleId}
               documents={dossier.documents}
               profileId={profile?.id ?? null}
-              onRefresh={() => void refresh()}
+              onRefresh={handleLegalRefresh}
               loading={loadingLegal}
               disabled={loadingLegal}
             />
@@ -170,7 +177,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               inventoryoracleId={dossier.inventoryoracleId}
               fines={dossier.fines}
               profileId={profile?.id ?? null}
-              onRefresh={() => void refresh()}
+              onRefresh={handleLegalRefresh}
               loading={loadingLegal}
             />
           )}

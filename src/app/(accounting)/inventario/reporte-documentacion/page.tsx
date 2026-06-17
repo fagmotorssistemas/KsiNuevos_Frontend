@@ -30,7 +30,10 @@ export default function ReporteDocumentacionPage() {
                 </div>
                 <button
                     type="button"
-                    onClick={refresh}
+                    onClick={() => {
+                        refresh();
+                        setChecklistReloadKey((k) => k + 1);
+                    }}
                     className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors self-start"
                     title="Actualizar datos"
                 >
@@ -52,6 +55,7 @@ export default function ReporteDocumentacionPage() {
                     key={detailVehicle.placa}
                     vehiculo={detailVehicle}
                     initialTab={detailInitialTab}
+                    onLegalChange={() => setChecklistReloadKey((k) => k + 1)}
                     onClose={() => {
                         setDetailVehicle(null);
                         setChecklistReloadKey((k) => k + 1);

@@ -40,16 +40,23 @@ export type VehicleLegalChecklistBulk = {
 }
 
 const IN_CHUNK = 150
+/** PostgREST devuelve como máximo 1000 filas por request si no se pagina */
+const SUPABASE_PAGE_SIZE = 1000
 
 async function fetchInChunks<T>(
   ids: string[],
-  fetcher: (chunk: string[]) => Promise<T[]>
+  fetchPage: (chunk: string[], from: number, to: number) => Promise<T[]>
 ): Promise<T[]> {
   const out: T[] = []
   for (let i = 0; i < ids.length; i += IN_CHUNK) {
     const chunk = ids.slice(i, i + IN_CHUNK)
-    const rows = await fetcher(chunk)
-    out.push(...rows)
+    let from = 0
+    for (;;) {
+      const rows = await fetchPage(chunk, from, from + SUPABASE_PAGE_SIZE - 1)
+      out.push(...rows)
+      if (rows.length < SUPABASE_PAGE_SIZE) break
+      from += SUPABASE_PAGE_SIZE
+    }
   }
   return out
 }
@@ -62,12 +69,14 @@ async function attachDocumentFiles(
 
   try {
     const docIds = documents.map((d) => d.id)
-    const allFiles = await fetchInChunks(docIds, async (chunk) => {
+    const allFiles = await fetchInChunks(docIds, async (chunk, from, to) => {
       const { data, error } = await supabase
         .from('inventory_vehicle_document_files')
         .select('*')
         .in('document_id', chunk)
         .order('created_at', { ascending: true })
+        .order('id')
+        .range(from, to)
       if (error) throw error
       return (data ?? []) as VehicleDocumentFileRow[]
     })
@@ -232,56 +241,58 @@ export async function loadBulkVehicleLegalChecklist(
   if (oracleIds.length === 0) return { byPlate }
 
   const [allDocs, allDebts, allFines] = await Promise.all([
-    fetchInChunks(oracleIds, async (chunk) => {
+    fetchInChunks(oracleIds, async (chunk, from, to) => {
       const { data, error } = await supabase
         .from('inventory_vehicle_documents')
         .select('*')
         .in('inventoryoracle_id', chunk)
+        .order('id')
+        .range(from, to)
       if (error) throw error
       return (data ?? []) as VehicleDocumentRow[]
     }),
-    fetchInChunks(oracleIds, async (chunk) => {
+    fetchInChunks(oracleIds, async (chunk, from, to) => {
       const { data, error } = await supabase
         .from('inventory_vehicle_debts')
         .select('*')
         .in('inventoryoracle_id', chunk)
+        .order('id')
+        .range(from, to)
       if (error) throw error
       return (data ?? []) as VehicleDebtRow[]
     }),
-    fetchInChunks(oracleIds, async (chunk) => {
+    fetchInChunks(oracleIds, async (chunk, from, to) => {
       const { data, error } = await supabase
         .from('inventory_vehicle_fines')
         .select('inventoryoracle_id, status')
         .in('inventoryoracle_id', chunk)
+        .order('id')
+        .range(from, to)
       if (error) throw error
       return data ?? []
     }),
   ])
 
-  const idToNorm = new Map<string, string>()
-  for (const [norm, id] of oracleByNorm) {
-    if (!idToNorm.has(id)) idToNorm.set(id, norm)
+  const idToEntry = new Map<string, VehicleLegalChecklistEntry>()
+  for (const entry of byPlate.values()) {
+    if (entry.inventoryoracleId) {
+      idToEntry.set(entry.inventoryoracleId, entry)
+    }
   }
 
   const enrichedDocs = await attachDocumentFiles(supabase, allDocs)
   for (const doc of enrichedDocs) {
-    const norm = idToNorm.get(doc.inventoryoracle_id)
-    if (!norm) continue
-    const entry = byPlate.get(norm)
+    const entry = idToEntry.get(doc.inventoryoracle_id)
     if (entry) entry.documents.set(doc.doc_type, doc)
   }
 
   for (const debt of allDebts) {
-    const norm = idToNorm.get(debt.inventoryoracle_id)
-    if (!norm) continue
-    const entry = byPlate.get(norm)
+    const entry = idToEntry.get(debt.inventoryoracle_id)
     if (entry) entry.debts.set(debt.debt_type, debt)
   }
 
   for (const fine of allFines) {
-    const norm = idToNorm.get(fine.inventoryoracle_id)
-    if (!norm) continue
-    const entry = byPlate.get(norm)
+    const entry = idToEntry.get(fine.inventoryoracle_id)
     if (!entry) continue
     entry.totalFinesCount += 1
     if (fine.status === 'pendiente') entry.pendingFinesCount += 1
