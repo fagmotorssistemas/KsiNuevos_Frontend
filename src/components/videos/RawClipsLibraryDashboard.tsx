@@ -15,7 +15,10 @@ import {
   Search,
   SlidersHorizontal,
   ExternalLink,
+  Sparkles,
 } from 'lucide-react'
+import { CreateReelModal } from '@/components/videos/CreateReelModal'
+import type { ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
 import type {
   RawClipItem,
   RawClipsFolderSummary,
@@ -136,10 +139,12 @@ function InfoSidebar({
   folder,
   clips,
   loadingClips,
+  onUseForNewReel,
 }: {
   folder: RawClipsFolderSummary | null
   clips: RawClipItem[]
   loadingClips: boolean
+  onUseForNewReel?: () => void
 }) {
   if (!folder) {
     return (
@@ -239,6 +244,15 @@ function InfoSidebar({
         </div>
 
         <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onUseForNewReel}
+            disabled={loadingClips || clips.length === 0 || !onUseForNewReel}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            Usar clips para nuevo reel
+          </button>
           <Link
             href={`/marketing/videos/${folder.id}`}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -334,6 +348,39 @@ export function RawClipsLibraryDashboard() {
   const [clips, setClips] = useState<RawClipItem[]>([])
   const [loadingClips, setLoadingClips] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'folder'>('grid')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [reelLibraryDraft, setReelLibraryDraft] = useState<ReelLibraryDraft | null>(null)
+
+  function buildReelDraft(folder: RawClipsFolderSummary, clipItems: RawClipItem[]): ReelLibraryDraft {
+    return {
+      sourceJobId: folder.id,
+      folderTitle: folder.title,
+      clips: clipItems.map((c) => ({
+        path: c.path,
+        name: c.name,
+        signedUrl: c.signedUrl,
+        sizeBytes: c.sizeBytes,
+        clipIndex: c.clipIndex,
+      })),
+      vehicleId: folder.vehicleId,
+      vehicleLine2: folder.vehicleLine2 ?? folder.inventory?.model ?? null,
+      jobName: folder.jobName ?? folder.title,
+      ...(folder.inventory
+        ? {
+            vehicleLine1: folder.inventory.brand,
+            vehicleLine2: folder.inventory.model,
+            vehicleLine4: String(folder.inventory.year),
+          }
+        : {}),
+    }
+  }
+
+  function handleUseClipsForNewReel() {
+    const folder = selectedFolder ?? selectedFromList
+    if (!folder || clips.length === 0) return
+    setReelLibraryDraft(buildReelDraft(folder, clips))
+    setIsCreateModalOpen(true)
+  }
 
   const selectedFromList = useMemo(
     () => folders.find((f) => f.id === selectedId) ?? null,
@@ -613,8 +660,26 @@ export function RawClipsLibraryDashboard() {
           )}
         </div>
 
-        <InfoSidebar folder={activeFolder} clips={clips} loadingClips={loadingClips} />
+        <InfoSidebar
+          folder={activeFolder}
+          clips={clips}
+          loadingClips={loadingClips}
+          onUseForNewReel={activeFolder && clips.length > 0 ? handleUseClipsForNewReel : undefined}
+        />
       </div>
+
+      <CreateReelModal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false)
+          setReelLibraryDraft(null)
+        }}
+        onJobCreated={() => {
+          void loadLibrary()
+          if (selectedId) void loadFolderDetail(selectedId)
+        }}
+        initialLibraryDraft={reelLibraryDraft}
+      />
     </div>
   )
 }

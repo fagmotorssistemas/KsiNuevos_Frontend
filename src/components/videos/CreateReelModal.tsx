@@ -32,6 +32,8 @@ import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { buildFilenameClipOrderIndices, sortClipIndicesByFileName } from './sort-video-files-by-name'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
+import { readRemoteVideoDurationSeconds } from './read-remote-video-duration'
+import type { ReelLibraryClipDraft, ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
 
 type VoiceOverUiMode = 'auto' | 'clip' | 'mp3'
@@ -58,6 +60,8 @@ interface CreateReelModalProps {
   isOpen: boolean
   onClose: () => void
   onJobCreated: () => void
+  /** Precarga desde biblioteca de clips: abre en paso 2 con clips listos. */
+  initialLibraryDraft?: ReelLibraryDraft | null
 }
 
 /** Clips típicos de iPhone (IMG_*.MOV) suelen ir en HDR; al recomponer por API el tono puede verse lavado vs. export manual. */
@@ -69,7 +73,12 @@ function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
   })
 }
 
-export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelModalProps) {
+export function CreateReelModal({
+  isOpen,
+  onClose,
+  onJobCreated,
+  initialLibraryDraft = null,
+}: CreateReelModalProps) {
   const [step, setStep] = useState<Step>(1)
   const [jobName, setJobName] = useState('')
   const [flowType, setFlowType] = useState<FlowType>('single')
@@ -124,6 +133,25 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [showWatermark, setShowWatermark] = useState(false)
+  const [libraryClips, setLibraryClips] = useState<ReelLibraryClipDraft[]>([])
+  const [librarySourceJobId, setLibrarySourceJobId] = useState<string | null>(null)
+
+  const activeClipCount = libraryClips.length > 0 ? libraryClips.length : files.length
+  const usingLibraryClips = libraryClips.length > 0
+
+  const clipUiFiles = useMemo(() => {
+    if (usingLibraryClips) {
+      return libraryClips.map(
+        (c) => new File([], c.name, { type: 'video/mp4', lastModified: Date.now() })
+      )
+    }
+    return files
+  }, [usingLibraryClips, libraryClips, files])
+
+  const clipUiPreviewUrls = useMemo(() => {
+    if (usingLibraryClips) return libraryClips.map((c) => c.signedUrl)
+    return clipPreviewUrls
+  }, [usingLibraryClips, libraryClips, clipPreviewUrls])
 
   function brandOverlaysCreatePayload(): Record<string, unknown> {
     const t1 = vehicleLine1.trim()
@@ -188,7 +216,35 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     setWhatsappNumber('')
     setLogoUrl('')
     setShowWatermark(false)
+    setLibraryClips([])
+    setLibrarySourceJobId(null)
   }
+
+  function applyLibraryDraft(draft: ReelLibraryDraft) {
+    setLibrarySourceJobId(draft.sourceJobId)
+    setLibraryClips(draft.clips)
+    setFiles([])
+    setFlowType(draft.clips.length >= 2 ? 'multiple' : 'single')
+    setStep(2)
+    setJobName(draft.jobName?.trim() || draft.folderTitle || '')
+    if (draft.vehicleId) setInventoryPickId(draft.vehicleId)
+    if (draft.vehicleLine1) setVehicleLine1(draft.vehicleLine1)
+    if (draft.vehicleLine2) setVehicleLine2(draft.vehicleLine2)
+    if (draft.vehicleLine3) setVehicleLine3(draft.vehicleLine3)
+    if (draft.vehicleLine4) setVehicleLine4(draft.vehicleLine4)
+    if (draft.vehicleLine1 || draft.vehicleLine2 || draft.vehicleLine3 || draft.vehicleLine4) {
+      setShowBrandOverlays(true)
+    }
+    setManualFullClipOrderEnabled(false)
+    setManualClipOrderIndices([])
+    setManualIntroEnabled(false)
+    setManualIntroSlots([null, null, null])
+  }
+
+  useEffect(() => {
+    if (!isOpen || !initialLibraryDraft) return
+    applyLibraryDraft(initialLibraryDraft)
+  }, [isOpen, initialLibraryDraft])
 
   useEffect(() => {
     if (!isOpen) return
@@ -233,27 +289,28 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
   }, [voiceOverMode, voiceOverClipIndex, voiceOverOverlayClipIndices])
 
   useEffect(() => {
-    if (!manualFullClipOrderEnabled || flowType !== 'multiple' || files.length < 2) return
-    const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+    if (!manualFullClipOrderEnabled || flowType !== 'multiple' || activeClipCount < 2) return
+    const eligible = clipUiFiles.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
     setManualClipOrderIndices((prev) => {
       const kept = prev.filter((i) => eligible.includes(i))
       const missing = eligible.filter((i) => !kept.includes(i))
-      return sortClipIndicesByFileName(files, [...kept, ...missing])
+      return sortClipIndicesByFileName(clipUiFiles, [...kept, ...missing])
     })
   }, [
-    files,
+    clipUiFiles,
+    activeClipCount,
     flowType,
     manualFullClipOrderEnabled,
     clipIndexBlockedForNarrative,
   ])
 
   function manualIntroPayload(): number[] | undefined {
-    if (!manualIntroEnabled || flowType !== 'multiple' || files.length < 2) return undefined
+    if (!manualIntroEnabled || flowType !== 'multiple' || activeClipCount < 2) return undefined
     const out: number[] = []
     const seen = new Set<number>()
     for (const x of manualIntroSlots) {
       if (x == null || !Number.isInteger(x)) continue
-      if (x < 0 || x >= files.length) continue
+      if (x < 0 || x >= activeClipCount) continue
       if (clipIndexBlockedForNarrative(x)) continue
       if (seen.has(x)) continue
       seen.add(x)
@@ -288,14 +345,243 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
     onClose()
   }
 
+  function orderedLibraryClipsForSubmit(): ReelLibraryClipDraft[] {
+    if (!usingLibraryClips) return []
+    if (
+      flowType === 'multiple' &&
+      manualFullClipOrderEnabled &&
+      manualClipOrderIndices.length > 0 &&
+      manualClipOrderIndices.length === libraryClips.length
+    ) {
+      return manualClipOrderIndices.map((i) => libraryClips[i]!).filter(Boolean)
+    }
+    return libraryClips
+  }
+
+  async function handleSubmitFromLibrary() {
+    if (!librarySourceJobId) {
+      throw new Error('Falta el job origen de la biblioteca')
+    }
+
+    const orderedClips = orderedLibraryClipsForSubmit()
+    if (!orderedClips.length) {
+      throw new Error('No hay clips seleccionados de la biblioteca')
+    }
+
+    setUploadProgress('Copiando clips de biblioteca...')
+
+    const createRes = await fetch('/api/videos/jobs/create-from-library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceJobId: librarySourceJobId,
+        sourcePaths: orderedClips.map((c) => c.path),
+        flowType,
+        musicTrackId: selectedMusicId,
+        jobName: jobName.trim(),
+        ...brandOverlaysCreatePayload(),
+      }),
+    })
+
+    const createData = await parseJsonOrThrow<{
+      jobId?: string
+      paths?: string[]
+      scriptUpload?: ScriptUploadInfo
+      error?: string
+    }>(createRes)
+
+    if (!createRes.ok || !createData.jobId || !createData.paths?.length) {
+      throw new Error(createData.error ?? 'Error copiando clips de biblioteca')
+    }
+
+    const { jobId: newJobId, paths: destPaths, scriptUpload } = createData
+
+    let voiceOverStoredPath: string | undefined
+    if (flowType === 'multiple' && voiceOverMode === 'mp3') {
+      if (!voiceOverMp3File) {
+        throw new Error('Selecciona un archivo de audio (MP3) para la voz en off')
+      }
+      if (
+        voiceOverMp3DurationSec == null ||
+        !Number.isFinite(voiceOverMp3DurationSec) ||
+        voiceOverMp3DurationSec <= 0.2
+      ) {
+        throw new Error('No se pudo leer la duración del audio. Prueba con otro MP3.')
+      }
+      setUploadProgress('Subiendo audio de voz en off...')
+      const voFd = new FormData()
+      voFd.append('file', voiceOverMp3File)
+      const voUp = await fetch(`/api/videos/jobs/${newJobId}/voice-over-audio`, {
+        method: 'POST',
+        body: voFd,
+      })
+      const voData = await parseJsonOrThrow<{ path?: string; error?: string }>(voUp)
+      if (!voUp.ok || !voData.path) {
+        throw new Error(voData.error ?? `Error subiendo el audio de voz en off (HTTP ${voUp.status})`)
+      }
+      voiceOverStoredPath = voData.path
+    }
+
+    const COMPRESS_THRESHOLD = 30 * 1024 * 1024
+    const largeClipPaths = destPaths.filter((_, i) => (orderedClips[i]?.sizeBytes ?? 0) > COMPRESS_THRESHOLD)
+
+    if (largeClipPaths.length > 0) {
+      setUploadProgress(
+        `Optimizando ${largeClipPaths.length} clip(s) grande(s) para el renderizador (puede tardar 2-3 min)…`
+      )
+      try {
+        const compressRes = await fetch(`/api/videos/jobs/${newJobId}/compress-clips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths: largeClipPaths }),
+        })
+        if (compressRes.ok) {
+          const data = (await compressRes.json()) as { compressed?: string[]; compressedCount?: number }
+          const count = data.compressed?.length ?? data.compressedCount ?? 0
+          if (count > 0) {
+            setUploadProgress(`${count} clip(s) optimizado(s). Continuando…`)
+          }
+        }
+      } catch {
+        console.warn('[compress-clips] La compresión server-side no estuvo disponible; usando clips originales.')
+      }
+    }
+
+    let clipDurations: (number | null)[] | undefined
+    if (flowType === 'multiple') {
+      setUploadProgress('Leyendo duración de los videos...')
+      const durs = await Promise.all(
+        orderedClips.map((c) => readRemoteVideoDurationSeconds(c.signedUrl))
+      )
+      for (let i = 0; i < orderedClips.length; i++) {
+        const d = durs[i]
+        if (d == null || !Number.isFinite(d) || d <= 0.05) {
+          throw new Error(
+            `No se pudo leer la duración de "${orderedClips[i]!.name}". Prueba exportar de nuevo como MP4 o MOV.`
+          )
+        }
+      }
+      clipDurations = durs.map((d) => Number(d!.toFixed(3)))
+    }
+
+    let scriptPdfPath: string | undefined
+    if (scriptPdfFile) {
+      if (!scriptUpload) {
+        throw new Error('No se pudo preparar la subida del guion. Actualiza la app e inténtalo de nuevo.')
+      }
+      const n = scriptPdfFile.name.trim().toLowerCase()
+      if (!n.endsWith('.pdf') && scriptPdfFile.type !== 'application/pdf') {
+        throw new Error('El guion debe ser un archivo PDF')
+      }
+      setUploadProgress('Subiendo guion (PDF)...')
+      const supabase = createClient()
+      const scriptBody =
+        scriptPdfFile.type === 'application/pdf'
+          ? scriptPdfFile
+          : new File([scriptPdfFile], scriptPdfFile.name, {
+              type: 'application/pdf',
+              lastModified: scriptPdfFile.lastModified,
+            })
+      const { error: scriptUploadError } = await supabase.storage
+        .from(VIDEO_RAW_BUCKET)
+        .uploadToSignedUrl(scriptUpload.path, scriptUpload.token, scriptBody, {
+          cacheControl: '3600',
+        })
+      if (scriptUploadError) {
+        throw new Error(`Error subiendo el guion: ${scriptUploadError.message}`)
+      }
+      scriptPdfPath = scriptUpload.path
+    }
+
+    setUploadProgress('Iniciando pipeline...')
+
+    const voiceOverPayload =
+      flowType === 'multiple' && orderedClips.length >= 2
+        ? voiceOverMode === 'clip'
+          ? {
+              voiceOverBaseClipIndex: voiceOverClipIndex,
+              ...(voiceOverOverlayClipIndices.length > 0
+                ? { voiceOverOverlayClipIndices }
+                : {}),
+            }
+          : voiceOverMode === 'mp3' && voiceOverStoredPath && voiceOverMp3DurationSec != null
+            ? {
+                voiceOverAudioPath: voiceOverStoredPath,
+                voiceOverMp3DurationSec: voiceOverMp3DurationSec,
+                ...(voiceOverOverlayClipIndices.length > 0
+                  ? { voiceOverOverlayClipIndices }
+                  : {}),
+              }
+            : {}
+        : {}
+
+    const introIdx = manualFullClipOrderEnabled ? undefined : manualIntroPayload()
+    const canonV = canonicalVehiclePayload()
+
+    let clipOrderPayload: Record<string, unknown> = {}
+    if (flowType === 'multiple' && orderedClips.length >= 2 && !(introIdx && introIdx.length > 0)) {
+      const eligible = buildFilenameClipOrderIndices(clipUiFiles, clipIndexBlockedForNarrative)
+      const order =
+        manualFullClipOrderEnabled && manualClipOrderIndices.length > 0
+          ? manualClipOrderIndices
+          : eligible
+
+      const ok =
+        eligible.length > 0 &&
+        eligible.length === order.length &&
+        eligible.every((i) => order.includes(i))
+      if (!ok) {
+        throw new Error(
+          'Orden de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
+        )
+      }
+
+      clipOrderPayload = {
+        manualClipOrderIndices: order,
+        ...(manualFullClipOrderEnabled && forceAllManualOrderClips
+          ? { forceAllManualOrderClips: true }
+          : {}),
+      }
+    }
+
+    const startRes = await fetch('/api/videos/jobs/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId: newJobId,
+        paths: destPaths,
+        ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
+        ...voiceOverPayload,
+        ...(scriptPdfPath ? { scriptPdfPath } : {}),
+        ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
+        ...clipOrderPayload,
+        ...(canonV ? { canonicalVehicle: canonV } : {}),
+        ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
+        ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
+      }),
+    })
+
+    const startData = await parseJsonOrThrow<{ jobId?: string; error?: string }>(startRes)
+    if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
+
+    setJobId(newJobId)
+    setStep(5)
+    onJobCreated()
+  }
+
   async function handleSubmit() {
-    if (!files.length || !selectedMusicId) {
+    if (activeClipCount === 0 || !selectedMusicId) {
       toast.error('Selecciona al menos un video y un track de música')
       return
     }
 
     setIsSubmitting(true)
     try {
+      if (usingLibraryClips) {
+        await handleSubmitFromLibrary()
+        return
+      }
+
       for (const file of files) {
         if (!resolveVideoMimeType(file)) {
           throw new Error(
@@ -658,16 +944,65 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {/* PASO 2 — Upload */}
           {step === 2 && (
             <div className="space-y-6">
-              <VideoUploader flowType={flowType} files={files} onFilesChange={setFiles} previewUrls={clipPreviewUrls} />
+              {usingLibraryClips ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                    <p className="font-semibold">Clips desde biblioteca ({libraryClips.length})</p>
+                    <p className="mt-1 text-xs text-sky-800 leading-relaxed">
+                      Material en bruto ya subido. Al generar el reel se copiará a un job nuevo; no necesitas
+                      volver a subirlo.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
+                    {libraryClips.map((clip) => (
+                      <div
+                        key={clip.path}
+                        className="overflow-hidden rounded-xl border border-gray-200 bg-white"
+                      >
+                        <div className="aspect-video bg-black">
+                          <video
+                            src={clip.signedUrl}
+                            className="h-full w-full object-cover"
+                            controls
+                            playsInline
+                            preload="metadata"
+                          />
+                        </div>
+                        <p className="truncate px-2 py-1.5 text-[11px] font-medium text-gray-700">
+                          {clip.clipIndex != null ? `#${clip.clipIndex + 1} · ` : ''}
+                          {clip.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLibraryClips([])
+                      setLibrarySourceJobId(null)
+                    }}
+                    className="text-xs font-semibold text-violet-600 hover:text-violet-800"
+                  >
+                    Subir otros videos en su lugar
+                  </button>
+                </div>
+              ) : (
+                <VideoUploader
+                  flowType={flowType}
+                  files={files}
+                  onFilesChange={setFiles}
+                  previewUrls={clipPreviewUrls}
+                />
+              )}
 
-              {flowType === 'multiple' && files.length >= 2 && (
+              {flowType === 'multiple' && activeClipCount >= 2 && (
                 <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 leading-relaxed">
                   El Reel usará los clips en este orden de secuencia (por nombre de archivo). Ese orden se envía
                   automáticamente al crear el video.
                 </p>
               )}
 
-              {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
+              {activeClipCount > 0 && !usingLibraryClips && filesLookLikeIphoneMovForColorHint(files) && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
                   <p className="font-semibold text-amber-950">Sobre el color del resultado</p>
                   <p className="mt-1">
@@ -679,7 +1014,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                 </div>
               )}
 
-              {flowType === 'multiple' && files.length >= 2 && (
+              {flowType === 'multiple' && activeClipCount >= 2 && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
                   <p className="text-sm font-semibold text-gray-900">Voz en off</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
@@ -746,7 +1081,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                       <p className="text-xs font-medium text-gray-700">
                         ¿Qué clip aporta el audio entero de la VO? Revisa la miniatura para no equivocarte de archivo.
                       </p>
-                      {files.map((f, i) => (
+                      {clipUiFiles.map((f, i) => (
                         <label
                           key={`${f.name}-${i}`}
                           className={`flex gap-3 rounded-xl border p-2.5 cursor-pointer transition-colors ${
@@ -764,9 +1099,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                             }}
                           />
                           <div className="w-28 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
-                            {clipPreviewUrls[i] ? (
+                            {clipUiPreviewUrls[i] ? (
                               <video
-                                src={clipPreviewUrls[i]}
+                                src={clipUiPreviewUrls[i]}
                                 className="h-full w-full object-cover"
                                 controls
                                 playsInline
@@ -826,7 +1161,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                         </p>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {files.map((f, i) => {
+                        {clipUiFiles.map((f, i) => {
                           if (voiceOverMode === 'clip' && i === voiceOverClipIndex) return null
                           const isChecked = voiceOverOverlayClipIndices.includes(i)
                           const orderPos = voiceOverOverlayClipIndices.indexOf(i) + 1
@@ -850,9 +1185,9 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                 }}
                               />
                               <div className="w-24 shrink-0 aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
-                                {clipPreviewUrls[i] ? (
+                                {clipUiPreviewUrls[i] ? (
                                   <video
-                                    src={clipPreviewUrls[i]}
+                                    src={clipUiPreviewUrls[i]}
                                     className="h-full w-full object-cover"
                                     controls
                                     playsInline
@@ -993,10 +1328,10 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                                   </option>
                                 ))}
                             </select>
-                            {manualIntroSlots[slotIdx] != null && clipPreviewUrls[manualIntroSlots[slotIdx]!] ? (
+                            {manualIntroSlots[slotIdx] != null && clipUiPreviewUrls[manualIntroSlots[slotIdx]!] ? (
                               <div className="aspect-video rounded-lg bg-black overflow-hidden border border-gray-200">
                                 <video
-                                  src={clipPreviewUrls[manualIntroSlots[slotIdx]!]!}
+                                  src={clipUiPreviewUrls[manualIntroSlots[slotIdx]!]!}
                                   className="h-full w-full object-cover"
                                   playsInline
                                   controls
@@ -1022,7 +1357,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                           if (on) {
                             setManualIntroEnabled(false)
                             setManualIntroSlots([null, null, null])
-                            const eligible = files.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
+                            const eligible = clipUiFiles.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
                             setManualClipOrderIndices(sortClipIndicesByFileName(files, eligible))
                           } else {
                             setForceAllManualOrderClips(false)
@@ -1059,8 +1394,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
                       <ManualClipOrderSortable
                         order={manualClipOrderIndices}
                         onOrderChange={setManualClipOrderIndices}
-                        files={files}
-                        previewUrls={clipPreviewUrls}
+                        files={clipUiFiles}
+                        previewUrls={clipUiPreviewUrls}
                       />
                     )}
                   </div>
@@ -1117,7 +1452,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
           {/* PASO 4 — Música */}
           {step === 4 && (
             <div className="space-y-4">
-              {files.length > 0 && filesLookLikeIphoneMovForColorHint(files) && (
+              {activeClipCount > 0 && !usingLibraryClips && filesLookLikeIphoneMovForColorHint(files) && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 leading-relaxed">
                   Recuerda: si los colores del Reel salen apagados con clips <code className="bg-amber-100/80 px-1 rounded">IMG_*.MOV</code>, prueba
                   subir el mismo material como <strong>MP4 SDR</strong> y vuelve a generar.
@@ -1324,6 +1659,8 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               <VideoPlayer
                 url={completedJob.final_video_url}
                 duration={completedJob.final_video_duration}
+                jobId={completedJob.id}
+                jobName={completedJob.job_name}
               />
 
               <button
@@ -1354,7 +1691,7 @@ export function CreateReelModal({ isOpen, onClose, onJobCreated }: CreateReelMod
               <button
                 type="button"
                 onClick={() => setStep((s) => (s + 1) as Step)}
-                disabled={step === 2 && files.length === 0}
+                disabled={step === 2 && activeClipCount === 0}
                 className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Siguiente

@@ -283,7 +283,7 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
 ): Promise<ResolvedInventoryVehicle | null> {
   const { data: jobRow, error: jobErr } = await supabase
     .from('video_jobs_v2')
-    .select('video_script_id, show_brand_overlays, vehicle_line_1, vehicle_line_2')
+    .select('video_script_id, show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_4')
     .eq('id', jobId)
     .single()
 
@@ -296,12 +296,14 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
     return null
   }
 
-  const needsBrandConfig =
-    !jobRow.show_brand_overlays &&
-    !jobRow.vehicle_line_1?.trim() &&
-    !jobRow.vehicle_line_2?.trim()
+  const line1 = jobRow.vehicle_line_1?.trim() ?? ''
+  const line2 = jobRow.vehicle_line_2?.trim() ?? ''
+  const line4 = jobRow.vehicle_line_4?.trim() ?? ''
 
-  if (!needsBrandConfig) {
+  // Completar desde audio si falta marca, modelo o año (p. ej. biblioteca heredó solo L2).
+  const shouldMatchFromAssembly = !line1 || !line2 || !line4
+
+  if (!shouldMatchFromAssembly) {
     return null
   }
 

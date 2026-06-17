@@ -1,17 +1,21 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Play, Pause, Download, Copy } from 'lucide-react'
+import { Play, Pause, Download, Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useVideoDownload } from '@/hooks/videos/useVideoDownload'
 
 interface VideoPlayerProps {
   url: string
   duration?: number | null
+  jobId?: string
+  jobName?: string | null
 }
 
-export function VideoPlayer({ url, duration }: VideoPlayerProps) {
+export function VideoPlayer({ url, duration, jobId, jobName }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const { isDownloading, download } = useVideoDownload()
 
   function togglePlay() {
     if (!videoRef.current) return
@@ -23,11 +27,8 @@ export function VideoPlayer({ url, duration }: VideoPlayerProps) {
     setIsPlaying(!isPlaying)
   }
 
-  async function handleDownload() {
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `reel-v2-${Date.now()}.mp4`
-    link.click()
+  function handleDownload() {
+    void download({ url, jobId, filename: jobName })
   }
 
   async function handleCopyUrl() {
@@ -71,10 +72,20 @@ export function VideoPlayer({ url, duration }: VideoPlayerProps) {
         <button
           type="button"
           onClick={handleDownload}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-md"
+          disabled={isDownloading}
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-md disabled:opacity-60 disabled:cursor-not-allowed min-w-[130px] justify-center"
         >
-          <Download className="w-4 h-4" />
-          Descargar
+          {isDownloading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Cargando…
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" />
+              Descargar
+            </>
+          )}
         </button>
         <button
           type="button"

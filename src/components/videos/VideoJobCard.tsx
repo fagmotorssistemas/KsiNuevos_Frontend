@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X } from 'lucide-react'
+import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoJob, VideoJobStatus } from '@/lib/videos/types'
 import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
+import { useVideoDownload } from '@/hooks/videos/useVideoDownload'
 
 const STATUS_CONFIG: Record<VideoJobStatus, { label: string; className: string }> = {
   pending: { label: 'Pendiente', className: 'bg-gray-100 text-gray-600' },
@@ -45,7 +46,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const { isDownloading, download } = useVideoDownload()
 
   async function handleDeleteJob() {
     setIsDeleting(true)
@@ -64,29 +65,13 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
     }
   }
 
-  async function handleDownload() {
+  function handleDownload() {
     if (!job.final_video_url) return
-    setIsDownloading(true)
-    try {
-      const res = await fetch(job.final_video_url)
-      if (!res.ok) throw new Error(`No se pudo descargar (HTTP ${res.status})`)
-      const blob = await res.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const filename = `${job.job_name?.trim() || `video-job-${job.id.slice(0, 8)}`}.mp4`
-      a.href = blobUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(blobUrl)
-    } catch (error) {
-      console.error('[VideoJobCard] download:', error)
-      window.open(job.final_video_url, '_blank', 'noopener,noreferrer')
-      toast.error('No se pudo forzar descarga directa. Se abrió el video en otra pestaña.')
-    } finally {
-      setIsDownloading(false)
-    }
+    void download({
+      url: job.final_video_url,
+      jobId: job.id,
+      filename: job.job_name,
+    })
   }
 
   return (
@@ -188,12 +173,17 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
 
             <button
               type="button"
-              onClick={() => void handleDownload()}
+              onClick={handleDownload}
               disabled={!job.final_video_url || isDownloading}
               className="flex items-center justify-center w-full h-9 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
-              title="Descargar"
+              title={isDownloading ? 'Cargando…' : 'Descargar'}
+              aria-label={isDownloading ? 'Cargando descarga' : 'Descargar'}
             >
-              <Download className="w-4 h-4" />
+              {isDownloading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
             </button>
             <button
               type="button"

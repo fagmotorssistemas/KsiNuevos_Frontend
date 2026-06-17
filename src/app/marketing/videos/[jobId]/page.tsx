@@ -255,7 +255,12 @@ export default function JobDetailPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
               <h2 className="text-base font-bold text-gray-900 mb-4">Video Final</h2>
               <div className="flex justify-center">
-                <VideoPlayer url={job.final_video_url} duration={job.final_video_duration} />
+                <VideoPlayer
+                  url={job.final_video_url}
+                  duration={job.final_video_duration}
+                  jobId={job.id}
+                  jobName={job.job_name}
+                />
               </div>
             </div>
           ) : isProcessing ? (
