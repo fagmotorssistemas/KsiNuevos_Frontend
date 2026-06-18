@@ -12,6 +12,10 @@ import {
   Sparkles,
   Upload,
   FileText,
+  Loader2,
+  Mic2,
+  Brain,
+  Clapperboard,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { VideoUploader } from './VideoUploader'
@@ -142,6 +146,75 @@ async function measureReelAudioPayloadForStart(params: {
     console.warn('[CreateReelModal] Medición de audio falló; usando fallback:', err)
     return fallbackPayload
   }
+}
+
+const PRE_PIPELINE_STEPS = [
+  { key: 'upload', label: 'Subida', icon: Upload },
+  { key: 'transcribing', label: 'Audio + Visual', icon: Mic2 },
+  { key: 'analyzing', label: 'Análisis IA', icon: Brain },
+  { key: 'rendering', label: 'Renderizado', icon: Clapperboard },
+  { key: 'completed', label: 'Listo', icon: CheckCircle2 },
+] as const
+
+/** Paso 5 antes de que exista jobId: subida/medición wasm en el navegador. */
+function ReelPrePipelineProgress({ message }: { message: string | null }) {
+  const statusText = message?.trim() || 'Preparando tu Reel...'
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-medium text-gray-700">{statusText}</span>
+          <span className="text-sm font-bold text-violet-600">—</span>
+        </div>
+        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full w-[12%] bg-gradient-to-r from-violet-500 to-violet-600 rounded-full animate-pulse" />
+        </div>
+        <p className="text-xs text-gray-500">
+          Tiempo estimado restante: <span className="font-medium text-gray-600">8–12 minutos</span>
+        </p>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          La creación del Reel toma su tiempo; el renderizado puede demorar varios minutos aunque la barra
+          avance rápido.{' '}
+          <span className="text-gray-600">
+            Puedes cerrar esta ventana y seguir navegando en la página sin problema: el proceso continúa en
+            el servidor. Revisa el avance en la lista de videos de marketing.
+          </span>
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {PRE_PIPELINE_STEPS.map((step, i) => {
+          const isActive = i === 0
+          const isPending = i > 0
+          return (
+            <div
+              key={step.key}
+              className={`flex items-center gap-4 p-4 rounded-xl transition-all
+                ${isActive ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : ''}
+                ${isPending ? 'bg-gray-50 border border-gray-100' : ''}
+              `}
+            >
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0
+                  ${isActive ? 'bg-white/20' : 'bg-gray-200'}
+                `}
+              >
+                <step.icon className={`w-5 h-5 ${isActive ? 'text-white animate-pulse' : 'text-gray-400'}`} />
+              </div>
+              <div className="min-w-0">
+                <p className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                  {step.label}
+                </p>
+                {isActive && <p className="text-xs text-white/80 mt-0.5">{statusText}</p>}
+              </div>
+              {isActive && <Loader2 className="w-4 h-4 text-white/80 animate-spin ml-auto shrink-0" />}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function CreateReelModal({
@@ -651,8 +724,13 @@ export function CreateReelModal({
     if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
 
     setJobId(newJobId)
-    setStep(5)
     onJobCreated()
+  }
+
+  function beginProcessingStep(message = 'Preparando tu Reel...') {
+    setStep(5)
+    setIsSubmitting(true)
+    setUploadProgress(message)
   }
 
   async function handleSubmit() {
@@ -661,9 +739,9 @@ export function CreateReelModal({
       return
     }
 
-    setIsSubmitting(true)
     try {
       if (usingLibraryClips) {
+        beginProcessingStep('Copiando clips de biblioteca...')
         await handleSubmitFromLibrary()
         return
       }
@@ -682,10 +760,9 @@ export function CreateReelModal({
         }
       }
 
-      const supabase = createClient()
+      beginProcessingStep('Preparando upload...')
 
-      // ── PASO 1: Crear job y obtener URLs firmadas de upload ──────────────
-      setUploadProgress('Preparando upload...')
+      const supabase = createClient()
 
       const createRes = await fetch('/api/videos/jobs/create', {
         method: 'POST',
@@ -906,10 +983,10 @@ export function CreateReelModal({
       if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
 
       setJobId(newJobId)
-      setStep(5)
       onJobCreated()
     } catch (err) {
       console.error('[CreateReelModal] submit failed:', err)
+      setStep(4)
       toast.error(extractErrorMessage(err, 'Error iniciando el proceso'))
     } finally {
       setIsSubmitting(false)
@@ -1740,6 +1817,7 @@ export function CreateReelModal({
           )}
 
           {/* PASO 5 — Procesando */}
+          {step === 5 && !jobId && <ReelPrePipelineProgress message={uploadProgress} />}
           {step === 5 && jobId && (
             <PipelineStatus jobId={jobId} onCompleted={handleCompleted} />
           )}
@@ -1803,20 +1881,10 @@ export function CreateReelModal({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!selectedMusicId || isSubmitting}
-                className="flex flex-col items-center gap-0.5 px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-w-[140px]"
+                className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-w-[140px]"
               >
-                <span className="flex items-center gap-2">
-                  {isSubmitting
-                    ? <Upload className="w-4 h-4 animate-bounce" />
-                    : <Sparkles className="w-4 h-4" />
-                  }
-                  {isSubmitting ? 'Subiendo...' : 'Generar Reel'}
-                </span>
-                {uploadProgress && (
-                  <span className="text-xs text-white/70 font-normal truncate max-w-[160px]">
-                    {uploadProgress}
-                  </span>
-                )}
+                <Sparkles className="w-4 h-4" />
+                Generar Reel
               </button>
             )}
           </div>

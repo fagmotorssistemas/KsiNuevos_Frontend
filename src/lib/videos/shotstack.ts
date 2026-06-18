@@ -916,14 +916,30 @@ function cleanVehicleText(text: string): string {
     .trim()
 }
 
+/** Mitsubishi Montero: L2 solo 1.ª palabra del modelo; sin L3 (p. ej. sin "SPORT"). */
+function isMitsubishiMonteroBrandOverlay(brandLine: string, modelRaw: string): boolean {
+  const brand = cleanVehicleText(brandLine).toLowerCase()
+  if (brand !== 'mitsubishi') return false
+  const firstModelWord = cleanVehicleText(modelRaw).split(/\s+/).filter(Boolean)[0]?.toLowerCase() ?? ''
+  return firstModelWord === 'montero'
+}
+
 /**
  * L2: solo las 2 primeras palabras del modelo (p. ej. "grand vitara sz …" → "GRAND VITARA").
  * L3: únicamente si esas 2 palabras no caben en L2 → L2=1.ª, L3=2.ª. Nunca palabra 3+ (SZ, etc.).
  */
-function splitModelLinesForBrandOverlay(modelRaw: string): { line2: string; line3Model: string } {
+function splitModelLinesForBrandOverlay(
+  modelRaw: string,
+  brandLine = ''
+): { line2: string; line3Model: string } {
   const cleaned = cleanVehicleText(modelRaw)
   const words = cleaned.split(/\s+/).filter(Boolean)
   if (words.length === 0) return { line2: '', line3Model: '' }
+
+  if (isMitsubishiMonteroBrandOverlay(brandLine, modelRaw)) {
+    return { line2: words[0]!, line3Model: '' }
+  }
+
   if (words.length === 1) return { line2: words[0]!, line3Model: '' }
 
   const word1 = words[0]!
@@ -962,12 +978,14 @@ function buildBrandOverlayTracks(
 
   const tracks: ShotstackTrack[] = []
   const line1 = cleanVehicleText(brandConfig.vehicle_line_1?.trim() || '')
-  const { line2, line3Model } = splitModelLinesForBrandOverlay(
-    brandConfig.vehicle_line_2?.trim() || ''
-  )
-  const line3Tagline = cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
-  const line3 = [line3Model, line3Tagline].filter(Boolean).join(' ')
-  const line3IsModelOverflow = !!line3Model
+  const modelRaw = brandConfig.vehicle_line_2?.trim() || ''
+  const mitsubishiMontero = isMitsubishiMonteroBrandOverlay(line1, modelRaw)
+  const { line2, line3Model } = splitModelLinesForBrandOverlay(modelRaw, line1)
+  const line3Tagline = mitsubishiMontero
+    ? ''
+    : cleanVehicleText(brandConfig.vehicle_line_3?.trim() || '')
+  const line3 = mitsubishiMontero ? '' : [line3Model, line3Tagline].filter(Boolean).join(' ')
+  const line3IsModelOverflow = mitsubishiMontero ? false : !!line3Model
   const line4 = cleanVehicleText(brandConfig.vehicle_line_4?.trim() || '')
   const cta   = brandConfig.cta_text?.trim() || ''
   const wa    = brandConfig.whatsapp_number?.trim() || ''
