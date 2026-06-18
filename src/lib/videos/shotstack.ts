@@ -8,6 +8,12 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './creatomate'
+import {
+  clampShotstackAssetVolume,
+  computeReelAudioBalance,
+  FALLBACK_DIALOGUE_VOLUME,
+  FALLBACK_MUSIC_VOLUME,
+} from './audio-balance'
 import { getSignedUrlForPath } from './storage'
 import { isDriveBadgeText } from './drive-badge'
 
@@ -41,7 +47,7 @@ const DEFAULT_MOTOR_MENTION_SFX_URL =
   'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/mixkit-correct-answer-tone-2870.wav'
 const DEFAULT_CLIP_TRANSITION_WHOOSH_URL =
   'https://enfqumrstqefbxtwsslq.supabase.co/storage/v1/object/public/music-tracks-v3/dragon-studio-whoosh-effect-382717.mp3'
-/** Volumen equilibrado vs música (0.17) y diálogo del clip (1.0) */
+/** Volumen equilibrado vs música de fondo y diálogo del clip */
 const MOTOR_MENTION_SFX_VOLUME = 0.4
 const MOTOR_MENTION_SFX_LENGTH_SEC = 0.45
 const MOTOR_MENTION_SFX_MIN_GAP_SEC = 0.25
@@ -223,7 +229,8 @@ function computeLinearStarts(sequence: SequenceItem[]): number[] {
 function buildFirstClipIntroClips(
   item: SequenceItem,
   src: string,
-  withSlideOut: boolean
+  withSlideOut: boolean,
+  dialogueVolume: number
 ): ShotstackClip[] {
   const trimStart = Number(item.trim_start.toFixed(3))
   const totalLen = Number(item.trim_duration.toFixed(3))
@@ -239,7 +246,7 @@ function buildFirstClipIntroClips(
       type: 'video',
       src,
       trim: Number((trimStart + sourceOffset).toFixed(3)),
-      volume: 1,
+      volume: dialogueVolume,
       transcode: true,
     },
     start: Number(timelineStart.toFixed(3)),
@@ -364,7 +371,11 @@ function buildClipBoundaryTransition(
   return {}
 }
 
-function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): ShotstackTrack[] {
+function buildVideoTracks(
+  sequence: SequenceItem[],
+  clipUrls: string[],
+  dialogueVolume: number
+): ShotstackTrack[] {
   const linearStarts = computeLinearStarts(sequence)
   const overlap = CLIP_TRANSITION_OVERLAP_SEC
   const transitionCount = countActiveClipTransitions(sequence.length)
@@ -384,7 +395,7 @@ function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): Shotsta
         type: 'video',
         src,
         trim: Number(item.trim_start.toFixed(3)),
-        volume: 1,
+        volume: dialogueVolume,
         transcode: true,
       },
       start: Number(start.toFixed(3)),
@@ -398,7 +409,7 @@ function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): Shotsta
   if (sequence.length === 1) {
     const item = sequence[0]!
     const src = clipUrls[item.clip_index] ?? clipUrls[0]
-    return [{ clips: buildFirstClipIntroClips(item, src, false) }]
+    return [{ clips: buildFirstClipIntroClips(item, src, false, dialogueVolume) }]
   }
 
   const topClips: ShotstackClip[] = []
@@ -406,7 +417,7 @@ function buildVideoTracks(sequence: SequenceItem[], clipUrls: string[]): Shotsta
 
   const item0 = sequence[0]!
   const src0 = clipUrls[item0.clip_index] ?? clipUrls[0]
-  topClips.push(...buildFirstClipIntroClips(item0, src0, !!CLIP_BOUNDARY_TRANSITIONS[0]))
+  topClips.push(...buildFirstClipIntroClips(item0, src0, !!CLIP_BOUNDARY_TRANSITIONS[0], dialogueVolume))
 
   for (let i = 1; i < sequence.length; i++) {
     const start = linearStarts[i]! - overlap * countOverlapsBeforeClip(i, sequence.length)
@@ -491,7 +502,8 @@ function buildBrollOverlayTracks(sequence: SequenceItem[], clipUrls: string[]): 
 function buildMusicTrack(
   musicUrl: string,
   totalDuration: number,
-  musicTrimStartSec: number
+  musicTrimStartSec: number,
+  musicVolume: number
 ): ShotstackTrack | null {
   const url = musicUrl?.trim()
   if (!url) return null
@@ -502,7 +514,7 @@ function buildMusicTrack(
           type: 'audio',
           src: url,
           trim: Number(Math.max(0, musicTrimStartSec).toFixed(3)),
-          volume: 0.17,
+          volume: musicVolume,
           effect: 'fadeOut',
         },
         start: 0,
@@ -1925,6 +1937,9 @@ export async function renderSegmentsV2(
     comentaMentionTimeSec?: number
     /** Texto del dialogo de la escena "comenta" (overlay superior) */
     comentaOverlayText?: string
+    /** Override manual; si no vienen, se calculan midiendo voz vs música. */
+    musicVolume?: number
+    dialogueVolume?: number
   }
 ): Promise<string> {
   if (voiceOverIntro != null) {
@@ -1938,6 +1953,33 @@ export async function renderSegmentsV2(
   const totalDuration = Number(
     sequence.reduce((acc, it) => acc + Number(it.trim_duration.toFixed(3)), 0).toFixed(3)
   )
+
+  const musicTrim = opts?.musicTrimStartSecOverride ?? 0
+
+  let musicVolume = opts?.musicVolume
+  let dialogueVolume = opts?.dialogueVolume
+  if (musicVolume == null || dialogueVolume == null) {
+    const balance = await computeReelAudioBalance({
+      jobId,
+      sequence,
+      clipUrls,
+      musicUrl,
+      musicTrimStartSec: musicTrim,
+      reelDurationSec: totalDuration,
+    })
+    musicVolume = musicVolume ?? balance.musicVolume
+    dialogueVolume = dialogueVolume ?? balance.dialogueVolume
+    console.log(
+      `[Shotstack][${jobId}] Mezcla audio (${balance.source}): música=${musicVolume}, voz=${dialogueVolume}`
+    )
+  } else {
+    console.log(
+      `[Shotstack][${jobId}] Mezcla audio (override): música=${musicVolume}, voz=${dialogueVolume}`
+    )
+  }
+
+  musicVolume = clampShotstackAssetVolume(musicVolume ?? FALLBACK_MUSIC_VOLUME)
+  dialogueVolume = clampShotstackAssetVolume(dialogueVolume ?? FALLBACK_DIALOGUE_VOLUME)
 
   const tracks: ShotstackTrack[] = []
 
@@ -2101,15 +2143,14 @@ export async function renderSegmentsV2(
   }
 
   tracks.push(...buildBrollOverlayTracks(sequence, clipUrls))
-  tracks.push(...buildVideoTracks(sequence, clipUrls))
+  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume))
 
   const flashTrack = buildClipFlashTransitionTrack(sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
     label: 'clip 4',
   })
   if (flashTrack) tracks.unshift(flashTrack)
 
-  const musicTrim = opts?.musicTrimStartSecOverride ?? 0
-  const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim)
+  const musicTrack = buildMusicTrack(musicUrl, totalDuration, musicTrim, musicVolume)
   if (musicTrack) tracks.push(musicTrack)
 
   const motorSfxTrack = buildMotorMentionSfxTrack(captionBlocksToRender, totalDuration, jobId)

@@ -63,9 +63,22 @@ export type GeminiAnalysis =
   | GeminiMultipleAnalysis
   | GeminiSegmentAnalysisResult
 
+export interface VideoJobInventoryJoin {
+  id: string
+  brand: string
+  model: string
+  year: number
+  plate?: string | null
+}
+
 export interface VideoJob {
   id: string
   job_name?: string | null
+  inventory_vehicle_id?: string | null
+  inventory_vehicle?: VideoJobInventoryJoin | null
+  vehicle_line_1?: string | null
+  vehicle_line_2?: string | null
+  vehicle_line_4?: string | null
   created_at: string
   updated_at: string
   flow_type: FlowType

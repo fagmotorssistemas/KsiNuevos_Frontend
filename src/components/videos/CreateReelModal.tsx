@@ -380,6 +380,7 @@ export function CreateReelModal({
         musicTrackId: selectedMusicId,
         jobName: jobName.trim(),
         ...brandOverlaysCreatePayload(),
+        ...(inventoryPickId.trim() ? { inventory_vehicle_id: inventoryPickId.trim() } : {}),
       }),
     })
 
@@ -610,6 +611,7 @@ export function CreateReelModal({
           files: files.map((f) => ({ filename: f.name, mimeType: f.type || 'video/mp4' })),
           musicTrackId: selectedMusicId,
           ...brandOverlaysCreatePayload(),
+          ...(inventoryPickId.trim() ? { inventory_vehicle_id: inventoryPickId.trim() } : {}),
         }),
       })
 

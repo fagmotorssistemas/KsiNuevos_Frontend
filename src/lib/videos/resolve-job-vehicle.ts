@@ -14,7 +14,10 @@ export type ResolvedJobVehicle = {
 type JobVehicleFields = {
   id: string
   job_name: string | null
+  vehicle_line_1?: string | null
   vehicle_line_2: string | null
+  vehicle_line_4?: string | null
+  inventory_vehicle_id?: string | null
   selected_clips: unknown
   video_script_id: string | null
   created_at: string | null
@@ -33,11 +36,28 @@ function formatShortDate(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(iso))
 }
 
+export function buildJobNameFromInventory(
+  brand: string,
+  model: string,
+  year: string | number | null | undefined
+): string {
+  const parts = [
+    brand.trim(),
+    model.trim(),
+    year != null && String(year).trim() ? String(year).trim() : '',
+  ].filter(Boolean)
+  return capitalizeWords(parts.join(' ')).slice(0, 100)
+}
+
 export function vehicleIdFromJobMeta(
   selectedClips: unknown,
   scriptVehicleId?: string | null,
-  queueVehicleId?: string | null
+  queueVehicleId?: string | null,
+  inventoryVehicleId?: string | null
 ): string | null {
+  const fromColumn = inventoryVehicleId?.trim()
+  if (fromColumn) return fromColumn
+
   if (isPipelineInputMeta(selectedClips)) {
     const fromMeta = selectedClips.vehicleId?.trim()
     if (fromMeta) return fromMeta
@@ -53,26 +73,34 @@ export function resolveJobVehicleLabel(
   job: JobVehicleFields,
   inventory: InventoryVehicleSnippet | null
 ): ResolvedJobVehicle {
-  const vehicleId = inventory?.id ?? null
+  const vehicleId = inventory?.id ?? job.inventory_vehicle_id?.trim() ?? null
 
   if (inventory) {
     const title = capitalizeWords(
       `${inventory.brand} ${inventory.model} ${inventory.year}`.trim()
     )
+    const plate = inventory.plate?.trim()
+    const line2 = job.vehicle_line_2?.trim()
+    const subtitle =
+      plate ||
+      (line2 && line2.toLowerCase() !== inventory.model.trim().toLowerCase() ? line2 : null)
     return {
       vehicleId,
       title,
-      subtitle: inventory.plate?.trim() || null,
+      subtitle,
       inventory,
     }
   }
 
+  const line1 = job.vehicle_line_1?.trim()
   const line2 = job.vehicle_line_2?.trim()
-  if (line2) {
+  const line4 = job.vehicle_line_4?.trim()
+  const fromLines = [line1, line2?.split(/\s+/)[0], line4].filter(Boolean).join(' ')
+  if (fromLines) {
     return {
-      vehicleId: null,
-      title: capitalizeWords(line2),
-      subtitle: null,
+      vehicleId,
+      title: capitalizeWords(fromLines),
+      subtitle: line2 && line2 !== fromLines ? capitalizeWords(line2) : null,
       inventory: null,
     }
   }

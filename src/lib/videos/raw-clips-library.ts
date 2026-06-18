@@ -221,11 +221,15 @@ function jobMatchesSearch(
   const hay = [
     job.id,
     job.job_name,
+    job.vehicle_line_1,
     job.vehicle_line_2,
+    job.vehicle_line_4,
+    job.inventory_vehicle_id,
     resolvedTitle,
     inventory?.brand,
     inventory?.model,
     inventory?.plate,
+    inventory?.id,
     job.status,
   ]
     .filter(Boolean)
@@ -242,11 +246,13 @@ function buildFolderSummary(
   const resolved = resolveJobVehicleLabel(job, inventory)
   const pathsCount = countVideoClips(job.raw_video_paths)
   const clipCount = Math.max(pathsCount, storageAgg?.clipCount ?? 0)
+  const inventoryVehicleId = job.inventory_vehicle_id?.trim() || resolved.vehicleId
 
   return {
     id: job.id,
     title: resolved.title,
     subtitle: resolved.subtitle,
+    inventoryVehicleId,
     vehicleId: resolved.vehicleId,
     inventory: resolved.inventory,
     jobName: job.job_name,
@@ -278,7 +284,12 @@ async function enrichJobs(jobs: JobRow[]) {
   for (const job of jobs) {
     const scriptVid = job.video_script_id ? scriptMap.get(job.video_script_id) : null
     const queueVid = queueMap.get(job.id)
-    const vid = vehicleIdFromJobMeta(job.selected_clips, scriptVid, queueVid)
+    const vid = vehicleIdFromJobMeta(
+      job.selected_clips,
+      scriptVid,
+      queueVid,
+      job.inventory_vehicle_id
+    )
     if (vid) vehicleIds.push(vid)
   }
   const inventoryMap = await fetchInventoryMap(vehicleIds)
@@ -286,7 +297,12 @@ async function enrichJobs(jobs: JobRow[]) {
   return jobs.map((job) => {
     const scriptVid = job.video_script_id ? scriptMap.get(job.video_script_id) : null
     const queueVid = queueMap.get(job.id)
-    const vid = vehicleIdFromJobMeta(job.selected_clips, scriptVid, queueVid)
+    const vid = vehicleIdFromJobMeta(
+      job.selected_clips,
+      scriptVid,
+      queueVid,
+      job.inventory_vehicle_id
+    )
     const inventory = vid ? inventoryMap.get(vid) ?? null : null
     const resolved = resolveJobVehicleLabel(job, inventory)
     return {
@@ -386,7 +402,12 @@ export async function fetchRawClipsFolderDetail(jobId: string): Promise<{
 
   const scriptVid = job.video_script_id ? scriptMap.get(job.video_script_id) : null
   const queueVid = queueMap.get(jobId)
-  const vehicleId = vehicleIdFromJobMeta(job.selected_clips, scriptVid, queueVid)
+  const vehicleId = vehicleIdFromJobMeta(
+    job.selected_clips,
+    scriptVid,
+    queueVid,
+    (job as { inventory_vehicle_id?: string | null }).inventory_vehicle_id
+  )
   const inventoryMap = vehicleId ? await fetchInventoryMap([vehicleId]) : new Map()
   const inventory = vehicleId ? inventoryMap.get(vehicleId) ?? null : null
   const storageAgg = buildStorageAggMap(jobStorageRows, [jobId]).get(jobId)

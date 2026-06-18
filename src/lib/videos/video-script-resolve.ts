@@ -243,7 +243,10 @@ export async function resolveAndLinkVideoScriptForJob(
         updatePayload.show_brand_overlays = true
         if (brand) updatePayload.vehicle_line_1 = brand
         if (model) updatePayload.vehicle_line_2 = model
-        if (year)  updatePayload.vehicle_line_4 = year
+        if (year) updatePayload.vehicle_line_4 = year
+        if (scriptRow?.vehicle_id) {
+          updatePayload.inventory_vehicle_id = scriptRow.vehicle_id
+        }
         console.log(
           `[VideoScriptResolve][${jobId}] Brand config auto-poblado desde guión: ` +
             `L1="${brand}" L2="${model}" L4="${year}"`

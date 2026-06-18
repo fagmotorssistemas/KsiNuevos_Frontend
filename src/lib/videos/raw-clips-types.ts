@@ -11,6 +11,8 @@ export type RawClipsFolderSummary = {
   id: string
   title: string
   subtitle: string | null
+  /** FK `video_jobs_v2.inventory_vehicle_id` cuando existe. */
+  inventoryVehicleId: string | null
   vehicleId: string | null
   inventory: InventoryVehicleSnippet | null
   jobName: string | null

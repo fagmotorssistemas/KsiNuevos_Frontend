@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { Segment } from './segmenter'
+import { buildJobNameFromInventory } from './resolve-job-vehicle'
 import { jaccardSimilarity, normalizeForMatch, wordFuzzyMatches } from './subtitle-screen-text'
 
 const MIN_INVENTORY_MATCH = 0.12
@@ -283,7 +284,7 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
 ): Promise<ResolvedInventoryVehicle | null> {
   const { data: jobRow, error: jobErr } = await supabase
     .from('video_jobs_v2')
-    .select('video_script_id, show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_4')
+    .select('video_script_id, show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_4, job_name')
     .eq('id', jobId)
     .single()
 
@@ -355,8 +356,12 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
     show_brand_overlays: true,
     vehicle_line_1: brand,
     vehicle_line_2: model,
+    inventory_vehicle_id: best.id,
   }
   if (year) updatePayload.vehicle_line_4 = year
+  if (!jobRow.job_name?.trim()) {
+    updatePayload.job_name = buildJobNameFromInventory(brand, model, year || null)
+  }
 
   const { error: updateErr } = await supabase
     .from('video_jobs_v2')

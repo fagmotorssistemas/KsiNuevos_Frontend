@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
+import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
 
 const RAW_BUCKET = 'raw-videos-v2'
 
@@ -55,6 +56,7 @@ interface CreateJobBody {
   files: FileInfo[]
   musicTrackId: string
   jobName?: string
+  inventory_vehicle_id?: string | null
   show_brand_overlays?: boolean | null
   vehicle_line_1?: string | null
   vehicle_line_2?: string | null
@@ -110,6 +112,11 @@ export async function POST(request: NextRequest) {
     const { flowType, files, musicTrackId, jobName } = body
     const brandInsertFields = pickBrandInsertFields(body)
 
+    const inventoryVehicleId =
+      body.inventory_vehicle_id != null && String(body.inventory_vehicle_id).trim() !== ''
+        ? String(body.inventory_vehicle_id).trim()
+        : null
+
     if (!flowType || !files?.length || !musicTrackId) {
       return NextResponse.json(
         { error: 'flowType, files y musicTrackId son requeridos' },
@@ -148,10 +155,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const normalizedJobName =
+    let normalizedJobName =
       typeof jobName === 'string' && jobName.trim().length > 0
         ? jobName.trim().slice(0, 100)
         : null
+
+    if (!normalizedJobName && inventoryVehicleId) {
+      const { data: invRow } = await supabase
+        .from('inventoryoracle')
+        .select('brand, model, year')
+        .eq('id', inventoryVehicleId)
+        .maybeSingle()
+      if (invRow) {
+        normalizedJobName = buildJobNameFromInventory(
+          String(invRow.brand ?? ''),
+          String(invRow.model ?? ''),
+          invRow.year
+        )
+      }
+    }
 
     // Crear registro inicial del job
     const baseInsert = {
@@ -161,6 +183,7 @@ export async function POST(request: NextRequest) {
       current_step: 'Esperando subida de archivos...',
       progress_percentage: 0,
       music_track_url: musicTrack.public_url,
+      ...(inventoryVehicleId ? { inventory_vehicle_id: inventoryVehicleId } : {}),
       ...brandInsertFields,
     }
 

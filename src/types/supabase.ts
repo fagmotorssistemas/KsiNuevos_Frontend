@@ -5837,6 +5837,7 @@ export type Database = {
           gemini_analysis: Json | null
           id: string
           job_name: string | null
+          inventory_vehicle_id: string | null
           logo_url: string | null
           music_track_url: string | null
           progress_percentage: number | null
@@ -5873,6 +5874,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           job_name?: string | null
+          inventory_vehicle_id?: string | null
           logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
@@ -5909,6 +5911,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           job_name?: string | null
+          inventory_vehicle_id?: string | null
           logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
@@ -5932,6 +5935,13 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "video_jobs_v2_inventory_vehicle_id_fkey"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "video_jobs_v2_video_script_id_fkey"
             columns: ["video_script_id"]

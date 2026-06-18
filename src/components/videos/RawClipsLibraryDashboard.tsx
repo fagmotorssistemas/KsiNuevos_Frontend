@@ -63,6 +63,14 @@ function formatDate(iso: string) {
   )
 }
 
+function formatUploadDate(iso: string) {
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(new Date(iso))
+}
+
+function shortId(id: string) {
+  return id.slice(0, 8)
+}
+
 function statusBadge(status: string) {
   return STATUS_BADGE[status] ?? {
     label: status,
@@ -115,6 +123,19 @@ function FolderCard({
           {folder.subtitle}
         </p>
       ) : null}
+      <p
+        className={`mt-2 font-mono text-[10px] tracking-tight ${
+          selected ? 'text-violet-200/90' : 'text-gray-400'
+        }`}
+      >
+        Job {shortId(folder.id)}
+        {folder.inventoryVehicleId ? (
+          <>
+            <span className={selected ? 'text-violet-300/60' : 'text-gray-300'}> · </span>
+            Inv. {shortId(folder.inventoryVehicleId)}
+          </>
+        ) : null}
+      </p>
       <div
         className={`mt-3 flex items-center justify-between text-xs font-medium ${
           selected ? 'text-violet-100' : 'text-gray-500'
@@ -123,6 +144,9 @@ function FolderCard({
         <span>{folder.clipCount} clips</span>
         <span>{formatBytes(folder.totalBytes)}</span>
       </div>
+      <p className={`mt-1 text-[11px] ${selected ? 'text-violet-200' : 'text-gray-400'}`}>
+        Subido {formatUploadDate(folder.createdAt)}
+      </p>
       {!selected && (
         <span
           className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}
@@ -190,6 +214,15 @@ function InfoSidebar({
           {folder.subtitle ? (
             <p className="text-xs text-gray-500">{folder.subtitle}</p>
           ) : null}
+          <p className="mt-1 font-mono text-[11px] text-gray-400">
+            Job {folder.id}
+            {folder.inventoryVehicleId ? (
+              <>
+                <br />
+                Inventario {folder.inventoryVehicleId}
+              </>
+            ) : null}
+          </p>
         </div>
 
         <div className="space-y-3">
@@ -362,7 +395,7 @@ export function RawClipsLibraryDashboard() {
         sizeBytes: c.sizeBytes,
         clipIndex: c.clipIndex,
       })),
-      vehicleId: folder.vehicleId,
+      vehicleId: folder.inventoryVehicleId ?? folder.vehicleId,
       vehicleLine2: folder.vehicleLine2 ?? folder.inventory?.model ?? null,
       jobName: folder.jobName ?? folder.title,
       ...(folder.inventory

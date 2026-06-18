@@ -6,6 +6,7 @@ import { Play, Download, ExternalLink, Clock, Film, Layers, Trash2, X, Loader2 }
 import { toast } from 'sonner'
 import type { VideoJob, VideoJobStatus } from '@/lib/videos/types'
 import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
+import { resolveJobVehicleLabel } from '@/lib/videos/resolve-job-vehicle'
 import { useVideoDownload } from '@/hooks/videos/useVideoDownload'
 
 const STATUS_CONFIG: Record<VideoJobStatus, { label: string; className: string }> = {
@@ -43,6 +44,30 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
   const cfg = STATUS_CONFIG[job.status]
   const socialStage = job.status === 'completed' ? resolveSocialPublishStage(job) : null
   const socialBadge = socialStage ? SOCIAL_STAGE_BADGE[socialStage] : null
+  const inventoryJoin = job.inventory_vehicle
+  const vehicleLabel = resolveJobVehicleLabel(
+    {
+      id: job.id,
+      job_name: job.job_name ?? null,
+      vehicle_line_1: job.vehicle_line_1,
+      vehicle_line_2: job.vehicle_line_2 ?? null,
+      vehicle_line_4: job.vehicle_line_4,
+      inventory_vehicle_id: job.inventory_vehicle_id,
+      selected_clips: job.selected_clips,
+      video_script_id: null,
+      created_at: job.created_at,
+    },
+    inventoryJoin
+      ? {
+          id: inventoryJoin.id,
+          brand: inventoryJoin.brand,
+          model: inventoryJoin.model,
+          year: inventoryJoin.year,
+          plate: inventoryJoin.plate ?? null,
+          status: null,
+        }
+      : null
+  )
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -70,7 +95,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
     void download({
       url: job.final_video_url,
       jobId: job.id,
-      filename: job.job_name,
+      filename: vehicleLabel.title,
     })
   }
 
@@ -130,8 +155,11 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
         {/* Info */}
         <div className="p-3 sm:p-4 space-y-3">
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs font-semibold text-gray-800 truncate">
-            {job.job_name?.trim() || `Job ${job.id.slice(0, 8)}`}
+            {vehicleLabel.title}
           </div>
+          {vehicleLabel.subtitle ? (
+            <p className="text-[11px] text-gray-500 truncate -mt-1">{vehicleLabel.subtitle}</p>
+          ) : null}
 
           {/* Progreso si está procesando */}
           {isProcessing && (

@@ -440,6 +440,7 @@ export async function POST(request: NextRequest) {
         current_step: 'Archivos recibidos. Iniciando pipeline...',
         progress_percentage: 20,
         ...(pipelineInput ? { selected_clips: pipelineInput } : {}),
+        ...(vehicleId ? { inventory_vehicle_id: vehicleId } : {}),
         ...scriptDbFields,
       })
       .eq('id', jobId)

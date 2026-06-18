@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
+import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 const RAW_BUCKET = 'raw-videos-v2'
@@ -48,6 +49,7 @@ interface CreateFromLibraryBody {
   flowType: FlowType
   musicTrackId: string
   jobName?: string
+  inventory_vehicle_id?: string | null
   show_brand_overlays?: boolean | null
   vehicle_line_1?: string | null
   vehicle_line_2?: string | null
@@ -153,7 +155,28 @@ export async function POST(request: NextRequest) {
         ? jobName.trim().slice(0, 100)
         : null
 
+    const inventoryVehicleId =
+      body.inventory_vehicle_id != null && String(body.inventory_vehicle_id).trim() !== ''
+        ? String(body.inventory_vehicle_id).trim()
+        : null
+
     const brandInsertFields = pickBrandInsertFields(body)
+
+    let resolvedJobName = normalizedJobName
+    if (!resolvedJobName && inventoryVehicleId) {
+      const { data: invRow } = await supabase
+        .from('inventoryoracle')
+        .select('brand, model, year')
+        .eq('id', inventoryVehicleId)
+        .maybeSingle()
+      if (invRow) {
+        resolvedJobName = buildJobNameFromInventory(
+          String(invRow.brand ?? ''),
+          String(invRow.model ?? ''),
+          invRow.year
+        )
+      }
+    }
 
     const baseInsert = {
       flow_type: flowType,
@@ -162,11 +185,12 @@ export async function POST(request: NextRequest) {
       current_step: 'Copiando clips de biblioteca...',
       progress_percentage: 5,
       music_track_url: musicTrack.public_url,
+      ...(inventoryVehicleId ? { inventory_vehicle_id: inventoryVehicleId } : {}),
       ...brandInsertFields,
     }
 
-    const insertPayload = normalizedJobName
-      ? { ...baseInsert, job_name: normalizedJobName }
+    const insertPayload = resolvedJobName
+      ? { ...baseInsert, job_name: resolvedJobName }
       : baseInsert
 
     const { data: job, error: insertError } = await supabase
