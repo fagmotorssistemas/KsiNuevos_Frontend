@@ -10,12 +10,19 @@ import {
   parseMeanVolumeDb,
   type ReelAudioBalance,
 } from './audio-balance-core'
-import { loadFfmpegWasm, type VideoCompressProgressFn } from './compress-video-client'
+import {
+  assertFfmpegAssetsReachable,
+  isFfmpegWasmEnvironmentReady,
+  loadFfmpegWasm,
+  type VideoCompressProgressFn,
+} from './compress-video-client'
 import { extractErrorMessage } from './extract-error-message'
 
 const MAX_VOICE_SAMPLES = 4
 const MAX_SAMPLE_DURATION_SEC = 14
 const MAX_MUSIC_ANALYSIS_SEC = 75
+const AUDIO_MEASURE_TIMEOUT_MS = 120_000
+const FFMPEG_AUDIO_LOAD_TIMEOUT_MS = 60_000
 
 export type ClientVoiceSampleInput =
   | { kind: 'file'; file: File; durationSec?: number; weightSec?: number }
@@ -146,6 +153,11 @@ export async function measureReelAudioBalanceInBrowser(
     return fallback()
   }
 
+  if (!isFfmpegWasmEnvironmentReady()) {
+    console.warn('[AudioBalanceClient] crossOriginIsolated=false; usando fallback de mezcla.')
+    return fallback()
+  }
+
   const picked = pickVoiceSamples(voiceSamples)
   const musicUrlTrimmed = musicUrl.trim()
   if (picked.length === 0 || !musicUrlTrimmed) {
@@ -154,8 +166,20 @@ export async function measureReelAudioBalanceInBrowser(
   }
 
   try {
-    onProgress?.('Midiendo niveles de voz y música (ffmpeg en el navegador)…')
-    const { ffmpeg, fetchFile } = await loadFfmpegWasm(onProgress)
+    await assertFfmpegAssetsReachable()
+  } catch (err) {
+    console.warn(
+      `[AudioBalanceClient] Assets /ffmpeg no disponibles: ${extractErrorMessage(err, 'error')}. Fallback.`
+    )
+    return fallback()
+  }
+
+  const measure = async (): Promise<ReelAudioBalance> => {
+    onProgress?.('Midiendo niveles de voz y música…')
+    const { ffmpeg, fetchFile } = await loadFfmpegWasm(onProgress, {
+      purpose: 'audio',
+      timeoutMs: FFMPEG_AUDIO_LOAD_TIMEOUT_MS,
+    })
 
     const musicDurationSec = Math.min(
       Math.max(reelDurationSec ?? MAX_MUSIC_ANALYSIS_SEC, 0.5),
@@ -201,6 +225,18 @@ export async function measureReelAudioBalanceInBrowser(
       musicMeanDb,
       source: 'measured',
     }
+  }
+
+  try {
+    return await Promise.race([
+      measure(),
+      new Promise<ReelAudioBalance>((resolve) => {
+        setTimeout(() => {
+          console.warn('[AudioBalanceClient] Medición superó el tiempo límite; usando fallback.')
+          resolve(fallback())
+        }, AUDIO_MEASURE_TIMEOUT_MS)
+      }),
+    ])
   } catch (err) {
     console.warn(
       `[AudioBalanceClient] ffmpeg.wasm falló: ${extractErrorMessage(err, 'error desconocido')}. Usando fallback.`

@@ -8,6 +8,11 @@ import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 
 export type VideoCompressProgressFn = (message: string) => void
 
+export type FfmpegLoadPurpose = 'compress' | 'audio'
+
+const DEFAULT_FFMPEG_LOAD_TIMEOUT_MS = 90_000
+const FFMPEG_ASSET_CHECK_TIMEOUT_MS = 8_000
+
 type FfmpegModule = typeof import('@ffmpeg/ffmpeg')
 type UtilModule = typeof import('@ffmpeg/util')
 
@@ -37,19 +42,49 @@ function resetFfmpegLoader(): void {
   ffmpegLoadPromise = null
 }
 
-async function assertFfmpegAssetsReachable(): Promise<void> {
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+}
+
+/** Comprueba que los binarios de ffmpeg.wasm existen en /ffmpeg (postinstall o build). */
+export async function assertFfmpegAssetsReachable(): Promise<void> {
   const wasmUrl = `${window.location.origin}/ffmpeg/ffmpeg-core.wasm`
-  const res = await fetch(wasmUrl, { method: 'HEAD' })
+  const res = await withTimeout(
+    fetch(wasmUrl, { method: 'HEAD' }),
+    FFMPEG_ASSET_CHECK_TIMEOUT_MS,
+    'Tiempo de espera agotado comprobando /ffmpeg/ffmpeg-core.wasm'
+  )
   if (!res.ok) {
     throw new Error(
-      `No se encontró el compresor en ${wasmUrl} (HTTP ${res.status}). ` +
-        'En local: npm install y reinicia el servidor. En producción: espera a que termine el deploy.'
+      `No se encontró ffmpeg.wasm en ${wasmUrl} (HTTP ${res.status}). ` +
+        'En local: ejecuta npm install (copia public/ffmpeg) y reinicia el servidor.'
     )
   }
 }
 
+export function isFfmpegWasmEnvironmentReady(): boolean {
+  if (typeof window === 'undefined') return false
+  if (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated) return false
+  return true
+}
+
 /** Carga ffmpeg.wasm (compartido con medición de audio en el navegador). */
-export async function loadFfmpegWasm(onProgress?: VideoCompressProgressFn): Promise<{
+export async function loadFfmpegWasm(
+  onProgress?: VideoCompressProgressFn,
+  options?: { purpose?: FfmpegLoadPurpose; timeoutMs?: number }
+): Promise<{
   ffmpeg: InstanceType<FfmpegModule['FFmpeg']>
   fetchFile: UtilModule['fetchFile']
 }> {
@@ -57,20 +92,35 @@ export async function loadFfmpegWasm(onProgress?: VideoCompressProgressFn): Prom
     throw new Error('La compresión de video solo está disponible en el navegador.')
   }
 
+  if (!isFfmpegWasmEnvironmentReady()) {
+    throw new Error(
+      'ffmpeg.wasm no está disponible (SharedArrayBuffer / crossOriginIsolated). Recarga la página desde /marketing.'
+    )
+  }
+
   await assertFfmpegAssetsReachable()
+
+  const purpose = options?.purpose ?? 'compress'
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_FFMPEG_LOAD_TIMEOUT_MS
+  const loadingMessage =
+    purpose === 'audio'
+      ? 'Cargando analizador de audio (primera vez ~1 min)…'
+      : 'Preparando compresor de video (primera vez puede tardar 1–2 min)…'
 
   const { FFmpeg } = await import('@ffmpeg/ffmpeg')
   const { fetchFile } = await import('@ffmpeg/util')
 
   if (!ffmpegLoadPromise) {
     ffmpegLoadPromise = (async () => {
-      onProgress?.('Preparando compresor de video (primera vez puede tardar 1–2 min)…')
+      onProgress?.(loadingMessage)
       const ffmpeg = new FFmpeg()
-      ffmpeg.on('progress', ({ progress }) => {
-        if (progress > 0.02 && progress <= 1) {
-          onProgress?.(`Comprimiendo… ${Math.round(progress * 100)}%`)
-        }
-      })
+      if (purpose === 'compress') {
+        ffmpeg.on('progress', ({ progress }) => {
+          if (progress > 0.02 && progress <= 1) {
+            onProgress?.(`Comprimiendo… ${Math.round(progress * 100)}%`)
+          }
+        })
+      }
 
       // URLs directas del mismo origen (evita blob:… que webpack/Next trata como módulo en producción).
       const baseURL = `${window.location.origin}/ffmpeg`
@@ -78,21 +128,32 @@ export async function loadFfmpegWasm(onProgress?: VideoCompressProgressFn): Prom
       const wasmURL = `${baseURL}/ffmpeg-core.wasm`
 
       try {
-        await ffmpeg.load({ coreURL, wasmURL })
+        await withTimeout(
+          ffmpeg.load({ coreURL, wasmURL }),
+          timeoutMs,
+          `Tiempo de espera agotado cargando ffmpeg (${Math.round(timeoutMs / 1000)} s). ` +
+            'Se usará la mezcla de audio predeterminada.'
+        )
       } catch (err) {
         resetFfmpegLoader()
         throw toError(
           err,
-          'No se pudo cargar el compresor de video (/ffmpeg). Verifica el deploy (npm run build copia los archivos) y recarga'
+          'No se pudo cargar ffmpeg.wasm (/ffmpeg). Verifica npm install o el deploy y recarga'
         )
       }
 
       return ffmpeg
     })()
+  } else {
+    onProgress?.(loadingMessage)
   }
 
   try {
-    const ffmpeg = await ffmpegLoadPromise
+    const ffmpeg = await withTimeout(
+      ffmpegLoadPromise,
+      timeoutMs,
+      `Tiempo de espera agotado esperando ffmpeg (${Math.round(timeoutMs / 1000)} s)`
+    )
     return { ffmpeg, fetchFile }
   } catch (err) {
     resetFfmpegLoader()

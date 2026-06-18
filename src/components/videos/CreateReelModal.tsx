@@ -113,21 +113,34 @@ async function measureReelAudioPayloadForStart(params: {
   voiceSamples: ClientVoiceSampleInput[]
   onProgress?: (msg: string) => void
 }): Promise<{ reelMusicVolume: number; reelDialogueVolume: number }> {
-  const { measureReelAudioBalanceInBrowser } = await import('@/lib/videos/audio-balance-client')
-  const reelDurationSec = params.clipDurations?.reduce<number>(
-    (acc, d) => acc + (typeof d === 'number' && Number.isFinite(d) ? d : 0),
-    0
+  const { FALLBACK_DIALOGUE_VOLUME, FALLBACK_MUSIC_VOLUME } = await import(
+    '@/lib/videos/audio-balance-core'
   )
-  const balance = await measureReelAudioBalanceInBrowser({
-    voiceSamples: params.voiceSamples,
-    musicUrl: params.musicUrl,
-    musicTrimStartSec: params.musicTrimStartSec ?? 0,
-    reelDurationSec: reelDurationSec != null && reelDurationSec > 0 ? reelDurationSec : undefined,
-    onProgress: params.onProgress,
-  })
-  return {
-    reelMusicVolume: balance.musicVolume,
-    reelDialogueVolume: balance.dialogueVolume,
+  const fallbackPayload = {
+    reelMusicVolume: FALLBACK_MUSIC_VOLUME,
+    reelDialogueVolume: FALLBACK_DIALOGUE_VOLUME,
+  }
+
+  try {
+    const { measureReelAudioBalanceInBrowser } = await import('@/lib/videos/audio-balance-client')
+    const reelDurationSec = params.clipDurations?.reduce<number>(
+      (acc, d) => acc + (typeof d === 'number' && Number.isFinite(d) ? d : 0),
+      0
+    )
+    const balance = await measureReelAudioBalanceInBrowser({
+      voiceSamples: params.voiceSamples,
+      musicUrl: params.musicUrl,
+      musicTrimStartSec: params.musicTrimStartSec ?? 0,
+      reelDurationSec: reelDurationSec != null && reelDurationSec > 0 ? reelDurationSec : undefined,
+      onProgress: params.onProgress,
+    })
+    return {
+      reelMusicVolume: balance.musicVolume,
+      reelDialogueVolume: balance.dialogueVolume,
+    }
+  } catch (err) {
+    console.warn('[CreateReelModal] Medición de audio falló; usando fallback:', err)
+    return fallbackPayload
   }
 }
 
