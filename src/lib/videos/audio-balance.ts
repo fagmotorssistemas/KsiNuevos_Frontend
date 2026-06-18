@@ -21,12 +21,11 @@ const TARGET_MUSIC_BELOW_VOICE_DB = 14
 /** Shotstack rechaza `asset.volume` > 1 (HTTP 400). */
 export const SHOTSTACK_MAX_ASSET_VOLUME = 1
 
-export const FALLBACK_MUSIC_VOLUME = 0.06
+export const FALLBACK_MUSIC_VOLUME = 0.04
 export const FALLBACK_DIALOGUE_VOLUME = 1
 
 const MIN_MUSIC_VOLUME = 0.015
 const MAX_MUSIC_VOLUME = 0.1
-
 export interface ReelAudioBalance {
   musicVolume: number
   dialogueVolume: number
