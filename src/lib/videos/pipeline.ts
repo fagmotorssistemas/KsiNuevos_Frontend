@@ -402,6 +402,7 @@ function applyComentaWhenNoGuion(
   }
 
   const result = applyComentaFromAssembly(subtitleBlocks, sequence, allSegments, {
+    brandLine: brandConfig.vehicle_line_1,
     modelLine: brandConfig.vehicle_line_2,
     yearLine: brandConfig.vehicle_line_4,
     jobId,

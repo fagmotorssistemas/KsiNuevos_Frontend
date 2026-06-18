@@ -6,6 +6,10 @@ import { jaccardSimilarity, normalizeForMatch, wordFuzzyMatches } from './subtit
 
 const MIN_INVENTORY_MATCH = 0.12
 const MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT = 0.08
+const MIN_MARGIN_ACCEPT_SCORE = 0.08
+const MIN_MARGIN_GAP = 0.06
+const NEAR_MISS_MIN_SCORE = 0.1
+const COMPOUND_PHRASE_BONUS = 0.32
 
 /** Artículos/preposiciones: no deben sumar score contra tokens de modelo (la→land). */
 const INVENTORY_STOPWORDS = new Set([
@@ -28,6 +32,15 @@ export type ResolvedInventoryVehicle = {
   year: string
   score: number
   brandMentionTimeSec?: number
+}
+
+type VehicleLabels = {
+  brand: string
+  model: string
+  year: string
+  vehicleId?: string
+  score: number
+  reason: string
 }
 
 function transcriptFromSegments(segments: Segment[]): string {
@@ -68,7 +81,7 @@ function inventoryModelTokenMatches(assemblyWord: string, modelToken: string): b
 }
 
 function brandMentionedInTranscript(brandNorm: string, transcriptWords: string[]): boolean {
-  if (brandNorm.length < 3) return false
+  if (brandNorm.length < 2) return false
   for (const w of transcriptWords) {
     if (isInventoryStopword(w)) continue
     if (wordFuzzyMatches(w, brandNorm)) return true
@@ -94,6 +107,13 @@ function modelSearchTokens(model: string): string[] {
   }
 
   return [...new Set(tokens)]
+}
+
+function firstAlphabeticModelToken(model: string): string | null {
+  for (const t of modelSearchTokens(model)) {
+    if (!/^\d/.test(t)) return t
+  }
+  return null
 }
 
 function brandsMentionedInTranscript(
@@ -128,10 +148,104 @@ function candidateBrandInMentionedSet(
   return false
 }
 
+/** Dos palabras seguidas en audio ≈ marca + primer token de modelo (mini cooper, kia seltos). */
+function phraseFuzzyMatches(spokenPhrase: string, targetPhrase: string): boolean {
+  const aParts = normalizeForMatch(spokenPhrase).split(' ').filter(Boolean)
+  const bParts = normalizeForMatch(targetPhrase).split(' ').filter(Boolean)
+  if (aParts.length < 2 || bParts.length < 2) return false
+  return wordFuzzyMatches(aParts[0]!, bParts[0]!) && wordFuzzyMatches(aParts[1]!, bParts[1]!)
+}
+
+function compoundBrandModelTargetPhrase(candidate: InventoryCandidate): string | null {
+  const brandNorm = normalizeForMatch(candidate.brand.trim())
+  const modelToken = firstAlphabeticModelToken(candidate.model)
+  if (!brandNorm || !modelToken) return null
+  return `${brandNorm} ${modelToken}`
+}
+
+function compoundBrandModelPhraseMatches(
+  transcriptWords: string[],
+  candidate: InventoryCandidate
+): boolean {
+  const target = compoundBrandModelTargetPhrase(candidate)
+  if (!target) return false
+
+  for (let i = 0; i < transcriptWords.length - 1; i++) {
+    if (isInventoryStopword(transcriptWords[i]!) || isInventoryStopword(transcriptWords[i + 1]!)) {
+      continue
+    }
+    const bigram = `${transcriptWords[i]} ${transcriptWords[i + 1]}`
+    if (phraseFuzzyMatches(bigram, target)) return true
+  }
+  return false
+}
+
+function modelMentionedInTranscript(
+  candidate: InventoryCandidate,
+  transcriptWords: string[]
+): boolean {
+  if (compoundBrandModelPhraseMatches(transcriptWords, candidate)) return true
+  const modelTokens = modelSearchTokens(candidate.model)
+  return modelTokens.some((token) =>
+    transcriptWords.some(
+      (w) => !isInventoryStopword(w) && inventoryModelTokenMatches(w, token)
+    )
+  )
+}
+
+function yearMatchesTranscript(
+  candidate: InventoryCandidate,
+  yearTokens: string[]
+): boolean {
+  if (yearTokens.length === 0) return true
+  if (candidate.year == null) return false
+  return yearTokens.includes(String(candidate.year))
+}
+
+function candidatePassesAnchorFilter(
+  candidate: InventoryCandidate,
+  transcriptWords: string[],
+  yearTokens: string[]
+): boolean {
+  const brandNorm = normalizeForMatch(candidate.brand)
+  if (!brandMentionedInTranscript(brandNorm, transcriptWords)) return false
+  if (!modelMentionedInTranscript(candidate, transcriptWords)) return false
+  if (!yearMatchesTranscript(candidate, yearTokens)) return false
+  return true
+}
+
+function anotherCandidateHasYear(
+  candidates: InventoryCandidate[],
+  currentId: string,
+  yearStr: string
+): boolean {
+  return candidates.some(
+    (c) => c.id !== currentId && c.year != null && String(c.year) === yearStr
+  )
+}
+
+function hasStrongMatchSignal(
+  candidate: InventoryCandidate,
+  transcriptWords: string[],
+  yearTokens: string[]
+): boolean {
+  const brandNorm = normalizeForMatch(candidate.brand)
+  const brandOk = brandMentionedInTranscript(brandNorm, transcriptWords)
+  const compoundOk = compoundBrandModelPhraseMatches(transcriptWords, candidate)
+  const modelOk = modelMentionedInTranscript(candidate, transcriptWords)
+  const yearOk = yearMatchesTranscript(candidate, yearTokens)
+  return brandOk && (compoundOk || modelOk) && yearOk
+}
+
+function shouldAcceptByMargin(bestScore: number, secondScore: number): boolean {
+  return bestScore >= MIN_MARGIN_ACCEPT_SCORE && bestScore - secondScore >= MIN_MARGIN_GAP
+}
+
 function scoreVehicleAgainstTranscript(
   transcript: string,
   vehicle: InventoryCandidate,
   mentionedBrands: Set<string>,
+  allCandidates: InventoryCandidate[],
   vehicleIdHint?: string | null
 ): number {
   const normTranscript = normalizeForMatch(transcript)
@@ -145,6 +259,8 @@ function scoreVehicleAgainstTranscript(
 
   const transcriptWords = normTranscript.split(' ').filter(Boolean)
   const brandNorm = normalizeForMatch(brand)
+  const yearTokens = transcriptYearTokens(transcriptWords)
+  const compoundMatch = compoundBrandModelPhraseMatches(transcriptWords, vehicle)
 
   if (brandNorm.length >= 2) {
     for (const w of transcriptWords) {
@@ -171,6 +287,10 @@ function scoreVehicleAgainstTranscript(
     }
   }
 
+  if (compoundMatch) {
+    score += COMPOUND_PHRASE_BONUS
+  }
+
   const normFull = normalizeForMatch(fullName)
   if (normFull.length >= 4) {
     if (normTranscript.includes(normFull)) score += 0.35
@@ -179,21 +299,25 @@ function scoreVehicleAgainstTranscript(
     }
   }
 
-  const yearTokens = transcriptYearTokens(transcriptWords)
   if (vehicle.year != null) {
     const yearStr = String(vehicle.year)
     if (yearTokens.length > 0) {
       if (yearTokens.includes(yearStr)) score += 0.12
-      else score -= 0.25
+      else if (anotherCandidateHasYear(allCandidates, vehicle.id, yearTokens[0]!)) {
+        score -= 0.25
+      }
     } else if (transcriptWords.includes(yearStr)) {
       score += 0.08
     }
   }
 
-  if (mentionedBrands.size > 0 && brandNorm.length >= 3) {
-    if (!candidateBrandInMentionedSet(brandNorm, mentionedBrands)) {
-      score -= 0.55
-    }
+  if (
+    mentionedBrands.size > 0 &&
+    brandNorm.length >= 3 &&
+    !candidateBrandInMentionedSet(brandNorm, mentionedBrands) &&
+    !hasStrongMatchSignal(vehicle, transcriptWords, yearTokens)
+  ) {
+    score -= 0.55
   }
 
   if (vehicleIdHint && vehicle.id === vehicleIdHint) score += 0.45
@@ -238,6 +362,146 @@ function findBrandMentionTimeSec(
   }
 
   return undefined
+}
+
+function pickAcceptedVehicle(
+  candidates: InventoryCandidate[],
+  transcript: string,
+  transcriptWords: string[],
+  mentionedBrands: Set<string>,
+  vehicleIdHint: string | null
+): VehicleLabels | null {
+  const yearTokens = transcriptYearTokens(transcriptWords)
+  const minScore = vehicleIdHint ? MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT : MIN_INVENTORY_MATCH
+
+  const scored = candidates
+    .map((candidate) => ({
+      candidate,
+      score: scoreVehicleAgainstTranscript(
+        transcript,
+        candidate,
+        mentionedBrands,
+        candidates,
+        vehicleIdHint
+      ),
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  if (scored.length === 0) return null
+
+  const best = scored[0]!
+  const second = scored[1]
+  const secondScore = second?.score ?? 0
+
+  const anchorMatches = candidates.filter((c) =>
+    candidatePassesAnchorFilter(c, transcriptWords, yearTokens)
+  )
+
+  if (anchorMatches.length === 1) {
+    const only = anchorMatches[0]!
+    const matched = scored.find((s) => s.candidate.id === only.id)
+    return {
+      brand: only.brand.trim(),
+      model: only.model.trim(),
+      year: only.year != null ? String(only.year) : '',
+      vehicleId: only.id,
+      score: matched?.score ?? Math.max(minScore, best.score),
+      reason: 'unique-anchor',
+    }
+  }
+
+  if (best.score >= minScore) {
+    return {
+      brand: best.candidate.brand.trim(),
+      model: best.candidate.model.trim(),
+      year: best.candidate.year != null ? String(best.candidate.year) : '',
+      vehicleId: best.candidate.id,
+      score: best.score,
+      reason: 'score-threshold',
+    }
+  }
+
+  if (shouldAcceptByMargin(best.score, secondScore)) {
+    return {
+      brand: best.candidate.brand.trim(),
+      model: best.candidate.model.trim(),
+      year: best.candidate.year != null ? String(best.candidate.year) : '',
+      vehicleId: best.candidate.id,
+      score: best.score,
+      reason: 'score-margin',
+    }
+  }
+
+  if (
+    best.score >= NEAR_MISS_MIN_SCORE &&
+    hasStrongMatchSignal(best.candidate, transcriptWords, yearTokens)
+  ) {
+    return {
+      brand: best.candidate.brand.trim(),
+      model: best.candidate.model.trim(),
+      year: best.candidate.year != null ? String(best.candidate.year) : '',
+      vehicleId: best.candidate.id,
+      score: best.score,
+      reason: 'near-miss-strong',
+    }
+  }
+
+  if (anchorMatches.length > 1) {
+    const bestAnchor = scored.find((s) => anchorMatches.some((a) => a.id === s.candidate.id))
+    if (
+      bestAnchor &&
+      bestAnchor.score >= MIN_MARGIN_ACCEPT_SCORE &&
+      hasStrongMatchSignal(bestAnchor.candidate, transcriptWords, yearTokens)
+    ) {
+      return {
+        brand: bestAnchor.candidate.brand.trim(),
+        model: bestAnchor.candidate.model.trim(),
+        year: bestAnchor.candidate.year != null ? String(bestAnchor.candidate.year) : '',
+        vehicleId: bestAnchor.candidate.id,
+        score: bestAnchor.score,
+        reason: 'anchor-best',
+      }
+    }
+  }
+
+  return inferVehicleLabelsFromTranscript(transcriptWords, yearTokens, scored)
+}
+
+/** Título desde audio cuando inventario no supera umbral pero marca/modelo/año están claros. */
+function inferVehicleLabelsFromTranscript(
+  transcriptWords: string[],
+  yearTokens: string[],
+  scored: { candidate: InventoryCandidate; score: number }[]
+): VehicleLabels | null {
+  const year = yearTokens[0] ?? ''
+
+  for (const { candidate, score } of scored) {
+    if (score < NEAR_MISS_MIN_SCORE) continue
+    if (!hasStrongMatchSignal(candidate, transcriptWords, yearTokens)) continue
+    return {
+      brand: candidate.brand.trim(),
+      model: candidate.model.trim(),
+      year: candidate.year != null ? String(candidate.year) : year,
+      score,
+      reason: 'audio-fallback-inventory',
+    }
+  }
+
+  for (const { candidate } of scored) {
+    if (!compoundBrandModelPhraseMatches(transcriptWords, candidate)) continue
+    if (yearTokens.length > 0 && candidate.year != null && !yearTokens.includes(String(candidate.year))) {
+      continue
+    }
+    return {
+      brand: candidate.brand.trim(),
+      model: candidate.model.trim(),
+      year: candidate.year != null ? String(candidate.year) : year,
+      score: 0,
+      reason: 'audio-fallback-compound',
+    }
+  }
+
+  return null
 }
 
 async function fetchInventoryCandidates(
@@ -301,7 +565,6 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
   const line2 = jobRow.vehicle_line_2?.trim() ?? ''
   const line4 = jobRow.vehicle_line_4?.trim() ?? ''
 
-  // Completar desde audio si falta marca, modelo o año (p. ej. biblioteca heredó solo L2).
   const shouldMatchFromAssembly = !line1 || !line2 || !line4
 
   if (!shouldMatchFromAssembly) {
@@ -323,42 +586,38 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
   const transcriptWords = normalizeForMatch(transcript).split(' ').filter(Boolean)
   const mentionedBrands = brandsMentionedInTranscript(transcriptWords, candidates)
 
-  let best: InventoryCandidate | null = null
-  let bestScore = 0
+  const picked = pickAcceptedVehicle(
+    candidates,
+    transcript,
+    transcriptWords,
+    mentionedBrands,
+    vehicleIdHint
+  )
 
-  for (const candidate of candidates) {
-    const score = scoreVehicleAgainstTranscript(
-      transcript,
-      candidate,
-      mentionedBrands,
-      vehicleIdHint
-    )
-    if (score > bestScore) {
-      bestScore = score
-      best = candidate
-    }
-  }
-
-  const minScore = vehicleIdHint ? MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT : MIN_INVENTORY_MATCH
-  if (!best || bestScore < minScore) {
+  if (!picked) {
+    const bestPreview = candidates
+      .map((c) =>
+        scoreVehicleAgainstTranscript(transcript, c, mentionedBrands, candidates, vehicleIdHint)
+      )
+      .sort((a, b) => b - a)[0]
     console.warn(
-      `[InventoryMatch][${jobId}] Sin match confiable (best=${bestScore.toFixed(3)}, min=${minScore})`
+      `[InventoryMatch][${jobId}] Sin match confiable (best=${(bestPreview ?? 0).toFixed(3)}, min=${vehicleIdHint ? MIN_INVENTORY_MATCH_WITH_VEHICLE_HINT : MIN_INVENTORY_MATCH})`
     )
     return null
   }
 
-  const brand = best.brand.trim()
-  const model = best.model.trim()
-  const year = best.year != null ? String(best.year).trim() : ''
+  const brand = picked.brand
+  const model = picked.model
+  const year = picked.year
   const brandMentionTimeSec = findBrandMentionTimeSec(segments, brand, model)
 
   const updatePayload: Record<string, unknown> = {
     show_brand_overlays: true,
     vehicle_line_1: brand,
     vehicle_line_2: model,
-    inventory_vehicle_id: best.id,
   }
   if (year) updatePayload.vehicle_line_4 = year
+  if (picked.vehicleId) updatePayload.inventory_vehicle_id = picked.vehicleId
   if (!jobRow.job_name?.trim()) {
     updatePayload.job_name = buildJobNameFromInventory(brand, model, year || null)
   }
@@ -375,18 +634,19 @@ export async function resolveAndApplyVehicleFromAssemblyForJob(
 
   const mentionedList = [...mentionedBrands].join(', ') || 'ninguna'
   console.log(
-    `[InventoryMatch][${jobId}] Vehículo desde Assembly→inventario: ` +
-      `"${brand}" "${model}"${year ? ` (${year})` : ''} score=${bestScore.toFixed(3)}` +
+    `[InventoryMatch][${jobId}] Vehículo (${picked.reason}): ` +
+      `"${brand}" "${model}"${year ? ` (${year})` : ''} score=${picked.score.toFixed(3)}` +
       (brandMentionTimeSec != null ? ` t=${brandMentionTimeSec}s` : '') +
-      ` marcas_en_audio=[${mentionedList}]`
+      ` marcas_en_audio=[${mentionedList}]` +
+      (picked.vehicleId ? '' : ' (sin inventory_vehicle_id)')
   )
 
   return {
-    vehicleId: best.id,
+    vehicleId: picked.vehicleId ?? '',
     brand,
     model,
     year,
-    score: bestScore,
+    score: picked.score,
     brandMentionTimeSec,
   }
 }
