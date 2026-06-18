@@ -35,6 +35,7 @@ import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readRemoteVideoDurationSeconds } from './read-remote-video-duration'
 import type { ReelLibraryClipDraft, ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
+import type { ClientVoiceSampleInput } from '@/lib/videos/audio-balance-client'
 
 type VoiceOverUiMode = 'auto' | 'clip' | 'mp3'
 type MusicTrimMode = 'smart' | 'manual'
@@ -71,6 +72,63 @@ function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
     if (!/\.mov$/i.test(n)) return false
     return /^IMG_\d+/i.test(n) || /^RPReplay|ScreenRecording|Cinematic/i.test(n)
   })
+}
+
+function buildVoiceSamplesFromFiles(
+  files: File[],
+  clipDurations: (number | null)[] | undefined,
+  excludeIndices: number[]
+): ClientVoiceSampleInput[] {
+  return files
+    .map((file, i) => ({ file, i }))
+    .filter(({ i }) => !excludeIndices.includes(i))
+    .map(({ file, i }) => ({
+      kind: 'file' as const,
+      file,
+      durationSec: clipDurations?.[i] ?? undefined,
+      weightSec: clipDurations?.[i] ?? undefined,
+    }))
+}
+
+function buildVoiceSamplesFromLibrary(
+  clips: ReelLibraryClipDraft[],
+  clipDurations: (number | null)[] | undefined,
+  excludeIndices: number[]
+): ClientVoiceSampleInput[] {
+  return clips
+    .map((clip, i) => ({ clip, i }))
+    .filter(({ i }) => !excludeIndices.includes(i))
+    .map(({ clip, i }) => ({
+      kind: 'url' as const,
+      url: clip.signedUrl,
+      durationSec: clipDurations?.[i] ?? undefined,
+      weightSec: clipDurations?.[i] ?? undefined,
+    }))
+}
+
+async function measureReelAudioPayloadForStart(params: {
+  musicUrl: string
+  musicTrimStartSec?: number
+  clipDurations?: (number | null)[]
+  voiceSamples: ClientVoiceSampleInput[]
+  onProgress?: (msg: string) => void
+}): Promise<{ reelMusicVolume: number; reelDialogueVolume: number }> {
+  const { measureReelAudioBalanceInBrowser } = await import('@/lib/videos/audio-balance-client')
+  const reelDurationSec = params.clipDurations?.reduce<number>(
+    (acc, d) => acc + (typeof d === 'number' && Number.isFinite(d) ? d : 0),
+    0
+  )
+  const balance = await measureReelAudioBalanceInBrowser({
+    voiceSamples: params.voiceSamples,
+    musicUrl: params.musicUrl,
+    musicTrimStartSec: params.musicTrimStartSec ?? 0,
+    reelDurationSec: reelDurationSec != null && reelDurationSec > 0 ? reelDurationSec : undefined,
+    onProgress: params.onProgress,
+  })
+  return {
+    reelMusicVolume: balance.musicVolume,
+    reelDialogueVolume: balance.dialogueVolume,
+  }
 }
 
 export function CreateReelModal({
@@ -494,8 +552,6 @@ export function CreateReelModal({
       scriptPdfPath = scriptUpload.path
     }
 
-    setUploadProgress('Iniciando pipeline...')
-
     const voiceOverPayload =
       flowType === 'multiple' && orderedClips.length >= 2
         ? voiceOverMode === 'clip'
@@ -545,6 +601,21 @@ export function CreateReelModal({
       }
     }
 
+    let reelAudioPayload: { reelMusicVolume: number; reelDialogueVolume: number } | null = null
+    if (selectedMusicUrl) {
+      const excludeIndices =
+        flowType === 'multiple' && voiceOverMode === 'clip' ? [voiceOverClipIndex] : []
+      reelAudioPayload = await measureReelAudioPayloadForStart({
+        musicUrl: selectedMusicUrl,
+        musicTrimStartSec: musicTrimMode === 'manual' ? manualMusicTrimStartSec : 0,
+        clipDurations,
+        voiceSamples: buildVoiceSamplesFromLibrary(orderedClips, clipDurations, excludeIndices),
+        onProgress: setUploadProgress,
+      })
+    }
+
+    setUploadProgress('Iniciando pipeline...')
+
     const startRes = await fetch('/api/videos/jobs/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -559,6 +630,7 @@ export function CreateReelModal({
         ...(canonV ? { canonicalVehicle: canonV } : {}),
         ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
         ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
+        ...(reelAudioPayload ?? {}),
       }),
     })
 
@@ -735,8 +807,6 @@ export function CreateReelModal({
       }
 
       // ── PASO 4: Notificar al servidor que los archivos están listos ───────
-      setUploadProgress('Iniciando pipeline...')
-
       const voiceOverPayload =
         flowType === 'multiple' && files.length >= 2
           ? voiceOverMode === 'clip'
@@ -786,6 +856,21 @@ export function CreateReelModal({
         }
       }
 
+      let reelAudioPayload: { reelMusicVolume: number; reelDialogueVolume: number } | null = null
+      if (selectedMusicUrl) {
+        const excludeIndices =
+          flowType === 'multiple' && voiceOverMode === 'clip' ? [voiceOverClipIndex] : []
+        reelAudioPayload = await measureReelAudioPayloadForStart({
+          musicUrl: selectedMusicUrl,
+          musicTrimStartSec: musicTrimMode === 'manual' ? manualMusicTrimStartSec : 0,
+          clipDurations,
+          voiceSamples: buildVoiceSamplesFromFiles(files, clipDurations, excludeIndices),
+          onProgress: setUploadProgress,
+        })
+      }
+
+      setUploadProgress('Iniciando pipeline...')
+
       const startRes = await fetch('/api/videos/jobs/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -800,6 +885,7 @@ export function CreateReelModal({
           ...(canonV ? { canonicalVehicle: canonV } : {}),
           ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
           ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
+          ...(reelAudioPayload ?? {}),
         }),
       })
 

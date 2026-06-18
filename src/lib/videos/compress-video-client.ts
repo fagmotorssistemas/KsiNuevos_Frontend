@@ -48,7 +48,8 @@ async function assertFfmpegAssetsReachable(): Promise<void> {
   }
 }
 
-async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
+/** Carga ffmpeg.wasm (compartido con medición de audio en el navegador). */
+export async function loadFfmpegWasm(onProgress?: VideoCompressProgressFn): Promise<{
   ffmpeg: InstanceType<FfmpegModule['FFmpeg']>
   fetchFile: UtilModule['fetchFile']
 }> {
@@ -101,7 +102,11 @@ async function loadFfmpeg(onProgress?: VideoCompressProgressFn): Promise<{
 
 /** Precarga wasm (p. ej. al seleccionar clips grandes) para fallar antes de pulsar Crear. */
 export async function preloadVideoCompressor(onProgress?: VideoCompressProgressFn): Promise<void> {
-  await loadFfmpeg(onProgress)
+  await loadFfmpegWasm(onProgress)
+}
+
+function loadFfmpeg(onProgress?: VideoCompressProgressFn) {
+  return loadFfmpegWasm(onProgress)
 }
 
 function uint8ToFile(data: Uint8Array, originalName: string): File {

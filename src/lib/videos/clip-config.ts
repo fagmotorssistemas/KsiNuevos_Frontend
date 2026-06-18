@@ -56,6 +56,9 @@ export interface VideoJobPipelineInputMeta {
   canonicalVehicle?: CanonicalVehicleMeta | null
   /** ID inventario (`inventoryoracle.id`) para detectar `video_scripts` del mismo vehículo. */
   vehicleId?: string | null
+  /** Volúmenes de mezcla medidos en el navegador (ffmpeg.wasm) antes del pipeline. */
+  reelMusicVolume?: number | null
+  reelDialogueVolume?: number | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta {
@@ -79,8 +82,18 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     (Array.isArray(o.manualClipOrderIndices) && o.manualClipOrderIndices.length > 0) ||
     o.forceAllManualOrderClips === true ||
     hasVehicle ||
-    (typeof o.vehicleId === 'string' && o.vehicleId.trim().length > 0)
+    (typeof o.vehicleId === 'string' && o.vehicleId.trim().length > 0) ||
+    normalizeReelAudioVolume(o.reelMusicVolume) != null ||
+    normalizeReelAudioVolume(o.reelDialogueVolume) != null
   )
+}
+
+/** Volumen Shotstack 0..1 guardado en metadatos del job. */
+export function normalizeReelAudioVolume(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined || raw === '') return undefined
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n < 0 || n > 1) return undefined
+  return Number(n.toFixed(3))
 }
 
 /** Inicio manual de música en segundos (>=0), con tope de seguridad para payloads inválidos. */

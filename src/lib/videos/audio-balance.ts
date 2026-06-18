@@ -1,5 +1,5 @@
 /**
- * Balance dinámico voz vs música de fondo por Reel.
+ * Balance dinámico voz vs música de fondo por Reel (servidor).
  * Mide niveles con ffmpeg (volumedetect) y calcula volúmenes de mezcla para Shotstack.
  */
 
@@ -7,6 +7,25 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 
 import type { SequenceItem } from './segmenter'
+import { isPipelineInputMeta, normalizeReelAudioVolume } from './clip-config'
+import {
+  clampShotstackAssetVolume,
+  computeMixVolumesFromLevels,
+  FALLBACK_DIALOGUE_VOLUME,
+  FALLBACK_MUSIC_VOLUME,
+  parseMeanVolumeDb,
+  type ReelAudioBalance,
+} from './audio-balance-core'
+
+export {
+  clampShotstackAssetVolume,
+  computeMixVolumesFromLevels,
+  FALLBACK_DIALOGUE_VOLUME,
+  FALLBACK_MUSIC_VOLUME,
+  parseMeanVolumeDb,
+  SHOTSTACK_MAX_ASSET_VOLUME,
+  type ReelAudioBalance,
+} from './audio-balance-core'
 
 const execFileAsync = promisify(execFile)
 
@@ -15,23 +34,21 @@ const MAX_VOICE_SAMPLES = 4
 const MAX_SAMPLE_DURATION_SEC = 14
 const MAX_MUSIC_ANALYSIS_SEC = 75
 
-/** Música debe quedar al menos N dB por debajo de la voz en la mezcla final. */
-const TARGET_MUSIC_BELOW_VOICE_DB = 14
+export interface ReelAudioRenderVolumes {
+  musicVolume?: number
+  dialogueVolume?: number
+}
 
-/** Shotstack rechaza `asset.volume` > 1 (HTTP 400). */
-export const SHOTSTACK_MAX_ASSET_VOLUME = 1
-
-export const FALLBACK_MUSIC_VOLUME = 0.04
-export const FALLBACK_DIALOGUE_VOLUME = 1
-
-const MIN_MUSIC_VOLUME = 0.015
-const MAX_MUSIC_VOLUME = 0.1
-export interface ReelAudioBalance {
-  musicVolume: number
-  dialogueVolume: number
-  voiceMeanDb: number | null
-  musicMeanDb: number | null
-  source: 'measured' | 'fallback'
+/** Lee volúmenes medidos en el navegador desde `selected_clips` del job. */
+export function reelAudioVolumesFromPipelineMeta(selectedClips: unknown): ReelAudioRenderVolumes {
+  if (!isPipelineInputMeta(selectedClips)) return {}
+  const musicVolume = normalizeReelAudioVolume(selectedClips.reelMusicVolume)
+  const dialogueVolume = normalizeReelAudioVolume(selectedClips.reelDialogueVolume)
+  if (musicVolume == null && dialogueVolume == null) return {}
+  return {
+    ...(musicVolume != null ? { musicVolume } : {}),
+    ...(dialogueVolume != null ? { dialogueVolume } : {}),
+  }
 }
 
 interface VoiceSample {
@@ -39,15 +56,6 @@ interface VoiceSample {
   trimStartSec: number
   durationSec: number
   weightSec: number
-}
-
-function parseMeanVolumeDb(stderr: string): number | null {
-  const match = stderr.match(/mean_volume:\s*(-?\s*inf|nan|-?\d+(?:\.\d+)?)\s*dB/i)
-  if (!match) return null
-  const raw = match[1]!.replace(/\s+/g, '').toLowerCase()
-  if (raw === '-inf' || raw === 'inf' || raw === 'nan') return -120
-  const n = Number.parseFloat(raw)
-  return Number.isFinite(n) ? n : null
 }
 
 async function measureMeanVolumeDbFromUrl(
@@ -78,14 +86,6 @@ async function measureMeanVolumeDbFromUrl(
     console.warn(`[VideoV2Pipeline][${jobId}][AudioBalance] ffmpeg volumedetect falló: ${msg}`)
     return null
   }
-}
-
-function dbToLinear(db: number): number {
-  return Math.pow(10, db / 20)
-}
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, n))
 }
 
 function pickVoiceSamples(sequence: SequenceItem[], clipUrls: string[]): VoiceSample[] {
@@ -130,33 +130,6 @@ async function measureWeightedVoiceMeanDb(
   }
   if (totalWeight <= 0) return null
   return weightedSum / totalWeight
-}
-
-/** Asegura volumen válido para la API de Shotstack (0..1). */
-export function clampShotstackAssetVolume(volume: number): number {
-  return Number(clamp(volume, 0, SHOTSTACK_MAX_ASSET_VOLUME).toFixed(3))
-}
-
-export function computeMixVolumesFromLevels(
-  voiceMeanDb: number,
-  musicMeanDb: number
-): Pick<ReelAudioBalance, 'musicVolume' | 'dialogueVolume'> {
-  // Shotstack no permite subir la voz por encima de 1.0; compensamos bajando más la música.
-  let targetGapDb = TARGET_MUSIC_BELOW_VOICE_DB
-  if (voiceMeanDb < -31) {
-    const quietnessDb = -31 - voiceMeanDb
-    targetGapDb += Math.min(10, quietnessDb * 0.4)
-  }
-
-  const musicVolumeDb = voiceMeanDb - targetGapDb - musicMeanDb
-  const musicVolume = clampShotstackAssetVolume(
-    clamp(dbToLinear(musicVolumeDb), MIN_MUSIC_VOLUME, MAX_MUSIC_VOLUME)
-  )
-
-  return {
-    musicVolume,
-    dialogueVolume: SHOTSTACK_MAX_ASSET_VOLUME,
-  }
 }
 
 export interface ComputeReelAudioBalanceOptions {
@@ -211,8 +184,7 @@ export async function computeReelAudioBalance(
 
   console.log(
     `[VideoV2Pipeline][${jobId}][AudioBalance] voz≈${voiceMeanDb.toFixed(1)} dB, ` +
-      `música≈${musicMeanDb.toFixed(1)} dB → música=${musicVolume}, voz=${dialogueVolume} ` +
-      `(objetivo ${TARGET_MUSIC_BELOW_VOICE_DB} dB bajo voz)`
+      `música≈${musicMeanDb.toFixed(1)} dB → música=${musicVolume}, voz=${dialogueVolume}`
   )
 
   return {

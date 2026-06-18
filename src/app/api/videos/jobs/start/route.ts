@@ -24,6 +24,7 @@ import {
   normalizeManualClipOrderIndices,
   normalizeCanonicalVehicle,
   normalizeMusicTrimStartSec,
+  normalizeReelAudioVolume,
 } from '@/lib/videos/clip-config'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos/extract-pdf-script-text'
 
@@ -82,6 +83,9 @@ interface StartJobBody {
   vehicleId?: string | null
   /** Inicio manual del track musical en segundos (opcional). */
   musicTrimStartSec?: number | null
+  /** Mezcla medida en el navegador (ffmpeg.wasm) antes del pipeline. */
+  reelMusicVolume?: number | null
+  reelDialogueVolume?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -103,6 +107,8 @@ export async function POST(request: NextRequest) {
       canonicalVehicle: canonicalVehicleRaw,
       vehicleId: vehicleIdRaw,
       musicTrimStartSec: musicTrimStartRaw,
+      reelMusicVolume: reelMusicVolumeRaw,
+      reelDialogueVolume: reelDialogueVolumeRaw,
     } = body
 
     if (!jobId || !paths?.length) {
@@ -343,6 +349,8 @@ export async function POST(request: NextRequest) {
         ? String(vehicleIdRaw).trim()
         : undefined
     const musicTrimStartSec = normalizeMusicTrimStartSec(musicTrimStartRaw ?? undefined)
+    const reelMusicVolume = normalizeReelAudioVolume(reelMusicVolumeRaw ?? undefined)
+    const reelDialogueVolume = normalizeReelAudioVolume(reelDialogueVolumeRaw ?? undefined)
 
     const supabase = getServiceClient()
 
@@ -403,7 +411,9 @@ export async function POST(request: NextRequest) {
       forceAllManualOrderClips ||
       canonicalVehicle !== undefined ||
       vehicleId !== undefined ||
-      musicTrimStartSec !== undefined
+      musicTrimStartSec !== undefined ||
+      reelMusicVolume !== undefined ||
+      reelDialogueVolume !== undefined
         ? ({
             _v2_pipeline_input: true,
             ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -424,6 +434,8 @@ export async function POST(request: NextRequest) {
             ...(canonicalVehicle ? { canonicalVehicle } : {}),
             ...(vehicleId ? { vehicleId } : {}),
             ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),
+            ...(reelMusicVolume !== undefined ? { reelMusicVolume } : {}),
+            ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
           } as unknown as Json)
         : undefined
 
@@ -470,6 +482,8 @@ export async function POST(request: NextRequest) {
       voiceOverAudioPath,
       voiceOverMp3DurationSec,
       musicTrimStartSec,
+      reelMusicVolume,
+      reelDialogueVolume,
     })
 
     return NextResponse.json({ jobId, status: 'processing' })
@@ -493,6 +507,8 @@ function startPipelineFromPaths(params: {
   voiceOverAudioPath?: string
   voiceOverMp3DurationSec?: number
   musicTrimStartSec?: number
+  reelMusicVolume?: number
+  reelDialogueVolume?: number
 }) {
   const {
     jobId,
@@ -507,6 +523,8 @@ function startPipelineFromPaths(params: {
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
     musicTrimStartSec,
+    reelMusicVolume,
+    reelDialogueVolume,
   } = params
 
   const files = paths.map((path, i) => ({
@@ -530,5 +548,7 @@ function startPipelineFromPaths(params: {
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
     musicTrimStartSec,
+    reelMusicVolume,
+    reelDialogueVolume,
   })
 }

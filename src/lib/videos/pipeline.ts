@@ -77,6 +77,7 @@ import {
   type VoiceOverIntroRenderInput,
 } from './creatomate'
 import { renderSegmentsV2, getShotstackRenderStatus } from './shotstack'
+import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import {
@@ -593,7 +594,8 @@ async function runSingleVideoPipelineFromStorage(
   storagePath: string,
   signedUrl: string,
   musicTrackUrl: string,
-  musicTrimStartSecOverride?: number
+  musicTrimStartSecOverride?: number,
+  reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
   let googleFileRef: GoogleFileRef | null = null
 
@@ -817,6 +819,7 @@ async function runSingleVideoPipelineFromStorage(
 
     const renderId = await renderSegmentsV2(jobId, analysis.sequence, clipUrls, subtitleBlocks, musicTrackUrl, undefined, {
       musicTrimStartSecOverride,
+      ...reelAudioVolumes,
       brandConfig,
       brandMentionTimeSec,
       comentaMentionTimeSec: comentaMentionTimeSecA,
@@ -1042,7 +1045,8 @@ async function runMultipleClipsPipelineFromStorage(
   voiceOverOverlayClipIndicesInput: number[] | undefined,
   voiceOverAudioPathInput: string | undefined,
   voiceOverMp3DurationSecInput: number | undefined,
-  musicTrimStartSecOverride?: number
+  musicTrimStartSecOverride?: number,
+  reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
   let googleFileRefs: GoogleFileRef[] = []
 
@@ -1609,7 +1613,7 @@ async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       musicTrackUrl,
       voIntroForRender,
-      { musicTrimStartSecOverride, brandConfig, brandMentionTimeSec, brandMentionLengthSec, comentaMentionTimeSec, comentaOverlayText }
+      { musicTrimStartSecOverride, ...reelAudioVolumes, brandConfig, brandMentionTimeSec, brandMentionLengthSec, comentaMentionTimeSec, comentaOverlayText }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -2549,6 +2553,8 @@ export async function rerunCreatomateRenderForJob(
     brandConfig
   )
 
+  const reelAudioVolumes = reelAudioVolumesFromPipelineMeta(sc)
+
   const renderId = await renderSegmentsV2(
     jobId,
     analysis.sequence,
@@ -2558,6 +2564,7 @@ export async function rerunCreatomateRenderForJob(
     voIntroForRender,
     {
       musicTrimStartSecOverride: effectiveMusicTrimStartSec,
+      ...reelAudioVolumes,
       brandConfig,
       comentaMentionTimeSec: comentaMentionTimeSecRerun,
       comentaOverlayText: comentaOverlayTextRerun,
@@ -2669,6 +2676,8 @@ export function startPipelineBackground(params: {
   voiceOverAudioPath?: string
   voiceOverMp3DurationSec?: number
   musicTrimStartSec?: number
+  reelMusicVolume?: number
+  reelDialogueVolume?: number
 }) {
   const {
     jobId,
@@ -2682,13 +2691,30 @@ export function startPipelineBackground(params: {
     voiceOverAudioPath,
     voiceOverMp3DurationSec,
     musicTrimStartSec,
+    reelMusicVolume,
+    reelDialogueVolume,
   } = params
+
+  const reelAudioVolumes: ReelAudioRenderVolumes | undefined =
+    reelMusicVolume != null || reelDialogueVolume != null
+      ? {
+          ...(reelMusicVolume != null ? { musicVolume: reelMusicVolume } : {}),
+          ...(reelDialogueVolume != null ? { dialogueVolume: reelDialogueVolume } : {}),
+        }
+      : undefined
 
   if (flowType === 'single') {
     const f = files[0]
     setImmediate(() => {
       if (f.alreadyUploaded && f.path && f.signedUrl) {
-        runSingleVideoPipelineFromStorage(jobId, f.path, f.signedUrl, musicTrackUrl, musicTrimStartSec).catch((e) =>
+        runSingleVideoPipelineFromStorage(
+          jobId,
+          f.path,
+          f.signedUrl,
+          musicTrackUrl,
+          musicTrimStartSec,
+          reelAudioVolumes
+        ).catch((e) =>
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en single pipeline: ${e}`)
         )
       } else {
@@ -2712,7 +2738,8 @@ export function startPipelineBackground(params: {
           voiceOverOverlayClipIndices,
           voiceOverAudioPath,
           voiceOverMp3DurationSec,
-          musicTrimStartSec
+          musicTrimStartSec,
+          reelAudioVolumes
         ).catch((e) =>
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en multiple pipeline: ${e}`)
         )
