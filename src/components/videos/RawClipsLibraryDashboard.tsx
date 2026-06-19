@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -332,12 +332,24 @@ function InfoSidebar({
 }
 
 function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
+
+  async function handlePlayClick() {
+    const video = videoRef.current
+    if (!video) return
+    try {
+      await video.play()
+    } catch {
+      // Política del navegador o clip aún cargando
+    }
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="relative aspect-[9/16] max-h-[320px] w-full bg-black">
         <video
+          ref={videoRef}
           src={clip.signedUrl}
           className="h-full w-full object-contain"
           controls={playing}
@@ -345,13 +357,19 @@ function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
           playsInline
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
         />
         {!playing && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
+          <button
+            type="button"
+            onClick={handlePlayClick}
+            aria-label="Reproducir clip"
+            className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors hover:bg-black/30"
+          >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
               <Play className="h-5 w-5 text-violet-600" fill="currentColor" />
             </div>
-          </div>
+          </button>
         )}
       </div>
       <div className="space-y-1 p-3">

@@ -290,12 +290,11 @@ function countOverlapsBeforeClip(clipIndex: number, sequenceLength: number): num
 
 function computeClipVideoStartSec(sequence: SequenceItem[], clipIndex: number): number {
   const linearStarts = computeLinearStarts(sequence)
-  return Number(
-    (
-      linearStarts[clipIndex]! -
-      CLIP_TRANSITION_OVERLAP_SEC * countOverlapsBeforeClip(clipIndex, sequence.length)
-    ).toFixed(3)
-  )
+  const raw =
+    linearStarts[clipIndex]! -
+    CLIP_TRANSITION_OVERLAP_SEC * countOverlapsBeforeClip(clipIndex, sequence.length)
+  // Shotstack exige start >= 0; si el 1.er clip es muy corto, el overlap puede quedar negativo.
+  return Number(Math.max(0, raw).toFixed(3))
 }
 
 function buildClipFlashTransitionTrack(
@@ -376,7 +375,6 @@ function buildVideoTracks(
   clipUrls: string[],
   dialogueVolume: number
 ): ShotstackTrack[] {
-  const linearStarts = computeLinearStarts(sequence)
   const overlap = CLIP_TRANSITION_OVERLAP_SEC
   const transitionCount = countActiveClipTransitions(sequence.length)
 
@@ -420,7 +418,7 @@ function buildVideoTracks(
   topClips.push(...buildFirstClipIntroClips(item0, src0, !!CLIP_BOUNDARY_TRANSITIONS[0], dialogueVolume))
 
   for (let i = 1; i < sequence.length; i++) {
-    const start = linearStarts[i]! - overlap * countOverlapsBeforeClip(i, sequence.length)
+    const start = computeClipVideoStartSec(sequence, i)
     const item = sequence[i]!
     const src = clipUrls[item.clip_index] ?? clipUrls[0]
     let length = Number(item.trim_duration.toFixed(3))
@@ -908,6 +906,7 @@ const BRAND_OVERLAY_INTRO_SEC = 3.5
 function cleanVehicleText(text: string): string {
   return text
     .replace(/\b(AC|TM|TA|MT|AT)\b/gi, '')
+    .replace(/\b(CD|CS)\b/gi, '')
     .replace(/\b(4X4|4X2|2X4|AWD|FWD|RWD)\b/gi, '')
     .replace(/\b\d+P\b/gi, '')
     .replace(/\b\d+\.\d+\b/g, '')

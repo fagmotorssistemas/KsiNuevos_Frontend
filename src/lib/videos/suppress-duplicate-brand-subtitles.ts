@@ -17,6 +17,7 @@ export interface TitleIdentity {
 function cleanVehicleText(text: string): string {
   return text
     .replace(/\b(AC|TM|TA|MT|AT)\b/gi, '')
+    .replace(/\b(CD|CS)\b/gi, '')
     .replace(/\b(4X4|4X2|2X4|AWD|FWD|RWD)\b/gi, '')
     .replace(/\b\d+P\b/gi, '')
     .replace(/\b\d+\.\d+\b/g, '')
