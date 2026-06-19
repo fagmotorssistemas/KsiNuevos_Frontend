@@ -6,7 +6,7 @@ import {
 import { wordFuzzyMatches } from './subtitle-screen-text'
 
 const MAX_INTRO_SOURCE_CLIP_INDEX = 1
-const BRAND_L2_TWO_WORD_MAX_CHARS = 14
+const BRAND_L2_TWO_WORD_MAX_CHARS = 11
 
 export interface TitleIdentity {
   brand: string
