@@ -173,13 +173,10 @@ function ReelPrePipelineProgress({ message }: { message: string | null }) {
         <p className="text-xs text-gray-500">
           Tiempo estimado restante: <span className="font-medium text-gray-600">8–12 minutos</span>
         </p>
-        <p className="text-xs text-gray-400 leading-relaxed">
-          La creación del Reel toma su tiempo; el renderizado puede demorar varios minutos aunque la barra
-          avance rápido.{' '}
-          <span className="text-gray-600">
-            Puedes cerrar esta ventana y seguir navegando en la página sin problema: el proceso continúa en
-            el servidor. Revisa el avance en la lista de videos de marketing.
-          </span>
+        <p className="text-xs text-amber-800 leading-relaxed rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <span className="font-semibold">No cierres esta ventana todavía.</span> Estamos subiendo tus clips y
+          preparando el análisis. Mantén el modal abierto hasta que comience el renderizado; si sales antes, el
+          Reel puede quedarse trabado y no continuar.
         </p>
       </div>
 
@@ -235,6 +232,7 @@ export function CreateReelModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
+  const [pipelineCanClose, setPipelineCanClose] = useState(false)
   const [completedJob, setCompletedJob] = useState<VideoJob | null>(null)
   /** Automático, audio de un clip, o archivo MP3 de voz en off. */
   const [voiceOverMode, setVoiceOverMode] = useState<VoiceOverUiMode>('auto')
@@ -332,6 +330,7 @@ export function CreateReelModal({
     setMusicTrimMode('smart')
     setManualMusicTrimStartSec(0)
     setJobId(null)
+    setPipelineCanClose(false)
     setCompletedJob(null)
     setIsSubmitting(false)
     setUploadProgress(null)
@@ -484,7 +483,22 @@ export function CreateReelModal({
     }
   }, [voiceOverMode, voiceOverClipIndex])
 
+  const canCloseModal = useMemo(() => {
+    if (step === 6) return true
+    if (step === 5) {
+      if (!jobId) return false
+      return pipelineCanClose
+    }
+    return true
+  }, [step, jobId, pipelineCanClose])
+
   function handleClose() {
+    if (!canCloseModal) {
+      toast.warning(
+        'Espera a que comience el renderizado (≈80% de la barra) antes de cerrar. Si sales antes, el Reel puede quedarse trabado.'
+      )
+      return
+    }
     reset()
     onClose()
   }
@@ -1017,7 +1031,19 @@ export function CreateReelModal({
               <p className="text-xs text-gray-400">Paso {step} de 6 — {STEP_LABELS[step - 1]}</p>
             </div>
           </div>
-          <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={!canCloseModal}
+            title={
+              canCloseModal
+                ? 'Cerrar'
+                : 'Espera a que comience el renderizado antes de cerrar'
+            }
+            className={`p-2 rounded-xl transition-colors ${
+              canCloseModal ? 'hover:bg-gray-100' : 'cursor-not-allowed opacity-40'
+            }`}
+          >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -1819,7 +1845,11 @@ export function CreateReelModal({
           {/* PASO 5 — Procesando */}
           {step === 5 && !jobId && <ReelPrePipelineProgress message={uploadProgress} />}
           {step === 5 && jobId && (
-            <PipelineStatus jobId={jobId} onCompleted={handleCompleted} />
+            <PipelineStatus
+              jobId={jobId}
+              onCompleted={handleCompleted}
+              onCloseAllowedChange={setPipelineCanClose}
+            />
           )}
 
           {/* PASO 6 — Resultado */}
