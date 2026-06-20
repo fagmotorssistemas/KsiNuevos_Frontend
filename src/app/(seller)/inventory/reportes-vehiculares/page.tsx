@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function ReportesVehicularesPage() {
     const { profile } = useAuth();
-    const { allCars, isLoading, reload } = useInventory();
+    const { allCars, isLoading, reload, patchCar } = useInventory();
     const [selectedCar, setSelectedCar] = useState<InventoryCar | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
@@ -22,6 +22,14 @@ export default function ReportesVehicularesPage() {
     const handleCloseDetailModal = () => {
         setSelectedCar(null);
         setIsDetailModalOpen(false);
+    };
+
+    const handleUpdateSuccess = async (patch: Partial<InventoryCar>) => {
+        if (selectedCar) {
+            patchCar(selectedCar.id, patch);
+            setSelectedCar((prev) => (prev ? { ...prev, ...patch } : null));
+        }
+        await reload({ silent: true });
     };
 
     return (
@@ -39,7 +47,7 @@ export default function ReportesVehicularesPage() {
                 </div>
                 <button
                     type="button"
-                    onClick={reload}
+                    onClick={() => void reload()}
                     className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors self-start"
                     title="Actualizar datos"
                 >
@@ -50,7 +58,7 @@ export default function ReportesVehicularesPage() {
             <InventoryVehicleReport
                 cars={allCars}
                 onEdit={handleEditCar}
-                onReload={reload}
+                onReload={() => void reload()}
                 currentUserRole={profile?.role}
             />
 
@@ -58,7 +66,7 @@ export default function ReportesVehicularesPage() {
                 <InventoryDetailModal
                     car={selectedCar}
                     onClose={handleCloseDetailModal}
-                    onUpdate={reload}
+                    onUpdate={handleUpdateSuccess}
                     currentUserRole={profile?.role}
                 />
             )}

@@ -15,6 +15,13 @@ import { downloadAllInventoryImages } from "@/lib/download-inventory-images";
 import { canShowInventoryDownloadAllImages } from "@/lib/inventory-download-images-access";
 
 import type { InventoryCar } from "@/hooks/useInventory";
+import {
+    formatInventoryPrice,
+    formatRevertCountdown,
+    getEffectivePublicPrice,
+    isPromoPublicPriceActive,
+} from "@/lib/inventario/inventory-pricing";
+import { canViewInventoryPrices } from "@/lib/inventario/inventory-pricing-access";
 
 // --- UTILIDAD PARA GENERAR PDF ---
 const generateTechnicalSheet = async (car: InventoryCar) => {
@@ -224,11 +231,11 @@ export function InventoryTable({
     const [downloadingImagesId, setDownloadingImagesId] = useState<string | null>(null);
 
     const role = currentUserRole?.toLowerCase() || '';
-    const canEdit = role === 'admin' || role === 'marketing' || role === 'vendedor'; // Vendedor gestiona sin editar precio (solo admin)
+    const canViewPrices = canViewInventoryPrices(role);
+    const canEdit = role === 'admin' || role === 'marketing' || role === 'vendedor';
     const canDownloadAllImages = canShowInventoryDownloadAllImages(currentUserId);
 
-    const formatPrice = (price: number | null) => 
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price ?? 0);
+    const formatPrice = (price: number | null) => formatInventoryPrice(price);
 
     const formatKm = (km: number | null) => 
         km ? `${km.toLocaleString()} km` : '0 km';
@@ -305,7 +312,12 @@ export function InventoryTable({
                                 <th className="px-4 py-3 font-semibold">Vehículo</th>
                                 <th className="px-4 py-3 font-semibold">Placa / ID</th>
                                 <th className="px-4 py-3 font-semibold">Año / Color</th>
-                                <th className="px-4 py-3 font-semibold">Precio</th>
+                                {canViewPrices && (
+                                    <>
+                                        <th className="px-4 py-3 font-semibold">Precio interno</th>
+                                        <th className="px-4 py-3 font-semibold">Precio público</th>
+                                    </>
+                                )}
                                 <th className="px-4 py-3 font-semibold hidden md:table-cell">Kilometraje</th>
                                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
                                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Ubicación</th>
@@ -357,9 +369,40 @@ export function InventoryTable({
                                                     {car.color || '-'}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 font-medium text-emerald-600">
-                                                {formatPrice(car.price)}
-                                            </td>
+                                            {canViewPrices && (
+                                                <>
+                                                    <td className="px-4 py-3 font-medium text-slate-800">
+                                                        {car.internal_fixed_price != null ? (
+                                                            <span>{formatInventoryPrice(car.internal_fixed_price)}</span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                                                                Sin fijar
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 font-medium text-emerald-600">
+                                                        <div>
+                                                            {formatPrice(getEffectivePublicPrice(car))}
+                                                        </div>
+                                                        {isPromoPublicPriceActive({
+                                                            price: car.price,
+                                                            internal_fixed_price: car.internal_fixed_price,
+                                                            internal_fixed_price_set_at: car.internal_fixed_price_set_at,
+                                                            public_price_changed_at: car.public_price_changed_at,
+                                                            public_price_change_reason: car.public_price_change_reason,
+                                                            public_price_reverts_at: car.public_price_reverts_at,
+                                                        }) && (
+                                                            <div className="text-[10px] text-violet-600 font-normal mt-0.5 max-w-[150px] leading-snug">
+                                                                {car.public_price_reverts_at && (
+                                                                    <span className="block text-slate-400">
+                                                                        {formatRevertCountdown(car.public_price_reverts_at)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-4 py-3 text-slate-600 hidden md:table-cell">
                                                 {formatKm(car.mileage)}
                                             </td>
@@ -427,7 +470,7 @@ export function InventoryTable({
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
                                         No se encontraron vehículos.
                                     </td>
                                 </tr>

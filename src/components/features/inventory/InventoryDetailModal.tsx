@@ -3,7 +3,7 @@ import {
     X, Save, Car, Share2, MapPin, Tag, Cog,
     DollarSign, Gauge, Loader2,
     Image as ImageIcon, UploadCloud, Plus, Trash2, Download,
-    Link, FileText, ClipboardCheck,
+    Link, FileText, ClipboardCheck, ChevronDown, User, Check,
 } from "lucide-react";
 import { downloadImagesAsPngZip, sanitizeDownloadFilename, type DownloadImageItem } from "@/lib/download-image-as-png";
 import { toast } from "sonner";
@@ -24,6 +24,18 @@ import {
     type ListingChecklist,
     type ListingChecklistKey,
 } from "@/types/inventory-listing-checklist";
+import {
+    formatInventoryPrice,
+    formatRevertCountdown,
+    getEffectivePublicPrice,
+    isPromoPublicPriceActive,
+    isVehicleAvailableForPriceRules,
+    buildPromoReasonFromSeller,
+} from "@/lib/inventario/inventory-pricing";
+import {
+    canEditInventoryPrices,
+    canViewInventoryPrices,
+} from "@/lib/inventario/inventory-pricing-access";
 
 // --- UI unificada (mismo patrón que modal Inventario General) ---
 function SectionTitle({
@@ -113,6 +125,127 @@ const Select = ({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
     </div>
 );
 
+function sellerInitials(name: string | null | undefined): string {
+    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function SellerPicker({
+    sellers,
+    value,
+    onChange,
+    placeholder = "Seleccionar vendedor…",
+}: {
+    sellers: { id: string; full_name: string | null }[];
+    value: string;
+    onChange: (id: string) => void;
+    placeholder?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const selected = sellers.find((s) => s.id === value);
+    const selectedName = selected?.full_name?.trim() || null;
+
+    useEffect(() => {
+        if (!open) return;
+        const handleOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleOutside);
+        return () => document.removeEventListener("mousedown", handleOutside);
+    }, [open]);
+
+    return (
+        <div ref={containerRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((prev) => !prev)}
+                className={`w-full min-h-10 px-3 py-2 flex items-center gap-2.5 text-left transition-all outline-none ${
+                    open ? "bg-violet-50/60" : "bg-white hover:bg-slate-50/80"
+                }`}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+            >
+                {selectedName ? (
+                    <>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-blue-100 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200/60">
+                            {sellerInitials(selectedName)}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-semibold text-slate-800 truncate">
+                                {selectedName}
+                            </span>
+                            <span className="block text-[10px] text-violet-600">Vendedor seleccionado</span>
+                        </span>
+                    </>
+                ) : (
+                    <>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 ring-1 ring-slate-200/80">
+                            <User className="h-4 w-4" />
+                        </span>
+                        <span className="flex-1 text-xs text-slate-400">{placeholder}</span>
+                    </>
+                )}
+                <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+                        open ? "rotate-180 text-violet-500" : ""
+                    }`}
+                />
+            </button>
+
+            {open && (
+                <div
+                    role="listbox"
+                    className="absolute z-30 left-0 right-0 top-[calc(100%+6px)] rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 py-1.5 max-h-52 overflow-y-auto animate-in fade-in zoom-in-95 duration-150"
+                >
+                    {sellers.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-slate-400 italic">No hay vendedores activos</p>
+                    ) : (
+                        sellers.map((seller) => {
+                            const name = seller.full_name?.trim() || "Sin nombre";
+                            const isSelected = seller.id === value;
+                            return (
+                                <button
+                                    key={seller.id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected}
+                                    onClick={() => {
+                                        onChange(seller.id);
+                                        setOpen(false);
+                                    }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
+                                        isSelected
+                                            ? "bg-violet-50 text-violet-900"
+                                            : "text-slate-700 hover:bg-slate-50"
+                                    }`}
+                                >
+                                    <span
+                                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                                            isSelected
+                                                ? "bg-violet-200 text-violet-800"
+                                                : "bg-slate-100 text-slate-600"
+                                        }`}
+                                    >
+                                        {sellerInitials(name === "Sin nombre" ? null : name)}
+                                    </span>
+                                    <span className="flex-1 text-xs font-medium truncate">{name}</span>
+                                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-violet-600" />}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 const STATUS_LABELS: Record<string, string> = {
     disponible: '🟢 Disponible',
     reservado: '🟡 Reservado',
@@ -168,20 +301,22 @@ function ModalPanel({ children, className = "" }: { children: React.ReactNode; c
 interface InventoryDetailModalProps {
     car: InventoryCar;
     onClose: () => void;
-    onUpdate: () => void;
+    onUpdate: (patch: Partial<InventoryCar>) => void | Promise<void>;
     currentUserRole?: string | null;
 }
 
 export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }: InventoryDetailModalProps) {
     const { supabase } = useAuth();
     const role = currentUserRole?.toLowerCase() || '';
-    const isAdmin = role === 'admin'; // Solo admin puede editar precio
-    const canEdit = isAdmin || role === 'marketing' || role === 'vendedor';
+    const canViewPrices = canViewInventoryPrices(role);
+    const isAdmin = canEditInventoryPrices(role);
+    const canEdit = canViewPrices;
     // Añadimos 'publications' a las pestañas
     const [activeTab, setActiveTab] = useState<
         'general' | 'marketing' | 'photos' | 'publications' | 'listing'
     >('general');
     const [isSaving, setIsSaving] = useState(false);
+    const [isCancellingPromo, setIsCancellingPromo] = useState(false);
     const [uploadStatus, setUploadStatus] = useState("");
     const [downloadingAllPhotos, setDownloadingAllPhotos] = useState(false);
     const [photoViewerIndex, setPhotoViewerIndex] = useState<number | null>(null);
@@ -219,7 +354,9 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
     // Estado del Formulario
     const [formData, setFormData] = useState({
-        price: car.price || 0,
+        internalFixedPrice:
+            car.internal_fixed_price != null ? String(car.internal_fixed_price) : '',
+        publicPrice: String(car.price ?? car.internal_fixed_price ?? 0),
         mileage: car.mileage || 0,
         status: car.status || 'disponible',
         location: car.location || 'patio',
@@ -241,6 +378,67 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
             img_gallery_urls: car.img_gallery_urls,
         })
     );
+
+    const [activeSellers, setActiveSellers] = useState<{ id: string; full_name: string | null }[]>([]);
+    const [publicPriceRequestedBySellerId, setPublicPriceRequestedBySellerId] = useState(
+        car.public_price_requested_by ?? ''
+    );
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        inventarioService
+            .listActiveSellers()
+            .then(setActiveSellers)
+            .catch(() => setActiveSellers([]));
+    }, [isAdmin]);
+
+    useEffect(() => {
+        setPublicPriceRequestedBySellerId(car.public_price_requested_by ?? '');
+    }, [car.id, car.public_price_requested_by]);
+
+    useEffect(() => {
+        setFormData((prev) => ({
+            ...prev,
+            internalFixedPrice:
+                car.internal_fixed_price != null
+                    ? String(car.internal_fixed_price)
+                    : prev.internalFixedPrice,
+            publicPrice: String(car.price ?? car.internal_fixed_price ?? prev.publicPrice ?? 0),
+        }));
+    }, [car.id, car.internal_fixed_price, car.price]);
+
+    const pricingAvailable = isVehicleAvailableForPriceRules({
+        stock: car.stock,
+        status: car.status,
+    });
+    const hasInternalFixedPrice = car.internal_fixed_price != null;
+    const internalReferencePrice =
+        formData.internalFixedPrice.trim() !== ''
+            ? Number(formData.internalFixedPrice)
+            : car.internal_fixed_price;
+    const hasInternalReference =
+        internalReferencePrice != null && Number.isFinite(internalReferencePrice) && internalReferencePrice > 0;
+    const promoActive = isPromoPublicPriceActive({
+        price: car.price,
+        internal_fixed_price: car.internal_fixed_price,
+        internal_fixed_price_set_at: car.internal_fixed_price_set_at,
+        public_price_changed_at: car.public_price_changed_at,
+        public_price_change_reason: car.public_price_change_reason,
+        public_price_reverts_at: car.public_price_reverts_at,
+    });
+    const publicDiffersFromInternal =
+        hasInternalReference &&
+        Number(formData.publicPrice).toFixed(2) !== Number(internalReferencePrice).toFixed(2);
+    const publicChangedInForm =
+        Number(formData.publicPrice).toFixed(2) !== Number(car.price ?? 0).toFixed(2);
+    const showSellerPicker =
+        publicDiffersFromInternal && publicChangedInForm;
+
+    const promoRequestedByName = useMemo(() => {
+        if (!car.public_price_requested_by) return null;
+        const seller = activeSellers.find((s) => s.id === car.public_price_requested_by);
+        return seller?.full_name?.trim() || null;
+    }, [car.public_price_requested_by, activeSellers]);
 
     const paginaWebFromPhotos = useMemo(
         () =>
@@ -308,6 +506,41 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
     const handleChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleCancelPromo = async () => {
+        if (!isAdmin || !pricingAvailable || !car.plate || !promoActive) return;
+        if (
+            !window.confirm(
+                '¿Cancelar la promo y volver el precio público al interno fijo? Quedará registrado en el historial.'
+            )
+        ) {
+            return;
+        }
+
+        setIsCancellingPromo(true);
+        try {
+            const result = await inventarioService.cancelPublicPromo(car.plate);
+            const patch: Partial<InventoryCar> = {
+                price: result.price,
+                public_price_changed_at: null,
+                public_price_change_reason: null,
+                public_price_reverts_at: null,
+                public_price_requested_by: null,
+            };
+            setFormData((prev) => ({
+                ...prev,
+                publicPrice: String(result.price),
+            }));
+            setPublicPriceRequestedBySellerId('');
+            await onUpdate(patch);
+            toast.success('Promo cancelada. Precio público alineado al interno fijo.');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'No se pudo cancelar la promo';
+            toast.error(message);
+        } finally {
+            setIsCancellingPromo(false);
+        }
     };
 
     const handleListingChecklistChange = (key: ListingChecklistKey, checked: boolean) => {
@@ -456,33 +689,116 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
             setUploadStatus("Guardando cambios...");
 
-            {/*// 1. Actualizar tabla 'inventory' (por ID)
-            const { error: error1 } = await supabase
-                .from('inventory')
-                .update({
-                    price: Number(formData.price),
-                    mileage: Number(formData.mileage),
-                    status: formData.status as any,
-                    location: formData.location as any,
-                    description: formData.description,
-                    marketing_in_patio: formData.marketing_in_patio,
-                    marketing_posts_count: Number(formData.marketing_posts_count),
-                    marketing_videos_count: Number(formData.marketing_videos_count),
-                    marketing_stories_count: Number(formData.marketing_stories_count),
-                    
-                    // Actualizamos imágenes
-                    img_main_url: finalMainUrl,
-                    img_gallery_urls: finalGalleryUrls,
+            let resolvedPublicPrice = Number(formData.publicPrice) || car.price || 0;
+            let resolvedInternalFixed = car.internal_fixed_price;
+            let pricePatch: Partial<InventoryCar> = {};
 
-                    color: formData.color,
-                    year: Number(formData.year)
-                })
-                .eq('id', car.id);
+            if (car.plate) {
+                const plate = car.plate.toUpperCase();
 
-            if (error1) throw error1;*/}
+                if (isAdmin && pricingAvailable) {
+                    const internalVal = formData.internalFixedPrice
+                        ? Number(formData.internalFixedPrice)
+                        : 0;
+                    let currentFixed = Number(car.internal_fixed_price ?? 0);
 
-            const oraclePayload = {
-                price: isAdmin ? Number(formData.price) : (car.price ?? 0),
+                    if (!hasInternalFixedPrice) {
+                        if (!internalVal) {
+                            throw new Error(
+                                'Debes registrar el precio interno fijo antes de guardar promociones públicas'
+                            );
+                        }
+                        const result = await inventarioService.setInternalFixedPrice(plate, internalVal);
+                        resolvedPublicPrice = result.price;
+                        resolvedInternalFixed = result.internalFixedPrice;
+                        currentFixed = result.internalFixedPrice;
+                        pricePatch = {
+                            internal_fixed_price: result.internalFixedPrice,
+                            internal_fixed_price_set_at: result.internalFixedPriceSetAt,
+                            price: result.price,
+                            public_price_changed_at: null,
+                            public_price_change_reason: null,
+                            public_price_reverts_at: null,
+                            public_price_requested_by: null,
+                        };
+                    } else {
+                        const internalChanged =
+                            !!internalVal &&
+                            Number(internalVal.toFixed(2)) !== Number(car.internal_fixed_price!.toFixed(2));
+
+                        if (internalChanged) {
+                            const result = await inventarioService.setInternalFixedPrice(plate, internalVal);
+                            resolvedPublicPrice = result.price;
+                            resolvedInternalFixed = result.internalFixedPrice;
+                            currentFixed = result.internalFixedPrice;
+                            pricePatch = {
+                                ...pricePatch,
+                                internal_fixed_price: result.internalFixedPrice,
+                                price: result.price,
+                                ...(result.syncedPublic
+                                    ? {
+                                          public_price_changed_at: null,
+                                          public_price_change_reason: null,
+                                          public_price_reverts_at: null,
+                                          public_price_requested_by: null,
+                                      }
+                                    : {}),
+                            };
+                        }
+
+                        const publicPrice = Number(formData.publicPrice);
+                        if (!publicPrice) {
+                            throw new Error('Ingresa el precio público (visible al cliente)');
+                        }
+
+                        const currentPublic = Number((car.price ?? 0).toFixed(2));
+                        const publicChangedInFormSave =
+                            Number(publicPrice.toFixed(2)) !== currentPublic;
+
+                        if (publicChangedInFormSave) {
+                            const changingPublic =
+                                Number(publicPrice.toFixed(2)) !== Number(currentFixed.toFixed(2));
+                            if (changingPublic && !publicPriceRequestedBySellerId.trim()) {
+                                throw new Error(
+                                    'Selecciona el vendedor que solicitó el precio promocional'
+                                );
+                            }
+                            const sellerName = activeSellers.find(
+                                (s) => s.id === publicPriceRequestedBySellerId
+                            )?.full_name;
+                            const result = await inventarioService.updatePublicPrice(
+                                plate,
+                                publicPrice,
+                                changingPublic
+                                    ? buildPromoReasonFromSeller(sellerName)
+                                    : 'Alineado al precio interno fijo',
+                                changingPublic ? publicPriceRequestedBySellerId : null
+                            );
+                            resolvedPublicPrice = result.price;
+                            pricePatch = {
+                                ...pricePatch,
+                                price: result.price,
+                                public_price_changed_at: result.publicPriceChangedAt,
+                                public_price_change_reason: result.publicPriceChangeReason,
+                                public_price_reverts_at: result.publicPriceRevertsAt,
+                                public_price_requested_by: result.publicPriceRequestedBy,
+                            };
+                        } else if (internalChanged) {
+                            resolvedPublicPrice = pricePatch.price ?? resolvedPublicPrice;
+                        } else {
+                            resolvedPublicPrice = publicPrice;
+                        }
+                    }
+                }
+
+                if (canEdit) {
+                    await inventarioService.updateMileage(plate, Number(formData.mileage));
+                }
+            }
+
+            const updatedAt = new Date().toISOString();
+            const oraclePayload: Record<string, unknown> = {
+                price: isAdmin ? resolvedPublicPrice : (car.price ?? 0),
                 mileage: Number(formData.mileage),
                 status: formData.status as any,
                 location: formData.location as any,
@@ -500,8 +816,12 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                     img_main_url: finalMainUrl,
                     img_gallery_urls: finalGalleryUrls,
                 }),
-                updated_at: new Date().toISOString(),
+                updated_at: updatedAt,
             };
+
+            if (isAdmin && pricingAvailable && resolvedInternalFixed != null) {
+                oraclePayload.internal_fixed_price = resolvedInternalFixed;
+            }
 
             const oracleQuery = car.plate
                 ? supabase.from('inventoryoracle').update(oraclePayload).eq('plate', car.plate.toUpperCase())
@@ -512,7 +832,31 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                 console.warn("⚠️ Advertencia al actualizar inventoryoracle:", error2);
             }
 
-            onUpdate();
+            const savedPatch: Partial<InventoryCar> = {
+                ...pricePatch,
+                price: isAdmin ? resolvedPublicPrice : car.price,
+                internal_fixed_price: resolvedInternalFixed,
+                mileage: Number(formData.mileage),
+                status: formData.status as InventoryCar['status'],
+                location: formData.location as InventoryCar['location'],
+                description: formData.description,
+                color: formData.color,
+                year: Number(formData.year),
+                marketing_in_patio: formData.marketing_in_patio,
+                marketing_posts_count: Number(formData.marketing_posts_count),
+                marketing_videos_count: Number(formData.marketing_videos_count),
+                marketing_stories_count: Number(formData.marketing_stories_count),
+                img_main_url: finalMainUrl,
+                img_gallery_urls: finalGalleryUrls,
+                publication_url: formData.publication_url,
+                listing_checklist: mergeListingChecklistForSave(listingChecklist, {
+                    img_main_url: finalMainUrl,
+                    img_gallery_urls: finalGalleryUrls,
+                }) as InventoryCar['listing_checklist'],
+                updated_at: updatedAt,
+            };
+
+            await onUpdate(savedPatch);
             onClose();
         } catch (error: any) {
             console.error("Error al actualizar vehículo:", error);
@@ -630,24 +974,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         )}
                                     </FormField>
 
-                                    <FormField label="Precio de venta" required>
-                                        {isAdmin ? (
-                                            <div className="relative flex items-center">
-                                                <DollarSign className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
-                                                <Input
-                                                    type="number"
-                                                    className="pl-7 font-mono font-bold"
-                                                    value={formData.price}
-                                                    onChange={(e) => handleChange('price', e.target.value)}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="h-9 px-2 flex items-center text-xs font-mono font-bold text-blue-800 bg-blue-50">
-                                                $ {Number(formData.price).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                                            </div>
-                                        )}
-                                    </FormField>
-
                                     <FormField label="Kilometraje">
                                         <div className="relative flex items-center">
                                             <Gauge className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
@@ -682,6 +1008,193 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         />
                                     </FormField>
                                 </div>
+
+                                {canViewPrices && (
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                                            Precios del vehículo
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                                            {isAdmin ? (
+                                                hasInternalFixedPrice ? (
+                                                    <>
+                                                        El <strong>precio interno fijo</strong> es la referencia de ventas (editable).
+                                                        El <strong>precio público</strong> es el que ve el cliente en la web.
+                                                        Si el público difiere del interno, indica qué vendedor lo solicitó; en 5 días vuelve al interno fijo.
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Primero registra el <strong>precio interno fijo</strong> (referencia de ventas).
+                                                        Al guardar, se habilitará el precio público para la web.
+                                                    </>
+                                                )
+                                            ) : hasInternalFixedPrice ? (
+                                                <>
+                                                    Referencia de ventas (<strong>interno</strong>) y precio visible al cliente (<strong>público</strong>).
+                                                    Solo lectura — contacta al administrador para cambios o promos.
+                                                </>
+                                            ) : (
+                                                <>Aún no hay precio interno fijo registrado. Solo lectura.</>
+                                            )}
+                                        </p>
+                                    </div>
+
+                                    <div
+                                        className={
+                                            hasInternalFixedPrice
+                                                ? 'grid grid-cols-1 md:grid-cols-2 gap-3'
+                                                : 'max-w-md'
+                                        }
+                                    >
+                                        <FormField label="Precio interno fijo (referencia ventas)">
+                                            {isAdmin && pricingAvailable ? (
+                                                <div className="relative flex items-center">
+                                                    <DollarSign className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
+                                                    <Input
+                                                        type="number"
+                                                        className="pl-7 font-mono font-bold text-slate-800"
+                                                        value={formData.internalFixedPrice}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => {
+                                                                const nextInternal = e.target.value;
+                                                                if (!hasInternalFixedPrice) {
+                                                                    return {
+                                                                        ...prev,
+                                                                        internalFixedPrice: nextInternal,
+                                                                    };
+                                                                }
+                                                                const baselineInternal =
+                                                                    prev.internalFixedPrice ||
+                                                                    String(car.internal_fixed_price ?? '');
+                                                                const wasAligned =
+                                                                    Number(prev.publicPrice).toFixed(2) ===
+                                                                    Number(baselineInternal).toFixed(2);
+                                                                return {
+                                                                    ...prev,
+                                                                    internalFixedPrice: nextInternal,
+                                                                    publicPrice:
+                                                                        wasAligned && nextInternal
+                                                                            ? nextInternal
+                                                                            : prev.publicPrice,
+                                                                };
+                                                            })
+                                                        }
+                                                        placeholder="Precio de referencia para ventas"
+                                                    />
+                                                </div>
+                                            ) : hasInternalFixedPrice ? (
+                                                <div className="h-9 px-2 flex items-center gap-2 text-xs font-mono font-bold text-slate-800 bg-slate-100">
+                                                    {formatInventoryPrice(car.internal_fixed_price)}
+                                                </div>
+                                            ) : (
+                                                <div className="h-9 px-2 flex items-center text-xs text-amber-700 bg-amber-50">
+                                                    Sin precio interno fijo
+                                                </div>
+                                            )}
+                                        </FormField>
+
+                                        {hasInternalFixedPrice && (
+                                            <FormField label="Precio público (cliente / web)">
+                                                {isAdmin && pricingAvailable ? (
+                                                    <div className="relative flex items-center">
+                                                        <DollarSign className="absolute left-2 text-slate-400 h-3.5 w-3.5" />
+                                                        <Input
+                                                            type="number"
+                                                            className="pl-7 font-mono font-bold text-emerald-800"
+                                                            value={formData.publicPrice}
+                                                            onChange={(e) =>
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    publicPrice: e.target.value,
+                                                                }))
+                                                            }
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-9 px-2 flex items-center text-xs font-mono font-bold text-emerald-700 bg-emerald-50">
+                                                        {formatInventoryPrice(
+                                                            getEffectivePublicPrice({
+                                                                price: car.price,
+                                                                internal_fixed_price: car.internal_fixed_price,
+                                                                internal_fixed_price_set_at:
+                                                                    car.internal_fixed_price_set_at,
+                                                                public_price_changed_at:
+                                                                    car.public_price_changed_at,
+                                                                public_price_change_reason:
+                                                                    car.public_price_change_reason,
+                                                                public_price_reverts_at:
+                                                                    car.public_price_reverts_at,
+                                                            })
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </FormField>
+                                        )}
+                                    </div>
+
+                                    {promoActive && (
+                                        <div className="relative rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 pr-10 text-[11px] text-violet-900">
+                                            <span className="font-semibold">Promo activa</span>
+                                            {car.public_price_reverts_at && (
+                                                <span className="block text-violet-600 mt-0.5">
+                                                    {formatRevertCountdown(car.public_price_reverts_at)}
+                                                    {' · '}
+                                                    Cambió el{' '}
+                                                    {new Date(car.public_price_changed_at!).toLocaleDateString('es-EC')}
+                                                </span>
+                                            )}
+                                            {promoRequestedByName && (
+                                                <span className="block text-violet-600 mt-0.5">
+                                                    Solicitado por: {promoRequestedByName}
+                                                </span>
+                                            )}
+                                            {isAdmin && pricingAvailable && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleCancelPromo}
+                                                    disabled={isCancellingPromo || isSaving}
+                                                    className="absolute top-2 right-2 p-1 rounded-md text-violet-500 hover:text-violet-900 hover:bg-violet-100/80 transition-colors disabled:opacity-50"
+                                                    title="Cancelar promo y volver al precio interno fijo"
+                                                    aria-label="Cancelar promo"
+                                                >
+                                                    {isCancellingPromo ? (
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    ) : (
+                                                        <X className="h-3.5 w-3.5" />
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {isAdmin && pricingAvailable && hasInternalReference && showSellerPicker && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="text-[10px] uppercase font-bold text-slate-400">
+                                                Vendedor que solicitó la promo
+                                                <span className="text-red-500 normal-case"> *</span>
+                                            </span>
+                                            <div className="rounded-xl border border-slate-200 bg-white overflow-visible shadow-sm">
+                                                <SellerPicker
+                                                    sellers={activeSellers}
+                                                    value={publicPriceRequestedBySellerId}
+                                                    onChange={setPublicPriceRequestedBySellerId}
+                                                />
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 leading-relaxed flex items-start gap-1.5">
+                                                <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                                                Elige al vendedor que pidió este precio. En 5 días el precio público vuelve solo al interno fijo.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {!pricingAvailable && (
+                                        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                                            Vehículo no disponible: los precios promocionales no se modifican (solo lectura).
+                                        </p>
+                                    )}
+                                </div>
+                                )}
 
                                 <FormField label="Observaciones internas" className="md:col-span-2 lg:col-span-3">
                                     <textarea

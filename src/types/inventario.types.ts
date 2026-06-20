@@ -13,7 +13,13 @@ export interface VehiculoInventario {
     placa: string;
     tipo: string;
     color: string;
-    price?: number;       // Precio fijo/lista del vehículo
+    price?: number;       // Precio público (web / promo)
+    internalFixedPrice?: number | null;
+    internalFixedPriceSetAt?: string | null;
+    publicPriceChangedAt?: string | null;
+    publicPriceChangeReason?: string | null;
+    publicPriceRevertsAt?: string | null;
+    publicPriceRequestedBy?: string | null;
     mileage?: number;
     /** Precio al que se vendió (cuando stock === 0). Viene del kardex/historial. */
     precioVenta?: number;

@@ -33,7 +33,8 @@ export default function InventoryPage() {
         updateFilter,
         setSortBy,
         resetFilters,
-        reload 
+        reload,
+        patchCar,
     } = useInventory();
 
     // Estados de Modales
@@ -53,9 +54,12 @@ export default function InventoryPage() {
         setIsDetailModalOpen(false);
     };
 
-    const handleUpdateSuccess = () => {
-        reload();
-        // Opcional: Cerrar modal si se desea
+    const handleUpdateSuccess = async (patch: Partial<InventoryCar>) => {
+        if (selectedCar) {
+            patchCar(selectedCar.id, patch);
+            setSelectedCar((prev) => (prev ? { ...prev, ...patch } : null));
+        }
+        await reload({ silent: true });
     };
 
     // Handlers Creación

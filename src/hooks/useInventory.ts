@@ -34,9 +34,9 @@ export function useInventory() {
     });
 
     // 1. CARGA DE DATOS
-    const fetchInventory = useCallback(async () => {
+    const fetchInventory = useCallback(async (options?: { silent?: boolean }) => {
         if (!user) return;
-        setIsLoading(true);
+        if (!options?.silent) setIsLoading(true);
 
         const { data, error } = await supabase
             .from('inventoryoracle')
@@ -48,8 +48,12 @@ export function useInventory() {
         } else {
             setCars(data || []);
         }
-        setIsLoading(false);
+        if (!options?.silent) setIsLoading(false);
     }, [supabase, user]);
+
+    const patchCar = useCallback((id: string, patch: Partial<InventoryCar>) => {
+        setCars((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    }, []);
 
     useEffect(() => {
         if (!isAuthLoading && user) {
@@ -136,6 +140,7 @@ export function useInventory() {
         rowsPerPage,
         isLoading: isLoading || isAuthLoading,
         reload: fetchInventory,
+        patchCar,
         sortBy,
         setSortBy,
         filters,

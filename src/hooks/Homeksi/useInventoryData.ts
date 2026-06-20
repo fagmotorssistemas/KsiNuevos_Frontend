@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
+import { getEffectivePublicPrice } from "@/lib/inventario/inventory-pricing";
 
 // --- 1. DEFINICIÓN DE TIPOS LOCAL ---
 // Definimos 'InventoryCar' aquí mismo, igual que en tu otro hook.
@@ -17,6 +18,8 @@ export type InventoryCar = Pick<
   | "transmission"
   | "mileage"
   | "price"
+  | "internal_fixed_price"
+  | "public_price_reverts_at"
   | "img_main_url"
   | "slug"
   | "features"
@@ -45,7 +48,7 @@ export function useInventoryData() {
     // 3. Query Selectiva: Debe coincidir con la lista de arriba
     const SELECT_QUERY = `
         id, brand, model, year, color, type_body, transmission, 
-        mileage, price, img_main_url, slug, features, specs, 
+        mileage, price, internal_fixed_price, public_price_reverts_at, img_main_url, slug, features, specs, 
         fuel_type, drive_type, passenger_capacity, cylinder_count, 
         version, plate_short, aesthetic_condition, mechanical_condition, created_at,
         registration_place, previous_owners
@@ -68,8 +71,18 @@ export function useInventoryData() {
             if (error) throw error;
 
             if (data) {
-                // Asignamos los datos. TypeScript aceptará esto porque 'data' coincide con 'InventoryCar'
-                setRawCars(data as unknown as InventoryCar[]);
+                const withEffectivePrice = (data as unknown as InventoryCar[]).map((car) => ({
+                    ...car,
+                    price: getEffectivePublicPrice({
+                        price: car.price,
+                        internal_fixed_price: car.internal_fixed_price ?? null,
+                        internal_fixed_price_set_at: null,
+                        public_price_changed_at: null,
+                        public_price_change_reason: null,
+                        public_price_reverts_at: car.public_price_reverts_at ?? null,
+                    }),
+                }));
+                setRawCars(withEffectivePrice);
             }
         } catch (err: any) {
             console.error("Error fetching inventory:", err);

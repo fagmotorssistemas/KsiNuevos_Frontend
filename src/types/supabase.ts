@@ -1909,6 +1909,47 @@ export type Database = {
           },
         ]
       }
+      inventory_price_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          inventoryoracle_id: string
+          new_price: number | null
+          old_price: number | null
+          price_type: string
+          reason: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          inventoryoracle_id: string
+          new_price?: number | null
+          old_price?: number | null
+          price_type: string
+          reason?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          inventoryoracle_id?: string
+          new_price?: number | null
+          old_price?: number | null
+          price_type?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_price_history_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_vehicle_debts: {
         Row: {
           amount: number | null
@@ -2362,6 +2403,8 @@ export type Database = {
           img_gallery_urls: string[] | null
           img_main_url: string | null
           img_prefix: string | null
+          internal_fixed_price: number | null
+          internal_fixed_price_set_at: string | null
           is_featured: boolean | null
           listing_checklist: Json
           location: Database["public"]["Enums"]["car_location"] | null
@@ -2378,6 +2421,10 @@ export type Database = {
           plate_short: string | null
           previous_owners: number | null
           price: number | null
+          public_price_change_reason: string | null
+          public_price_changed_at: string | null
+          public_price_requested_by: string | null
+          public_price_reverts_at: string | null
           publication_url: string | null
           purchase_date: string | null
           registration_place: string | null
@@ -2427,6 +2474,8 @@ export type Database = {
           img_gallery_urls?: string[] | null
           img_main_url?: string | null
           img_prefix?: string | null
+          internal_fixed_price?: number | null
+          internal_fixed_price_set_at?: string | null
           is_featured?: boolean | null
           listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
@@ -2443,6 +2492,10 @@ export type Database = {
           plate_short?: string | null
           previous_owners?: number | null
           price?: number | null
+          public_price_change_reason?: string | null
+          public_price_changed_at?: string | null
+          public_price_requested_by?: string | null
+          public_price_reverts_at?: string | null
           publication_url?: string | null
           purchase_date?: string | null
           registration_place?: string | null
@@ -2492,6 +2545,8 @@ export type Database = {
           img_gallery_urls?: string[] | null
           img_main_url?: string | null
           img_prefix?: string | null
+          internal_fixed_price?: number | null
+          internal_fixed_price_set_at?: string | null
           is_featured?: boolean | null
           listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
@@ -2508,6 +2563,10 @@ export type Database = {
           plate_short?: string | null
           previous_owners?: number | null
           price?: number | null
+          public_price_change_reason?: string | null
+          public_price_changed_at?: string | null
+          public_price_requested_by?: string | null
+          public_price_reverts_at?: string | null
           publication_url?: string | null
           purchase_date?: string | null
           registration_place?: string | null
@@ -2530,7 +2589,15 @@ export type Database = {
           wheels_count?: string | null
           year?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inventoryoracle_public_price_requested_by_fkey"
+            columns: ["public_price_requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventoryoracle_embeddings: {
         Row: {
@@ -5836,8 +5903,8 @@ export type Database = {
           flow_type: string
           gemini_analysis: Json | null
           id: string
-          job_name: string | null
           inventory_vehicle_id: string | null
+          job_name: string | null
           logo_url: string | null
           music_track_url: string | null
           progress_percentage: number | null
@@ -5873,8 +5940,8 @@ export type Database = {
           flow_type: string
           gemini_analysis?: Json | null
           id?: string
-          job_name?: string | null
           inventory_vehicle_id?: string | null
+          job_name?: string | null
           logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
@@ -5910,8 +5977,8 @@ export type Database = {
           flow_type?: string
           gemini_analysis?: Json | null
           id?: string
-          job_name?: string | null
           inventory_vehicle_id?: string | null
+          job_name?: string | null
           logo_url?: string | null
           music_track_url?: string | null
           progress_percentage?: number | null
