@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
     Car, 
     Info, 
@@ -6,13 +6,61 @@ import {
     Loader2,
     Pencil,
     Save,
-    Lock
+    Lock,
+    DollarSign,
+    X,
+    Gauge,
 } from "lucide-react";
 import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
 import { useAuth } from "@/hooks/useAuth";
 import { VehicleDetailModal } from "./VehicleDetailModal";
-import { formatRevertCountdown, formatInventoryPrice, isPromoPublicPriceActive, buildPromoReasonFromSeller } from "@/lib/inventario/inventory-pricing";
+import { InventorySellerPicker } from "@/components/features/inventory/InventorySellerPicker";
+import { formatRevertCountdown, formatInventoryPrice, isPromoPublicPriceActive, buildPromoReasonFromSeller, isVehicleAvailableForPriceRules } from "@/lib/inventario/inventory-pricing";
+
+function PricingFormField({
+    label,
+    hint,
+    required = false,
+    children,
+    className = "",
+}: {
+    label: string;
+    hint?: string;
+    required?: boolean;
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+            <div className="min-h-[2.75rem] flex flex-col justify-end">
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wide leading-snug">
+                    {label}
+                    {required && <span className="text-red-500 normal-case"> *</span>}
+                </span>
+                {hint ? (
+                    <span className="text-[10px] text-slate-400 normal-case font-normal mt-0.5 leading-snug">
+                        {hint}
+                    </span>
+                ) : (
+                    <span className="text-[10px] text-transparent mt-0.5 leading-snug select-none" aria-hidden>
+                        &nbsp;
+                    </span>
+                )}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden transition-all focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
+                {children}
+            </div>
+        </div>
+    );
+}
+
+const PricingInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input
+        className={`w-full h-10 px-3 bg-white focus:bg-blue-50/20 outline-none transition-all text-sm text-slate-800 placeholder:text-slate-400 border-0 ${className}`}
+        {...props}
+    />
+);
 
 /** Del historial kardex obtiene el precio al que se vendió (NOTA DE ENTREGA o último egreso). Mismo dato que el $ en el modal. */
 function getPrecioVentaFromHistorial(historial: MovimientoKardex[]): number | null {
@@ -47,6 +95,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     });
     const [activeSellers, setActiveSellers] = useState<{ id: string; full_name: string | null }[]>([]);
     const [saving, setSaving] = useState(false);
+    const [isCancellingPromo, setIsCancellingPromo] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -97,11 +146,88 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
         if (!isAdmin) return;
         setEditingVehiculo(v);
         setEditForm({
-            internalFixedPrice: v.internalFixedPrice ? String(v.internalFixedPrice) : '',
-            publicPrice: v.price ? String(v.price) : '',
+            internalFixedPrice: v.internalFixedPrice != null ? String(v.internalFixedPrice) : '',
+            publicPrice:
+                v.internalFixedPrice != null
+                    ? String(v.price ?? v.internalFixedPrice ?? '')
+                    : '',
             publicPriceRequestedBySellerId: v.publicPriceRequestedBy ?? '',
             mileage: v.mileage ? String(v.mileage) : '',
         });
+    };
+
+    const pricingAvailable = editingVehiculo
+        ? isVehicleAvailableForPriceRules({ stock: editingVehiculo.stock })
+        : false;
+    const hasInternalFixedPrice = editingVehiculo?.internalFixedPrice != null;
+    const internalReferencePrice =
+        editForm.internalFixedPrice.trim() !== ''
+            ? Number(editForm.internalFixedPrice)
+            : editingVehiculo?.internalFixedPrice ?? null;
+    const hasInternalReference =
+        internalReferencePrice != null &&
+        Number.isFinite(internalReferencePrice) &&
+        internalReferencePrice > 0;
+    const promoActive =
+        !!editingVehiculo &&
+        isPromoPublicPriceActive({
+            price: editingVehiculo.price ?? null,
+            internal_fixed_price: editingVehiculo.internalFixedPrice ?? null,
+            internal_fixed_price_set_at: editingVehiculo.internalFixedPriceSetAt ?? null,
+            public_price_changed_at: editingVehiculo.publicPriceChangedAt ?? null,
+            public_price_change_reason: editingVehiculo.publicPriceChangeReason ?? null,
+            public_price_reverts_at: editingVehiculo.publicPriceRevertsAt ?? null,
+        });
+    const publicDiffersFromInternal =
+        hasInternalReference &&
+        Number(editForm.publicPrice).toFixed(2) !== Number(internalReferencePrice).toFixed(2);
+    const publicChangedInForm =
+        !!editingVehiculo &&
+        Number(editForm.publicPrice).toFixed(2) !== Number(editingVehiculo.price ?? 0).toFixed(2);
+    const showSellerPicker = publicDiffersFromInternal && publicChangedInForm;
+    const promoRequestedByName = useMemo(() => {
+        if (!editingVehiculo?.publicPriceRequestedBy) return null;
+        const seller = activeSellers.find((s) => s.id === editingVehiculo.publicPriceRequestedBy);
+        return seller?.full_name?.trim() || null;
+    }, [editingVehiculo?.publicPriceRequestedBy, activeSellers]);
+
+    const handleCancelPromo = async () => {
+        if (!isAdmin || !editingVehiculo || !pricingAvailable || !promoActive) return;
+        if (
+            !window.confirm(
+                '¿Cancelar la promo y volver el precio público al interno fijo? Quedará registrado en el historial.'
+            )
+        ) {
+            return;
+        }
+
+        setIsCancellingPromo(true);
+        try {
+            const result = await inventarioService.cancelPublicPromo(editingVehiculo.placa);
+            const updated: VehiculoInventario = {
+                ...editingVehiculo,
+                price: result.price,
+                publicPriceChangedAt: null,
+                publicPriceChangeReason: null,
+                publicPriceRevertsAt: null,
+                publicPriceRequestedBy: null,
+            };
+            setVehiculos((prev) =>
+                prev.map((v) => (v.placa === editingVehiculo.placa ? updated : v))
+            );
+            setEditingVehiculo(updated);
+            setEditForm((prev) => ({
+                ...prev,
+                publicPrice: String(result.price),
+                publicPriceRequestedBySellerId: '',
+            }));
+            alert('Promo cancelada. Precio público alineado al interno fijo.');
+        } catch (error) {
+            console.error(error);
+            alert(error instanceof Error ? error.message : 'No se pudo cancelar la promo');
+        } finally {
+            setIsCancellingPromo(false);
+        }
     };
 
     const handleSaveCommercial = async () => {
@@ -140,7 +266,23 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                         publicPriceRevertsAt: null,
                         publicPriceRequestedBy: null,
                     };
-                    currentFixed = result.internalFixedPrice;
+
+                    await inventarioService.updateMileage(editingVehiculo.placa, mileage);
+
+                    setVehiculos((prev) =>
+                        prev.map((v) => (v.placa === editingVehiculo.placa ? nextVehicle : v))
+                    );
+                    setEditingVehiculo(nextVehicle);
+                    setEditForm((prev) => ({
+                        ...prev,
+                        internalFixedPrice: String(result.internalFixedPrice),
+                        publicPrice: String(result.price),
+                        publicPriceRequestedBySellerId: '',
+                    }));
+                    alert(
+                        'Precio interno fijo registrado. Ya puedes ajustar el precio público si lo necesitas.'
+                    );
+                    return;
                 } else if (internalChanged) {
                     const result = await inventarioService.setInternalFixedPrice(
                         editingVehiculo.placa,
@@ -410,107 +552,213 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
             {/* === MODAL DE EDICIÓN DE PRECIO/KM === */}
             {isAdmin && editingVehiculo && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-lg font-bold text-slate-800 mb-1">Editar Datos Comerciales</h3>
-                        <p className="text-sm text-slate-500 mb-4">{editingVehiculo.marca} {editingVehiculo.modelo} - {editingVehiculo.placa}</p>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+                        <div className="flex items-start justify-between gap-3 pb-4 mb-5 border-b border-slate-100">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                                    Editar Datos Comerciales
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                    {editingVehiculo.marca} {editingVehiculo.modelo}
+                                </p>
+                            </div>
+                            <span className="shrink-0 font-mono text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                                {editingVehiculo.placa}
+                            </span>
+                        </div>
 
-                        {editingVehiculo.stock <= 0 && (
-                            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">
-                                Vehículo vendido: solo puedes actualizar el kilometraje. Las reglas de precio no aplican.
+                        {!pricingAvailable && (
+                            <p className="text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2.5 mb-5">
+                                Vehículo no disponible: solo puedes actualizar el kilometraje. Las reglas de precio no aplican.
                             </p>
                         )}
                         
-                        <div className="space-y-4">
-                            {editingVehiculo.stock > 0 && (
-                                <>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-700 mb-1">
-                                            Precio interno fijo ($)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={editForm.internalFixedPrice}
-                                            onChange={(e) => {
-                                                const nextInternal = e.target.value;
-                                                const wasAligned =
-                                                    editingVehiculo.internalFixedPrice == null ||
-                                                    Number(editForm.publicPrice).toFixed(2) ===
-                                                        Number(editingVehiculo.internalFixedPrice).toFixed(2);
-                                                setEditForm({
-                                                    ...editForm,
-                                                    internalFixedPrice: nextInternal,
-                                                    publicPrice:
-                                                        wasAligned && nextInternal
-                                                            ? nextInternal
-                                                            : editForm.publicPrice,
-                                                });
-                                            }}
-                                            placeholder="Precio de referencia para ventas"
-                                        />
+                        <div className="space-y-5">
+                            {pricingAvailable && (
+                                <section className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/90 to-white p-5 space-y-5">
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                                            Precios del vehículo
+                                        </p>
+                                        <p className="text-xs text-slate-500 leading-relaxed rounded-lg bg-white/80 border border-slate-100 px-3 py-2.5">
+                                            {hasInternalFixedPrice ? (
+                                                <>
+                                                    El <strong className="text-slate-700">precio interno fijo</strong> es la referencia de ventas.
+                                                    El <strong className="text-slate-700">precio público</strong> lo ve el cliente en la web.
+                                                    Si difieren, indica el vendedor; en 5 días vuelve al interno fijo.
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Primero registra el <strong className="text-slate-700">precio interno fijo</strong>.
+                                                    Al guardar se habilitará el precio público.
+                                                </>
+                                            )}
+                                        </p>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-700 mb-1">Precio público ($)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={editForm.publicPrice}
-                                            onChange={e => setEditForm({...editForm, publicPrice: e.target.value})}
-                                            placeholder="Precio visible al cliente"
-                                        />
+
+                                    <div
+                                        className={
+                                            hasInternalFixedPrice
+                                                ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 items-end'
+                                                : 'max-w-sm'
+                                        }
+                                    >
+                                        <PricingFormField label="Interno fijo" hint="Referencia ventas">
+                                            <div className="relative flex items-center">
+                                                <DollarSign className="absolute left-3 text-slate-400 h-4 w-4 pointer-events-none" />
+                                                <PricingInput
+                                                    type="number"
+                                                    className="pl-9 font-mono font-semibold text-slate-800 tabular-nums"
+                                                    value={editForm.internalFixedPrice}
+                                                    onChange={(e) => {
+                                                        const nextInternal = e.target.value;
+                                                        if (!hasInternalFixedPrice) {
+                                                            setEditForm({
+                                                                ...editForm,
+                                                                internalFixedPrice: nextInternal,
+                                                            });
+                                                            return;
+                                                        }
+                                                        const baselineInternal =
+                                                            editForm.internalFixedPrice ||
+                                                            String(editingVehiculo.internalFixedPrice ?? '');
+                                                        const wasAligned =
+                                                            Number(editForm.publicPrice).toFixed(2) ===
+                                                            Number(baselineInternal).toFixed(2);
+                                                        setEditForm({
+                                                            ...editForm,
+                                                            internalFixedPrice: nextInternal,
+                                                            publicPrice:
+                                                                wasAligned && nextInternal
+                                                                    ? nextInternal
+                                                                    : editForm.publicPrice,
+                                                        });
+                                                    }}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                        </PricingFormField>
+
+                                        {hasInternalFixedPrice && (
+                                            <PricingFormField label="Precio público" hint="Cliente / web">
+                                                <div className="relative flex items-center">
+                                                    <DollarSign className="absolute left-3 text-emerald-500/70 h-4 w-4 pointer-events-none" />
+                                                    <PricingInput
+                                                        type="number"
+                                                        className="pl-9 font-mono font-semibold text-emerald-700 tabular-nums"
+                                                        value={editForm.publicPrice}
+                                                        onChange={(e) =>
+                                                            setEditForm({
+                                                                ...editForm,
+                                                                publicPrice: e.target.value,
+                                                            })
+                                                        }
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                            </PricingFormField>
+                                        )}
                                     </div>
-                                    {editForm.publicPrice &&
-                                        editForm.internalFixedPrice &&
-                                        Number(editForm.publicPrice).toFixed(2) !==
-                                            Number(editForm.internalFixedPrice).toFixed(2) &&
-                                        Number(editForm.publicPrice).toFixed(2) !==
-                                            Number(editingVehiculo.price ?? 0).toFixed(2) && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-700 mb-1">
-                                                Vendedor que solicitó la promo
-                                            </label>
-                                            <select
-                                                className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                value={editForm.publicPriceRequestedBySellerId}
-                                                onChange={e => setEditForm({...editForm, publicPriceRequestedBySellerId: e.target.value})}
+
+                                    {promoActive && (
+                                        <div className="relative rounded-xl border border-violet-200/80 bg-violet-50 px-3.5 py-3 pr-11 text-xs text-violet-900">
+                                            <span className="font-semibold">Promo activa</span>
+                                            {editingVehiculo.publicPriceRevertsAt && (
+                                                <span className="block text-violet-600 mt-1">
+                                                    {formatRevertCountdown(editingVehiculo.publicPriceRevertsAt)}
+                                                    {editingVehiculo.publicPriceChangedAt && (
+                                                        <>
+                                                            {' · '}
+                                                            Cambió el{' '}
+                                                            {new Date(
+                                                                editingVehiculo.publicPriceChangedAt
+                                                            ).toLocaleDateString('es-EC')}
+                                                        </>
+                                                    )}
+                                                </span>
+                                            )}
+                                            {promoRequestedByName && (
+                                                <span className="block text-violet-600 mt-0.5">
+                                                    Solicitado por: {promoRequestedByName}
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelPromo}
+                                                disabled={isCancellingPromo || saving}
+                                                className="absolute top-2.5 right-2.5 p-1 rounded-md text-violet-500 hover:text-violet-900 hover:bg-violet-100/80 transition-colors disabled:opacity-50"
+                                                title="Cancelar promo y volver al precio interno fijo"
+                                                aria-label="Cancelar promo"
                                             >
-                                                <option value="">Seleccionar vendedor…</option>
-                                                {activeSellers.map((seller) => (
-                                                    <option key={seller.id} value={seller.id}>
-                                                        {seller.full_name?.trim() || 'Sin nombre'}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <p className="text-[11px] text-slate-400 mt-1">
-                                                En 5 días el precio público vuelve automáticamente al interno fijo.
-                                            </p>
+                                                {isCancellingPromo ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <X className="h-3.5 w-3.5" />
+                                                )}
+                                            </button>
                                         </div>
                                     )}
-                                </>
+
+                                    {hasInternalReference && showSellerPicker && (
+                                        <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+                                            <div>
+                                                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wide">
+                                                    Vendedor que solicitó la promo
+                                                    <span className="text-red-500 normal-case"> *</span>
+                                                </span>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                                    Requerido cuando el precio público difiere del interno fijo.
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl border border-slate-200 bg-white overflow-visible shadow-sm">
+                                                <InventorySellerPicker
+                                                    sellers={activeSellers}
+                                                    value={editForm.publicPriceRequestedBySellerId}
+                                                    onChange={(id) =>
+                                                        setEditForm({
+                                                            ...editForm,
+                                                            publicPriceRequestedBySellerId: id,
+                                                        })
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
                             )}
-                            <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Kilometraje Actual</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={editForm.mileage}
-                                    onChange={e => setEditForm({...editForm, mileage: e.target.value})}
-                                    placeholder="Ingrese el kilometraje"
-                                />
-                            </div>
+
+                            <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                                <PricingFormField label="Kilometraje" hint="Odómetro actual">
+                                    <div className="relative flex items-center">
+                                        <Gauge className="absolute left-3 text-slate-400 h-4 w-4 pointer-events-none" />
+                                        <PricingInput
+                                            type="number"
+                                            className="pl-9 pr-12 font-mono font-semibold text-slate-800 tabular-nums"
+                                            value={editForm.mileage}
+                                            onChange={(e) => setEditForm({ ...editForm, mileage: e.target.value })}
+                                            placeholder="0"
+                                        />
+                                        <span className="absolute right-3 text-[10px] font-bold uppercase tracking-wide text-slate-400 pointer-events-none">
+                                            km
+                                        </span>
+                                    </div>
+                                </PricingFormField>
+                            </section>
                         </div>
 
-                        <div className="flex gap-3 mt-6">
+                        <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
                             <button 
+                                type="button"
                                 onClick={() => setEditingVehiculo(null)}
-                                className="flex-1 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                                className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                             >
                                 Cancelar
                             </button>
                             <button 
+                                type="button"
                                 onClick={handleSaveCommercial}
-                                disabled={saving}
-                                className="flex-1 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors flex items-center justify-center gap-2"
+                                disabled={saving || isCancellingPromo}
+                                className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
                             >
                                 {saving ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}
                                 Guardar
