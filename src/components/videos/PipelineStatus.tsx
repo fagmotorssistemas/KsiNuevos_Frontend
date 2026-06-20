@@ -49,17 +49,13 @@ const STATUS_ORDER: Record<string, number> = {
 interface PipelineStatusProps {
   jobId: string
   onCompleted: (job: VideoJob) => void
-  onCloseAllowedChange?: (allowed: boolean) => void
 }
 
 export function canCloseReelPipeline(job: VideoJob): boolean {
-  if (job.status === 'failed' || job.status === 'completed') return true
-  if (job.status === 'rendering') return true
-  if ((job.progress_percentage ?? 0) >= 80) return true
-  return false
+  return true
 }
 
-export function PipelineStatus({ jobId, onCompleted, onCloseAllowedChange }: PipelineStatusProps) {
+export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
   const [job, setJob] = useState<VideoJob | null>(null)
   const [isStale, setIsStale] = useState(false)
   const [startTime] = useState(Date.now())
@@ -91,14 +87,6 @@ export function PipelineStatus({ jobId, onCompleted, onCloseAllowedChange }: Pip
     return () => clearInterval(interval)
   }, [fetchStatus, startTime])
 
-  useEffect(() => {
-    if (!job) {
-      onCloseAllowedChange?.(false)
-      return
-    }
-    onCloseAllowedChange?.(canCloseReelPipeline(job))
-  }, [job, onCloseAllowedChange])
-
   const currentStatusIdx = job ? (STATUS_ORDER[job.status] ?? 0) : 0
 
   if (!job) {
@@ -125,7 +113,6 @@ export function PipelineStatus({ jobId, onCompleted, onCloseAllowedChange }: Pip
   }
 
   const remainingEstimate = estimatedRemainingLabel(job.status, job.progress_percentage ?? 0)
-  const closeAllowed = canCloseReelPipeline(job)
 
   return (
     <div className="flex flex-col gap-8">
@@ -146,22 +133,10 @@ export function PipelineStatus({ jobId, onCompleted, onCloseAllowedChange }: Pip
         <p className="text-xs text-gray-500">
           Tiempo estimado restante: <span className="font-medium text-gray-600">{remainingEstimate}</span>
         </p>
-        {closeAllowed ? (
-          <p className="text-xs text-gray-400 leading-relaxed">
-            La creación del Reel toma su tiempo; el renderizado puede demorar varios minutos aunque la barra
-            avance rápido.{' '}
-            <span className="text-gray-600">
-              Ya comenzó el renderizado: puedes cerrar esta ventana y seguir navegando. El proceso continúa en
-              el servidor. Revisa el avance en Marketing → Videos.
-            </span>
-          </p>
-        ) : (
-          <p className="text-xs text-amber-800 leading-relaxed rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-            <span className="font-semibold">No cierres esta ventana todavía.</span> Mantén el modal abierto
-            hasta que comience el renderizado (alrededor del 80% de la barra). Si sales antes, el Reel puede
-            quedarse trabado y no continuar.
-          </p>
-        )}
+        <p className="text-xs text-gray-400 leading-relaxed">
+          El pipeline ya está en el servidor. Puedes cerrar esta ventana y seguir navegando; el proceso continúa
+          en segundo plano. Revisa el avance en Marketing → Videos.
+        </p>
       </div>
 
       {/* Pipeline visual */}
@@ -210,7 +185,7 @@ export function PipelineStatus({ jobId, onCompleted, onCloseAllowedChange }: Pip
         })}
       </div>
 
-      {isStale && closeAllowed && (
+      {isStale && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
           Esto está tardando más de lo usual. Puedes cerrar esta ventana y navegar por el sitio: el Reel
           sigue generándose. Vuelve a Marketing → Videos para ver el estado.

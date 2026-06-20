@@ -108,6 +108,13 @@ async function pollTranscription(transcriptId: string): Promise<AssemblyAITransc
   throw new Error('[VideoV2AssemblyAI] Timeout: la transcripción tardó más de 10 minutos')
 }
 
+export function buildSrtFromRawWords(words: RawWord[]): string {
+  if (words.length === 0) return ''
+  return wordsToSrt(
+    words.map((w) => ({ text: w.text, start: w.start, end: w.end, confidence: 1 }))
+  )
+}
+
 function wordsToSrt(words: AssemblyAITranscriptResponse['words']): string {
   if (!words || words.length === 0) return ''
 

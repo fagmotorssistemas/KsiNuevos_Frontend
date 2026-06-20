@@ -55,8 +55,13 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
   }, [searchQuery])
 
   const fetchJobs = useCallback(
-    async (currentPage: number, currentFilter: VideoJobStatus | 'all', search: string) => {
-      setIsLoading(true)
+    async (
+      currentPage: number,
+      currentFilter: VideoJobStatus | 'all',
+      search: string,
+      silent = false
+    ) => {
+      if (!silent) setIsLoading(true)
       try {
         const supabase = createClient()
         let query = supabase
@@ -99,11 +104,29 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
       } catch (err) {
         console.error('[VideoJobList] Error cargando jobs:', err)
       } finally {
-        setIsLoading(false)
+        if (!silent) setIsLoading(false)
       }
     },
     []
   )
+
+  const ACTIVE_JOB_STATUSES: VideoJobStatus[] = [
+    'pending',
+    'uploading',
+    'transcribing',
+    'analyzing',
+    'rendering',
+  ]
+
+  const hasActiveJobs = jobs.some((j) => ACTIVE_JOB_STATUSES.includes(j.status))
+
+  useEffect(() => {
+    if (!hasActiveJobs || page !== 0) return
+    const timer = window.setInterval(() => {
+      fetchJobs(0, filter, debouncedSearch, true)
+    }, 8_000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJobs, page, filter, debouncedSearch, fetchJobs])
 
   useEffect(() => {
     setPage(0)

@@ -383,14 +383,20 @@ function addKeywordCaptionBlocks(
  *   - Dentro de esa misma escena, las palabras clave restantes (no-marca) siguen como subtítulos normales
  * - Menciones posteriores de marca+modelo → subtítulos normales
  */
+/** Primera palabra del modelo tal cual en ficha (p. ej. "d-max" → "D-MAX"). */
+export function canonicalPrimaryModelLabel(modelLine?: string | null): string | null {
+  const first = modelLine?.trim().split(/\s+/)[0]
+  return first ? first.toUpperCase() : null
+}
+
 /** Texto del overlay superior en escena "comenta": COMENTA + 1ª palabra modelo + año */
 export function buildComentaOverlayText(
   modelLine?: string | null,
   yearLine?: string | null
 ): string {
   const parts = ['COMENTA']
-  const modelWord = modelLine?.trim().split(/\s+/)[0]
-  if (modelWord) parts.push(modelWord.toUpperCase())
+  const modelWord = canonicalPrimaryModelLabel(modelLine)
+  if (modelWord) parts.push(modelWord)
   const yearRaw = yearLine?.trim() ?? ''
   const yearMatch = yearRaw.match(/\b(19|20)\d{2}\b/)
   if (yearMatch) parts.push(yearMatch[0]!)

@@ -39,7 +39,6 @@ import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readRemoteVideoDurationSeconds } from './read-remote-video-duration'
 import type { ReelLibraryClipDraft, ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
 import { readLocalAudioDurationSeconds } from './read-local-audio-duration'
-import type { ClientVoiceSampleInput } from '@/lib/videos/audio-balance-client'
 
 type VoiceOverUiMode = 'auto' | 'clip' | 'mp3'
 type MusicTrimMode = 'smart' | 'manual'
@@ -78,74 +77,27 @@ function filesLookLikeIphoneMovForColorHint(files: File[]): boolean {
   })
 }
 
-function buildVoiceSamplesFromFiles(
-  files: File[],
-  clipDurations: (number | null)[] | undefined,
-  excludeIndices: number[]
-): ClientVoiceSampleInput[] {
-  return files
-    .map((file, i) => ({ file, i }))
-    .filter(({ i }) => !excludeIndices.includes(i))
-    .map(({ file, i }) => ({
-      kind: 'file' as const,
-      file,
-      durationSec: clipDurations?.[i] ?? undefined,
-      weightSec: clipDurations?.[i] ?? undefined,
-    }))
-}
-
-function buildVoiceSamplesFromLibrary(
-  clips: ReelLibraryClipDraft[],
-  clipDurations: (number | null)[] | undefined,
-  excludeIndices: number[]
-): ClientVoiceSampleInput[] {
-  return clips
-    .map((clip, i) => ({ clip, i }))
-    .filter(({ i }) => !excludeIndices.includes(i))
-    .map(({ clip, i }) => ({
-      kind: 'url' as const,
-      url: clip.signedUrl,
-      durationSec: clipDurations?.[i] ?? undefined,
-      weightSec: clipDurations?.[i] ?? undefined,
-    }))
-}
-
-async function measureReelAudioPayloadForStart(params: {
-  musicUrl: string
-  musicTrimStartSec?: number
-  clipDurations?: (number | null)[]
-  voiceSamples: ClientVoiceSampleInput[]
+async function finalizeJobPipeline(
+  newJobId: string,
+  payload: Record<string, unknown>,
   onProgress?: (msg: string) => void
-}): Promise<{ reelMusicVolume: number; reelDialogueVolume: number }> {
-  const { FALLBACK_DIALOGUE_VOLUME, FALLBACK_MUSIC_VOLUME } = await import(
-    '@/lib/videos/audio-balance-core'
-  )
-  const fallbackPayload = {
-    reelMusicVolume: FALLBACK_MUSIC_VOLUME,
-    reelDialogueVolume: FALLBACK_DIALOGUE_VOLUME,
+): Promise<{ audioSource?: string }> {
+  onProgress?.('Finalizando en servidor (medición de audio + pipeline)…')
+  const res = await fetch(`/api/videos/jobs/${newJobId}/finalize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ measureAudio: true, ...payload }),
+  })
+  const data = await parseJsonOrThrow<{
+    jobId?: string
+    error?: string
+    audioSource?: string
+    status?: string
+  }>(res)
+  if (!res.ok) {
+    throw new Error(data.error ?? `Error finalizando el job (HTTP ${res.status})`)
   }
-
-  try {
-    const { measureReelAudioBalanceInBrowser } = await import('@/lib/videos/audio-balance-client')
-    const reelDurationSec = params.clipDurations?.reduce<number>(
-      (acc, d) => acc + (typeof d === 'number' && Number.isFinite(d) ? d : 0),
-      0
-    )
-    const balance = await measureReelAudioBalanceInBrowser({
-      voiceSamples: params.voiceSamples,
-      musicUrl: params.musicUrl,
-      musicTrimStartSec: params.musicTrimStartSec ?? 0,
-      reelDurationSec: reelDurationSec != null && reelDurationSec > 0 ? reelDurationSec : undefined,
-      onProgress: params.onProgress,
-    })
-    return {
-      reelMusicVolume: balance.musicVolume,
-      reelDialogueVolume: balance.dialogueVolume,
-    }
-  } catch (err) {
-    console.warn('[CreateReelModal] Medición de audio falló; usando fallback:', err)
-    return fallbackPayload
-  }
+  return { audioSource: data.audioSource }
 }
 
 const PRE_PIPELINE_STEPS = [
@@ -156,7 +108,7 @@ const PRE_PIPELINE_STEPS = [
   { key: 'completed', label: 'Listo', icon: CheckCircle2 },
 ] as const
 
-/** Paso 5 antes de que exista jobId: subida/medición wasm en el navegador. */
+/** Paso 5 antes de que exista jobId: subida + finalize en servidor. */
 function ReelPrePipelineProgress({ message }: { message: string | null }) {
   const statusText = message?.trim() || 'Preparando tu Reel...'
 
@@ -175,8 +127,8 @@ function ReelPrePipelineProgress({ message }: { message: string | null }) {
         </p>
         <p className="text-xs text-amber-800 leading-relaxed rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <span className="font-semibold">No cierres esta ventana todavía.</span> Estamos subiendo tus clips y
-          preparando el análisis. Mantén el modal abierto hasta que comience el renderizado; si sales antes, el
-          Reel puede quedarse trabado y no continuar.
+          preparando el job en el servidor. Cuando veas el pipeline en marcha podrás cerrar y seguir en la lista de
+          videos.
         </p>
       </div>
 
@@ -232,7 +184,7 @@ export function CreateReelModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
-  const [pipelineCanClose, setPipelineCanClose] = useState(false)
+  const [pipelineStarted, setPipelineStarted] = useState(false)
   const [completedJob, setCompletedJob] = useState<VideoJob | null>(null)
   /** Automático, audio de un clip, o archivo MP3 de voz en off. */
   const [voiceOverMode, setVoiceOverMode] = useState<VoiceOverUiMode>('auto')
@@ -330,7 +282,7 @@ export function CreateReelModal({
     setMusicTrimMode('smart')
     setManualMusicTrimStartSec(0)
     setJobId(null)
-    setPipelineCanClose(false)
+    setPipelineStarted(false)
     setCompletedJob(null)
     setIsSubmitting(false)
     setUploadProgress(null)
@@ -485,17 +437,14 @@ export function CreateReelModal({
 
   const canCloseModal = useMemo(() => {
     if (step === 6) return true
-    if (step === 5) {
-      if (!jobId) return false
-      return pipelineCanClose
-    }
+    if (step === 5) return pipelineStarted
     return true
-  }, [step, jobId, pipelineCanClose])
+  }, [step, pipelineStarted])
 
   function handleClose() {
     if (!canCloseModal) {
       toast.warning(
-        'Espera a que comience el renderizado (≈80% de la barra) antes de cerrar. Si sales antes, el Reel puede quedarse trabado.'
+        'Espera a que el servidor confirme el inicio del pipeline. Si sales antes, el Reel puede quedarse incompleto.'
       )
       return
     }
@@ -701,43 +650,27 @@ export function CreateReelModal({
       }
     }
 
-    let reelAudioPayload: { reelMusicVolume: number; reelDialogueVolume: number } | null = null
-    if (selectedMusicUrl) {
-      const excludeIndices =
-        flowType === 'multiple' && voiceOverMode === 'clip' ? [voiceOverClipIndex] : []
-      reelAudioPayload = await measureReelAudioPayloadForStart({
-        musicUrl: selectedMusicUrl,
-        musicTrimStartSec: musicTrimMode === 'manual' ? manualMusicTrimStartSec : 0,
-        clipDurations,
-        voiceSamples: buildVoiceSamplesFromLibrary(orderedClips, clipDurations, excludeIndices),
-        onProgress: setUploadProgress,
-      })
+    const finalizePayload = {
+      paths: destPaths,
+      ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
+      ...voiceOverPayload,
+      ...(scriptPdfPath ? { scriptPdfPath } : {}),
+      ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
+      ...clipOrderPayload,
+      ...(canonV ? { canonicalVehicle: canonV } : {}),
+      ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
+      ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
     }
 
-    setUploadProgress('Iniciando pipeline...')
-
-    const startRes = await fetch('/api/videos/jobs/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jobId: newJobId,
-        paths: destPaths,
-        ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
-        ...voiceOverPayload,
-        ...(scriptPdfPath ? { scriptPdfPath } : {}),
-        ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
-        ...clipOrderPayload,
-        ...(canonV ? { canonicalVehicle: canonV } : {}),
-        ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
-        ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
-        ...(reelAudioPayload ?? {}),
-      }),
-    })
-
-    const startData = await parseJsonOrThrow<{ jobId?: string; error?: string }>(startRes)
-    if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
+    const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
+    if (audioSource === 'measured') {
+      setUploadProgress('Pipeline iniciado (audio medido en servidor).')
+    } else {
+      setUploadProgress('Pipeline iniciado en servidor.')
+    }
 
     setJobId(newJobId)
+    setPipelineStarted(true)
     onJobCreated()
   }
 
@@ -960,43 +893,27 @@ export function CreateReelModal({
         }
       }
 
-      let reelAudioPayload: { reelMusicVolume: number; reelDialogueVolume: number } | null = null
-      if (selectedMusicUrl) {
-        const excludeIndices =
-          flowType === 'multiple' && voiceOverMode === 'clip' ? [voiceOverClipIndex] : []
-        reelAudioPayload = await measureReelAudioPayloadForStart({
-          musicUrl: selectedMusicUrl,
-          musicTrimStartSec: musicTrimMode === 'manual' ? manualMusicTrimStartSec : 0,
-          clipDurations,
-          voiceSamples: buildVoiceSamplesFromFiles(files, clipDurations, excludeIndices),
-          onProgress: setUploadProgress,
-        })
+      const finalizePayload = {
+        paths: uploads.map((u) => u.path),
+        ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
+        ...voiceOverPayload,
+        ...(scriptPdfPath ? { scriptPdfPath } : {}),
+        ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
+        ...clipOrderPayload,
+        ...(canonV ? { canonicalVehicle: canonV } : {}),
+        ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
+        ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
       }
 
-      setUploadProgress('Iniciando pipeline...')
-
-      const startRes = await fetch('/api/videos/jobs/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobId: newJobId,
-          paths: uploads.map((u) => u.path),
-          ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
-          ...voiceOverPayload,
-          ...(scriptPdfPath ? { scriptPdfPath } : {}),
-          ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
-          ...clipOrderPayload,
-          ...(canonV ? { canonicalVehicle: canonV } : {}),
-          ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
-          ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
-          ...(reelAudioPayload ?? {}),
-        }),
-      })
-
-      const startData = await parseJsonOrThrow<{ jobId?: string; error?: string }>(startRes)
-      if (!startRes.ok) throw new Error(startData.error ?? 'Error iniciando el pipeline')
+      const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
+      if (audioSource === 'measured') {
+        setUploadProgress('Pipeline iniciado (audio medido en servidor).')
+      } else {
+        setUploadProgress('Pipeline iniciado en servidor.')
+      }
 
       setJobId(newJobId)
+      setPipelineStarted(true)
       onJobCreated()
     } catch (err) {
       console.error('[CreateReelModal] submit failed:', err)
@@ -1038,7 +955,7 @@ export function CreateReelModal({
             title={
               canCloseModal
                 ? 'Cerrar'
-                : 'Espera a que comience el renderizado antes de cerrar'
+                : 'Espera a que el servidor confirme el inicio del pipeline'
             }
             className={`p-2 rounded-xl transition-colors ${
               canCloseModal ? 'hover:bg-gray-100' : 'cursor-not-allowed opacity-40'
@@ -1845,11 +1762,7 @@ export function CreateReelModal({
           {/* PASO 5 — Procesando */}
           {step === 5 && !jobId && <ReelPrePipelineProgress message={uploadProgress} />}
           {step === 5 && jobId && (
-            <PipelineStatus
-              jobId={jobId}
-              onCompleted={handleCompleted}
-              onCloseAllowedChange={setPipelineCanClose}
-            />
+            <PipelineStatus jobId={jobId} onCompleted={handleCompleted} />
           )}
 
           {/* PASO 6 — Resultado */}

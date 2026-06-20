@@ -2,7 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType, GeminiSegmentAnalysisResult, VideoJobStatus } from './types'
 import { getSignedUrlForPath, resolveFinalReelVideoUrl, resolveVoiceOverAudioUrl } from './storage'
-import { transcribeVideoV2, type RawWord } from './assemblyai'
+import { buildSrtFromRawWords, transcribeVideoV2, type RawWord } from './assemblyai'
+import {
+  extractEngineDisplacementFromVehicleText,
+  fixMotorDisplacementAsrWords,
+} from './fix-motor-displacement-asr'
 import {
   buildAdjustedSRT,
   buildAdjustedSRTForVoiceOverIntro,
@@ -377,6 +381,31 @@ async function getJobStatus(jobId: string): Promise<VideoJobStatus | null> {
 const BRAND_CONFIG_SELECT =
   'show_brand_overlays, vehicle_line_1, vehicle_line_2, vehicle_line_3, vehicle_line_4, cta_text, whatsapp_number, logo_url, show_watermark'
 
+async function loadEngineDisplacementHint(jobId: string): Promise<string | null> {
+  const supabase = getServiceClient()
+  const { data } = await supabase
+    .from('video_jobs_v2')
+    .select('vehicle_line_2, vehicle_line_3')
+    .eq('id', jobId)
+    .single()
+  if (!data) return null
+  const combined = [data.vehicle_line_2, data.vehicle_line_3].filter(Boolean).join(' ')
+  return extractEngineDisplacementFromVehicleText(combined)
+}
+
+function applyMotorDisplacementAsrFixToWords(
+  words: RawWord[],
+  jobId: string,
+  clipIndex: number,
+  displacementHint: string | null
+): RawWord[] {
+  return fixMotorDisplacementAsrWords(words, {
+    expectedDisplacement: displacementHint,
+    jobId,
+    clipIndex,
+  })
+}
+
 async function applyDriveSubtitleNormalization(
   jobId: string,
   blocks: SubtitleBlock[]
@@ -617,7 +646,15 @@ async function runSingleVideoPipelineFromStorage(
     if (transcriptionResult.status === 'rejected') {
       throw new Error(`Error en transcripción: ${transcriptionResult.reason}`)
     }
-    const { transcriptId, srtContent, rawWords } = transcriptionResult.value
+    const { transcriptId, rawWords: rawWordsFromAssembly } = transcriptionResult.value
+    const displacementHint = await loadEngineDisplacementHint(jobId)
+    const rawWords = applyMotorDisplacementAsrFixToWords(
+      rawWordsFromAssembly,
+      jobId,
+      0,
+      displacementHint
+    )
+    const srtContent = buildSrtFromRawWords(rawWords)
 
     // Preparación visual es opcional (fallback a solo-texto)
     let useVisualAnalysis = false
@@ -1131,6 +1168,18 @@ async function runMultipleClipsPipelineFromStorage(
       console.warn(
         `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar videos para Gemini, usando análisis solo de texto como fallback: ${fileRefsResult.reason}`
       )
+    }
+
+    const displacementHint = await loadEngineDisplacementHint(jobId)
+    for (let i = 0; i < transcriptions.length; i++) {
+      if (kinds[i] !== 'spoken' || transcriptions[i].rawWords.length === 0) continue
+      transcriptions[i].rawWords = applyMotorDisplacementAsrFixToWords(
+        transcriptions[i].rawWords,
+        jobId,
+        i,
+        displacementHint
+      )
+      transcriptions[i].srtContent = buildSrtFromRawWords(transcriptions[i].rawWords)
     }
 
     const combinedSrt = transcriptions.map((r) => r.srtContent).filter(Boolean).join('\n\n')
