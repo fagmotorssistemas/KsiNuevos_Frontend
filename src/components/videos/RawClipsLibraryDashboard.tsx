@@ -12,12 +12,14 @@ import {
   Layers,
   Loader2,
   Play,
+  Plus,
   Search,
   SlidersHorizontal,
   ExternalLink,
   Sparkles,
 } from 'lucide-react'
 import { CreateReelModal } from '@/components/videos/CreateReelModal'
+import { UploadLibraryClipsModal } from '@/components/videos/UploadLibraryClipsModal'
 import type { ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
 import type {
   RawClipItem,
@@ -400,6 +402,7 @@ export function RawClipsLibraryDashboard() {
   const [loadingClips, setLoadingClips] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'folder'>('grid')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [reelLibraryDraft, setReelLibraryDraft] = useState<ReelLibraryDraft | null>(null)
 
   function buildReelDraft(folder: RawClipsFolderSummary, clipItems: RawClipItem[]): ReelLibraryDraft {
@@ -556,16 +559,29 @@ export function RawClipsLibraryDashboard() {
               </p>
             </div>
 
-            {viewMode === 'folder' ? (
-              <button
-                type="button"
-                onClick={handleBackToGrid}
-                className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Todas las carpetas
-              </button>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2 self-start">
+              {viewMode === 'grid' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm hover:bg-violet-700"
+                  title="Subir clips a biblioteca"
+                  aria-label="Subir clips a biblioteca"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              ) : null}
+              {viewMode === 'folder' ? (
+                <button
+                  type="button"
+                  onClick={handleBackToGrid}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Todas las carpetas
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {/* Stats */}
@@ -730,6 +746,15 @@ export function RawClipsLibraryDashboard() {
           if (selectedId) void loadFolderDetail(selectedId)
         }}
         initialLibraryDraft={reelLibraryDraft}
+      />
+
+      <UploadLibraryClipsModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onSaved={() => {
+          setPage(1)
+          void loadLibrary()
+        }}
       />
     </div>
   )
