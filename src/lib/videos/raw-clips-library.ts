@@ -124,57 +124,22 @@ function buildStorageAggMap(
   return map
 }
 
-/** Agrega bytes/clips por job consultando `storage.objects` (fiable vs. list masivo). */
+/** Agrega bytes/clips por job listando cada carpeta en Storage (service role). */
 async function fetchStorageAggForJobIds(
   jobIds: string[]
 ): Promise<Map<string, { bytes: number; clipCount: number; updatedAt: string | null }>> {
-  const map = new Map<string, { bytes: number; clipCount: number; updatedAt: string | null }>()
   const unique = [...new Set(jobIds.filter(Boolean))]
-  if (!unique.length) return map
+  if (!unique.length) return new Map()
 
-  const supabase = getServiceClient()
-  const chunk = 30
-
-  for (let i = 0; i < unique.length; i += chunk) {
-    const slice = unique.slice(i, i + chunk)
-    const orFilter = slice.map((id) => `name.like.${id}/%`).join(',')
-
-    const { data, error } = await supabase
-      .schema('storage')
-      .from('objects')
-      .select('name, metadata, updated_at')
-      .eq('bucket_id', RAW_BUCKET)
-      .or(orFilter)
-
-    if (error) {
-      console.error('[raw-clips-library] storage.objects query', error.message)
-      const rows = (await Promise.all(slice.map((id) => fetchStorageObjectsForJob(id)))).flat()
-      const partial = buildStorageAggMap(rows, slice)
-      for (const [jobId, agg] of partial) map.set(jobId, agg)
-      continue
-    }
-
-    for (const row of data ?? []) {
-      const name = String(row.name ?? '')
-      if (!isVideoClipPath(name)) continue
-      const slash = name.indexOf('/')
-      if (slash <= 0) continue
-      const jobId = name.slice(0, slash)
-      if (!slice.includes(jobId)) continue
-
-      const size = parseObjectSizeBytes(row.metadata)
-      const prev = map.get(jobId) ?? { bytes: 0, clipCount: 0, updatedAt: null }
-      prev.bytes += size
-      prev.clipCount += 1
-      const updated = row.updated_at as string | null
-      if (updated && (!prev.updatedAt || updated > prev.updatedAt)) {
-        prev.updatedAt = updated
-      }
-      map.set(jobId, prev)
-    }
+  const CONCURRENCY = 12
+  const rows: StorageObjectRow[] = []
+  for (let i = 0; i < unique.length; i += CONCURRENCY) {
+    const batch = unique.slice(i, i + CONCURRENCY)
+    const batchRows = await Promise.all(batch.map((id) => fetchStorageObjectsForJob(id)))
+    rows.push(...batchRows.flat())
   }
 
-  return map
+  return buildStorageAggMap(rows, unique)
 }
 
 async function fetchInventoryMap(ids: string[]): Promise<Map<string, InventoryVehicleSnippet>> {
