@@ -72,6 +72,17 @@ function parseObjectSizeBytes(metadata: unknown): number {
   return 0
 }
 
+/** Tamaño en bytes desde metadata de Storage o campo top-level (FileObjectV2). */
+function resolveStorageFileSizeBytes(
+  metadata: unknown,
+  topLevelSize?: number | null
+): number {
+  if (typeof topLevelSize === 'number' && Number.isFinite(topLevelSize) && topLevelSize > 0) {
+    return topLevelSize
+  }
+  return parseObjectSizeBytes(metadata)
+}
+
 async function fetchStorageObjectsForJob(jobId: string): Promise<StorageObjectRow[]> {
   const supabase = getServiceClient()
   const { data, error } = await supabase.storage.from(RAW_BUCKET).list(jobId, {
@@ -85,15 +96,16 @@ async function fetchStorageObjectsForJob(jobId: string): Promise<StorageObjectRo
 
   return (data ?? [])
     .filter((f) => f.id != null && f.name)
-    .map((f) => ({
-      name: `${jobId}/${f.name}`,
-      metadata:
-        f.metadata && typeof f.metadata === 'object'
-          ? (f.metadata as { size?: number })
-          : null,
-      updated_at: f.updated_at ?? null,
-      created_at: f.created_at ?? null,
-    }))
+    .map((f) => {
+      const row = f as { metadata?: unknown; size?: number }
+      const sizeBytes = resolveStorageFileSizeBytes(row.metadata, row.size)
+      return {
+        name: `${jobId}/${f.name}`,
+        metadata: sizeBytes > 0 ? { size: sizeBytes } : null,
+        updated_at: f.updated_at ?? null,
+        created_at: f.created_at ?? null,
+      }
+    })
 }
 
 function buildStorageAggMap(

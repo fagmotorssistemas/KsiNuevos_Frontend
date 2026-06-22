@@ -33,6 +33,7 @@ import {
   resolveVideoMimeType,
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
+import { compressJobClipsOrThrow } from '@/lib/videos/compress-job-clips-client'
 import { buildFilenameClipOrderIndices, sortClipIndicesByFileName } from './sort-video-files-by-name'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
@@ -530,30 +531,8 @@ export function CreateReelModal({
       voiceOverStoredPath = voData.path
     }
 
-    const COMPRESS_THRESHOLD = 30 * 1024 * 1024
-    const largeClipPaths = destPaths.filter((_, i) => (orderedClips[i]?.sizeBytes ?? 0) > COMPRESS_THRESHOLD)
-
-    if (largeClipPaths.length > 0) {
-      setUploadProgress(
-        `Optimizando ${largeClipPaths.length} clip(s) grande(s) para el renderizador (puede tardar 2-3 min)…`
-      )
-      try {
-        const compressRes = await fetch(`/api/videos/jobs/${newJobId}/compress-clips`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paths: largeClipPaths }),
-        })
-        if (compressRes.ok) {
-          const data = (await compressRes.json()) as { compressed?: string[]; compressedCount?: number }
-          const count = data.compressed?.length ?? data.compressedCount ?? 0
-          if (count > 0) {
-            setUploadProgress(`${count} clip(s) optimizado(s). Continuando…`)
-          }
-        }
-      } catch {
-        console.warn('[compress-clips] La compresión server-side no estuvo disponible; usando clips originales.')
-      }
-    }
+    // Todos los paths copiados: Nest filtra por thresholdMb (no depende de sizeBytes del cliente).
+    await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
 
     let clipDurations: (number | null)[] | undefined
     if (flowType === 'multiple') {
@@ -797,35 +776,12 @@ export function CreateReelModal({
         scriptPdfPath = scriptUpload.path
       }
 
-      // ── PASO 2.5: Comprimir clips grandes en el servidor (>30 MB) ──────────
-      const COMPRESS_THRESHOLD = 30 * 1024 * 1024
-      const largeClipPaths = uploads
-        .filter((u, i) => files[i].size > COMPRESS_THRESHOLD)
-        .map((u) => u.path)
-
-      if (largeClipPaths.length > 0) {
-        setUploadProgress(
-          `Optimizando ${largeClipPaths.length} clip(s) grande(s) para el renderizador (puede tardar 2-3 min)…`
-        )
-        try {
-          const compressRes = await fetch(`/api/videos/jobs/${newJobId}/compress-clips`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paths: largeClipPaths }),
-          })
-          if (compressRes.ok) {
-            const data = (await compressRes.json()) as { compressed?: string[]; compressedCount?: number }
-            const count = data.compressed?.length ?? data.compressedCount ?? 0
-            if (count > 0) {
-              setUploadProgress(`${count} clip(s) optimizado(s). Continuando…`)
-            }
-          }
-        } catch {
-          // Si la compresión server-side falla, continuamos con los clips originales.
-          // Shotstack puede fallar, pero no debemos bloquear el flujo por eso.
-          console.warn('[compress-clips] La compresión server-side no estuvo disponible; usando clips originales.')
-        }
-      }
+      // ── PASO 2.5: Comprimir clips grandes en el servidor (Nest filtra por thresholdMb) ──
+      await compressJobClipsOrThrow(
+        newJobId,
+        uploads.map((u) => u.path),
+        setUploadProgress
+      )
 
       // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)
       let clipDurations: (number | null)[] | undefined

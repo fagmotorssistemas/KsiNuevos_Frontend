@@ -157,7 +157,7 @@ export async function uploadRawVideoClip(
   // delega la compresión al backend NestJS después del upload, y transcode:true en
   // Shotstack re-codifica los clips en sus servidores. El WASM se colgaba en navegación
   // SPA por falta de SharedArrayBuffer (COOP/COEP no se re-aplican sin recarga completa).
-  const SKIP_CLIENT_COMPRESSION = true
+  const SKIP_CLIENT_COMPRESSION = false
   if (!SKIP_CLIENT_COMPRESSION && file.size > VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES) {
     const originalMb = (file.size / (1024 * 1024)).toFixed(0)
     onProgress?.(
