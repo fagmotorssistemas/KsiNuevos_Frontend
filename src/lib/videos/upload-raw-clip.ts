@@ -156,7 +156,7 @@ export async function uploadRawVideoClip(
   // Compresión proactiva en navegador (ffmpeg.wasm) para clips >32 MB antes de subir.
   // Requiere crossOriginIsolated (COOP/COEP en /marketing). Si falla, se sube el original.
   // CreateReelModal además llama a Nest compress-clips tras la subida (paso 2.5).
-  const SKIP_CLIENT_COMPRESSION = false
+  const SKIP_CLIENT_COMPRESSION = true
   if (!SKIP_CLIENT_COMPRESSION && file.size > VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES) {
     const originalMb = (file.size / (1024 * 1024)).toFixed(0)
     onProgress?.(
