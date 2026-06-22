@@ -45,6 +45,40 @@ function apiHeaders() {
   }
 }
 
+/** Sube bytes al CDN de AssemblyAI y devuelve la URL interna para transcripción. */
+async function uploadBytesToAssemblyAI(fileBytes: Buffer): Promise<string> {
+  const res = await fetch(`${ASSEMBLYAI_BASE}/upload`, {
+    method: 'POST',
+    headers: { Authorization: process.env.ASSEMBLYAI_API_KEY! },
+    body: new Uint8Array(fileBytes),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`[VideoV2AssemblyAI] Error subiendo archivo: ${err}`)
+  }
+  const data = (await res.json()) as { upload_url?: string }
+  if (!data.upload_url) throw new Error('[VideoV2AssemblyAI] Upload sin upload_url')
+  return data.upload_url
+}
+
+async function downloadMediaForAssemblyAI(signedUrl: string, jobId: string): Promise<Buffer> {
+  console.log(`[VideoV2Pipeline][${jobId}][AssemblyAI] Descargando clip desde Storage para upload directo…`)
+  const res = await fetch(signedUrl, { signal: AbortSignal.timeout(5 * 60 * 1000) })
+  if (!res.ok) {
+    throw new Error(`[VideoV2AssemblyAI] No se pudo descargar el clip (HTTP ${res.status})`)
+  }
+  const buf = Buffer.from(await res.arrayBuffer())
+  console.log(
+    `[VideoV2Pipeline][${jobId}][AssemblyAI] Descargado ${(buf.length / 1024 / 1024).toFixed(1)} MB para upload`
+  )
+  return buf
+}
+
+async function resolveAssemblyAudioSource(signedUrl: string, jobId: string): Promise<string> {
+  const bytes = await downloadMediaForAssemblyAI(signedUrl, jobId)
+  return uploadBytesToAssemblyAI(bytes)
+}
+
 async function submitTranscription(audioUrl: string): Promise<string> {
   /** Por defecto forzamos español; se puede sobrescribir por env (ej. `en`, `pt`). */
   const forcedLang = process.env.VIDEO_ASSEMBLY_LANGUAGE_CODE?.trim() || 'es'
@@ -174,12 +208,13 @@ export interface TranscriptionResult {
   rawWords: RawWord[]
 }
 
-export async function transcribeVideoV2(
-  audioUrl: string,
-  jobId: string
-): Promise<TranscriptionResult> {
-  console.log(`[VideoV2Pipeline][${jobId}][AssemblyAI] Iniciando transcripción`)
+function buildTranscriptionResult(result: AssemblyAITranscriptResponse): TranscriptionResult {
+  const srtContent = wordsToSrt(result.words)
+  const rawWords = extractRawWords(result.words)
+  return { transcriptId: result.id, srtContent, rawWords }
+}
 
+async function transcribeFromAudioSource(audioUrl: string, jobId: string): Promise<TranscriptionResult> {
   let transcriptId: string
   let retries = 0
   while (true) {
@@ -197,10 +232,18 @@ export async function transcribeVideoV2(
   console.log(`[VideoV2Pipeline][${jobId}][AssemblyAI] Transcript ID: ${transcriptId}. Haciendo polling...`)
 
   const result = await pollTranscription(transcriptId)
-  const srtContent = wordsToSrt(result.words)
-  const rawWords = extractRawWords(result.words)
+  const built = buildTranscriptionResult(result)
+  console.log(
+    `[VideoV2Pipeline][${jobId}][AssemblyAI] Transcripción completada. SRT generado (${built.rawWords.length} palabras crudas).`
+  )
+  return built
+}
 
-  console.log(`[VideoV2Pipeline][${jobId}][AssemblyAI] Transcripción completada. SRT generado (${rawWords.length} palabras crudas).`)
-
-  return { transcriptId, srtContent, rawWords }
+export async function transcribeVideoV2(
+  signedUrl: string,
+  jobId: string
+): Promise<TranscriptionResult> {
+  console.log(`[VideoV2Pipeline][${jobId}][AssemblyAI] Iniciando transcripción (upload directo)`)
+  const uploadUrl = await resolveAssemblyAudioSource(signedUrl, jobId)
+  return transcribeFromAudioSource(uploadUrl, jobId)
 }

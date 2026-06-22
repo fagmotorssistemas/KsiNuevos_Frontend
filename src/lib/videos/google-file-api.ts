@@ -174,13 +174,25 @@ export async function prepareVideoForGemini(
 
 export async function prepareMultipleVideosForGemini(
   signedUrls: string[],
-  jobId: string
+  jobId: string,
+  concurrency = 2
 ): Promise<GoogleFileRef[]> {
-  console.log(`[VideoV2GoogleFileAPI][${jobId}] Preparando ${signedUrls.length} videos en paralelo`)
-
-  return Promise.all(
-    signedUrls.map((url, i) => prepareVideoForGemini(url, jobId, `clip${i}`))
+  console.log(
+    `[VideoV2GoogleFileAPI][${jobId}] Preparando ${signedUrls.length} videos (concurrencia ${concurrency})`
   )
+
+  const refs: GoogleFileRef[] = new Array(signedUrls.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < signedUrls.length) {
+      const i = nextIndex++
+      refs[i] = await prepareVideoForGemini(signedUrls[i]!, jobId, `clip${i}`)
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, signedUrls.length) }, () => worker()))
+  return refs
 }
 
 // ─── Cleanup ──────────────────────────────────────────────────────────────────

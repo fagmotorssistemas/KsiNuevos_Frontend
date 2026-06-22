@@ -1122,18 +1122,32 @@ export async function runMultipleClipsPipelineFromStorage(
       return
     }
 
-    // B1 — EN PARALELO: Transcripción de todos los clips + Preparación visual
-    console.log(`[VideoV2Pipeline][${jobId}][B1] Iniciando transcripción + preparación visual de ${files.length} clips en paralelo`)
+    // B1 — Transcripción de todos los clips; luego preparación visual para Gemini
+    console.log(`[VideoV2Pipeline][${jobId}][B1] Transcribiendo ${files.length} clips…`)
     await updateJob(jobId, {
       status: 'transcribing',
-      current_step: `Transcribiendo y clasificando clips (B-roll automático si no hay habla)… ${files.length} archivos`,
+      current_step: `Transcribiendo clips (0/${files.length})…`,
       progress_percentage: 20,
     })
 
+    const totalClips = signedUrls.length
+    let transcribedCount = 0
     const autoResults = await Promise.all(
-      signedUrls.map((url, i) =>
-        transcribeClipWithAutoKind(url, jobId, i, clipDurationsSecInput?.[i] ?? null, explicitKinds?.[i])
-      )
+      signedUrls.map(async (url, i) => {
+        const result = await transcribeClipWithAutoKind(
+          url,
+          jobId,
+          i,
+          clipDurationsSecInput?.[i] ?? null,
+          explicitKinds?.[i]
+        )
+        transcribedCount++
+        await updateJob(jobId, {
+          current_step: `Transcribiendo clips (${transcribedCount}/${totalClips})…`,
+          progress_percentage: 20 + Math.round((transcribedCount / totalClips) * 15),
+        })
+        return result
+      })
     )
     const transcriptions = autoResults.map((a) => a.row)
     const kinds = autoResults.map((a) => a.inferredKind)
@@ -1153,7 +1167,11 @@ export async function runMultipleClipsPipelineFromStorage(
     // Preparación visual después de transcripción (menos pico de CPU/memoria en Vercel)
     let useVisualAnalysis = false
     try {
-      googleFileRefs = await prepareMultipleVideosForGemini(signedUrls, jobId)
+      await updateJob(jobId, {
+        current_step: 'Preparando análisis visual (Gemini)…',
+        progress_percentage: 36,
+      })
+      googleFileRefs = await prepareMultipleVideosForGemini(signedUrls, jobId, 2)
       useVisualAnalysis = true
       console.log(`[VideoV2Pipeline][${jobId}][B1] ${googleFileRefs.length} videos listos en Google File API`)
     } catch (reason) {
