@@ -2,11 +2,9 @@
  * Lógica compartida de POST /jobs/start y POST /jobs/[jobId]/finalize
  */
 
-import { after } from 'next/server'
+import { dispatchVideoPipelineRun } from '@/lib/videos/dispatch-pipeline-run'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/types/supabase'
-import { startPipelineBackground } from '@/lib/videos/pipeline'
-import { getSignedUrlForPath } from '@/lib/videos/storage'
 import type { VideoClipKind } from '@/lib/videos/clip-config'
 import {
   normalizeClipKindsInput,
@@ -65,65 +63,8 @@ export type JobStartResult =
   | { ok: true; jobId: string; status: 'processing' }
   | { ok: false; error: string; status: number }
 
-function startPipelineFromPaths(params: {
-  jobId: string
-  flowType: 'single' | 'multiple'
-  paths: string[]
-  signedUrls: string[]
-  musicTrackUrl: string
-  clipKinds?: VideoClipKind[]
-  clipDurationsSec?: (number | null)[]
-  voiceOverBaseClipIndex?: number
-  voiceOverOverlayClipIndices?: number[]
-  voiceOverAudioPath?: string
-  voiceOverMp3DurationSec?: number
-  musicTrimStartSec?: number
-  reelMusicVolume?: number
-  reelDialogueVolume?: number
-}) {
-  const {
-    jobId,
-    flowType,
-    paths,
-    signedUrls,
-    musicTrackUrl,
-    clipKinds,
-    clipDurationsSec,
-    voiceOverBaseClipIndex,
-    voiceOverOverlayClipIndices,
-    voiceOverAudioPath,
-    voiceOverMp3DurationSec,
-    musicTrimStartSec,
-    reelMusicVolume,
-    reelDialogueVolume,
-  } = params
-
-  const files = paths.map((path, i) => ({
-    buffer: Buffer.alloc(0),
-    filename: path.split('/').pop() ?? `clip_${i}.mp4`,
-    mimeType: 'video/mp4',
-    alreadyUploaded: true,
-    path,
-    signedUrl: signedUrls[i],
-  }))
-
-  after(() => {
-    startPipelineBackground({
-      jobId,
-      flowType,
-      files,
-      musicTrackUrl,
-      clipKinds,
-      clipDurationsSec,
-      voiceOverBaseClipIndex,
-      voiceOverOverlayClipIndices,
-      voiceOverAudioPath,
-      voiceOverMp3DurationSec,
-      musicTrimStartSec,
-      reelMusicVolume,
-      reelDialogueVolume,
-    })
-  })
+function schedulePipelineRun(jobId: string) {
+  dispatchVideoPipelineRun(jobId)
 }
 
 export async function executeJobStart(body: StartJobBody): Promise<JobStartResult> {
@@ -467,27 +408,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     return { ok: false, error: `Error actualizando job: ${updateError.message}`, status: 500 }
   }
 
-  const signedUrls = await Promise.all(paths.map((path) => getSignedUrlForPath(path)))
-
-  const flowType = job.flow_type as 'single' | 'multiple'
-  const musicTrackUrl = job.music_track_url
-
-  startPipelineFromPaths({
-    jobId,
-    flowType,
-    paths,
-    signedUrls,
-    musicTrackUrl,
-    clipKinds,
-    clipDurationsSec,
-    voiceOverBaseClipIndex,
-    voiceOverOverlayClipIndices,
-    voiceOverAudioPath,
-    voiceOverMp3DurationSec,
-    musicTrimStartSec,
-    reelMusicVolume,
-    reelDialogueVolume,
-  })
+  schedulePipelineRun(jobId)
 
   return { ok: true, jobId, status: 'processing' }
 }

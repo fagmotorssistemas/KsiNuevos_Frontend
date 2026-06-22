@@ -58,6 +58,7 @@ export function canCloseReelPipeline(job: VideoJob): boolean {
 export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
   const [job, setJob] = useState<VideoJob | null>(null)
   const [isStale, setIsStale] = useState(false)
+  const [isResuming, setIsResuming] = useState(false)
   const [startTime] = useState(Date.now())
 
   const fetchStatus = useCallback(async () => {
@@ -74,6 +75,25 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
       // Red / HTML / JSON inválido en polling: no spamear consola
     }
   }, [jobId, onCompleted])
+
+  const handleResumePipeline = useCallback(async () => {
+    setIsResuming(true)
+    try {
+      const res = await fetch(`/api/videos/jobs/${jobId}/run-pipeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo reanudar el pipeline')
+      setIsStale(false)
+      await fetchStatus()
+    } catch (err) {
+      console.error('[PipelineStatus] resume:', err)
+    } finally {
+      setIsResuming(false)
+    }
+  }, [jobId, fetchStatus])
 
   useEffect(() => {
     fetchStatus()
@@ -186,9 +206,19 @@ export function PipelineStatus({ jobId, onCompleted }: PipelineStatusProps) {
       </div>
 
       {isStale && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-          Esto está tardando más de lo usual. Puedes cerrar esta ventana y navegar por el sitio: el Reel
-          sigue generándose. Vuelve a Marketing → Videos para ver el estado.
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 space-y-3">
+          <p>
+            Esto está tardando más de lo usual. Puedes cerrar esta ventana y navegar por el sitio: el Reel
+            sigue generándose. Vuelve a Marketing → Videos para ver el estado.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleResumePipeline()}
+            disabled={isResuming}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 disabled:opacity-50"
+          >
+            {isResuming ? 'Reanudando…' : 'Reintentar pipeline en el servidor'}
+          </button>
         </div>
       )}
     </div>

@@ -618,7 +618,7 @@ async function monitorCreatomateRenderFallback(jobId: string, renderId: string) 
 // FLUJO A — Un solo video largo (desde Storage)
 // ──────────────────────────────────────────────
 
-async function runSingleVideoPipelineFromStorage(
+export async function runSingleVideoPipelineFromStorage(
   jobId: string,
   storagePath: string,
   signedUrl: string,
@@ -1072,7 +1072,7 @@ async function resolveVoiceOverTrackDurationSec(
   )
 }
 
-async function runMultipleClipsPipelineFromStorage(
+export async function runMultipleClipsPipelineFromStorage(
   jobId: string,
   files: PipelineFile[],
   musicTrackUrl: string,
@@ -1130,19 +1130,11 @@ async function runMultipleClipsPipelineFromStorage(
       progress_percentage: 20,
     })
 
-    const [transcriptionResults, fileRefsResult] = await Promise.allSettled([
-      Promise.all(
-        signedUrls.map((url, i) =>
-          transcribeClipWithAutoKind(url, jobId, i, clipDurationsSecInput?.[i] ?? null, explicitKinds?.[i])
-        )
-      ),
-      prepareMultipleVideosForGemini(signedUrls, jobId),
-    ])
-
-    if (transcriptionResults.status === 'rejected') {
-      throw new Error(`Error en transcripción o lectura de clips: ${transcriptionResults.reason}`)
-    }
-    const autoResults = transcriptionResults.value
+    const autoResults = await Promise.all(
+      signedUrls.map((url, i) =>
+        transcribeClipWithAutoKind(url, jobId, i, clipDurationsSecInput?.[i] ?? null, explicitKinds?.[i])
+      )
+    )
     const transcriptions = autoResults.map((a) => a.row)
     const kinds = autoResults.map((a) => a.inferredKind)
     console.log(
@@ -1158,15 +1150,15 @@ async function runMultipleClipsPipelineFromStorage(
       return
     }
 
-    // Preparación visual es opcional
+    // Preparación visual después de transcripción (menos pico de CPU/memoria en Vercel)
     let useVisualAnalysis = false
-    if (fileRefsResult.status === 'fulfilled') {
-      googleFileRefs = fileRefsResult.value
+    try {
+      googleFileRefs = await prepareMultipleVideosForGemini(signedUrls, jobId)
       useVisualAnalysis = true
       console.log(`[VideoV2Pipeline][${jobId}][B1] ${googleFileRefs.length} videos listos en Google File API`)
-    } else {
+    } catch (reason) {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar videos para Gemini, usando análisis solo de texto como fallback: ${fileRefsResult.reason}`
+        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar videos para Gemini, usando análisis solo de texto como fallback: ${reason}`
       )
     }
 
@@ -2763,9 +2755,13 @@ export function startPipelineBackground(params: {
           musicTrackUrl,
           musicTrimStartSec,
           reelAudioVolumes
-        ).catch((e) =>
+        ).catch((e) => {
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en single pipeline: ${e}`)
-        )
+          void updateJob(jobId, {
+            status: 'failed',
+            error_message: e instanceof Error ? e.message : String(e),
+          }).catch(() => {})
+        })
       } else {
         console.error(`[VideoV2Pipeline][${jobId}] Flujo single requiere archivo pre-subido a Storage.`)
         void updateJob(jobId, { status: 'failed', error_message: 'Archivo no encontrado en Storage.' }).catch((e) =>
@@ -2789,9 +2785,13 @@ export function startPipelineBackground(params: {
           voiceOverMp3DurationSec,
           musicTrimStartSec,
           reelAudioVolumes
-        ).catch((e) =>
+        ).catch((e) => {
           console.error(`[VideoV2Pipeline][${jobId}] Unhandled error en multiple pipeline: ${e}`)
-        )
+          void updateJob(jobId, {
+            status: 'failed',
+            error_message: e instanceof Error ? e.message : String(e),
+          }).catch(() => {})
+        })
       } else {
         console.error(`[VideoV2Pipeline][${jobId}] Flujo multiple requiere archivos pre-subidos a Storage.`)
         void updateJob(jobId, { status: 'failed', error_message: 'Archivos no encontrados en Storage.' }).catch((e) =>
