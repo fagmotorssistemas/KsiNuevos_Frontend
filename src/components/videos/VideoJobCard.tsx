@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import type { VideoJob, VideoJobStatus } from '@/lib/videos/types'
 import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
 import { resolveJobVehicleLabel } from '@/lib/videos/resolve-job-vehicle'
+import { resolveJobPlaybackUrl } from '@/lib/videos/resolve-job-playback-url'
 import { useVideoDownload } from '@/hooks/videos/useVideoDownload'
 
 const STATUS_CONFIG: Record<VideoJobStatus, { label: string; className: string }> = {
@@ -72,6 +73,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { isDownloading, download } = useVideoDownload()
+  const playbackUrl = resolveJobPlaybackUrl(job.id, job.final_video_url)
 
   async function handleDeleteJob() {
     setIsDeleting(true)
@@ -91,9 +93,9 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
   }
 
   function handleDownload() {
-    if (!job.final_video_url) return
+    if (!playbackUrl) return
     void download({
-      url: job.final_video_url,
+      url: playbackUrl,
       jobId: job.id,
       filename: vehicleLabel.title,
     })
@@ -104,14 +106,13 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
         {/* Miniatura / Preview */}
         <div className="relative h-52 bg-gray-900 flex items-center justify-center overflow-hidden">
-          {job.final_video_url ? (
+          {playbackUrl ? (
             <video
-              src={`${job.final_video_url}#t=0.1`}
+              src={`${playbackUrl}#t=0.1`}
               className="w-full h-full object-cover"
               muted
               playsInline
               preload="metadata"
-              crossOrigin="anonymous"
             />
           ) : (
             <div className="flex flex-col items-center gap-2">
@@ -138,7 +139,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
             ) : null}
           </div>
 
-          {job.final_video_url && (
+          {playbackUrl && (
             <button
               type="button"
               onClick={() => setIsPreviewOpen(true)}
@@ -202,7 +203,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
             <button
               type="button"
               onClick={handleDownload}
-              disabled={!job.final_video_url || isDownloading}
+              disabled={!playbackUrl || isDownloading}
               className="flex items-center justify-center w-full h-9 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
               title={isDownloading ? 'Cargando…' : 'Descargar'}
               aria-label={isDownloading ? 'Cargando descarga' : 'Descargar'}
@@ -225,7 +226,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
         </div>
       </div>
 
-      {isPreviewOpen && job.final_video_url && (
+      {isPreviewOpen && playbackUrl && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 flex items-center justify-center">
           <div className="w-full max-w-md bg-black rounded-2xl overflow-hidden relative">
             <button
@@ -236,7 +237,7 @@ export function VideoJobCard({ job, onJobDeleted }: VideoJobCardProps) {
               <X className="w-4 h-4" />
             </button>
             <video
-              src={job.final_video_url}
+              src={playbackUrl}
               className="w-full h-auto max-h-[80vh] bg-black"
               controls
               autoPlay
