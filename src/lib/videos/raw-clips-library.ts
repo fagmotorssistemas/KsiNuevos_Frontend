@@ -58,6 +58,20 @@ function countVideoClips(paths: string[] | null | undefined): number {
   return (paths ?? []).filter(isVideoClipPath).length
 }
 
+function parseObjectSizeBytes(metadata: unknown): number {
+  if (!metadata || typeof metadata !== 'object') return 0
+  const m = metadata as Record<string, unknown>
+  for (const key of ['size', 'contentLength']) {
+    const val = m[key]
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) return val
+    if (typeof val === 'string') {
+      const n = Number(val)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+  }
+  return 0
+}
+
 async function fetchStorageObjectsForJob(jobId: string): Promise<StorageObjectRow[]> {
   const supabase = getServiceClient()
   const { data, error } = await supabase.storage.from(RAW_BUCKET).list(jobId, {
@@ -82,47 +96,6 @@ async function fetchStorageObjectsForJob(jobId: string): Promise<StorageObjectRo
     }))
 }
 
-async function fetchAllRawStorageObjects(): Promise<StorageObjectRow[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!baseUrl || !key) return []
-
-  const rows: StorageObjectRow[] = []
-  const pageSize = 1000
-  let offset = 0
-
-  for (;;) {
-    const url = new URL(`${baseUrl}/rest/v1/objects`)
-    url.searchParams.set('select', 'name,metadata,updated_at,created_at')
-    url.searchParams.set('bucket_id', `eq.${RAW_BUCKET}`)
-    url.searchParams.set('order', 'name.asc')
-    url.searchParams.set('limit', String(pageSize))
-    url.searchParams.set('offset', String(offset))
-
-    const res = await fetch(url.toString(), {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        'Accept-Profile': 'storage',
-      },
-      cache: 'no-store',
-    })
-
-    if (!res.ok) {
-      console.error('[raw-clips-library] storage REST', res.status, await res.text())
-      break
-    }
-
-    const chunk = (await res.json()) as StorageObjectRow[]
-    rows.push(...chunk)
-    if (chunk.length < pageSize) break
-    offset += pageSize
-    if (offset > 20000) break
-  }
-
-  return rows
-}
-
 function buildStorageAggMap(
   storageRows: StorageObjectRow[],
   jobIds: string[]
@@ -137,7 +110,7 @@ function buildStorageAggMap(
     if (!idSet.has(jobId)) continue
     if (!isVideoClipPath(row.name)) continue
 
-    const size = typeof row.metadata?.size === 'number' ? row.metadata.size : 0
+    const size = parseObjectSizeBytes(row.metadata)
     const prev = map.get(jobId) ?? { bytes: 0, clipCount: 0, updatedAt: null }
     prev.bytes += size
     prev.clipCount += 1
@@ -146,6 +119,59 @@ function buildStorageAggMap(
       prev.updatedAt = updated
     }
     map.set(jobId, prev)
+  }
+
+  return map
+}
+
+/** Agrega bytes/clips por job consultando `storage.objects` (fiable vs. list masivo). */
+async function fetchStorageAggForJobIds(
+  jobIds: string[]
+): Promise<Map<string, { bytes: number; clipCount: number; updatedAt: string | null }>> {
+  const map = new Map<string, { bytes: number; clipCount: number; updatedAt: string | null }>()
+  const unique = [...new Set(jobIds.filter(Boolean))]
+  if (!unique.length) return map
+
+  const supabase = getServiceClient()
+  const chunk = 30
+
+  for (let i = 0; i < unique.length; i += chunk) {
+    const slice = unique.slice(i, i + chunk)
+    const orFilter = slice.map((id) => `name.like.${id}/%`).join(',')
+
+    const { data, error } = await supabase
+      .schema('storage')
+      .from('objects')
+      .select('name, metadata, updated_at')
+      .eq('bucket_id', RAW_BUCKET)
+      .or(orFilter)
+
+    if (error) {
+      console.error('[raw-clips-library] storage.objects query', error.message)
+      const rows = (await Promise.all(slice.map((id) => fetchStorageObjectsForJob(id)))).flat()
+      const partial = buildStorageAggMap(rows, slice)
+      for (const [jobId, agg] of partial) map.set(jobId, agg)
+      continue
+    }
+
+    for (const row of data ?? []) {
+      const name = String(row.name ?? '')
+      if (!isVideoClipPath(name)) continue
+      const slash = name.indexOf('/')
+      if (slash <= 0) continue
+      const jobId = name.slice(0, slash)
+      if (!slice.includes(jobId)) continue
+
+      const size = parseObjectSizeBytes(row.metadata)
+      const prev = map.get(jobId) ?? { bytes: 0, clipCount: 0, updatedAt: null }
+      prev.bytes += size
+      prev.clipCount += 1
+      const updated = row.updated_at as string | null
+      if (updated && (!prev.updatedAt || updated > prev.updatedAt)) {
+        prev.updatedAt = updated
+      }
+      map.set(jobId, prev)
+    }
   }
 
   return map
@@ -272,13 +298,11 @@ async function enrichJobs(jobs: JobRow[]) {
   const jobIds = jobs.map((j) => j.id)
   const scriptIds = jobs.map((j) => j.video_script_id).filter((id): id is string => Boolean(id))
 
-  const [storageRows, queueMap, scriptMap] = await Promise.all([
-    fetchAllRawStorageObjects(),
+  const [storageAggMap, queueMap, scriptMap] = await Promise.all([
+    fetchStorageAggForJobIds(jobIds),
     fetchQueueVehicleMap(jobIds),
     fetchScriptVehicleMap(scriptIds),
   ])
-
-  const storageAggMap = buildStorageAggMap(storageRows, jobIds)
 
   const vehicleIds: string[] = []
   for (const job of jobs) {
@@ -433,7 +457,7 @@ export async function fetchRawClipsFolderDetail(jobId: string): Promise<{
   for (const row of jobStorageRows) {
     if (!pathSet.has(row.name)) continue
     clipMeta.set(row.name, {
-      sizeBytes: typeof row.metadata?.size === 'number' ? row.metadata.size : 0,
+      sizeBytes: parseObjectSizeBytes(row.metadata),
       createdAt: row.created_at,
     })
   }

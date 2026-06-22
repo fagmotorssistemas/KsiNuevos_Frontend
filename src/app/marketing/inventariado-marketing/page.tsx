@@ -9,6 +9,8 @@ import {
   Filter,
   AlertTriangle,
   Film,
+  ArrowLeft,
+  FolderOpen,
 } from 'lucide-react'
 import { Pagination } from '@/shared/components/Pagination'
 import {
@@ -17,6 +19,7 @@ import {
   type InventoryKpiSummary,
 } from '@/components/features/inventory/InventoryKpiStats'
 import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
+import { VideoJobList } from '@/components/videos/VideoJobList'
 
 type Row = {
   id: string
@@ -65,6 +68,15 @@ function formatVehicleTitle(row: Row) {
 }
 
 type PageTab = 'inventario' | 'clips'
+type VehicleDetailTab = 'reels' | 'raw-clips'
+
+function tabButtonClass(active: boolean) {
+  return `inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+    active
+      ? 'bg-white text-violet-700 border border-gray-200 border-b-white -mb-px shadow-sm'
+      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/80'
+  }`
+}
 
 export default function InventariadoMarketingPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -96,6 +108,7 @@ export default function InventariadoMarketingPage() {
   )
 
   const [activeTab, setActiveTab] = useState<PageTab>('inventario')
+  const [vehicleDetailTab, setVehicleDetailTab] = useState<VehicleDetailTab>('reels')
   const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null)
 
   const lastFilterSig = useRef<string | null>(null)
@@ -186,6 +199,7 @@ export default function InventariadoMarketingPage() {
 
   function handleVehicleSelect(row: Row) {
     setSelectedVehicle(row)
+    setVehicleDetailTab('reels')
     setActiveTab('clips')
   }
 
@@ -206,7 +220,7 @@ export default function InventariadoMarketingPage() {
             <h1 className="text-2xl font-extrabold text-gray-900">Inventariado marketing</h1>
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">
               Inventario con reels generados vinculados al vehículo y estado de publicación en redes. Haz clic en un
-              vehículo para ver sus clips en bruto.
+              vehículo para ver sus reels y clips en bruto.
             </p>
           </div>
         </div>
@@ -216,11 +230,7 @@ export default function InventariadoMarketingPage() {
         <button
           type="button"
           onClick={() => setActiveTab('inventario')}
-          className={`inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'inventario'
-              ? 'bg-white text-violet-700 border border-gray-200 border-b-white -mb-px shadow-sm'
-              : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/80'
-          }`}
+          className={tabButtonClass(activeTab === 'inventario')}
         >
           <ClipboardList className="w-4 h-4" />
           Inventario
@@ -229,26 +239,66 @@ export default function InventariadoMarketingPage() {
           <button
             type="button"
             onClick={() => setActiveTab('clips')}
-            className={`inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors max-w-full ${
-              activeTab === 'clips'
-                ? 'bg-white text-violet-700 border border-gray-200 border-b-white -mb-px shadow-sm'
-                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/80'
-            }`}
+            className={`${tabButtonClass(activeTab === 'clips')} max-w-full`}
           >
             <Film className="w-4 h-4 shrink-0" />
-            <span className="truncate">Clips · {selectedVehicleTitle}</span>
+            <span className="truncate">{selectedVehicleTitle}</span>
           </button>
         ) : null}
       </div>
 
       {activeTab === 'clips' && selectedVehicle ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
-          <RawClipsLibraryDashboard
-            embedded
-            inventoryVehicleId={selectedVehicle.id}
-            vehicleTitle={selectedVehicleTitle ?? undefined}
-            onBack={handleBackToInventory}
-          />
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-xl font-extrabold text-gray-900">{selectedVehicleTitle}</h2>
+              {selectedVehicle.plate ? (
+                <p className="text-xs text-gray-400 mt-0.5">Placa: {selectedVehicle.plate}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={handleBackToInventory}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shrink-0 self-start"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver al inventario
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
+            <button
+              type="button"
+              onClick={() => setVehicleDetailTab('reels')}
+              className={tabButtonClass(vehicleDetailTab === 'reels')}
+            >
+              <Film className="w-4 h-4" />
+              Reels
+            </button>
+            <button
+              type="button"
+              onClick={() => setVehicleDetailTab('raw-clips')}
+              className={tabButtonClass(vehicleDetailTab === 'raw-clips')}
+            >
+              <FolderOpen className="w-4 h-4" />
+              Clips en bruto
+            </button>
+          </div>
+
+          {vehicleDetailTab === 'reels' ? (
+            <section aria-label="Reels del vehículo">
+              <VideoJobList embedded inventoryVehicleId={selectedVehicle.id} />
+            </section>
+          ) : (
+            <section aria-label="Clips en bruto">
+              <RawClipsLibraryDashboard
+                embedded
+                hideHeader
+                inventoryVehicleId={selectedVehicle.id}
+                vehicleTitle={selectedVehicleTitle ?? undefined}
+              />
+            </section>
+          )}
         </div>
       ) : (
         <>

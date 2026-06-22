@@ -36,9 +36,18 @@ interface VideoJobListProps {
   refreshKey?: number
   /** Incrementar para refrescar lista tras cambios en publicación (aprobar, etc.). */
   publishRefreshKey?: number
+  /** Filtra reels al vehículo del inventario. */
+  inventoryVehicleId?: string
+  /** Modo embebido (p. ej. Inventariado marketing): oculta búsqueda global. */
+  embedded?: boolean
 }
 
-export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJobListProps) {
+export function VideoJobList({
+  refreshKey = 0,
+  publishRefreshKey = 0,
+  inventoryVehicleId,
+  embedded = false,
+}: VideoJobListProps) {
   const [jobs, setJobs] = useState<VideoJob[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<VideoJobStatus | 'all'>('all')
@@ -75,7 +84,12 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
           query = query.eq('status', currentFilter)
         }
 
-        if (search) {
+        const vehicleFilter = inventoryVehicleId?.trim()
+        if (vehicleFilter) {
+          query = query.eq('inventory_vehicle_id', vehicleFilter)
+        }
+
+        if (search && !vehicleFilter) {
           const pattern = `%${escapeIlikePattern(search)}%`
           const { data: invRows } = await supabase
             .from('inventoryoracle')
@@ -107,7 +121,7 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
         if (!silent) setIsLoading(false)
       }
     },
-    []
+    [inventoryVehicleId]
   )
 
   const ACTIVE_JOB_STATUSES: VideoJobStatus[] = [
@@ -132,7 +146,7 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
     setPage(0)
     setJobs([])
     fetchJobs(0, filter, debouncedSearch)
-  }, [filter, debouncedSearch, refreshKey, publishRefreshKey, fetchJobs])
+  }, [filter, debouncedSearch, refreshKey, publishRefreshKey, inventoryVehicleId, fetchJobs])
 
   function handleFilterChange(f: VideoJobStatus | 'all') {
     setFilter(f)
@@ -148,27 +162,37 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
     setJobs((prev) => prev.filter((job) => job.id !== jobId))
   }
 
+  const showResultCount = embedded ? !!inventoryVehicleId : !!debouncedSearch
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por marca, modelo o nombre…"
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400"
-          />
+      {!embedded ? (
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por marca, modelo o nombre…"
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400"
+            />
+          </div>
+          {debouncedSearch ? (
+            <p className="text-xs text-gray-500 shrink-0">
+              {isLoading && jobs.length === 0
+                ? 'Buscando…'
+                : `${jobs.length} reel${jobs.length === 1 ? '' : 's'} encontrado${jobs.length === 1 ? '' : 's'}`}
+            </p>
+          ) : null}
         </div>
-        {debouncedSearch ? (
-          <p className="text-xs text-gray-500 shrink-0">
-            {isLoading && jobs.length === 0
-              ? 'Buscando…'
-              : `${jobs.length} reel${jobs.length === 1 ? '' : 's'} encontrado${jobs.length === 1 ? '' : 's'}`}
-          </p>
-        ) : null}
-      </div>
+      ) : showResultCount ? (
+        <p className="text-xs font-medium text-gray-500">
+          {isLoading && jobs.length === 0
+            ? 'Cargando reels…'
+            : `${jobs.length} reel${jobs.length === 1 ? '' : 's'} encontrado${jobs.length === 1 ? '' : 's'}`}
+        </p>
+      ) : null}
 
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap">
@@ -200,12 +224,18 @@ export function VideoJobList({ refreshKey = 0, publishRefreshKey = 0 }: VideoJob
           </div>
           <div>
             <p className="font-semibold text-gray-900">
-              {debouncedSearch ? 'Sin resultados' : 'No hay videos aún'}
+              {embedded
+                ? 'Sin reels para este vehículo'
+                : debouncedSearch
+                  ? 'Sin resultados'
+                  : 'No hay videos aún'}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {debouncedSearch
-                ? 'Prueba con otra marca, modelo o nombre de job'
-                : 'Crea tu primer Reel con el botón de arriba'}
+              {embedded
+                ? 'Los reels generados para este vehículo aparecerán aquí.'
+                : debouncedSearch
+                  ? 'Prueba con otra marca, modelo o nombre de job'
+                  : 'Crea tu primer Reel con el botón de arriba'}
             </p>
           </div>
         </div>

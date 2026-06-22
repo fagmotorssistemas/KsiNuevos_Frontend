@@ -391,6 +391,10 @@ export type RawClipsLibraryDashboardProps = {
   vehicleTitle?: string
   /** Modo embebido desde Inventariado marketing. */
   embedded?: boolean
+  /** Oculta título/descripción (cuando el padre ya los muestra). */
+  hideHeader?: boolean
+  /** Subtítulo de sección cuando `hideHeader`. */
+  sectionTitle?: string
   onBack?: () => void
 }
 
@@ -398,6 +402,8 @@ export function RawClipsLibraryDashboard({
   inventoryVehicleId,
   vehicleTitle,
   embedded = false,
+  hideHeader = false,
+  sectionTitle,
   onBack,
 }: RawClipsLibraryDashboardProps = {}) {
   const [folders, setFolders] = useState<RawClipsFolderSummary[]>([])
@@ -544,9 +550,12 @@ export function RawClipsLibraryDashboard({
   const pageTitle =
     viewMode === 'folder' && activeFolder
       ? activeFolder.title
-      : embedded && vehicleTitle
+      : embedded && vehicleTitle && !hideHeader
         ? `Clips · ${vehicleTitle}`
-        : 'Biblioteca de clips'
+        : sectionTitle ?? 'Biblioteca de clips'
+
+  const showFullPageHeader = !hideHeader || viewMode === 'folder'
+  const showSectionIntro = hideHeader && viewMode === 'grid' && !!sectionTitle
 
   return (
     <div
@@ -583,10 +592,22 @@ export function RawClipsLibraryDashboard({
             </nav>
           ) : null}
 
+          {/* Section intro (modo embebido sin cabecera completa) */}
+          {showSectionIntro ? (
+            <div>
+              <h2 className="text-lg font-extrabold tracking-tight text-gray-900">{sectionTitle}</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Carpetas con material fuente subido para generar reels de este vehículo.
+              </p>
+            </div>
+          ) : null}
+
           {/* Header */}
+          {showFullPageHeader ? (
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">{pageTitle}</h1>
+              {!hideHeader ? (
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
                 {embedded ? (
                   <>
@@ -603,6 +624,9 @@ export function RawClipsLibraryDashboard({
                   </>
                 )}
               </p>
+              ) : viewMode === 'folder' ? (
+                <p className="mt-1 text-sm text-gray-500">Material fuente de esta carpeta.</p>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 self-start">
@@ -639,6 +663,7 @@ export function RawClipsLibraryDashboard({
               ) : null}
             </div>
           </div>
+          ) : null}
 
           {/* Stats */}
           {stats && viewMode === 'grid' ? (
