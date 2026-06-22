@@ -118,8 +118,8 @@ export function SchedulePublishModal({
     setDateYmd(dy)
     setTimeHm(th)
     setSearchTerm('')
-    setVehicleId('')
-  }, [isOpen, mode, job?.id])
+    setVehicleId(job?.inventory_vehicle_id?.trim() ?? '')
+  }, [isOpen, mode, job?.id, job?.inventory_vehicle_id])
 
   useEffect(() => {
     if (!isOpen) return

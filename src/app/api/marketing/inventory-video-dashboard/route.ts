@@ -11,6 +11,7 @@ const PAGE_SIZE_DEFAULT = 25
 const PAGE_SIZE_MAX = 100
 const INVENTORY_FETCH_BATCH = 800
 const QUEUE_FETCH_BATCH = 1000
+const JOBS_FETCH_BATCH = 1000
 const MAX_INVENTORY_ROWS = 15000
 
 type QueueAgg = {
@@ -49,6 +50,16 @@ function addVideoForStatus(agg: QueueAgg, status: string, videoId: string) {
   }
 }
 
+function resolveInventoryVehicleId(
+  jobInventoryVehicleId: string | null | undefined,
+  queueVehicleId: string | null | undefined
+): string | null {
+  const fromJob = jobInventoryVehicleId?.trim()
+  if (fromJob) return fromJob
+  const fromQueue = queueVehicleId?.trim()
+  return fromQueue || null
+}
+
 function parseInventoryStatusGroup(raw: string | null): CarStatus[] | null {
   if (!raw || raw === 'all') return null
   const map: Record<string, CarStatus[]> = {
@@ -69,8 +80,10 @@ function escapeIlike(q: string) {
 }
 
 /**
- * GET — Inventario + conteos de videos únicos por vehículo según `video_publishing_queue`.
- * Query: page, pageSize, q (búsqueda), inventoryStatus, coverage (all|with_published|without_published), sort
+ * GET — Inventario + conteos por vehículo:
+ * - `uniqueGenerated`: reels completados o fallidos con `video_jobs_v2.inventory_vehicle_id`
+ * - `uniqueFailed`: jobs con error de pipeline + publicaciones fallidas en cola (sin duplicar IDs)
+ * - Publicación: cola unida al job; agrupa por FK del job (fallback `queue.vehicle_id` legacy)
  */
 export async function GET(request: NextRequest) {
   const auth = await requireMarketingSession(request)
@@ -85,30 +98,72 @@ export async function GET(request: NextRequest) {
   const qRaw = (url.searchParams.get('q') ?? '').trim()
   const inventoryStatus = url.searchParams.get('inventoryStatus') ?? 'all'
   const coverage = url.searchParams.get('coverage') ?? 'all'
-  const sort = url.searchParams.get('sort') ?? 'published_desc'
+  const sort = url.searchParams.get('sort') ?? 'generated_desc'
 
   const supabase = await createServerSupabaseClient()
 
-  /** 1) Cola de publicación → agregados por vehicle_id (videos únicos por estado). */
+  /** 1) Reels completados o fallidos vinculados al inventario. */
+  const generatedAgg = new Map<string, Set<string>>()
+  const pipelineFailedAgg = new Map<string, Set<string>>()
+  let jOffset = 0
+  for (;;) {
+    const { data: jobChunk, error: jobErr } = await supabase
+      .from('video_jobs_v2')
+      .select('id, inventory_vehicle_id, status')
+      .neq('flow_type', 'noticiero')
+      .in('status', ['completed', 'failed'])
+      .not('inventory_vehicle_id', 'is', null)
+      .range(jOffset, jOffset + JOBS_FETCH_BATCH - 1)
+
+    if (jobErr) {
+      console.error('[inventory-video-dashboard] jobs', jobErr)
+      return NextResponse.json({ error: jobErr.message }, { status: 500 })
+    }
+    const rows = jobChunk ?? []
+    for (const row of rows) {
+      const vid = row.inventory_vehicle_id as string
+      const jobId = row.id as string
+      if (!vid || !jobId) continue
+      let set = generatedAgg.get(vid)
+      if (!set) {
+        set = new Set()
+        generatedAgg.set(vid, set)
+      }
+      set.add(jobId)
+      if (row.status === 'failed') {
+        let failedSet = pipelineFailedAgg.get(vid)
+        if (!failedSet) {
+          failedSet = new Set()
+          pipelineFailedAgg.set(vid, failedSet)
+        }
+        failedSet.add(jobId)
+      }
+    }
+    if (rows.length < JOBS_FETCH_BATCH) break
+    jOffset += JOBS_FETCH_BATCH
+    if (jOffset > 50000) break
+  }
+
+  /** 2) Cola de publicación → agrupada por inventario del job (FK), no solo queue.vehicle_id. */
   const queueAgg = new Map<string, QueueAgg>()
   let qOffset = 0
   for (;;) {
-    const queueQuery = supabase
+    const { data: queueChunk, error: queueErr } = await supabase
       .from('video_publishing_queue')
-      .select('vehicle_id, video_id, status')
-      .not('vehicle_id', 'is', null)
+      .select('video_id, status, vehicle_id, video_jobs_v2 ( inventory_vehicle_id )')
       .range(qOffset, qOffset + QUEUE_FETCH_BATCH - 1)
 
-    const { data: queueChunk, error: queueErr } = await queueQuery
     if (queueErr) {
       console.error('[inventory-video-dashboard] queue', queueErr)
       return NextResponse.json({ error: queueErr.message }, { status: 500 })
     }
     const rows = queueChunk ?? []
     for (const row of rows) {
-      const vid = row.vehicle_id as string
       const videoId = row.video_id as string
-      if (!vid || !videoId) continue
+      if (!videoId) continue
+      const jobJoin = row.video_jobs_v2 as { inventory_vehicle_id?: string | null } | null
+      const vid = resolveInventoryVehicleId(jobJoin?.inventory_vehicle_id, row.vehicle_id as string | null)
+      if (!vid) continue
       let agg = queueAgg.get(vid)
       if (!agg) {
         agg = emptyAgg()
@@ -121,7 +176,7 @@ export async function GET(request: NextRequest) {
     if (qOffset > 50000) break
   }
 
-  /** 2) Inventario filtrado (campos mínimos), por lotes. */
+  /** 3) Inventario filtrado (campos mínimos), por lotes. */
   const statusFilter = parseInventoryStatusGroup(inventoryStatus)
   const searchEscaped = qRaw ? escapeIlike(qRaw) : ''
 
@@ -168,8 +223,9 @@ export async function GET(request: NextRequest) {
     if (inventoryRows.length >= MAX_INVENTORY_ROWS) break
   }
 
-  /** 3) Enriquecer + filtro cobertura publicación. */
+  /** 4) Enriquecer + filtro cobertura. */
   type Enriched = (typeof inventoryRows)[number] & {
+    uniqueGenerated: number
     uniquePublished: number
     uniquePending: number
     uniqueFailed: number
@@ -177,12 +233,18 @@ export async function GET(request: NextRequest) {
   }
 
   let enriched: Enriched[] = inventoryRows.map((row) => {
+    const generated = generatedAgg.get(row.id)
     const agg = queueAgg.get(row.id) ?? emptyAgg()
+    const failedIds = new Set<string>([
+      ...(pipelineFailedAgg.get(row.id) ?? []),
+      ...agg.failed,
+    ])
     return {
       ...row,
+      uniqueGenerated: generated?.size ?? 0,
       uniquePublished: agg.published.size,
       uniquePending: agg.pending.size,
-      uniqueFailed: agg.failed.size,
+      uniqueFailed: failedIds.size,
       uniqueCancelled: agg.cancelled.size,
     }
   })
@@ -191,12 +253,20 @@ export async function GET(request: NextRequest) {
     enriched = enriched.filter((r) => r.uniquePublished > 0)
   } else if (coverage === 'without_published') {
     enriched = enriched.filter((r) => r.uniquePublished === 0)
+  } else if (coverage === 'with_generated') {
+    enriched = enriched.filter((r) => r.uniqueGenerated > 0)
+  } else if (coverage === 'without_generated') {
+    enriched = enriched.filter((r) => r.uniqueGenerated === 0)
   }
 
-  /** 4) Ordenamiento. */
+  /** 5) Ordenamiento. */
   const cmpStr = (a: string, b: string) => a.localeCompare(b, 'es', { sensitivity: 'base' })
   enriched.sort((a, b) => {
     switch (sort) {
+      case 'generated_desc':
+        return b.uniqueGenerated - a.uniqueGenerated || cmpStr(a.brand, b.brand)
+      case 'generated_asc':
+        return a.uniqueGenerated - b.uniqueGenerated || cmpStr(a.brand, b.brand)
       case 'published_asc':
         return a.uniquePublished - b.uniquePublished || cmpStr(a.brand, b.brand)
       case 'published_desc':
@@ -213,7 +283,7 @@ export async function GET(request: NextRequest) {
         return tb - ta
       }
       default:
-        return b.uniquePublished - a.uniquePublished || cmpStr(a.brand, b.brand)
+        return b.uniqueGenerated - a.uniqueGenerated || cmpStr(a.brand, b.brand)
     }
   })
 
@@ -223,6 +293,12 @@ export async function GET(request: NextRequest) {
   const start = (safePage - 1) * pageSize
   const slice = enriched.slice(start, start + pageSize)
 
+  const [{ count: totalRegistered }, { count: totalActive }, { count: totalBaja }] = await Promise.all([
+    supabase.from('inventoryoracle').select('*', { count: 'exact', head: true }),
+    supabase.from('inventoryoracle').select('*', { count: 'exact', head: true }).eq('status', 'disponible'),
+    supabase.from('inventoryoracle').select('*', { count: 'exact', head: true }).eq('status', 'vendido'),
+  ])
+
   return NextResponse.json({
     rows: slice,
     total,
@@ -230,5 +306,10 @@ export async function GET(request: NextRequest) {
     pageSize,
     totalPages,
     capped: inventoryRows.length >= MAX_INVENTORY_ROWS,
+    kpiSummary: {
+      totalVehiculosRegistrados: totalRegistered ?? 0,
+      totalActivos: totalActive ?? 0,
+      totalBaja: totalBaja ?? 0,
+    },
   })
 }

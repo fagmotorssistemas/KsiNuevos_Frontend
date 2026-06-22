@@ -28,9 +28,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    if (!body.vehicleId) {
-      return NextResponse.json({ error: 'vehicleId es requerido' }, { status: 400 })
-    }
+
     const platforms = (body.platforms ?? []).filter(isPlatform)
     if (platforms.length === 0) {
       return NextResponse.json({ error: 'Selecciona al menos una red' }, { status: 400 })
@@ -45,18 +43,26 @@ export async function POST(request: NextRequest) {
 
     const { data: job, error: jobErr } = await supabase
       .from('video_jobs_v2')
-      .select('id, status, final_video_url')
+      .select('id, status, final_video_url, inventory_vehicle_id')
       .eq('id', body.videoId)
       .single()
     if (jobErr || !job || job.status !== 'completed' || !job.final_video_url) {
       return NextResponse.json({ error: 'Video no encontrado o aún no está listo' }, { status: 400 })
     }
 
+    const vehicleId = job.inventory_vehicle_id?.trim() || body.vehicleId?.trim()
+    if (!vehicleId) {
+      return NextResponse.json(
+        { error: 'vehicleId es requerido (vincula el reel a un vehículo del inventario)' },
+        { status: 400 }
+      )
+    }
+
     const { data: inserted, error: insErr } = await supabase
       .from('video_publishing_queue')
       .insert({
         video_id: body.videoId,
-        vehicle_id: body.vehicleId,
+        vehicle_id: vehicleId,
         caption: body.caption.trim(),
         scheduled_at: scheduled.toISOString(),
         platforms,

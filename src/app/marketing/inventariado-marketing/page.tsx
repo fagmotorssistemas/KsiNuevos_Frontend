@@ -8,8 +8,15 @@ import {
   ArrowDownWideNarrow,
   Filter,
   AlertTriangle,
+  Film,
 } from 'lucide-react'
 import { Pagination } from '@/shared/components/Pagination'
+import {
+  InventoryKpiStats,
+  type InventoryKpiFilter,
+  type InventoryKpiSummary,
+} from '@/components/features/inventory/InventoryKpiStats'
+import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
 
 type Row = {
   id: string
@@ -20,6 +27,7 @@ type Row = {
   status: string | null
   updated_at: string | null
   plate: string | null
+  uniqueGenerated: number
   uniquePublished: number
   uniquePending: number
   uniqueFailed: number
@@ -52,6 +60,12 @@ function formatStatus(status: string | null) {
   return STATUS_LABELS[status] ?? toTitleCase(status.replace(/_/g, ' '))
 }
 
+function formatVehicleTitle(row: Row) {
+  return `${toTitleCase(row.brand)} ${toTitleCase(row.model)} ${row.year}`
+}
+
+type PageTab = 'inventario' | 'clips'
+
 export default function InventariadoMarketingPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
@@ -60,13 +74,19 @@ export default function InventariadoMarketingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [capped, setCapped] = useState(false)
+  const [kpiSummary, setKpiSummary] = useState<InventoryKpiSummary | null>(null)
+  const [kpiLoading, setKpiLoading] = useState(true)
 
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [inventoryStatus, setInventoryStatus] = useState('all')
-  const [coverage, setCoverage] = useState<'all' | 'with_published' | 'without_published'>('all')
+  const [coverage, setCoverage] = useState<
+    'all' | 'with_generated' | 'without_generated' | 'with_published' | 'without_published'
+  >('all')
   const [sort, setSort] = useState(
-    'published_desc' as
+    'generated_desc' as
+      | 'generated_desc'
+      | 'generated_asc'
       | 'published_desc'
       | 'published_asc'
       | 'pending_desc'
@@ -74,6 +94,9 @@ export default function InventariadoMarketingPage() {
       | 'brand_asc'
       | 'updated_desc'
   )
+
+  const [activeTab, setActiveTab] = useState<PageTab>('inventario')
+  const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null)
 
   const lastFilterSig = useRef<string | null>(null)
   const pendingFilterReset = useRef(false)
@@ -106,6 +129,7 @@ export default function InventariadoMarketingPage() {
           totalPages?: number
           page?: number
           capped?: boolean
+          kpiSummary?: InventoryKpiSummary
           error?: string
         }
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
@@ -113,11 +137,16 @@ export default function InventariadoMarketingPage() {
         setTotal(data.total ?? 0)
         setTotalPages(Math.max(1, data.totalPages ?? 1))
         setCapped(!!data.capped)
+        if (data.kpiSummary) {
+          setKpiSummary(data.kpiSummary)
+          setKpiLoading(false)
+        }
         if (data.page && data.page !== pageNum) setPage(data.page)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar')
         setRows([])
         setTotal(0)
+        setKpiLoading(false)
       } finally {
         setLoading(false)
       }
@@ -146,6 +175,26 @@ export default function InventariadoMarketingPage() {
   const startIndex = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const endIndex = Math.min(page * PAGE_SIZE, total)
 
+  const activeKpiFilter: InventoryKpiFilter =
+    inventoryStatus === 'disponible' ? 'active' : inventoryStatus === 'vendido' ? 'baja' : 'all'
+
+  function handleKpiFilterChange(filter: InventoryKpiFilter) {
+    if (filter === 'active') setInventoryStatus('disponible')
+    else if (filter === 'baja') setInventoryStatus('vendido')
+    else setInventoryStatus('all')
+  }
+
+  function handleVehicleSelect(row: Row) {
+    setSelectedVehicle(row)
+    setActiveTab('clips')
+  }
+
+  function handleBackToInventory() {
+    setActiveTab('inventario')
+  }
+
+  const selectedVehicleTitle = selectedVehicle ? formatVehicleTitle(selectedVehicle) : null
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -156,12 +205,53 @@ export default function InventariadoMarketingPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Inventariado marketing</h1>
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-              Inventario completo con videos únicos publicados, en cola y fallidos según la programación en redes.
+              Inventario con reels generados vinculados al vehículo y estado de publicación en redes. Haz clic en un
+              vehículo para ver sus clips en bruto.
             </p>
           </div>
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('inventario')}
+          className={`inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+            activeTab === 'inventario'
+              ? 'bg-white text-violet-700 border border-gray-200 border-b-white -mb-px shadow-sm'
+              : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/80'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" />
+          Inventario
+        </button>
+        {selectedVehicle ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab('clips')}
+            className={`inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors max-w-full ${
+              activeTab === 'clips'
+                ? 'bg-white text-violet-700 border border-gray-200 border-b-white -mb-px shadow-sm'
+                : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100/80'
+            }`}
+          >
+            <Film className="w-4 h-4 shrink-0" />
+            <span className="truncate">Clips · {selectedVehicleTitle}</span>
+          </button>
+        ) : null}
+      </div>
+
+      {activeTab === 'clips' && selectedVehicle ? (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
+          <RawClipsLibraryDashboard
+            embedded
+            inventoryVehicleId={selectedVehicle.id}
+            vehicleTitle={selectedVehicleTitle ?? undefined}
+            onBack={handleBackToInventory}
+          />
+        </div>
+      ) : (
+        <>
       {capped ? (
         <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -172,6 +262,15 @@ export default function InventariadoMarketingPage() {
         </div>
       ) : null}
 
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <InventoryKpiStats
+          data={kpiSummary}
+          loading={kpiLoading && !kpiSummary}
+          activeFilter={activeKpiFilter}
+          onFilterChange={handleKpiFilterChange}
+        />
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <Filter className="w-4 h-4 text-violet-600" />
@@ -179,7 +278,7 @@ export default function InventariadoMarketingPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          <div className="lg:col-span-4 relative">
+          <div className="lg:col-span-5 relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="search"
@@ -190,35 +289,26 @@ export default function InventariadoMarketingPage() {
             />
           </div>
 
-          <div className="lg:col-span-2">
-            <select
-              value={inventoryStatus}
-              onChange={(e) => setInventoryStatus(e.target.value)}
-              className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white"
-            >
-              <option value="all">Todos los estados</option>
-              <option value="disponible">Disponible</option>
-              <option value="vendido">Vendido</option>
-              <option value="reservado">Reservado</option>
-              <option value="mantenimiento">Mantenimiento</option>
-              <option value="devuelto">Devuelto</option>
-              <option value="consignacion">Consignación</option>
-              <option value="conwilsonhernan">Con Wilson Hernán</option>
-              <option value="otros">Otros (no disp./vend./res.)</option>
-            </select>
-          </div>
-
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-4">
             <select
               value={coverage}
               onChange={(e) =>
-                setCoverage(e.target.value as 'all' | 'with_published' | 'without_published')
+                setCoverage(
+                  e.target.value as
+                    | 'all'
+                    | 'with_generated'
+                    | 'without_generated'
+                    | 'with_published'
+                    | 'without_published'
+                )
               }
               className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white"
             >
-              <option value="all">Publicación: todos</option>
-              <option value="with_published">Con al menos 1 video publicado</option>
-              <option value="without_published">Sin videos publicados</option>
+              <option value="all">Cobertura: todos</option>
+              <option value="with_generated">Con reels generados</option>
+              <option value="without_generated">Sin reels generados</option>
+              <option value="with_published">Con al menos 1 publicado</option>
+              <option value="without_published">Sin publicados</option>
             </select>
           </div>
 
@@ -229,6 +319,8 @@ export default function InventariadoMarketingPage() {
               onChange={(e) =>
                 setSort(
                   e.target.value as
+                    | 'generated_desc'
+                    | 'generated_asc'
                     | 'published_desc'
                     | 'published_asc'
                     | 'pending_desc'
@@ -239,6 +331,8 @@ export default function InventariadoMarketingPage() {
               }
               className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white"
             >
+              <option value="generated_desc">Más reels generados primero</option>
+              <option value="generated_asc">Menos reels generados primero</option>
               <option value="published_desc">Más publicados primero</option>
               <option value="published_asc">Menos publicados primero</option>
               <option value="pending_desc">Más en cola primero</option>
@@ -261,6 +355,7 @@ export default function InventariadoMarketingPage() {
               <tr>
                 <th className="px-5 sm:px-6 py-4 min-w-[220px]">Vehículo</th>
                 <th className="px-4 sm:px-5 py-4 whitespace-nowrap">Estado</th>
+                <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Generados</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Publicados</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">En cola</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Fallidos</th>
@@ -270,20 +365,24 @@ export default function InventariadoMarketingPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 sm:px-6 py-16 text-center text-gray-500">
+                  <td colSpan={7} className="px-5 sm:px-6 py-16 text-center text-gray-500">
                     <Loader2 className="w-8 h-8 animate-spin text-violet-600 mx-auto mb-2" />
                     Cargando inventario…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 sm:px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-5 sm:px-6 py-12 text-center text-gray-500">
                     No hay vehículos que coincidan con los filtros.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50/80">
+                  <tr
+                    key={r.id}
+                    onClick={() => handleVehicleSelect(r)}
+                    className="hover:bg-violet-50/60 cursor-pointer transition-colors"
+                  >
                     <td className="px-5 sm:px-6 py-4 align-top">
                       <div className="font-semibold text-gray-900">
                         {toTitleCase(r.brand)} {toTitleCase(r.model)} {r.year}
@@ -297,6 +396,9 @@ export default function InventariadoMarketingPage() {
                       <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
                         {formatStatus(r.status)}
                       </span>
+                    </td>
+                    <td className="px-4 sm:px-5 py-4 text-center font-semibold text-violet-700 tabular-nums align-middle">
+                      {r.uniqueGenerated}
                     </td>
                     <td className="px-4 sm:px-5 py-4 text-center font-semibold text-emerald-700 tabular-nums align-middle">
                       {r.uniquePublished}
@@ -332,6 +434,8 @@ export default function InventariadoMarketingPage() {
           />
         ) : null}
       </div>
+        </>
+      )}
     </div>
   )
 }

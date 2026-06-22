@@ -12,10 +12,11 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const q = url.searchParams.get('q') ?? undefined
     const status = url.searchParams.get('status') ?? undefined
+    const inventoryVehicleId = url.searchParams.get('inventoryVehicleId') ?? undefined
     const page = Number(url.searchParams.get('page') ?? '1') || 1
     const pageSize = Number(url.searchParams.get('pageSize') ?? '24') || 24
 
-    const data = await fetchRawClipsLibrary({ q, status, page, pageSize })
+    const data = await fetchRawClipsLibrary({ q, status, page, pageSize, inventoryVehicleId })
     return NextResponse.json(data)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'

@@ -384,7 +384,22 @@ function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
   )
 }
 
-export function RawClipsLibraryDashboard() {
+export type RawClipsLibraryDashboardProps = {
+  /** Filtra carpetas al vehículo del inventario. */
+  inventoryVehicleId?: string
+  /** Título del vehículo (modo embebido). */
+  vehicleTitle?: string
+  /** Modo embebido desde Inventariado marketing. */
+  embedded?: boolean
+  onBack?: () => void
+}
+
+export function RawClipsLibraryDashboard({
+  inventoryVehicleId,
+  vehicleTitle,
+  embedded = false,
+  onBack,
+}: RawClipsLibraryDashboardProps = {}) {
   const [folders, setFolders] = useState<RawClipsFolderSummary[]>([])
   const [stats, setStats] = useState<RawClipsLibraryStats | null>(null)
   const [total, setTotal] = useState(0)
@@ -451,6 +466,7 @@ export function RawClipsLibraryDashboard() {
         status,
       })
       if (q.trim()) params.set('q', q.trim())
+      if (inventoryVehicleId?.trim()) params.set('inventoryVehicleId', inventoryVehicleId.trim())
 
       const res = await fetch(`/api/videos/raw-clips/library?${params}`)
       const data = (await res.json()) as LibraryResponse & { error?: string }
@@ -464,7 +480,7 @@ export function RawClipsLibraryDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, q, status])
+  }, [page, pageSize, q, status, inventoryVehicleId])
 
   const loadFolderDetail = useCallback(async (jobId: string) => {
     setLoadingClips(true)
@@ -481,6 +497,14 @@ export function RawClipsLibraryDashboard() {
       setLoadingClips(false)
     }
   }, [])
+
+  useEffect(() => {
+    setPage(1)
+    setSelectedId(null)
+    setSelectedFolder(null)
+    setClips([])
+    setViewMode('grid')
+  }, [inventoryVehicleId])
 
   useEffect(() => {
     void loadLibrary()
@@ -517,50 +541,82 @@ export function RawClipsLibraryDashboard() {
   const activeFolder = selectedFolder ?? selectedFromList
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  const pageTitle =
+    viewMode === 'folder' && activeFolder
+      ? activeFolder.title
+      : embedded && vehicleTitle
+        ? `Clips · ${vehicleTitle}`
+        : 'Biblioteca de clips'
+
   return (
-    <div className="-mx-4 flex min-h-[calc(100vh-8rem)] flex-col md:-mx-8">
-      <div className="flex flex-1 flex-col gap-6 px-4 md:px-8 xl:flex-row">
+    <div
+      className={
+        embedded
+          ? 'flex min-h-[420px] flex-col'
+          : '-mx-4 flex min-h-[calc(100vh-8rem)] flex-col md:-mx-8'
+      }
+    >
+      <div className={`flex flex-1 flex-col gap-6 ${embedded ? '' : 'px-4 md:px-8'} xl:flex-row`}>
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           {/* Breadcrumbs */}
-          <nav className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
-            <Link href="/marketing" className="hover:text-violet-600">
-              Marketing
-            </Link>
-            <ChevronRight className="h-4 w-4 shrink-0" />
-            {viewMode === 'folder' && activeFolder ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleBackToGrid}
-                  className="hover:text-violet-600"
-                >
-                  Biblioteca de clips
-                </button>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-                <span className="font-medium text-gray-900 line-clamp-1">{activeFolder.title}</span>
-              </>
-            ) : (
-              <span className="font-medium text-gray-900">Biblioteca de clips</span>
-            )}
-          </nav>
+          {!embedded ? (
+            <nav className="flex flex-wrap items-center gap-1 text-sm text-gray-500">
+              <Link href="/marketing" className="hover:text-violet-600">
+                Marketing
+              </Link>
+              <ChevronRight className="h-4 w-4 shrink-0" />
+              {viewMode === 'folder' && activeFolder ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleBackToGrid}
+                    className="hover:text-violet-600"
+                  >
+                    Biblioteca de clips
+                  </button>
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                  <span className="font-medium text-gray-900 line-clamp-1">{activeFolder.title}</span>
+                </>
+              ) : (
+                <span className="font-medium text-gray-900">Biblioteca de clips</span>
+              )}
+            </nav>
+          ) : null}
 
           {/* Header */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">
-                {viewMode === 'folder' && activeFolder ? activeFolder.title : 'Biblioteca de clips'}
-              </h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">{pageTitle}</h1>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Clips en bruto subidos para la fábrica de Reels. Cada carpeta corresponde a un job de{' '}
-                <Link href="/marketing/videos" className="font-medium text-violet-600 hover:underline">
-                  Videos
-                </Link>
-                .
+                {embedded ? (
+                  <>
+                    Clips en bruto vinculados a este vehículo. Selecciona una carpeta para ver el material fuente de
+                    cada reel.
+                  </>
+                ) : (
+                  <>
+                    Clips en bruto subidos para la fábrica de Reels. Cada carpeta corresponde a un job de{' '}
+                    <Link href="/marketing/videos" className="font-medium text-violet-600 hover:underline">
+                      Videos
+                    </Link>
+                    .
+                  </>
+                )}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 self-start">
-              {viewMode === 'grid' ? (
+              {embedded && onBack ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Volver al inventario
+                </button>
+              ) : null}
+              {viewMode === 'grid' && !embedded ? (
                 <button
                   type="button"
                   onClick={() => setIsUploadModalOpen(true)}
@@ -632,7 +688,11 @@ export function RawClipsLibraryDashboard() {
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Buscar por vehículo, placa, nombre o estado…"
+                  placeholder={
+                    embedded
+                      ? 'Buscar por nombre de job o estado…'
+                      : 'Buscar por vehículo, placa, nombre o estado…'
+                  }
                   className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
                 />
               </form>
@@ -680,7 +740,9 @@ export function RawClipsLibraryDashboard() {
 
               {folders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center text-sm text-gray-500">
-                  No hay carpetas que coincidan con la búsqueda.
+                  {embedded
+                    ? 'No hay clips en bruto vinculados a este vehículo.'
+                    : 'No hay carpetas que coincidan con la búsqueda.'}
                 </div>
               ) : null}
 

@@ -8,9 +8,14 @@ import {
   CheckCircle2, AlertCircle, Loader2, Megaphone,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import { JobManualEditor } from '@/components/videos/JobManualEditor'
 import { VideoPlayer } from '@/components/videos/VideoPlayer'
 import { PipelineStatus } from '@/components/videos/PipelineStatus'
+import {
+  VehicleInventoryPicker,
+  type InventoryPickerRow,
+} from '@/components/videos/VehicleInventoryPicker'
 import type { VideoJobStatus, VideoJob } from '@/lib/videos/types'
 import { resolveSocialPublishStage } from '@/lib/videos/publish-flow'
 
@@ -68,6 +73,10 @@ export default function JobDetailPage() {
   const [isSavingMeta, setIsSavingMeta] = useState(false)
   const [isApprovingForPublish, setIsApprovingForPublish] = useState(false)
   const [jobNameInput, setJobNameInput] = useState('')
+  const [vehicleId, setVehicleId] = useState('')
+  const [inventoryRows, setInventoryRows] = useState<InventoryPickerRow[]>([])
+  const [loadingInventory, setLoadingInventory] = useState(true)
+
   const fetchJob = useCallback(async () => {
     try {
       const res = await fetch(`/api/videos/job-status/${jobId}`)
@@ -76,12 +85,56 @@ export default function JobDetailPage() {
       const data = (await res.json()) as VideoJob
       setJob(data)
       setJobNameInput(data.job_name ?? '')
+      setVehicleId(data.inventory_vehicle_id?.trim() ?? '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setIsLoading(false)
     }
   }, [jobId])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingInventory(true)
+    const supabase = createClient()
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from('inventoryoracle')
+        .select('id, brand, model, year, plate, version')
+        .order('updated_at', { ascending: false })
+        .limit(300)
+
+      if (cancelled) return
+      if (error) {
+        toast.error('No se pudo cargar el inventario')
+        setLoadingInventory(false)
+        return
+      }
+
+      let rows = (data ?? []) as InventoryPickerRow[]
+      const linkedId = vehicleId.trim()
+      if (linkedId && !rows.some((r) => r.id === linkedId)) {
+        const { data: linked } = await supabase
+          .from('inventoryoracle')
+          .select('id, brand, model, year, plate, version')
+          .eq('id', linkedId)
+          .maybeSingle()
+        if (!cancelled && linked) {
+          rows = [linked as InventoryPickerRow, ...rows]
+        }
+      }
+
+      if (!cancelled) {
+        setInventoryRows(rows)
+        setLoadingInventory(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [vehicleId])
 
   useEffect(() => {
     void fetchJob()
@@ -127,7 +180,11 @@ export default function JobDetailPage() {
 
   const statusCfg = STATUS_CONFIG[job.status]
 
-  async function patchJobMeta(payload: { status?: VideoJobStatus; jobName?: string | null }) {
+  async function patchJobMeta(payload: {
+    status?: VideoJobStatus
+    jobName?: string | null
+    inventoryVehicleId?: string | null
+  }) {
     setIsSavingMeta(true)
     try {
       const res = await fetch(`/api/videos/jobs/${jobId}/meta`, {
@@ -139,12 +196,19 @@ export default function JobDetailPage() {
       if (!res.ok) throw new Error(data.error ?? 'No se pudieron guardar los cambios')
       setJob(data)
       setJobNameInput(data.job_name ?? '')
+      setVehicleId(data.inventory_vehicle_id?.trim() ?? '')
       toast.success('Cambios guardados')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error guardando cambios')
     } finally {
       setIsSavingMeta(false)
     }
+  }
+
+  function handleVehicleSelect(nextId: string) {
+    const normalized = nextId.trim()
+    if (normalized === (job?.inventory_vehicle_id?.trim() ?? '')) return
+    void patchJobMeta({ inventoryVehicleId: normalized || null })
   }
 
   async function handleApproveForPublish() {
@@ -200,30 +264,47 @@ export default function JobDetailPage() {
                 {job.flow_type === 'single' ? '1 video largo' : `${job.raw_video_paths.length} clips`}
                 {' · '}Creado {formatDate(job.created_at)}
               </p>
-              <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={jobNameInput}
-                  onChange={(e) => setJobNameInput(e.target.value)}
-                  onBlur={() => {
-                    const trimmed = jobNameInput.trim()
-                    if ((job.job_name ?? '') === trimmed) return
-                    void patchJobMeta({ jobName: trimmed })
-                  }}
-                  placeholder="Nombre del job"
-                  maxLength={100}
-                  className="w-full sm:w-72 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800"
-                />
-                <select
-                  value={job.status}
-                  onChange={(e) => void patchJobMeta({ status: e.target.value as VideoJobStatus })}
-                  disabled={isSavingMeta}
-                  className="w-full sm:w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 disabled:opacity-70"
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+              <div className="mt-3 flex flex-col gap-3 max-w-md">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    Vehículo del inventario
+                  </label>
+                  <VehicleInventoryPicker
+                    rows={inventoryRows}
+                    loading={loadingInventory}
+                    disabled={isSavingMeta}
+                    vehicleId={vehicleId}
+                    onSelect={handleVehicleSelect}
+                    compact
+                    showCount={false}
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={jobNameInput}
+                    onChange={(e) => setJobNameInput(e.target.value)}
+                    onBlur={() => {
+                      const trimmed = jobNameInput.trim()
+                      if ((job.job_name ?? '') === trimmed) return
+                      void patchJobMeta({ jobName: trimmed })
+                    }}
+                    placeholder="Nombre del job"
+                    maxLength={100}
+                    disabled={isSavingMeta}
+                    className="w-full sm:flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 disabled:opacity-70"
+                  />
+                  <select
+                    value={job.status}
+                    onChange={(e) => void patchJobMeta({ status: e.target.value as VideoJobStatus })}
+                    disabled={isSavingMeta}
+                    className="w-full sm:w-56 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 disabled:opacity-70"
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { VideoJobStatus, VideoSocialPublishStage } from '@/lib/videos/types'
+import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
 
 const ALLOWED_STATUS: VideoJobStatus[] = [
   'pending',
@@ -32,6 +33,8 @@ function getServiceClient() {
 interface PatchBody {
   status?: VideoJobStatus
   jobName?: string | null
+  /** UUID en inventoryoracle; null para desvincular. */
+  inventoryVehicleId?: string | null
   /** Flujo publicación redes (solo jobs completados). */
   socialPublishStage?: VideoSocialPublishStage
 }
@@ -84,6 +87,35 @@ export async function PATCH(
           ? body.jobName.trim().slice(0, 100)
           : null
       updates.job_name = normalized
+    }
+
+    if (body.inventoryVehicleId !== undefined) {
+      const raw = body.inventoryVehicleId
+      if (raw == null || (typeof raw === 'string' && raw.trim() === '')) {
+        updates.inventory_vehicle_id = null
+      } else if (typeof raw === 'string') {
+        const vehicleId = raw.trim()
+        const { data: inv, error: invErr } = await supabase
+          .from('inventoryoracle')
+          .select('id, brand, model, year')
+          .eq('id', vehicleId)
+          .single()
+
+        if (invErr || !inv) {
+          return NextResponse.json({ error: 'Vehículo no encontrado en inventario' }, { status: 400 })
+        }
+
+        updates.inventory_vehicle_id = inv.id
+        updates.vehicle_line_1 = inv.brand
+        updates.vehicle_line_2 = inv.model
+        updates.vehicle_line_4 = inv.year != null ? String(inv.year) : null
+        if (body.jobName === undefined) {
+          updates.job_name = buildJobNameFromInventory(inv.brand, inv.model, inv.year)
+        }
+      } else {
+        return NextResponse.json({ error: 'inventoryVehicleId inválido' }, { status: 400 })
+      }
+      updates.updated_at = new Date().toISOString()
     }
 
     if (Object.keys(updates).length === 0) {

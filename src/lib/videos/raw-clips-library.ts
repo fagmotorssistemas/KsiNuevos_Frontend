@@ -309,6 +309,7 @@ async function enrichJobs(jobs: JobRow[]) {
       job,
       inventory,
       resolvedTitle: resolved.title,
+      resolvedVehicleId: vid,
       storageAgg: storageAggMap.get(job.id),
     }
   })
@@ -319,6 +320,8 @@ export async function fetchRawClipsLibrary(params: {
   status?: string
   page?: number
   pageSize?: number
+  /** Filtra carpetas al vehículo del inventario (`inventory_vehicle_id` o resolución legacy). */
+  inventoryVehicleId?: string
 }): Promise<{
   folders: RawClipsFolderSummary[]
   stats: RawClipsLibraryStats
@@ -330,6 +333,7 @@ export async function fetchRawClipsLibrary(params: {
   const pageSize = Math.min(60, Math.max(12, params.pageSize ?? 24))
   const q = params.q?.trim() ?? ''
   const statusFilter = params.status?.trim()
+  const inventoryVehicleId = params.inventoryVehicleId?.trim() ?? ''
 
   const supabase = getServiceClient()
 
@@ -338,6 +342,10 @@ export async function fetchRawClipsLibrary(params: {
     .select('*')
     .neq('flow_type', 'noticiero')
     .order('created_at', { ascending: false })
+
+  if (inventoryVehicleId) {
+    query = query.eq('inventory_vehicle_id', inventoryVehicleId)
+  }
 
   if (statusFilter && statusFilter !== 'all') {
     query = query.eq('status', statusFilter)
@@ -352,9 +360,10 @@ export async function fetchRawClipsLibrary(params: {
 
   const enriched = await enrichJobs(jobs)
 
-  const filtered = enriched.filter((row) =>
-    jobMatchesSearch(row.job, row.resolvedTitle, row.inventory, q)
-  )
+  const filtered = enriched.filter((row) => {
+    if (inventoryVehicleId && row.resolvedVehicleId !== inventoryVehicleId) return false
+    return jobMatchesSearch(row.job, row.resolvedTitle, row.inventory, q)
+  })
 
   const total = filtered.length
   const slice = filtered.slice((page - 1) * pageSize, page * pageSize)
