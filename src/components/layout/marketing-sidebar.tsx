@@ -140,7 +140,7 @@ export function MarketingSidebar() {
                     </div>
                 )}
 
-                <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-6 px-3 space-y-1">
+                <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide py-6 px-3 space-y-1">
                     {!isCollapsed && (
                         <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 whitespace-nowrap transition-opacity">
                             Herramientas

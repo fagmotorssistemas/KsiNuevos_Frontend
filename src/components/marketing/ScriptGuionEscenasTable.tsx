@@ -8,14 +8,9 @@ type ColKey = keyof GuionEscena
 const COLUMNS: { key: ColKey; label: string; minW: string }[] = [
   { key: 'esc', label: 'Esc.', minW: 'w-11' },
   { key: 'tiempo', label: 'Tiempo', minW: 'w-[4.5rem]' },
-  { key: 'plano', label: 'Plano / Ángulo', minW: 'min-w-[130px]' },
   { key: 'movimiento', label: 'Movimiento de cámara', minW: 'min-w-[120px]' },
   { key: 'accion', label: 'Acción visual', minW: 'min-w-[180px]' },
   { key: 'dialogo', label: 'Diálogo / Voz en off', minW: 'min-w-[200px]' },
-  { key: 'musica_sonido', label: 'Música / Sonido', minW: 'min-w-[140px]' },
-  { key: 'texto_pantalla', label: 'Texto en pantalla', minW: 'min-w-[120px]' },
-  { key: 'postproduccion', label: 'Indicaciones de postproducción', minW: 'min-w-[160px]' },
-  { key: 'notas', label: 'Notas', minW: 'min-w-[100px]' },
 ]
 
 function cellValue(e: GuionEscena, key: ColKey): string {
@@ -50,8 +45,8 @@ export function ScriptGuionEscenasTable({
           </button>
         )}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1280px] border-collapse text-xs leading-snug">
+      <div className="overflow-x-auto scrollbar-hide">
+        <table className="w-full min-w-[640px] border-collapse text-xs leading-snug">
           <thead>
             <tr className="bg-emerald-800 text-white">
               {COLUMNS.map((c) => (
@@ -75,7 +70,6 @@ export function ScriptGuionEscenasTable({
                   const isEsc = c.key === 'esc'
                   const isTiempo = c.key === 'tiempo'
                   const isDialogo = c.key === 'dialogo'
-                  const isPantalla = c.key === 'texto_pantalla'
                   return (
                     <td
                       key={c.key}
@@ -86,13 +80,7 @@ export function ScriptGuionEscenasTable({
                         isDialogo || c.key === 'accion' ? 'leading-relaxed' : '',
                       ].join(' ')}
                     >
-                      {isPantalla && val !== '—' ? (
-                        <span className="inline-block font-extrabold uppercase tracking-wide text-[10px] text-slate-900 bg-white border border-gray-200 rounded px-1.5 py-0.5">
-                          {val}
-                        </span>
-                      ) : (
-                        val
-                      )}
+                      {val}
                     </td>
                   )
                 })}

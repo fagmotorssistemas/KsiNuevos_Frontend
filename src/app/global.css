@@ -4,3 +4,17 @@
   --font-sans: var(--font-satoshi), "Poppins", ui-sans-serif, system-ui, sans-serif;
 }
 
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+body:has([data-marketing-shell]) {
+  overflow: hidden;
+}

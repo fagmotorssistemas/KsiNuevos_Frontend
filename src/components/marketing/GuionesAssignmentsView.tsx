@@ -540,14 +540,14 @@ export function GuionesAssignmentsView({
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 min-h-[520px]">
-        <aside className="lg:w-[300px] xl:w-[340px] shrink-0 flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden max-h-[70vh] lg:max-h-[calc(100vh-12rem)]">
+        <aside className="lg:w-[300px] xl:w-[340px] shrink-0 flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <p className="text-xs font-extrabold uppercase tracking-wide text-gray-500">
               Asignaciones
             </p>
             <p className="text-sm font-bold text-gray-800 mt-0.5">{fecha}</p>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-4">
+          <div className="p-2 space-y-4">
             {groups.map((g) => (
               <div key={g.vendedorNombre}>
                 <p className="px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-gray-500 sticky top-0 bg-white/95 backdrop-blur-sm z-10">
@@ -602,7 +602,7 @@ export function GuionesAssignmentsView({
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[70vh] lg:max-h-[calc(100vh-12rem)]">
+        <main className="flex-1 min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-gray-500">
               <MessageSquareText className="h-10 w-10 text-gray-300 mb-3" />
@@ -651,7 +651,7 @@ export function GuionesAssignmentsView({
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-6">
                 {(selectedEffectiveStatus !== 'guion_generado' &&
                   selectedEffectiveStatus !== 'descartado') ||
                 selectedScriptMissing ? (
