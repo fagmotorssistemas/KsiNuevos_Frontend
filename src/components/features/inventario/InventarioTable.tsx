@@ -240,104 +240,113 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
 
             if (isAvailable) {
                 const internalPrice = editForm.internalFixedPrice ? Number(editForm.internalFixedPrice) : 0;
-                if (!internalPrice) {
-                    throw new Error('Registra el precio interno fijo antes de continuar');
-                }
-
-                let currentFixed = Number(editingVehiculo.internalFixedPrice ?? 0);
-                const internalChanged =
-                    editingVehiculo.internalFixedPrice != null
-                        ? Number(internalPrice.toFixed(2)) !==
-                          Number(editingVehiculo.internalFixedPrice.toFixed(2))
-                        : true;
-
-                if (editingVehiculo.internalFixedPrice == null) {
-                    const result = await inventarioService.setInternalFixedPrice(
-                        editingVehiculo.placa,
-                        internalPrice
-                    );
-                    nextVehicle = {
-                        ...nextVehicle,
-                        internalFixedPrice: result.internalFixedPrice,
-                        internalFixedPriceSetAt: result.internalFixedPriceSetAt,
-                        price: result.price,
-                        publicPriceChangedAt: null,
-                        publicPriceChangeReason: null,
-                        publicPriceRevertsAt: null,
-                        publicPriceRequestedBy: null,
-                    };
-
-                    await inventarioService.updateMileage(editingVehiculo.placa, mileage);
-
-                    setVehiculos((prev) =>
-                        prev.map((v) => (v.placa === editingVehiculo.placa ? nextVehicle : v))
-                    );
-                    setEditingVehiculo(nextVehicle);
-                    setEditForm((prev) => ({
-                        ...prev,
-                        internalFixedPrice: String(result.internalFixedPrice),
-                        publicPrice: String(result.price),
-                        publicPriceRequestedBySellerId: '',
-                    }));
-                    alert(
-                        'Precio interno fijo registrado. Ya puedes ajustar el precio público si lo necesitas.'
-                    );
-                    return;
-                } else if (internalChanged) {
-                    const result = await inventarioService.setInternalFixedPrice(
-                        editingVehiculo.placa,
-                        internalPrice
-                    );
-                    nextVehicle = {
-                        ...nextVehicle,
-                        internalFixedPrice: result.internalFixedPrice,
-                        price: result.price,
-                        ...(result.syncedPublic
-                            ? {
-                                  publicPriceChangedAt: null,
-                                  publicPriceChangeReason: null,
-                                  publicPriceRevertsAt: null,
-                                  publicPriceRequestedBy: null,
-                              }
-                            : {}),
-                    };
-                    currentFixed = result.internalFixedPrice;
-                }
-
-                const publicPrice = editForm.publicPrice ? Number(editForm.publicPrice) : 0;
-                if (!publicPrice) {
-                    throw new Error('Ingresa el precio público');
-                }
-
+                const publicPrice = editForm.publicPrice ? Number(editForm.publicPrice) : NaN;
                 const currentPublic = Number((editingVehiculo.price ?? 0).toFixed(2));
                 const publicChangedInForm =
+                    Number.isFinite(publicPrice) &&
                     Number(publicPrice.toFixed(2)) !== currentPublic;
+                const internalChanged =
+                    editingVehiculo.internalFixedPrice != null &&
+                    internalPrice > 0 &&
+                    Number(internalPrice.toFixed(2)) !==
+                        Number(editingVehiculo.internalFixedPrice.toFixed(2));
+                const settingInternalForFirstTime =
+                    editingVehiculo.internalFixedPrice == null && internalPrice > 0;
+                const hasPriceChanges =
+                    settingInternalForFirstTime || internalChanged || publicChangedInForm;
 
-                if (publicChangedInForm) {
-                    const changingPublic =
-                        Number(publicPrice.toFixed(2)) !== Number(currentFixed.toFixed(2));
-                    if (changingPublic && !editForm.publicPriceRequestedBySellerId.trim()) {
-                        throw new Error('Selecciona el vendedor que solicitó el precio promocional');
+                if (hasPriceChanges) {
+                    if (editingVehiculo.internalFixedPrice == null && internalPrice <= 0) {
+                        throw new Error('Registra el precio interno fijo antes de cambiar precios');
                     }
-                    const sellerName = activeSellers.find(
-                        (s) => s.id === editForm.publicPriceRequestedBySellerId
-                    )?.full_name;
-                    const result = await inventarioService.updatePublicPrice(
-                        editingVehiculo.placa,
-                        publicPrice,
-                        changingPublic
-                            ? buildPromoReasonFromSeller(sellerName)
-                            : 'Alineado al precio interno fijo',
-                        changingPublic ? editForm.publicPriceRequestedBySellerId : null
-                    );
-                    nextVehicle = {
-                        ...nextVehicle,
-                        price: result.price,
-                        publicPriceChangedAt: result.publicPriceChangedAt,
-                        publicPriceChangeReason: result.publicPriceChangeReason,
-                        publicPriceRevertsAt: result.publicPriceRevertsAt,
-                        publicPriceRequestedBy: result.publicPriceRequestedBy,
-                    };
+
+                    let currentFixed = Number(editingVehiculo.internalFixedPrice ?? 0);
+
+                    if (settingInternalForFirstTime) {
+                        const result = await inventarioService.setInternalFixedPrice(
+                            editingVehiculo.placa,
+                            internalPrice
+                        );
+                        nextVehicle = {
+                            ...nextVehicle,
+                            internalFixedPrice: result.internalFixedPrice,
+                            internalFixedPriceSetAt: result.internalFixedPriceSetAt,
+                            price: result.price,
+                            publicPriceChangedAt: null,
+                            publicPriceChangeReason: null,
+                            publicPriceRevertsAt: null,
+                            publicPriceRequestedBy: null,
+                        };
+
+                        await inventarioService.updateMileage(editingVehiculo.placa, mileage);
+
+                        setVehiculos((prev) =>
+                            prev.map((v) => (v.placa === editingVehiculo.placa ? nextVehicle : v))
+                        );
+                        setEditingVehiculo(nextVehicle);
+                        setEditForm((prev) => ({
+                            ...prev,
+                            internalFixedPrice: String(result.internalFixedPrice),
+                            publicPrice: String(result.price),
+                            publicPriceRequestedBySellerId: '',
+                        }));
+                        alert(
+                            'Precio interno fijo registrado. Ya puedes ajustar el precio público si lo necesitas.'
+                        );
+                        return;
+                    }
+
+                    if (internalChanged) {
+                        const result = await inventarioService.setInternalFixedPrice(
+                            editingVehiculo.placa,
+                            internalPrice
+                        );
+                        nextVehicle = {
+                            ...nextVehicle,
+                            internalFixedPrice: result.internalFixedPrice,
+                            price: result.price,
+                            ...(result.syncedPublic
+                                ? {
+                                      publicPriceChangedAt: null,
+                                      publicPriceChangeReason: null,
+                                      publicPriceRevertsAt: null,
+                                      publicPriceRequestedBy: null,
+                                  }
+                                : {}),
+                        };
+                        currentFixed = result.internalFixedPrice;
+                    }
+
+                    if (publicChangedInForm) {
+                        if (!Number.isFinite(publicPrice) || publicPrice <= 0) {
+                            throw new Error('Ingresa el precio público');
+                        }
+
+                        const changingPublic =
+                            Number(publicPrice.toFixed(2)) !== Number(currentFixed.toFixed(2));
+                        if (changingPublic && !editForm.publicPriceRequestedBySellerId.trim()) {
+                            throw new Error('Selecciona el vendedor que solicitó el precio promocional');
+                        }
+                        const sellerName = activeSellers.find(
+                            (s) => s.id === editForm.publicPriceRequestedBySellerId
+                        )?.full_name;
+                        const result = await inventarioService.updatePublicPrice(
+                            editingVehiculo.placa,
+                            publicPrice,
+                            changingPublic
+                                ? buildPromoReasonFromSeller(sellerName)
+                                : 'Alineado al precio interno fijo',
+                            changingPublic ? editForm.publicPriceRequestedBySellerId : null
+                        );
+                        nextVehicle = {
+                            ...nextVehicle,
+                            price: result.price,
+                            publicPriceChangedAt: result.publicPriceChangedAt,
+                            publicPriceChangeReason: result.publicPriceChangeReason,
+                            publicPriceRevertsAt: result.publicPriceRevertsAt,
+                            publicPriceRequestedBy: result.publicPriceRequestedBy,
+                        };
+                    }
                 }
             }
 

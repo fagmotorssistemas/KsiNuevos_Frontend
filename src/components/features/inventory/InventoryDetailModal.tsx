@@ -703,27 +703,24 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                     let currentFixed = Number(car.internal_fixed_price ?? 0);
 
                     if (!hasInternalFixedPrice) {
-                        if (!internalVal) {
-                            throw new Error(
-                                'Debes registrar el precio interno fijo antes de guardar promociones públicas'
-                            );
+                        if (internalVal > 0) {
+                            const result = await inventarioService.setInternalFixedPrice(plate, internalVal);
+                            resolvedPublicPrice = result.price;
+                            resolvedInternalFixed = result.internalFixedPrice;
+                            currentFixed = result.internalFixedPrice;
+                            pricePatch = {
+                                internal_fixed_price: result.internalFixedPrice,
+                                internal_fixed_price_set_at: result.internalFixedPriceSetAt,
+                                price: result.price,
+                                public_price_changed_at: null,
+                                public_price_change_reason: null,
+                                public_price_reverts_at: null,
+                                public_price_requested_by: null,
+                            };
                         }
-                        const result = await inventarioService.setInternalFixedPrice(plate, internalVal);
-                        resolvedPublicPrice = result.price;
-                        resolvedInternalFixed = result.internalFixedPrice;
-                        currentFixed = result.internalFixedPrice;
-                        pricePatch = {
-                            internal_fixed_price: result.internalFixedPrice,
-                            internal_fixed_price_set_at: result.internalFixedPriceSetAt,
-                            price: result.price,
-                            public_price_changed_at: null,
-                            public_price_change_reason: null,
-                            public_price_reverts_at: null,
-                            public_price_requested_by: null,
-                        };
                     } else {
                         const internalChanged =
-                            !!internalVal &&
+                            internalVal > 0 &&
                             Number(internalVal.toFixed(2)) !== Number(car.internal_fixed_price!.toFixed(2));
 
                         if (internalChanged) {
@@ -746,16 +743,18 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             };
                         }
 
-                        const publicPrice = Number(formData.publicPrice);
-                        if (!publicPrice) {
-                            throw new Error('Ingresa el precio público (visible al cliente)');
-                        }
-
+                        const publicPriceRaw = formData.publicPrice?.trim();
+                        const publicPrice = publicPriceRaw ? Number(publicPriceRaw) : NaN;
                         const currentPublic = Number((car.price ?? 0).toFixed(2));
                         const publicChangedInFormSave =
+                            Number.isFinite(publicPrice) &&
                             Number(publicPrice.toFixed(2)) !== currentPublic;
 
                         if (publicChangedInFormSave) {
+                            if (!Number.isFinite(publicPrice) || publicPrice <= 0) {
+                                throw new Error('Ingresa el precio público (visible al cliente)');
+                            }
+
                             const changingPublic =
                                 Number(publicPrice.toFixed(2)) !== Number(currentFixed.toFixed(2));
                             if (changingPublic && !publicPriceRequestedBySellerId.trim()) {
@@ -786,7 +785,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                         } else if (internalChanged) {
                             resolvedPublicPrice = pricePatch.price ?? resolvedPublicPrice;
                         } else {
-                            resolvedPublicPrice = publicPrice;
+                            resolvedPublicPrice = car.price ?? resolvedPublicPrice;
                         }
                     }
                 }
