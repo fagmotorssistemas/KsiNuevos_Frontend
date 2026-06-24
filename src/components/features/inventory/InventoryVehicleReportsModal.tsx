@@ -20,6 +20,7 @@ import {
     resolveListingChecklist,
     type ListingChecklistKey,
 } from "@/types/inventory-listing-checklist";
+import { formatInventoryPrice } from "@/lib/inventario/inventory-pricing";
 
 type ReportView = "disponible" | "vendido";
 
@@ -46,14 +47,6 @@ const CHECKLIST_COLUMNS: { key: ListingChecklistKey; label: string }[] = [
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-function formatPrice(price: number | null) {
-    return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-    }).format(price ?? 0);
-}
 
 function formatKm(km: number | null) {
     return km ? `${km.toLocaleString()} km` : "0 km";
@@ -186,7 +179,7 @@ export function InventoryVehicleReport({
                             "es"
                         ) * dir;
                     case "price":
-                        return ((a.price ?? 0) - (b.price ?? 0)) * dir;
+                        return ((a.internal_fixed_price ?? 0) - (b.internal_fixed_price ?? 0)) * dir;
                     case "mileage":
                         return ((a.mileage ?? 0) - (b.mileage ?? 0)) * dir;
                     case "location":
@@ -309,7 +302,7 @@ export function InventoryVehicleReport({
                                     />
                                     <SortableHeader label="Placa" sortKey="plate" current={sortKey} asc={sortAsc} onSort={handleSort} />
                                     <SortableHeader label="Año/Color" sortKey="year" current={sortKey} asc={sortAsc} onSort={handleSort} />
-                                    <SortableHeader label="Precio" sortKey="price" current={sortKey} asc={sortAsc} onSort={handleSort} />
+                                    <SortableHeader label="Precio fijo" sortKey="price" current={sortKey} asc={sortAsc} onSort={handleSort} />
                                     <SortableHeader label="Km" sortKey="mileage" current={sortKey} asc={sortAsc} onSort={handleSort} />
                                     {CHECKLIST_COLUMNS.map((col) => (
                                         <th
@@ -374,7 +367,13 @@ export function InventoryVehicleReport({
                                                     {car.year || "—"} · {car.color || "—"}
                                                 </td>
                                                 <td className="px-2 py-2 text-[13px] font-semibold text-slate-900 tabular-nums truncate">
-                                                    {formatPrice(car.price)}
+                                                    {car.internal_fixed_price != null ? (
+                                                        formatInventoryPrice(car.internal_fixed_price)
+                                                    ) : (
+                                                        <span className="text-[11px] font-medium text-amber-700">
+                                                            Sin fijar
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-2 text-[13px] text-slate-500 tabular-nums truncate">
                                                     {formatKm(car.mileage)}
