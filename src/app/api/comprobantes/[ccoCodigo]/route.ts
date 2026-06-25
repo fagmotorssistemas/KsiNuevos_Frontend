@@ -42,7 +42,7 @@ export async function POST(
 ) {
   const { ccoCodigo } = await params
 
-  if (!ccoCodigo || isNaN(Number(ccoCodigo))) {
+  if (!ccoCodigo || !/^\d+$/.test(ccoCodigo)) {
     return NextResponse.json(
       { success: false, message: 'ccoCodigo debe ser numérico.', code: 'BAD_REQUEST' },
       { status: 400 }

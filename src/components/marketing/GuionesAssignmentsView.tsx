@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  KeyRound,
   Loader2,
   MessageSquareText,
   Sparkles,
@@ -21,10 +20,7 @@ import type {
   GeneratedScriptApi,
   ScriptAssignmentRow,
 } from '@/types/script-assignment'
-import {
-  getAssignmentVehicleLabel,
-  parseKeywordsInput,
-} from '@/types/script-assignment'
+import { getAssignmentVehicleLabel } from '@/types/script-assignment'
 type VehicleImage = { id: string; img_main_url: string | null; color: string | null }
 
 const GUION_TIPO_ORDER = ['informativo', 'educativo', 'venta', 'frio', 'comparacion', 'objecion']
@@ -207,65 +203,6 @@ function mapApiScriptToRow(
   }
 }
 
-function KeywordsEditor({
-  assignmentId,
-  initial,
-  disabled,
-  saving,
-  onSave,
-}: {
-  assignmentId: string
-  initial: string[]
-  disabled: boolean
-  saving: boolean
-  onSave: (id: string, keywords: string[]) => Promise<void>
-}) {
-  const [text, setText] = useState(initial.join(', '))
-
-  useEffect(() => {
-    setText(initial.join(', '))
-  }, [assignmentId, initial.join('|')])
-
-  const parsed = useMemo(() => parseKeywordsInput(text), [text])
-  const valid = parsed.length >= 4
-
-  return (
-    <div className="space-y-2">
-      <label className="text-xs font-extrabold uppercase tracking-wide text-gray-500">
-        Palabras clave (mín. 4, separadas por coma)
-      </label>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        disabled={disabled || saving}
-        rows={2}
-        placeholder="ej. trabajo, comodidad, 4x4, diésel"
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm resize-y min-h-[56px] disabled:bg-gray-50 disabled:text-gray-500"
-      />
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span
-          className={`text-xs font-bold ${valid ? 'text-emerald-700' : 'text-amber-700'}`}
-        >
-          {parsed.length} / 4 palabras
-        </span>
-        <button
-          type="button"
-          disabled={disabled || saving || !valid}
-          onClick={() => onSave(assignmentId, parsed)}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-700 text-white text-xs font-bold hover:bg-violet-800 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <KeyRound className="h-3.5 w-3.5" />
-          )}
-          Guardar keywords
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export function GuionesAssignmentsView({
   fecha,
   assignments,
@@ -284,9 +221,7 @@ export function GuionesAssignmentsView({
   loading: boolean
   onReload: () => void
 }) {
-  const { user } = useAuth()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [savingKeywordsId, setSavingKeywordsId] = useState<string | null>(null)
   const [generatingId, setGeneratingId] = useState<string | null>(null)
   const [generatingAll, setGeneratingAll] = useState(false)
   const [rows, setRows] = useState(assignments)
@@ -407,30 +342,6 @@ export function GuionesAssignmentsView({
   const selectedEffectiveStatus = selected
     ? effectiveAssignmentStatus(selected, selectedScripts, loadingScripts)
     : null
-
-  const handleSaveKeywords = async (assignmentId: string, keywords: string[]) => {
-    setSavingKeywordsId(assignmentId)
-    try {
-      const res = await scriptsService.submitKeywords(
-        assignmentId,
-        keywords,
-        user?.id
-      )
-      setRows((prev) =>
-        patchAssignmentRow(prev, assignmentId, {
-          palabras_clave: res.palabras_clave,
-          status: res.status,
-          guion_tipo: res.guion_tipo,
-          palabras_clave_at: new Date().toISOString(),
-        })
-      )
-      toast.success('Keywords guardadas')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al guardar keywords')
-    } finally {
-      setSavingKeywordsId(null)
-    }
-  }
 
   const runGenerate = async (assignmentId: string, opts?: { silent?: boolean }) => {
     const res = await scriptsService.generateForAssignment(assignmentId)
@@ -652,18 +563,6 @@ export function GuionesAssignmentsView({
               </div>
 
               <div className="p-4 sm:p-6 space-y-6">
-                {(selectedEffectiveStatus !== 'guion_generado' &&
-                  selectedEffectiveStatus !== 'descartado') ||
-                selectedScriptMissing ? (
-                  <KeywordsEditor
-                    assignmentId={selected.assignment_id}
-                    initial={selected.palabras_clave}
-                    disabled={false}
-                    saving={savingKeywordsId === selected.assignment_id}
-                    onSave={handleSaveKeywords}
-                  />
-                ) : null}
-
                 {selected.palabras_clave.length > 0 &&
                   selectedEffectiveStatus === 'guion_generado' &&
                   !selectedScriptMissing && (

@@ -56,7 +56,7 @@ export type GeneratedScriptApi = {
 }
 
 export const ASSIGNMENT_STATUS_LABELS: Record<string, string> = {
-  pendiente_keywords: 'Pendiente keywords',
+  pendiente_keywords: 'Pendiente',
   keywords_recibidos: 'Keywords listas',
   guion_generado: 'Guión generado',
   descartado: 'Descartado',

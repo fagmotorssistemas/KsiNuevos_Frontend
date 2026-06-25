@@ -85,7 +85,7 @@ export function AssignmentStatusBadge({ status }: { status: string }) {
           : 'bg-amber-100 text-amber-800 border-amber-200'
 
   const labels: Record<string, string> = {
-    pendiente_keywords: 'Pendiente keywords',
+    pendiente_keywords: 'Pendiente',
     keywords_recibidos: 'Keywords listas',
     guion_generado: 'Guión generado',
     descartado: 'Descartado',

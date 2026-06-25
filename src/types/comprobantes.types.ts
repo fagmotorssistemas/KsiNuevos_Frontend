@@ -7,7 +7,8 @@ export interface Comprobante {
   dspComproba?: string | null;
   ccoFecha?: string | null;
   ccoEmpresa?: number | null;
-  ccoCodigo?: number | null;
+  /** ID Oracle; puede superar Number.MAX_SAFE_INTEGER — siempre tratarlo como string */
+  ccoCodigo?: string | null;
   ccoPeriodo?: string | null;
   ccoSigla?: string | null;
   ccoAlmacen?: string | null;
@@ -62,7 +63,7 @@ export interface Comprobante {
 /** Registro de la tabla Oracle CCOMPROBA_IMAGEN */
 export interface ComprobanteImagen {
   ccoEmpresa: number;
-  ccoCodigo: number;
+  ccoCodigo: string;
   ccoSecuencia: number;
   ccoUrl: string;
   creaUsr?: string | null;

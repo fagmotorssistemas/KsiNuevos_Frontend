@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { comprobantesService } from '@/services/comprobantes.service';
+import { comprobantesService, normalizeCcoCodigo } from '@/services/comprobantes.service';
 import { Comprobante, ComprobanteImagen } from '@/types/comprobantes.types';
 
 export const useComprobantes = (empresa?: number) => {
@@ -30,10 +30,13 @@ export const useComprobantes = (empresa?: number) => {
   }, [empresa]);
 
   const fetchImagenes = useCallback(
-    async (ccoCodigo: number) => {
+    async (ccoCodigo: string, ccoEmpresa?: number | null) => {
       try {
         setLoadingImagenes(true);
-        const data = await comprobantesService.getImagenes(ccoCodigo, empresa);
+        const data = await comprobantesService.getImagenes(
+          ccoCodigo,
+          ccoEmpresa ?? empresa
+        );
         setImagenes(data);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'No se pudo cargar los adjuntos.';
@@ -51,7 +54,12 @@ export const useComprobantes = (empresa?: number) => {
       setSelectedState(c);
       setImagenes([]);
       if (c?.ccoCodigo != null) {
-        fetchImagenes(c.ccoCodigo as number);
+        const codigo = normalizeCcoCodigo(c.ccoCodigo);
+        if (!codigo) {
+          toast.error('El código del comprobante llegó corrupto desde el backend. Pídele al backend que envíe ccoCodigo como string en el JSON.');
+          return;
+        }
+        fetchImagenes(codigo, c.ccoEmpresa);
       }
     },
     [fetchImagenes]
@@ -60,13 +68,18 @@ export const useComprobantes = (empresa?: number) => {
   const uploadImagen = useCallback(
     async (file: File, usuario: string) => {
       if (selected?.ccoCodigo == null) return;
+      const codigo = normalizeCcoCodigo(selected.ccoCodigo);
+      if (!codigo) {
+        toast.error('El código del comprobante es inválido (probablemente corrupto por JSON number). El backend debe enviar ccoCodigo como string.');
+        return;
+      }
       try {
         setUploading(true);
         const nueva = await comprobantesService.uploadImagen(
-          selected.ccoCodigo as number,
+          codigo,
           file,
           usuario,
-          empresa
+          selected.ccoEmpresa ?? empresa
         );
         setImagenes((prev) => [...prev, nueva]);
         toast.success('Adjunto subido correctamente');
