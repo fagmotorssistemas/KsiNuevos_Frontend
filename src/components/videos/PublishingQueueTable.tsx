@@ -27,7 +27,7 @@ export interface PublishingQueueRow {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    pending: { label: 'Pendiente', className: 'bg-blue-100 text-blue-800' },
+    pending: { label: 'Programado', className: 'bg-sky-100 text-sky-800' },
     publishing: { label: 'Publicando…', className: 'bg-amber-100 text-amber-800' },
     published: { label: 'Publicado', className: 'bg-emerald-100 text-emerald-800' },
     failed: { label: 'Fallido', className: 'bg-red-100 text-red-800' },
@@ -52,7 +52,11 @@ function formatPlatformLabel(platform: string) {
   return toTitleCase(platform)
 }
 
+type QueueStatusFilter = 'pending' | 'publishing' | 'published' | 'failed' | 'cancelled'
+
 function formatStatusLabel(status: string) {
+  if (status === 'pending') return 'Programado'
+  if (status === 'publishing') return 'Publicando'
   if (status === 'published') return 'Publicado'
   if (status === 'failed') return 'Fallido'
   if (status === 'cancelled') return 'Cancelado'
@@ -158,7 +162,7 @@ export function PublishingQueueTable({
   const [editJob, setEditJob] = useState<VideoJob | null>(null)
   const [editQueue, setEditQueue] = useState<QueueRowLike | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<'published' | 'failed' | 'cancelled'>('published')
+  const [statusFilter, setStatusFilter] = useState<QueueStatusFilter>('pending')
   const [query, setQuery] = useState('')
   const [resultsByQueue, setResultsByQueue] = useState<Record<string, PublishResultRow[]>>({})
   const [republishTarget, setRepublishTarget] = useState<{ queueId: string; platforms: string[] } | null>(null)
@@ -176,7 +180,7 @@ export function PublishingQueueTable({
           inventoryoracle ( brand, model, year, version )
         `
         )
-        .in('status', ['published', 'failed', 'cancelled'])
+        .in('status', ['pending', 'publishing', 'published', 'failed', 'cancelled'])
         .order('scheduled_at', { ascending: false })
         .limit(200)
       if (error) throw error
@@ -286,14 +290,23 @@ export function PublishingQueueTable({
     )
   }
 
-  const filteredRows = rows.filter((row) => {
-    if (row.status !== statusFilter) return false
-    const q = query.trim().toLowerCase()
-    if (!q) return true
-    const v = row.inventoryoracle
-    const text = `${row.video_jobs_v2?.job_name ?? ''} ${row.video_id} ${v?.brand ?? ''} ${v?.model ?? ''} ${v?.year ?? ''}`.toLowerCase()
-    return text.includes(q)
-  })
+  const filteredRows = rows
+    .filter((row) => {
+      if (row.status !== statusFilter) return false
+      const q = query.trim().toLowerCase()
+      if (!q) return true
+      const v = row.inventoryoracle
+      const text = `${row.video_jobs_v2?.job_name ?? ''} ${row.video_id} ${v?.brand ?? ''} ${v?.model ?? ''} ${v?.year ?? ''}`.toLowerCase()
+      return text.includes(q)
+    })
+    .sort((a, b) => {
+      const aMs = new Date(a.scheduled_at).getTime()
+      const bMs = new Date(b.scheduled_at).getTime()
+      if (statusFilter === 'pending' || statusFilter === 'publishing') {
+        return aMs - bMs
+      }
+      return bMs - aMs
+    })
 
   return (
     <>
@@ -310,7 +323,7 @@ export function PublishingQueueTable({
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {(['published', 'failed', 'cancelled'] as const).map((s) => (
+            {(['pending', 'publishing', 'published', 'failed', 'cancelled'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -422,7 +435,13 @@ export function PublishingQueueTable({
       </div>
       </div>
       {filteredRows.length === 0 && !loading ? (
-        <p className="text-center text-sm text-gray-500 py-8">No hay publicaciones programadas.</p>
+        <p className="text-center text-sm text-gray-500 py-8">
+          {statusFilter === 'pending'
+            ? 'No hay publicaciones programadas pendientes.'
+            : statusFilter === 'publishing'
+              ? 'No hay publicaciones en curso.'
+              : 'No hay registros en esta categoría.'}
+        </p>
       ) : null}
 
       <PublishResultsModal queueId={resultQueueId} onClose={() => setResultQueueId(null)} />
