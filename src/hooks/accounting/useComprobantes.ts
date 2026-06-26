@@ -12,6 +12,7 @@ export const useComprobantes = (empresa?: number) => {
   const [imagenes, setImagenes] = useState<ComprobanteImagen[]>([]);
   const [loadingImagenes, setLoadingImagenes] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingSecuencia, setDeletingSecuencia] = useState<number | null>(null);
 
   const fetchComprobantes = useCallback(async () => {
     try {
@@ -93,6 +94,35 @@ export const useComprobantes = (empresa?: number) => {
     [selected, empresa]
   );
 
+  const deleteImagen = useCallback(
+    async (ccoSecuencia: number) => {
+      if (selected?.ccoCodigo == null) return;
+      const codigo = normalizeCcoCodigo(selected.ccoCodigo);
+      if (!codigo) {
+        toast.error('El código del comprobante es inválido.');
+        return;
+      }
+      if (!window.confirm('¿Eliminar este adjunto? Esta acción no se puede deshacer.')) return;
+
+      try {
+        setDeletingSecuencia(ccoSecuencia);
+        await comprobantesService.deleteImagen(
+          codigo,
+          ccoSecuencia,
+          selected.ccoEmpresa ?? empresa
+        );
+        setImagenes((prev) => prev.filter((img) => img.ccoSecuencia !== ccoSecuencia));
+        toast.success('Adjunto eliminado');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Error al eliminar el adjunto.';
+        toast.error(msg);
+      } finally {
+        setDeletingSecuencia(null);
+      }
+    },
+    [selected, empresa]
+  );
+
   useEffect(() => {
     fetchComprobantes();
   }, [fetchComprobantes]);
@@ -108,5 +138,7 @@ export const useComprobantes = (empresa?: number) => {
     loadingImagenes,
     uploading,
     uploadImagen,
+    deletingSecuencia,
+    deleteImagen,
   };
 };

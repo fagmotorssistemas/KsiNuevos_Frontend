@@ -99,4 +99,18 @@ export const comprobantesService = {
     const json = await res.json();
     return json.data.imagen as ComprobanteImagen;
   },
+
+  /** DELETE /comprobantes/:ccoCodigo/imagenes/:ccoSecuencia?empresa={empresa} */
+  async deleteImagen(
+    ccoCodigo: string,
+    ccoSecuencia: number,
+    empresa?: number
+  ): Promise<void> {
+    const qs = empresa !== undefined ? `?empresa=${empresa}` : '';
+    const res = await fetch(
+      `${API_URL}/comprobantes/${encodeURIComponent(ccoCodigo)}/imagenes/${ccoSecuencia}${qs}`,
+      { method: 'DELETE' }
+    );
+    if (!res.ok) return throwApiError(res);
+  },
 };

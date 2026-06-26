@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { useComprobantes } from '@/hooks/accounting/useComprobantes';
 import { useAuth } from '@/hooks/useAuth';
@@ -93,22 +94,62 @@ function ComprobanteRow({
 // ─────────────────────────────────────────────
 // Sub-componente: Tarjeta de adjunto
 // ─────────────────────────────────────────────
-function AdjuntoCard({ img }: { img: ComprobanteImagen }) {
+function AdjuntoCard({
+  img,
+  onDelete,
+  deleting,
+}: {
+  img: ComprobanteImagen;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const esImagen = isImage(img.ccoUrl);
   return (
     <div className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-      {esImagen ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={img.ccoUrl}
-          alt={`Adjunto #${img.ccoSecuencia}`}
-          className="w-full h-32 object-cover bg-slate-100"
-        />
-      ) : (
-        <div className="w-full h-32 flex items-center justify-center bg-red-50">
-          <FileText size={40} className="text-red-400" />
-        </div>
-      )}
+      <div className="relative h-32">
+        {esImagen ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={img.ccoUrl}
+            alt={`Adjunto #${img.ccoSecuencia}`}
+            className="w-full h-full object-cover bg-slate-100"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-red-50">
+            <FileText size={40} className="text-red-400" />
+          </div>
+        )}
+
+        <a
+          href={img.ccoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="flex items-center gap-1.5 text-white text-sm font-medium bg-black/40 px-3 py-1.5 rounded-lg">
+            <ExternalLink size={14} />
+            {esImagen ? 'Ver imagen' : 'Abrir PDF'}
+          </span>
+        </a>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          disabled={deleting}
+          title="Eliminar adjunto"
+          className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/90 text-slate-500 hover:text-red-600 hover:bg-white shadow-sm transition-colors disabled:opacity-50"
+        >
+          {deleting ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Trash2 size={14} />
+          )}
+        </button>
+      </div>
 
       <div className="p-3">
         <p className="text-xs text-slate-500 mb-1">
@@ -121,19 +162,6 @@ function AdjuntoCard({ img }: { img: ComprobanteImagen }) {
           <p className="text-xs text-slate-400">{formatDate(img.creaFecha)}</p>
         )}
       </div>
-
-      <a
-        href={img.ccoUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="flex items-center gap-1.5 text-white text-sm font-medium bg-black/40 px-3 py-1.5 rounded-lg">
-          <ExternalLink size={14} />
-          {esImagen ? 'Ver imagen' : 'Abrir PDF'}
-        </span>
-      </a>
     </div>
   );
 }
@@ -146,14 +174,18 @@ function AdjuntosPanel({
   imagenes,
   loadingImagenes,
   uploading,
+  deletingSecuencia,
   onUpload,
+  onDelete,
   onClose,
 }: {
   selected: Comprobante;
   imagenes: ComprobanteImagen[];
   loadingImagenes: boolean;
   uploading: boolean;
+  deletingSecuencia: number | null;
   onUpload: (file: File) => void;
+  onDelete: (ccoSecuencia: number) => void;
   onClose: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -216,7 +248,12 @@ function AdjuntosPanel({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
             {imagenes.map((img) => (
-              <AdjuntoCard key={img.ccoSecuencia} img={img} />
+              <AdjuntoCard
+                key={img.ccoSecuencia}
+                img={img}
+                deleting={deletingSecuencia === img.ccoSecuencia}
+                onDelete={() => onDelete(img.ccoSecuencia)}
+              />
             ))}
           </div>
         )}
@@ -279,8 +316,20 @@ export default function ComprobantesPage() {
   const { profile } = useAuth();
   const usuario = profile?.full_name ?? profile?.id ?? 'USR';
 
-  const { comprobantes, loading, error, refresh, selected, selectComprobante, imagenes, loadingImagenes, uploading, uploadImagen } =
-    useComprobantes();
+  const {
+    comprobantes,
+    loading,
+    error,
+    refresh,
+    selected,
+    selectComprobante,
+    imagenes,
+    loadingImagenes,
+    uploading,
+    uploadImagen,
+    deletingSecuencia,
+    deleteImagen,
+  } = useComprobantes();
 
   const [search, setSearch] = useState('');
 
@@ -441,7 +490,9 @@ export default function ComprobantesPage() {
             imagenes={imagenes}
             loadingImagenes={loadingImagenes}
             uploading={uploading}
+            deletingSecuencia={deletingSecuencia}
             onUpload={handleUpload}
+            onDelete={deleteImagen}
             onClose={() => selectComprobante(null)}
           />
         )}
