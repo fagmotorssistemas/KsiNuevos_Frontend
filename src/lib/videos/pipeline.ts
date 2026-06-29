@@ -415,11 +415,10 @@ async function applyDriveSubtitleNormalization(
   return normalizeDriveSubtitleBlocks(blocks, badge, jobId)
 }
 
-function applyComentaWhenNoGuion(
+function applyComentaOverlayFromAssembly(
   subtitleBlocks: SubtitleBlock[],
   sequence: SequenceItem[],
   allSegments: Segment[],
-  hasGuionEscenas: boolean,
   brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
   jobId: string
 ): {
@@ -427,7 +426,7 @@ function applyComentaWhenNoGuion(
   comentaMentionTimeSec?: number
   comentaOverlayText?: string
 } {
-  if (hasGuionEscenas || !brandConfig) {
+  if (!brandConfig) {
     return { subtitleBlocks }
   }
 
@@ -520,6 +519,19 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
 
     const current = await getJobStatus(jobId)
     if (current === 'completed' || current === 'failed') {
+      if (current === 'failed') {
+        try {
+          const render = await getShotstackRenderStatus(renderId)
+          console.error(
+            `[VideoV2Pipeline][${jobId}][ShotstackMonitor] Job cerrado por webhook — render:`,
+            JSON.stringify(render, null, 2)
+          )
+        } catch (err) {
+          console.warn(
+            `[VideoV2Pipeline][${jobId}][ShotstackMonitor] Job failed; no se pudo consultar render: ${err}`
+          )
+        }
+      }
       console.log(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] Job ya cerrado (status=${current}).`)
       return
     }
@@ -833,11 +845,10 @@ export async function runSingleVideoPipelineFromStorage(
     let comentaMentionTimeSecA: number | undefined
     let comentaOverlayTextA: string | undefined
     {
-      const comenta = applyComentaWhenNoGuion(
+      const comenta = applyComentaOverlayFromAssembly(
         subtitleBlocks,
         analysis.sequence,
         segments,
-        escenasSingle.length > 0,
         brandConfig,
         jobId
       )
@@ -1598,7 +1609,7 @@ export async function runMultipleClipsPipelineFromStorage(
         brandConfig?.vehicle_line_2?.trim().split(/\s+/)[0],
       ].filter((k): k is string => !!k && k.length >= 2)
 
-      const { captionBlocks, brandTimeSec, brandLengthSec, comentaTimeSec, comentaOverlayText: comentaText } =
+      const { captionBlocks, brandTimeSec, brandLengthSec } =
         buildCaptionBlocksFromDialogoAssembly(
           analysis.sequence,
           allSegments,
@@ -1621,12 +1632,6 @@ export async function runMultipleClipsPipelineFromStorage(
         brandMentionTimeSec = brandTimeSec
         brandMentionLengthSec = brandLengthSec ?? 3.5
       }
-      if (comentaTimeSec != null) {
-        comentaMentionTimeSec = comentaTimeSec
-      }
-      if (comentaText?.trim()) {
-        comentaOverlayText = comentaText.trim()
-      }
     }
 
     subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
@@ -1639,12 +1644,11 @@ export async function runMultipleClipsPipelineFromStorage(
       escenasMulti.length > 0
     )
 
-    if (escenasMulti.length === 0) {
-      const comenta = applyComentaWhenNoGuion(
+    {
+      const comenta = applyComentaOverlayFromAssembly(
         subtitleBlocks,
         analysis.sequence,
         allSegments,
-        false,
         brandConfig,
         jobId
       )
@@ -2592,11 +2596,10 @@ export async function rerunCreatomateRenderForJob(
   let comentaMentionTimeSecRerun: number | undefined
   let comentaOverlayTextRerun: string | undefined
   {
-    const comenta = applyComentaWhenNoGuion(
+    const comenta = applyComentaOverlayFromAssembly(
       subtitleBlocks,
       analysis.sequence,
       allSegments,
-      escenasRerun.length > 0,
       brandConfig,
       jobId
     )

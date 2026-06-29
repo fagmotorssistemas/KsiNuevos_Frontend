@@ -134,9 +134,18 @@ const CLIP_FLASH_FADE_IN_SEC = 0.12
 const CLIP_FLASH_HOLD_SEC = 0.08
 const CLIP_FLASH_FADE_OUT_SEC = 0.35
 const CLIP_FLASH_PEAK_OPACITY = 0.65
-// URL del SVG del destello subido a Supabase Storage (iconos-videos-edicion/flash-destello.svg).
-// Ejecutar src/scripts/upload-flash-svg.ts una vez para generarla y añadirla al .env.
-const CLIP_FLASH_SVG_URL = process.env.FLASH_SVG_URL ?? ''
+/** Shotstack exige type "svg" con markup inline; una URL .svg como type "image" falla el render. */
+const CLIP_FLASH_SVG_MARKUP =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
+  '<defs>' +
+  '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
+  '<stop offset="0%" stop-color="#FFE94A" stop-opacity="1"/>' +
+  '<stop offset="60%" stop-color="#FF8C00" stop-opacity="1"/>' +
+  '<stop offset="100%" stop-color="#FF4500" stop-opacity="0.8"/>' +
+  '</radialGradient>' +
+  '</defs>' +
+  '<rect width="1080" height="1920" fill="url(#flash)"/>' +
+  '</svg>'
 
 function buildTimelineFonts(): { src: string }[] {
   return [{ src: MONTSERRAT_BLACK_TTF }, { src: PLAYFAIR_DISPLAY_SEMIBOLD_TTF }]
@@ -325,19 +334,16 @@ function buildClipFlashTransitionTrack(
   if (jobId) {
     console.log(
       `[Shotstack][${jobId}] Flash ${opts?.label ?? `clip ${clipIndex + 1}`} → cut≈${cutSec.toFixed(2)}s ` +
-        `start=${start.toFixed(2)}s len=${lengthSec}s peak=${peakOpacity} (SVG overlay)`
+        `start=${start.toFixed(2)}s len=${lengthSec}s peak=${peakOpacity} (svg asset inline)`
     )
   }
 
   return {
     clips: [
       {
-        asset: { type: 'image', src: CLIP_FLASH_SVG_URL },
+        asset: { type: 'svg', src: CLIP_FLASH_SVG_MARKUP },
         start,
         length: lengthSec,
-        fit: 'none',
-        width: OUTPUT_WIDTH,
-        height: OUTPUT_HEIGHT,
         position: 'center',
         opacity: [
           { from: 0, to: peakOpacity, start: 0, length: fadeInSec },
@@ -1234,6 +1240,13 @@ function resolveClosingLogoUrl(
 ): string {
   const custom = brandConfig?.logo_url?.trim()
   if (custom) return custom
+  const envLogo = process.env.VIDEO_LOGO_URL?.trim()
+  if (envLogo) return envLogo
+  const supabaseBase = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
+  if (supabaseBase) {
+    // Shotstack (servidores AU) no puede ingestar https://www.ksinuevos.com/logol.png
+    return `${supabaseBase}/storage/v1/object/public/iconos-videos-edicion/logol.png`
+  }
   return `${callbackBase}${DEFAULT_CLOSING_LOGO_PATH}`
 }
 

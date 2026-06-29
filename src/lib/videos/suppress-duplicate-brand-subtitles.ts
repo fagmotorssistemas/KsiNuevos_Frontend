@@ -6,7 +6,6 @@ import {
 import { wordFuzzyMatches } from './subtitle-screen-text'
 
 const MAX_INTRO_SOURCE_CLIP_INDEX = 1
-const BRAND_L2_TWO_WORD_MAX_CHARS = 11
 
 export interface TitleIdentity {
   brand: string
@@ -26,23 +25,6 @@ function cleanVehicleText(text: string): string {
     .trim()
 }
 
-function splitModelLinesForBrandOverlay(modelRaw: string): { line2: string; line3Model: string } {
-  const cleaned = cleanVehicleText(modelRaw)
-  const words = cleaned.split(/\s+/).filter(Boolean)
-  if (words.length === 0) return { line2: '', line3Model: '' }
-  if (words.length === 1) return { line2: words[0]!, line3Model: '' }
-
-  const word1 = words[0]!
-  const word2 = words[1]!
-  const twoWordLine = `${word1} ${word2}`
-
-  if (twoWordLine.length <= BRAND_L2_TWO_WORD_MAX_CHARS) {
-    return { line2: twoWordLine, line3Model: '' }
-  }
-
-  return { line2: word1, line3Model: word2 }
-}
-
 function parseTitleYear(yearLine?: string | null): string | null {
   const raw = yearLine?.trim() ?? ''
   if (!raw) return null
@@ -52,19 +34,17 @@ function parseTitleYear(yearLine?: string | null): string | null {
   return null
 }
 
-function modelKeywordsFromLine2(modelLine: string): string[] {
-  const { line2, line3Model } = splitModelLinesForBrandOverlay(modelLine)
+/** Todas las palabras del modelo en ficha (p. ej. Land, Cruiser, Prado). */
+function modelKeywordsFromModelLine(modelLine: string): string[] {
+  const cleaned = cleanVehicleText(modelLine)
   const keywords: string[] = []
   const seen = new Set<string>()
 
-  for (const part of [line2, line3Model]) {
-    if (!part) continue
-    for (const w of part.split(/\s+/).filter(Boolean)) {
-      const key = w.toLowerCase()
-      if (seen.has(key)) continue
-      seen.add(key)
-      keywords.push(w)
-    }
+  for (const w of cleaned.split(/\s+/).filter(Boolean)) {
+    const key = w.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    keywords.push(w)
   }
 
   return keywords
@@ -79,7 +59,7 @@ function resolveTitleIdentity(input: {
   const modelLine = input.modelLine.trim()
   if (!modelLine) return null
 
-  const modelKeywords = modelKeywordsFromLine2(modelLine).slice(0, 2)
+  const modelKeywords = modelKeywordsFromModelLine(modelLine)
   if (modelKeywords.length === 0) return null
 
   return {
@@ -114,7 +94,15 @@ function levenshteinDistance(a: string, b: string): number {
   return dp[m]![n]!
 }
 
-/** Fuzzy relajado solo para dedup intro (ASR: rouge↔rush, celto↔seltos). */
+function sharedSuffixLength(a: string, b: string): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[a.length - 1 - i] === b[b.length - 1 - i]) {
+    i++
+  }
+  return i
+}
+
+/** Fuzzy relajado solo para dedup intro (ASR: rouge↔rush, krauser↔cruiser). */
 function introModelTokenMatches(token: string, keyword: string): boolean {
   if (wordFuzzyMatches(token, keyword)) return true
   const a = normalizeToken(wordCore(token))
@@ -128,6 +116,9 @@ function introModelTokenMatches(token: string, keyword: string): boolean {
   const dist = levenshteinDistance(a, k)
   if (dist <= 2) return true
   if (a[0] === k[0] && minLen >= 4 && dist <= 3) return true
+  // Palabras largas: ASR puede cambiar 1ª letra (krauser ↔ cruiser, dist 3)
+  if (minLen >= 6 && dist <= 3) return true
+  if (minLen >= 6 && sharedSuffixLength(a, k) >= 3 && dist <= 4) return true
   return false
 }
 
@@ -182,7 +173,13 @@ function tokenContainsFusedModelKeyword(token: string, modelKeywords: string[]):
 
 function tokenMatchesIntroYearWord(token: string, year: string | null): boolean {
   const core = wordCore(token)
-  if (year) return core === year
+  if (!core) return false
+  if (year) {
+    if (core === year) return true
+    // ASR truncado: "20", "202" cuando el título tiene 2020
+    if (/^\d{2,4}$/.test(core) && year.startsWith(core)) return true
+    return false
+  }
   return /^(19|20)\d{2}$/.test(core)
 }
 
@@ -202,7 +199,7 @@ function isOnlyLaOrElText(text: string): boolean {
 }
 
 /**
- * Quita palabras de marca, modelo (2 primeras del título) y año (L4) del texto del subtítulo.
+ * Quita palabras de marca, modelo (ficha completa) y año del título del texto del subtítulo.
  */
 export function stripTitleIdentityWordsFromText(
   text: string,
@@ -277,7 +274,7 @@ export interface SuppressIntroClipVehicleSubsOpts {
 }
 
 /**
- * Clips 0–1: quita del subtítulo marca, 2 primeras palabras de modelo y año del título (fuzzy).
+ * Clips 0–1: quita del subtítulo marca, palabras del modelo y año del título (fuzzy ASR).
  * El overlay de título ya muestra esa identidad (inventario resuelto).
  */
 export function suppressIntroClipVehicleSubtitleDuplicates(

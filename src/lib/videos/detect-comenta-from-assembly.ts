@@ -2,7 +2,6 @@ import type { Segment, SequenceItem, SubtitleBlock } from './segmenter'
 import { computeReelClipStartMs } from './reel-timeline'
 import {
   buildComentaOverlayText,
-  canonicalPrimaryModelLabel,
   normalizeForMatch,
   wordFuzzyMatches,
 } from './subtitle-screen-text'
@@ -13,9 +12,12 @@ export type ComentaFromAssemblyResult = {
   comentaOverlayText: string | null
 }
 
-/** Palabras de cierre en voz: "comenta" o "menciona" (overlay sigue siendo COMENTA). */
-const COMENTA_CTA_WORDS = ['comenta', 'menciona'] as const
-const COMENTA_CTA_TEXT_RE = /\b(?:comenta|menciona)\b/i
+/**
+ * Disparadores en Assembly (voz). El overlay en pantalla siempre muestra "COMENTA".
+ * "escribe" cubre ASR que confunde comenta ↔ escribe.
+ */
+const COMENTA_CTA_WORDS = ['comenta', 'menciona', 'escribe'] as const
+const COMENTA_CTA_TEXT_RE = /\b(?:comenta|menciona|escribe)\b/i
 const MAX_WORDS_AFTER_COMENTA = 3
 
 const AFTER_COMENTA_STOPWORDS = new Set([
@@ -57,49 +59,48 @@ function collectWordsAfterTrigger(rawWords: { text: string }[], startIndex: numb
   return out
 }
 
-function modelTokensForComentaMatch(modelLine: string): string[] {
-  const tokens: string[] = []
-  const firstRaw = modelLine.trim().split(/\s+/)[0]
-  if (firstRaw) {
-    const merged = normalizeForMatch(firstRaw).replace(/\s+/g, '')
-    if (merged.length >= 2) tokens.push(merged)
-  }
-  const raw = normalizeForMatch(modelLine).split(' ').filter(Boolean)
-  for (const w of raw) {
-    if (/^\d{3,4}$/.test(w)) continue
-    if (w.length >= 3) tokens.push(w)
-    if (tokens.length >= 4) break
-  }
-  return [...new Set(tokens)]
+function spokenWordMatchesBrand(word: string, brandLine: string): boolean {
+  const brandNorm = normalizeForMatch(brandLine)
+  if (brandNorm.length < 2) return false
+  return wordFuzzyMatches(word, brandNorm)
 }
 
-/** Normaliza la 1ª palabra del modelo sin partir guiones (d-max → dmax). */
-function canonicalModelNorm(modelLine: string): string {
-  const first = modelLine.trim().split(/\s+/)[0] ?? ''
-  return normalizeForMatch(first).replace(/\s+/g, '')
+function spokenWordMatchesModelToken(word: string, modelTokenNorm: string): boolean {
+  if (modelTokenNorm.length < 2) return false
+  return wordFuzzyMatches(word, modelTokenNorm)
 }
 
-/**
- * ¿La voz tras "comenta" alude al modelo de ficha? Incluye fragmentos (d + max → d-max).
- */
-function speechReferencesModel(wordsAfter: string[], modelLine: string): boolean {
-  if (wordsAfter.some((w) => spokenWordMatchesModel(w, modelLine))) return true
+/** Etiqueta en pantalla (inventario) para una palabra dicha tras el CTA; null si no matchea. */
+function inventoryLabelForSpokenWord(
+  word: string,
+  brandLine: string | null | undefined,
+  modelLine: string | null | undefined
+): string | null {
+  const brand = brandLine?.trim() ?? ''
+  if (brand && spokenWordMatchesBrand(word, brand)) {
+    return brand.toUpperCase()
+  }
 
-  const canonicalNorm = canonicalModelNorm(modelLine)
-  if (canonicalNorm.length < 2) return false
+  const model = modelLine?.trim() ?? ''
+  if (!model) return null
 
-  let acc = ''
-  for (const word of wordsAfter.slice(0, MAX_WORDS_AFTER_COMENTA)) {
-    const norm = normalizeForMatch(normalizeWord(word))
-    if (!norm || isAfterComentaStopword(norm)) continue
-    acc += norm
-    if (acc === canonicalNorm) return true
-    if (wordFuzzyMatches(acc, canonicalNorm) || wordFuzzyMatches(acc, modelLine.trim().split(/\s+/)[0] ?? '')) {
-      return true
+  for (const raw of model.split(/\s+/).filter(Boolean)) {
+    if (/^\d{3,4}$/.test(raw)) continue
+    const norm = normalizeForMatch(raw)
+    if (norm.length >= 2 && spokenWordMatchesModelToken(word, norm)) {
+      return raw.toUpperCase()
     }
   }
 
-  return acc.length >= 3 && canonicalNorm.includes(acc)
+  const firstRaw = model.split(/\s+/)[0]?.trim() ?? ''
+  if (firstRaw) {
+    const mergedNorm = normalizeForMatch(firstRaw).replace(/\s+/g, '')
+    if (mergedNorm.length >= 2 && spokenWordMatchesModelToken(word, mergedNorm)) {
+      return firstRaw.toUpperCase()
+    }
+  }
+
+  return null
 }
 
 function buildComentaOverlayFromMiddle(
@@ -114,20 +115,9 @@ function buildComentaOverlayFromMiddle(
   return parts.join(' ')
 }
 
-function spokenWordMatchesBrand(word: string, brandLine: string): boolean {
-  const brandNorm = normalizeForMatch(brandLine)
-  if (brandNorm.length < 2) return false
-  return wordFuzzyMatches(word, brandNorm)
-}
-
-function spokenWordMatchesModel(word: string, modelLine: string): boolean {
-  return modelTokensForComentaMatch(modelLine).some((token) => wordFuzzyMatches(word, token))
-}
-
 /**
- * Usa las 1–3 palabras tras "comenta" que matcheen marca/modelo del vehículo ya identificado.
- * Para modelo usa la 1ª palabra canónica de ficha (p. ej. D-MAX), no fragmentos ASR (MAX).
- * El año sigue viniendo de inventario (yearLine). Si nada matchea → null (fallback inventario).
+ * Una sola palabra tras el CTA que matchee marca/modelo en ficha (bien escrita).
+ * Si no hay palabra útil → null (fallback inventario: 1ª palabra modelo + año).
  */
 function resolveComentaOverlayFromSpeech(
   wordsAfter: string[],
@@ -137,35 +127,14 @@ function resolveComentaOverlayFromSpeech(
 ): string | null {
   if (wordsAfter.length === 0) return null
 
-  const brand = brandLine?.trim() ?? ''
-  const model = modelLine?.trim() ?? ''
-  if (!brand && !model) return null
-
-  const middle: string[] = []
-  const used = new Set<string>()
-
   for (const word of wordsAfter) {
-    if (!brand || !spokenWordMatchesBrand(word, brand)) continue
-    const label = word.toUpperCase()
-    const key = label.toLowerCase()
-    if (used.has(key)) continue
-    used.add(key)
-    middle.push(label)
-  }
-
-  if (model && speechReferencesModel(wordsAfter, model)) {
-    const canonical = canonicalPrimaryModelLabel(model)
-    if (canonical) {
-      const key = normalizeForMatch(canonical)
-      if (!used.has(key)) {
-        used.add(key)
-        middle.push(canonical)
-      }
+    const label = inventoryLabelForSpokenWord(word, brandLine, modelLine)
+    if (label) {
+      return buildComentaOverlayFromMiddle([label], yearLine)
     }
   }
 
-  if (middle.length === 0) return null
-  return buildComentaOverlayFromMiddle(middle, yearLine)
+  return null
 }
 
 function findComentaHitInSequence(
@@ -243,9 +212,8 @@ function cutSubtitleBlocksAtComenta(
 }
 
 /**
- * Modo sin guión: Assembly es el guión. Detecta "comenta" o "menciona" en la transcripción,
- * overlay COMENTA con lo dicho (marca/modelo del vehículo identificado) + año inventario;
- * si no se reconoce → 1ª palabra modelo inventario + año (comportamiento previo).
+ * Detecta comenta / menciona / escribe en Assembly.
+ * Overlay siempre empieza con COMENTA; opcionalmente +1 palabra del inventario + año.
  */
 export function applyComentaFromAssembly(
   blocks: SubtitleBlock[],
@@ -277,11 +245,12 @@ export function applyComentaFromAssembly(
   const subtitleBlocks = cutSubtitleBlocksAtComenta(blocks, comentaTimeSec)
 
   if (opts?.jobId) {
-    const fallbackText = buildComentaOverlayText(opts?.modelLine, opts?.yearLine)
-    let source = spokenOverlay ? `voz [${wordsAfter.join(', ')}]` : 'fallback inventario'
-    if (spokenOverlay && spokenOverlay === fallbackText && wordsAfter.length > 0) {
-      source = `voz [${wordsAfter.join(', ')}] → modelo canonical`
-    }
+    const source =
+      spokenOverlay != null
+        ? `voz [${wordsAfter.join(', ')}] → 1 palabra inventario`
+        : wordsAfter.length > 0
+          ? `voz [${wordsAfter.join(', ')}] sin match → fallback inventario`
+          : 'fallback inventario (solo CTA)'
     console.log(
       `[ComentaAssembly][${opts.jobId}] COMENTA detectado t=${comentaTimeSec.toFixed(2)}s ` +
         `overlay="${comentaOverlayText}" (${source}) ` +
