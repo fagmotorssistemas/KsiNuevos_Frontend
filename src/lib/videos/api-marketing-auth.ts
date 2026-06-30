@@ -15,6 +15,7 @@ const MARKETING_API_PATH_ACCESS: { prefix: string; submodule: string }[] = [
   { prefix: '/api/scripts', submodule: 'plan-videos' },
   { prefix: '/api/videos', submodule: 'video-automation' },
   { prefix: '/api/marketing/metrics', submodule: 'metricas-campana' },
+  { prefix: '/api/marketing/capi', submodule: 'metricas-campana' },
   { prefix: '/api/marketing/noticiero', submodule: 'blog-posts' },
   { prefix: '/api/marketing/inventory-video-dashboard', submodule: 'metricas-campana' },
 ]
