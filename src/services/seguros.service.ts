@@ -1,12 +1,9 @@
 // src/services/seguros.service.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 import { parseMoneda } from "@/utils/format"; // Asegúrate que esta utilidad exista
 import { SeguroVehicular } from "@/types/seguros.types";
 
-// --- CONFIGURACIÓN SUPABASE ---
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient();
 
 // --- CONFIGURACIÓN API LEGACY ---
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;

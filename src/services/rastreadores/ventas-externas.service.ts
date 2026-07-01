@@ -6,9 +6,21 @@ import {
     PagoVentaExternaPayload
 } from '@/types/rastreadores.types';
 import { TipoPagoEnum } from '@/types/rastreadores.types';
+import type { Database } from '@/types/supabase';
 import { limpiarTexto } from '@/utils/rastreo-format';
 import { supabase } from './supabaseClient';
 import { crearOActualizarConcesionaria } from './concesionarias.service';
+
+type ClienteExternoInsert = Database['public']['Tables']['clientes_externos']['Insert'];
+type ClienteExternoUpdate = Database['public']['Tables']['clientes_externos']['Update'];
+type VehiculoInsert = Database['public']['Tables']['vehiculos']['Insert'];
+type VentaRastreadorInsert = Database['public']['Tables']['ventas_rastreador']['Insert'];
+type MetodoPagoRastreador = Database['public']['Enums']['metodo_pago_rastreador_enum'];
+
+function parseAnioVehiculo(anio: string): number | null {
+    const parsed = parseInt(limpiarTexto(anio), 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
 
 export interface OpcionesVentaConcesionaria {
     esConcesionaria: boolean;
@@ -111,7 +123,7 @@ export async function registrarVentaExterna(
     }
 
     identificacionLimpia = limpiarTexto(cliente.identificacion);
-    const clientePayload: Record<string, unknown> = {
+    const clientePayload: ClienteExternoInsert = {
         identificacion: identificacionLimpia,
         nombre_completo: limpiarTexto(cliente.nombre),
         telefono: limpiarTexto(cliente.telefono) || null,
@@ -138,8 +150,8 @@ export async function registrarVentaExterna(
     }
 
     const { data: clienteInserted, error: clienteError } = existingCliente?.id
-        ? await supabase.from('clientes_externos').update(clientePayload).eq('id', existingCliente.id).select().single()
-        : await supabase.from('clientes_externos').insert([clientePayload]).select().single();
+        ? await supabase.from('clientes_externos').update(clientePayload as ClienteExternoUpdate).eq('id', existingCliente.id).select().single()
+        : await supabase.from('clientes_externos').insert(clientePayload).select().single();
 
     if (clienteError || !clienteInserted) return { success: false, error: clienteError?.message ?? 'Error al guardar cliente externo' };
     clienteData = clienteInserted;
@@ -189,16 +201,17 @@ export async function registrarVentaExterna(
 async function crearVehiculoSiAplica(cliente_id: string, cliente: ClienteExternoPayload): Promise<string | null> {
     const placa = limpiarTexto(cliente.placa);
     if (!placa || placa === 'N/A') return null;
+    const vehiculoInsert: VehiculoInsert = {
+        cliente_id,
+        placa,
+        marca: limpiarTexto(cliente.marca) || null,
+        modelo: limpiarTexto(cliente.modelo) || null,
+        anio: parseAnioVehiculo(cliente.anio),
+        color: limpiarTexto(cliente.color) || null,
+    };
     const { data: veh, error } = await supabase
         .from('vehiculos')
-        .insert({
-            cliente_id,
-            placa,
-            marca: limpiarTexto(cliente.marca) || null,
-            modelo: limpiarTexto(cliente.modelo) || null,
-            anio: limpiarTexto(cliente.anio) || null,
-            color: limpiarTexto(cliente.color) || null
-        })
+        .insert(vehiculoInsert)
         .select('id')
         .single();
     if (error || !veh) return null;
@@ -220,29 +233,34 @@ interface CrearVentaCompletaParams {
 async function crearVentaRastreadorCompleta(params: CrearVentaCompletaParams) {
     const { gps_id, cliente_id, vehiculo_id, concesionaria_id, nota_venta, pago, gpsPayload, actualizarStockId } = params;
 
+    const ventaInsert: VentaRastreadorInsert = {
+        gps_id,
+        cliente_id: cliente_id ?? null,
+        vehiculo_id: vehiculo_id ?? null,
+        concesionaria_id: concesionaria_id ?? null,
+        entorno: 'EXTERNO',
+        tipo_pago: pago.tipo_pago,
+        precio_total: Number(pago.precio_total),
+        abono_inicial: pago.abono_inicial != null ? Number(pago.abono_inicial) : 0,
+        total_financiado: pago.total_financiado != null ? Number(pago.total_financiado) : null,
+        numero_cuotas: pago.numero_cuotas ?? null,
+        metodo_pago:
+            pago.metodo_pago != null
+                ? (pago.metodo_pago as MetodoPagoRastreador)
+                : null,
+        url_comprobante_pago: pago.url_comprobante_pago ?? null,
+        fecha_entrega: pago.fecha_entrega && pago.fecha_entrega !== '' ? pago.fecha_entrega : null,
+        asesor_id: pago.asesor_id && pago.asesor_id !== '' ? pago.asesor_id : null,
+        observacion: pago.observacion && pago.observacion.trim() !== '' ? pago.observacion.trim() : null,
+        nota_venta,
+        es_venta_externa: true,
+        instalador_id: pago.instalador_id && pago.instalador_id !== '' ? pago.instalador_id : null,
+        costo_instalacion: pago.costo_instalacion ?? null,
+    };
+
     const { data: ventaData, error: ventaError } = await supabase
         .from('ventas_rastreador')
-        .insert({
-            gps_id,
-            cliente_id: cliente_id ?? null,
-            vehiculo_id: vehiculo_id ?? null,
-            concesionaria_id: concesionaria_id ?? null,
-            entorno: 'EXTERNO',
-            tipo_pago: pago.tipo_pago,
-            precio_total: Number(pago.precio_total),
-            abono_inicial: pago.abono_inicial != null ? Number(pago.abono_inicial) : 0,
-            total_financiado: pago.total_financiado != null ? Number(pago.total_financiado) : null,
-            numero_cuotas: pago.numero_cuotas ?? null,
-            metodo_pago: pago.metodo_pago != null ? String(pago.metodo_pago) : null,
-            url_comprobante_pago: pago.url_comprobante_pago ?? null,
-            fecha_entrega: (pago.fecha_entrega && pago.fecha_entrega !== '') ? pago.fecha_entrega : null,
-            asesor_id: (pago.asesor_id && pago.asesor_id !== '') ? pago.asesor_id : null,
-            observacion: (pago.observacion && pago.observacion.trim() !== '') ? pago.observacion.trim() : null,
-            nota_venta,
-            es_venta_externa: true,
-            instalador_id: (pago.instalador_id && pago.instalador_id !== '') ? pago.instalador_id : null,
-            costo_instalacion: pago.costo_instalacion ?? null
-        })
+        .insert(ventaInsert)
         .select('id')
         .single();
 

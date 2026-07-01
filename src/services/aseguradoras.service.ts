@@ -1,11 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import type { Aseguradora, AseguradoraInsert, AseguradoraUpdate } from "@/types/aseguradoras.types";
+import type { Database } from "@/types/supabase";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient();
 
 const TABLE = "aseguradoras";
+
+type AseguradoraDbInsert = Database["public"]["Tables"]["aseguradoras"]["Insert"];
+type AseguradoraDbUpdate = Database["public"]["Tables"]["aseguradoras"]["Update"];
 
 export const aseguradorasService = {
   async listar(): Promise<Aseguradora[]> {
@@ -48,7 +50,7 @@ export const aseguradorasService = {
 
   async crear(payload: AseguradoraInsert): Promise<{ data: Aseguradora | null; error: Error | null }> {
     // No enviamos contacto_* ni porcentaje/config para evitar validaciones del backend; la tabla usa NULL/defaults.
-    const insert: Record<string, unknown> = {
+    const insert: AseguradoraDbInsert = {
       nombre: payload.nombre.trim(),
       ruc: payload.ruc?.trim() || null,
       telefono: payload.telefono?.trim() || null,
@@ -61,7 +63,7 @@ export const aseguradorasService = {
     };
     const { data, error } = await supabase
       .from(TABLE)
-      .insert([insert])
+      .insert(insert)
       .select()
       .single();
     if (error) return { data: null, error: error as unknown as Error };
@@ -69,7 +71,7 @@ export const aseguradorasService = {
   },
 
   async actualizar(id: string, payload: AseguradoraUpdate): Promise<{ data: Aseguradora | null; error: Error | null }> {
-    const update: Record<string, unknown> = {};
+    const update: AseguradoraDbUpdate = {};
     if (payload.nombre !== undefined) update.nombre = payload.nombre.trim();
     if (payload.ruc !== undefined) update.ruc = payload.ruc?.trim() || null;
     if (payload.telefono !== undefined) update.telefono = payload.telefono?.trim() || null;

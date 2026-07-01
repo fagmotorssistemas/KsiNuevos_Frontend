@@ -116,7 +116,7 @@ export interface ModeloGPS {
     id: string;
     /** Nombre visible del modelo (en BD es `marca`) */
     marca: string | null;
-    costo_referencia: number;
+    costo_referencia: number | null;
     /** Relación opcional: el modelo puede depender del proveedor */
     provedor_id?: string | null;
 }

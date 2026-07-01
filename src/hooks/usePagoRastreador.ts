@@ -4,9 +4,12 @@ import {
     PagoRastreadorInfo, 
     TipoPagoEnum, 
     VentaRastreadorPayload, 
-    CuotaRastreadorPayload 
 } from '@/types/rastreadores.types';
+import type { Database } from '@/types/supabase';
 import { supabase } from '@/services/rastreadores/supabaseClient';
+
+type VentaRastreadorInsert = Database['public']['Tables']['ventas_rastreador']['Insert'];
+type MetodoPagoRastreador = Database['public']['Enums']['metodo_pago_rastreador_enum'];
 
 interface CalculoPagoParams {
     monto_rastreador: number;
@@ -69,25 +72,51 @@ export function usePagoRastreador() {
 
             // 1. Insert en ventas_rastreador (columnas según BD: gps_id, fecha_entrega, etc.)
             const gpsId = payload.gps_id ?? gps_id;
+            const ventaInsert: VentaRastreadorInsert = {
+                gps_id: String(gpsId),
+                entorno: entornoDb,
+                tipo_pago: payload.tipo_pago,
+                precio_total: Number(payload.precio_total),
+                abono_inicial: payload.abono_inicial != null ? Number(payload.abono_inicial) : 0,
+                total_financiado: payload.total_financiado != null ? Number(payload.total_financiado) : null,
+                numero_cuotas: payload.numero_cuotas != null ? Number(payload.numero_cuotas) : null,
+                metodo_pago:
+                    payload.metodo_pago != null
+                        ? (payload.metodo_pago as MetodoPagoRastreador)
+                        : undefined,
+                url_comprobante_pago:
+                    payload.url_comprobante_pago != null && payload.url_comprobante_pago !== ''
+                        ? payload.url_comprobante_pago
+                        : undefined,
+                fecha_entrega:
+                    payload.fecha_entrega != null && payload.fecha_entrega !== ''
+                        ? payload.fecha_entrega
+                        : undefined,
+                asesor_id:
+                    payload.asesor_id != null && payload.asesor_id !== ''
+                        ? payload.asesor_id
+                        : undefined,
+                observacion:
+                    payload.observacion != null && payload.observacion !== ''
+                        ? payload.observacion.trim()
+                        : undefined,
+                nota_venta:
+                    payload.nota_venta != null && payload.nota_venta !== ''
+                        ? payload.nota_venta.trim()
+                        : undefined,
+                instalador_id:
+                    payload.instalador_id != null && payload.instalador_id !== ''
+                        ? payload.instalador_id
+                        : undefined,
+                costo_instalacion:
+                    payload.costo_instalacion != null
+                        ? Number(payload.costo_instalacion)
+                        : undefined,
+            };
+
             const { data: ventaData, error: ventaError } = await supabase
                 .from('ventas_rastreador')
-                .insert({
-                    gps_id: String(gpsId),
-                    entorno: entornoDb,
-                    tipo_pago: payload.tipo_pago,
-                    precio_total: Number(payload.precio_total),
-                    abono_inicial: payload.abono_inicial != null ? Number(payload.abono_inicial) : 0,
-                    total_financiado: payload.total_financiado != null ? Number(payload.total_financiado) : null,
-                    numero_cuotas: payload.numero_cuotas != null ? Number(payload.numero_cuotas) : null,
-                    ...(payload.metodo_pago != null && { metodo_pago: String(payload.metodo_pago) }),
-                    ...(payload.url_comprobante_pago != null && payload.url_comprobante_pago !== '' && { url_comprobante_pago: payload.url_comprobante_pago }),
-                    ...(payload.fecha_entrega != null && payload.fecha_entrega !== '' && { fecha_entrega: payload.fecha_entrega }),
-                    ...(payload.asesor_id != null && payload.asesor_id !== '' && { asesor_id: payload.asesor_id }),
-                    ...(payload.observacion != null && payload.observacion !== '' && { observacion: payload.observacion.trim() }),
-                    ...(payload.nota_venta != null && payload.nota_venta !== '' && { nota_venta: payload.nota_venta.trim() }),
-                    ...(payload.instalador_id != null && payload.instalador_id !== '' && { instalador_id: payload.instalador_id }),
-                    ...(payload.costo_instalacion != null && { costo_instalacion: Number(payload.costo_instalacion) })
-                })
+                .insert(ventaInsert)
                 .select()
                 .single();
 

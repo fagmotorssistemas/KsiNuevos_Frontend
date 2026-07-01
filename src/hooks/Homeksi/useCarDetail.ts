@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 
 // Traemos el tipo completo de la fila de la base de datos
 export type CarDetail = Database['public']['Tables']['inventoryoracle']['Row'];
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 export function useCarDetail(id: string) {
   const [car, setCar] = useState<CarDetail | null>(null);

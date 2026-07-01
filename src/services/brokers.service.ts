@@ -1,11 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import type { Broker, BrokerInsert, BrokerUpdate } from "@/types/brokers.types";
+import type { Database } from "@/types/supabase";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient();
 
 const TABLE = "brokers";
+
+type BrokerDbInsert = Database["public"]["Tables"]["brokers"]["Insert"];
+type BrokerDbUpdate = Database["public"]["Tables"]["brokers"]["Update"];
 
 export const brokersService = {
   async listar(): Promise<Broker[]> {
@@ -47,7 +49,7 @@ export const brokersService = {
   },
 
   async crear(payload: BrokerInsert): Promise<{ data: Broker | null; error: Error | null }> {
-    const insert: Record<string, unknown> = {
+    const insert: BrokerDbInsert = {
       nombre: payload.nombre.trim(),
       telefono: payload.telefono?.trim() || null,
       email: payload.email?.trim() || null,
@@ -65,7 +67,7 @@ export const brokersService = {
   },
 
   async actualizar(id: string, payload: BrokerUpdate): Promise<{ data: Broker | null; error: Error | null }> {
-    const update: Record<string, unknown> = {};
+    const update: BrokerDbUpdate = {};
     if (payload.nombre !== undefined) update.nombre = payload.nombre.trim();
     if (payload.telefono !== undefined) update.telefono = payload.telefono?.trim() || null;
     if (payload.email !== undefined) update.email = payload.email?.trim() || null;

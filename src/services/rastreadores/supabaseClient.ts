@@ -1,7 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+/** Cliente con sesión del navegador (requerido para RLS por rol). */
+export const supabase = createClient();
 export const API_URL = process.env.NEXT_PUBLIC_API_URL!;

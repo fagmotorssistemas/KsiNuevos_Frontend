@@ -1,9 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import type { SeguroPoliza, SeguroPolizaInsert, SeguroPolizaUpdate } from "@/types/seguros-polizas.types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient();
 
 const TABLE = "seguros_polizas";
 

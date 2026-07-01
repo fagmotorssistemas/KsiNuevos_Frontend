@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js"; // <--- CAMBIO AQUÍ
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/supabase";
 
 // --- TIPOS ---
@@ -14,12 +14,7 @@ export type InventoryFilters = {
 };
 
 // --- INICIALIZACIÓN DEL CLIENTE ---
-// Usamos las variables de entorno directamente. 
-// Asegúrate de que estas variables existan en tu .env.local
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 export function useInventoryPublic() {
     
