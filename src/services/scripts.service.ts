@@ -85,6 +85,20 @@ export const scriptsService = {
     const body = (await res.json()) as { scripts?: (ScriptRow & { assignment_id?: string | null })[] }
     return body.scripts ?? []
   },
+
+  async updateGuionEscenas(
+    scriptId: string,
+    guionEscenas: unknown[]
+  ): Promise<{ id: string; guion_escenas: unknown }> {
+    const res = await fetch(`${SCRIPTS_API_BASE}/guiones/${scriptId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guion_escenas: guionEscenas }),
+    })
+    if (!res.ok) throw new Error(await parseError(res))
+    const body = (await res.json()) as { script: { id: string; guion_escenas: unknown } }
+    return body.script
+  },
 }
 
 export function patchAssignmentRow(

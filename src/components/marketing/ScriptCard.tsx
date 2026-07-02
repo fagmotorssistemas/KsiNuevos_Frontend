@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ExternalLink, MessageSquareText } from 'lucide-react'
 import { GuionTipoBadge, SemanaBadge } from './badges'
@@ -38,9 +38,14 @@ function statusPill(s: string | null) {
   return 'bg-amber-100 text-amber-800 border-amber-200'
 }
 
-export function ScriptCard({ script }: { script: ScriptRow }) {
+export function ScriptCard({ script: initialScript }: { script: ScriptRow }) {
   const [open, setOpen] = useState(false)
+  const [script, setScript] = useState(initialScript)
   const structured = hasStructuredGuion(script)
+
+  useEffect(() => {
+    setScript(initialScript)
+  }, [initialScript])
 
   const fbUrl = useMemo(() => {
     if (!script.facebook_post_id) return null
@@ -102,7 +107,12 @@ export function ScriptCard({ script }: { script: ScriptRow }) {
 
           {open && (
             <div className="mt-3 rounded-xl border border-gray-200 bg-white p-4 min-w-0 w-full">
-              <ScriptGuionDetail script={script} />
+              <ScriptGuionDetail
+                script={script}
+                onEscenasSaved={(guion_escenas) =>
+                  setScript((s) => ({ ...s, guion_escenas }))
+                }
+              />
             </div>
           )}
         </div>

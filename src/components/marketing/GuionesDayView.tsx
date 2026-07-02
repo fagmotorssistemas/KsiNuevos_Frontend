@@ -20,10 +20,12 @@ export function GuionesDayView({
   groups,
   selectedId,
   onSelect,
+  onScriptUpdate,
 }: {
   groups: VendorGroup[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onScriptUpdate?: (scriptId: string, guionEscenas: unknown) => void
 }) {
   const selected = useMemo(() => {
     for (const g of groups) {
@@ -137,7 +139,10 @@ export function GuionesDayView({
               </div>
             </div>
             <div className="p-4 sm:p-6">
-              <ScriptGuionDetail script={selected} />
+              <ScriptGuionDetail
+                script={selected}
+                onEscenasSaved={(guion_escenas) => onScriptUpdate?.(selected.id, guion_escenas)}
+              />
             </div>
           </>
         )}

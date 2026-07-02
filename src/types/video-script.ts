@@ -34,6 +34,22 @@ function str(v: unknown): string | undefined {
   return s || undefined
 }
 
+export function serializeGuionEscenas(escenas: GuionEscena[]): Record<string, unknown>[] {
+  return escenas.map((e) => {
+    const row: Record<string, unknown> = { esc: e.esc }
+    if (e.tiempo) row.tiempo = e.tiempo
+    if (e.plano) row.plano = e.plano
+    if (e.movimiento) row.movimiento = e.movimiento
+    if (e.accion) row.accion = e.accion
+    if (e.dialogo?.trim()) row.dialogo = e.dialogo.trim()
+    if (e.texto_pantalla) row.texto_pantalla = e.texto_pantalla
+    if (e.musica_sonido) row.musica_sonido = e.musica_sonido
+    if (e.postproduccion) row.postproduccion = e.postproduccion
+    if (e.notas) row.notas = e.notas
+    return row
+  })
+}
+
 export function parseGuionEscenas(raw: unknown): GuionEscena[] {
   if (raw == null) return []
   let data: unknown = raw

@@ -609,6 +609,19 @@ export function GuionesAssignmentsView({
                       <ScriptGuionDetail
                         script={activeScript}
                         vehiculoLabel={selected ? getAssignmentVehicleLabel(selected) : undefined}
+                        onEscenasSaved={(guion_escenas) => {
+                          setScriptsByAssignment((prev) => {
+                            const aid = selected.assignment_id
+                            const scripts = prev[aid]
+                            if (!scripts) return prev
+                            return {
+                              ...prev,
+                              [aid]: scripts.map((s) =>
+                                s.id === activeScript.id ? { ...s, guion_escenas } : s
+                              ),
+                            }
+                          })
+                        }}
                       />
                     </div>
                   </div>
