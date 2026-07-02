@@ -113,7 +113,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'marketing', slug: 'publicaciones-sociales', name: 'Publicaciones sociales', sortOrder: 1, routePrefixes: ['/marketing/publicaciones'] },
   { moduleSlug: 'marketing', slug: 'video-automation', name: 'Video automation', sortOrder: 2, routePrefixes: ['/marketing/videos', '/marketing/biblioteca-clips'] },
   { moduleSlug: 'marketing', slug: 'blog-posts', name: 'Blog posts', sortOrder: 3, routePrefixes: ['/marketing/noticiero'] },
-  { moduleSlug: 'marketing', slug: 'metricas-campana', name: 'Métricas de campaña', sortOrder: 4, routePrefixes: ['/marketing/metricas', '/marketing/inventariado-marketing', '/marketing/capi-meta'] },
+  { moduleSlug: 'marketing', slug: 'metricas-campana', name: 'Métricas de campaña', sortOrder: 4, routePrefixes: ['/marketing/metricas', '/marketing/inventariado-marketing', '/marketing/capi-meta', '/marketing/campanas'] },
   { moduleSlug: 'marketing', slug: 'plan-videos', name: 'Plan de videos', sortOrder: 5, routePrefixes: ['/marketing/guiones', '/marketing/planificador'] },
   { moduleSlug: 'marketing', slug: 'scraper-marketing', name: 'Scraper', sortOrder: 6 },
   // Admin — solo pantallas que existen hoy

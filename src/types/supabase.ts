@@ -35,6 +35,24 @@ export type Database = {
         }
         Relationships: []
       }
+      app_runtime_secrets: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       appointments: {
         Row: {
           created_at: string | null
@@ -355,6 +373,48 @@ export type Database = {
           nombre?: string
           porcentaje_comision?: number | null
           telefono?: string | null
+        }
+        Relationships: []
+      }
+      capi_event_sync_log: {
+        Row: {
+          created_at: string
+          ctwa_clid: string | null
+          error_message: string | null
+          event_id: string
+          event_name: string
+          id: string
+          meta_response: Json | null
+          phone: string
+          sent_at: string | null
+          status: string
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          ctwa_clid?: string | null
+          error_message?: string | null
+          event_id: string
+          event_name?: string
+          id?: string
+          meta_response?: Json | null
+          phone: string
+          sent_at?: string | null
+          status?: string
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          ctwa_clid?: string | null
+          error_message?: string | null
+          event_id?: string
+          event_name?: string
+          id?: string
+          meta_response?: Json | null
+          phone?: string
+          sent_at?: string | null
+          status?: string
+          value?: number | null
         }
         Relationships: []
       }
@@ -1057,6 +1117,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ctwa_clicks: {
+        Row: {
+          ad_headline: string | null
+          ad_id: string | null
+          captured_at: string | null
+          ctwa_clid: string
+          expires_at: string | null
+          phone: string
+        }
+        Insert: {
+          ad_headline?: string | null
+          ad_id?: string | null
+          captured_at?: string | null
+          ctwa_clid: string
+          expires_at?: string | null
+          phone: string
+        }
+        Update: {
+          ad_headline?: string | null
+          ad_id?: string | null
+          captured_at?: string | null
+          ctwa_clid?: string
+          expires_at?: string | null
+          phone?: string
+        }
+        Relationships: []
       }
       cuotas_rastreador: {
         Row: {
@@ -2881,6 +2968,105 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_campaign_groups: {
+        Row: {
+          campaign_month: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          sort_order: number
+          status: string
+          updated_at: string
+          vehicle_category: string | null
+        }
+        Insert: {
+          campaign_month: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          vehicle_category?: string | null
+        }
+        Update: {
+          campaign_month?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          sort_order?: number
+          status?: string
+          updated_at?: string
+          vehicle_category?: string | null
+        }
+        Relationships: []
+      }
+      marketing_campaign_vehicles: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          inventory_id: string
+          needs_photos: boolean
+          needs_video: boolean
+          notes: string | null
+          posts_count: number
+          price_snapshot: number | null
+          reels_count: number
+          sort_order: number
+          video_status: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          inventory_id: string
+          needs_photos?: boolean
+          needs_video?: boolean
+          notes?: string | null
+          posts_count?: number
+          price_snapshot?: number | null
+          reels_count?: number
+          sort_order?: number
+          video_status?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          inventory_id?: string
+          needs_photos?: boolean
+          needs_video?: boolean
+          notes?: string | null
+          posts_count?: number
+          price_snapshot?: number | null
+          reels_count?: number
+          sort_order?: number
+          video_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaign_vehicles_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaign_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_vehicles_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
@@ -6619,6 +6805,16 @@ export type Database = {
       }
     }
     Views: {
+      v_capi_health_24h: {
+        Row: {
+          enviados: number | null
+          fallidos: number | null
+          pendientes: number | null
+          porcentaje_error: number | null
+          total_eventos: number | null
+        }
+        Relationships: []
+      }
       view_scraper_price_statistics: {
         Row: {
           average_price: number | null
@@ -6645,6 +6841,11 @@ export type Database = {
         Returns: string
       }
       campaign_month_now_ecuador: { Args: never; Returns: string }
+      can_access_taller_module: {
+        Args: { p_action?: string }
+        Returns: boolean
+      }
+      can_manage_marketing_campaigns: { Args: never; Returns: boolean }
       can_use_marketing_dev_requests: { Args: never; Returns: boolean }
       can_view_planner_row: {
         Args: {
@@ -6711,6 +6912,8 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_capi_internal_secret: { Args: never; Returns: string }
+      fn_sha256: { Args: { input: string }; Returns: string }
       get_leads_pager: {
         Args: {
           p_assigned: string
@@ -6763,13 +6966,19 @@ export type Database = {
           submodule_slug: string
         }[]
       }
+      has_any_profile_role: { Args: { p_roles: string[] }; Returns: boolean }
       is_admin_or_marketing: { Args: never; Returns: boolean }
+      is_authenticated_staff: { Args: never; Returns: boolean }
       is_cartera_manual_staff: { Args: never; Returns: boolean }
       is_legal_staff: { Args: never; Returns: boolean }
       is_marketing_dev_request_admin: { Args: never; Returns: boolean }
       is_marketing_planner_admin: { Args: never; Returns: boolean }
       is_marketing_planner_member: { Args: never; Returns: boolean }
       is_profile_admin: { Args: never; Returns: boolean }
+      is_public_catalog_vehicle: {
+        Args: { p_status: Database["public"]["Enums"]["car_status"] }
+        Returns: boolean
+      }
       is_role: { Args: { required_role: string }; Returns: boolean }
       lead_ids_for_temperature_filter: {
         Args: {
@@ -6864,6 +7073,13 @@ export type Database = {
       }
       reassign_stale_unmanaged_leads: { Args: never; Returns: number }
       reset_leads_temperature_monthly: { Args: never; Returns: number }
+      rls_roles_gps: { Args: never; Returns: string[] }
+      rls_roles_marketing: { Args: never; Returns: string[] }
+      rls_roles_scraper: { Args: never; Returns: string[] }
+      rls_roles_seguros: { Args: never; Returns: string[] }
+      rls_roles_staff: { Args: never; Returns: string[] }
+      rls_roles_taller: { Args: never; Returns: string[] }
+      rls_roles_ventas: { Args: never; Returns: string[] }
       rpc_cases_without_gestion: {
         Args: { p_days: number }
         Returns: {

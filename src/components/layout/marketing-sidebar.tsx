@@ -19,6 +19,7 @@ import {
     Newspaper,
     FolderOpen,
     Radio,
+    Layers,
 } from 'lucide-react';
 import {
     canSeeMarketingSidebarHref,
@@ -33,6 +34,7 @@ const menuItems = [
     { name: 'Guiones', href: '/marketing/guiones', icon: ScrollText },
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
+    { name: 'Campañas', href: '/marketing/campanas', icon: Layers },
     { name: 'CAPI Meta', href: '/marketing/capi-meta', icon: Radio },
     { name: 'Planificador', href: '/marketing/planificador', icon: CalendarDays },
     { name: 'Videos', href: '/marketing/videos', icon: Sparkles },
