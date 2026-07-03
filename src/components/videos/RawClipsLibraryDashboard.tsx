@@ -17,7 +17,10 @@ import {
   SlidersHorizontal,
   ExternalLink,
   Sparkles,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { CreateReelModal } from '@/components/videos/CreateReelModal'
 import { UploadLibraryClipsModal } from '@/components/videos/UploadLibraryClipsModal'
 import type { ReelLibraryDraft } from '@/lib/videos/reel-library-draft'
@@ -96,7 +99,7 @@ function FolderCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`group text-left rounded-2xl border p-5 transition-all duration-200 ${
+      className={`group w-full text-left rounded-2xl border p-5 transition-all duration-200 ${
         selected
           ? 'border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-500/25 scale-[1.01]'
           : 'border-gray-200 bg-white hover:border-violet-200 hover:shadow-md'
@@ -166,11 +169,15 @@ function InfoSidebar({
   clips,
   loadingClips,
   onUseForNewReel,
+  onDeleteClip,
+  deletingClipPath,
 }: {
   folder: RawClipsFolderSummary | null
   clips: RawClipItem[]
   loadingClips: boolean
   onUseForNewReel?: () => void
+  onDeleteClip?: (clip: RawClipItem) => void
+  deletingClipPath?: string | null
 }) {
   if (!folder) {
     return (
@@ -320,9 +327,30 @@ function InfoSidebar({
             </p>
             <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-gray-600">
               {clips.map((c) => (
-                <li key={c.path} className="truncate rounded-lg bg-gray-50 px-2 py-1.5">
-                  {c.clipIndex != null ? `#${c.clipIndex + 1} · ` : ''}
-                  {c.name}
+                <li
+                  key={c.path}
+                  className="flex items-center gap-1 rounded-lg bg-gray-50 px-2 py-1.5"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {c.clipIndex != null ? `#${c.clipIndex + 1} · ` : ''}
+                    {c.name}
+                  </span>
+                  {onDeleteClip ? (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteClip(c)}
+                      disabled={deletingClipPath === c.path}
+                      className="shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      title="Eliminar clip"
+                      aria-label={`Eliminar ${c.name}`}
+                    >
+                      {deletingClipPath === c.path ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -333,7 +361,15 @@ function InfoSidebar({
   )
 }
 
-function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
+function ClipPreviewCard({
+  clip,
+  onDelete,
+  deleting,
+}: {
+  clip: RawClipItem
+  onDelete?: () => void
+  deleting?: boolean
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
 
@@ -348,8 +384,24 @@ function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="relative aspect-[9/16] max-h-[320px] w-full bg-black">
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="absolute right-2 top-2 z-10 rounded-lg bg-black/50 p-1.5 text-white/80 opacity-0 transition-opacity hover:bg-red-600 hover:text-white group-hover:opacity-100 disabled:opacity-50"
+            title="Eliminar clip"
+            aria-label={`Eliminar ${clip.name}`}
+          >
+            {deleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </button>
+        ) : null}
         <video
           ref={videoRef}
           src={clip.signedUrl}
@@ -379,6 +431,71 @@ function ClipPreviewCard({ clip }: { clip: RawClipItem }) {
           {clip.clipIndex != null ? `Clip ${clip.clipIndex + 1}` : 'Clip'} · {clip.name}
         </p>
         <p className="text-[11px] text-gray-500">{formatBytes(clip.sizeBytes)}</p>
+      </div>
+    </div>
+  )
+}
+
+function DeleteClipConfirmModal({
+  clip,
+  open,
+  deleting,
+  onClose,
+  onConfirm,
+}: {
+  clip: RawClipItem | null
+  open: boolean
+  deleting: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  if (!open || !clip) return null
+
+  const label =
+    clip.clipIndex != null ? `Clip ${clip.clipIndex + 1} · ${clip.name}` : clip.name
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-clip-title"
+      >
+        <div className="flex items-start gap-4 border-b border-gray-100 px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 id="delete-clip-title" className="text-lg font-bold text-gray-900">
+              ¿Eliminar este clip?
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              ¿Estás seguro de que quieres eliminar{' '}
+              <span className="font-semibold text-gray-900">{label}</span> ({formatBytes(clip.sizeBytes)})?
+              Esta acción no se puede deshacer.
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Sí, eliminar
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -425,6 +542,8 @@ export function RawClipsLibraryDashboard({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [reelLibraryDraft, setReelLibraryDraft] = useState<ReelLibraryDraft | null>(null)
+  const [clipToDelete, setClipToDelete] = useState<RawClipItem | null>(null)
+  const [deletingClip, setDeletingClip] = useState(false)
 
   function buildReelDraft(folder: RawClipsFolderSummary, clipItems: RawClipItem[]): ReelLibraryDraft {
     return {
@@ -542,6 +661,46 @@ export function RawClipsLibraryDashboard({
     e.preventDefault()
     setPage(1)
     setQ(searchInput)
+  }
+
+  function requestDeleteClip(clip: RawClipItem) {
+    setClipToDelete(clip)
+  }
+
+  async function handleConfirmDeleteClip() {
+    const jobId = selectedId ?? activeFolder?.id
+    if (!clipToDelete || !jobId) return
+    setDeletingClip(true)
+    try {
+      const res = await fetch(`/api/videos/raw-clips/library/${jobId}/clips`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: clipToDelete.path }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        folderDeleted?: boolean
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo eliminar el clip')
+
+      toast.success(`Clip eliminado`)
+
+      if (data.folderDeleted) {
+        handleBackToGrid()
+        setClipToDelete(null)
+        void loadLibrary()
+        return
+      }
+
+      setClipToDelete(null)
+      void loadFolderDetail(jobId)
+      void loadLibrary()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar')
+    } finally {
+      setDeletingClip(false)
+    }
   }
 
   const activeFolder = selectedFolder ?? selectedFromList
@@ -806,7 +965,12 @@ export function RawClipsLibraryDashboard({
               ) : (
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                   {clips.map((clip) => (
-                    <ClipPreviewCard key={clip.path} clip={clip} />
+                    <ClipPreviewCard
+                      key={clip.path}
+                      clip={clip}
+                      onDelete={() => requestDeleteClip(clip)}
+                      deleting={deletingClip && clipToDelete?.path === clip.path}
+                    />
                   ))}
                 </div>
               )}
@@ -819,6 +983,8 @@ export function RawClipsLibraryDashboard({
           clips={clips}
           loadingClips={loadingClips}
           onUseForNewReel={activeFolder && clips.length > 0 ? handleUseClipsForNewReel : undefined}
+          onDeleteClip={activeFolder && clips.length > 0 ? requestDeleteClip : undefined}
+          deletingClipPath={deletingClip ? clipToDelete?.path ?? null : null}
         />
       </div>
 
@@ -842,6 +1008,16 @@ export function RawClipsLibraryDashboard({
           setPage(1)
           void loadLibrary()
         }}
+      />
+
+      <DeleteClipConfirmModal
+        clip={clipToDelete}
+        open={!!clipToDelete}
+        deleting={deletingClip}
+        onClose={() => {
+          if (!deletingClip) setClipToDelete(null)
+        }}
+        onConfirm={() => void handleConfirmDeleteClip()}
       />
     </div>
   )

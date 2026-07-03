@@ -468,4 +468,77 @@ export async function fetchRawClipsFolderDetail(jobId: string): Promise<{
   return { folder, clips }
 }
 
+/** Elimina un clip de la carpeta (Storage + `raw_video_paths`). Si era el último, borra el job. */
+export async function deleteRawClip(
+  jobId: string,
+  clipPath: string
+): Promise<{ remainingClips: number; folderDeleted: boolean }> {
+  const normalizedPath = clipPath.trim()
+  if (!normalizedPath.startsWith(`${jobId}/`)) {
+    throw new Error('Ruta de clip inválida')
+  }
+  if (!isVideoClipPath(normalizedPath)) {
+    throw new Error('No es un clip de video')
+  }
+
+  const supabase = getServiceClient()
+  const { data: job, error: fetchError } = await supabase
+    .from('video_jobs_v2')
+    .select('id, raw_video_paths')
+    .eq('id', jobId)
+    .maybeSingle()
+  if (fetchError) throw new Error(fetchError.message)
+  if (!job) throw new Error('Carpeta no encontrada')
+
+  const storageRows = await fetchStorageObjectsForJob(jobId)
+  const pathSet = new Set<string>()
+  for (const p of job.raw_video_paths ?? []) {
+    if (isVideoClipPath(p)) pathSet.add(p)
+  }
+  for (const row of storageRows) {
+    if (isVideoClipPath(row.name)) pathSet.add(row.name)
+  }
+
+  if (!pathSet.has(normalizedPath)) {
+    throw new Error('Clip no encontrado en esta carpeta')
+  }
+
+  const { error: storageError } = await supabase.storage.from(RAW_BUCKET).remove([normalizedPath])
+  if (storageError) {
+    console.error('[raw-clips-library] storage.remove clip', normalizedPath, storageError.message)
+  }
+
+  pathSet.delete(normalizedPath)
+  const remainingPaths = [...pathSet].sort((a, b) => {
+    const ia = clipIndexFromPath(a)
+    const ib = clipIndexFromPath(b)
+    if (ia != null && ib != null) return ia - ib
+    return a.localeCompare(b)
+  })
+
+  if (remainingPaths.length === 0) {
+    const leftover = storageRows
+      .map((r) => r.name)
+      .filter((p) => p !== normalizedPath)
+    if (leftover.length) {
+      await supabase.storage.from(RAW_BUCKET).remove(leftover)
+    }
+    const { error: deleteError } = await supabase.from('video_jobs_v2').delete().eq('id', jobId)
+    if (deleteError) throw new Error(deleteError.message)
+    return { remainingClips: 0, folderDeleted: true }
+  }
+
+  const flowType = remainingPaths.length >= 2 ? 'multiple' : 'single'
+  const { error: updateError } = await supabase
+    .from('video_jobs_v2')
+    .update({
+      raw_video_paths: remainingPaths,
+      flow_type: flowType,
+    })
+    .eq('id', jobId)
+  if (updateError) throw new Error(updateError.message)
+
+  return { remainingClips: remainingPaths.length, folderDeleted: false }
+}
+
 export { formatBytes }
