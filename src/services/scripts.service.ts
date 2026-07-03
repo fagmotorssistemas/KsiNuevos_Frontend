@@ -4,6 +4,7 @@ import type {
   AssignmentsByDateResponse,
   GeneratedScriptApi,
   MonthOverviewResponse,
+  ScheduleLogEntry,
   ScriptAssignmentRow,
 } from '@/types/script-assignment'
 
@@ -98,6 +99,42 @@ export const scriptsService = {
     if (!res.ok) throw new Error(await parseError(res))
     const body = (await res.json()) as { script: { id: string; guion_escenas: unknown } }
     return body.script
+  },
+
+  async rescheduleAssignment(
+    assignmentId: string,
+    fechaDestino: string,
+    justificacion: string
+  ): Promise<{
+    id: string
+    fecha_asignacion: string
+    fecha_programada: string
+    reprogramaciones_count: number
+  }> {
+    const res = await fetch(`${SCRIPTS_API_BASE}/assignments/${assignmentId}/reschedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha_destino: fechaDestino, justificacion }),
+    })
+    if (!res.ok) throw new Error(await parseError(res))
+    const body = (await res.json()) as {
+      assignment: {
+        id: string
+        fecha_asignacion: string
+        fecha_programada: string
+        reprogramaciones_count: number
+      }
+    }
+    return body.assignment
+  },
+
+  async getAssignmentScheduleLog(assignmentId: string): Promise<ScheduleLogEntry[]> {
+    const res = await fetch(`${SCRIPTS_API_BASE}/assignments/${assignmentId}/schedule-log`, {
+      cache: 'no-store',
+    })
+    if (!res.ok) throw new Error(await parseError(res))
+    const body = (await res.json()) as { log?: ScheduleLogEntry[] }
+    return body.log ?? []
   },
 }
 

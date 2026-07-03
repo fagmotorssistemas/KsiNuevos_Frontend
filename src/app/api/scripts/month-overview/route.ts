@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
-import type { MonthOverviewItem, MonthOverviewResponse } from '@/types/script-assignment'
+import {
+  buildMonthOverviewItems,
+  buildReelCompletionIndex,
+  enrichArchiveRowsWithInventory,
+  SCRIPT_ASSIGNMENT_ACTIVE_SELECT,
+  SCRIPT_ASSIGNMENT_ARCHIVE_SELECT,
+  type RawArchiveRow,
+  type RawAssignmentRow,
+} from '@/lib/marketing/script-assignment-calendar'
+import type { MonthOverviewResponse } from '@/types/script-assignment'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,12 +27,6 @@ function parseMonthParam(raw: string | null): { mes: string; start: string; end:
     start: `${y}-${mm}-01`,
     end: `${y}-${mm}-${String(lastDay).padStart(2, '0')}`,
   }
-}
-
-function vehicleLabel(inv: { brand?: string | null; model?: string | null; year?: number | null } | null) {
-  if (!inv) return 'Vehículo'
-  const label = `${inv.brand ?? ''} ${inv.model ?? ''} ${inv.year ?? ''}`.trim()
-  return label || 'Vehículo'
 }
 
 export async function GET(request: NextRequest) {
@@ -43,42 +46,95 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message }, { status: 500 })
   }
 
-  const { data, error } = await supabase
-    .from('script_vehicle_assignments')
-    .select(
-      `
-      id,
-      fecha_asignacion,
-      status,
-      inventoryoracle:inventoryoracle (brand, model, year),
-      video_scripts (id)
-    `
-    )
-    .gte('fecha_asignacion', range.start)
-    .lte('fecha_asignacion', range.end)
-    .order('fecha_asignacion', { ascending: true })
+  let activeRows: RawAssignmentRow[] = []
+  {
+    const activeRes = await supabase
+      .from('script_vehicle_assignments')
+      .select(SCRIPT_ASSIGNMENT_ACTIVE_SELECT)
+      .or(
+        `and(fecha_asignacion.gte.${range.start},fecha_asignacion.lte.${range.end}),and(fecha_programada.gte.${range.start},fecha_programada.lte.${range.end})`
+      )
 
-  if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 })
+    if (
+      activeRes.error?.message?.includes('fecha_programada') ||
+      activeRes.error?.message?.includes('reprogramaciones_count')
+    ) {
+      const fallback = await supabase
+        .from('script_vehicle_assignments')
+        .select(
+          `
+          id,
+          vehicle_id,
+          fecha_asignacion,
+          status,
+          inventoryoracle:inventoryoracle (brand, model, year),
+          video_scripts (id)
+        `
+        )
+        .gte('fecha_asignacion', range.start)
+        .lte('fecha_asignacion', range.end)
+      if (fallback.error) {
+        return NextResponse.json({ message: fallback.error.message }, { status: 500 })
+      }
+      activeRows = (fallback.data ?? []).map((r) => {
+        const row = r as unknown as RawAssignmentRow & { fecha_asignacion: string }
+        return {
+          ...row,
+          fecha_programada: String(row.fecha_asignacion).slice(0, 10),
+          reprogramaciones_count: 0,
+        }
+      })
+    } else if (activeRes.error) {
+      return NextResponse.json({ message: activeRes.error.message }, { status: 500 })
+    } else {
+      activeRows = (activeRes.data ?? []) as unknown as RawAssignmentRow[]
+    }
   }
 
-  const items: MonthOverviewItem[] = (data ?? []).map((row) => {
-    const inv = row.inventoryoracle as
-      | { brand?: string | null; model?: string | null; year?: number | null }
-      | null
-    const scripts = row.video_scripts as { id: string }[] | null
-    const scriptCount = Array.isArray(scripts) ? scripts.length : 0
-    const status = String(row.status ?? '')
-    const guionGenerado = scriptCount > 0 || status === 'guion_generado'
+  const [archiveRes, archiveScriptsRes, jobsRes] = await Promise.all([
+    supabase
+      .from('script_vehicle_assignments_archive')
+      .select(SCRIPT_ASSIGNMENT_ARCHIVE_SELECT)
+      .gte('fecha_asignacion', range.start)
+      .lte('fecha_asignacion', range.end),
+    supabase
+      .from('video_scripts_archive')
+      .select('assignment_id')
+      .not('assignment_id', 'is', null),
+    supabase
+      .from('video_jobs_v2')
+      .select('inventory_vehicle_id, created_at')
+      .eq('status', 'completed')
+      .neq('flow_type', 'noticiero')
+      .not('inventory_vehicle_id', 'is', null)
+      .gte('created_at', `${range.start}T00:00:00-05:00`)
+      .lte('created_at', `${range.end}T23:59:59-05:00`),
+  ])
 
-    return {
-      fecha: String(row.fecha_asignacion).slice(0, 10),
-      assignment_id: row.id,
-      vehicle_label: vehicleLabel(inv),
-      guion_generado: guionGenerado,
-      status,
-    }
-  })
+  if (archiveRes.error) {
+    return NextResponse.json({ message: archiveRes.error.message }, { status: 500 })
+  }
+
+  const archiveRows = await enrichArchiveRowsWithInventory(
+    supabase,
+    (archiveRes.data ?? []) as Omit<RawArchiveRow, 'inventoryoracle'>[]
+  )
+
+  const archiveScriptIds = new Set<string>()
+  for (const row of archiveScriptsRes.data ?? []) {
+    const aid = row.assignment_id as string | null
+    if (aid) archiveScriptIds.add(aid)
+  }
+
+  const reelIndex = buildReelCompletionIndex(jobsRes.data ?? [])
+
+  const items = buildMonthOverviewItems(
+    activeRows,
+    archiveRows as RawArchiveRow[],
+    archiveScriptIds,
+    reelIndex,
+    range
+  )
 
   const body: MonthOverviewResponse = { mes: range.mes, items }
   return NextResponse.json(body)

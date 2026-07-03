@@ -31,9 +31,29 @@ export type AssignmentsByDateResponse = {
 export type MonthOverviewItem = {
   fecha: string
   assignment_id: string
+  vehicle_id: string
   vehicle_label: string
   guion_generado: boolean
   status: string
+  is_archived: boolean
+  slot_tipo: 'original' | 'reprogramado' | 'programado'
+  fecha_asignacion_original: string
+  fecha_programada: string
+  reel_cumplido: boolean
+  reprogramaciones_count: number
+  sombreado: boolean
+  readonly: boolean
+}
+
+export type ScheduleLogEntry = {
+  id: string
+  accion: string
+  fecha_origen: string
+  fecha_destino: string
+  justificacion: string
+  created_at: string
+  created_by: string
+  profiles?: { full_name: string | null } | null
 }
 
 export type MonthOverviewResponse = {

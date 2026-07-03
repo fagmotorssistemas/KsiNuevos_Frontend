@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   addMonths,
   eachDayOfInterval,
@@ -13,6 +13,7 @@ import {
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { GuionesAssignmentSlotModal } from '@/components/marketing/GuionesAssignmentSlotModal'
 import type { MonthOverviewItem } from '@/types/script-assignment'
 
 const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -23,6 +24,7 @@ type GuionesMonthCalendarProps = {
   loading: boolean
   onMesChange: (mes: string) => void
   onSelectDay: (fecha: string) => void
+  onReload?: () => void
 }
 
 function parseMes(mes: string): Date {
@@ -34,13 +36,19 @@ function toMesString(d: Date): string {
   return format(d, 'yyyy-MM')
 }
 
+function slotKey(item: MonthOverviewItem) {
+  return `${item.assignment_id}-${item.slot_tipo}-${item.fecha}`
+}
+
 export function GuionesMonthCalendar({
   mes,
   items,
   loading,
   onMesChange,
   onSelectDay,
+  onReload,
 }: GuionesMonthCalendarProps) {
+  const [selectedSlot, setSelectedSlot] = useState<MonthOverviewItem | null>(null)
   const monthDate = useMemo(() => parseMes(mes), [mes])
 
   const byDate = useMemo(() => {
@@ -64,13 +72,32 @@ export function GuionesMonthCalendar({
     monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
 
   const stats = useMemo(() => {
-    const total = items.length
-    const generated = items.filter((i) => i.guion_generado).length
-    return { total, generated, pending: total - generated }
+    const uniqueAssignments = new Set(items.map((i) => i.assignment_id))
+    const generated = new Set(
+      items.filter((i) => i.guion_generado).map((i) => i.assignment_id)
+    )
+    const reelsDone = new Set(
+      items.filter((i) => i.reel_cumplido).map((i) => i.assignment_id)
+    )
+    const total = uniqueAssignments.size
+    const generatedCount = generated.size
+    const reelCount = reelsDone.size
+    return {
+      total,
+      generated: generatedCount,
+      reels: reelCount,
+      pending: total - reelCount,
+    }
   }, [items])
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs text-amber-900 leading-relaxed">
+        <strong>Reel cumplido</strong> se detecta automáticamente al subir el video en{' '}
+        <strong>Marketing → Videos</strong> (mismo vehículo y misma fecha). Los ajustes manuales
+        de reprogramación dependen del usuario que los registra y requieren justificante.
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-2">
           <button
@@ -98,7 +125,10 @@ export function GuionesMonthCalendar({
             {stats.total} carros
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800">
-            {stats.generated} generados
+            {stats.generated} guiones
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-violet-50 text-violet-800">
+            {stats.reels} reels
           </span>
           <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800">
             {stats.pending} pendientes
@@ -127,8 +157,8 @@ export function GuionesMonthCalendar({
           <div className="grid grid-cols-7 auto-rows-auto">
             {calendarDays.map((day) => {
               const fecha = format(day, 'yyyy-MM-dd')
-              const inMonth = isSameMonth(day, monthDate)
               const cars = byDate.get(fecha) ?? []
+              const inMonth = isSameMonth(day, monthDate)
               const isToday = fecha === format(new Date(), 'yyyy-MM-dd')
 
               return (
@@ -156,23 +186,67 @@ export function GuionesMonthCalendar({
 
                   {cars.length > 0 && (
                     <ul className="space-y-1.5 w-full">
-                      {cars.map((car) => (
-                        <li
-                          key={car.assignment_id}
-                          className="flex items-start gap-2 rounded-lg bg-gray-50/90 border border-gray-100 px-2 py-1.5"
-                        >
-                          <span
+                      {cars.map((car) => {
+                        const dotClass = car.reel_cumplido
+                          ? 'bg-violet-600'
+                          : car.guion_generado
+                            ? 'bg-emerald-500'
+                            : 'bg-amber-400'
+
+                        return (
+                          <li
+                            key={slotKey(car)}
                             className={[
-                              'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
-                              car.guion_generado ? 'bg-emerald-500' : 'bg-amber-400',
+                              'flex items-start gap-2 rounded-lg border px-2 py-1.5 transition-colors',
+                              car.sombreado
+                                ? 'bg-gray-200/70 border-gray-200 opacity-75'
+                                : 'bg-gray-50/90 border-gray-100 hover:border-violet-200 hover:bg-violet-50/50',
+                              car.readonly ? 'border-dashed' : '',
                             ].join(' ')}
-                            title={car.guion_generado ? 'Guión generado' : 'Sin guión'}
-                          />
-                          <span className="text-xs leading-snug text-gray-800 font-semibold break-words">
-                            {car.vehicle_label}
-                          </span>
-                        </li>
-                      ))}
+                          >
+                            <button
+                              type="button"
+                              className="flex items-start gap-2 w-full text-left min-w-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedSlot(car)
+                              }}
+                            >
+                              <span
+                                className={[
+                                  'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
+                                  dotClass,
+                                ].join(' ')}
+                                title={
+                                  car.reel_cumplido
+                                    ? 'Reel subido'
+                                    : car.guion_generado
+                                      ? 'Guión generado'
+                                      : 'Pendiente'
+                                }
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span
+                                  className={[
+                                    'text-xs leading-snug font-semibold break-words block',
+                                    car.sombreado ? 'text-gray-500 line-through decoration-gray-400' : 'text-gray-800',
+                                  ].join(' ')}
+                                >
+                                  {car.vehicle_label}
+                                </span>
+                                {car.slot_tipo === 'reprogramado' && (
+                                  <span className="text-[10px] font-bold text-violet-700">
+                                    ↪ reprogramado
+                                  </span>
+                                )}
+                                {car.readonly && (
+                                  <span className="text-[10px] font-bold text-gray-400"> histórico</span>
+                                )}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </button>
@@ -184,15 +258,31 @@ export function GuionesMonthCalendar({
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
         <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-violet-600" />
+          Reel subido (cumplido)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
           Guión generado
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-amber-400" />
-          Pendiente / sin guión
+          Pendiente
         </span>
-        <span className="text-gray-400">Clic en un día con carros abre la vista del día.</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-5 w-8 rounded bg-gray-200/80 border border-gray-200" />
+          No grabado (día original)
+        </span>
+        <span className="text-gray-400">
+          Clic en el día abre la vista del día · clic en el carro abre detalle / reprogramar
+        </span>
       </div>
+
+      <GuionesAssignmentSlotModal
+        item={selectedSlot}
+        onClose={() => setSelectedSlot(null)}
+        onRescheduled={() => onReload?.()}
+      />
     </div>
   )
 }

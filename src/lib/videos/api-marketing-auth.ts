@@ -35,7 +35,7 @@ function resolveMarketingApiSubmodule(pathname: string): string | null {
 function staffMarketingApiEnumAllowed(ctx: PermissionContext): boolean {
   if (hasAnyReadPermission(ctx.map)) return false
   const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
-  return role === 'marketing' || role === 'contable'
+  return role === 'marketing' || role === 'contable' || role === 'vendedor'
 }
 
 function canAccessMarketingApi(pathname: string, ctx: PermissionContext): boolean {

@@ -181,7 +181,7 @@ function MarketingGuionesPageInner() {
           </h1>
           <p className="text-sm text-gray-600 mt-2 max-w-xl">
             {vista === 'mes'
-              ? 'Vista mensual: carros asignados por día y si el guión ya se generó (datos en base de datos).'
+              ? 'Vista mensual: carros asignados por día, guión generado y reel subido en Videos. Meses archivados son solo consulta.'
               : 'Ingresa palabras clave y genera guiones para las asignaciones del día objetivo. El cron selecciona vehículos de domingo a jueves para el siguiente día hábil.'}
           </p>
         </div>
@@ -289,6 +289,7 @@ function MarketingGuionesPageInner() {
           loading={monthLoading}
           onMesChange={(nextMes) => replaceParams({ mes: nextMes, vista: 'mes' })}
           onSelectDay={(fecha) => replaceParams({ vista: null, fecha, mes: fecha.slice(0, 7) })}
+          onReload={loadMonth}
         />
       )}
     </div>

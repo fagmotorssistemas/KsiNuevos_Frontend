@@ -4663,15 +4663,65 @@ export type Database = {
           },
         ]
       }
+      script_assignment_schedule_log: {
+        Row: {
+          accion: string
+          assignment_id: string
+          created_at: string
+          created_by: string
+          fecha_destino: string
+          fecha_origen: string
+          id: string
+          justificacion: string
+        }
+        Insert: {
+          accion?: string
+          assignment_id: string
+          created_at?: string
+          created_by: string
+          fecha_destino: string
+          fecha_origen: string
+          id?: string
+          justificacion: string
+        }
+        Update: {
+          accion?: string
+          assignment_id?: string
+          created_at?: string
+          created_by?: string
+          fecha_destino?: string
+          fecha_origen?: string
+          id?: string
+          justificacion?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "script_assignment_schedule_log_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "script_vehicle_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "script_assignment_schedule_log_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       script_vehicle_assignments: {
         Row: {
           created_at: string
           fecha_asignacion: string
+          fecha_programada: string
           guion_tipo: string | null
           id: string
           palabras_clave: string[]
           palabras_clave_at: string | null
           palabras_clave_por: string | null
+          reprogramaciones_count: number
           status: string
           vehicle_id: string
           vendedor_id: string
@@ -4679,11 +4729,13 @@ export type Database = {
         Insert: {
           created_at?: string
           fecha_asignacion: string
+          fecha_programada: string
           guion_tipo?: string | null
           id?: string
           palabras_clave?: string[]
           palabras_clave_at?: string | null
           palabras_clave_por?: string | null
+          reprogramaciones_count?: number
           status?: string
           vehicle_id: string
           vendedor_id: string
@@ -4691,11 +4743,13 @@ export type Database = {
         Update: {
           created_at?: string
           fecha_asignacion?: string
+          fecha_programada?: string
           guion_tipo?: string | null
           id?: string
           palabras_clave?: string[]
           palabras_clave_at?: string | null
           palabras_clave_por?: string | null
+          reprogramaciones_count?: number
           status?: string
           vehicle_id?: string
           vendedor_id?: string
