@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
+import { appendRawClipsPaths } from '@/lib/videos/raw-clips-library'
 
 const VIDEO_EXT = /\.(mp4|mov|avi|webm|mkv|m4v)$/i
 
@@ -28,6 +29,8 @@ function isVideoClipPath(path: string): boolean {
 interface CompleteLibraryBody {
   jobId: string
   paths: string[]
+  /** Si true, agrega paths a los existentes en lugar de reemplazarlos. */
+  append?: boolean
 }
 
 export async function POST(request: NextRequest) {
@@ -38,6 +41,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as CompleteLibraryBody
     const jobId = body.jobId?.trim()
     const paths = (body.paths ?? []).map((p) => p.trim()).filter(Boolean)
+    const append = body.append === true
 
     if (!jobId) {
       return NextResponse.json({ error: 'jobId es requerido' }, { status: 400 })
@@ -45,6 +49,11 @@ export async function POST(request: NextRequest) {
 
     if (!paths.length) {
       return NextResponse.json({ error: 'paths es requerido' }, { status: 400 })
+    }
+
+    if (append) {
+      const result = await appendRawClipsPaths(jobId, paths)
+      return NextResponse.json({ ok: true, jobId, clipCount: result.clipCount, appended: true })
     }
 
     for (const p of paths) {

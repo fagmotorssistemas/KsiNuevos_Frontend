@@ -12,6 +12,8 @@ import type {
   RawClipsFolderSummary,
   RawClipsLibraryStats,
 } from './raw-clips-types'
+import { VIDEO_MAX_CLIPS } from './clip-config'
+import type { FlowType } from './types'
 
 export type {
   RawClipItem,
@@ -539,6 +541,137 @@ export async function deleteRawClip(
   if (updateError) throw new Error(updateError.message)
 
   return { remainingClips: remainingPaths.length, folderDeleted: false }
+}
+
+export function sanitizeRawClipFilename(filename: string): string {
+  const base = filename.trim().split(/[/\\]/).pop() || 'video.mp4'
+  const dot = base.lastIndexOf('.')
+  const extRaw = dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  const stem = dot >= 0 ? base.slice(0, dot) : base
+  const ext = /^\.[a-z0-9]{1,8}$/.test(extRaw) ? extRaw : '.mp4'
+  const slug = stem
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'clip'
+  return `${slug}${ext}`
+}
+
+async function collectExistingVideoClipPaths(jobId: string): Promise<string[]> {
+  const supabase = getServiceClient()
+  const { data: job, error } = await supabase
+    .from('video_jobs_v2')
+    .select('raw_video_paths')
+    .eq('id', jobId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!job) throw new Error('Carpeta no encontrada')
+
+  const pathSet = new Set<string>()
+  for (const p of job.raw_video_paths ?? []) {
+    if (isVideoClipPath(p)) pathSet.add(p)
+  }
+  const storageRows = await fetchStorageObjectsForJob(jobId)
+  for (const row of storageRows) {
+    if (isVideoClipPath(row.name)) pathSet.add(row.name)
+  }
+  return [...pathSet]
+}
+
+/** Prepara URLs firmadas para subir clips adicionales a una carpeta existente. */
+export async function prepareAppendRawClipsUpload(
+  jobId: string,
+  files: Array<{ filename: string }>
+): Promise<{
+  uploads: Array<{ path: string; signedUrl: string; token: string }>
+  existingClipCount: number
+}> {
+  if (!files.length) throw new Error('Selecciona al menos un clip de video')
+
+  const supabase = getServiceClient()
+  const { data: job, error: fetchError } = await supabase
+    .from('video_jobs_v2')
+    .select('id, inventory_vehicle_id')
+    .eq('id', jobId)
+    .maybeSingle()
+  if (fetchError) throw new Error(fetchError.message)
+  if (!job) throw new Error('Carpeta no encontrada')
+
+  const existingPaths = await collectExistingVideoClipPaths(jobId)
+  const existingClipCount = existingPaths.length
+  const totalAfter = existingClipCount + files.length
+
+  if (totalAfter > VIDEO_MAX_CLIPS) {
+    throw new Error(
+      `Máximo ${VIDEO_MAX_CLIPS} clips por carpeta (hay ${existingClipCount}, intentas agregar ${files.length})`
+    )
+  }
+
+  const uploads: Array<{ path: string; signedUrl: string; token: string }> = []
+  const useIndexedNames = totalAfter >= 2
+
+  for (let i = 0; i < files.length; i++) {
+    const safeFilename = sanitizeRawClipFilename(files[i]!.filename)
+    const timestamp = Date.now() + i
+    const clipIndex = existingClipCount + i
+    const path = useIndexedNames
+      ? `${jobId}/clip_${clipIndex}_${timestamp}_${safeFilename}`
+      : `${jobId}/${timestamp}_${safeFilename}`
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(RAW_BUCKET)
+      .createSignedUploadUrl(path)
+
+    if (signedError || !signedData) {
+      throw new Error(
+        `Error generando URL de upload para ${files[i]!.filename}: ${signedError?.message ?? 'desconocido'}`
+      )
+    }
+
+    uploads.push({
+      path,
+      signedUrl: signedData.signedUrl,
+      token: signedData.token,
+    })
+  }
+
+  return { uploads, existingClipCount }
+}
+
+/** Registra paths nuevos en una carpeta existente (append). */
+export async function appendRawClipsPaths(
+  jobId: string,
+  newPaths: string[]
+): Promise<{ clipCount: number }> {
+  for (const p of newPaths) {
+    if (!p.startsWith(`${jobId}/`)) throw new Error(`Ruta inválida: ${p}`)
+    if (!isVideoClipPath(p)) throw new Error(`No es un clip de video: ${p}`)
+  }
+
+  const existingPaths = await collectExistingVideoClipPaths(jobId)
+  const merged = [...new Set([...existingPaths, ...newPaths])].sort((a, b) => {
+    const ia = clipIndexFromPath(a)
+    const ib = clipIndexFromPath(b)
+    if (ia != null && ib != null) return ia - ib
+    return a.localeCompare(b)
+  })
+
+  const flowType: FlowType = merged.length >= 2 ? 'multiple' : 'single'
+  const supabase = getServiceClient()
+  const { error: updateError } = await supabase
+    .from('video_jobs_v2')
+    .update({
+      raw_video_paths: merged,
+      flow_type: flowType,
+      status: 'pending',
+      current_step: 'Clips en biblioteca',
+      progress_percentage: 0,
+    })
+    .eq('id', jobId)
+
+  if (updateError) throw new Error(updateError.message)
+  return { clipCount: merged.length }
 }
 
 export { formatBytes }

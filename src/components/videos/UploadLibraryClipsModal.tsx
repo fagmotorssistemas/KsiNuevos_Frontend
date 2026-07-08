@@ -16,9 +16,20 @@ interface UploadLibraryClipsModalProps {
   isOpen: boolean
   onClose: () => void
   onSaved: () => void
+  /** Agrega clips a una carpeta existente (sin crear job nuevo). */
+  existingFolder?: {
+    id: string
+    title: string
+    clipCount: number
+  } | null
 }
 
-export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibraryClipsModalProps) {
+export function UploadLibraryClipsModal({
+  isOpen,
+  onClose,
+  onSaved,
+  existingFolder = null,
+}: UploadLibraryClipsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inventoryRows, setInventoryRows] = useState<InventoryPickerRow[]>([])
   const [loadingInventory, setLoadingInventory] = useState(false)
@@ -26,6 +37,11 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
   const [files, setFiles] = useState<File[]>([])
   const [progress, setProgress] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const isAppendMode = !!existingFolder
+  const maxClipsAllowed = isAppendMode
+    ? Math.max(0, VIDEO_MAX_CLIPS - existingFolder.clipCount)
+    : VIDEO_MAX_CLIPS
 
   const resetForm = useCallback(() => {
     setVehicleId('')
@@ -38,6 +54,11 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
   useEffect(() => {
     if (!isOpen) {
       resetForm()
+      return
+    }
+
+    if (isAppendMode) {
+      setLoadingInventory(false)
       return
     }
 
@@ -65,7 +86,7 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
     return () => {
       cancelled = true
     }
-  }, [isOpen, resetForm])
+  }, [isOpen, resetForm, isAppendMode])
 
   function handleFilesChange(list: FileList | null) {
     if (!list?.length) return
@@ -76,9 +97,13 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
     }
     setFiles((prev) => {
       const merged = [...prev, ...picked]
-      if (merged.length > VIDEO_MAX_CLIPS) {
-        toast.error(`Máximo ${VIDEO_MAX_CLIPS} clips por carpeta`)
-        return merged.slice(0, VIDEO_MAX_CLIPS)
+      if (merged.length > maxClipsAllowed) {
+        toast.error(
+          isAppendMode
+            ? `Puedes agregar hasta ${maxClipsAllowed} clip(s) más (máx. ${VIDEO_MAX_CLIPS} por carpeta)`
+            : `Máximo ${VIDEO_MAX_CLIPS} clips por carpeta`
+        )
+        return merged.slice(0, maxClipsAllowed)
       }
       return merged
     })
@@ -89,12 +114,16 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
   }
 
   async function handleSave() {
-    if (!vehicleId.trim()) {
+    if (!isAppendMode && !vehicleId.trim()) {
       toast.error('Selecciona el vehículo del inventario')
       return
     }
     if (files.length === 0) {
       toast.error('Añade al menos un clip de video')
+      return
+    }
+    if (isAppendMode && maxClipsAllowed <= 0) {
+      toast.error(`Esta carpeta ya tiene el máximo de ${VIDEO_MAX_CLIPS} clips`)
       return
     }
 
@@ -107,32 +136,63 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
     }
 
     setSaving(true)
-    setProgress('Creando carpeta en biblioteca…')
+    setProgress(isAppendMode ? 'Preparando subida…' : 'Creando carpeta en biblioteca…')
 
     try {
-      const createRes = await fetch('/api/videos/raw-clips/library/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inventory_vehicle_id: vehicleId.trim(),
-          files: files.map((f) => ({
-            filename: f.name,
-            mimeType: f.type || 'video/mp4',
-          })),
-        }),
-      })
+      let jobId: string
+      let uploads: Array<{ path: string; signedUrl: string; token: string }>
 
-      const createData = (await createRes.json()) as {
-        jobId?: string
-        uploads?: Array<{ path: string; signedUrl: string; token: string }>
-        error?: string
+      if (isAppendMode) {
+        const appendRes = await fetch(`/api/videos/raw-clips/library/${existingFolder.id}/clips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: files.map((f) => ({
+              filename: f.name,
+              mimeType: f.type || 'video/mp4',
+            })),
+          }),
+        })
+
+        const appendData = (await appendRes.json()) as {
+          jobId?: string
+          uploads?: Array<{ path: string; signedUrl: string; token: string }>
+          error?: string
+        }
+
+        if (!appendRes.ok || !appendData.jobId || !appendData.uploads?.length) {
+          throw new Error(appendData.error ?? 'Error preparando la subida')
+        }
+
+        jobId = appendData.jobId
+        uploads = appendData.uploads
+      } else {
+        const createRes = await fetch('/api/videos/raw-clips/library/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inventory_vehicle_id: vehicleId.trim(),
+            files: files.map((f) => ({
+              filename: f.name,
+              mimeType: f.type || 'video/mp4',
+            })),
+          }),
+        })
+
+        const createData = (await createRes.json()) as {
+          jobId?: string
+          uploads?: Array<{ path: string; signedUrl: string; token: string }>
+          error?: string
+        }
+
+        if (!createRes.ok || !createData.jobId || !createData.uploads?.length) {
+          throw new Error(createData.error ?? 'Error preparando la subida')
+        }
+
+        jobId = createData.jobId
+        uploads = createData.uploads
       }
 
-      if (!createRes.ok || !createData.jobId || !createData.uploads?.length) {
-        throw new Error(createData.error ?? 'Error preparando la subida')
-      }
-
-      const { jobId, uploads } = createData
       const supabase = createClient()
 
       for (let i = 0; i < files.length; i++) {
@@ -143,13 +203,14 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
         })
       }
 
-      setProgress('Guardando carpeta…')
+      setProgress(isAppendMode ? 'Guardando clips…' : 'Guardando carpeta…')
       const completeRes = await fetch('/api/videos/raw-clips/library/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId,
           paths: uploads.map((u) => u.path),
+          append: isAppendMode,
         }),
       })
 
@@ -158,7 +219,11 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
         throw new Error(completeData.error ?? 'Error finalizando la carpeta')
       }
 
-      toast.success(`${files.length} clip(s) guardados en biblioteca`)
+      toast.success(
+        isAppendMode
+          ? `${files.length} clip(s) agregados a la carpeta`
+          : `${files.length} clip(s) guardados en biblioteca`
+      )
       onSaved()
       onClose()
     } catch (err) {
@@ -183,10 +248,18 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
             <h2 id="upload-library-clips-title" className="text-lg font-bold text-gray-900">
-              Subir clips a biblioteca
+              {isAppendMode ? 'Agregar clips a carpeta' : 'Subir clips a biblioteca'}
             </h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              Elige el vehículo y sube clips en bruto para usarlos después en un Reel.
+              {isAppendMode ? (
+                <>
+                  Carpeta: <span className="font-medium text-gray-700">{existingFolder.title}</span>
+                  {' · '}
+                  {existingFolder.clipCount} clip{existingFolder.clipCount === 1 ? '' : 's'} actuales
+                </>
+              ) : (
+                'Elige el vehículo y sube clips en bruto para usarlos después en un Reel.'
+              )}
             </p>
           </div>
           <button
@@ -201,6 +274,7 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          {!isAppendMode ? (
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-gray-800">
               Vehículo del inventario <span className="text-red-500">*</span>
@@ -213,6 +287,7 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
               onSelect={setVehicleId}
             />
           </div>
+          ) : null}
 
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-gray-800">
@@ -235,7 +310,12 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
             >
               <Upload className="h-8 w-8 text-violet-500" />
               <span className="font-medium">Toca para elegir videos</span>
-              <span className="text-xs text-gray-400">MP4, MOV, WEBM… · máx. {VIDEO_MAX_CLIPS} clips</span>
+              <span className="text-xs text-gray-400">
+                MP4, MOV, WEBM… ·{' '}
+                {isAppendMode
+                  ? `hasta ${maxClipsAllowed} clip(s) más`
+                  : `máx. ${VIDEO_MAX_CLIPS} clips`}
+              </span>
             </button>
 
             {files.length > 0 ? (
@@ -278,11 +358,11 @@ export function UploadLibraryClipsModal({ isOpen, onClose, onSaved }: UploadLibr
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving || !vehicleId || files.length === 0}
+            disabled={saving || (!isAppendMode && !vehicleId) || files.length === 0 || maxClipsAllowed <= 0}
             className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {saving ? 'Guardando…' : 'Guardar clips'}
+            {saving ? 'Guardando…' : isAppendMode ? 'Agregar clips' : 'Guardar clips'}
           </button>
         </div>
       </div>

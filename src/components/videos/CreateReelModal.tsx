@@ -34,7 +34,13 @@ import {
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { compressJobClipsOrThrow } from '@/lib/videos/compress-job-clips-client'
-import { buildFilenameClipOrderIndices, sortClipIndicesByFileName } from './sort-video-files-by-name'
+import { sortClipIndicesByFileName } from './sort-video-files-by-name'
+import {
+  buildManualClipOrderFinalizePayload,
+  libraryUsesPhysicalClipReorder,
+  remapUiClipIndexToStorageAfterLibraryReorder,
+  syncManualClipOrderOnEligibilityChange,
+} from './manual-clip-order-submit'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
 import { readLocalVideoDurationSeconds } from './read-local-video-duration'
 import { readRemoteVideoDurationSeconds } from './read-remote-video-duration'
@@ -387,11 +393,9 @@ export function CreateReelModal({
   useEffect(() => {
     if (!manualFullClipOrderEnabled || flowType !== 'multiple' || activeClipCount < 2) return
     const eligible = clipUiFiles.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
-    setManualClipOrderIndices((prev) => {
-      const kept = prev.filter((i) => eligible.includes(i))
-      const missing = eligible.filter((i) => !kept.includes(i))
-      return sortClipIndicesByFileName(clipUiFiles, [...kept, ...missing])
-    })
+    setManualClipOrderIndices((prev) =>
+      syncManualClipOrderOnEligibilityChange(prev, eligible, clipUiFiles)
+    )
   }, [
     clipUiFiles,
     activeClipCount,
@@ -580,13 +584,49 @@ export function CreateReelModal({
       scriptPdfPath = scriptUpload.path
     }
 
-    const voiceOverPayload =
+    const introIdx = manualFullClipOrderEnabled ? undefined : manualIntroPayload()
+    const canonV = canonicalVehiclePayload()
+
+    const libraryPhysicalReorder =
+      manualFullClipOrderEnabled &&
+      libraryUsesPhysicalClipReorder(
+        true,
+        manualFullClipOrderEnabled,
+        manualClipOrderIndices,
+        libraryClips.length
+      )
+
+    const remapStorageIndex = (uiIndex: number) =>
+      libraryPhysicalReorder
+        ? remapUiClipIndexToStorageAfterLibraryReorder(uiIndex, manualClipOrderIndices)
+        : uiIndex
+
+    let clipOrderPayload: Record<string, unknown> = {}
+    try {
+      clipOrderPayload = buildManualClipOrderFinalizePayload({
+        flowType,
+        clipCount: orderedClips.length,
+        manualFullClipOrderEnabled,
+        forceAllManualOrderClips,
+        manualClipOrderIndices,
+        clipUiFiles,
+        usingLibraryClips: true,
+        hasManualIntro: !!(introIdx && introIdx.length > 0),
+        isBlocked: clipIndexBlockedForNarrative,
+      })
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(String(err))
+    }
+
+    const voiceOverPayloadResolved =
       flowType === 'multiple' && orderedClips.length >= 2
         ? voiceOverMode === 'clip'
           ? {
-              voiceOverBaseClipIndex: voiceOverClipIndex,
+              voiceOverBaseClipIndex: remapStorageIndex(voiceOverClipIndex),
               ...(voiceOverOverlayClipIndices.length > 0
-                ? { voiceOverOverlayClipIndices }
+                ? {
+                    voiceOverOverlayClipIndices: voiceOverOverlayClipIndices.map(remapStorageIndex),
+                  }
                 : {}),
             }
           : voiceOverMode === 'mp3' && voiceOverStoredPath && voiceOverMp3DurationSec != null
@@ -594,45 +634,18 @@ export function CreateReelModal({
                 voiceOverAudioPath: voiceOverStoredPath,
                 voiceOverMp3DurationSec: voiceOverMp3DurationSec,
                 ...(voiceOverOverlayClipIndices.length > 0
-                  ? { voiceOverOverlayClipIndices }
+                  ? {
+                      voiceOverOverlayClipIndices: voiceOverOverlayClipIndices.map(remapStorageIndex),
+                    }
                   : {}),
               }
             : {}
         : {}
 
-    const introIdx = manualFullClipOrderEnabled ? undefined : manualIntroPayload()
-    const canonV = canonicalVehiclePayload()
-
-    let clipOrderPayload: Record<string, unknown> = {}
-    if (flowType === 'multiple' && orderedClips.length >= 2 && !(introIdx && introIdx.length > 0)) {
-      const eligible = buildFilenameClipOrderIndices(clipUiFiles, clipIndexBlockedForNarrative)
-      const order =
-        manualFullClipOrderEnabled && manualClipOrderIndices.length > 0
-          ? manualClipOrderIndices
-          : eligible
-
-      const ok =
-        eligible.length > 0 &&
-        eligible.length === order.length &&
-        eligible.every((i) => order.includes(i))
-      if (!ok) {
-        throw new Error(
-          'Orden de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
-        )
-      }
-
-      clipOrderPayload = {
-        manualClipOrderIndices: order,
-        ...(manualFullClipOrderEnabled && forceAllManualOrderClips
-          ? { forceAllManualOrderClips: true }
-          : {}),
-      }
-    }
-
     const finalizePayload = {
       paths: destPaths,
       ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
-      ...voiceOverPayload,
+      ...voiceOverPayloadResolved,
       ...(scriptPdfPath ? { scriptPdfPath } : {}),
       ...(introIdx && introIdx.length > 0 ? { manualIntroClipIndices: introIdx } : {}),
       ...clipOrderPayload,
@@ -824,29 +837,20 @@ export function CreateReelModal({
       const canonV = canonicalVehiclePayload()
 
       let clipOrderPayload: Record<string, unknown> = {}
-      if (flowType === 'multiple' && files.length >= 2 && !(introIdx && introIdx.length > 0)) {
-        const eligible = buildFilenameClipOrderIndices(files, clipIndexBlockedForNarrative)
-        const order =
-          manualFullClipOrderEnabled && manualClipOrderIndices.length > 0
-            ? manualClipOrderIndices
-            : eligible
-
-        const ok =
-          eligible.length > 0 &&
-          eligible.length === order.length &&
-          eligible.every((i) => order.includes(i))
-        if (!ok) {
-          throw new Error(
-            'Orden de clips: revisa que la lista incluya exactamente todos los clips del montaje (sin el de VO ni los planos reservados).'
-          )
-        }
-
-        clipOrderPayload = {
-          manualClipOrderIndices: order,
-          ...(manualFullClipOrderEnabled && forceAllManualOrderClips
-            ? { forceAllManualOrderClips: true }
-            : {}),
-        }
+      try {
+        clipOrderPayload = buildManualClipOrderFinalizePayload({
+          flowType,
+          clipCount: files.length,
+          manualFullClipOrderEnabled,
+          forceAllManualOrderClips,
+          manualClipOrderIndices,
+          clipUiFiles,
+          usingLibraryClips: false,
+          hasManualIntro: !!(introIdx && introIdx.length > 0),
+          isBlocked: clipIndexBlockedForNarrative,
+        })
+      } catch (err) {
+        throw err instanceof Error ? err : new Error(String(err))
       }
 
       const finalizePayload = {
@@ -1434,8 +1438,10 @@ export function CreateReelModal({
                           if (on) {
                             setManualIntroEnabled(false)
                             setManualIntroSlots([null, null, null])
-                            const eligible = clipUiFiles.map((_, i) => i).filter((i) => !clipIndexBlockedForNarrative(i))
-                            setManualClipOrderIndices(sortClipIndicesByFileName(files, eligible))
+                            const eligible = clipUiFiles
+                              .map((_, i) => i)
+                              .filter((i) => !clipIndexBlockedForNarrative(i))
+                            setManualClipOrderIndices(sortClipIndicesByFileName(clipUiFiles, eligible))
                           } else {
                             setForceAllManualOrderClips(false)
                           }

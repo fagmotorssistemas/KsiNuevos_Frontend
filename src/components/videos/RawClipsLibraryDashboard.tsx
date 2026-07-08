@@ -30,6 +30,7 @@ import type {
   RawClipsLibraryStats,
 } from '@/lib/videos/raw-clips-types'
 import { formatBytes } from '@/lib/videos/resolve-job-vehicle'
+import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 
 type LibraryResponse = {
   folders: RawClipsFolderSummary[]
@@ -171,6 +172,8 @@ function InfoSidebar({
   onUseForNewReel,
   onDeleteClip,
   deletingClipPath,
+  onAddClips,
+  canAddClips,
 }: {
   folder: RawClipsFolderSummary | null
   clips: RawClipItem[]
@@ -178,6 +181,8 @@ function InfoSidebar({
   onUseForNewReel?: () => void
   onDeleteClip?: (clip: RawClipItem) => void
   deletingClipPath?: string | null
+  onAddClips?: () => void
+  canAddClips?: boolean
 }) {
   if (!folder) {
     return (
@@ -286,6 +291,16 @@ function InfoSidebar({
         </div>
 
         <div className="flex flex-col gap-2">
+          {canAddClips && onAddClips ? (
+            <button
+              type="button"
+              onClick={onAddClips}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-700 hover:bg-violet-100"
+            >
+              <Plus className="h-4 w-4" />
+              Agregar clips
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onUseForNewReel}
@@ -541,6 +556,11 @@ export function RawClipsLibraryDashboard({
   const [viewMode, setViewMode] = useState<'grid' | 'folder'>('grid')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [uploadTargetFolder, setUploadTargetFolder] = useState<{
+    id: string
+    title: string
+    clipCount: number
+  } | null>(null)
   const [reelLibraryDraft, setReelLibraryDraft] = useState<ReelLibraryDraft | null>(null)
   const [clipToDelete, setClipToDelete] = useState<RawClipItem | null>(null)
   const [deletingClip, setDeletingClip] = useState(false)
@@ -703,7 +723,28 @@ export function RawClipsLibraryDashboard({
     }
   }
 
+  function openNewFolderUpload() {
+    setUploadTargetFolder(null)
+    setIsUploadModalOpen(true)
+  }
+
+  function openAddClipsToFolder(folder: RawClipsFolderSummary) {
+    setUploadTargetFolder({
+      id: folder.id,
+      title: folder.title,
+      clipCount: clips.length || folder.clipCount,
+    })
+    setIsUploadModalOpen(true)
+  }
+
+  function handleUploadModalClose() {
+    setIsUploadModalOpen(false)
+    setUploadTargetFolder(null)
+  }
+
   const activeFolder = selectedFolder ?? selectedFromList
+  const canAddMoreClips =
+    !!activeFolder && (clips.length || activeFolder.clipCount) < VIDEO_MAX_CLIPS
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const pageTitle =
@@ -802,12 +843,22 @@ export function RawClipsLibraryDashboard({
               {viewMode === 'grid' && !embedded ? (
                 <button
                   type="button"
-                  onClick={() => setIsUploadModalOpen(true)}
+                  onClick={openNewFolderUpload}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm hover:bg-violet-700"
                   title="Subir clips a biblioteca"
                   aria-label="Subir clips a biblioteca"
                 >
                   <Plus className="h-5 w-5" />
+                </button>
+              ) : null}
+              {viewMode === 'folder' && activeFolder && canAddMoreClips ? (
+                <button
+                  type="button"
+                  onClick={() => openAddClipsToFolder(activeFolder)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar clips
                 </button>
               ) : null}
               {viewMode === 'folder' ? (
@@ -961,7 +1012,19 @@ export function RawClipsLibraryDashboard({
                   <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
                 </div>
               ) : clips.length === 0 ? (
-                <p className="text-sm text-gray-500">No se encontraron clips en esta carpeta.</p>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+                  <p className="text-sm text-gray-500">No se encontraron clips en esta carpeta.</p>
+                  {activeFolder && canAddMoreClips ? (
+                    <button
+                      type="button"
+                      onClick={() => openAddClipsToFolder(activeFolder)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Agregar clips
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                   {clips.map((clip) => (
@@ -985,6 +1048,10 @@ export function RawClipsLibraryDashboard({
           onUseForNewReel={activeFolder && clips.length > 0 ? handleUseClipsForNewReel : undefined}
           onDeleteClip={activeFolder && clips.length > 0 ? requestDeleteClip : undefined}
           deletingClipPath={deletingClip ? clipToDelete?.path ?? null : null}
+          onAddClips={
+            activeFolder && canAddMoreClips ? () => openAddClipsToFolder(activeFolder) : undefined
+          }
+          canAddClips={canAddMoreClips}
         />
       </div>
 
@@ -1003,9 +1070,14 @@ export function RawClipsLibraryDashboard({
 
       <UploadLibraryClipsModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={handleUploadModalClose}
+        existingFolder={uploadTargetFolder}
         onSaved={() => {
-          setPage(1)
+          if (uploadTargetFolder) {
+            void loadFolderDetail(uploadTargetFolder.id)
+          } else {
+            setPage(1)
+          }
           void loadLibrary()
         }}
       />
