@@ -123,8 +123,10 @@ export function VideoUploader({ flowType, files, onFilesChange, previewUrls }: V
         <div className="space-y-2">
           {flowType === 'multiple' && files.length >= 2 && (
             <p className="text-xs text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 leading-relaxed">
-              Clips ordenados por secuencia del nombre (ej. IMG_5114 → IMG_5115 → IMG_5118). Si falta un
-              número en la serie, se usa solo lo que subiste.
+              Clips ordenados por orden de grabación: iPhone <code className="text-[11px]">IMG_5114 → IMG_5115</code>,
+              DJI Pocket 3 / Mimo por hora en el nombre (mezcla <code className="text-[11px]">Dji Mimo</code> y{' '}
+              <code className="text-[11px]">dji_mimo_</code> incluida). Si falta un número en la serie IMG, se usa solo
+              lo que subiste.
             </p>
           )}
           {files.map((file, i) => {

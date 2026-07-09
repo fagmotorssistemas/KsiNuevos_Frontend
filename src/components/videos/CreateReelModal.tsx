@@ -1452,7 +1452,7 @@ export function CreateReelModal({
                         <span className="block text-xs text-gray-600 mt-0.5 leading-relaxed">
                           {forceAllManualOrderClips
                             ? 'Lista obligatoria: un corte de cada clip en el orden de abajo (arrastra la lista). Sin recorte automático por duración.'
-                            : 'El Reel ya usa el orden por nombre (IMG_…). Marca esto solo si quieres arrastrar y cambiar la secuencia. No se combina con Intro fija (emergencia).'}
+                            : 'El Reel ya usa el orden por grabación (IMG_… o hora DJI Mimo). Marca esto solo si quieres arrastrar y cambiar la secuencia. No se combina con Intro fija (emergencia).'}
                         </span>
                       </span>
                     </label>
