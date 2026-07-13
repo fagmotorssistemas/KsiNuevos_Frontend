@@ -78,7 +78,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'taller', slug: 'gastos-pagos', name: 'Gastos y pagos', sortOrder: 5 },
   { moduleSlug: 'taller', slug: 'personal-taller', name: 'Personal', sortOrder: 6 },
   // Finanzas
-  { moduleSlug: 'finanzas', slug: 'cartera-clientes', name: 'Cartera de clientes', sortOrder: 1, routePrefixes: ['/wallet'] },
+  { moduleSlug: 'finanzas', slug: 'cartera-clientes', name: 'Cartera de clientes', sortOrder: 1, routePrefixes: ['/wallet', '/mensajes-cartera'] },
   { moduleSlug: 'finanzas', slug: 'cartera-manual', name: 'Cartera manual', sortOrder: 2, routePrefixes: ['/cartera-manual'] },
   { moduleSlug: 'finanzas', slug: 'cuotas-pb', name: 'Cuotas (PB)', sortOrder: 3 },
   { moduleSlug: 'finanzas', slug: 'contratos-pb', name: 'Contratos (PB)', sortOrder: 4, routePrefixes: ['/contracts'] },

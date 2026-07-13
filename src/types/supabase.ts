@@ -431,7 +431,9 @@ export type Database = {
           id: number
           nombre: string | null
           notificado: boolean
+          numero_cambiado: boolean
           proximo_envio_at: string | null
+          razon_no_envio: string | null
           telefono: string | null
           ultima_etapa_enviada: string | null
           updated_at: string
@@ -448,7 +450,9 @@ export type Database = {
           id?: number
           nombre?: string | null
           notificado?: boolean
+          numero_cambiado?: boolean
           proximo_envio_at?: string | null
+          razon_no_envio?: string | null
           telefono?: string | null
           ultima_etapa_enviada?: string | null
           updated_at?: string
@@ -465,7 +469,9 @@ export type Database = {
           id?: number
           nombre?: string | null
           notificado?: boolean
+          numero_cambiado?: boolean
           proximo_envio_at?: string | null
+          razon_no_envio?: string | null
           telefono?: string | null
           ultima_etapa_enviada?: string | null
           updated_at?: string

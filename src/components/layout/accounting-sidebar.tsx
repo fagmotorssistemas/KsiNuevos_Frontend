@@ -23,6 +23,7 @@ import {
     ShieldCheck,
     HandCoins,
     FileCheck2,
+    MessageSquareOff,
 } from 'lucide-react';
 
 import {
@@ -46,6 +47,7 @@ const menuItems: MenuItem[] = [
     // { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Cartera', href: '/wallet', icon: Wallet },
     { name: 'Cartera manual', href: '/cartera-manual', icon: HandCoins },
+    { name: 'Mensajes cartera', href: '/mensajes-cartera', icon: MessageSquareOff },
     { name: 'Personal', href: '/employee', icon: Users },
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
