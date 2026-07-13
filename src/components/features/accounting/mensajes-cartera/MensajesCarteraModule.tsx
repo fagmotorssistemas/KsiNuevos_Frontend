@@ -84,6 +84,7 @@ export function MensajesCarteraModule() {
     } catch (e) {
       console.error(e);
       toast.error(getErrorMessage(e, "No se pudo cargar clientes de cartera"));
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -308,6 +309,12 @@ export function MensajesCarteraModule() {
                 ? "No hay clientes en cobranza automática"
                 : "Sin resultados para este filtro"}
             </p>
+            {rows.length === 0 && (
+              <p className="max-w-sm text-xs text-slate-400">
+                Si acabas de activar el permiso, cierra sesión y vuelve a entrar,
+                o pulsa reintentar.
+              </p>
+            )}
             {rows.length === 0 && (
               <button
                 type="button"
