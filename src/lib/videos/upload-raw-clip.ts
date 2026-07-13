@@ -153,6 +153,8 @@ export async function uploadRawVideoClip(
   let uploadFile = fileWithResolvedVideoMime(file)
   let compressionAttempted = false
 
+  // Orientación vertical: paso opcional aparte (botón "Enderezar orientación" en biblioteca).
+  // La subida sigue directa a Storage; no usar ffmpeg.wasm aquí (muy lento).
   // Compresión proactiva en navegador (ffmpeg.wasm) para clips >32 MB antes de subir.
   // Requiere crossOriginIsolated (COOP/COEP en /marketing). Si falla, se sube el original.
   // CreateReelModal además llama a Nest compress-clips tras la subida (paso 2.5).

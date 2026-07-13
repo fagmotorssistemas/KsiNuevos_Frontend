@@ -16,10 +16,14 @@ import {
   Search,
   SlidersHorizontal,
   ExternalLink,
+  Download,
+  RotateCw,
+  FlipVertical2,
   Sparkles,
   Trash2,
   AlertTriangle,
 } from 'lucide-react'
+import { downloadRawClipsFolderAsZip } from '@/lib/videos/download-raw-clips-folder'
 import { toast } from 'sonner'
 import { CreateReelModal } from '@/components/videos/CreateReelModal'
 import { UploadLibraryClipsModal } from '@/components/videos/UploadLibraryClipsModal'
@@ -165,6 +169,17 @@ function FolderCard({
   )
 }
 
+function parseClipIndexFromPath(path: string): number | null {
+  const m = path.match(/clip_(\d+)_/)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) ? n : null
+}
+
+function repairPathsStorageKey(folderId: string): string {
+  return `reel-orient-repair:${folderId}`
+}
+
 function InfoSidebar({
   folder,
   clips,
@@ -174,6 +189,13 @@ function InfoSidebar({
   deletingClipPath,
   onAddClips,
   canAddClips,
+  onDownloadFolder,
+  downloadingFolder,
+  onNormalizeOrientation,
+  normalizingOrientation,
+  onRepairUpsideDown,
+  repairingUpsideDown,
+  canRepairUpsideDown,
 }: {
   folder: RawClipsFolderSummary | null
   clips: RawClipItem[]
@@ -183,6 +205,13 @@ function InfoSidebar({
   deletingClipPath?: string | null
   onAddClips?: () => void
   canAddClips?: boolean
+  onDownloadFolder?: () => void
+  downloadingFolder?: boolean
+  onNormalizeOrientation?: () => void
+  normalizingOrientation?: boolean
+  onRepairUpsideDown?: () => void
+  repairingUpsideDown?: boolean
+  canRepairUpsideDown?: boolean
 }) {
   if (!folder) {
     return (
@@ -299,6 +328,53 @@ function InfoSidebar({
             >
               <Plus className="h-4 w-4" />
               Agregar clips
+            </button>
+          ) : null}
+          {onDownloadFolder ? (
+            <button
+              type="button"
+              onClick={onDownloadFolder}
+              disabled={loadingClips || clips.length === 0 || downloadingFolder || normalizingOrientation}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {downloadingFolder ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {downloadingFolder ? 'Preparando ZIP…' : 'Descargar carpeta (ZIP)'}
+            </button>
+          ) : null}
+          {onNormalizeOrientation ? (
+            <button
+              type="button"
+              onClick={onNormalizeOrientation}
+              disabled={loadingClips || clips.length === 0 || normalizingOrientation || downloadingFolder}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Corrige clips grabados en vertical que se ven de lado (requiere ffmpeg en el servidor)"
+            >
+              {normalizingOrientation ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCw className="h-4 w-4" />
+              )}
+              {normalizingOrientation ? 'Enderezando clips…' : 'Enderezar orientación'}
+            </button>
+          ) : null}
+          {canRepairUpsideDown && onRepairUpsideDown ? (
+            <button
+              type="button"
+              onClick={onRepairUpsideDown}
+              disabled={loadingClips || clips.length === 0 || repairingUpsideDown || normalizingOrientation}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-semibold text-rose-900 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Voltea 180° los clips que quedaron de cabeza tras enderezar"
+            >
+              {repairingUpsideDown ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FlipVertical2 className="h-4 w-4" />
+              )}
+              {repairingUpsideDown ? 'Corrigiendo…' : 'Corregir de cabeza'}
             </button>
           ) : null}
           <button
@@ -564,6 +640,10 @@ export function RawClipsLibraryDashboard({
   const [reelLibraryDraft, setReelLibraryDraft] = useState<ReelLibraryDraft | null>(null)
   const [clipToDelete, setClipToDelete] = useState<RawClipItem | null>(null)
   const [deletingClip, setDeletingClip] = useState(false)
+  const [downloadingFolder, setDownloadingFolder] = useState(false)
+  const [normalizingOrientation, setNormalizingOrientation] = useState(false)
+  const [repairingUpsideDown, setRepairingUpsideDown] = useState(false)
+  const [repairFlipPaths, setRepairFlipPaths] = useState<string[]>([])
 
   function buildReelDraft(folder: RawClipsFolderSummary, clipItems: RawClipItem[]): ReelLibraryDraft {
     return {
@@ -635,6 +715,15 @@ export function RawClipsLibraryDashboard({
       if (!res.ok) throw new Error(data.error ?? 'Error cargando carpeta')
       setSelectedFolder(data.folder)
       setClips(data.clips)
+      try {
+        const raw = sessionStorage.getItem(repairPathsStorageKey(jobId))
+        if (raw) {
+          const parsed = JSON.parse(raw) as string[]
+          if (Array.isArray(parsed)) setRepairFlipPaths(parsed.filter((p) => typeof p === 'string'))
+        }
+      } catch {
+        /* best-effort */
+      }
     } catch (err) {
       console.error(err)
       setClips([])
@@ -740,6 +829,163 @@ export function RawClipsLibraryDashboard({
   function handleUploadModalClose() {
     setIsUploadModalOpen(false)
     setUploadTargetFolder(null)
+  }
+
+  function resolveRepairFlipPaths(folderId: string): string[] {
+    if (repairFlipPaths.length > 0) return repairFlipPaths
+    try {
+      const raw = sessionStorage.getItem(repairPathsStorageKey(folderId))
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((p) => typeof p === 'string')
+        }
+      }
+    } catch {
+      /* best-effort */
+    }
+    // Recuperación: clips enderezados mal (índices típicos DJI) sin tocar 0,1,5 que suelen estar bien.
+    const fallback = new Set([2, 3, 4, 6, 7, 8])
+    return clips
+      .filter((c) => {
+        const idx = c.clipIndex ?? parseClipIndexFromPath(c.path)
+        return idx != null && fallback.has(idx)
+      })
+      .map((c) => c.path)
+  }
+
+  async function runNormalizeClips(
+    folder: RawClipsFolderSummary,
+    paths: string[],
+    options: { repairFlip180?: boolean; loadingLabel: string }
+  ) {
+    const toastId = toast.loading(`${options.loadingLabel} (0/${paths.length})…`)
+    const res = await fetch(`/api/videos/jobs/${folder.id}/normalize-clips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths, repairFlip180: options.repairFlip180 === true }),
+    })
+    const data = (await res.json()) as {
+      normalized?: string[]
+      skipped?: string[]
+      skipDetails?: Array<{ path: string; reason: string }>
+      errors?: string[]
+      error?: string
+    }
+    if (!res.ok) {
+      throw new Error(data.error ?? `HTTP ${res.status}`)
+    }
+    if (data.errors?.length) {
+      throw new Error(data.errors[0] ?? 'Error procesando clips')
+    }
+    return { data, toastId }
+  }
+
+  async function handleNormalizeFolderOrientation() {
+    const folder = selectedFolder ?? selectedFromList
+    if (!folder || clips.length === 0 || normalizingOrientation) return
+
+    setNormalizingOrientation(true)
+    try {
+      const { data, toastId } = await runNormalizeClips(folder, clips.map((c) => c.path), {
+        loadingLabel: 'Enderezando orientación',
+      })
+
+      const count = data.normalized?.length ?? 0
+      const skipDetails = data.skipDetails ?? []
+      const ffmpegMissing = skipDetails.some((d) =>
+        /ffmpeg|ffprobe|enoent/i.test(d.reason)
+      )
+
+      if (count > 0) {
+        const paths = data.normalized ?? []
+        setRepairFlipPaths(paths)
+        sessionStorage.setItem(repairPathsStorageKey(folder.id), JSON.stringify(paths))
+        toast.success(`${count} clip(s) enderezado(s). Recargando vista…`, { id: toastId })
+        await loadFolderDetail(folder.id)
+      } else if (ffmpegMissing) {
+        toast.error(
+          'No se encontró ffmpeg en el servidor. Instálalo (winget install Gyan.FFmpeg) y recarga la página.',
+          { id: toastId, duration: 12000 }
+        )
+      } else if (skipDetails.length > 0) {
+        const alreadyOk = skipDetails.every((d) =>
+          /ya vertical|sin tag/i.test(d.reason)
+        )
+        if (alreadyOk) {
+          toast.success('Todos los clips ya estaban en vertical correcta.', { id: toastId })
+        } else {
+          toast.warning(
+            `No se enderezó ningún clip. Motivo: ${skipDetails[0]?.reason ?? 'desconocido'}`,
+            { id: toastId, duration: 10000 }
+          )
+        }
+      } else {
+        toast.success('No hubo clips que enderezar.', { id: toastId })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo enderezar la carpeta', {
+        duration: 10000,
+      })
+    } finally {
+      setNormalizingOrientation(false)
+    }
+  }
+
+  async function handleRepairUpsideDownClips() {
+    const folder = selectedFolder ?? selectedFromList
+    if (!folder || clips.length === 0 || repairingUpsideDown) return
+
+    const paths = resolveRepairFlipPaths(folder.id)
+    if (paths.length === 0) {
+      toast.error('No hay clips candidatos para corregir de cabeza.')
+      return
+    }
+
+    setRepairingUpsideDown(true)
+    try {
+      const { data, toastId } = await runNormalizeClips(folder, paths, {
+        repairFlip180: true,
+        loadingLabel: 'Corrigiendo clips de cabeza',
+      })
+      const count = data.normalized?.length ?? 0
+      if (count > 0) {
+        setRepairFlipPaths([])
+        sessionStorage.removeItem(repairPathsStorageKey(folder.id))
+        toast.success(`${count} clip(s) corregido(s). Recargando vista…`, { id: toastId })
+        await loadFolderDetail(folder.id)
+      } else {
+        toast.warning('Ningún clip necesitó corrección de cabeza.', { id: toastId })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo corregir los clips', {
+        duration: 10000,
+      })
+    } finally {
+      setRepairingUpsideDown(false)
+    }
+  }
+
+  async function handleDownloadFolder() {
+    const folder = selectedFolder ?? selectedFromList
+    if (!folder || clips.length === 0 || downloadingFolder) return
+
+    setDownloadingFolder(true)
+    const toastId = toast.loading(`Descargando 0/${clips.length} clips…`)
+    try {
+      await downloadRawClipsFolderAsZip(clips, folder.title, (message) => {
+        toast.loading(message, { id: toastId })
+      })
+      toast.success(`Carpeta descargada (${clips.length} clip${clips.length === 1 ? '' : 's'})`, {
+        id: toastId,
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo descargar la carpeta', {
+        id: toastId,
+      })
+    } finally {
+      setDownloadingFolder(false)
+    }
   }
 
   const activeFolder = selectedFolder ?? selectedFromList
@@ -850,6 +1096,50 @@ export function RawClipsLibraryDashboard({
                 >
                   <Plus className="h-5 w-5" />
                 </button>
+              ) : null}
+              {viewMode === 'folder' && activeFolder && clips.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleRepairUpsideDownClips()}
+                    disabled={repairingUpsideDown || loadingClips || downloadingFolder || normalizingOrientation}
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {repairingUpsideDown ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FlipVertical2 className="h-4 w-4" />
+                    )}
+                    Corregir de cabeza
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleNormalizeFolderOrientation()}
+                    disabled={normalizingOrientation || loadingClips || downloadingFolder}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Corrige clips verticales que se ven de lado"
+                  >
+                    {normalizingOrientation ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                    Enderezar orientación
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadFolder()}
+                    disabled={downloadingFolder || loadingClips || normalizingOrientation}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {downloadingFolder ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Descargar carpeta
+                  </button>
+                </>
               ) : null}
               {viewMode === 'folder' && activeFolder && canAddMoreClips ? (
                 <button
@@ -1052,6 +1342,21 @@ export function RawClipsLibraryDashboard({
             activeFolder && canAddMoreClips ? () => openAddClipsToFolder(activeFolder) : undefined
           }
           canAddClips={canAddMoreClips}
+          onDownloadFolder={
+            activeFolder && clips.length > 0 ? () => void handleDownloadFolder() : undefined
+          }
+          downloadingFolder={downloadingFolder}
+          onNormalizeOrientation={
+            activeFolder && clips.length > 0
+              ? () => void handleNormalizeFolderOrientation()
+              : undefined
+          }
+          normalizingOrientation={normalizingOrientation}
+          onRepairUpsideDown={
+            activeFolder && clips.length > 0 ? () => void handleRepairUpsideDownClips() : undefined
+          }
+          repairingUpsideDown={repairingUpsideDown}
+          canRepairUpsideDown={activeFolder != null && clips.length > 0}
         />
       </div>
 

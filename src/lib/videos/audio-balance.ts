@@ -6,6 +6,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 
+import { resolveFfmpegBinaries } from '@/lib/videos/resolve-ffmpeg-path'
 import type { SequenceItem } from './segmenter'
 import { isPipelineInputMeta, normalizeReelAudioVolume } from './clip-config'
 import {
@@ -76,7 +77,13 @@ async function measureMeanVolumeDbFromUrl(
   args.push('-vn', '-af', 'volumedetect', '-f', 'null', '-')
 
   try {
-    const { stderr } = await execFileAsync('ffmpeg', args, {
+    const binaries = await resolveFfmpegBinaries()
+    if (!binaries) {
+      console.warn(`[VideoV2Pipeline][${jobId}][AudioBalance] ffmpeg no disponible`)
+      return null
+    }
+
+    const { stderr } = await execFileAsync(binaries.ffmpeg, args, {
       timeout: FFMPEG_TIMEOUT_MS,
       maxBuffer: 12 * 1024 * 1024,
     })

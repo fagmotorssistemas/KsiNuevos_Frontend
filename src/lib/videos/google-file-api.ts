@@ -12,6 +12,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { promisify } from 'util'
 import { execFile } from 'child_process'
+import { resolveFfmpegBinaries } from '@/lib/videos/resolve-ffmpeg-path'
 
 const execFileAsync = promisify(execFile)
 
@@ -81,7 +82,12 @@ async function compressForGemini(inputPath: string, jobId: string, suffix: strin
 
   console.log(`[VideoV2GoogleFileAPI][${jobId}] Comprimiendo con ffmpeg (CRF ${crf})`)
 
-  await execFileAsync('ffmpeg', [
+  const binaries = await resolveFfmpegBinaries()
+  if (!binaries) {
+    throw new Error('spawn ffmpeg ENOENT')
+  }
+
+  await execFileAsync(binaries.ffmpeg, [
     '-i', inputPath,
     '-vf', "scale='min(854,iw)':-2",
     '-c:v', 'libx264',

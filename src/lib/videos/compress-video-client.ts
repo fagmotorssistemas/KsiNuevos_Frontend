@@ -5,6 +5,7 @@
 
 import { VIDEO_STORAGE_UPLOAD_TARGET_BYTES } from '@/lib/videos/resolve-video-mime'
 import { extractErrorMessage } from '@/lib/videos/extract-error-message'
+import { planReelOrientation } from '@/lib/videos/video-orientation'
 
 export type VideoCompressProgressFn = (message: string) => void
 
@@ -21,6 +22,7 @@ type EncodeAttempt = {
   maxWidth: number
   audioK?: number
   fps?: number
+  vfFilter?: string
 }
 
 let ffmpegLoadPromise: Promise<InstanceType<FfmpegModule['FFmpeg']>> | null = null
@@ -170,6 +172,57 @@ function loadFfmpeg(onProgress?: VideoCompressProgressFn) {
   return loadFfmpegWasm(onProgress)
 }
 
+function parseRotationFromFfmpegLog(message: string): number | null {
+  const rotateTag = message.match(/\brotate\s*:\s*(-?\d+)/i)
+  if (rotateTag) {
+    const n = Number(rotateTag[1])
+    if (Number.isFinite(n)) return n
+  }
+  const displayMatrix = message.match(/rotation of (-?\d+(?:\.\d+)?)\s*degrees/i)
+  if (displayMatrix) {
+    const n = Number(displayMatrix[1])
+    if (Number.isFinite(n)) return Math.round(n)
+  }
+  return null
+}
+
+function parseDimensionsFromFfmpegLog(message: string): { width: number; height: number } | null {
+  const m = message.match(/Video:\s.*\s(\d{2,5})x(\d{2,5})/i)
+  if (!m) return null
+  const width = Number(m[1])
+  const height = Number(m[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null
+  return { width, height }
+}
+
+async function probeInputWithFfmpegWasm(
+  ffmpeg: InstanceType<FfmpegModule['FFmpeg']>,
+  inputName: string
+) {
+  let rotationDeg = 0
+  let codedWidth = 0
+  let codedHeight = 0
+  const onLog = ({ message }: { message: string }) => {
+    const rot = parseRotationFromFfmpegLog(message)
+    if (rot != null) rotationDeg = rot
+    const dims = parseDimensionsFromFfmpegLog(message)
+    if (dims) {
+      codedWidth = dims.width
+      codedHeight = dims.height
+    }
+  }
+  ffmpeg.on('log', onLog)
+  try {
+    await ffmpeg.exec(['-hide_banner', '-i', inputName, '-f', 'null', '-'])
+  } catch {
+    /* stderr en logs */
+  } finally {
+    ffmpeg.off('log', onLog)
+  }
+  if (codedWidth <= 0 || codedHeight <= 0) return null
+  return { codedWidth, codedHeight, rotationDeg }
+}
+
 function uint8ToFile(data: Uint8Array, originalName: string): File {
   const base = originalName.replace(/\.[^.]+$/i, '') || 'clip'
   const copy = new Uint8Array(data.byteLength)
@@ -186,15 +239,19 @@ async function encodeFromInput(
   attempt: EncodeAttempt
 ): Promise<Uint8Array> {
   const outputName = `out_${attempt.crf}_${attempt.maxWidth}.mp4`
-  const args: string[] = ['-i', inputName]
+  const args: string[] = ['-noautorotate', '-i', inputName]
 
   if (attempt.fps) {
     args.push('-r', String(attempt.fps))
   }
 
+  const vf =
+    attempt.vfFilter ??
+    `scale='min(${attempt.maxWidth},iw)':-2`
+
   args.push(
     '-vf',
-    `scale='min(${attempt.maxWidth},iw)':-2`,
+    vf,
     '-c:v',
     'libx264',
     '-crf',
@@ -205,6 +262,8 @@ async function encodeFromInput(
     'aac',
     '-b:a',
     `${attempt.audioK ?? 96}k`,
+    '-metadata:s:v:0',
+    'rotate=0',
     '-movflags',
     '+faststart',
     '-y',
@@ -267,6 +326,14 @@ export async function compressVideoFileForStorage(
     onProgress?.(`Leyendo ${file.name} en el compresor…`)
     await ffmpeg.writeFile(inputName, await fetchFile(file))
 
+    const probe = await probeInputWithFfmpegWasm(ffmpeg, inputName)
+    const orientationVf = probe
+      ? (() => {
+          const plan = planReelOrientation(probe)
+          return plan.required ? plan.vfFilter : undefined
+        })()
+      : undefined
+
     let lastData: Uint8Array | null = null
     let lastMb = ''
 
@@ -274,7 +341,10 @@ export async function compressVideoFileForStorage(
       const label = `${attempt.maxWidth}px CRF ${attempt.crf}`
       onProgress?.(`Comprimiendo ${file.name} (${label})…`)
       try {
-        lastData = await encodeFromInput(ffmpeg, inputName, attempt)
+        lastData = await encodeFromInput(ffmpeg, inputName, {
+          ...attempt,
+          vfFilter: orientationVf ?? attempt.vfFilter,
+        })
       } catch (err) {
         throw toError(err, `Error comprimiendo "${file.name}"`)
       }
