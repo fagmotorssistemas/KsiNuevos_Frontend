@@ -9,9 +9,9 @@ export type CompressClipsApiResult = {
 }
 
 /**
- * Pide al backend NestJS comprimir clips grandes del job en Storage.
- * Envía todos los paths; el servidor filtra por thresholdMb.
- * Lanza si el servicio falla por completo (p. ej. env vars o Nest caído).
+ * Pide al backend NestJS comprimir clips del job en Storage.
+ * Con `normalizeOrientation: true` Nest endereza (ffprobe) solo lo necesario
+ * y limpia metadato rotate — Shotstack transform.rotate quedó desactivado (dañaba clips).
  */
 export async function compressJobClipsOrThrow(
   jobId: string,
@@ -21,7 +21,7 @@ export async function compressJobClipsOrThrow(
   if (paths.length === 0) return 0
 
   onProgress?.(
-    `Optimizando clips en servidor (${paths.length}) — puede tardar 2-3 min si son archivos grandes…`
+    `Optimizando clips en servidor (${paths.length}) — orientación + tamaño si hace falta…`
   )
 
   let data: CompressClipsApiResult
@@ -32,6 +32,7 @@ export async function compressJobClipsOrThrow(
       body: JSON.stringify({
         paths,
         thresholdMb: VIDEO_COMPRESS_THRESHOLD_MB,
+        normalizeOrientation: true,
       }),
     })
     data = (await compressRes.json()) as CompressClipsApiResult

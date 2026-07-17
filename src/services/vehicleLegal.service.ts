@@ -652,7 +652,7 @@ export async function deleteVehicleDocumentFile(
   if (fileRow) {
     const { data: docMeta } = await supabase
       .from('inventory_vehicle_documents')
-      .select('inventoryoracle_id, doc_type')
+      .select('inventoryoracle_id, doc_type, detail_text')
       .eq('id', fileRow.document_id)
       .maybeSingle()
 
@@ -671,6 +671,12 @@ export async function deleteVehicleDocumentFile(
     if (remErr) throw remErr
 
     const latest = remaining?.[0]
+    const catalog = VEHICLE_DOCUMENT_CATALOG.find((item) => item.docType === docMeta?.doc_type)
+    const statusWithoutFiles: VehicleDocStatus = catalog?.requiresFile
+      ? 'falta'
+      : docMeta?.detail_text?.trim()
+        ? 'completo'
+        : catalog?.defaultStatus ?? 'pendiente'
     const { error: updErr } = await supabase
       .from('inventory_vehicle_documents')
       .update(
@@ -683,7 +689,7 @@ export async function deleteVehicleDocumentFile(
               mime_type: latest.mime_type,
             }
           : {
-              status: 'falta',
+              status: statusWithoutFiles,
               file_path: null,
               file_url: null,
               file_name: null,

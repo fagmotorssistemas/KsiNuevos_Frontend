@@ -235,15 +235,27 @@ function computeLinearStarts(sequence: SequenceItem[]): number[] {
   return starts
 }
 
+/**
+ * DESACTIVADO: transform.rotate dañó clips ya verticales (Beetle 10d54aeb…).
+ * Orientación se corrige en Nest antes del render.
+ */
+function shotstackOrientationTransform(
+  _angle: number | null | undefined
+): Partial<ShotstackClip> {
+  return {}
+}
+
 function buildFirstClipIntroClips(
   item: SequenceItem,
   src: string,
   withSlideOut: boolean,
-  dialogueVolume: number
+  dialogueVolume: number,
+  rotateAngle?: number | null
 ): ShotstackClip[] {
   const trimStart = Number(item.trim_start.toFixed(3))
   const totalLen = Number(item.trim_duration.toFixed(3))
   const introDur = Number(FIRST_CLIP_INTRO_PULL_SEC.toFixed(3))
+  const orient = shotstackOrientationTransform(rotateAngle)
 
   const mk = (
     timelineStart: number,
@@ -261,6 +273,7 @@ function buildFirstClipIntroClips(
     start: Number(timelineStart.toFixed(3)),
     length: Number(Math.max(0.05, playLength).toFixed(3)),
     fit: 'cover',
+    ...orient,
     ...extra,
   })
 
@@ -379,10 +392,12 @@ function buildClipBoundaryTransition(
 function buildVideoTracks(
   sequence: SequenceItem[],
   clipUrls: string[],
-  dialogueVolume: number
+  dialogueVolume: number,
+  clipRotateAngles?: Array<number | null | undefined>
 ): ShotstackTrack[] {
   const overlap = CLIP_TRANSITION_OVERLAP_SEC
   const transitionCount = countActiveClipTransitions(sequence.length)
+  const angleFor = (clipIndex: number) => clipRotateAngles?.[clipIndex]
 
   if (sequence.length === 0) return []
 
@@ -405,6 +420,7 @@ function buildVideoTracks(
       start: Number(start.toFixed(3)),
       length,
       fit: 'cover',
+      ...shotstackOrientationTransform(angleFor(item.clip_index)),
       ...(i > 0 ? { effect: 'zoomIn' as const } : {}),
       ...extra,
     }
@@ -413,7 +429,17 @@ function buildVideoTracks(
   if (sequence.length === 1) {
     const item = sequence[0]!
     const src = clipUrls[item.clip_index] ?? clipUrls[0]
-    return [{ clips: buildFirstClipIntroClips(item, src, false, dialogueVolume) }]
+    return [
+      {
+        clips: buildFirstClipIntroClips(
+          item,
+          src,
+          false,
+          dialogueVolume,
+          angleFor(item.clip_index)
+        ),
+      },
+    ]
   }
 
   const topClips: ShotstackClip[] = []
@@ -421,8 +447,15 @@ function buildVideoTracks(
 
   const item0 = sequence[0]!
   const src0 = clipUrls[item0.clip_index] ?? clipUrls[0]
-  topClips.push(...buildFirstClipIntroClips(item0, src0, !!CLIP_BOUNDARY_TRANSITIONS[0], dialogueVolume))
-
+  topClips.push(
+    ...buildFirstClipIntroClips(
+      item0,
+      src0,
+      !!CLIP_BOUNDARY_TRANSITIONS[0],
+      dialogueVolume,
+      angleFor(item0.clip_index)
+    )
+  )
   for (let i = 1; i < sequence.length; i++) {
     const start = computeClipVideoStartSec(sequence, i)
     const item = sequence[i]!
@@ -463,6 +496,7 @@ function buildVideoTracks(
         start: Number(start.toFixed(3)),
         length: CLIP_6_WIPE_UNDERLAY_SEC,
         fit: 'cover',
+        ...shotstackOrientationTransform(angleFor(clip5Item.clip_index)),
       })
       extras.transition = { in: CLIP_6_ENTER_TRANSITION_IN }
     }
@@ -478,7 +512,11 @@ function buildVideoTracks(
   return tracks
 }
 
-function buildBrollOverlayTracks(sequence: SequenceItem[], clipUrls: string[]): ShotstackTrack[] {
+function buildBrollOverlayTracks(
+  sequence: SequenceItem[],
+  clipUrls: string[],
+  clipRotateAngles?: Array<number | null | undefined>
+): ShotstackTrack[] {
   const starts = computeLinearStarts(sequence)
   const clips: ShotstackClip[] = []
   for (let i = 0; i < sequence.length; i++) {
@@ -498,6 +536,7 @@ function buildBrollOverlayTracks(sequence: SequenceItem[], clipUrls: string[]): 
       start: starts[i],
       length: Number(item.trim_duration.toFixed(3)),
       fit: 'cover',
+      ...shotstackOrientationTransform(clipRotateAngles?.[ov.clip_index]),
     })
   }
   return clips.length > 0 ? [{ clips }] : []
@@ -1952,6 +1991,11 @@ export async function renderSegmentsV2(
     /** Override manual; si no vienen, se calculan midiendo voz vs música. */
     musicVolume?: number
     dialogueVolume?: number
+    /**
+     * Ángulo Shotstack por índice de clip (raw_video_paths).
+     * Solo valores ≠ null/0 aplican transform.rotate (probe al subir).
+     */
+    clipRotateAngles?: Array<number | null | undefined>
   }
 ): Promise<string> {
   if (voiceOverIntro != null) {
@@ -2154,8 +2198,15 @@ export async function renderSegmentsV2(
     console.log(`[Shotstack][${jobId}] Logo de cierre (${CLOSING_LOGO_LEN_SEC}s finales): ${logoUrl}`)
   }
 
-  tracks.push(...buildBrollOverlayTracks(sequence, clipUrls))
-  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume))
+  const clipRotateAngles = opts?.clipRotateAngles
+  if (clipRotateAngles?.some((a) => a != null && a !== 0)) {
+    console.log(
+      `[Shotstack][${jobId}] Orientación Shotstack:`,
+      clipRotateAngles.map((a, i) => (a != null && a !== 0 ? `clip${i}=${a}°` : `clip${i}=skip`)).join(', ')
+    )
+  }
+  tracks.push(...buildBrollOverlayTracks(sequence, clipUrls, clipRotateAngles))
+  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume, clipRotateAngles))
 
   const flashTrack = buildClipFlashTransitionTrack(sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
     label: 'clip 4',

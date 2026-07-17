@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { VIDEO_RAW_BUCKET_MAX_BYTES } from '@/lib/videos/resolve-video-mime'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
+import { probeClipOrientationMeta } from '@/lib/videos/probe-video-orientation-client'
+import type { ClipOrientationMeta } from '@/lib/videos/video-orientation'
 import {
   VehicleInventoryPicker,
   type InventoryPickerRow,
@@ -194,13 +196,58 @@ export function UploadLibraryClipsModal({
       }
 
       const supabase = createClient()
+      const clipOrientations: ClipOrientationMeta[] = []
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]!
         const upload = uploads[i]!
+        setProgress(`${i + 1}/${files.length}: Leyendo orientación…`)
+        const orient = await probeClipOrientationMeta(file)
+        if (orient) {
+          clipOrientations.push(orient)
+          if (orient.shotstackRotateAngle != null) {
+            console.log(
+              `[UploadLibraryClipsModal] ${file.name}: Shotstack rotará ${orient.shotstackRotateAngle}° (${orient.reason})`
+            )
+          }
+        } else {
+          // Fallback seguro: no rotar en Shotstack si el probe falla
+          clipOrientations.push({
+            codedWidth: 1,
+            codedHeight: 2,
+            rotationDeg: 0,
+            shotstackRotateAngle: null,
+            reason: 'probe falló — skip rotate',
+          })
+          console.warn(`[UploadLibraryClipsModal] No se pudo probear orientación de ${file.name}`)
+        }
         await uploadRawVideoClip(supabase, jobId, upload.path, upload.token, file, {
           onProgress: (msg) => setProgress(`${i + 1}/${files.length}: ${msg}`),
         })
+      }
+
+      // Nest/ffmpeg: endereza solo clips con rotate + limpia tag (Shotstack transform desactivado).
+      setProgress('Ajustando orientación vertical en servidor…')
+      try {
+        const normRes = await fetch(`/api/videos/jobs/${jobId}/normalize-clips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paths: uploads.map((u) => u.path) }),
+        })
+        const normData = (await normRes.json()) as {
+          normalized?: string[]
+          errors?: string[]
+          error?: string
+        }
+        if (!normRes.ok) {
+          console.warn('[UploadLibraryClipsModal] normalize-clips:', normData.error)
+        } else if (normData.errors?.length) {
+          console.warn('[UploadLibraryClipsModal] normalize errors:', normData.errors)
+        } else if (normData.normalized?.length) {
+          setProgress(`${normData.normalized.length} clip(s) enderezados en servidor…`)
+        }
+      } catch (normErr) {
+        console.warn('[UploadLibraryClipsModal] normalize-clips skip:', normErr)
       }
 
       setProgress(isAppendMode ? 'Guardando clips…' : 'Guardando carpeta…')
@@ -211,6 +258,7 @@ export function UploadLibraryClipsModal({
           jobId,
           paths: uploads.map((u) => u.path),
           append: isAppendMode,
+          clipOrientations,
         }),
       })
 

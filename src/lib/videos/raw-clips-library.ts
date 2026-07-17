@@ -642,7 +642,8 @@ export async function prepareAppendRawClipsUpload(
 /** Registra paths nuevos en una carpeta existente (append). */
 export async function appendRawClipsPaths(
   jobId: string,
-  newPaths: string[]
+  newPaths: string[],
+  newOrientations?: import('@/lib/videos/video-orientation').ClipOrientationMeta[] | null
 ): Promise<{ clipCount: number }> {
   for (const p of newPaths) {
     if (!p.startsWith(`${jobId}/`)) throw new Error(`Ruta inválida: ${p}`)
@@ -659,6 +660,34 @@ export async function appendRawClipsPaths(
 
   const flowType: FlowType = merged.length >= 2 ? 'multiple' : 'single'
   const supabase = getServiceClient()
+
+  const { data: jobRow } = await supabase
+    .from('video_jobs_v2')
+    .select('selected_clips')
+    .eq('id', jobId)
+    .maybeSingle()
+
+  let selectedClipsUpdate: Record<string, unknown> | undefined
+  if (newOrientations && newOrientations.length === newPaths.length) {
+    const prev =
+      jobRow?.selected_clips && typeof jobRow.selected_clips === 'object'
+        ? { ...(jobRow.selected_clips as Record<string, unknown>) }
+        : {}
+    const byPath: Record<string, unknown> = {
+      ...((prev.clipOrientationsByPath as Record<string, unknown>) ?? {}),
+    }
+    for (let i = 0; i < newPaths.length; i++) {
+      byPath[newPaths[i]!] = newOrientations[i]!
+    }
+    const arr = merged.map((p) => byPath[p]).filter(Boolean)
+    selectedClipsUpdate = {
+      ...prev,
+      _v2_pipeline_input: true,
+      clipOrientationsByPath: byPath,
+      ...(arr.length === merged.length ? { clipOrientations: arr } : {}),
+    }
+  }
+
   const { error: updateError } = await supabase
     .from('video_jobs_v2')
     .update({
@@ -667,6 +696,9 @@ export async function appendRawClipsPaths(
       status: 'pending',
       current_step: 'Clips en biblioteca',
       progress_percentage: 0,
+      ...(selectedClipsUpdate
+        ? { selected_clips: selectedClipsUpdate as Database['public']['Tables']['video_jobs_v2']['Update']['selected_clips'] }
+        : {}),
     })
     .eq('id', jobId)
 

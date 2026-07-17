@@ -27,6 +27,7 @@ import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import {
   defaultClipKinds,
   isPipelineInputMeta,
+  clipRotateAnglesFromPipelineMeta,
   normalizeClipDurationsInput,
   normalizeClipKindsInput,
   normalizeCanonicalVehicle,
@@ -812,6 +813,7 @@ export async function runSingleVideoPipelineFromStorage(
     const clipUrls = [freshSignedUrl]
 
     let brandMentionTimeSec: number | undefined
+    let clipRotateAngles: Array<number | null> | undefined
     {
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
@@ -819,6 +821,7 @@ export async function runSingleVideoPipelineFromStorage(
         .select('selected_clips, video_script_id')
         .eq('id', jobId)
         .single()
+      clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, [storagePath])
       if (!metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
         await resolveAndApplyVehicleFromAssemblyForJob(
@@ -872,6 +875,7 @@ export async function runSingleVideoPipelineFromStorage(
       brandMentionTimeSec,
       comentaMentionTimeSec: comentaMentionTimeSecA,
       comentaOverlayText: comentaOverlayTextA,
+      clipRotateAngles,
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1581,15 +1585,17 @@ export async function runMultipleClipsPipelineFromStorage(
     let brandMentionLengthSec: number | undefined
     let comentaMentionTimeSec: number | undefined
     let comentaOverlayText: string | undefined
+    let clipRotateAngles: Array<number | null> | undefined
 
-    if (escenasMulti.length === 0) {
+    {
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
         .from('video_jobs_v2')
         .select('selected_clips, video_script_id')
         .eq('id', jobId)
         .single()
-      if (!metaRow?.video_script_id) {
+      clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, paths)
+      if (escenasMulti.length === 0 && !metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
         await resolveAndApplyVehicleFromAssemblyForJob(
           supabaseInv,
@@ -1676,7 +1682,16 @@ export async function runMultipleClipsPipelineFromStorage(
       subtitleBlocks,
       musicTrackUrl,
       voIntroForRender,
-      { musicTrimStartSecOverride, ...reelAudioVolumes, brandConfig, brandMentionTimeSec, brandMentionLengthSec, comentaMentionTimeSec, comentaOverlayText }
+      {
+        musicTrimStartSecOverride,
+        ...reelAudioVolumes,
+        brandConfig,
+        brandMentionTimeSec,
+        brandMentionLengthSec,
+        comentaMentionTimeSec,
+        comentaOverlayText,
+        clipRotateAngles,
+      }
     )
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -2630,6 +2645,7 @@ export async function rerunCreatomateRenderForJob(
       brandConfig,
       comentaMentionTimeSec: comentaMentionTimeSecRerun,
       comentaOverlayText: comentaOverlayTextRerun,
+      clipRotateAngles: clipRotateAnglesFromPipelineMeta(sc, paths),
     }
   )
 

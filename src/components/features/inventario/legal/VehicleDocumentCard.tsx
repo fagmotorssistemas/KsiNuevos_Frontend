@@ -86,6 +86,7 @@ export function VehicleDocumentCard({
 
   const files = listDocumentFiles(row)
   const isUploading = uploading || localUploading
+  const allowsFile = Boolean(catalog?.requiresFile || catalog?.allowsFile)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files
@@ -212,7 +213,7 @@ export function VehicleDocumentCard({
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {catalog?.requiresFile && (
+        {allowsFile && (
           <>
             <input
               ref={inputRef}
@@ -234,7 +235,7 @@ export function VehicleDocumentCard({
             </button>
           </>
         )}
-        {!catalog?.requiresFile && (
+        {!allowsFile && (
           <button
             type="button"
             disabled={disabled}
@@ -244,7 +245,7 @@ export function VehicleDocumentCard({
             {editing ? 'Cerrar' : 'Editar detalle'}
           </button>
         )}
-        {catalog?.requiresFile && (
+        {allowsFile && (
           <button
             type="button"
             disabled={disabled}

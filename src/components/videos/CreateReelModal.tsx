@@ -34,6 +34,11 @@ import {
 } from '@/lib/videos/resolve-video-mime'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { compressJobClipsOrThrow } from '@/lib/videos/compress-job-clips-client'
+import {
+  probeClipOrientationMeta,
+  probeClipOrientationMetaFromUrl,
+} from '@/lib/videos/probe-video-orientation-client'
+import type { ClipOrientationMeta } from '@/lib/videos/video-orientation'
 import { sortClipIndicesByFileName } from './sort-video-files-by-name'
 import {
   buildManualClipOrderFinalizePayload,
@@ -535,8 +540,29 @@ export function CreateReelModal({
       voiceOverStoredPath = voData.path
     }
 
-    // Todos los paths copiados: Nest filtra por thresholdMb (no depende de sizeBytes del cliente).
+    // Compresión de tamaño en Nest; orientación NO (va a Shotstack vía clipOrientations).
     await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
+
+    setUploadProgress('Leyendo orientación de clips…')
+    const clipOrientations: ClipOrientationMeta[] = []
+    for (let i = 0; i < orderedClips.length; i++) {
+      const clip = orderedClips[i]!
+      const meta =
+        (await probeClipOrientationMetaFromUrl(clip.signedUrl)) ??
+        ({
+          codedWidth: 1,
+          codedHeight: 2,
+          rotationDeg: 0,
+          shotstackRotateAngle: null,
+          reason: 'probe falló — skip rotate',
+        } satisfies ClipOrientationMeta)
+      clipOrientations.push(meta)
+      if (meta.shotstackRotateAngle != null) {
+        console.log(
+          `[CreateReelModal] library clip ${i}: Shotstack ${meta.shotstackRotateAngle}° (${meta.reason})`
+        )
+      }
+    }
 
     let clipDurations: (number | null)[] | undefined
     if (flowType === 'multiple') {
@@ -652,6 +678,7 @@ export function CreateReelModal({
       ...(canonV ? { canonicalVehicle: canonV } : {}),
       ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
       ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
+      clipOrientations,
     }
 
     const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -751,10 +778,27 @@ export function CreateReelModal({
         voiceOverStoredPath = voData.path
       }
 
-      // ── PASO 2: Subir clips (firmado directo o proxy API si el archivo es grande) ──
+      // ── PASO 2: Probe orientación + subir clips ──
+      const clipOrientations: ClipOrientationMeta[] = []
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const upload = uploads[i]
+        setUploadProgress(`${i + 1}/${files.length}: Leyendo orientación…`)
+        const orient =
+          (await probeClipOrientationMeta(file)) ??
+          ({
+            codedWidth: 1,
+            codedHeight: 2,
+            rotationDeg: 0,
+            shotstackRotateAngle: null,
+            reason: 'probe falló — skip rotate',
+          } satisfies ClipOrientationMeta)
+        clipOrientations.push(orient)
+        if (orient.shotstackRotateAngle != null) {
+          console.log(
+            `[CreateReelModal] ${file.name}: Shotstack ${orient.shotstackRotateAngle}° (${orient.reason})`
+          )
+        }
         await uploadRawVideoClip(supabase, newJobId, upload.path, upload.token, file, {
           onProgress: (msg) =>
             setUploadProgress(`${i + 1}/${files.length}: ${msg}`),
@@ -863,6 +907,7 @@ export function CreateReelModal({
         ...(canonV ? { canonicalVehicle: canonV } : {}),
         ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
         ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
+        clipOrientations,
       }
 
       const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)

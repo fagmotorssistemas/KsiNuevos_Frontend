@@ -10,6 +10,11 @@ import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { appendRawClipsPaths } from '@/lib/videos/raw-clips-library'
+import {
+  normalizeClipOrientationsInput,
+  type ClipOrientationMeta,
+} from '@/lib/videos/video-orientation'
+import type { Json } from '@/types/supabase'
 
 const VIDEO_EXT = /\.(mp4|mov|avi|webm|mkv|m4v)$/i
 
@@ -31,6 +36,8 @@ interface CompleteLibraryBody {
   paths: string[]
   /** Si true, agrega paths a los existentes en lugar de reemplazarlos. */
   append?: boolean
+  /** Probe de orientación en el navegador (mismo orden que `paths`). */
+  clipOrientations?: ClipOrientationMeta[]
 }
 
 export async function POST(request: NextRequest) {
@@ -51,8 +58,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'paths es requerido' }, { status: 400 })
     }
 
+    const orientations = normalizeClipOrientationsInput(body.clipOrientations, paths.length)
+
     if (append) {
-      const result = await appendRawClipsPaths(jobId, paths)
+      const result = await appendRawClipsPaths(jobId, paths, orientations)
       return NextResponse.json({ ok: true, jobId, clipCount: result.clipCount, appended: true })
     }
 
@@ -69,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     const { data: job, error: fetchError } = await supabase
       .from('video_jobs_v2')
-      .select('id, inventory_vehicle_id')
+      .select('id, inventory_vehicle_id, selected_clips')
       .eq('id', jobId)
       .single()
 
@@ -86,6 +95,25 @@ export async function POST(request: NextRequest) {
 
     const flowType: FlowType = paths.length >= 2 ? 'multiple' : 'single'
 
+    const byPath =
+      orientations != null
+        ? Object.fromEntries(paths.map((p, i) => [p, orientations[i]!]))
+        : undefined
+
+    const selectedClips =
+      orientations != null
+        ? ({
+            ...(job.selected_clips &&
+            typeof job.selected_clips === 'object' &&
+            !Array.isArray(job.selected_clips)
+              ? (job.selected_clips as Record<string, unknown>)
+              : {}),
+            _v2_pipeline_input: true,
+            clipOrientations: orientations,
+            clipOrientationsByPath: byPath,
+          } as unknown as Json)
+        : undefined
+
     const { error: updateError } = await supabase
       .from('video_jobs_v2')
       .update({
@@ -94,6 +122,7 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         current_step: 'Clips en biblioteca',
         progress_percentage: 0,
+        ...(selectedClips ? { selected_clips: selectedClips } : {}),
       })
       .eq('id', jobId)
 

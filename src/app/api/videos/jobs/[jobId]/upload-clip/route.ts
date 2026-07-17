@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { compressVideoForStorageCap } from '@/lib/videos/compression'
-import { normalizeVideoBufferForReel } from '@/lib/videos/normalize-video-orientation-server'
 import {
   VIDEO_RAW_BUCKET,
   VIDEO_RAW_BUCKET_MAX_BYTES,
@@ -95,13 +94,8 @@ export async function POST(
 
     let buf = Buffer.from(await file.arrayBuffer())
     let compressedOnServer = false
-    let normalizedOnServer = false
 
-    const norm = await normalizeVideoBufferForReel(buf, file.name)
-    if (norm.normalized) {
-      buf = Buffer.from(norm.buffer)
-      normalizedOnServer = true
-    }
+    // Orientación vertical: Nest (/normalize-clips), no ffmpeg local aquí.
 
     if (buf.length > VIDEO_STORAGE_UPLOAD_TARGET_BYTES) {
       const result = await compressVideoForStorageCap(buf, file.name)
@@ -144,7 +138,7 @@ export async function POST(
       )
     }
 
-    return NextResponse.json({ path, ok: true, compressed: compressedOnServer, normalized: normalizedOnServer })
+    return NextResponse.json({ path, ok: true, compressed: compressedOnServer })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[VideoV2][/jobs/upload-clip] Error:', message)

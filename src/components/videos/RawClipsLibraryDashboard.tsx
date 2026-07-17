@@ -35,6 +35,8 @@ import type {
 } from '@/lib/videos/raw-clips-types'
 import { formatBytes } from '@/lib/videos/resolve-job-vehicle'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
+import { probeClipOrientationMetaFromUrl } from '@/lib/videos/probe-video-orientation-client'
+import { planReelOrientation } from '@/lib/videos/video-orientation'
 
 type LibraryResponse = {
   folders: RawClipsFolderSummary[]
@@ -857,13 +859,24 @@ export function RawClipsLibraryDashboard({
   async function runNormalizeClips(
     folder: RawClipsFolderSummary,
     paths: string[],
-    options: { repairFlip180?: boolean; loadingLabel: string }
+    options: {
+      repairFlip180?: boolean
+      loadingLabel: string
+      toastId?: string | number
+      clipPlans?: Array<{ path: string; mode: 'reencode' | 'strip_meta'; reason?: string }>
+    }
   ) {
-    const toastId = toast.loading(`${options.loadingLabel} (0/${paths.length})…`)
+    const toastId =
+      options.toastId ?? toast.loading(`${options.loadingLabel} (${paths.length} clip(s))…`)
+    toast.loading(`${options.loadingLabel} (${paths.length} clip(s) a corregir)…`, { id: toastId })
     const res = await fetch(`/api/videos/jobs/${folder.id}/normalize-clips`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths, repairFlip180: options.repairFlip180 === true }),
+      body: JSON.stringify({
+        paths,
+        repairFlip180: options.repairFlip180 === true,
+        ...(options.clipPlans?.length ? { clipPlans: options.clipPlans } : {}),
+      }),
     })
     const data = (await res.json()) as {
       normalized?: string[]
@@ -886,47 +899,117 @@ export function RawClipsLibraryDashboard({
     if (!folder || clips.length === 0 || normalizingOrientation) return
 
     setNormalizingOrientation(true)
+    const toastId = toast.loading(`Identificando clips a enderezar (0/${clips.length})…`)
     try {
-      const { data, toastId } = await runNormalizeClips(folder, clips.map((c) => c.path), {
-        loadingLabel: 'Enderezando orientación',
-      })
+      const clipPlans: Array<{ path: string; mode: 'reencode' | 'strip_meta'; reason: string }> =
+        []
+      const alreadyOk: string[] = []
+
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i]!
+        toast.loading(`Identificando clips a enderezar (${i + 1}/${clips.length})…`, {
+          id: toastId,
+        })
+        try {
+          const meta = await probeClipOrientationMetaFromUrl(clip.signedUrl)
+          if (!meta) {
+            // Sin probe fiable: no mandar a Nest (evita procesar los 9 a ciegas)
+            alreadyOk.push(clip.path)
+            continue
+          }
+          const plan = planReelOrientation({
+            codedWidth: meta.codedWidth,
+            codedHeight: meta.codedHeight,
+            rotationDeg: meta.rotationDeg,
+          })
+          if (!plan.required || plan.mode === 'none') {
+            alreadyOk.push(clip.path)
+            continue
+          }
+          if (plan.mode === 'reencode' || plan.mode === 'strip_meta') {
+            clipPlans.push({ path: clip.path, mode: plan.mode, reason: plan.reason })
+            console.log(
+              `[Enderezar] ${clip.name}: ${plan.mode} — ${plan.reason} (${meta.codedWidth}x${meta.codedHeight} rot=${meta.rotationDeg})`
+            )
+          }
+        } catch (probeErr) {
+          console.warn(`[Enderezar] probe ${clip.name}:`, probeErr)
+          alreadyOk.push(clip.path)
+        }
+      }
+
+      if (clipPlans.length === 0) {
+        toast.success(
+          `Ningún clip necesita enderezarse (${alreadyOk.length}/${clips.length} ya OK o sin tag).`,
+          { id: toastId }
+        )
+        return
+      }
+
+      toast.loading(
+        `Enderezando ${clipPlans.length} de ${clips.length} (los demás no se tocan)…`,
+        { id: toastId }
+      )
+
+      const { data } = await runNormalizeClips(
+        folder,
+        clipPlans.map((p) => p.path),
+        {
+          loadingLabel: 'Enderezando orientación',
+          toastId,
+          clipPlans,
+        }
+      )
 
       const count = data.normalized?.length ?? 0
       const skipDetails = data.skipDetails ?? []
       const ffmpegMissing = skipDetails.some((d) =>
-        /ffmpeg|ffprobe|enoent/i.test(d.reason)
+        /ffmpeg|ffprobe|enoent|nest|normalize-clips no disponible|display_rotation/i.test(d.reason)
+      )
+      const rotateStuck = skipDetails.some((d) =>
+        /rotate sigue|sigue en\s*-?\d+/i.test(d.reason)
       )
 
       if (count > 0) {
         const paths = data.normalized ?? []
         setRepairFlipPaths(paths)
         sessionStorage.setItem(repairPathsStorageKey(folder.id), JSON.stringify(paths))
-        toast.success(`${count} clip(s) enderezado(s). Recargando vista…`, { id: toastId })
+        toast.success(
+          `${count} clip(s) enderezado(s) de ${clipPlans.length} candidatos. Recargando…`,
+          { id: toastId }
+        )
         await loadFolderDetail(folder.id)
+      } else if (rotateStuck) {
+        toast.error(
+          'Nest dejó rotate≠0 tras procesar (típico 1080×1920 + rotate=90). Debe usar strip_meta: sin transpose, solo limpiar rotate=0.',
+          { id: toastId, duration: 14000 }
+        )
       } else if (ffmpegMissing) {
         toast.error(
-          'No se encontró ffmpeg en el servidor. Instálalo (winget install Gyan.FFmpeg) y recarga la página.',
+          'El servidor Nest no pudo enderezar (ffmpeg / endpoint normalize-clips). Revisa el backend.',
           { id: toastId, duration: 12000 }
         )
       } else if (skipDetails.length > 0) {
-        const alreadyOk = skipDetails.every((d) =>
-          /ya vertical|sin tag/i.test(d.reason)
+        toast.warning(
+          `No se enderezó ningún clip. Motivo: ${skipDetails[0]?.reason ?? 'desconocido'}`,
+          { id: toastId, duration: 10000 }
         )
-        if (alreadyOk) {
-          toast.success('Todos los clips ya estaban en vertical correcta.', { id: toastId })
-        } else {
-          toast.warning(
-            `No se enderezó ningún clip. Motivo: ${skipDetails[0]?.reason ?? 'desconocido'}`,
-            { id: toastId, duration: 10000 }
-          )
-        }
       } else {
-        toast.success('No hubo clips que enderezar.', { id: toastId })
+        toast.warning('Nest no corrigió los clips candidatos. Revisa logs del backend.', {
+          id: toastId,
+          duration: 10000,
+        })
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'No se pudo enderezar la carpeta', {
-        duration: 10000,
-      })
+      const msg = err instanceof Error ? err.message : 'No se pudo enderezar la carpeta'
+      if (/rotate sigue|sigue en\s*-?\d+/i.test(msg)) {
+        toast.error(
+          'Nest no limpió el tag rotate (archivo ya vertical). En Nest: mode strip_meta sin transpose + rotate=0.',
+          { id: toastId, duration: 14000 }
+        )
+      } else {
+        toast.error(msg, { id: toastId, duration: 10000 })
+      }
     } finally {
       setNormalizingOrientation(false)
     }

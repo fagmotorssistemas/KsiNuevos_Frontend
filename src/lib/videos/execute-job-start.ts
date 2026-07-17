@@ -17,7 +17,12 @@ import {
   normalizeCanonicalVehicle,
   normalizeMusicTrimStartSec,
   normalizeReelAudioVolume,
+  resolveClipOrientationsForPaths,
 } from '@/lib/videos/clip-config'
+import {
+  normalizeClipOrientationsInput,
+  type ClipOrientationMeta,
+} from '@/lib/videos/video-orientation'
 import { extractScriptTextFromPdfBuffer } from '@/lib/videos/extract-pdf-script-text'
 
 const RAW_BUCKET = 'raw-videos-v2'
@@ -57,6 +62,8 @@ export interface StartJobBody {
   musicTrimStartSec?: number | null
   reelMusicVolume?: number | null
   reelDialogueVolume?: number | null
+  /** Probe de orientación en navegador (mismo orden que paths). */
+  clipOrientations?: ClipOrientationMeta[] | null
 }
 
 export type JobStartResult =
@@ -86,6 +93,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     musicTrimStartSec: musicTrimStartRaw,
     reelMusicVolume: reelMusicVolumeRaw,
     reelDialogueVolume: reelDialogueVolumeRaw,
+    clipOrientations: clipOrientationsRaw,
   } = body
 
   if (!jobId || !paths?.length) {
@@ -302,12 +310,13 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
   const musicTrimStartSec = normalizeMusicTrimStartSec(musicTrimStartRaw ?? undefined)
   const reelMusicVolume = normalizeReelAudioVolume(reelMusicVolumeRaw ?? undefined)
   const reelDialogueVolume = normalizeReelAudioVolume(reelDialogueVolumeRaw ?? undefined)
+  const clipOrientations = normalizeClipOrientationsInput(clipOrientationsRaw ?? undefined, paths.length)
 
   const supabase = getServiceClient()
 
   const { data: job, error: fetchError } = await supabase
     .from('video_jobs_v2')
-    .select('flow_type, music_track_url')
+    .select('flow_type, music_track_url, selected_clips')
     .eq('id', jobId)
     .single()
 
@@ -351,6 +360,12 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     }
   }
 
+  // Conservar orientaciones ya guardadas en biblioteca si el start no trae probe.
+  let resolvedOrientations = clipOrientations
+  if (!resolvedOrientations) {
+    resolvedOrientations = resolveClipOrientationsForPaths(job.selected_clips, paths)
+  }
+
   const pipelineInput: Json | undefined =
     clipKinds !== undefined ||
     clipDurationsSec !== undefined ||
@@ -364,7 +379,8 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     vehicleId !== undefined ||
     musicTrimStartSec !== undefined ||
     reelMusicVolume !== undefined ||
-    reelDialogueVolume !== undefined
+    reelDialogueVolume !== undefined ||
+    resolvedOrientations !== undefined
       ? ({
           _v2_pipeline_input: true,
           ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -383,6 +399,14 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
           ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),
           ...(reelMusicVolume !== undefined ? { reelMusicVolume } : {}),
           ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
+          ...(resolvedOrientations
+            ? {
+                clipOrientations: resolvedOrientations,
+                clipOrientationsByPath: Object.fromEntries(
+                  paths.map((p, i) => [p, resolvedOrientations[i]!])
+                ),
+              }
+            : {}),
         } as unknown as Json)
       : undefined
 

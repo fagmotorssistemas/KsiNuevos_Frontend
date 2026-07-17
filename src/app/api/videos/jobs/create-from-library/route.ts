@@ -11,6 +11,7 @@ import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
+import type { Json } from '@/types/supabase'
 
 const RAW_BUCKET = 'raw-videos-v2'
 const VIDEO_EXT = /\.(mp4|mov|avi|webm|mkv|m4v)$/i
@@ -193,6 +194,12 @@ export async function POST(request: NextRequest) {
       ? { ...baseInsert, job_name: resolvedJobName }
       : baseInsert
 
+    const { data: sourceJob } = await supabase
+      .from('video_jobs_v2')
+      .select('selected_clips')
+      .eq('id', normalizedSourceJobId)
+      .maybeSingle()
+
     const { data: job, error: insertError } = await supabase
       .from('video_jobs_v2')
       .insert(insertPayload)
@@ -232,6 +239,37 @@ export async function POST(request: NextRequest) {
       }
 
       destPaths.push(destPath)
+    }
+
+    // Copiar probe de orientación (biblioteca → job de reel) remapeando paths.
+    if (sourceJob?.selected_clips && typeof sourceJob.selected_clips === 'object') {
+      const srcMeta = sourceJob.selected_clips as {
+        clipOrientations?: unknown[]
+        clipOrientationsByPath?: Record<string, unknown>
+      }
+      const byPathSrc = srcMeta.clipOrientationsByPath ?? {}
+      const arrSrc = Array.isArray(srcMeta.clipOrientations) ? srcMeta.clipOrientations : []
+      const mapped: unknown[] = []
+      const byPathDest: Record<string, unknown> = {}
+      for (let i = 0; i < paths.length; i++) {
+        const meta = byPathSrc[paths[i]!] ?? arrSrc[i]
+        if (meta && typeof meta === 'object') {
+          mapped.push(meta)
+          byPathDest[destPaths[i]!] = meta
+        }
+      }
+      if (mapped.length === destPaths.length) {
+        await supabase
+          .from('video_jobs_v2')
+          .update({
+            selected_clips: {
+              _v2_pipeline_input: true,
+              clipOrientations: mapped,
+              clipOrientationsByPath: byPathDest,
+            } as unknown as Json,
+          })
+          .eq('id', newJobId)
+      }
     }
 
     const scriptPath = `${newJobId}/guion_${Date.now()}.pdf`

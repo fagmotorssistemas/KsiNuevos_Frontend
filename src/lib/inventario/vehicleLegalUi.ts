@@ -59,7 +59,7 @@ export function getDocumentCheckStatus(
 ): ChecklistCellStatus {
   if (!doc) return 'missing'
   if (DOC_OK.includes(doc.status)) return 'ok'
-  if (catalog.requiresFile && documentHasFiles(doc)) return 'ok'
+  if ((catalog.requiresFile || catalog.allowsFile) && documentHasFiles(doc)) return 'ok'
   if (!catalog.requiresFile && (doc.status === 'aprobado' || doc.status === 'completo' || doc.detail_text?.trim())) {
     return 'ok'
   }

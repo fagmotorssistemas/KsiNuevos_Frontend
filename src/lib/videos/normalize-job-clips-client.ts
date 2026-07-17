@@ -1,21 +1,23 @@
 export type NormalizeClipsApiResult = {
   normalized?: string[]
   skipped?: string[]
+  skipDetails?: Array<{ path: string; reason: string }>
   errors?: string[]
   error?: string
 }
 
 /**
- * Endereza clips en Storage (rotate → píxeles verticales) antes de comprimir/renderizar.
+ * Endereza clips en Storage (rotate → píxeles verticales) para Honor/móvil.
+ * Automático: no bloquea el flujo si ffmpeg no está; sí falla si hay error de proceso real.
  */
-export async function normalizeJobClipsOrThrow(
+export async function normalizeJobClipsBestEffort(
   jobId: string,
   paths: string[],
   onProgress?: (message: string) => void
 ): Promise<number> {
   if (paths.length === 0) return 0
 
-  onProgress?.(`Enderezando orientación de ${paths.length} clip(s)…`)
+  onProgress?.(`Ajustando orientación vertical en servidor…`)
 
   let data: NormalizeClipsApiResult
   try {
@@ -26,27 +28,33 @@ export async function normalizeJobClipsOrThrow(
     })
     data = (await res.json()) as NormalizeClipsApiResult
     if (!res.ok) {
-      throw new Error(data.error ?? `HTTP ${res.status}`)
+      console.warn(`[normalize-clips][${jobId}] HTTP ${res.status}:`, data.error)
+      onProgress?.('Orientación: omitida (servidor no pudo ajustar). Continuando…')
+      return 0
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(
-      `No se pudo enderezar la orientación de los clips (${msg}). Comprueba que ffmpeg esté disponible en el servidor.`
-    )
+    console.warn(`[normalize-clips][${jobId}]`, err)
+    onProgress?.('Orientación: omitida. Continuando…')
+    return 0
   }
 
   const normalized = data.normalized ?? []
   const errors = data.errors ?? []
+  const skipDetails = data.skipDetails ?? []
+  const ffmpegMissing = skipDetails.some((d) => /ffmpeg|ffprobe|enoent/i.test(d.reason))
 
   if (normalized.length > 0) {
-    onProgress?.(`${normalized.length} clip(s) enderezado(s).`)
+    onProgress?.(`${normalized.length} clip(s) en vertical correcta.`)
   }
 
   if (errors.length > 0) {
     console.warn(`[normalize-clips][${jobId}]`, errors)
-    throw new Error(
-      `No se pudo enderezar ${errors.length} clip(s): ${errors[0]?.slice(0, 200) ?? 'error desconocido'}`
+    // No abortar el reel: avisar y seguir (mismo comportamiento que compresión parcial).
+    onProgress?.(
+      `Orientación: ${errors.length} clip(s) no se pudieron ajustar. Continuando…`
     )
+  } else if (ffmpegMissing && normalized.length === 0) {
+    console.warn(`[normalize-clips][${jobId}] Nest/ffmpeg no disponible para orientación`)
   }
 
   return normalized.length

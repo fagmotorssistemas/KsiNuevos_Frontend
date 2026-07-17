@@ -1,3 +1,5 @@
+import type { ClipOrientationMeta } from '@/lib/videos/video-orientation'
+
 /** spoken = con habla (AssemblyAI). visual_only = planos sin habla; solo como vídeo encima del audio de otro clip. */
 export type VideoClipKind = 'spoken' | 'visual_only'
 
@@ -18,6 +20,13 @@ export interface VideoJobPipelineInputMeta {
   clipKinds?: VideoClipKind[]
   /** Duración en segundos por índice de clip (desde el navegador). */
   clipDurationsSec?: (number | null)[]
+  /**
+   * Orientación por índice (= orden de raw_video_paths): probe en navegador al subir.
+   * Shotstack usa `shotstackRotateAngle` solo cuando ≠ null (clips “corruptos” con tag rotate).
+   */
+  clipOrientations?: ClipOrientationMeta[]
+  /** Mapa path → orientación (más robusto al append / reorder). */
+  clipOrientationsByPath?: Record<string, ClipOrientationMeta>
   /**
    * Índice del clip cuyo audio completo va como voz en off (audio-only).
    * Gemini arma solo la secuencia narrativa sin este clip.
@@ -74,6 +83,8 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
   return (
     Array.isArray(o.clipKinds) ||
     Array.isArray(o.clipDurationsSec) ||
+    Array.isArray(o.clipOrientations) ||
+    (o.clipOrientationsByPath != null && typeof o.clipOrientationsByPath === 'object') ||
     typeof o.voiceOverBaseClipIndex === 'number' ||
     (Array.isArray(o.voiceOverOverlayClipIndices) && o.voiceOverOverlayClipIndices.length > 0) ||
     (typeof o.voiceOverAudioPath === 'string' && o.voiceOverAudioPath.trim().length > 0) ||
@@ -85,6 +96,49 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     (typeof o.vehicleId === 'string' && o.vehicleId.trim().length > 0) ||
     normalizeReelAudioVolume(o.reelMusicVolume) != null ||
     normalizeReelAudioVolume(o.reelDialogueVolume) != null
+  )
+}
+
+/** Resuelve meta de orientación al orden de `paths` (array o mapa por path). */
+export function resolveClipOrientationsForPaths(
+  selectedClips: unknown,
+  paths: string[]
+): ClipOrientationMeta[] | undefined {
+  if (!paths.length) return undefined
+  if (!selectedClips || typeof selectedClips !== 'object') return undefined
+  const o = selectedClips as VideoJobPipelineInputMeta & {
+    clipOrientationsByPath?: Record<string, ClipOrientationMeta>
+  }
+
+  const byPath = o.clipOrientationsByPath
+  if (byPath && typeof byPath === 'object') {
+    const mapped = paths.map((p) => byPath[p])
+    if (mapped.every((m) => m && typeof m === 'object' && Number.isFinite(m.codedWidth))) {
+      return mapped as ClipOrientationMeta[]
+    }
+  }
+
+  if (Array.isArray(o.clipOrientations) && o.clipOrientations.length === paths.length) {
+    return o.clipOrientations
+  }
+  return undefined
+}
+
+/** Ángulos Shotstack alineados a raw_video_paths del job. */
+export function clipRotateAnglesFromPipelineMeta(
+  selectedClips: unknown,
+  paths?: string[]
+): Array<number | null> | undefined {
+  if (paths?.length) {
+    const metas = resolveClipOrientationsForPaths(selectedClips, paths)
+    if (!metas) return undefined
+    return metas.map((m) => (m.shotstackRotateAngle == null ? null : m.shotstackRotateAngle))
+  }
+  if (!isPipelineInputMeta(selectedClips) || !Array.isArray(selectedClips.clipOrientations)) {
+    return undefined
+  }
+  return selectedClips.clipOrientations.map((o) =>
+    o?.shotstackRotateAngle == null ? null : o.shotstackRotateAngle
   )
 }
 
