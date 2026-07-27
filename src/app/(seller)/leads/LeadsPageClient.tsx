@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { FileSpreadsheet } from "lucide-react";
 
 // Features
 import { useLeads } from "@/hooks/useLeads";
@@ -9,6 +10,7 @@ import type { LeadWithDetails } from "@/types/leads.types";
 import { LeadsList } from "@/components/features/leads/LeadsList";
 import { LeadDetailModal } from "@/components/features/leads/Detail/LeadDetailModal";
 import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
+import { LeadsExportPrintModal } from "@/components/features/leads/LeadsExportPrintModal";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -36,10 +38,12 @@ export default function LeadsPageClient() {
     sellers,
   } = useLeads();
 
-  const { profile } = useAuth();
+  const { profile, supabase } = useAuth();
+  const isAdmin = profile?.role?.toLowerCase().trim() === "admin";
 
   const [selectedLead, setSelectedLead] = useState<LeadWithDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const entryMode = searchParams.get("status") === "asesoria_financiamiento" ? "asesoria_financiamiento" : "default";
 
@@ -65,8 +69,18 @@ export default function LeadsPageClient() {
             <span className="ml-1 text-slate-400">• {totalCount} leads totales</span>
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="primary" size="sm" onClick={reload} disabled={isLoading}>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="primary"
+            size="sm"
+            className="gap-2"
+            onClick={() => setIsExportModalOpen(true)}
+            disabled={isLoading}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Exportar / Imprimir
+          </Button>
+          <Button variant="secondary" size="sm" onClick={reload} disabled={isLoading}>
             {isLoading ? "Actualizando..." : "Actualizar Datos"}
           </Button>
         </div>
@@ -103,6 +117,14 @@ export default function LeadsPageClient() {
       {isModalOpen && selectedLead && (
         <LeadDetailModal lead={selectedLead} onClose={handleCloseModal} entryMode={entryMode} />
       )}
+
+      <LeadsExportPrintModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        supabase={supabase}
+        baseFilters={filters}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

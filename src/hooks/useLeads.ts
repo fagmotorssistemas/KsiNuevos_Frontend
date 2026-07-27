@@ -66,6 +66,7 @@ export function useLeads() {
         hasBudget: false,
         hasTradeIn: false,
         onlyInteractions: false,
+        withoutResume: false,
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -97,6 +98,7 @@ export function useLeads() {
             hasBudget: false,
             hasTradeIn: false,
             onlyInteractions: false,
+            withoutResume: false,
         }));
     }, [searchParams]);
 
@@ -156,6 +158,7 @@ export function useLeads() {
             hasBudget: false,
             hasTradeIn: false,
             onlyInteractions: false,
+            withoutResume: false,
         });
     };
 
@@ -270,7 +273,7 @@ export function useLeads() {
             } else if (key === 'dateRange') {
                 setFilters(prev => ({ ...prev, dateRange: value, exactDate: '' }));
             } else if (key === 'status') {
-                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false }));
+                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false }));
             } else {
                 setFilters(prev => ({ ...prev, [key]: value }));
             }

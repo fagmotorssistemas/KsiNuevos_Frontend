@@ -92,6 +92,10 @@ const applyLeadsCreatedAtRangeFromFilters = (query: any, filters: LeadsFilters) 
     return applyLeadsCreatedInRange(query, range.start, range.end);
 };
 
+/** Sin resumen = no respondido (alineado a la métrica de respondidos). */
+const applyWithoutResumeFilter = (query: any) =>
+    query.or('resume.is.null,resume.eq.');
+
 const isLeadsTemperatureFilterActive = (filters: LeadsFilters) =>
     Boolean(filters.temperature && filters.temperature !== 'all');
 
@@ -212,6 +216,7 @@ const isBoardFastPathEligible = (filters: LeadsFilters) =>
     !filters.search?.trim() &&
     !filters.hasTradeIn &&
     !filters.onlyInteractions &&
+    !filters.withoutResume &&
     filters.status !== 'datos_pedidos' &&
     filters.status !== 'asesoria_financiamiento';
 
@@ -752,6 +757,11 @@ export const fetchLeadsAPI = async (
             query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
 
+        // Solo sin resumen (no respondidos)
+        if (filters.withoutResume) {
+            query = applyWithoutResumeFilter(query);
+        }
+
         // Intersect all idFilters (búsqueda, trade-in, etc.; temperatura va aparte)
         if (idFilters.length > 0) {
             let finalIds = idFilters[0];
@@ -794,6 +804,33 @@ export const fetchLeadsAPI = async (
             : await fetchTradeInCarsForLeadPage(supabase, rawLeads);
 
         // 5. Query Secundaria para "Respondidos" (Métrica 1)
+        // Con filtro sin resumen, la lista ya son no respondidos → 0.
+        if (filters.withoutResume) {
+            const pageLeadPksEmpty = rawLeads
+                .map((r) => parseLeadPk(r?.id))
+                .filter((n): n is number => n != null);
+
+            const monthTempByLeadEmpty =
+                pageLeadPksEmpty.length > 0
+                    ? await fetchEffectiveTemperatureForLeads(
+                          supabase,
+                          pageLeadPksEmpty,
+                          tempFilterActive
+                              ? temperatureScope
+                              : { mode: 'month', campaignMonth: getEcuadorMonthStartISO() },
+                          tempFilterActive
+                              ? (filters.temperature as LeadTemperatureFilter)
+                              : undefined
+                      )
+                    : new Map<number, string>();
+
+            return {
+                data: mapLeadsPageRows(rawLeads, tradeInByLeadPk, monthTempByLeadEmpty),
+                count: count || 0,
+                respondedCount: 0,
+            };
+        }
+
         // CORRECCIÓN: Ahora contamos como respondido si 'resume' NO es nulo y NO está vacío.
         let respondedQuery = supabase
             .from('leads')

@@ -155,6 +155,7 @@ export function LeadsToolbar({
         filters.hasBudget ||
         filters.hasTradeIn ||
         filters.onlyInteractions ||
+        filters.withoutResume ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
         (canFilterByAssignee && assignedToValue !== 'all');
 
@@ -348,17 +349,54 @@ export function LeadsToolbar({
                     <span className="hidden sm:inline h-1 w-1 rounded-full bg-slate-300"></span>
 
                     <MetricHint
-                        title="Respondidos (con resumen)"
-                        lines={respondedHintLines}
-                        className={`items-center gap-1.5 text-brand-600 bg-brand-50 px-2.5 py-1 rounded-md border border-brand-100`}
+                        as="button"
+                        title={
+                            filters.withoutResume
+                                ? "Filtro activo: sin responder"
+                                : "Respondidos (con resumen)"
+                        }
+                        lines={
+                            filters.withoutResume
+                                ? [
+                                      "Mostrando solo leads sin resumen ejecutivo.",
+                                      "Clic de nuevo para quitar el filtro.",
+                                  ]
+                                : [
+                                      ...respondedHintLines,
+                                      "Clic para ver solo los no respondidos (sin resumen).",
+                                  ]
+                        }
+                        className={`items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm transition-colors ${
+                            filters.withoutResume
+                                ? "text-amber-800 bg-amber-50 border-amber-200"
+                                : "text-brand-600 bg-brand-50 border-brand-100 hover:bg-brand-100/70"
+                        }`}
+                        onClick={() => {
+                            const next = !filters.withoutResume;
+                            onFilterChange({
+                                withoutResume: next,
+                                onlyInteractions: false,
+                                hasBudget: false,
+                                hasTradeIn: false,
+                            });
+                        }}
                     >
                         <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-                        <span>
-                            <strong className="text-brand-700">{respondedCount}</strong> de {totalResults}{' '}
-                            respondidos
-                        </span>
-                        {totalResults > 0 && (
-                            <span className="text-brand-400 ml-0.5">({responseRate}%)</span>
+                        {filters.withoutResume ? (
+                            <span>
+                                Sin responder:{" "}
+                                <strong className="text-amber-900">{totalResults}</strong>
+                            </span>
+                        ) : (
+                            <span>
+                                <strong className="text-brand-700">{respondedCount}</strong> de{" "}
+                                {totalResults} respondidos
+                                {totalResults > 0 && (
+                                    <span className="text-brand-400 ml-0.5">
+                                        ({responseRate}%)
+                                    </span>
+                                )}
+                            </span>
                         )}
                     </MetricHint>
 
@@ -378,6 +416,7 @@ export function LeadsToolbar({
                             const ensureDate = next && !filters.exactDate ? getEcuadorDateISO() : filters.exactDate;
                             onFilterChange({
                                 onlyInteractions: next,
+                                withoutResume: false,
                                 dateRange: 'all',
                                 exactDate: ensureDate,
                             });
@@ -417,7 +456,7 @@ export function LeadsToolbar({
                                         {budgetCount > 0 && (
                                             <button 
                                                 type="button"
-                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all', hasTradeIn: false, onlyInteractions: false })}
+                                                onClick={() => onFilterChange({ hasBudget: !filters.hasBudget, status: 'all', requestStatus: 'all', hasTradeIn: false, onlyInteractions: false, withoutResume: false })}
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                     filters.hasBudget 
                                                     ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm' 
@@ -446,6 +485,7 @@ export function LeadsToolbar({
                                                         requestStatus: "all",
                                                         hasBudget: false,
                                                         onlyInteractions: false,
+                                                        withoutResume: false,
                                                     })
                                                 }
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
@@ -483,7 +523,7 @@ export function LeadsToolbar({
                                         {requestStats.datosPedidos.total > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 <button 
-                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false })}
+                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false })}
                                                     className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                         filters.status === 'datos_pedidos'
                                                         ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm'
@@ -512,7 +552,7 @@ export function LeadsToolbar({
                                                 {filters.status === 'datos_pedidos' && (
                                                     <div className="flex flex-col gap-0.5 pl-11 pr-2 pb-1 animate-in slide-in-from-top-1 fade-in duration-200">
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'pendiente', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'pendiente' 
                                                                 ? 'bg-orange-100 text-orange-800 font-semibold border-orange-200 shadow-sm' 
@@ -523,7 +563,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'pendiente' ? 'bg-orange-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.pendiente}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'en_proceso', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'en_proceso' 
                                                                 ? 'bg-blue-100 text-blue-800 font-semibold border-blue-200 shadow-sm' 
@@ -534,7 +574,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'en_proceso' ? 'bg-blue-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.en_proceso}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'resuelto', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 filters.requestStatus === 'resuelto' 
                                                                 ? 'bg-emerald-100 text-emerald-800 font-semibold border-emerald-200 shadow-sm' 
@@ -545,7 +585,7 @@ export function LeadsToolbar({
                                                             <span className={`font-bold px-1.5 rounded ${filters.requestStatus === 'resuelto' ? 'bg-emerald-200/50' : 'bg-slate-100 text-slate-500'}`}>{requestStats.datosPedidos.resuelto}</span>
                                                         </button>
                                                         <button 
-                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false }); }}
+                                                            onClick={(e) => { e.stopPropagation(); onFilterChange({ status: 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false }); }}
                                                             className={`flex justify-between items-center px-2 py-1.5 rounded-md text-xs transition-colors border ${
                                                                 (filters.requestStatus === 'all' || !filters.requestStatus)
                                                                 ? 'bg-purple-100 text-purple-800 font-semibold border-purple-200 shadow-sm' 

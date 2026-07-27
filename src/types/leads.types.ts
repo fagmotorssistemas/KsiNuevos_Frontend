@@ -41,4 +41,6 @@ export type LeadsFilters = {
      * (updated_at solo cambia al guardar resume).
      */
     onlyInteractions?: boolean;
+    /** Solo leads sin resumen ejecutivo (no respondidos). */
+    withoutResume?: boolean;
 };
