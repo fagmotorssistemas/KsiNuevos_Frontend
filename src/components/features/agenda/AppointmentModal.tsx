@@ -207,10 +207,16 @@ export function AppointmentModal({
     const isWalkInNew = !isEditing && !hasLeadLinked;
     const [showVehiclePicker, setShowVehiclePicker] = useState(false);
 
-    // Validar si todos los campos tienen datos
-    const isFormValid = 
+    // Con lead vinculado el nombre puede venir del lead.
+    // En edición permitimos citas legacy sin external_client_name.
+    const hasClientName =
+        formData.external_client_name.trim().length > 0 ||
+        Boolean(formData.lead_id) ||
+        isEditing;
+
+    const isFormValid =
         formData.title.trim().length > 0 &&
-        formData.external_client_name.trim().length > 0 &&
+        hasClientName &&
         formData.start_time.length > 0 &&
         formData.location.trim().length > 0 &&
         formData.notes.trim().length > 0 &&
@@ -295,7 +301,10 @@ export function AppointmentModal({
                 setFormData({
                     title: appointmentToEdit.title,
                     lead_id: appointmentToEdit.lead_id,
-                    external_client_name: appointmentToEdit.external_client_name || "",
+                    external_client_name:
+                        appointmentToEdit.external_client_name?.trim() ||
+                        appointmentToEdit.lead?.name ||
+                        "",
                     start_time: localIsoString,
                     location: appointmentToEdit.location || "",
                     notes: appointmentToEdit.notes || ""
@@ -449,10 +458,10 @@ export function AppointmentModal({
     const inputClasses = "w-full h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all pl-11 placeholder:text-slate-400 shadow-sm text-slate-700";
     const iconContainerClass = "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10";
     
-    const InputLabel = ({ label }: { label: string }) => (
+    const InputLabel = ({ label, required = true }: { label: string; required?: boolean }) => (
         <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1">
             {label}
-            <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>
+            {required && <span className="text-red-500 ml-1" title="Campo obligatorio">*</span>}
         </label>
     );
 
@@ -512,6 +521,11 @@ export function AppointmentModal({
                 }
             }
 
+            const resolvedClientName =
+                formData.external_client_name.trim() ||
+                appointmentToEdit?.lead?.name?.trim() ||
+                null;
+
             // Datos comunes para ambos casos (Insert y Update)
             const commonData = {
                 title: formData.title,
@@ -519,7 +533,7 @@ export function AppointmentModal({
                 start_time: startTime.toISOString(),
                 location: formData.location,
                 notes: notesWithVehicle,
-                external_client_name: formData.external_client_name
+                external_client_name: resolvedClientName
             };
 
             let dbError;
@@ -641,18 +655,30 @@ export function AppointmentModal({
 
                             {/* Cliente Externo */}
                             <div>
-                                <InputLabel label="Cliente / Contacto" />
+                                <InputLabel label="Cliente / Contacto" required={!formData.lead_id && !isEditing} />
                                 <div className="relative">
                                     <div className={iconContainerClass}><User className="h-5 w-5" /></div>
                                     <input
-                                        required
+                                        required={!formData.lead_id && !isEditing}
                                         type="text"
-                                        placeholder="Nombre del cliente"
+                                        placeholder={
+                                            formData.lead_id || isEditing
+                                                ? "Nombre del cliente (opcional)"
+                                                : "Nombre del cliente"
+                                        }
                                         className={`${inputClasses} ${getErrorClass('external_client_name')}`}
                                         value={formData.external_client_name}
                                         onChange={(e) => setFormData({...formData, external_client_name: e.target.value})}
                                     />
                                 </div>
+                                {formData.lead_id && !formData.external_client_name.trim() && (
+                                    <p className="mt-1.5 ml-1 text-xs text-slate-500">
+                                        Vinculado al lead #{formData.lead_id}
+                                        {appointmentToEdit?.lead?.name
+                                            ? ` · ${appointmentToEdit.lead.name}`
+                                            : ""}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Vehículo */}

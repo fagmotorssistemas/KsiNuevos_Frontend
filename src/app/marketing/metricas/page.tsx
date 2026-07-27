@@ -304,6 +304,7 @@ export default function MarketingMetricasPage() {
                   <Car className="h-4 w-4 text-indigo-600" />
                   <p className="text-xs font-bold text-slate-600">
                     {fmtInt(data?.paid.byVehicle.length)} en campaña ·{' '}
+                    {fmtInt(data?.paid.byVehicleCatalog.length)} catálogo ·{' '}
                     {fmtInt(data?.paid.byVehicleNeutral.length)} neutros · {monthLabel}
                   </p>
                 </div>
@@ -315,6 +316,7 @@ export default function MarketingMetricasPage() {
               </div>
               <VehicleLeadsTable
                 campaignRows={data?.paid.byVehicle ?? []}
+                catalogRows={data?.paid.byVehicleCatalog ?? []}
                 neutralRows={data?.paid.byVehicleNeutral ?? []}
               />
             </div>

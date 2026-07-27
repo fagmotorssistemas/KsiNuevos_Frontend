@@ -990,7 +990,7 @@ export function CampaignMetricsTable({ rows }: { rows: CampaignRankRow[] }) {
 
 const VEHICLE_LEADS_PAGE_SIZE = 10
 
-type VehicleLeadsTab = 'campaign' | 'neutral'
+type VehicleLeadsTab = 'campaign' | 'catalog' | 'neutral'
 
 function normalizeVehicleSearchText(value: string): string {
   return value
@@ -1025,6 +1025,7 @@ function VehicleLeadsTableBody({
 }) {
   const [page, setPage] = useState(1)
   const isNeutral = mode === 'neutral'
+  const isCatalog = mode === 'catalog'
 
   const totalPages = Math.max(1, Math.ceil(rows.length / VEHICLE_LEADS_PAGE_SIZE))
 
@@ -1117,7 +1118,14 @@ function VehicleLeadsTableBody({
                 >
                   🧊 Frío
                 </th>
-                <th className="px-4 py-3.5 text-[10px] font-extrabold uppercase tracking-wider text-right">
+                <th
+                  className="px-4 py-3.5 text-[10px] font-extrabold uppercase tracking-wider text-right"
+                  title={
+                    isCatalog
+                      ? 'Meta no reporta alcance por producto en campañas de catálogo (queda en 0)'
+                      : undefined
+                  }
+                >
                   Alcance
                 </th>
                 <th className="px-4 py-3.5 text-[10px] font-extrabold uppercase tracking-wider text-right">
@@ -1150,6 +1158,11 @@ function VehicleLeadsTableBody({
                       {v.isVendido && (
                         <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
                           Vendido
+                        </span>
+                      )}
+                      {isCatalog && (
+                        <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
+                          Catálogo
                         </span>
                       )}
                       {isNeutral && (
@@ -1271,15 +1284,18 @@ function VehicleLeadsTableBody({
 
 export function VehicleLeadsTable({
   campaignRows,
+  catalogRows,
   neutralRows,
 }: {
   campaignRows: VehicleLeadsRow[]
+  catalogRows: VehicleLeadsRow[]
   neutralRows: VehicleLeadsRow[]
 }) {
   const [tab, setTab] = useState<VehicleLeadsTab>('campaign')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const activeRows = tab === 'campaign' ? campaignRows : neutralRows
+  const activeRows =
+    tab === 'campaign' ? campaignRows : tab === 'catalog' ? catalogRows : neutralRows
   const filteredRows = useMemo(
     () => activeRows.filter((row) => matchesVehicleLeadsSearch(row, searchQuery)),
     [activeRows, searchQuery]
@@ -1309,6 +1325,27 @@ export function VehicleLeadsTable({
             ].join(' ')}
           >
             {campaignRows.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('catalog')}
+          className={[
+            'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
+            tab === 'catalog'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900',
+          ].join(' ')}
+        >
+          <Tag className="h-3.5 w-3.5 text-amber-600" />
+          Catálogo
+          <span
+            className={[
+              'tabular-nums rounded-md px-1.5 py-0.5 text-[10px]',
+              tab === 'catalog' ? 'bg-amber-100 text-amber-800' : 'bg-white text-slate-600',
+            ].join(' ')}
+          >
+            {catalogRows.length}
           </span>
         </button>
         <button
@@ -1367,6 +1404,14 @@ export function VehicleLeadsTable({
         </p>
       )}
 
+      {tab === 'catalog' && (
+        <p className="text-xs text-slate-500 font-medium -mt-1">
+          Autos en <span className="font-extrabold text-slate-700">campañas de catálogo Meta</span> (desglose por
+          producto). El alcance por auto no está disponible en este formato; Meta puede tardar hasta un día en
+          reportar datos de campañas recién activadas.
+        </p>
+      )}
+
       {tab === 'neutral' && (
         <p className="text-xs text-slate-500 font-medium -mt-1">
           Autos <span className="font-extrabold text-slate-700">disponibles en patio</span> sin campaña Meta en el
@@ -1383,7 +1428,9 @@ export function VehicleLeadsTable({
             ? 'Ningún vehículo coincide con marca, modelo o placa.'
             : tab === 'campaign'
               ? 'Sin vehículos con campaña o gasto Meta mapeado en este mes.'
-              : 'No hay autos disponibles en patio sin campaña en este mes.'
+              : tab === 'catalog'
+                ? 'Sin datos del catálogo todavía. Meta tarda hasta un día en reportar campañas recién activadas.'
+                : 'No hay autos disponibles en patio sin campaña en este mes.'
         }
       />
     </div>

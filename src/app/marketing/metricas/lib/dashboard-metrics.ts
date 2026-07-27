@@ -140,6 +140,8 @@ export type DashboardMetrics = {
     topCampaigns: CampaignRankRow[]
     allCampaigns: CampaignRankRow[]
     byVehicle: VehicleLeadsRow[]
+    /** Camino catálogo: campañas "CATALOGO" con desglose por product_id (reach no disponible). */
+    byVehicleCatalog: VehicleLeadsRow[]
     /** Patio disponible sin fila en meta_ad_vehicle_metrics / campaña en el mes. */
     byVehicleNeutral: VehicleLeadsRow[]
   }
@@ -205,6 +207,15 @@ export function campaignBelongsToMonth(
   campaignMonth: MetricasCampaignMonth
 ): boolean {
   return campaignMonthFromDateStart(dateStart) === campaignMonth
+}
+
+/** Campañas del camino catálogo (Advantage+ / catálogo de productos): nombre contiene "CATALOGO". */
+export function isCatalogCampaignName(name: string | null | undefined): boolean {
+  return String(name ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toUpperCase()
+    .includes('CATALOGO')
 }
 
 /** @deprecated Usar campaignBelongsToMonth (mes = date_start). */
@@ -749,6 +760,8 @@ type VehicleRowDb = {
   clicks_sum: number
   cost_per_lead: number | null
   ads_count: number | null
+  /** raw_data->>'source': insights_level_ad (camino 1) | insights_product_id_breakdown (catálogo). */
+  source: string | null
 }
 
 type VehicleRowDbRaw = Omit<VehicleRowDb, 'vehicle_label' | 'report_date'> & {
@@ -757,7 +770,7 @@ type VehicleRowDbRaw = Omit<VehicleRowDb, 'vehicle_label' | 'report_date'> & {
 
 /** Sin report_date en BD: una fila por (inventory_id, campaign_id), filtro por updated_at. */
 const VEHICLE_SELECT =
-  'inventory_id, campaign_id, campaign_name, spend, leads_count, reach_sum, impressions_sum, clicks_sum, cost_per_lead, ads_count, updated_at'
+  'inventory_id, campaign_id, campaign_name, spend, leads_count, reach_sum, impressions_sum, clicks_sum, cost_per_lead, ads_count, updated_at, source:raw_data->>source'
 
 type InventoryMeta = {
   label: string
@@ -825,6 +838,7 @@ function mapVehicleRows(raw: VehicleRowDbRaw[], labels: Map<string, string>): Ve
     clicks_sum: num(r.clicks_sum),
     cost_per_lead: r.cost_per_lead,
     ads_count: r.ads_count,
+    source: r.source ?? null,
     vehicle_label: labels.get(String(r.inventory_id)) ?? null,
     report_date: reportDateStr(r.updated_at),
   }))
@@ -835,7 +849,8 @@ async function fetchSpendByInventoryForMonth(
   db: ReturnType<typeof metricsDb>,
   campaignWindows: Map<string, { dateStart: string | null; dateStop: string | null }>,
   sinceReportDate: string,
-  untilReportDate: string
+  untilReportDate: string,
+  excludeCampaignIds: Set<string> = new Set()
 ): Promise<Map<string, number>> {
   const { data, error } = await db
     .from('meta_ad_vehicle_metrics')
@@ -848,6 +863,7 @@ async function fetchSpendByInventoryForMonth(
     const id = String((row as { inventory_id?: string }).inventory_id ?? '')
     const cid = String((row as { campaign_id?: string }).campaign_id ?? '')
     if (!id || !cid) continue
+    if (excludeCampaignIds.has(cid)) continue
     const w = campaignWindows.get(cid)
     const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
     if (w && !campaignBelongsToMonth(w.dateStart, campaignMonth)) {
@@ -1775,16 +1791,36 @@ export async function fetchDashboardMetrics(
     vehicleRaw,
     (r) => `${r.inventory_id}|${r.campaign_id}`
   )
-  const allVehicleRows = await fetchAllVehicleMetricRows(db)
+  const allVehicleRowsRaw = await fetchAllVehicleMetricRows(db)
   const campaignIdsForWindows = [
     ...new Set([
-      ...allVehicleRows.map((r) => String(r.campaign_id)),
+      ...allVehicleRowsRaw.map((r) => String(r.campaign_id)),
       ...vehicleSnapshots.map((r) => String(r.campaign_id)),
       ...generalSnapshots.map((r) => String(r.campaign_id)),
     ].filter(Boolean)),
   ]
   const campaignWindows = await fetchCampaignWindows(db, campaignIdsForWindows)
   const selectedCampaignMonth = campaignMonth
+
+  // Camino catálogo: se separa del camino 1 para que no se mezclen tablas ni gasto.
+  // Criterio principal: raw_data->>'source' (marca de origen del backend); fallback: nombre "CATALOGO".
+  const isCatalogRow = (r: VehicleRowDb) =>
+    r.source === 'insights_product_id_breakdown' ||
+    (r.source == null && isCatalogCampaignName(r.campaign_name))
+  const allVehicleRows = allVehicleRowsRaw.filter((r) => !isCatalogRow(r))
+  const catalogCampaignIds = new Set<string>([
+    ...allVehicleRowsRaw.filter(isCatalogRow).map((r) => String(r.campaign_id)),
+    ...generalSnapshots
+      .filter((r) => isCatalogCampaignName(r.campaign_name))
+      .map((r) => String(r.campaign_id)),
+  ])
+  // Catálogo corre varios meses (ej. julio-agosto): se filtra por solapamiento, no por mes de date_start.
+  const catalogVehicleRowsInMonth = allVehicleRowsRaw.filter((row) => {
+    if (!isCatalogRow(row)) return false
+    const w = campaignWindows.get(String(row.campaign_id ?? ''))
+    if (!w?.dateStart) return false
+    return campaignOverlapsMonth(w.dateStart, w.dateStop, sinceReportDate, untilReportDate)
+  })
 
   const vehicleRowsInMonth = filterVehicleRowsByCampaignMonth(
     allVehicleRows,
@@ -1802,7 +1838,8 @@ export async function fetchDashboardMetrics(
     db,
     campaignWindows,
     sinceReportDate,
-    untilReportDate
+    untilReportDate,
+    catalogCampaignIds
   )
   const leadCounts = await countVehicleLeadsFromInterestedCars(
     db,
@@ -1844,7 +1881,61 @@ export async function fetchDashboardMetrics(
     botSuggestionsByInventory
   )
 
-  const campaignInventoryIds = new Set(byVehicle.map((r) => r.inventoryId))
+  let byVehicleCatalog: VehicleLeadsRow[] = []
+  if (catalogVehicleRowsInMonth.length > 0) {
+    const catalogSpendByInventory = new Map<string, number>()
+    for (const row of catalogVehicleRowsInMonth) {
+      const id = String(row.inventory_id ?? '')
+      if (!id) continue
+      catalogSpendByInventory.set(id, (catalogSpendByInventory.get(id) ?? 0) + num(row.spend))
+    }
+    const catalogInventoryIds = [
+      ...new Set(catalogVehicleRowsInMonth.map((r) => String(r.inventory_id)).filter(Boolean)),
+    ]
+    const catalogWindowByInventory = buildCampaignWindowByInventory(
+      catalogVehicleRowsInMonth,
+      campaignWindows
+    )
+    const catalogLeadCounts = await countVehicleLeadsFromInterestedCars(
+      db,
+      catalogVehicleRowsInMonth,
+      campaignWindows,
+      sinceReportDate,
+      untilReportDate
+    )
+    const [catalogTempCounts, catalogMeta, catalogShowroom, catalogCitas] = await Promise.all([
+      countVehicleLeadTemperatures(db, catalogLeadCounts.campanaLeads),
+      fetchInventoryMeta(db, catalogInventoryIds),
+      countShowroomVisitsByInventory(
+        db,
+        catalogInventoryIds,
+        catalogWindowByInventory,
+        sinceReportDate,
+        untilReportDate
+      ),
+      countBotSuggestionsByInventory(
+        db,
+        catalogInventoryIds,
+        catalogWindowByInventory,
+        sinceReportDate,
+        untilReportDate
+      ),
+    ])
+    byVehicleCatalog = buildVehicleLeadsTable(
+      catalogVehicleRowsInMonth,
+      catalogLeadCounts,
+      catalogSpendByInventory,
+      catalogTempCounts,
+      catalogMeta,
+      catalogShowroom,
+      catalogCitas
+    )
+  }
+
+  const campaignInventoryIds = new Set([
+    ...byVehicle.map((r) => r.inventoryId),
+    ...byVehicleCatalog.map((r) => r.inventoryId),
+  ])
   const neutralIds = await fetchDisponiblePatioInventoryIds(db, campaignInventoryIds)
   const [neutralMeta, neutralLeadsInMonth, neutralShowroom] = await Promise.all([
     fetchInventoryMeta(db, neutralIds),
@@ -2001,6 +2092,7 @@ export async function fetchDashboardMetrics(
       topCampaigns,
       allCampaigns,
       byVehicle,
+      byVehicleCatalog,
       byVehicleNeutral,
     },
     organic: {
