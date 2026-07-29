@@ -144,6 +144,20 @@ const styles = StyleSheet.create({
     lineHeight: 1.4,
     paddingRight: 4,
   },
+  cellHablante: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 6.5,
+    color: C.accent,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  cellTextoPantalla: {
+    fontFamily: 'Helvetica-Oblique',
+    fontSize: 7,
+    color: C.muted,
+    marginTop: 3,
+    paddingRight: 4,
+  },
   footer: {
     position: 'absolute',
     bottom: 16,
@@ -221,7 +235,17 @@ export function GuionReelsPDFDocument({ data }: { data: GuionData }) {
                   {toma.tiempo?.trim() || '—'}
                 </Text>
                 <Text style={[styles.cellAccion, styles.colAccion]}>{toma.descripcionToma}</Text>
-                <Text style={[styles.cellDialogo, styles.colDialogo]}>{toma.guion}</Text>
+                <View style={styles.colDialogo}>
+                  {toma.hablante ? (
+                    <Text style={styles.cellHablante}>{toma.hablante}</Text>
+                  ) : null}
+                  <Text style={styles.cellDialogo}>{toma.guion}</Text>
+                  {toma.descripcionGuion ? (
+                    <Text style={styles.cellTextoPantalla}>
+                      En pantalla: {toma.descripcionGuion}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             ))}
           </View>

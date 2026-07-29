@@ -20,6 +20,7 @@ import {
     FolderOpen,
     Radio,
     Layers,
+    Clapperboard,
 } from 'lucide-react';
 import {
     canSeeMarketingSidebarHref,
@@ -32,6 +33,7 @@ import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModule
 const menuItems = [
     { name: 'Inicio', href: '/marketing', icon: LayoutDashboard },
     { name: 'Guiones', href: '/marketing/guiones', icon: ScrollText },
+    { name: 'Guiones V2', href: '/marketing/guiones-v2', icon: Clapperboard },
     { name: 'Publicaciones', href: '/marketing/publicaciones', icon: Megaphone },
     { name: 'Métricas', href: '/marketing/metricas', icon: BarChart3 },
     { name: 'Campañas', href: '/marketing/campanas', icon: Layers },
@@ -156,7 +158,8 @@ export function MarketingSidebar() {
                             const isActive =
                                 item.href === '/marketing'
                                     ? pathname === '/marketing'
-                                    : pathname.startsWith(item.href);
+                                    : pathname === item.href ||
+                                      pathname.startsWith(`${item.href}/`);
                             return (
                                 <Link
                                     key={item.href}

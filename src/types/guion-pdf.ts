@@ -14,6 +14,8 @@ export type GuionTomaPdf = {
   descripcionToma: string
   guion: string
   descripcionGuion?: string
+  /** Nombre a mostrar del hablante (ya resuelto, ej. "Vanessa Reyes" en vez de "CAMARA"). Reels. */
+  hablante?: string
 }
 
 export type GuionData = {
