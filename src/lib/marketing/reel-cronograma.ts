@@ -7,43 +7,56 @@ export type ReelCronogramaSlot = {
   descripcion: string
 }
 
+export type ReelCronogramaFormatoKey = ReelFormato | 'creativo' | 'live'
+
 export type ReelCronogramaRow = {
-  formato: ReelFormato
+  formato: ReelCronogramaFormatoKey
   label: string
   /** Clave = día de la semana estilo `date-fns getDay` (0 = domingo ... 6 = sábado). */
   porDia: Partial<Record<number, ReelCronogramaSlot>>
+  /**
+   * Solo aparece en la tabla de referencia del front.
+   * No alimenta el plan del día ni llama al backend.
+   */
+  soloVista?: boolean
+}
+
+const SLOT_LUN_VIE = [1, 2, 3, 4, 5] as const
+
+function slotsForDays(
+  days: readonly number[],
+  slot: ReelCronogramaSlot
+): Partial<Record<number, ReelCronogramaSlot>> {
+  const out: Partial<Record<number, ReelCronogramaSlot>> = {}
+  for (const d of days) out[d] = slot
+  return out
 }
 
 /**
- * Cronograma semanal de asignación automática (crons `reels-*-asignar`).
- * Quién interviene (backend):
- * - Ficha Rápida / Duelo / Financiamiento → label fijo "Marketing"
- *   (un solo assignee técnico; sin round-robin entre usuarios)
- * - POV 3 Ganchos → Vanessa, Felipe, Xavier (1 cada uno; cámara = Marketing)
- * - Detrás de Cámaras → solo el del día (Lun Vanessa / Mié Felipe / Vie Xavier)
- * Es una referencia estática; si el cron cambia, actualizar a mano.
+ * Cronograma semanal (referencia UI + plan del día).
+ * Quién interviene (alineado al backend actual):
+ * - Ficha / Duelo / Financiamiento / Detrás → "Marketing"
+ * - POV / Gancho → 2 por día (A+B) con rotación Vanessa / Felipe / Xavier
+ * - Creativo → solo vista del cronograma (no es formato de API)
  */
 export const REEL_CRONOGRAMA: ReelCronogramaRow[] = [
   {
     formato: 'ficha_rapida',
     label: 'Ficha Rápida',
-    porDia: {
-      1: { count: 3, descripcion: '1A, 1B, 1C · Marketing (3 autos)' },
-      2: { count: 3, descripcion: '1A, 1B, 1C · Marketing (3 autos)' },
-      3: { count: 3, descripcion: '1A, 1B, 1C · Marketing (3 autos)' },
-      4: { count: 3, descripcion: '1A, 1B, 1C · Marketing (3 autos)' },
-      5: { count: 3, descripcion: '1A, 1B, 1C · Marketing (3 autos)' },
-    },
+    porDia: slotsForDays(SLOT_LUN_VIE, {
+      count: 3,
+      descripcion: '1A, 1B, 1C · Marketing (3 autos)',
+    }),
   },
   {
     formato: 'pov_gancho',
-    label: 'POV 3 Ganchos',
+    label: 'POV / Gancho',
     porDia: {
-      1: { count: 3, descripcion: 'Vanessa, Felipe, Xavier (3 videos)' },
-      2: { count: 3, descripcion: 'Vanessa, Felipe, Xavier (3 videos)' },
-      3: { count: 3, descripcion: 'Vanessa, Felipe, Xavier (3 videos)' },
-      4: { count: 3, descripcion: 'Vanessa, Felipe, Xavier (3 videos)' },
-      5: { count: 3, descripcion: 'Vanessa, Felipe, Xavier (3 videos)' },
+      1: { count: 2, descripcion: 'Vanessa + Felipe (ganchoA + ganchoB)' },
+      2: { count: 2, descripcion: 'Felipe + Xavier (ganchoA + ganchoB)' },
+      3: { count: 2, descripcion: 'Xavier + Vanessa (ganchoA + ganchoB)' },
+      4: { count: 2, descripcion: 'Vanessa + Felipe (ganchoA + ganchoB)' },
+      5: { count: 2, descripcion: 'Felipe + Xavier (ganchoA + ganchoB)' },
     },
   },
   {
@@ -58,9 +71,9 @@ export const REEL_CRONOGRAMA: ReelCronogramaRow[] = [
     formato: 'detras_camaras',
     label: 'Detrás de Cámaras',
     porDia: {
-      1: { count: 1, descripcion: 'Con Vanessa' },
-      3: { count: 1, descripcion: 'Con Felipe' },
-      5: { count: 1, descripcion: 'Con Xavier' },
+      1: { count: 1, descripcion: 'Marketing' },
+      3: { count: 1, descripcion: 'Marketing' },
+      5: { count: 1, descripcion: 'Marketing' },
     },
   },
   {
@@ -72,10 +85,29 @@ export const REEL_CRONOGRAMA: ReelCronogramaRow[] = [
       5: { count: 1, descripcion: 'Sí · Marketing' },
     },
   },
+  {
+    formato: 'creativo',
+    label: 'Creativo',
+    soloVista: true,
+    porDia: slotsForDays(SLOT_LUN_VIE, {
+      count: 1,
+      descripcion: 'Creativo',
+    }),
+  },
+  {
+    formato: 'live',
+    label: 'Live',
+    soloVista: true,
+    porDia: {
+      1: { count: 1, descripcion: 'Live' },
+      3: { count: 1, descripcion: 'Live' },
+      5: { count: 1, descripcion: 'Live' },
+    },
+  },
 ]
 
-/** Orden de columnas para mostrar (Lunes..Domingo), igual a la tabla del negocio. */
-export const CRONOGRAMA_WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
+/** Orden de columnas para mostrar (Lunes..Viernes). */
+export const CRONOGRAMA_WEEKDAY_ORDER = [1, 2, 3, 4, 5]
 
 export const CRONOGRAMA_WEEKDAY_LABELS: Record<number, string> = {
   0: 'Domingo',
@@ -94,14 +126,24 @@ export type ReelCronogramaEsperado = {
   count: number
 }
 
-/** Qué formatos corresponde asignar/generar para una fecha, según el día de la semana. */
+function isBackendFormato(formato: ReelCronogramaFormatoKey): formato is ReelFormato {
+  return formato !== 'creativo' && formato !== 'live'
+}
+
+/** Qué formatos corresponde asignar/generar para una fecha (sin filas soloVista). */
 export function getReelCronogramaDelDia(fechaYmd: string): ReelCronogramaEsperado[] {
   const weekday = getDay(new Date(`${fechaYmd}T12:00:00`))
   const result: ReelCronogramaEsperado[] = []
   for (const row of REEL_CRONOGRAMA) {
+    if (row.soloVista || !isBackendFormato(row.formato)) continue
     const slot = row.porDia[weekday]
     if (slot) {
-      result.push({ formato: row.formato, label: row.label, descripcion: slot.descripcion, count: slot.count })
+      result.push({
+        formato: row.formato,
+        label: row.label,
+        descripcion: slot.descripcion,
+        count: slot.count,
+      })
     }
   }
   return result

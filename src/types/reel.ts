@@ -21,7 +21,7 @@ export const REEL_FORMATOS: ReelFormato[] = [
 
 export const REEL_FORMATO_LABELS: Record<ReelFormato, string> = {
   ficha_rapida: 'Ficha Rápida',
-  pov_gancho: 'POV 3 Ganchos',
+  pov_gancho: 'POV / Gancho',
   duelo: 'Duelo',
   financiamiento: 'Financiamiento',
   detras_camaras: 'Detrás de Cámaras',
@@ -31,23 +31,24 @@ export function getReelFormatoLabel(formato: string): string {
   return REEL_FORMATO_LABELS[formato as ReelFormato] ?? formato
 }
 
-/** Ficha / Duelo / Financiamiento: un solo assignee técnico; label fijo "Marketing". */
+/** Ficha / Duelo / Financiamiento / Detrás: assignee técnico; label fijo "Marketing". */
 export const REEL_FORMATOS_MARKETING: ReelFormato[] = [
   'ficha_rapida',
   'duelo',
   'financiamiento',
+  'detras_camaras',
 ]
 
-/** POV / Detrás: personas reales (Vanessa, Felipe, Xavier). */
-export const REEL_FORMATOS_CON_PERSONA: ReelFormato[] = ['pov_gancho', 'detras_camaras']
+/** POV: personas reales (Vanessa, Felipe, Xavier). */
+export const REEL_FORMATOS_CON_PERSONA: ReelFormato[] = ['pov_gancho']
 
 export function isReelMarketingFormato(formato: string): boolean {
   return (REEL_FORMATOS_MARKETING as string[]).includes(formato)
 }
 
 /** Nombre visible del assignee.
- * Ficha/Duelo/Financiamiento → "Marketing".
- * POV/Detrás → solo Vanessa / Felipe / Xavier (la cámara es Marketing, no se muestra).
+ * Ficha/Duelo/Financiamiento/Detrás → "Marketing".
+ * POV → solo Vanessa / Felipe / Xavier (la cámara es Marketing, no se muestra).
  */
 export function getReelAssigneeLabel(row: {
   formato: string
