@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Megaphone, ListVideo, AlertTriangle, PlayCircle, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Megaphone, ListVideo, AlertTriangle, PlayCircle, Loader2, RefreshCw, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { ApprovedVideosPublishingPanel } from './ApprovedVideosPublishingPanel'
 import { PublishingQueueTable } from './PublishingQueueTable'
@@ -15,6 +15,14 @@ interface VideosPublishingSectionProps {
   approvedEmptyHint?: string
 }
 
+type TokenHealth = {
+  soon: boolean
+  expired: boolean
+  expiresAt: string | null
+  hasToken: boolean
+  source: string
+}
+
 export function VideosPublishingSection({
   refreshKey = 0,
   onPublishingMutate,
@@ -22,8 +30,38 @@ export function VideosPublishingSection({
   approvedEmptyHint,
 }: VideosPublishingSectionProps) {
   const [sub, setSub] = useState<SubTab>('approved')
-  const [tokenWarn, setTokenWarn] = useState<{ soon: boolean; expiresAt: string | null } | null>(null)
+  const [tokenWarn, setTokenWarn] = useState<TokenHealth | null>(null)
   const [processingQueue, setProcessingQueue] = useState(false)
+  const [refreshingToken, setRefreshingToken] = useState(false)
+  const [savingToken, setSavingToken] = useState(false)
+  const [pasteToken, setPasteToken] = useState('')
+
+  const loadTokenHealth = useCallback(() => {
+    fetch('/api/videos/publish/health', { credentials: 'include' })
+      .then((r) => r.json())
+      .then(
+        (d: {
+          instagramTokenExpiringSoon?: boolean
+          instagramTokenExpired?: boolean
+          instagramTokenExpiresAt?: string | null
+          instagramTokenHasToken?: boolean
+          instagramTokenSource?: string
+        }) => {
+          setTokenWarn({
+            soon: !!d.instagramTokenExpiringSoon,
+            expired: !!d.instagramTokenExpired,
+            expiresAt: d.instagramTokenExpiresAt ?? null,
+            hasToken: d.instagramTokenHasToken !== false,
+            source: d.instagramTokenSource ?? 'missing',
+          })
+        }
+      )
+      .catch(() => setTokenWarn(null))
+  }, [])
+
+  useEffect(() => {
+    loadTokenHealth()
+  }, [loadTokenHealth])
 
   async function runProcessNow() {
     setProcessingQueue(true)
@@ -44,17 +82,74 @@ export function VideosPublishingSection({
     }
   }
 
-  useEffect(() => {
-    fetch('/api/videos/publish/health')
-      .then((r) => r.json())
-      .then((d: { instagramTokenExpiringSoon?: boolean; instagramTokenExpiresAt?: string | null }) => {
-        setTokenWarn({
-          soon: !!d.instagramTokenExpiringSoon,
-          expiresAt: d.instagramTokenExpiresAt ?? null,
-        })
+  async function runRefreshToken(force = false) {
+    setRefreshingToken(true)
+    try {
+      const qs = force ? '?force=1' : ''
+      const res = await fetch(`/api/videos/publish/instagram/refresh-token${qs}`, {
+        method: 'POST',
+        credentials: 'include',
       })
-      .catch(() => setTokenWarn(null))
-  }, [])
+      const data = (await res.json()) as {
+        action?: string
+        expiresAt?: string
+        reason?: string
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? data.reason ?? `HTTP ${res.status}`)
+      if (data.action === 'refreshed') {
+        toast.success(`Token renovado ~60 días${data.expiresAt ? ` (hasta ${data.expiresAt})` : ''}`)
+      } else if (data.action === 'skipped') {
+        toast.message(data.reason ?? 'Refresh omitido')
+      } else if (data.action === 'needs_reauth') {
+        toast.error(data.reason ?? 'Hay que generar un token nuevo en Meta')
+      } else {
+        toast.message(data.reason ?? data.action ?? 'Listo')
+      }
+      loadTokenHealth()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo refrescar el token')
+    } finally {
+      setRefreshingToken(false)
+    }
+  }
+
+  async function savePastedToken() {
+    const accessToken = pasteToken.trim()
+    if (!accessToken) {
+      toast.error('Pega el access token de Instagram')
+      return
+    }
+    setSavingToken(true)
+    try {
+      const res = await fetch('/api/videos/publish/instagram/set-token', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        exchanged?: boolean
+        expiresAt?: string
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setPasteToken('')
+      toast.success(
+        data.exchanged
+          ? `Token canjeado a ~60 días (vence ${data.expiresAt ?? '—'})`
+          : `Token guardado (vence ${data.expiresAt ?? '—'})`
+      )
+      loadTokenHealth()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar el token')
+    } finally {
+      setSavingToken(false)
+    }
+  }
+
+  const showTokenPanel = !!tokenWarn && (tokenWarn.expired || tokenWarn.soon || !tokenWarn.hasToken)
 
   return (
     <div className="space-y-6">
@@ -70,17 +165,73 @@ export function VideosPublishingSection({
         </div>
       </div>
 
-      {tokenWarn?.soon ? (
-        <div className="flex gap-3 items-start rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-bold">Token de Instagram por vencer</p>
-            <p className="mt-1 text-amber-900/90">
-              Renueva el access token en Meta antes del límite
-              {tokenWarn.expiresAt ? ` (${tokenWarn.expiresAt})` : ''}. Configura{' '}
-              <code className="text-xs bg-amber-100/80 px-1 rounded">INSTAGRAM_ACCESS_TOKEN_EXPIRES_AT</code> en el
-              servidor para esta alerta (ISO 8601).
-            </p>
+      {showTokenPanel ? (
+        <div
+          className={`rounded-2xl border px-4 py-3 ${
+            tokenWarn.expired || !tokenWarn.hasToken
+              ? 'border-red-200 bg-red-50 text-red-950'
+              : 'border-amber-200 bg-amber-50 text-amber-950'
+          }`}
+        >
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-3 text-sm min-w-0">
+              {tokenWarn.expired || !tokenWarn.hasToken ? (
+                <>
+                  <p className="font-bold">Token de Instagram vencido o ausente</p>
+                  <p className="opacity-90">
+                    Meta no permite renovar un token ya expirado. Genera uno nuevo en Meta Developers (Instagram →
+                    token de usuario), pégalo aquí y el sistema intentará canjearlo a ~60 días. Un cron semanal lo
+                    refrescará mientras siga vivo.
+                    {tokenWarn.expiresAt ? ` Venció: ${tokenWarn.expiresAt}.` : ''}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold">Token de Instagram por vencer</p>
+                  <p className="opacity-90">
+                    Renueva antes del límite
+                    {tokenWarn.expiresAt ? ` (${tokenWarn.expiresAt})` : ''}. Fuente: {tokenWarn.source}.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={refreshingToken}
+                    onClick={() => void runRefreshToken(true)}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold disabled:opacity-50"
+                  >
+                    {refreshingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Extender ~60 días ahora
+                  </button>
+                </>
+              )}
+
+              {(tokenWarn.expired || !tokenWarn.hasToken) && (
+                <div className="space-y-2 pt-1">
+                  <label className="flex items-center gap-1.5 text-xs font-bold">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    Pegar access token nuevo
+                  </label>
+                  <textarea
+                    value={pasteToken}
+                    onChange={(e) => setPasteToken(e.target.value)}
+                    rows={3}
+                    placeholder="IGAAxxxx… o el token que te da Meta"
+                    className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-mono text-gray-900 placeholder:text-gray-400"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    disabled={savingToken || !pasteToken.trim()}
+                    onClick={() => void savePastedToken()}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-bold disabled:opacity-50"
+                  >
+                    {savingToken ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                    Guardar (intentar 60 días)
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

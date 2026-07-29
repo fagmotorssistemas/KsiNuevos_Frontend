@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { getFacebookPublishDiagnostics } from '@/lib/videos/facebook'
-import { isInstagramTokenExpiringSoon } from '@/lib/videos/publish-flow'
+import { getInstagramTokenHealth } from '@/lib/videos/publish-flow'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,9 +14,17 @@ export async function GET(request: Request) {
     return null
   })
 
+  const ig = await getInstagramTokenHealth(15).catch((e) => {
+    console.error('[publish/health] instagram token', e)
+    return null
+  })
+
   return NextResponse.json({
-    instagramTokenExpiringSoon: isInstagramTokenExpiringSoon(15),
-    instagramTokenExpiresAt: process.env.INSTAGRAM_ACCESS_TOKEN_EXPIRES_AT ?? null,
+    instagramTokenExpiringSoon: ig?.expiringSoon ?? false,
+    instagramTokenExpired: ig?.expired ?? false,
+    instagramTokenExpiresAt: ig?.expiresAt ?? null,
+    instagramTokenHasToken: ig?.hasToken ?? false,
+    instagramTokenSource: ig?.source ?? 'missing',
     facebook,
   })
 }

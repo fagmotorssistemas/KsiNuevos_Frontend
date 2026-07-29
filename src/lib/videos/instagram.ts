@@ -1,3 +1,5 @@
+import { getInstagramAccessToken } from '@/lib/videos/instagram-token'
+
 const IG_API = 'https://graph.instagram.com/v21.0'
 
 function formBody(params: Record<string, string>): string {
@@ -23,7 +25,7 @@ export interface InstagramPublishResult {
  */
 export async function publishInstagramReel(videoUrl: string, caption: string): Promise<InstagramPublishResult> {
   const userId = process.env.INSTAGRAM_USER_ID
-  const token = process.env.INSTAGRAM_ACCESS_TOKEN
+  const { token } = await getInstagramAccessToken()
   if (!userId || !token) {
     throw new Error('INSTAGRAM_USER_ID o INSTAGRAM_ACCESS_TOKEN no configurados')
   }

@@ -5,6 +5,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/videos/publish/instagram/refresh-token",
+      "schedule": "0 12 * * 1"
+    },
+    {
       "path": "/api/marketing/noticiero/auto-publish",
       "schedule": "0 14 * * 1,3,5"
     },
