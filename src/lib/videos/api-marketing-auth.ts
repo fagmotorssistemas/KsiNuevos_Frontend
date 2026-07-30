@@ -13,7 +13,7 @@ import { fetchPermissionMap } from '@/lib/permissions/fetch'
 /** Rutas API de marketing → submódulo RBAC (mismo criterio que el sidebar). */
 const MARKETING_API_PATH_ACCESS: { prefix: string; submodule: string }[] = [
   { prefix: '/api/scripts', submodule: 'plan-videos' },
-  { prefix: '/api/reels', submodule: 'guiones-v2' },
+  { prefix: '/api/reels', submodule: 'plan-videos' },
   { prefix: '/api/videos', submodule: 'video-automation' },
   { prefix: '/api/marketing/metrics', submodule: 'metricas-campana' },
   { prefix: '/api/marketing/capi', submodule: 'metricas-campana' },
