@@ -20,6 +20,22 @@ const COMENTA_CTA_WORDS = ['comenta', 'menciona', 'escribe'] as const
 const COMENTA_CTA_TEXT_RE = /\b(?:comenta|menciona|escribe)\b/i
 const MAX_WORDS_AFTER_COMENTA = 3
 
+/**
+ * Temas de voz que NO son marca/modelo. Si dice esto tras el CTA,
+ * el overlay es "COMENTA <TEMA>" (sin vehículo ni año).
+ */
+const COMENTA_TOPIC_CANONICAL: Record<string, string> = {
+  financiamiento: 'FINANCIAMIENTO',
+  financiacion: 'FINANCIAMIENTO',
+  financiamientos: 'FINANCIAMIENTO',
+  credito: 'CREDITO',
+  créditos: 'CREDITO',
+  creditos: 'CREDITO',
+  enganche: 'ENGANCHE',
+  cuota: 'CUOTA',
+  cuotas: 'CUOTAS',
+}
+
 const AFTER_COMENTA_STOPWORDS = new Set([
   'a', 'al', 'con', 'de', 'del', 'e', 'el', 'en', 'es', 'la', 'las', 'le', 'les',
   'lo', 'los', 'me', 'mi', 'no', 'o', 'para', 'por', 'que', 'se', 'si', 'su', 'sus',
@@ -66,8 +82,24 @@ function spokenWordMatchesBrand(word: string, brandLine: string): boolean {
 }
 
 function spokenWordMatchesModelToken(word: string, modelTokenNorm: string): boolean {
+  // Tokens cortos ("fin", "h", "ac") no deben fuzzy-matchear palabras largas
+  // ("financiamiento" → "fin" del modelo "2008 fin h...").
   if (modelTokenNorm.length < 2) return false
+  if (modelTokenNorm.length < 4) {
+    return normalizeForMatch(word) === modelTokenNorm
+  }
   return wordFuzzyMatches(word, modelTokenNorm)
+}
+
+function resolveTopicOverlayFromSpeech(wordsAfter: string[]): string | null {
+  for (const word of wordsAfter) {
+    const n = normalizeForMatch(word)
+    const canonical = COMENTA_TOPIC_CANONICAL[n]
+    if (canonical) return `COMENTA ${canonical}`
+    // Prefijo: "financia...", "financiamo..." (ASR truncado)
+    if (n.startsWith('financi')) return 'COMENTA FINANCIAMIENTO'
+  }
+  return null
 }
 
 /** Etiqueta en pantalla (inventario) para una palabra dicha tras el CTA; null si no matchea. */
@@ -76,6 +108,10 @@ function inventoryLabelForSpokenWord(
   brandLine: string | null | undefined,
   modelLine: string | null | undefined
 ): string | null {
+  // Temas (financiamiento, crédito…) nunca se tratan como marca/modelo.
+  const n = normalizeForMatch(word)
+  if (COMENTA_TOPIC_CANONICAL[n] || n.startsWith('financi')) return null
+
   const brand = brandLine?.trim() ?? ''
   if (brand && spokenWordMatchesBrand(word, brand)) {
     return brand.toUpperCase()
@@ -116,8 +152,8 @@ function buildComentaOverlayFromMiddle(
 }
 
 /**
- * Una sola palabra tras el CTA que matchee marca/modelo en ficha (bien escrita).
- * Si no hay palabra útil → null (fallback inventario: 1ª palabra modelo + año).
+ * Prioridad: tema (financiamiento…) → marca/modelo dicho → null.
+ * Null no debe caer en vehículo inventado si la voz dijo otra cosa.
  */
 function resolveComentaOverlayFromSpeech(
   wordsAfter: string[],
@@ -127,12 +163,19 @@ function resolveComentaOverlayFromSpeech(
 ): string | null {
   if (wordsAfter.length === 0) return null
 
+  const topic = resolveTopicOverlayFromSpeech(wordsAfter)
+  if (topic) return topic
+
   for (const word of wordsAfter) {
     const label = inventoryLabelForSpokenWord(word, brandLine, modelLine)
     if (label) {
       return buildComentaOverlayFromMiddle([label], yearLine)
     }
   }
+
+  // Dijo algo tras el CTA pero no es marca/modelo: mostrar esa palabra, no el vehículo.
+  const first = wordsAfter[0]
+  if (first) return `COMENTA ${first.toUpperCase()}`
 
   return null
 }
@@ -213,7 +256,7 @@ function cutSubtitleBlocksAtComenta(
 
 /**
  * Detecta comenta / menciona / escribe en Assembly.
- * Overlay siempre empieza con COMENTA; opcionalmente +1 palabra del inventario + año.
+ * Overlay: COMENTA + tema (financiamiento…) o marca/modelo dicho; sin inventar vehículo.
  */
 export function applyComentaFromAssembly(
   blocks: SubtitleBlock[],
@@ -234,22 +277,32 @@ export function applyComentaFromAssembly(
   }
 
   const { timeSec: comentaTimeSec, wordsAfter } = hit
-  const fallbackOverlay = buildComentaOverlayText(opts?.modelLine, opts?.yearLine)
+  // Fallback inventario solo si el CTA no trae palabra después (ej. solo "comenta").
+  // Si dijo "financiamiento" u otra cosa, nunca inventar el vehículo.
   const spokenOverlay = resolveComentaOverlayFromSpeech(
     wordsAfter,
     opts?.brandLine,
     opts?.modelLine,
     opts?.yearLine
   )
-  const comentaOverlayText = spokenOverlay ?? fallbackOverlay
+  const comentaOverlayText =
+    spokenOverlay ??
+    (wordsAfter.length === 0
+      ? buildComentaOverlayText(opts?.modelLine, opts?.yearLine)
+      : 'COMENTA')
   const subtitleBlocks = cutSubtitleBlocksAtComenta(blocks, comentaTimeSec)
 
   if (opts?.jobId) {
     const source =
       spokenOverlay != null
-        ? `voz [${wordsAfter.join(', ')}] → 1 palabra inventario`
+        ? spokenOverlay.includes('FINANCIAMIENTO') ||
+          spokenOverlay.includes('CREDITO') ||
+          spokenOverlay.includes('ENGANCHE') ||
+          spokenOverlay.includes('CUOTA')
+          ? `voz [${wordsAfter.join(', ')}] → tema (sin vehículo)`
+          : `voz [${wordsAfter.join(', ')}] → 1 palabra inventario`
         : wordsAfter.length > 0
-          ? `voz [${wordsAfter.join(', ')}] sin match → fallback inventario`
+          ? `voz [${wordsAfter.join(', ')}] sin match → COMENTA solo`
           : 'fallback inventario (solo CTA)'
     console.log(
       `[ComentaAssembly][${opts.jobId}] COMENTA detectado t=${comentaTimeSec.toFixed(2)}s ` +
