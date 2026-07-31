@@ -1611,7 +1611,7 @@ export async function renderSegmentsV2(
     clipRotateAngles?: Array<number | null | undefined>
     /**
      * Estilo de subtítulos: `v1` (actual) | `v2` (lineal fijo abajo, Rubik 16).
-     * Si se omite, usa `VIDEO_CAPTION_STYLE_VERSION` o `v1`.
+     * Versión de captions del job. Si se omite, usa env o v1.
      */
     captionStyleVersion?: CaptionStyleVersion | null
   }

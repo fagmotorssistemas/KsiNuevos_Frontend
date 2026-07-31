@@ -231,6 +231,8 @@ export function CreateReelModal({
   /** Checklist: un corte por clip del orden, sin recorte ~35 s. */
   const [forceAllManualOrderClips, setForceAllManualOrderClips] = useState(false)
   const [showBrandOverlays, setShowBrandOverlays] = useState(false)
+  /** Estilo de subtítulos Shotstack: V2 lineal karaoke (default) o V1 clásico. */
+  const [captionStyleVersion, setCaptionStyleVersion] = useState<'v1' | 'v2'>('v2')
   const [vehicleLine1, setVehicleLine1] = useState('')
   const [vehicleLine2, setVehicleLine2] = useState('')
   const [vehicleLine3, setVehicleLine3] = useState('')
@@ -315,6 +317,7 @@ export function CreateReelModal({
     setManualClipOrderIndices([])
     setForceAllManualOrderClips(false)
     setShowBrandOverlays(false)
+    setCaptionStyleVersion('v2')
     setVehicleLine1('')
     setVehicleLine2('')
     setVehicleLine3('')
@@ -679,6 +682,7 @@ export function CreateReelModal({
       ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
       ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
       clipOrientations,
+      captionStyleVersion,
     }
 
     const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -908,6 +912,7 @@ export function CreateReelModal({
         ...(inventoryPickId.trim() ? { vehicleId: inventoryPickId.trim() } : {}),
         ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         clipOrientations,
+        captionStyleVersion,
       }
 
       const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -1591,6 +1596,43 @@ export function CreateReelModal({
                 Al generar, el sistema elige solo el fragmento de la pista que mejor encaja con la duración del Reel
                 (parte más dinámica y alineada con los cortes cuando el servidor puede analizar el audio).
               </p>
+
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-violet-950">Estilo de subtítulos</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCaptionStyleVersion('v2')}
+                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                        captionStyleVersion === 'v2'
+                          ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                          : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-gray-900">V2 · Karaoke</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        Fijo abajo, palabra activa en rojo
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCaptionStyleVersion('v1')}
+                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                        captionStyleVersion === 'v1'
+                          ? 'border-violet-500 bg-white ring-2 ring-violet-200'
+                          : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-gray-900">V1 · Clásico</span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        Alterna posición y olas
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <MusicSelector
                 selectedId={selectedMusicId}
                 onSelect={(track) => {
@@ -1691,6 +1733,9 @@ export function CreateReelModal({
                     <span className="font-semibold text-violet-950">Activar overlays de marca K-SI</span>
                     <span className="block text-xs text-gray-600 mt-0.5">
                       Título del vehículo, año, CTA, WhatsApp y logo (Shotstack).
+                      {captionStyleVersion === 'v2'
+                        ? ' En V2 el título de marca no se pinta encima de los captions.'
+                        : ''}
                     </span>
                   </span>
                 </label>

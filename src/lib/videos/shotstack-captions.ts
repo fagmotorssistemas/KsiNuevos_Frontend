@@ -1,6 +1,6 @@
 /**
  * Selector de versión de captions Shotstack.
- * Prioridad: override → env VIDEO_CAPTION_STYLE_VERSION → v1.
+ * Prioridad: override del job (modal) → env VIDEO_CAPTION_STYLE_VERSION → v1.
  */
 
 import type { SubtitleBlock } from './segmenter'
@@ -13,8 +13,8 @@ export type CaptionStyleVersion = 'v1' | 'v2'
 
 /**
  * Resuelve la versión de subtítulos.
- * Prioridad: opts.captionStyleVersion → env VIDEO_CAPTION_STYLE_VERSION → v1 (default).
- * Así V1 sigue intacta hasta que actives V2 a propósito.
+ * Prioridad: override del job → env (fallback legacy) → v1.
+ * El modal siempre envía `captionStyleVersion`; el env solo aplica a jobs viejos sin ese campo.
  */
 export function resolveCaptionStyleVersion(
   override?: CaptionStyleVersion | null

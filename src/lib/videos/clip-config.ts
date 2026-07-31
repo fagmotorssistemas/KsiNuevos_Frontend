@@ -68,6 +68,11 @@ export interface VideoJobPipelineInputMeta {
   /** Volúmenes de mezcla medidos en el navegador (ffmpeg.wasm) antes del pipeline. */
   reelMusicVolume?: number | null
   reelDialogueVolume?: number | null
+  /**
+   * Estilo de subtítulos Shotstack elegido en el modal.
+   * Si se omite (jobs viejos), el pipeline usa `VIDEO_CAPTION_STYLE_VERSION` o v1.
+   */
+  captionStyleVersion?: 'v1' | 'v2' | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta {
@@ -95,8 +100,19 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     hasVehicle ||
     (typeof o.vehicleId === 'string' && o.vehicleId.trim().length > 0) ||
     normalizeReelAudioVolume(o.reelMusicVolume) != null ||
-    normalizeReelAudioVolume(o.reelDialogueVolume) != null
+    normalizeReelAudioVolume(o.reelDialogueVolume) != null ||
+    o.captionStyleVersion === 'v1' ||
+    o.captionStyleVersion === 'v2'
   )
+}
+
+/** Lee la versión de captions elegida en el modal (si hay). */
+export function captionStyleVersionFromPipelineMeta(
+  selectedClips: unknown
+): 'v1' | 'v2' | null {
+  if (!selectedClips || typeof selectedClips !== 'object') return null
+  const v = (selectedClips as VideoJobPipelineInputMeta).captionStyleVersion
+  return v === 'v1' || v === 'v2' ? v : null
 }
 
 /** Resuelve meta de orientación al orden de `paths` (array o mapa por path). */

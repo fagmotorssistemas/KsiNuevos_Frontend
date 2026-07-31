@@ -28,6 +28,7 @@ import {
   defaultClipKinds,
   isPipelineInputMeta,
   clipRotateAnglesFromPipelineMeta,
+  captionStyleVersionFromPipelineMeta,
   normalizeClipDurationsInput,
   normalizeClipKindsInput,
   normalizeCanonicalVehicle,
@@ -472,10 +473,11 @@ function applyBrandSubtitleDedup(
   brandConfig: Awaited<ReturnType<typeof loadBrandConfigForJob>>,
   sequence: SequenceItem[],
   jobId: string,
-  guionSubtitleTimeline: boolean
+  guionSubtitleTimeline: boolean,
+  captionStyleVersion?: 'v1' | 'v2' | null
 ): SubtitleBlock[] {
   // V2 no usa título de marca: no quitar esas palabras de los subtítulos.
-  if (resolveCaptionStyleVersion() === 'v2') return subtitleBlocks
+  if (resolveCaptionStyleVersion(captionStyleVersion) === 'v2') return subtitleBlocks
   if (!brandConfig?.show_brand_overlays) return subtitleBlocks
   const modelLine = brandConfig.vehicle_line_2?.trim()
   if (!modelLine) return subtitleBlocks
@@ -823,6 +825,7 @@ export async function runSingleVideoPipelineFromStorage(
 
     let brandMentionTimeSec: number | undefined
     let clipRotateAngles: Array<number | null> | undefined
+    let captionStyleVersion: 'v1' | 'v2' | null = null
     {
       const supabaseInv = getServiceClient()
       const { data: metaRow } = await supabaseInv
@@ -831,6 +834,7 @@ export async function runSingleVideoPipelineFromStorage(
         .eq('id', jobId)
         .single()
       clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, [storagePath])
+      captionStyleVersion = captionStyleVersionFromPipelineMeta(metaRow?.selected_clips)
       if (!metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
         await resolveAndApplyVehicleFromAssemblyForJob(
@@ -851,7 +855,8 @@ export async function runSingleVideoPipelineFromStorage(
       brandConfig,
       analysis.sequence,
       jobId,
-      escenasSingle.length > 0
+      escenasSingle.length > 0,
+      captionStyleVersion
     )
 
     let comentaMentionTimeSecA: number | undefined
@@ -885,7 +890,7 @@ export async function runSingleVideoPipelineFromStorage(
       comentaMentionTimeSec: comentaMentionTimeSecA,
       comentaOverlayText: comentaOverlayTextA,
       clipRotateAngles,
-      captionStyleVersion: resolveCaptionStyleVersion(),
+      captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1596,6 +1601,7 @@ export async function runMultipleClipsPipelineFromStorage(
     let comentaMentionTimeSec: number | undefined
     let comentaOverlayText: string | undefined
     let clipRotateAngles: Array<number | null> | undefined
+    let captionStyleVersion: 'v1' | 'v2' | null = null
 
     {
       const supabaseInv = getServiceClient()
@@ -1605,6 +1611,7 @@ export async function runMultipleClipsPipelineFromStorage(
         .eq('id', jobId)
         .single()
       clipRotateAngles = clipRotateAnglesFromPipelineMeta(metaRow?.selected_clips, paths)
+      captionStyleVersion = captionStyleVersionFromPipelineMeta(metaRow?.selected_clips)
       if (escenasMulti.length === 0 && !metaRow?.video_script_id) {
         const vId = vehicleIdFromPipelineMeta(metaRow?.selected_clips)
         await resolveAndApplyVehicleFromAssemblyForJob(
@@ -1657,7 +1664,8 @@ export async function runMultipleClipsPipelineFromStorage(
       brandConfig,
       analysis.sequence,
       jobId,
-      escenasMulti.length > 0
+      escenasMulti.length > 0,
+      captionStyleVersion
     )
 
     {
@@ -1701,7 +1709,7 @@ export async function runMultipleClipsPipelineFromStorage(
         comentaMentionTimeSec,
         comentaOverlayText,
         clipRotateAngles,
-        captionStyleVersion: resolveCaptionStyleVersion(),
+        captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
       }
     )
     await updateJob(jobId, {
@@ -2611,12 +2619,15 @@ export async function rerunCreatomateRenderForJob(
 
   subtitleBlocks = await applyDriveSubtitleNormalization(jobId, subtitleBlocks)
 
+  const captionStyleVersion = captionStyleVersionFromPipelineMeta(sc)
+
   subtitleBlocks = applyBrandSubtitleDedup(
     subtitleBlocks,
     brandConfig,
     analysis.sequence,
     jobId,
-    escenasRerun.length > 0
+    escenasRerun.length > 0,
+    captionStyleVersion
   )
 
   let comentaMentionTimeSecRerun: number | undefined
@@ -2657,7 +2668,7 @@ export async function rerunCreatomateRenderForJob(
       comentaMentionTimeSec: comentaMentionTimeSecRerun,
       comentaOverlayText: comentaOverlayTextRerun,
       clipRotateAngles: clipRotateAnglesFromPipelineMeta(sc, paths),
-      captionStyleVersion: resolveCaptionStyleVersion(),
+      captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
     }
   )
 

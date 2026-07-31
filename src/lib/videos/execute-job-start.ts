@@ -64,6 +64,8 @@ export interface StartJobBody {
   reelDialogueVolume?: number | null
   /** Probe de orientación en navegador (mismo orden que paths). */
   clipOrientations?: ClipOrientationMeta[] | null
+  /** Estilo de subtítulos: v1 (alterna) o v2 (karaoke fijo abajo). */
+  captionStyleVersion?: 'v1' | 'v2' | null
 }
 
 export type JobStartResult =
@@ -94,6 +96,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     reelMusicVolume: reelMusicVolumeRaw,
     reelDialogueVolume: reelDialogueVolumeRaw,
     clipOrientations: clipOrientationsRaw,
+    captionStyleVersion: captionStyleVersionRaw,
   } = body
 
   if (!jobId || !paths?.length) {
@@ -311,6 +314,10 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
   const reelMusicVolume = normalizeReelAudioVolume(reelMusicVolumeRaw ?? undefined)
   const reelDialogueVolume = normalizeReelAudioVolume(reelDialogueVolumeRaw ?? undefined)
   const clipOrientations = normalizeClipOrientationsInput(clipOrientationsRaw ?? undefined, paths.length)
+  const captionStyleVersion =
+    captionStyleVersionRaw === 'v1' || captionStyleVersionRaw === 'v2'
+      ? captionStyleVersionRaw
+      : undefined
 
   const supabase = getServiceClient()
 
@@ -380,7 +387,8 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
     musicTrimStartSec !== undefined ||
     reelMusicVolume !== undefined ||
     reelDialogueVolume !== undefined ||
-    resolvedOrientations !== undefined
+    resolvedOrientations !== undefined ||
+    captionStyleVersion !== undefined
       ? ({
           _v2_pipeline_input: true,
           ...(clipKinds !== undefined ? { clipKinds } : {}),
@@ -399,6 +407,7 @@ export async function executeJobStart(body: StartJobBody): Promise<JobStartResul
           ...(musicTrimStartSec !== undefined ? { musicTrimStartSec } : {}),
           ...(reelMusicVolume !== undefined ? { reelMusicVolume } : {}),
           ...(reelDialogueVolume !== undefined ? { reelDialogueVolume } : {}),
+          ...(captionStyleVersion ? { captionStyleVersion } : {}),
           ...(resolvedOrientations
             ? {
                 clipOrientations: resolvedOrientations,
