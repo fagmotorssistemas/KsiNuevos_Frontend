@@ -540,8 +540,8 @@ export function CreateReelModal({
       voiceOverStoredPath = voData.path
     }
 
-    // Compresión de tamaño en Nest; orientación NO (va a Shotstack vía clipOrientations).
-    await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
+    // Compresión Nest → entrega H.264 .mp4; usar remappedPaths en finalize (Shotstack).
+    const { remappedPaths } = await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
 
     setUploadProgress('Leyendo orientación de clips…')
     const clipOrientations: ClipOrientationMeta[] = []
@@ -669,7 +669,7 @@ export function CreateReelModal({
         : {}
 
     const finalizePayload = {
-      paths: destPaths,
+      paths: remappedPaths,
       ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
       ...voiceOverPayloadResolved,
       ...(scriptPdfPath ? { scriptPdfPath } : {}),
@@ -833,8 +833,8 @@ export function CreateReelModal({
         scriptPdfPath = scriptUpload.path
       }
 
-      // ── PASO 2.5: Comprimir clips grandes en el servidor (Nest filtra por thresholdMb) ──
-      await compressJobClipsOrThrow(
+      // ── PASO 2.5: Nest → MP4 de entrega; finalize debe usar remappedPaths ──
+      const { remappedPaths } = await compressJobClipsOrThrow(
         newJobId,
         uploads.map((u) => u.path),
         setUploadProgress
@@ -898,7 +898,7 @@ export function CreateReelModal({
       }
 
       const finalizePayload = {
-        paths: uploads.map((u) => u.path),
+        paths: remappedPaths,
         ...(flowType === 'multiple' && clipDurations ? { clipDurations } : {}),
         ...voiceOverPayload,
         ...(scriptPdfPath ? { scriptPdfPath } : {}),

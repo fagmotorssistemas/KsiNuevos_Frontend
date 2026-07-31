@@ -45,20 +45,45 @@ function apiHeaders() {
   }
 }
 
+function formatFetchError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err)
+  const cause = err.cause instanceof Error
+    ? `${err.cause.name}: ${err.cause.message}`
+    : err.cause != null
+      ? String(err.cause)
+      : ''
+  return cause ? `${err.message} (${cause})` : err.message
+}
+
 /** Sube bytes al CDN de AssemblyAI y devuelve la URL interna para transcripción. */
-async function uploadBytesToAssemblyAI(fileBytes: Buffer): Promise<string> {
-  const res = await fetch(`${ASSEMBLYAI_BASE}/upload`, {
-    method: 'POST',
-    headers: { Authorization: process.env.ASSEMBLYAI_API_KEY! },
-    body: new Uint8Array(fileBytes),
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`[VideoV2AssemblyAI] Error subiendo archivo: ${err}`)
+async function uploadBytesToAssemblyAI(fileBytes: Buffer, jobId?: string): Promise<string> {
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(`${ASSEMBLYAI_BASE}/upload`, {
+        method: 'POST',
+        headers: { Authorization: process.env.ASSEMBLYAI_API_KEY! },
+        body: new Uint8Array(fileBytes),
+        signal: AbortSignal.timeout(5 * 60 * 1000),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        throw new Error(`[VideoV2AssemblyAI] Error subiendo archivo: ${err}`)
+      }
+      const data = (await res.json()) as { upload_url?: string }
+      if (!data.upload_url) throw new Error('[VideoV2AssemblyAI] Upload sin upload_url')
+      return data.upload_url
+    } catch (err) {
+      lastErr = err
+      const detail = formatFetchError(err)
+      if (attempt >= MAX_RETRIES) break
+      console.warn(
+        `[VideoV2Pipeline][${jobId ?? '?'}][AssemblyAI] Reintento upload ${attempt}/${MAX_RETRIES}: ${detail}`
+      )
+      await sleep(2000 * attempt)
+    }
   }
-  const data = (await res.json()) as { upload_url?: string }
-  if (!data.upload_url) throw new Error('[VideoV2AssemblyAI] Upload sin upload_url')
-  return data.upload_url
+  throw new Error(`[VideoV2AssemblyAI] Upload falló tras ${MAX_RETRIES} intentos: ${formatFetchError(lastErr)}`)
 }
 
 async function downloadMediaForAssemblyAI(signedUrl: string, jobId: string): Promise<Buffer> {
@@ -76,7 +101,7 @@ async function downloadMediaForAssemblyAI(signedUrl: string, jobId: string): Pro
 
 async function resolveAssemblyAudioSource(signedUrl: string, jobId: string): Promise<string> {
   const bytes = await downloadMediaForAssemblyAI(signedUrl, jobId)
-  return uploadBytesToAssemblyAI(bytes)
+  return uploadBytesToAssemblyAI(bytes, jobId)
 }
 
 async function submitTranscription(audioUrl: string): Promise<string> {

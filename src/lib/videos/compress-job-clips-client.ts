@@ -2,23 +2,38 @@
 export const VIDEO_COMPRESS_THRESHOLD_MB = 30
 
 export type CompressClipsApiResult = {
+  /** Paths de entrega (.mp4) tras transcode. */
   compressed?: string[]
   compressedCount?: number
   skipped?: string[]
   errors?: string[]
+  /** Origen → entrega (.mov → .mp4). Obligatorio usar en finalize/pipeline. */
+  pathRemap?: Record<string, string>
+}
+
+export type CompressJobClipsResult = {
+  count: number
+  /** Mismas posiciones que `paths`, ya remapeadas a entrega MP4 si Nest las cambió. */
+  remappedPaths: string[]
+  pathRemap: Record<string, string>
 }
 
 /**
  * Pide al backend NestJS comprimir clips del job en Storage.
  * Con `normalizeOrientation: true` Nest endereza (ffprobe) solo lo necesario
  * y limpia metadato rotate — Shotstack transform.rotate quedó desactivado (dañaba clips).
+ *
+ * Tras comprimir, Nest sube un **.mp4 H.264** de entrega (no reescribe el .mov).
+ * Hay que usar `remappedPaths` en finalize para que Shotstack no baje el original.
  */
 export async function compressJobClipsOrThrow(
   jobId: string,
   paths: string[],
   onProgress?: (message: string) => void
-): Promise<number> {
-  if (paths.length === 0) return 0
+): Promise<CompressJobClipsResult> {
+  if (paths.length === 0) {
+    return { count: 0, remappedPaths: [], pathRemap: {} }
+  }
 
   onProgress?.(
     `Optimizando clips en servidor (${paths.length}) — orientación + tamaño si hace falta…`
@@ -44,17 +59,32 @@ export async function compressJobClipsOrThrow(
 
   const compressed = data.compressed ?? []
   const errors = data.errors ?? []
+  const pathRemap = data.pathRemap ?? {}
   const count = compressed.length > 0 ? compressed.length : (data.compressedCount ?? 0)
 
+  const remappedPaths = paths.map((p) => {
+    const viaRemap = pathRemap[p]
+    if (viaRemap) return viaRemap
+    // Compat: Nest viejo devolvía el mismo path en compressed
+    const hit = compressed.find(
+      (c) => c === p || c.replace(/\.[^.]+$/i, '') === p.replace(/\.[^.]+$/i, '')
+    )
+    return hit ?? p
+  })
+
+  if (Object.keys(pathRemap).length > 0) {
+    console.log(`[compress-clips][${jobId}] pathRemap:`, pathRemap)
+  }
+
   if (count > 0) {
-    onProgress?.(`${count} clip(s) optimizado(s). Continuando…`)
+    onProgress?.(`${count} clip(s) optimizado(s) a MP4 de entrega. Continuando…`)
     if (errors.length > 0) {
       console.warn(
         `[compress-clips][${jobId}] ${count} comprimido(s), ${errors.length} error(es):`,
         errors
       )
     }
-    return count
+    return { count, remappedPaths, pathRemap }
   }
 
   if (errors.length > 0) {
@@ -64,5 +94,5 @@ export async function compressJobClipsOrThrow(
     )
   }
 
-  return 0
+  return { count: 0, remappedPaths: paths, pathRemap }
 }

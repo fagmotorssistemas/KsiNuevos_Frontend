@@ -1537,11 +1537,8 @@ function validateSequence(
     )
   }
 
-  // 6) Si quedó muy largo: reels cortos (VO manual vs autónomo) o reels muy largos (>92s)
-  const isManualVoMode =
-    opts?.manualVoiceOverBaseClipIndex != null || opts?.manualVoiceOverFromExternalAudio === true
-  const shortSoftCap = isManualVoMode ? 22 : 33
-  const shortHardCap = isManualVoMode ? 25 : 36
+  // 6) Tope solo para reels MUY largos (>92s). Sin soft-cap ~33s: el montaje
+  //    dura lo que dura el habla/segmentos elegidos (no se corta habla al final).
   const REEL_TRIM_TRIGGER_SEC = 92
   const REEL_TRIM_TARGET_SEC = 88
   const REEL_LAST_SEGMENT_MIN_SEC = 0.22
@@ -1570,33 +1567,13 @@ function validateSequence(
         }
         totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
       }
-    } else if (totalDuration > shortHardCap && sequence.length > 0) {
-      for (let i = sequence.length - 1; i >= 0 && totalDuration > shortSoftCap; i--) {
-        const seg = segmentLookup.get(sequence[i].segment_id)
-        if (seg && !isEndCtaSegment(seg) && !isPresentationSegment(seg)) {
-          totalDuration -= sequence[i].trim_duration
-          sequence.splice(i, 1)
-        }
-      }
-      totalDuration = Number(totalDuration.toFixed(3))
-
-      if (totalDuration > shortHardCap && sequence.length > 0) {
-        const last = sequence[sequence.length - 1]
-        const excess = totalDuration - shortSoftCap
-        last.trim_duration = Number(Math.max(0.8, last.trim_duration - excess).toFixed(3))
-        last.trim_end = Number((last.trim_start + last.trim_duration).toFixed(3))
-        if (last.visual_overlay) {
-          last.visual_overlay = {
-            ...last.visual_overlay,
-            trim_end: Number((last.visual_overlay.trim_start + last.trim_duration).toFixed(3)),
-          }
-        }
-        totalDuration = Number(sequence.reduce((sum, item) => sum + item.trim_duration, 0).toFixed(3))
-      }
+      console.log(
+        `[VideoV2Pipeline][${jobId}][Gemini] Reel muy largo: recortado a ${totalDuration.toFixed(1)}s (tope seguridad ${REEL_TRIM_TARGET_SEC}s)`
+      )
     }
   } else {
     console.log(
-      `[VideoV2Pipeline][${jobId}][Checklist] Duración total ${totalDuration.toFixed(1)}s — sin recorte automático (~35s)`
+      `[VideoV2Pipeline][${jobId}][Checklist] Duración total ${totalDuration.toFixed(1)}s — sin recorte automático`
     )
   }
 

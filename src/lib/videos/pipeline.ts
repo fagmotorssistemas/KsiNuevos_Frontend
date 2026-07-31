@@ -81,7 +81,7 @@ import {
   VOICE_OVER_EXTERNAL_CLIP_INDEX,
   type VoiceOverIntroRenderInput,
 } from './creatomate'
-import { renderSegmentsV2, getShotstackRenderStatus } from './shotstack'
+import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion } from './shotstack'
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
@@ -474,6 +474,8 @@ function applyBrandSubtitleDedup(
   jobId: string,
   guionSubtitleTimeline: boolean
 ): SubtitleBlock[] {
+  // V2 no usa título de marca: no quitar esas palabras de los subtítulos.
+  if (resolveCaptionStyleVersion() === 'v2') return subtitleBlocks
   if (!brandConfig?.show_brand_overlays) return subtitleBlocks
   const modelLine = brandConfig.vehicle_line_2?.trim()
   if (!modelLine) return subtitleBlocks
@@ -657,7 +659,14 @@ export async function runSingleVideoPipelineFromStorage(
 
     // Transcripción es obligatoria
     if (transcriptionResult.status === 'rejected') {
-      throw new Error(`Error en transcripción: ${transcriptionResult.reason}`)
+      const reason = transcriptionResult.reason
+      const detail =
+        reason instanceof Error
+          ? reason.cause instanceof Error
+            ? `${reason.message} (${reason.cause.message})`
+            : reason.message
+          : String(reason)
+      throw new Error(`Error en transcripción: ${detail}`)
     }
     const { transcriptId, rawWords: rawWordsFromAssembly } = transcriptionResult.value
     const displacementHint = await loadEngineDisplacementHint(jobId)
@@ -876,6 +885,7 @@ export async function runSingleVideoPipelineFromStorage(
       comentaMentionTimeSec: comentaMentionTimeSecA,
       comentaOverlayText: comentaOverlayTextA,
       clipRotateAngles,
+      captionStyleVersion: resolveCaptionStyleVersion(),
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1691,6 +1701,7 @@ export async function runMultipleClipsPipelineFromStorage(
         comentaMentionTimeSec,
         comentaOverlayText,
         clipRotateAngles,
+        captionStyleVersion: resolveCaptionStyleVersion(),
       }
     )
     await updateJob(jobId, {
@@ -2646,6 +2657,7 @@ export async function rerunCreatomateRenderForJob(
       comentaMentionTimeSec: comentaMentionTimeSecRerun,
       comentaOverlayText: comentaOverlayTextRerun,
       clipRotateAngles: clipRotateAnglesFromPipelineMeta(sc, paths),
+      captionStyleVersion: resolveCaptionStyleVersion(),
     }
   )
 

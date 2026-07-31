@@ -21,7 +21,7 @@ export async function POST(
     const normalizeOrientation = body.normalizeOrientation !== false
 
     if (!resolvedPaths.length) {
-      return NextResponse.json({ compressed: [], skipped: [], errors: [] }, { status: 200 })
+      return NextResponse.json({ compressed: [], skipped: [], errors: [], pathRemap: {} }, { status: 200 })
     }
 
     const nest = await runNestVideoJob({
@@ -40,6 +40,7 @@ export async function POST(
         compressed: [],
         skipped: [],
         errors: resolvedPaths,
+        pathRemap: {},
       },
     })
 
@@ -47,6 +48,6 @@ export async function POST(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error(`[compress-clips] Error: ${msg}`)
-    return NextResponse.json({ compressed: [], skipped: [], errors: [] }, { status: 200 })
+    return NextResponse.json({ compressed: [], skipped: [], errors: [], pathRemap: {} }, { status: 200 })
   }
 }

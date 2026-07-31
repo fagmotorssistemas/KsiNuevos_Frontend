@@ -16,23 +16,37 @@ import {
 } from './audio-balance'
 import { getSignedUrlForPath } from './storage'
 import { isDriveBadgeText } from './drive-badge'
+import {
+  OUTPUT_WIDTH,
+  s720,
+  htmlEscape,
+  overlayCaptionFontSize,
+  buildJumpThenFixed,
+  dropOverlappingSubtitleBlocks,
+  type ShotstackClip,
+  type ShotstackTrack,
+} from './shotstack-captions-shared'
+import {
+  buildCaptionTracks,
+  resolveCaptionStyleVersion,
+  type CaptionStyleVersion,
+} from './shotstack-captions'
+
+export type { CaptionStyleVersion } from './shotstack-captions'
+export { resolveCaptionStyleVersion } from './shotstack-captions'
 
 const RAW_BUCKET = 'raw-videos-v2'
 
-/** Salida vertical 1080p (9:16). */
-const OUTPUT_WIDTH = 1080
+/** Salida vertical 1080p (9:16). OUTPUT_WIDTH desde shotstack-captions-shared. */
 const OUTPUT_HEIGHT = 1920
-/** Canvas base (720p) donde se calibraron px de overlays y tipografía. */
-const DESIGN_WIDTH = 720
-const LAYOUT_SCALE = OUTPUT_WIDTH / DESIGN_WIDTH
 
-/** Convierte px definidos en 720p al canvas actual (1080p, factor 1.5×). */
-function s720(px: number): number {
-  return Math.round(px * LAYOUT_SCALE)
-}
-
+/** Montserrat Black real (Shotstack). El de fontsource latin-900 se registra como
+ * "Montserrat Thin Black" y el HTML con font-family:'Montserrat' no lo aplica → letra delgada. */
 const MONTSERRAT_BLACK_TTF =
-  'https://cdn.jsdelivr.net/fontsource/fonts/montserrat@5.2.5/latin-900-normal.ttf'
+  'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/fonts/Montserrat-Black.ttf'
+/** Fuente auxiliar (timeline); captions V2 usan Montserrat como V1. */
+const RUBIK_BLACK_TTF =
+  'https://cdn.jsdelivr.net/fontsource/fonts/rubik@5.2.5/latin-900-normal.ttf'
 
 const CLOSING_LOGO_LEN_SEC = 3.5
 const DEFAULT_CLOSING_LOGO_PATH = '/logol.png'
@@ -70,25 +84,8 @@ const COMENTA_LINE1_OFFSET_Y = -0.08
 const COMENTA_LINE2_OFFSET_Y = -0.13
 const COMENTA_FONT_FAMILY = 'Montserrat'
 
-/** Subtítulos y COMENTA: escala calibrada en 720p, aplicada a 1080p. */
-function overlayCaptionFontSize(text: string): number {
-  const len = text.length
-  if (len <= 8) return s720(80)
-  if (len <= 14) return s720(72)
-  if (len <= 20) return s720(60)
-  return s720(48)
-}
-
 function comentaCaptionFontSize(text: string): number {
   return overlayCaptionFontSize(text)
-}
-
-function longPairFontSize(word: string): number {
-  const len = word.length
-  if (len <= 6) return s720(88)
-  if (len <= 9) return s720(78)
-  if (len <= 12) return s720(68)
-  return s720(58)
 }
 
 function brandL2FontSize(wordCount: number): number {
@@ -148,7 +145,11 @@ const CLIP_FLASH_SVG_MARKUP =
   '</svg>'
 
 function buildTimelineFonts(): { src: string }[] {
-  return [{ src: MONTSERRAT_BLACK_TTF }, { src: PLAYFAIR_DISPLAY_SEMIBOLD_TTF }]
+  return [
+    { src: MONTSERRAT_BLACK_TTF },
+    { src: PLAYFAIR_DISPLAY_SEMIBOLD_TTF },
+    { src: RUBIK_BLACK_TTF },
+  ]
 }
 
 function assertShotstackEnv(): { apiKey: string; baseUrl: string; callbackBase: string } {
@@ -221,9 +222,6 @@ export async function uploadVttToStorage(jobId: string, vttContent: string): Pro
 
   return getSignedUrlForPath(path)
 }
-
-type ShotstackClip = Record<string, unknown>
-type ShotstackTrack = { clips: ShotstackClip[] }
 
 function computeLinearStarts(sequence: SequenceItem[]): number[] {
   const starts: number[] = []
@@ -926,14 +924,6 @@ function buildHighlightSfxTrack(
   return { clips }
 }
 
-function htmlEscape(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
 
 /** Duración del bloque de marca al inicio del Reel (segundos). */
 const BRAND_OVERLAY_INTRO_SEC = 3.5
@@ -981,20 +971,6 @@ function splitModelLinesForBrandOverlay(modelRaw: string): { line2: string; line
   return { line2: word1, line3Model: word2 }
 }
 
-function buildJumpThenFixed(baseY: number, totalLen: number): unknown[] {
-  const A = 0.055
-  const S = 0.08
-  const settle = 4 * S
-  const frames: unknown[] = [
-    { from: baseY + A,        to: baseY - A,        start: 0,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-    { from: baseY - A,        to: baseY + A * 0.5,  start: S,         length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-    { from: baseY + A * 0.5,  to: baseY - A * 0.25, start: S * 2,     length: S,   interpolation: 'bezier', easing: 'easeInOutSine' },
-    { from: baseY - A * 0.25, to: baseY,             start: S * 3,     length: S,   interpolation: 'bezier', easing: 'easeOutSine'   },
-  ]
-  const restLen = Number(Math.max(0.05, totalLen - settle).toFixed(3))
-  frames.push({ from: baseY, to: baseY, start: Number(settle.toFixed(3)), length: restLen })
-  return frames
-}
 
 function buildBrandOverlayTracks(
   brandConfig: BrandConfig | null | undefined,
@@ -1565,369 +1541,6 @@ function captionFontSize(text: string): number {
   return best % 2 === 0 ? best : best - 1
 }
 
-/**
- * Cuando dos subtítulos se solapan, TRUNCA el anterior para que el siguiente pueda aparecer.
- * Nunca descarta ningún subtítulo — solo recorta duración si es necesario.
- */
-function dropOverlappingSubtitleBlocks(blocks: SubtitleBlock[], jobId: string): SubtitleBlock[] {
-  const sorted = [...blocks]
-    .filter((b) => b.text?.trim() && b.duration > 0.01)
-    .sort((a, b) => a.time - b.time)
-  const out: SubtitleBlock[] = []
-  for (const b of sorted) {
-    const prev = out.length > 0 ? out[out.length - 1]! : null
-    if (prev && b.time < prev.time + prev.duration) {
-      // Truncar el anterior para que termine justo antes de que empiece éste
-      const trimmedDur = Number(Math.max(0.08, b.time - prev.time - 0.02).toFixed(3))
-      out[out.length - 1] = { ...prev, duration: trimmedDur }
-      console.log(
-        `[Shotstack][${jobId}] Subtítulo anterior truncado t=${prev.time.toFixed(2)}s ` +
-          `${prev.duration.toFixed(2)}s → ${trimmedDur.toFixed(2)}s para dar paso a "${b.text.trim().slice(0, 30)}"`
-      )
-    }
-    out.push(b)
-  }
-  return out
-}
-
-function buildCaptionHtmlTracks(
-  blocks: SubtitleBlock[],
-  totalDuration: number,
-  jobId?: string
-): ShotstackTrack[] {
-  void totalDuration
-  const safe = jobId ? dropOverlappingSubtitleBlocks(blocks, jobId) : blocks
-  const validBlocks = safe.filter((b) => b.text?.trim() && b.duration > 0.01)
-  if (validBlocks.length === 0) return []
-
-  const captionStyle = { textTransform: 'uppercase' }
-  const captionAlign = { horizontal: 'center', vertical: 'middle' }
-
-  const captionShadowEffect = { offsetX: 0, offsetY: 0, blur: s720(30), color: '#000000', opacity: 1 }
-  const captionBoxW = s720(700)
-  const captionBoxH = s720(200)
-  const longPairBoxW = s720(680)
-  const longPairBoxH = s720(180)
-
-  // Posición alterna: par → abajo (y: 0.15), impar → arriba/centro (y: 0.70)
-  const captionPositionY = (idx: number) => (idx % 2 === 0 ? 0.15 : 0.70)
-
-  // Palabras técnicas del vehículo que reciben animación de ola
-  const TECH_SPEC_RE = /\b(MOTOR|TRANSMIS|MANUAL|AUTOM[AÁ]T|TURBO|D[IÍ]ESEL|GASOLINA|TURBO|HP|CV|CC|4X[24]|\d+[\.,]\d+|\d{4}CC)\b/i
-
-  // Genera keyframes de ola (oscilación suave) alrededor de la posición base
-  function buildWaveOffset(baseY: number, durationSec: number): unknown[] {
-    const HALF_PERIOD = 0.35  // segundos por medio ciclo
-    const AMPLITUDE   = 0.025 // ±2.5% del frame height
-    const frames: unknown[] = []
-    let t = 0
-    let phase = 0 // 0 = sube, 1 = baja
-    while (t < durationSec - 0.05) {
-      const len = Number(Math.min(HALF_PERIOD, durationSec - t).toFixed(3))
-      const from = phase === 0 ? baseY          : baseY + AMPLITUDE
-      const to   = phase === 0 ? baseY + AMPLITUDE : baseY
-      frames.push({ from, to, start: Number(t.toFixed(3)), length: len, interpolation: 'bezier', easing: 'easeInOutSine' })
-      t += HALF_PERIOD
-      phase = 1 - phase
-    }
-    return frames
-  }
-
-  function captionOffsetY(text: string, idx: number, durationSec: number): unknown {
-    const baseY = captionPositionY(idx)
-    if (TECH_SPEC_RE.test(text)) {
-      const frames = buildWaveOffset(baseY, durationSec)
-      if (frames.length >= 2) return frames
-    }
-    return baseY
-  }
-
-  function isLongPair(text: string): boolean {
-    if (isDriveBadgeText(text)) return false
-    const words = text.trim().split(/\s+/)
-    return words.length === 2 && words.every(w => w.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').length >= 5)
-  }
-
-  function isYellowHighlightBlock(b: SubtitleBlock): boolean {
-    return b.highlightFx === 'yellow_whoosh' || b.highlightFx === 'yellow_pop'
-  }
-
-  const driveBadgeBlocks = validBlocks.filter((b) => isDriveBadgeText(b.text))
-  const nonDriveBlocks = validBlocks.filter((b) => !isDriveBadgeText(b.text))
-  const longPairBlocks = nonDriveBlocks.filter(b => isLongPair(b.text.trim().toUpperCase()))
-  const highlightYellowBlocks = nonDriveBlocks.filter((b) => isYellowHighlightBlock(b))
-  const regularBlocks = nonDriveBlocks.filter(
-    (b) => !isLongPair(b.text.trim().toUpperCase()) && !isYellowHighlightBlock(b)
-  )
-
-  const driveBadgeClips: ShotstackClip[] = driveBadgeBlocks.map((b, idx) => {
-    const text = b.text.trim().toUpperCase()
-    const sz = overlayCaptionFontSize(text)
-    return {
-      asset: {
-        type: 'rich-text',
-        text,
-        font: { family: 'Montserrat', size: sz, weight: 900, color: '#FFE100', opacity: 1 },
-        style: captionStyle,
-        align: captionAlign,
-      },
-      start: Number(b.time.toFixed(3)),
-      length: Number(b.duration.toFixed(3)),
-      width: captionBoxW,
-      height: captionBoxH,
-      position: 'bottom',
-      offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
-    }
-  })
-
-  const highlightYellowClips: ShotstackClip[] = highlightYellowBlocks.map((b, idx) => {
-    const text = b.text.trim().toUpperCase()
-    const sz = overlayCaptionFontSize(text)
-    return {
-      asset: {
-        type: 'rich-text',
-        text,
-        font: { family: 'Montserrat', size: sz, weight: 900, color: '#FFE100', opacity: 1 },
-        style: captionStyle,
-        align: captionAlign,
-      },
-      start: Number(b.time.toFixed(3)),
-      length: Number(b.duration.toFixed(3)),
-      width: captionBoxW,
-      height: captionBoxH,
-      position: 'bottom',
-      offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
-    }
-  })
-
-  // CAPA 2 (texto real) — blanco, sin transition para que aparezca instantáneamente
-  const realClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
-    const text = b.text.trim().toUpperCase()
-    const sz = overlayCaptionFontSize(text)
-    return {
-      asset: {
-        type: 'rich-text',
-        text,
-        font:   { family: 'Montserrat', size: sz, weight: 900, color: '#FFFFFF', opacity: 1 },
-        style:  captionStyle,
-        align:  captionAlign,
-      },
-      start: Number(b.time.toFixed(3)),
-      length: Number(b.duration.toFixed(3)),
-      width: captionBoxW, height: captionBoxH,
-      position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
-    }
-  })
-
-  // CAPA 1 (sombra) — misma posición alterna que la capa real
-  const shadowClips: ShotstackClip[] = regularBlocks.map((b, idx) => {
-    const text = b.text.trim().toUpperCase()
-    const sz = overlayCaptionFontSize(text)
-    return {
-      asset: {
-        type: 'rich-text',
-        text,
-        font:   { family: 'Montserrat', size: sz, weight: 900, color: '#000000', opacity: 1 },
-        shadow: captionShadowEffect,
-        style:  captionStyle,
-        align:  captionAlign,
-      },
-      start: Number(b.time.toFixed(3)),
-      length: Number(b.duration.toFixed(3)),
-      width: captionBoxW, height: captionBoxH,
-      position: 'bottom', offset: { x: 0, y: captionOffsetY(text, idx, b.duration) },
-    }
-  })
-
-  // PARES LARGOS — amarillo, word1 arriba-izquierda, word2 abajo-derecha, sin sombra
-  // Si es TRANSMISIÓN + MANUAL/AUTOMÁTICO → brinco al entrar (igual que el título)
-  const TRANSMISION_RE = /^TRANSMIS/i
-  const GEAR_TYPE_RE   = /^(MANUAL|AUTOM[AÁ]T)/i
-
-  const lpWord1Clips: ShotstackClip[] = []
-  const lpWord2Clips: ShotstackClip[] = []
-
-  for (const b of longPairBlocks) {
-    const words = b.text.trim().toUpperCase().split(/\s+/)
-    const w1 = words[0]!
-    const w2 = words[1]!
-    const start  = Number(b.time.toFixed(3))
-    const length = Number(b.duration.toFixed(3))
-
-    const isTransmisionPair = TRANSMISION_RE.test(w1) && GEAR_TYPE_RE.test(w2)
-    const y1 = 0.20
-    const y2 = 0.15
-
-    lpWord1Clips.push({
-      asset: {
-        type: 'rich-text',
-        text: w1,
-        font:  { family: 'Montserrat', size: longPairFontSize(w1), weight: 900, color: '#FFE100', opacity: 1 },
-        style: captionStyle,
-        align: captionAlign,
-      },
-      start, length,
-      width: longPairBoxW, height: longPairBoxH,
-      position: 'bottom',
-      offset: { x: -0.10, y: isTransmisionPair ? buildJumpThenFixed(y1, length) : y1 },
-    })
-
-    lpWord2Clips.push({
-      asset: {
-        type: 'rich-text',
-        text: w2,
-        font:  { family: 'Montserrat', size: longPairFontSize(w2), weight: 900, color: '#FFE100', opacity: 1 },
-        style: captionStyle,
-        align: captionAlign,
-      },
-      start, length,
-      width: longPairBoxW, height: longPairBoxH,
-      position: 'bottom',
-      offset: { x: 0.10, y: isTransmisionPair ? buildJumpThenFixed(y2, length) : y2 },
-    })
-  }
-
-  const tracks: ShotstackTrack[] = [{ clips: realClips }, { clips: shadowClips }]
-  if (driveBadgeClips.length > 0) {
-    tracks.push({ clips: driveBadgeClips })
-  }
-  if (highlightYellowClips.length > 0) {
-    tracks.push({ clips: highlightYellowClips })
-  }
-  if (lpWord1Clips.length > 0) {
-    tracks.push({ clips: lpWord1Clips })
-    tracks.push({ clips: lpWord2Clips })
-  }
-
-  // Brillitos detrás del texto, mismo lugar y tamaño aproximado (contorno, no tapa palabras)
-  const sparkleUrl = process.env.SPARKLE_OVERLAY_URL?.trim()
-  if (sparkleUrl) {
-    function isMotorOrNumberSubtitle(text: string): boolean {
-      const t = text.trim().toUpperCase()
-      return /\bMOTOR\b/.test(t) || /\b\d+[\.,]\d+\b/.test(t)
-    }
-
-    function isSparkleSubtitle(text: string): boolean {
-      return isMotorOrNumberSubtitle(text) || isDriveBadgeText(text)
-    }
-
-    function isTransmisionGearSubtitle(text: string): boolean {
-      const words = text.trim().toUpperCase().split(/\s+/)
-      if (words.length !== 2) return false
-      return TRANSMISION_RE.test(words[0]!) && GEAR_TYPE_RE.test(words[1]!)
-    }
-
-    function sparkleBoxForText(text: string, fontSize: number): { width: number; height: number } {
-      const len = text.trim().length
-      const textW = Math.ceil(len * fontSize * 0.52)
-      const textH = Math.ceil(fontSize * 1.25)
-      return {
-        width: Math.min(s720(700), Math.max(s720(150), Math.ceil(textW * 1.45))),
-        height: Math.max(s720(85), Math.ceil(textH * 1.55)),
-      }
-    }
-
-    function sparkleBoxForWord(word: string, fontSize: number): { width: number; height: number } {
-      const len = word.length
-      const textW = Math.ceil(len * fontSize * 0.58)
-      const textH = Math.ceil(fontSize * 1.2)
-      return {
-        width: Math.min(s720(520), Math.max(s720(160), Math.ceil(textW * 1.5))),
-        height: Math.max(s720(90), Math.ceil(textH * 1.6)),
-      }
-    }
-
-    function buildSparkleClip(
-      start: number,
-      length: number,
-      offset: { x: number; y: unknown },
-      box: { width: number; height: number }
-    ): ShotstackClip {
-      return {
-        asset: {
-          type: 'video' as const,
-          src: sparkleUrl,
-          trim: 0,
-          volume: 0,
-        },
-        start: Number(start.toFixed(3)),
-        length: Number(length.toFixed(3)),
-        fit: 'contain' as const,
-        width: box.width,
-        height: box.height,
-        position: 'bottom' as const,
-        offset,
-        opacity: 0.88,
-      }
-    }
-
-    const sparkleClips: ShotstackClip[] = []
-
-    for (const [idx, b] of regularBlocks.entries()) {
-      const text = b.text.trim()
-      if (!isSparkleSubtitle(text)) continue
-      const upper = text.toUpperCase()
-      sparkleClips.push(
-        buildSparkleClip(
-          b.time,
-          b.duration,
-          { x: 0, y: captionOffsetY(upper, idx, b.duration) },
-          sparkleBoxForText(upper, overlayCaptionFontSize(upper))
-        )
-      )
-    }
-
-    for (const [idx, b] of highlightYellowBlocks.entries()) {
-      const text = b.text.trim().toUpperCase()
-      sparkleClips.push(
-        buildSparkleClip(
-          b.time,
-          b.duration,
-          { x: 0, y: captionOffsetY(text, idx, b.duration) },
-          sparkleBoxForText(text, overlayCaptionFontSize(text))
-        )
-      )
-    }
-
-    for (const [idx, b] of driveBadgeBlocks.entries()) {
-      const text = b.text.trim().toUpperCase()
-      sparkleClips.push(
-        buildSparkleClip(
-          b.time,
-          b.duration,
-          { x: 0, y: captionOffsetY(text, idx, b.duration) },
-          sparkleBoxForText(text, overlayCaptionFontSize(text))
-        )
-      )
-    }
-
-    for (const b of longPairBlocks) {
-      if (!isTransmisionGearSubtitle(b.text)) continue
-      const words = b.text.trim().toUpperCase().split(/\s+/)
-      const w1 = words[0]!
-      const w2 = words[1]!
-      const start = b.time
-      const length = b.duration
-      const y1 = 0.20
-      const y2 = 0.15
-      const y1Offset = buildJumpThenFixed(y1, length)
-      const y2Offset = buildJumpThenFixed(y2, length)
-
-      sparkleClips.push(
-        buildSparkleClip(start, length, { x: -0.10, y: y1Offset }, sparkleBoxForWord(w1, longPairFontSize(w1))),
-        buildSparkleClip(start, length, { x: 0.10, y: y2Offset }, sparkleBoxForWord(w2, longPairFontSize(w2)))
-      )
-    }
-
-    if (sparkleClips.length > 0) {
-      // Detrás del texto (primera capa) para que se vea en el contorno sin tapar
-      tracks.unshift({ clips: sparkleClips })
-    }
-  }
-
-  return tracks
-}
-
 async function postShotstackRender(apiKey: string, baseUrl: string, body: unknown): Promise<string> {
   const res = await fetch(baseUrl, {
     method: 'POST',
@@ -1996,6 +1609,11 @@ export async function renderSegmentsV2(
      * Solo valores ≠ null/0 aplican transform.rotate (probe al subir).
      */
     clipRotateAngles?: Array<number | null | undefined>
+    /**
+     * Estilo de subtítulos: `v1` (actual) | `v2` (lineal fijo abajo, Rubik 16).
+     * Si se omite, usa `VIDEO_CAPTION_STYLE_VERSION` o `v1`.
+     */
+    captionStyleVersion?: CaptionStyleVersion | null
   }
 ): Promise<string> {
   if (voiceOverIntro != null) {
@@ -2039,10 +1657,19 @@ export async function renderSegmentsV2(
 
   const tracks: ShotstackTrack[] = []
 
-  const hasBrandOverlays = Boolean(
-    opts?.brandConfig?.show_brand_overlays === true &&
-      (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
-  )
+  const captionStyleVersion = resolveCaptionStyleVersion(opts?.captionStyleVersion)
+  console.log(`[Shotstack][${jobId}] Caption style version=${captionStyleVersion}`)
+
+  // V2: sin título de marca — solo subtítulos lineales fijos abajo.
+  const hasBrandOverlays =
+    captionStyleVersion !== 'v2' &&
+    Boolean(
+      opts?.brandConfig?.show_brand_overlays === true &&
+        (opts.brandConfig.vehicle_line_1?.trim() || opts.brandConfig.vehicle_line_2?.trim())
+    )
+  if (captionStyleVersion === 'v2') {
+    console.log(`[Shotstack][${jobId}] Captions V2: título/marca desactivado (solo subtítulos)`)
+  }
 
   // Timing del overlay de marca: viene del pipeline (dialogo+Assembly) o fallback t=0
   const brandStart  = opts?.brandMentionTimeSec  ?? 0
@@ -2087,11 +1714,15 @@ export async function renderSegmentsV2(
       })
     : subtitleBlocksAdjusted
 
-  tracks.push(...buildCaptionHtmlTracks(captionBlocksToRender, totalDuration, jobId))
+  tracks.push(
+    ...buildCaptionTracks(captionStyleVersion, captionBlocksToRender, totalDuration, jobId)
+  )
   const captionCount = captionBlocksToRender.filter((b) => b.text?.trim() && b.duration > 0.01).length
   if (captionCount > 0) {
     const safe = dropOverlappingSubtitleBlocks(captionBlocksToRender, jobId)
-    console.log(`[Shotstack][${jobId}] Subtítulos HTML (${safe.length} frases, sin solapar)`)
+    console.log(
+      `[Shotstack][${jobId}] Subtítulos HTML (${safe.length} frases, sin solapar, style=${captionStyleVersion})`
+    )
     for (const b of safe) {
       console.log(
         `[Shotstack][${jobId}]   caption t=${b.time.toFixed(2)}s +${b.duration.toFixed(2)}s ` +
@@ -2114,7 +1745,9 @@ export async function renderSegmentsV2(
     }))
   }
 
-  const brandOverlayTracks = buildBrandOverlayTracks(opts?.brandConfig ?? null, totalDuration, brandStart, brandLength)
+  const brandOverlayTracks = hasBrandOverlays
+    ? buildBrandOverlayTracks(opts?.brandConfig ?? null, totalDuration, brandStart, brandLength)
+    : []
   if (brandOverlayTracks.length > 0) {
     const bc = opts?.brandConfig
     console.log(
@@ -2134,8 +1767,9 @@ export async function renderSegmentsV2(
   } else {
     const bc = opts?.brandConfig
     console.log(
-      `[Shotstack][${jobId}] Brand overlays DESACTIVADOS — ` +
-        `show_brand_overlays=${JSON.stringify(bc?.show_brand_overlays)}, ` +
+      `[Shotstack][${jobId}] Brand overlays DESACTIVADOS` +
+        (captionStyleVersion === 'v2' ? ' (captions V2)' : '') +
+        ` — show_brand_overlays=${JSON.stringify(bc?.show_brand_overlays)}, ` +
         `líneas: L1="${bc?.vehicle_line_1 ?? ''}" L2="${bc?.vehicle_line_2 ?? ''}" ` +
         `L3="${bc?.vehicle_line_3 ?? ''}" L4="${bc?.vehicle_line_4 ?? ''}"`
     )
