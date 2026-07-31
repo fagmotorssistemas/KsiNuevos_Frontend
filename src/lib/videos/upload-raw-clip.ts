@@ -89,10 +89,11 @@ async function uploadClipViaSignedUrl(
   supabase: StorageClient,
   path: string,
   token: string,
-  file: File
+  file: File,
+  bucket: string = VIDEO_RAW_BUCKET
 ): Promise<{ ok: true } | { ok: false; message: string; status?: number }> {
   const { error } = await supabase.storage
-    .from(VIDEO_RAW_BUCKET)
+    .from(bucket)
     .uploadToSignedUrl(path, token, file, { cacheControl: '3600' })
 
   if (error) {
@@ -137,9 +138,13 @@ async function uploadClipViaApiProxy(
 }
 
 /**
- * Sube al bucket raw-videos-v2: primero el archivo original; si Storage rechaza por tamaño, comprime y reintenta.
+ * Sube al bucket indicado (por defecto `raw-videos-v2`): primero el archivo original;
+ * si Storage rechaza por tamaño, comprime y reintenta.
  * Si el clip supera VIDEO_SHOTSTACK_PRE_COMPRESS_ABOVE_BYTES (~32 MB), lo comprime ANTES de subir para
  * evitar que Shotstack falle con "Downloading assets failed" al intentar descargar archivos muy grandes.
+ *
+ * `options.bucket` debe coincidir con el bucket usado al crear el signed upload URL
+ * (p. ej. `raw-full-videos-v2` en biblioteca de videos en bruto).
  */
 export async function uploadRawVideoClip(
   supabase: StorageClient,
@@ -147,9 +152,10 @@ export async function uploadRawVideoClip(
   path: string,
   token: string,
   file: File,
-  options?: { onProgress?: VideoUploadProgressFn }
+  options?: { onProgress?: VideoUploadProgressFn; bucket?: string }
 ): Promise<void> {
   const onProgress = options?.onProgress
+  const bucket = options?.bucket?.trim() || VIDEO_RAW_BUCKET
   let uploadFile = fileWithResolvedVideoMime(file)
   let compressionAttempted = false
 
@@ -185,7 +191,7 @@ export async function uploadRawVideoClip(
   }
 
   onProgress?.(`Subiendo ${uploadFile.name}…`)
-  let signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile)
+  let signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile, bucket)
   if (signed.ok) return
 
   if (isLikelyStorageSizeError(signed.message, signed.status) && !compressionAttempted) {
@@ -201,10 +207,21 @@ export async function uploadRawVideoClip(
     onProgress?.(
       `Reintentando subida de ${uploadFile.name} (${(uploadFile.size / (1024 * 1024)).toFixed(1)} MB)…`
     )
-    signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile)
+    signed = await uploadClipViaSignedUrl(supabase, path, token, uploadFile, bucket)
     if (signed.ok) return
 
     if (isLikelyStorageSizeError(signed.message, signed.status)) {
+      // El proxy de jobs solo escribe en raw-videos-v2.
+      if (bucket !== VIDEO_RAW_BUCKET) {
+        throw new Error(
+          formatVideoClipUploadError(
+            file,
+            `${signed.message} (bucket ${bucket}; sin proxy de tamaño)`,
+            signed.status,
+            uploadFile.size
+          )
+        )
+      }
       onProgress?.(`Reintentando ${uploadFile.name} vía servidor…`)
       const proxy = await uploadClipViaApiProxy(jobId, path, uploadFile)
       if (proxy.ok) return

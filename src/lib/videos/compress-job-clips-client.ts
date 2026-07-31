@@ -48,6 +48,8 @@ export async function compressJobClipsOrThrow(
         paths,
         thresholdMb: VIDEO_COMPRESS_THRESHOLD_MB,
         normalizeOrientation: true,
+        /** CapCut-like: Nest aplica eq+unsharp al transcodificar. */
+        enhanceColor: true,
       }),
     })
     data = (await compressRes.json()) as CompressClipsApiResult

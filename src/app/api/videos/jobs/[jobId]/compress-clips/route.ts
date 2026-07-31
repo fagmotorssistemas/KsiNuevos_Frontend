@@ -14,11 +14,14 @@ export async function POST(
       clipPaths?: string[]
       thresholdMb?: number
       normalizeOrientation?: boolean
+      enhanceColor?: boolean
     }
     const resolvedPaths: string[] = body.clipPaths ?? body.paths ?? []
     const thresholdMb = body.thresholdMb ?? 30
     // Cliente manda true al generar reel (Shotstack transform.rotate desactivado).
     const normalizeOrientation = body.normalizeOrientation !== false
+    // Mejora de color (eq+unsharp). Default ON.
+    const enhanceColor = body.enhanceColor !== false
 
     if (!resolvedPaths.length) {
       return NextResponse.json({ compressed: [], skipped: [], errors: [], pathRemap: {} }, { status: 200 })
@@ -35,6 +38,7 @@ export async function POST(
         thresholdMb,
         // Nest puede aplicar orientación aquí también (ffmpeg en servidor).
         normalizeOrientation,
+        enhanceColor,
       },
       emptyResult: {
         compressed: [],

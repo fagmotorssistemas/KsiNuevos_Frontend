@@ -6,7 +6,10 @@ import { Loader2, Plus, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { uploadRawVideoClip } from '@/lib/videos/upload-raw-clip'
 import { VIDEO_RAW_BUCKET_MAX_BYTES } from '@/lib/videos/resolve-video-mime'
-import { RAW_FULL_VIDEOS_MAX_PER_FOLDER } from '@/lib/videos/raw-full-videos-types'
+import {
+  RAW_FULL_VIDEOS_BUCKET,
+  RAW_FULL_VIDEOS_MAX_PER_FOLDER,
+} from '@/lib/videos/raw-full-videos-types'
 import {
   VehicleInventoryPicker,
   type InventoryPickerRow,
@@ -170,6 +173,7 @@ export function UploadFullVideosModal({
         setProgress(`Subiendo ${i + 1}/${files.length}: ${file.name}`)
         await uploadRawVideoClip(supabase, folderId, upload.path, upload.token, file, {
           onProgress: setProgress,
+          bucket: RAW_FULL_VIDEOS_BUCKET,
         })
       }
 
