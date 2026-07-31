@@ -3,17 +3,21 @@
  * Compartida entre servidor (`audio-balance.ts`) y navegador (`audio-balance-client.ts`).
  */
 
-/** Música debe quedar al menos N dB por debajo de la voz en la mezcla final. */
-const TARGET_MUSIC_BELOW_VOICE_DB = 14
+/**
+ * Gap voz–música (dB). Más bajo = música más audible.
+ * 6 ≈ se nota de fondo sin tapar voz (10/14 quedaban flojos en reels).
+ */
+const TARGET_MUSIC_BELOW_VOICE_DB = 6
 
 /** Shotstack rechaza `asset.volume` > 1 (HTTP 400). */
 export const SHOTSTACK_MAX_ASSET_VOLUME = 1
 
-export const FALLBACK_MUSIC_VOLUME = 0.04
+export const FALLBACK_MUSIC_VOLUME = 0.22
 export const FALLBACK_DIALOGUE_VOLUME = 1
 
-const MIN_MUSIC_VOLUME = 0.015
-const MAX_MUSIC_VOLUME = 0.1
+const MIN_MUSIC_VOLUME = 0.12
+/** Techo: antes 0.1–0.32; reels pedían más presencia de pista. */
+const MAX_MUSIC_VOLUME = 0.45
 
 export interface ReelAudioBalance {
   musicVolume: number
