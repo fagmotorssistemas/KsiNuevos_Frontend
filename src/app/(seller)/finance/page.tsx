@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, Suspense, useRef } from "react";
-import { Calculator, RefreshCcw, Printer, Loader2 } from "lucide-react";
+import { Calculator, RefreshCcw, Printer, Loader2, AlertTriangle, Save } from "lucide-react";
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
 import { CreditForm } from "@/components/features/financing/CreditForm";
 import { CreditProforma } from "@/components/features/financing/CreditProforma";
@@ -38,7 +38,7 @@ function CreditSimulatorContent() {
     const proformaRef = useRef(null);
 
     const handlePrintAndSave = async () => {
-        if (!values.clientName) {
+        if (!values.clientName?.trim()) {
             alert("Por favor ingrese el nombre del cliente antes de generar la proforma.");
             return;
         }
@@ -46,76 +46,63 @@ function CreditSimulatorContent() {
         setIsGeneratingPdf(true);
 
         try {
-            // --- NUEVA LÓGICA DE GENERACIÓN DE PDF (Soporta oklch/Tailwind) ---
             if (proformaRef.current === null) {
-                return;
+                throw new Error("No se encontró el contenido de la proforma.");
             }
 
-            // 1. Convertir el HTML a una imagen PNG de alta calidad
-            // 'cacheBust' ayuda a que carguen las imágenes externas si las hubiera
-            // 'backgroundColor' asegura que el fondo sea blanco y no transparente
-            const dataUrl = await toPng(proformaRef.current, { 
-                cacheBust: true, 
+            // 1. HTML → PNG (soporta Tailwind/oklch)
+            const dataUrl = await toPng(proformaRef.current, {
+                cacheBust: true,
                 backgroundColor: '#ffffff',
                 quality: 0.95,
-                pixelRatio: 2 // Mejora la resolución
+                pixelRatio: 2,
             });
 
-            // 2. Crear un PDF con jsPDF
+            // 2. PNG → PDF A4
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
-                format: 'a4'
+                format: 'a4',
             });
 
-            // 3. Calcular dimensiones para que ajuste en A4 (210mm ancho)
             const imgProperties = pdf.getImageProperties(dataUrl);
             const pdfWidth = pdf.internal.pageSize.getWidth();
-            // Calculamos la altura proporcional
             const pdfHeight = (imgProperties.height * pdfWidth) / imgProperties.width;
-
-            // 4. Agregar la imagen al PDF
-            // (imagen, formato, x, y, ancho, alto)
             pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
-            // 5. Generar el Blob para subir
             const pdfBlob = pdf.output('blob');
 
-            // --- FIN NUEVA LÓGICA ---
-
-            // 6. Subir a Supabase Storage
-            // Usamos una función de limpieza para el nombre del archivo para evitar caracteres raros
-            const cleanName = values.clientName.replace(/[^a-zA-Z0-9]/g, '');
+            // 3. Subir PDF a Storage (bucket proformas)
+            const cleanName = values.clientName.replace(/[^a-zA-Z0-9]/g, '') || 'cliente';
             const fileName = `${Date.now()}_${cleanName}.pdf`;
-            
-            const { data: uploadData, error: uploadError } = await supabase
-                .storage
+
+            const { error: uploadError } = await supabase.storage
                 .from('proformas')
                 .upload(fileName, pdfBlob, {
                     contentType: 'application/pdf',
-                    upsert: false
+                    upsert: false,
                 });
 
             if (uploadError) throw uploadError;
 
-            // 7. Obtener la URL Pública
-            const { data: { publicUrl } } = supabase
-                .storage
+            const { data: { publicUrl } } = supabase.storage
                 .from('proformas')
                 .getPublicUrl(fileName);
 
-            // 8. Guardar en la Base de Datos con la URL
-            await saveProforma({
-                pdf_url: publicUrl 
-            });
+            // 4. Guardar fila en credit_proformas con pdf_url
+            const saved = await saveProforma({ pdf_url: publicUrl });
+            if (!saved) {
+                throw new Error("No se pudo guardar la proforma en la base de datos.");
+            }
 
-            // 9. Abrir el diálogo de impresión nativo
             window.print();
-
         } catch (error) {
             console.error("Error al generar/guardar PDF:", error);
-            // Mensaje de error más descriptivo
-            alert("Hubo un error técnico generando la imagen del PDF. Por favor imprime usando el diálogo del navegador que aparecerá a continuación.");
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "Hubo un error técnico generando o guardando el PDF.";
+            alert(`${message}\n\nSe abrirá el diálogo de impresión del navegador.`);
             window.print();
         } finally {
             setIsGeneratingPdf(false);
@@ -141,18 +128,37 @@ function CreditSimulatorContent() {
             <div className="max-w-6xl mx-auto space-y-6">
 
                 {/* HEADER (Oculto al imprimir) */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                            <Calculator className="text-blue-600 h-8 w-8" />
-                            Cotizador Financiero
-                        </h1>
-                        <p className="text-slate-500 mt-1">
-                            Simulación de crédito automotriz (Inventario en Tiempo Real)
-                        </p>
+                <div className="space-y-4 print:hidden">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                                <Calculator className="text-blue-600 h-8 w-8" />
+                                Cotizador Financiero
+                            </h1>
+                            <p className="text-slate-500 mt-1">
+                                Simulación de crédito automotriz (Inventario en Tiempo Real)
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 items-center">
+                    <div
+                        role="status"
+                        className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950"
+                    >
+                        <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" aria-hidden />
+                        <div className="text-sm leading-relaxed">
+                            <p className="font-semibold">
+                                Todas las proformas de financiamiento deben guardarse
+                            </p>
+                            <p className="text-amber-800/90 mt-0.5">
+                                Aunque no se entreguen al cliente. El botón{' '}
+                                <span className="font-semibold text-amber-950">Guardar + PDF e Imprimir</span>
+                                {' '}hace las tres cosas: archiva la proforma en el sistema, genera el PDF y abre la impresión.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 items-center justify-end">
                         <label className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 select-none shadow-sm transition-colors">
                             <div className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -180,14 +186,22 @@ function CreditSimulatorContent() {
                         <button
                             onClick={handlePrintAndSave}
                             disabled={isProcessing}
+                            title="Guarda la proforma en el sistema, genera el PDF y abre la impresión"
                             className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium shadow-md shadow-blue-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isProcessing ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                                <Printer className="w-4 h-4" />
+                                <>
+                                    <Save className="w-4 h-4" />
+                                    <Printer className="w-4 h-4" />
+                                </>
                             )}
-                            {isGeneratingPdf ? 'Archivando...' : (isHookSaving ? 'Guardando...' : 'Imprimir / PDF')}
+                            {isGeneratingPdf
+                                ? 'Guardando PDF...'
+                                : isHookSaving
+                                  ? 'Guardando...'
+                                  : 'Guardar + PDF e Imprimir'}
                         </button>
 
                         <button

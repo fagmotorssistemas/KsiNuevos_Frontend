@@ -1059,7 +1059,7 @@ export type Database = {
             foreignKeyName: "credit_proformas_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "inventory"
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]

@@ -112,7 +112,7 @@ CREATE TABLE public.credit_proformas (
   status text DEFAULT 'generada'::text,
   pdf_url text,
   CONSTRAINT credit_proformas_pkey PRIMARY KEY (id),
-  CONSTRAINT credit_proformas_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES public.inventory(id),
+  CONSTRAINT credit_proformas_vehicle_id_fkey FOREIGN KEY (vehicle_id) REFERENCES public.inventoryoracle(id) ON DELETE SET NULL,
   CONSTRAINT credit_proformas_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.cuotas_rastreador (

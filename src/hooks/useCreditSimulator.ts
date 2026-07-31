@@ -201,54 +201,58 @@ export function useCreditSimulator() {
 
     const resetDefaults = () => setValues(defaultValues);
 
-    // --- 5. GUARDAR (MODIFICADO PARA PDF) ---
-    // Aceptamos un objeto opcional 'extraData' donde vendrá la URL del PDF
+    // --- 5. GUARDAR (PDF en Storage + fila en credit_proformas) ---
     const saveProforma = async (extraData: { pdf_url?: string } = {}) => {
         if (!user) {
             toast.error("Inicia sesión para guardar.");
             return false;
         }
-        if (!values.clientName || !values.clientId) {
-            toast.error("Faltan datos del cliente.");
+        if (!values.clientName?.trim()) {
+            toast.error("Ingresa el nombre del cliente para guardar.");
             return false;
         }
 
         setIsSaving(true);
-        
+
+        const selectedId = values.selectedVehicle?.id;
+        const isValidUuid =
+            !!selectedId &&
+            selectedId !== 'manual' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selectedId);
+
+        const vehicleDescription = values.selectedVehicle
+            ? `${values.selectedVehicle.brand} ${values.selectedVehicle.model} ${values.selectedVehicle.year}`.trim()
+            : 'Vehículo Personalizado / No listado';
+
         const dataToSave = {
             created_by: user.id,
-            client_name: values.clientName,
-            client_id: values.clientId,
-            client_phone: values.clientPhone,
-            client_address: values.clientAddress,
-            vehicle_id: values.selectedVehicle?.id || null, 
-            vehicle_description: values.selectedVehicle 
-                ? `${values.selectedVehicle.brand} ${values.selectedVehicle.model} ${values.selectedVehicle.year}` 
-                : 'Vehículo Personalizado / No listado',
+            client_name: values.clientName.trim(),
+            client_id: values.clientId?.trim() || null,
+            client_phone: values.clientPhone?.trim() || null,
+            client_address: values.clientAddress?.trim() || null,
+            vehicle_id: isValidUuid ? selectedId : null,
+            vehicle_description: vehicleDescription || 'Vehículo Personalizado / No listado',
             vehicle_price: values.vehiclePrice,
-            
-            // Guardamos el monto final calculado
             down_payment_amount: results.downPaymentAmount,
-            
             term_months: values.termMonths,
             interest_rate: values.interestRateMonthly,
             monthly_payment: results.monthlyPayment,
             status: 'generada',
-            pdf_url: extraData.pdf_url || null // GUARDAMOS LA URL DEL PDF
+            pdf_url: extraData.pdf_url || null,
         };
 
         const { error } = await supabase.from('credit_proformas').insert(dataToSave);
-        
+
         setIsSaving(false);
 
         if (error) {
             console.error("Error guardando:", error);
-            toast.error("Error al guardar proforma.");
+            toast.error(error.message || "Error al guardar proforma.");
             return false;
-        } else {
-            toast.success("¡Proforma guardada exitosamente!");
-            return true;
         }
+
+        toast.success("¡Proforma guardada en Supabase!");
+        return true;
     };
 
     return {

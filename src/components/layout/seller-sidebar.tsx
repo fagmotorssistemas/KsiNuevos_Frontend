@@ -17,6 +17,7 @@ import {
     ShoppingCart,   // Pedidos
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
+    FileText,        // Proformas guardadas
     LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,7 +43,8 @@ const menuItems: MenuItem[] = [
     { name: 'Reportes Vehiculares', href: '/inventory/reportes-vehiculares', icon: LayoutGrid },
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
-    { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
+    { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
+    { name: 'Proformas', href: '/finance/proformas', icon: FileText },
 ];
 
 export function SellerSidebar() {

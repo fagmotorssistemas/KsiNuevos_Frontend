@@ -1119,35 +1119,47 @@ export type Database = {
             foreignKeyName: "credit_proformas_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: "inventory"
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
       }
       ctwa_clicks: {
         Row: {
+          ad_body: string | null
           ad_headline: string | null
           ad_id: string | null
+          ad_image_url: string | null
           captured_at: string | null
+          catalog_id: string | null
           ctwa_clid: string
           expires_at: string | null
           phone: string
+          product_retailer_id: string | null
         }
         Insert: {
+          ad_body?: string | null
           ad_headline?: string | null
           ad_id?: string | null
+          ad_image_url?: string | null
           captured_at?: string | null
+          catalog_id?: string | null
           ctwa_clid: string
           expires_at?: string | null
           phone: string
+          product_retailer_id?: string | null
         }
         Update: {
+          ad_body?: string | null
           ad_headline?: string | null
           ad_id?: string | null
+          ad_image_url?: string | null
           captured_at?: string | null
+          catalog_id?: string | null
           ctwa_clid?: string
           expires_at?: string | null
           phone?: string
+          product_retailer_id?: string | null
         }
         Relationships: []
       }
@@ -2037,6 +2049,53 @@ export type Database = {
           {
             foreignKeyName: "inventory_price_history_inventoryoracle_id_fkey"
             columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_creatives: {
+        Row: {
+          created_at: string
+          creative_kind: string
+          error_message: string | null
+          id: string
+          image_url: string | null
+          image_urls: Json | null
+          status: string
+          updated_at: string
+          variant: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          creative_kind: string
+          error_message?: string | null
+          id?: string
+          image_url?: string | null
+          image_urls?: Json | null
+          status?: string
+          updated_at?: string
+          variant: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          creative_kind?: string
+          error_message?: string | null
+          id?: string
+          image_url?: string | null
+          image_urls?: Json | null
+          status?: string
+          updated_at?: string
+          variant?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_creatives_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
@@ -4411,6 +4470,269 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      raw_full_video_folders: {
+        Row: {
+          created_at: string
+          folder_name: string | null
+          id: string
+          inventory_vehicle_id: string
+          updated_at: string
+          video_paths: string[]
+        }
+        Insert: {
+          created_at?: string
+          folder_name?: string | null
+          id?: string
+          inventory_vehicle_id: string
+          updated_at?: string
+          video_paths?: string[]
+        }
+        Update: {
+          created_at?: string
+          folder_name?: string | null
+          id?: string
+          inventory_vehicle_id?: string
+          updated_at?: string
+          video_paths?: string[]
+        }
+        Relationships: []
+      }
+      reel_format_assignments: {
+        Row: {
+          created_at: string
+          fecha_asignacion: string
+          fecha_programada: string
+          formato: string
+          id: string
+          status: string
+          variante: string
+          vehicle_id: string | null
+          vehicle_id_2: string | null
+          vendedor_id: string
+          vendedor_secundario_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          fecha_asignacion: string
+          fecha_programada: string
+          formato: string
+          id?: string
+          status?: string
+          variante: string
+          vehicle_id?: string | null
+          vehicle_id_2?: string | null
+          vendedor_id: string
+          vendedor_secundario_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          fecha_asignacion?: string
+          fecha_programada?: string
+          formato?: string
+          id?: string
+          status?: string
+          variante?: string
+          vehicle_id?: string | null
+          vehicle_id_2?: string | null
+          vendedor_id?: string
+          vendedor_secundario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reel_format_assignments_vehicle_id_2_fkey"
+            columns: ["vehicle_id_2"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_format_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_format_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_format_assignments_vendedor_secundario_id_fkey"
+            columns: ["vendedor_secundario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reel_scripts: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          formato: string
+          guion_escenas: Json
+          id: string
+          objetivo: string | null
+          palabras_count: number
+          status: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo: string | null
+          updated_at: string
+          variante: string
+          vehicle_data: Json | null
+          vehicle_data_2: Json | null
+          vehicle_id: string | null
+          vehicle_id_2: string | null
+          vendedor_id: string
+          vendedor_nombre: string
+          vendedor_secundario_id: string | null
+          vendedor_secundario_nombre: string | null
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          formato: string
+          guion_escenas: Json
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo?: string | null
+          updated_at?: string
+          variante: string
+          vehicle_data?: Json | null
+          vehicle_data_2?: Json | null
+          vehicle_id?: string | null
+          vehicle_id_2?: string | null
+          vendedor_id: string
+          vendedor_nombre: string
+          vendedor_secundario_id?: string | null
+          vendedor_secundario_nombre?: string | null
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          formato?: string
+          guion_escenas?: Json
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string
+          texto_hash?: string
+          titulo?: string | null
+          updated_at?: string
+          variante?: string
+          vehicle_data?: Json | null
+          vehicle_data_2?: Json | null
+          vehicle_id?: string | null
+          vehicle_id_2?: string | null
+          vendedor_id?: string
+          vendedor_nombre?: string
+          vendedor_secundario_id?: string | null
+          vendedor_secundario_nombre?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reel_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "reel_format_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_scripts_vehicle_id_2_fkey"
+            columns: ["vehicle_id_2"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_scripts_vendedor_secundario_id_fkey"
+            columns: ["vendedor_secundario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reel_vehicle_usage: {
+        Row: {
+          last_assignment_id: string | null
+          last_fecha: string | null
+          last_formato: string | null
+          last_variante: string | null
+          times_total: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          last_assignment_id?: string | null
+          last_fecha?: string | null
+          last_formato?: string | null
+          last_variante?: string | null
+          times_total?: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          last_assignment_id?: string | null
+          last_fecha?: string | null
+          last_formato?: string | null
+          last_variante?: string | null
+          times_total?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reel_vehicle_usage_last_assignment_id_fkey"
+            columns: ["last_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "reel_format_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_vehicle_usage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_permissions: {
         Row: {
@@ -6901,6 +7223,10 @@ export type Database = {
         Returns: string
       }
       campaign_month_now_ecuador: { Args: never; Returns: string }
+      can_access_mensajes_cartera: {
+        Args: { p_action?: string }
+        Returns: boolean
+      }
       can_access_taller_module: {
         Args: { p_action?: string }
         Returns: boolean
@@ -6973,6 +7299,16 @@ export type Database = {
         Returns: Json
       }
       fn_capi_internal_secret: { Args: never; Returns: string }
+      fn_match_lead_to_ctwa_click: {
+        Args: { p_phone: string }
+        Returns: {
+          ad_headline: string
+          captured_at: string
+          ctwa_clid: string
+          matched: boolean
+          product_retailer_id: string
+        }[]
+      }
       fn_sha256: { Args: { input: string }; Returns: string }
       get_leads_pager: {
         Args: {
@@ -7131,7 +7467,6 @@ export type Database = {
           lead_id: number
         }[]
       }
-      reassign_stale_unmanaged_leads: { Args: never; Returns: number }
       reset_leads_temperature_monthly: { Args: never; Returns: number }
       rls_roles_gps: { Args: never; Returns: string[] }
       rls_roles_marketing: { Args: never; Returns: string[] }
