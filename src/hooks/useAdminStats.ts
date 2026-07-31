@@ -45,15 +45,10 @@ export function useAdminStats() {
             start.setDate(1);
             start.setHours(0, 0, 0, 0);
         } else if (dateFilter === 'lastMonth') {
-            // LÓGICA AGREGADA: Mes Pasado
-            // 1. Establecer el inicio: Restamos 1 al mes actual y fijamos el día 1
-            start.setMonth(now.getMonth() - 1);
-            start.setDate(1);
-            start.setHours(0, 0, 0, 0);
-
-            // 2. Establecer el fin: El día 0 del mes actual es el último día del mes anterior
-            end = new Date(now.getFullYear(), now.getMonth(), 0);
-            end.setHours(23, 59, 59, 999);
+            // Construir fechas por componentes (evitar setMonth sobre día 31,
+            // que desborda: 31 jul → setMonth(jun) = 1 jul, rango vacío).
+            start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         } else if (dateFilter === 'custom') {
             const [year, month, day] = customDate.split('-').map(Number);
             start = new Date(year, month - 1, day, 0, 0, 0, 0);
