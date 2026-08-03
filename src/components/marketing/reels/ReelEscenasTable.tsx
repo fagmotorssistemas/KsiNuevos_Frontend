@@ -32,7 +32,7 @@ export function ReelEscenasTable({
   script: Pick<ReelScript, 'formato' | 'vendedor_nombre' | 'vendedor_secundario_nombre'>
   columnas?: string[] | null
 }) {
-  if (escenas.length === 0) return null
+  if (!escenas?.length) return null
 
   const cols = (columnas?.length ? columnas : DEFAULT_REEL_GUION_COLUMNAS).filter(
     (c) => COLUMN_CONFIG[c]

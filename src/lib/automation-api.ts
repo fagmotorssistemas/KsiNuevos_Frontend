@@ -14,8 +14,11 @@ export function getAutomationApiUrl(): string {
 /** Mismo origen: rutas proxy en `src/app/api/scripts/*` (evita CORS en el navegador). */
 export const SCRIPTS_API_BASE = '/api/scripts'
 
-/** Mismo origen: rutas proxy en `src/app/api/reels/*` (sistema nuevo, tablas reel_*). */
+/** Mismo origen: rutas proxy en `src/app/api/reels/*` (sistema legacy reel_*). */
 export const REELS_API_BASE = '/api/reels'
+
+/** Mismo origen: rutas proxy en `src/app/api/pilares/*` (Guiones V2 / pilares). */
+export const PILARES_API_BASE = '/api/pilares'
 
 /** URL pública de referencia (mensajes de error, docs). */
 export const AUTOMATION_API_PUBLIC_URL = getAutomationApiUrl()

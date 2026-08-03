@@ -4,11 +4,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { Clapperboard, Loader2, Users } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { ReelsByVendorView } from '@/components/marketing/reels/ReelsByVendorView'
-import { ReelsPlanDelDia } from '@/components/marketing/reels/ReelsPlanDelDia'
+import { PilaresByVendorView } from '@/components/marketing/pilares/PilaresByVendorView'
+import { PilaresPlanDelDia } from '@/components/marketing/pilares/PilaresPlanDelDia'
 import { AUTOMATION_API_PUBLIC_URL } from '@/lib/automation-api'
-import { reelsService } from '@/services/reels.service'
-import type { ReelAssignmentRow } from '@/types/reel'
+import { pilaresService } from '@/services/pilares.service'
+import type { PilarAssignmentRow, PilarAssignmentsResponse } from '@/types/pilar'
 
 type Vista = 'dia' | 'vendedor'
 
@@ -36,7 +36,7 @@ function resolveVista(searchParams: URLSearchParams): Vista {
   return searchParams.get('vista') === 'vendedor' ? 'vendedor' : 'dia'
 }
 
-function MarketingReelsPageInner() {
+function MarketingPilaresPageInner() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -49,7 +49,8 @@ function MarketingReelsPageInner() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [assignments, setAssignments] = useState<ReelAssignmentRow[]>([])
+  const [assignments, setAssignments] = useState<PilarAssignmentRow[]>([])
+  const [raw, setRaw] = useState<PilarAssignmentsResponse | null>(null)
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -91,27 +92,29 @@ function MarketingReelsPageInner() {
     setLoading(true)
     setError(null)
     try {
-      const res = await reelsService.getAssignmentsByDate(date)
+      const res = await pilaresService.getAssignmentsByDate(date)
       setAssignments(res.assignments)
+      setRaw(res.raw)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar las asignaciones')
       setAssignments([])
+      setRaw(null)
     } finally {
       setLoading(false)
     }
   }, [date])
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
   const vendorOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const a of assignments) {
-      // Ficha/Duelo/Financiamiento usan assignee técnico "Marketing".
-      // POV/Detrás: solo quien sale (Vanessa/Felipe/Xavier); cámara = Marketing.
-      if (a.vendedor_nombre.trim().toLowerCase() === 'marketing') continue
-      if (!map.has(a.vendedor_id)) map.set(a.vendedor_id, a.vendedor_nombre)
+      if (!a.vendedor_id) continue
+      const name = a.vendedor_nombre?.trim()
+      if (!name || name.toLowerCase() === 'marketing') continue
+      if (!map.has(a.vendedor_id)) map.set(a.vendedor_id, name)
     }
     return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }))
   }, [assignments])
@@ -128,8 +131,8 @@ function MarketingReelsPageInner() {
           </h1>
           <p className="text-sm text-gray-500 mt-2 max-w-xl">
             {vista === 'vendedor'
-              ? 'Reels generados por vendedor: revisa, descarga y marca publicaciones.'
-              : 'Organiza los reels del día por formato y genera guiones.'}
+              ? 'Guiones de pilares por vendedor: revisa, descarga y marca publicaciones.'
+              : 'Organiza el día por pilares (autos, educativo, entretenimiento, humanizar) y revisa hooks.'}
           </p>
         </div>
 
@@ -158,7 +161,7 @@ function MarketingReelsPageInner() {
             </button>
           </div>
 
-          {vista === 'dia' && (
+          {vista === 'dia' ? (
             <input
               type="date"
               value={draftDate}
@@ -169,33 +172,34 @@ function MarketingReelsPageInner() {
               }}
               className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white"
             />
-          )}
+          ) : null}
 
-          {loading && (
+          {loading ? (
             <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
               <Loader2 className="h-4 w-4 animate-spin" />
               Cargando…
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {vista === 'dia' && error && (
+      {vista === 'dia' && error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
           {error}
-          {!/permiso|autorizado|403/i.test(error) && (
+          {!/permiso|autorizado|403/i.test(error) ? (
             <p className="mt-2 font-normal text-red-600 text-xs">
-              Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté
-              disponible.
+              Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté disponible
+              y exponga `/pilares/*`.
             </p>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {vista === 'dia' && !error && (
-        <ReelsPlanDelDia
+      {vista === 'dia' && !error ? (
+        <PilaresPlanDelDia
           fecha={date}
           assignments={assignments}
+          raw={raw}
           loading={loading}
           onChanged={load}
           onSwitchToVendorTab={(vendedorId) =>
@@ -204,26 +208,26 @@ function MarketingReelsPageInner() {
           selectedId={selectedAssignmentId}
           onSelect={setSelectedAssignmentId}
         />
-      )}
+      ) : null}
 
-      {vista === 'vendedor' && (
-        <ReelsByVendorView vendorOptions={vendorOptions} initialVendorId={vendedorParam} />
-      )}
+      {vista === 'vendedor' ? (
+        <PilaresByVendorView vendorOptions={vendorOptions} initialVendorId={vendedorParam} />
+      ) : null}
     </div>
   )
 }
 
-export default function MarketingReelsPage() {
+export default function MarketingPilaresPage() {
   return (
     <Suspense
       fallback={
         <div className="flex items-center justify-center py-20 text-sm text-gray-500">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Cargando reels…
+          Cargando pilares…
         </div>
       }
     >
-      <MarketingReelsPageInner />
+      <MarketingPilaresPageInner />
     </Suspense>
   )
 }

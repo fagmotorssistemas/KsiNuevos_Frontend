@@ -28,7 +28,17 @@ export const REEL_FORMATO_LABELS: Record<ReelFormato, string> = {
 }
 
 export function getReelFormatoLabel(formato: string): string {
-  return REEL_FORMATO_LABELS[formato as ReelFormato] ?? formato
+  if (formato in REEL_FORMATO_LABELS) {
+    return REEL_FORMATO_LABELS[formato as ReelFormato]
+  }
+  // Compat Guiones V2 / pilares (script.formato puede traer sistema)
+  const pilarLabels: Record<string, string> = {
+    pilar1: 'Video Autos / Pilar 1',
+    pilar2: 'Video Humanizar Marca',
+    pilar3: 'Video Educativo',
+    pilar4: 'Video Entretenimiento',
+  }
+  return pilarLabels[formato] ?? formato
 }
 
 /** Ficha / Duelo / Financiamiento / Detrás: assignee técnico; label fijo "Marketing". */

@@ -14,6 +14,7 @@ import { fetchPermissionMap } from '@/lib/permissions/fetch'
 const MARKETING_API_PATH_ACCESS: { prefix: string; submodule: string }[] = [
   { prefix: '/api/scripts', submodule: 'plan-videos' },
   { prefix: '/api/reels', submodule: 'plan-videos' },
+  { prefix: '/api/pilares', submodule: 'plan-videos' },
   { prefix: '/api/videos', submodule: 'video-automation' },
   { prefix: '/api/marketing/metrics', submodule: 'metricas-campana' },
   { prefix: '/api/marketing/capi', submodule: 'metricas-campana' },
