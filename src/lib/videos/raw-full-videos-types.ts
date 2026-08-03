@@ -20,7 +20,10 @@ export type RawFullVideoFolderSummary = {
   id: string
   title: string
   subtitle: string | null
-  inventoryVehicleId: string
+  inventoryVehicleId: string | null
+  inventoryVehicleId2: string | null
+  formato: string | null
+  caption: string | null
   inventory: RawFullVideoInventorySnippet | null
   folderName: string | null
   videoCount: number

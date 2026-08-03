@@ -37,6 +37,8 @@ export function ApprovedVideosPublishingPanel({
         .limit(100)
       if (flowTypeFilter) {
         query = query.eq('flow_type', flowTypeFilter)
+      } else {
+        query = query.neq('flow_type', 'noticiero').neq('flow_type', 'raw_full')
       }
       const { data, error } = await query
       if (error) throw error

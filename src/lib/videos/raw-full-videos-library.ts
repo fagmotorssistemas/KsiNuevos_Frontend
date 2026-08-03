@@ -6,6 +6,11 @@ import {
   resolveJobVehicleLabel,
 } from '@/lib/videos/resolve-job-vehicle'
 import {
+  RAW_FULL_CAPTION_FORMATOS,
+  isRawFullCaptionFormato,
+  type RawFullCaptionFormato,
+} from '@/lib/videos/raw-full-caption-templates'
+import {
   RAW_FULL_VIDEOS_BUCKET,
   RAW_FULL_VIDEOS_MAX_PER_FOLDER,
   type RawFullVideoFolderSummary,
@@ -27,7 +32,10 @@ const VIDEO_EXT = /\.(mp4|mov|avi|webm|mkv|m4v)$/i
 
 type FolderRow = {
   id: string
-  inventory_vehicle_id: string
+  inventory_vehicle_id: string | null
+  inventory_vehicle_id_2: string | null
+  formato: string | null
+  caption: string | null
   folder_name: string | null
   video_paths: string[] | null
   created_at: string
@@ -142,35 +150,65 @@ function toSummary(
   bytes: number,
   videoCount: number
 ): RawFullVideoFolderSummary {
-  const label = resolveJobVehicleLabel(
-    {
+  if (inv) {
+    const label = resolveJobVehicleLabel(
+      {
+        id: row.id,
+        job_name: row.folder_name,
+        vehicle_line_1: null,
+        vehicle_line_2: null,
+        vehicle_line_4: null,
+        inventory_vehicle_id: row.inventory_vehicle_id,
+        selected_clips: null,
+        video_script_id: null,
+        created_at: row.created_at,
+      },
+      {
+        id: inv.id,
+        brand: inv.brand,
+        model: inv.model,
+        year: inv.year,
+        plate: inv.plate,
+        status: inv.status,
+      }
+    )
+    return {
       id: row.id,
-      job_name: row.folder_name,
-      vehicle_line_1: null,
-      vehicle_line_2: null,
-      vehicle_line_4: null,
-      inventory_vehicle_id: row.inventory_vehicle_id,
-      selected_clips: null,
-      video_script_id: null,
-      created_at: row.created_at,
-    },
-    inv
-      ? {
-          id: inv.id,
-          brand: inv.brand,
-          model: inv.model,
-          year: inv.year,
-          plate: inv.plate,
-          status: inv.status,
-        }
-      : null
-  )
+      title: label.title,
+      subtitle: [
+        RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === row.formato)?.label,
+        label.subtitle,
+      ]
+        .filter(Boolean)
+        .join(' · ') || null,
+      inventoryVehicleId: row.inventory_vehicle_id,
+      inventoryVehicleId2: row.inventory_vehicle_id_2,
+      formato: row.formato,
+      caption: row.caption,
+      inventory: inv,
+      folderName: row.folder_name,
+      videoCount,
+      totalBytes: bytes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  const customTitle = row.folder_name?.trim() || 'Video sin título'
+  const formatoLabel = RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === row.formato)?.label
   return {
     id: row.id,
-    title: label.title,
-    subtitle: label.subtitle,
+    title: customTitle,
+    subtitle: formatoLabel
+      ? `${formatoLabel}${row.inventory_vehicle_id ? '' : ' · sin vehículo'}`
+      : row.inventory_vehicle_id
+        ? null
+        : 'Sin vehículo · título libre',
     inventoryVehicleId: row.inventory_vehicle_id,
-    inventory: inv,
+    inventoryVehicleId2: row.inventory_vehicle_id_2,
+    formato: row.formato,
+    caption: row.caption,
+    inventory: null,
     folderName: row.folder_name,
     videoCount,
     totalBytes: bytes,
@@ -196,8 +234,8 @@ export async function fetchRawFullVideoLibrary(opts: {
   const supabase = getServiceClient()
 
   let query = foldersDb(supabase)
-    .select('id, inventory_vehicle_id, folder_name, video_paths, created_at, updated_at')
-    .order('updated_at', { ascending: false })
+    .select('id, inventory_vehicle_id, inventory_vehicle_id_2, formato, caption, folder_name, video_paths, created_at, updated_at')
+    .order('created_at', { ascending: false })
 
   if (opts.inventoryVehicleId?.trim()) {
     query = query.eq('inventory_vehicle_id', opts.inventoryVehicleId.trim())
@@ -209,12 +247,13 @@ export async function fetchRawFullVideoLibrary(opts: {
   let rows = (data ?? []) as FolderRow[]
   const q = opts.q?.trim().toLowerCase()
   if (q) {
-    const invIds = rows.map((r) => r.inventory_vehicle_id)
+    const invIds = rows.map((r) => r.inventory_vehicle_id).filter((id): id is string => !!id)
     const invMap = await fetchInventoryMap(invIds)
     rows = rows.filter((r) => {
-      const inv = invMap.get(r.inventory_vehicle_id)
+      const inv = r.inventory_vehicle_id ? invMap.get(r.inventory_vehicle_id) : undefined
       const hay = [
         r.folder_name,
+        r.formato,
         inv?.brand,
         inv?.model,
         inv?.plate,
@@ -227,9 +266,14 @@ export async function fetchRawFullVideoLibrary(opts: {
     })
   }
 
+  // Más recientes primero (día de subida)
+  rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
   const total = rows.length
   const pageRows = rows.slice((page - 1) * pageSize, page * pageSize)
-  const invMap = await fetchInventoryMap(pageRows.map((r) => r.inventory_vehicle_id))
+  const invMap = await fetchInventoryMap(
+    pageRows.map((r) => r.inventory_vehicle_id).filter((id): id is string => !!id)
+  )
 
   const folders: RawFullVideoFolderSummary[] = []
   let totalVideos = 0
@@ -242,7 +286,8 @@ export async function fetchRawFullVideoLibrary(opts: {
     const bytes = storage.reduce((s, x) => s + x.sizeBytes, 0)
     totalVideos += videoCount
     totalBytes += bytes
-    folders.push(toSummary(row, invMap.get(row.inventory_vehicle_id) ?? null, bytes, videoCount))
+    const inv = row.inventory_vehicle_id ? invMap.get(row.inventory_vehicle_id) ?? null : null
+    folders.push(toSummary(row, inv, bytes, videoCount))
   }
 
   // Stats globales ligeras (paths en DB)
@@ -267,7 +312,7 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
 } | null> {
   const supabase = getServiceClient()
   const { data, error } = await foldersDb(supabase)
-    .select('id, inventory_vehicle_id, folder_name, video_paths, created_at, updated_at')
+    .select('id, inventory_vehicle_id, inventory_vehicle_id_2, formato, caption, folder_name, video_paths, created_at, updated_at')
     .eq('id', folderId)
     .maybeSingle()
 
@@ -275,7 +320,9 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
   if (!data) return null
 
   const row = data as FolderRow
-  const invMap = await fetchInventoryMap([row.inventory_vehicle_id])
+  const invMap = await fetchInventoryMap(
+    row.inventory_vehicle_id ? [row.inventory_vehicle_id] : []
+  )
   const storage = await listStorageForFolder(folderId)
   const storageByPath = new Map(storage.map((s) => [s.path, s]))
   const paths = (row.video_paths ?? []).filter(isVideoPath)
@@ -302,46 +349,99 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
     })
   }
 
+  videos.sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return tb - ta
+  })
+
   const bytes = videos.reduce((s, v) => s + v.sizeBytes, 0)
+  const inv = row.inventory_vehicle_id ? invMap.get(row.inventory_vehicle_id) ?? null : null
   return {
-    folder: toSummary(row, invMap.get(row.inventory_vehicle_id) ?? null, bytes, videos.length),
+    folder: toSummary(row, inv, bytes, videos.length),
     videos,
   }
 }
 
 export async function createRawFullVideoFolder(opts: {
-  inventoryVehicleId: string
+  inventoryVehicleId?: string | null
+  inventoryVehicleId2?: string | null
+  formato?: string | null
+  title?: string | null
+  caption?: string | null
   files: Array<{ filename: string }>
 }): Promise<{
   folderId: string
   uploads: Array<{ path: string; signedUrl: string; token: string }>
 }> {
-  const inventoryVehicleId = opts.inventoryVehicleId.trim()
+  const inventoryVehicleId = opts.inventoryVehicleId?.trim() || ''
+  const inventoryVehicleId2 = opts.inventoryVehicleId2?.trim() || ''
+  const customTitle = opts.title?.trim() || ''
+  const formatoRaw = opts.formato?.trim() || ''
   const files = opts.files
-  if (!inventoryVehicleId) throw new Error('inventory_vehicle_id es requerido')
+
+  if (!formatoRaw || !isRawFullCaptionFormato(formatoRaw)) {
+    throw new Error('Selecciona el formato del video (Ficha, POV, Duelo, etc.)')
+  }
+  const formato: RawFullCaptionFormato = formatoRaw
+  const meta = RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === formato)!
+
+  if (meta.vehiclesRequired >= 1 && !inventoryVehicleId) {
+    throw new Error('Selecciona el vehículo del inventario')
+  }
+  if (meta.vehiclesRequired >= 2 && !inventoryVehicleId2) {
+    throw new Error('En duelo debes seleccionar dos vehículos')
+  }
+  if (
+    meta.vehiclesAllowed >= 2 &&
+    inventoryVehicleId &&
+    inventoryVehicleId2 &&
+    inventoryVehicleId === inventoryVehicleId2
+  ) {
+    throw new Error('Los dos vehículos del duelo deben ser distintos')
+  }
   if (!files.length) throw new Error('Selecciona al menos un video')
   if (files.length > RAW_FULL_VIDEOS_MAX_PER_FOLDER) {
     throw new Error(`Máximo ${RAW_FULL_VIDEOS_MAX_PER_FOLDER} videos por carpeta`)
   }
 
   const supabase = getServiceClient()
-  const { data: invRow, error: invError } = await supabase
-    .from('inventoryoracle')
-    .select('id, brand, model, year')
-    .eq('id', inventoryVehicleId)
-    .maybeSingle()
+  let folderName = customTitle || meta.label
+  let vehicleIdToSave: string | null =
+    meta.vehiclesAllowed >= 1 && inventoryVehicleId ? inventoryVehicleId : null
+  let vehicleId2ToSave: string | null =
+    meta.vehiclesAllowed >= 2 && inventoryVehicleId2 ? inventoryVehicleId2 : null
 
-  if (invError || !invRow) throw new Error('Vehículo no encontrado en inventario')
+  if (inventoryVehicleId) {
+    const { data: invRow, error: invError } = await supabase
+      .from('inventoryoracle')
+      .select('id, brand, model, year')
+      .eq('id', inventoryVehicleId)
+      .maybeSingle()
 
-  const folderName = buildJobNameFromInventory(
-    String(invRow.brand ?? ''),
-    String(invRow.model ?? ''),
-    invRow.year
-  )
+    if (invError || !invRow) throw new Error('Vehículo no encontrado en inventario')
+
+    folderName =
+      customTitle ||
+      buildJobNameFromInventory(String(invRow.brand ?? ''), String(invRow.model ?? ''), invRow.year) ||
+      meta.label
+  }
+
+  if (vehicleId2ToSave) {
+    const { data: inv2, error: inv2Err } = await supabase
+      .from('inventoryoracle')
+      .select('id')
+      .eq('id', vehicleId2ToSave)
+      .maybeSingle()
+    if (inv2Err || !inv2) throw new Error('Segundo vehículo no encontrado en inventario')
+  }
 
   const { data: folder, error: insertError } = await foldersDb(supabase)
     .insert({
-      inventory_vehicle_id: inventoryVehicleId,
+      inventory_vehicle_id: vehicleIdToSave,
+      inventory_vehicle_id_2: vehicleId2ToSave,
+      formato,
+      caption: opts.caption?.trim() || null,
       folder_name: folderName || null,
       video_paths: [],
     })
@@ -379,6 +479,14 @@ export async function createRawFullVideoFolder(opts: {
   }
 
   return { folderId, uploads }
+}
+
+export async function updateRawFullFolderCaption(folderId: string, caption: string): Promise<void> {
+  const supabase = getServiceClient()
+  const { error } = await foldersDb(supabase)
+    .update({ caption: caption.trim(), updated_at: new Date().toISOString() })
+    .eq('id', folderId)
+  if (error) throw new Error(error.message)
 }
 
 export async function prepareAppendRawFullVideos(

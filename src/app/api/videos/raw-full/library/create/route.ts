@@ -10,11 +10,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as {
-      inventory_vehicle_id?: string
+      inventory_vehicle_id?: string | null
+      inventory_vehicle_id_2?: string | null
+      formato?: string | null
+      title?: string | null
+      caption?: string | null
       files?: Array<{ filename: string; mimeType?: string }>
     }
     const result = await createRawFullVideoFolder({
-      inventoryVehicleId: body.inventory_vehicle_id ?? '',
+      inventoryVehicleId: body.inventory_vehicle_id ?? null,
+      inventoryVehicleId2: body.inventory_vehicle_id_2 ?? null,
+      formato: body.formato ?? null,
+      title: body.title ?? null,
+      caption: body.caption ?? null,
       files: (body.files ?? []).map((f) => ({ filename: f.filename ?? '' })),
     })
     return NextResponse.json(result)
@@ -22,7 +30,10 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[raw-full/library/create]', message)
     const status =
-      message.includes('requerido') || message.includes('Selecciona') || message.startsWith('Máximo')
+      message.includes('Selecciona') ||
+      message.includes('duelo') ||
+      message.includes('formato') ||
+      message.startsWith('Máximo')
         ? 400
         : message.includes('no encontrado')
           ? 404

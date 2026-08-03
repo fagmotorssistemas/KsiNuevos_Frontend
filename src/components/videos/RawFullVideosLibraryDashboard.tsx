@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   ArrowLeft,
+  CalendarClock,
   FolderOpen,
   Loader2,
+  ListVideo,
   Plus,
   RefreshCw,
   Search,
@@ -12,12 +14,36 @@ import {
   Upload,
   Film,
   Download,
+  PlayCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatBytes, type RawFullVideoFolderSummary, type RawFullVideoItem } from '@/lib/videos/raw-full-videos-library'
 import { UploadFullVideosModal } from '@/components/videos/UploadFullVideosModal'
+import { ScheduleRawFullPublishModal } from '@/components/videos/ScheduleRawFullPublishModal'
+import { RawFullPublishingQueuePanel } from '@/components/videos/RawFullPublishingQueuePanel'
+
+function formatUploadDay(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('es-EC', {
+      timeZone: 'America/Guayaquil',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso))
+  } catch {
+    return iso.slice(0, 10)
+  }
+}
+
+type MainTab = 'library' | 'queue'
 
 export function RawFullVideosLibraryDashboard() {
+  const [mainTab, setMainTab] = useState<MainTab>('library')
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0)
+  const [processingQueue, setProcessingQueue] = useState(false)
   const [folders, setFolders] = useState<RawFullVideoFolderSummary[]>([])
   const [stats, setStats] = useState({ totalFolders: 0, totalVideos: 0, totalBytes: 0 })
   const [loading, setLoading] = useState(true)
@@ -35,6 +61,12 @@ export function RawFullVideosLibraryDashboard() {
   } | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [busyPath, setBusyPath] = useState<string | null>(null)
+  const [scheduleTarget, setScheduleTarget] = useState<{
+    folderId: string
+    videoPath: string
+    caption: string
+    vehicleId: string | null
+  } | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300)
@@ -63,8 +95,8 @@ export function RawFullVideosLibraryDashboard() {
   }, [debouncedQ])
 
   useEffect(() => {
-    void loadLibrary()
-  }, [loadLibrary])
+    if (mainTab === 'library') void loadLibrary()
+  }, [loadLibrary, mainTab])
 
   const loadDetail = useCallback(async (folderId: string) => {
     setDetailLoading(true)
@@ -139,6 +171,25 @@ export function RawFullVideosLibraryDashboard() {
     }
   }
 
+  async function runProcessNow() {
+    setProcessingQueue(true)
+    try {
+      const res = await fetch('/api/videos/publish/process', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = (await res.json()) as { processed?: number; error?: string }
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      const n = data.processed ?? 0
+      toast.success(n > 0 ? `Cola procesada: ${n} ítem(s)` : 'Nada pendiente por ahora')
+      setQueueRefreshKey((k) => k + 1)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo ejecutar el procesador')
+    } finally {
+      setProcessingQueue(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -146,224 +197,332 @@ export function RawFullVideosLibraryDashboard() {
           <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Marketing</p>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-0.5">Biblioteca de videos en bruto</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Videos enteros ya creados en otra herramienta. Storage separado de la biblioteca de clips.
+            Videos enteros ya creados en otra herramienta. Cola de publicación propia (no se mezcla con Videos).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void loadLibrary()}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Actualizar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAppendTarget(null)
-              setUploadOpen(true)
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
-          >
-            <Plus className="w-4 h-4" />
-            Subir videos
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-bold uppercase text-gray-500">Carpetas</p>
-          <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalFolders}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-bold uppercase text-gray-500">Videos</p>
-          <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalVideos}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-[11px] font-bold uppercase text-gray-500">Peso (página)</p>
-          <p className="text-xl font-extrabold text-gray-900 mt-0.5">{formatBytes(stats.totalBytes)}</p>
-        </div>
-      </div>
-
-      {!selectedId ? (
-        <>
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por marca, modelo, placa…"
-              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm"
-            />
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
-            </div>
-          ) : folders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-              <FolderOpen className="w-10 h-10 text-gray-300 mx-auto" />
-              <p className="mt-3 font-bold text-gray-800">Sin carpetas aún</p>
-              <p className="text-sm text-gray-500 mt-1">Sube videos enteros asociados a un vehículo.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {folders.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => void loadDetail(f.id)}
-                  className="text-left rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-violet-200 transition-all"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
-                      <Film className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-gray-900 truncate">{f.title}</p>
-                      {f.subtitle ? (
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{f.subtitle}</p>
-                      ) : null}
-                      <p className="text-xs text-gray-600 mt-2">
-                        {f.videoCount} video{f.videoCount === 1 ? '' : 's'} · {formatBytes(f.totalBytes)}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedId(null)
-                setDetailFolder(null)
-                setVideos([])
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-sm font-semibold text-gray-700"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Volver
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!detailFolder) return
-                setAppendTarget({
-                  id: detailFolder.id,
-                  title: detailFolder.title,
-                  videoCount: detailFolder.videoCount,
-                })
-                setUploadOpen(true)
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
-            >
-              <Upload className="w-4 h-4" />
-              Agregar videos
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteFolder()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold"
-            >
-              <Trash2 className="w-4 h-4" />
-              Eliminar carpeta
-            </button>
-          </div>
-
-          {detailLoading || !detailFolder ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
-            </div>
+          {mainTab === 'library' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void loadLibrary()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Actualizar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAppendTarget(null)
+                  setUploadOpen(true)
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+              >
+                <Plus className="w-4 h-4" />
+                Subir videos
+              </button>
+            </>
           ) : (
             <>
-              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
-                <h2 className="text-lg font-extrabold text-gray-900">{detailFolder.title}</h2>
-                {detailFolder.subtitle ? (
-                  <p className="text-sm text-gray-500 mt-0.5">{detailFolder.subtitle}</p>
-                ) : null}
-                <p className="text-xs text-gray-600 mt-2">
-                  {detailFolder.videoCount} video(s) · {formatBytes(detailFolder.totalBytes)}
-                </p>
+              <button
+                type="button"
+                onClick={() => setQueueRefreshKey((k) => k + 1)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Actualizar
+              </button>
+              <button
+                type="button"
+                disabled={processingQueue}
+                onClick={() => void runProcessNow()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50"
+              >
+                {processingQueue ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <PlayCircle className="w-4 h-4" />
+                )}
+                Procesar cola ahora
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab('library')
+            setSelectedId(null)
+            setDetailFolder(null)
+            setVideos([])
+          }}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+            mainTab === 'library'
+              ? 'bg-violet-600 text-white border-violet-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <FolderOpen className="w-4 h-4" />
+          Carpetas
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('queue')}
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+            mainTab === 'queue'
+              ? 'bg-violet-600 text-white border-violet-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <ListVideo className="w-4 h-4" />
+          Cola programados
+        </button>
+      </div>
+
+      {mainTab === 'queue' ? (
+        <div className="space-y-4">
+          <div className="rounded-[1.5rem] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-slate-50 px-5 py-4">
+            <h2 className="text-lg font-extrabold text-gray-900">Cola de publicación</h2>
+            <p className="text-sm text-gray-600 mt-1 max-w-2xl">
+              Solo videos en bruto programados desde esta biblioteca. Edita, cancela o publica sin mezclar
+              con el módulo Videos.
+            </p>
+          </div>
+          <RawFullPublishingQueuePanel
+            refreshKey={queueRefreshKey}
+            onMutate={() => setQueueRefreshKey((k) => k + 1)}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <p className="text-[11px] font-bold uppercase text-gray-500">Carpetas</p>
+              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalFolders}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <p className="text-[11px] font-bold uppercase text-gray-500">Videos</p>
+              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalVideos}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <p className="text-[11px] font-bold uppercase text-gray-500">Peso (página)</p>
+              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{formatBytes(stats.totalBytes)}</p>
+            </div>
+          </div>
+
+          {!selectedId ? (
+            <>
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar por título, marca, modelo, placa…"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm"
+                />
               </div>
 
-              {videos.length === 0 ? (
-                <p className="text-sm text-gray-500 py-8 text-center">Esta carpeta no tiene videos.</p>
+              {loading ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+                </div>
+              ) : folders.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+                  <FolderOpen className="w-10 h-10 text-gray-300 mx-auto" />
+                  <p className="mt-3 font-bold text-gray-800">Sin carpetas aún</p>
+                  <p className="text-sm text-gray-500 mt-1">Sube videos enteros asociados a un vehículo.</p>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {videos.map((v) => (
-                    <div
-                      key={v.path}
-                      className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {folders.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => void loadDetail(f.id)}
+                      className="text-left rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-violet-200 transition-all"
                     >
-                      <div className="relative h-44 bg-gray-900">
-                        {v.signedUrl ? (
-                          <video
-                            src={`${v.signedUrl}#t=0.1`}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                            preload="metadata"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Film className="w-8 h-8 text-gray-600" />
-                          </div>
-                        )}
-                        {v.signedUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewUrl(v.signedUrl)}
-                            className="absolute inset-0 bg-black/10 hover:bg-black/30 transition-colors"
-                            title="Previsualizar"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="p-3 space-y-2">
-                        <p className="text-xs font-semibold text-gray-800 truncate" title={v.name}>
-                          {v.name}
-                        </p>
-                        <p className="text-[11px] text-gray-500">{formatBytes(v.sizeBytes)}</p>
-                        <div className="flex gap-2">
-                          {v.signedUrl ? (
-                            <a
-                              href={v.signedUrl}
-                              download={v.name}
-                              className="flex-1 inline-flex items-center justify-center gap-1 h-9 rounded-xl bg-violet-50 text-violet-800 text-xs font-bold hover:bg-violet-100"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Descargar
-                            </a>
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
+                          <Film className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-gray-900 truncate">{f.title}</p>
+                          {f.subtitle ? (
+                            <p className="text-xs text-gray-500 truncate mt-0.5">{f.subtitle}</p>
                           ) : null}
-                          <button
-                            type="button"
-                            disabled={busyPath === v.path}
-                            onClick={() => void handleDeleteVideo(v.path)}
-                            className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
-                            title="Eliminar"
-                          >
-                            {busyPath === v.path ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          <p className="text-xs text-gray-600 mt-2">
+                            {f.videoCount} video{f.videoCount === 1 ? '' : 's'} · {formatBytes(f.totalBytes)}
+                          </p>
+                          <p className="text-[11px] text-violet-700 font-semibold mt-1 capitalize">
+                            Subido {formatUploadDay(f.createdAt)}
+                          </p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
             </>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(null)
+                    setDetailFolder(null)
+                    setVideos([])
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-sm font-semibold text-gray-700"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!detailFolder) return
+                    setAppendTarget({
+                      id: detailFolder.id,
+                      title: detailFolder.title,
+                      videoCount: detailFolder.videoCount,
+                    })
+                    setUploadOpen(true)
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+                >
+                  <Upload className="w-4 h-4" />
+                  Agregar videos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteFolder()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar carpeta
+                </button>
+              </div>
+
+              {detailLoading || !detailFolder ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 space-y-2">
+                    <h2 className="text-lg font-extrabold text-gray-900">{detailFolder.title}</h2>
+                    {detailFolder.subtitle ? (
+                      <p className="text-sm text-gray-500 mt-0.5">{detailFolder.subtitle}</p>
+                    ) : null}
+                    <p className="text-xs text-gray-600">
+                      {detailFolder.videoCount} video(s) · {formatBytes(detailFolder.totalBytes)} · Subido{' '}
+                      {formatUploadDay(detailFolder.createdAt)}
+                    </p>
+                    {detailFolder.caption ? (
+                      <p className="text-xs text-gray-500 whitespace-pre-wrap line-clamp-4 border-t border-gray-100 pt-2">
+                        {detailFolder.caption}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {videos.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-8 text-center">Esta carpeta no tiene videos.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {videos.map((v) => (
+                        <div
+                          key={v.path}
+                          className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
+                        >
+                          <div className="relative h-44 bg-gray-900">
+                            {v.signedUrl ? (
+                              <video
+                                src={`${v.signedUrl}#t=0.1`}
+                                className="w-full h-full object-cover"
+                                muted
+                                playsInline
+                                preload="metadata"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Film className="w-8 h-8 text-gray-600" />
+                              </div>
+                            )}
+                            {v.signedUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewUrl(v.signedUrl)}
+                                className="absolute inset-0 bg-black/10 hover:bg-black/30 transition-colors"
+                                title="Previsualizar"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="p-3 space-y-2">
+                            <p className="text-xs font-semibold text-gray-800 truncate" title={v.name}>
+                              {v.name}
+                            </p>
+                            <p className="text-[11px] text-gray-500">{formatBytes(v.sizeBytes)}</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!detailFolder) return
+                                  if (!detailFolder.caption?.trim()) {
+                                    toast.error(
+                                      'Esta carpeta no tiene caption. Sube de nuevo eligiendo formato o edita el copy al programar.'
+                                    )
+                                  }
+                                  setScheduleTarget({
+                                    folderId: detailFolder.id,
+                                    videoPath: v.path,
+                                    caption: detailFolder.caption?.trim() || '',
+                                    vehicleId: detailFolder.inventoryVehicleId,
+                                  })
+                                }}
+                                className="flex-1 inline-flex items-center justify-center gap-1 h-9 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+                              >
+                                <CalendarClock className="w-3.5 h-3.5" />
+                                Programar
+                              </button>
+                              {v.signedUrl ? (
+                                <a
+                                  href={v.signedUrl}
+                                  download={v.name}
+                                  className="inline-flex items-center justify-center gap-1 h-9 px-3 rounded-xl bg-violet-50 text-violet-800 text-xs font-bold hover:bg-violet-100"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  Descargar
+                                </a>
+                              ) : null}
+                              <button
+                                type="button"
+                                disabled={busyPath === v.path}
+                                onClick={() => void handleDeleteVideo(v.path)}
+                                className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
+                                title="Eliminar"
+                              >
+                                {busyPath === v.path ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       <UploadFullVideosModal
@@ -376,6 +535,26 @@ export function RawFullVideosLibraryDashboard() {
         onSaved={() => {
           void loadLibrary()
           if (selectedId) void loadDetail(selectedId)
+        }}
+        onScheduled={() => {
+          void loadLibrary()
+          setMainTab('queue')
+          setQueueRefreshKey((k) => k + 1)
+        }}
+      />
+
+      <ScheduleRawFullPublishModal
+        isOpen={!!scheduleTarget}
+        onClose={() => setScheduleTarget(null)}
+        folderId={scheduleTarget?.folderId ?? null}
+        videoPath={scheduleTarget?.videoPath ?? null}
+        initialCaption={scheduleTarget?.caption ?? ''}
+        initialVehicleId={scheduleTarget?.vehicleId ?? null}
+        onScheduled={() => {
+          setScheduleTarget(null)
+          setMainTab('queue')
+          setQueueRefreshKey((k) => k + 1)
+          toast.success('Programado — revisa la cola de esta biblioteca')
         }}
       />
 

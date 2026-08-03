@@ -9,7 +9,12 @@ import { formatUtcForEcuadorDisplay } from '@/lib/videos/ecuador-time'
 import { SchedulePublishModal, type QueueRowLike } from './SchedulePublishModal'
 import { RepublishModal } from './RepublishModal'
 
-type VideoJoin = { job_name: string | null; final_video_url: string | null; flow_type?: string | null }
+type VideoJoin = {
+  job_name: string | null
+  final_video_url: string | null
+  flow_type?: string | null
+  selected_clips?: unknown
+}
 type VehicleJoin = { brand: string; model: string; year: number; version: string | null }
 type PublishResultRow = { queue_id: string; platform: string; platform_post_id: string | null }
 
@@ -147,14 +152,27 @@ function PublishResultsModal({ queueId, onClose }: ResultModalProps) {
   )
 }
 
+function isRawFullQueueJob(job: VideoJoin | null | undefined): boolean {
+  if (!job) return false
+  if (job.flow_type === 'raw_full') return true
+  const clips = job.selected_clips
+  if (clips && typeof clips === 'object' && !Array.isArray(clips)) {
+    return (clips as { _v2_full_raw_publish?: boolean })._v2_full_raw_publish === true
+  }
+  return false
+}
+
 export function PublishingQueueTable({
   refreshKey = 0,
   onMutate,
   flowTypeFilter,
+  /** `videos` = excluye biblioteca en bruto; `raw_full` = solo esa cola */
+  queueSource = 'videos',
 }: {
   refreshKey?: number
   onMutate?: () => void
   flowTypeFilter?: string
+  queueSource?: 'videos' | 'raw_full'
 }) {
   const [rows, setRows] = useState<PublishingQueueRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -176,7 +194,7 @@ export function PublishingQueueTable({
         .select(
           `
           id, video_id, vehicle_id, caption, scheduled_at, platforms, status,
-          video_jobs_v2 ( job_name, final_video_url, flow_type ),
+          video_jobs_v2 ( job_name, final_video_url, flow_type, selected_clips ),
           inventoryoracle ( brand, model, year, version )
         `
         )
@@ -187,6 +205,14 @@ export function PublishingQueueTable({
       let queueRows = (data ?? []) as unknown as PublishingQueueRow[]
       if (flowTypeFilter) {
         queueRows = queueRows.filter((r) => r.video_jobs_v2?.flow_type === flowTypeFilter)
+      }
+      if (queueSource === 'raw_full') {
+        queueRows = queueRows.filter((r) => isRawFullQueueJob(r.video_jobs_v2))
+      } else {
+        queueRows = queueRows.filter((r) => !isRawFullQueueJob(r.video_jobs_v2))
+        if (!flowTypeFilter) {
+          queueRows = queueRows.filter((r) => r.video_jobs_v2?.flow_type !== 'noticiero')
+        }
       }
       setRows(queueRows)
 
@@ -211,7 +237,7 @@ export function PublishingQueueTable({
     } finally {
       setLoading(false)
     }
-  }, [flowTypeFilter])
+  }, [flowTypeFilter, queueSource])
 
   useEffect(() => {
     load()
