@@ -122,7 +122,7 @@ export function UserNav({
     return (
         <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3 sm:gap-4'}`}>
 
-            {showLaviletToggle && onToggleLaviletOnly && (
+            {showLaviletToggle && onToggleLaviletOnly && profile?.role === 'admin' && (
                 <button
                     type="button"
                     onClick={onToggleLaviletOnly}

@@ -35,7 +35,7 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   { href: '/marketing', label: 'Marketing', module: 'marketing' },
   { href: '/rastreadores', label: 'Rastreadores', module: 'gps' },
   { href: '/seguros', label: 'Seguros', module: 'seguros' },
-  { href: '/lavilet', label: 'Lavilet', module: 'lavilet' },
+  { href: '/lavilet', label: 'Lavilet', module: 'admin' }, // Cambiado a module: 'admin' para restringirlo
   { href: '/scraper', label: 'Scraper', submodule: 'scraper-marketing' },
   { href: '/report', label: 'Monitoreo', submodule: 'monitoreo-reportes' },
   { href: '/admin/permisos', label: 'Permisos', submodule: 'permisos-roles' },

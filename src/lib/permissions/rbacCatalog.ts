@@ -123,6 +123,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   // Admin — solo pantallas que existen hoy
   { moduleSlug: 'admin', slug: 'permisos-roles', name: 'Permisos y usuarios', sortOrder: 1, routePrefixes: ['/admin/permisos'] },
   { moduleSlug: 'admin', slug: 'monitoreo-reportes', name: 'Monitoreo y reportes', sortOrder: 2, routePrefixes: ['/report'] },
+  { moduleSlug: 'admin', slug: 'lavilet-view', name: 'Vista Lavilet', sortOrder: 3, routePrefixes: ['/lavilet'] },
 ]
 
 function buildModuleSubmodules(): Record<ModuleSlug, readonly string[]> {
