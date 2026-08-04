@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNotifications, NotificationItem } from "@/hooks/useNotifications";
 import { Avatar } from "@/components/ui/avatar";
 import { 
-    LogOut, User, Bell, Clock, Check, Calendar, Sparkles, AlertTriangle
+    LogOut, User, Bell, Clock, Check, Calendar, Sparkles, AlertTriangle, Building2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -58,7 +58,17 @@ const formatFriendlyDate = (dateString: string) => {
     return dayLabel; // Solo "Hoy" o "Mañana"
 };
 
-export function UserNav({ compact = false }: { compact?: boolean }) {
+export function UserNav({
+    compact = false,
+    laviletOnly = false,
+    onToggleLaviletOnly,
+    showLaviletToggle = false,
+}: {
+    compact?: boolean;
+    laviletOnly?: boolean;
+    onToggleLaviletOnly?: () => void;
+    showLaviletToggle?: boolean;
+}) {
     const { user, profile, supabase } = useAuth();
     const { notifications, markAsRead, hasNotifications } = useNotifications();
     
@@ -111,6 +121,23 @@ export function UserNav({ compact = false }: { compact?: boolean }) {
 
     return (
         <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3 sm:gap-4'}`}>
+
+            {showLaviletToggle && onToggleLaviletOnly && (
+                <button
+                    type="button"
+                    onClick={onToggleLaviletOnly}
+                    title={laviletOnly ? 'Mostrar todos los módulos' : 'Vista Lavilet'}
+                    aria-pressed={laviletOnly}
+                    aria-label={laviletOnly ? 'Mostrar todos los módulos' : 'Vista Lavilet'}
+                    className={`relative p-2 rounded-full transition-all outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-300
+                        ${laviletOnly
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                        }`}
+                >
+                    <Building2 className="h-5 w-5" />
+                </button>
+            )}
             
             {/* --- CAMPANA --- */}
             <div className="relative" ref={notifRef}>

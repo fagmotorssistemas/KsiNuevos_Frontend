@@ -87,11 +87,6 @@ function isMorosoManual(r: CarteraManualRow): boolean {
 export function CarteraManualModule() {
   const { profile, user } = useAuth();
   const role = (profile?.role || "").toLowerCase().trim();
-  const isLegalRole =
-    role === "admin" ||
-    role === "abogado" ||
-    role === "abogada" ||
-    role === "finanzas";
 
   const [rows, setRows] = useState<CarteraManualRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +211,6 @@ export function CarteraManualModule() {
           setSelectedId(null);
           load();
         }}
-        isLegalRole={isLegalRole}
       />
     );
   }
@@ -629,13 +623,11 @@ function CarteraManualDetail({
   userId,
   role,
   onBack,
-  isLegalRole,
 }: {
   row: CarteraManualRow;
   userId: string | undefined;
   role: string;
   onBack: () => void;
-  isLegalRole: boolean;
 }) {
   const vencido = isMorosoManual(row);
   const isAdmin = role === "admin";
@@ -824,25 +816,23 @@ function CarteraManualDetail({
         </div>
       </div>
 
-      {isLegalRole && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Scale className="h-5 w-5 text-slate-700" />
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Gestión legal de cartera
-              </p>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Mismo flujo que Oracle; equipo legal y finanzas. Cada gestión indica quién la registró.
-              </p>
-            </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Scale className="h-5 w-5 text-slate-700" />
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Gestión legal de cartera
+            </p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Mismo flujo que Oracle; equipo legal y finanzas. Cada gestión indica quién la registró.
+            </p>
           </div>
-          <LegalCasesTab
-            legalContext={{ type: "manual", carteraManualId: row.id }}
-            defaultMontoReferenciaForNewCase={row.saldo_actual}
-          />
         </div>
-      )}
+        <LegalCasesTab
+          legalContext={{ type: "manual", carteraManualId: row.id }}
+          defaultMontoReferenciaForNewCase={row.saldo_actual}
+        />
+      </div>
       {showEdit && (
         <CarteraManualEditModal
           row={row}

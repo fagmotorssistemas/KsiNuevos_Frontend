@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Menu, X } from 'lucide-react'
@@ -17,15 +17,32 @@ import {
 } from '@/lib/permissions'
 
 export const Navbar = () => {
-  const pathname = usePathname()
+  const router = useRouter()
   const { user, profile, permissionMap } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [laviletOnly, setLaviletOnly] = useState(false)
   const permCtx: PermissionContext = useMemo(
     () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
     [profile?.role, permissionMap]
   )
-  const mobileNavItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
-  const compact = shouldCompactPrimaryNav(mobileNavItems.length)
+  const allNavItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
+  const canSeeLavilet = useMemo(
+    () => allNavItems.some((item) => item.module === 'lavilet'),
+    [allNavItems]
+  )
+  const mobileNavItems = useMemo(() => {
+    if (!laviletOnly) return allNavItems
+    return allNavItems.filter((item) => item.module === 'lavilet')
+  }, [allNavItems, laviletOnly])
+  const compact = shouldCompactPrimaryNav(laviletOnly ? mobileNavItems.length : allNavItems.length)
+
+  const handleToggleLaviletOnly = useCallback(() => {
+    setLaviletOnly((prev) => {
+      const next = !prev
+      if (next) router.push('/lavilet')
+      return next
+    })
+  }, [router])
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -45,7 +62,7 @@ export const Navbar = () => {
 
           {user && (
             <div className="hidden min-w-0 flex-1 md:block">
-              <MainNav />
+              <MainNav laviletOnly={laviletOnly} />
             </div>
           )}
         </div>
@@ -53,7 +70,12 @@ export const Navbar = () => {
         <div className={`flex shrink-0 items-center ${compact ? 'gap-2' : 'gap-4'}`}>
           {user ? (
             <>
-              <UserNav compact={compact} />
+              <UserNav
+                compact={compact}
+                laviletOnly={laviletOnly}
+                onToggleLaviletOnly={handleToggleLaviletOnly}
+                showLaviletToggle={canSeeLavilet}
+              />
               <button
                 className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

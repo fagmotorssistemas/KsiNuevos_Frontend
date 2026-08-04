@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { RefreshCw, LayoutList, AlertTriangle, CalendarClock, HandCoins } from "lucide-react";
+import {
+    RefreshCw,
+    LayoutList,
+    AlertTriangle,
+    CalendarClock,
+    HandCoins,
+    Columns3,
+    Table2,
+} from "lucide-react";
 
 import { KpiDashboard } from "@/components/features/accounting/wallet/KpiDashboard";
 import { TopDebtorsTable } from "@/components/features/accounting/wallet/TopDebtorsTable";
 import { AllDebtorsTable } from "@/components/features/accounting/wallet/AllDebtorsTable";
+import { DebtorsKanbanBoard } from "@/components/features/accounting/wallet/DebtorsKanbanBoard";
 import { ClientSearch } from "@/components/features/accounting/wallet/ClientSearch";
 import { ClientDetail } from "@/components/features/accounting/wallet/ClientDetail";
 import { useWalletData } from "@/hooks/accounting/useWalletData";
@@ -18,6 +27,7 @@ export default function WalletPage() {
     
     // 1. Agregamos 'mora' a las opciones de modo lista
     const [listMode, setListMode] = useState<'risk' | 'all' | 'mora'>('risk');
+    const [boardView, setBoardView] = useState<'lista' | 'kanban'>('lista');
     
     const [filterMode, setFilterMode] = useState<'all' | 'vencidos' | 'aldia'>('all');
     
@@ -27,13 +37,17 @@ export default function WalletPage() {
 
     const { kpis, topDebtors, loading, refresh } = useWalletData();
 
-    // 2. Modificamos el efecto para cargar datos si es 'all' O 'mora'
+    // 2. Cargar directorio para 'all', 'mora' o cuando se abre el kanban
     useEffect(() => {
-        if ((listMode === 'all' || listMode === 'mora') && allDebtors.length === 0) {
+        const needAll =
+            listMode === 'all' ||
+            listMode === 'mora' ||
+            boardView === 'kanban';
+        if (needAll && allDebtors.length === 0) {
             const fetchAll = async () => {
                 setLoadingAll(true);
                 try {
-                    const data = await walletService.getAllDebtors(100);
+                    const data = await walletService.getAllDebtors(1000);
                     setAllDebtors(data);
                 } catch (error) {
                     console.error("Error cargando directorio:", error);
@@ -43,7 +57,7 @@ export default function WalletPage() {
             };
             fetchAll();
         }
-    }, [listMode]); // Se ejecuta cuando cambia el modo
+    }, [listMode, boardView, allDebtors.length]);
 
     // 3. Función especial para manejar el click en "Mayor Mora"
     const handleMoraViewClick = () => {
@@ -59,6 +73,14 @@ export default function WalletPage() {
         return [...allDebtors].sort((a, b) => b.diasMoraMaximo - a.diasMoraMaximo);
     }, [allDebtors, listMode]);
 
+    /** Base del kanban: preferir directorio completo; si aún no carga, top deudores. */
+    const kanbanDebtors = useMemo(() => {
+        const base = allDebtors.length > 0 ? allDebtors : topDebtors;
+        if (filterMode === 'vencidos') return base.filter((d) => d.documentosVencidos > 0);
+        if (filterMode === 'aldia') return base.filter((d) => d.documentosVencidos === 0);
+        return base;
+    }, [allDebtors, topDebtors, filterMode]);
+
     const handleSelectClient = (clientId: number) => {
         setSelectedClientId(clientId);
         setView('detail');
@@ -71,7 +93,7 @@ export default function WalletPage() {
     };
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full mx-auto py-2">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -110,80 +132,118 @@ export default function WalletPage() {
                         onFilterChange={setFilterMode} 
                     />
 
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                        
-                        {/* Controles de Pestaña (Tabs) */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                            <div className="flex p-1 bg-slate-100 rounded-lg w-full sm:w-fit overflow-x-auto">
-                                {/* Botón 1: Prioridad */}
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative">
+                        {/* Toggle Lista / Kanban — esquina superior derecha */}
+                        <div className="absolute top-4 right-4 z-10">
+                            <div className="flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 shadow-sm">
                                 <button
-                                    onClick={() => setListMode('risk')}
-                                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                        listMode === 'risk'
+                                    type="button"
+                                    onClick={() => setBoardView('lista')}
+                                    title="Vista lista"
+                                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
+                                        boardView === 'lista'
                                             ? 'bg-white text-slate-900 shadow-sm'
                                             : 'text-slate-500 hover:text-slate-700'
                                     }`}
                                 >
-                                    <AlertTriangle className={`h-4 w-4 ${listMode === 'risk' ? 'text-red-500' : ''}`} />
-                                    Prioridad Alta
+                                    <Table2 className="h-3.5 w-3.5" />
+                                    Lista
                                 </button>
-
-                                {/* Botón 2: NUEVO - Mayor Mora */}
                                 <button
-                                    onClick={handleMoraViewClick}
-                                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                        listMode === 'mora'
+                                    type="button"
+                                    onClick={() => setBoardView('kanban')}
+                                    title="Vista tablero"
+                                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
+                                        boardView === 'kanban'
                                             ? 'bg-white text-slate-900 shadow-sm'
                                             : 'text-slate-500 hover:text-slate-700'
                                     }`}
                                 >
-                                    <CalendarClock className={`h-4 w-4 ${listMode === 'mora' ? 'text-orange-500' : ''}`} />
-                                    Mayor Mora
-                                </button>
-
-                                {/* Botón 3: Directorio */}
-                                <button
-                                    onClick={() => setListMode('all')}
-                                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                        listMode === 'all'
-                                            ? 'bg-white text-slate-900 shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    <LayoutList className={`h-4 w-4 ${listMode === 'all' ? 'text-blue-500' : ''}`} />
-                                    Directorio A-Z
+                                    <Columns3 className="h-3.5 w-3.5" />
+                                    Tablero
                                 </button>
                             </div>
                         </div>
 
-                        {/* Renderizado Condicional de Tablas */}
-                        {listMode === 'risk' && (
-                            <TopDebtorsTable
-                                debtors={topDebtors}
-                                onViewDetail={handleSelectClient}
-                                filterMode={filterMode}
-                                onFilterChange={setFilterMode}
-                            />
-                        )}
+                        {boardView === 'lista' ? (
+                            <>
+                                {/* Controles de Pestaña (Tabs) */}
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pr-0 sm:pr-36">
+                                    <div className="flex p-1 bg-slate-100 rounded-lg w-full sm:w-fit overflow-x-auto">
+                                        <button
+                                            onClick={() => setListMode('risk')}
+                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                                listMode === 'risk'
+                                                    ? 'bg-white text-slate-900 shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700'
+                                            }`}
+                                        >
+                                            <AlertTriangle className={`h-4 w-4 ${listMode === 'risk' ? 'text-red-500' : ''}`} />
+                                            Prioridad Alta
+                                        </button>
 
-                        {/* Reutilizamos TopDebtorsTable para la vista de Mora porque queremos ver los indicadores de riesgo */}
-                        {listMode === 'mora' && (
-                            <TopDebtorsTable
-                                debtors={debtorsByMora} // Pasamos la lista ordenada
-                                onViewDetail={handleSelectClient}
-                                filterMode={filterMode}
-                                onFilterChange={setFilterMode}
-                            />
-                        )}
+                                        <button
+                                            onClick={handleMoraViewClick}
+                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                                listMode === 'mora'
+                                                    ? 'bg-white text-slate-900 shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700'
+                                            }`}
+                                        >
+                                            <CalendarClock className={`h-4 w-4 ${listMode === 'mora' ? 'text-orange-500' : ''}`} />
+                                            Mayor Mora
+                                        </button>
 
-                        {listMode === 'all' && (
-                            <AllDebtorsTable 
-                                debtors={allDebtors}
-                                onViewDetail={handleSelectClient}
-                                loading={loadingAll}
-                                filterMode={filterMode}
-                                onFilterChange={setFilterMode}
-                            />
+                                        <button
+                                            onClick={() => setListMode('all')}
+                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                                listMode === 'all'
+                                                    ? 'bg-white text-slate-900 shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700'
+                                            }`}
+                                        >
+                                            <LayoutList className={`h-4 w-4 ${listMode === 'all' ? 'text-blue-500' : ''}`} />
+                                            Directorio A-Z
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {listMode === 'risk' && (
+                                    <TopDebtorsTable
+                                        debtors={topDebtors}
+                                        onViewDetail={handleSelectClient}
+                                        filterMode={filterMode}
+                                        onFilterChange={setFilterMode}
+                                    />
+                                )}
+
+                                {listMode === 'mora' && (
+                                    <TopDebtorsTable
+                                        debtors={debtorsByMora}
+                                        onViewDetail={handleSelectClient}
+                                        filterMode={filterMode}
+                                        onFilterChange={setFilterMode}
+                                    />
+                                )}
+
+                                {listMode === 'all' && (
+                                    <AllDebtorsTable
+                                        debtors={allDebtors}
+                                        onViewDetail={handleSelectClient}
+                                        loading={loadingAll}
+                                        filterMode={filterMode}
+                                        onFilterChange={setFilterMode}
+                                    />
+                                )}
+                            </>
+                        ) : (
+                            <div className="pt-8 sm:pt-2">
+                                <DebtorsKanbanBoard
+                                    debtors={kanbanDebtors}
+                                    loading={loading || loadingAll}
+                                    onViewDetail={handleSelectClient}
+                                />
+                            </div>
                         )}
                     </div>
                 </div>

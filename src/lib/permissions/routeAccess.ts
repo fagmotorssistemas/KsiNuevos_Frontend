@@ -117,6 +117,9 @@ export function moduleRouteDenied(pathname: string, ctx: PermissionContext): str
   if (pathname === '/rastreadores' || pathname.startsWith('/rastreadores/')) {
     return canAccessModule(ctx, MODULE_SLUGS.gps) ? null : MODULE_SLUGS.gps
   }
+  if (pathname === '/lavilet' || pathname.startsWith('/lavilet/')) {
+    return canAccessModule(ctx, MODULE_SLUGS.lavilet) ? null : MODULE_SLUGS.lavilet
+  }
   if (pathname === '/admin/permisos' || pathname.startsWith('/admin/permisos/')) {
     return isAppAdminRole(ctx) ? null : 'permisos-roles'
   }

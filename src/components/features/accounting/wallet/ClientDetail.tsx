@@ -23,7 +23,6 @@ import { ClientContactInfo } from "./ClientContactInfo";
 // Importamos el nuevo componente
 import { AmortizationTab } from "./AmortizationTab"; 
 import { LegalCasesTab } from "./LegalCasesTab";
-import { useAuth } from "@/hooks/useAuth";
 
 interface ClientDetailProps {
     clientId: number;
@@ -132,9 +131,6 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
     const [loading, setLoading] = useState(true);
     // Agregamos 'amortization' y 'legal' a los tipos de tab
     const [activeTab, setActiveTab] = useState<'docs' | 'sales' | 'payments' | 'notes' | 'amortization' | 'legal'>('docs');
-    const { profile } = useAuth();
-    const role = (profile?.role || "").toLowerCase().trim();
-    const isLegalRole = role === "admin" || role === "abogado" || role === "abogada" || role === "finanzas";
 
     useEffect(() => {
         const loadDetail = async () => {
@@ -366,19 +362,17 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                     <History className="h-4 w-4" />
                     Gestión Sistema ({data.notas.length})
                 </button>
-                {isLegalRole && (
-                    <button
-                        onClick={() => setActiveTab('legal')}
-                        className={`pb-3 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap relative ${
-                            activeTab === 'legal' 
-                                ? 'text-red-600 border-b-2 border-red-600' 
-                                : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                    >
-                        <History className="h-4 w-4" />
-                        Gestión Legal
-                    </button>
-                )}
+                <button
+                    onClick={() => setActiveTab('legal')}
+                    className={`pb-3 text-sm font-medium flex items-center gap-2 transition-all whitespace-nowrap relative ${
+                        activeTab === 'legal' 
+                            ? 'text-red-600 border-b-2 border-red-600' 
+                            : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    <History className="h-4 w-4" />
+                    Gestión Legal
+                </button>
             </div>
 
             {/* CONTENIDO DE TABS */}
@@ -636,8 +630,8 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                 </div>
             )}
 
-            {/* TAB: GESTIÓN LEGAL (MÓDULO NUEVO) */}
-            {activeTab === 'legal' && isLegalRole && (
+            {/* TAB: GESTIÓN LEGAL */}
+            {activeTab === 'legal' && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
                     <div className="flex items-center justify-between gap-3 mb-2">
                         <div>

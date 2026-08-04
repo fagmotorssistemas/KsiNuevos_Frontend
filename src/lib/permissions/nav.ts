@@ -38,6 +38,9 @@ export function pathnameBelongsToPrimaryNavItem(pathname: string, item: PrimaryN
   if (item.module === MODULE_SLUGS.seguros) {
     return pathMatchesPrefix(path, '/seguros')
   }
+  if (item.module === MODULE_SLUGS.lavilet) {
+    return pathMatchesPrefix(path, '/lavilet')
+  }
   if (item.submodule === 'scraper-marketing') {
     return pathMatchesPrefix(path, '/scraper')
   }

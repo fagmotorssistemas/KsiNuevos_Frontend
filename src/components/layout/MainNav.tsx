@@ -12,7 +12,13 @@ import {
   type PermissionContext,
 } from "@/lib/permissions";
 
-export function MainNav({ className }: { className?: string }) {
+export function MainNav({
+  className,
+  laviletOnly = false,
+}: {
+  className?: string;
+  laviletOnly?: boolean;
+}) {
   const pathname = usePathname();
   const { profile, permissionMap } = useAuth();
 
@@ -21,7 +27,11 @@ export function MainNav({ className }: { className?: string }) {
     [profile?.role, permissionMap]
   );
 
-  const navItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx]);
+  const navItems = useMemo(() => {
+    const items = buildPrimaryNavItems(permCtx);
+    if (!laviletOnly) return items;
+    return items.filter((item) => item.module === "lavilet");
+  }, [permCtx, laviletOnly]);
   const compact = shouldCompactPrimaryNav(navItems.length);
 
   return (

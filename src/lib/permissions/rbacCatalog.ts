@@ -15,6 +15,7 @@ export const MODULE_SLUGS = {
   legal: 'legal',
   seguros: 'seguros',
   marketing: 'marketing',
+  lavilet: 'lavilet',
   admin: 'admin',
 } as const
 
@@ -43,6 +44,7 @@ export const RBAC_MODULE_DEFINITIONS: readonly RbacModuleDef[] = [
   { slug: 'legal', name: 'Legal', sortOrder: 50 },
   { slug: 'seguros', name: 'Seguros', sortOrder: 60 },
   { slug: 'marketing', name: 'Marketing', sortOrder: 70 },
+  { slug: 'lavilet', name: 'Lavilet', sortOrder: 75 },
   { slug: 'admin', name: 'Admin', sortOrder: 80 },
 ]
 
@@ -55,6 +57,7 @@ const MODULE_LEVEL_ROUTE_PREFIXES: readonly string[] = [
   '/report',
   '/seguros',
   '/rastreadores',
+  '/lavilet',
   '/admin',
   '/perfil',
 ]
