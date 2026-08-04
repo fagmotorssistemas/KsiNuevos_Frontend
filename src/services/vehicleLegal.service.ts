@@ -9,6 +9,7 @@ import type {
   VehicleDocumentFileRow,
   VehicleDocumentRow,
   VehicleEventRow,
+  VehicleFineFileRow,
   VehicleFineRow,
   VehicleInternalNoteRow,
   VehicleLegalDossier,
@@ -95,6 +96,43 @@ async function attachDocumentFiles(
   } catch (err) {
     console.warn('[vehicleLegal] attachDocumentFiles fallback', err)
     return documents.map((doc) => ({ ...doc, files: [] }))
+  }
+}
+
+async function attachFineFiles(
+  supabase: SupabaseClient,
+  fines: VehicleFineRow[]
+): Promise<VehicleFineRow[]> {
+  if (fines.length === 0) return fines
+
+  try {
+    const fineIds = fines.map((f) => f.id)
+    const allFiles = await fetchInChunks(fineIds, async (chunk, from, to) => {
+      const { data, error } = await supabase
+        .from('inventory_vehicle_fine_files')
+        .select('*')
+        .in('fine_id', chunk)
+        .order('created_at', { ascending: true })
+        .order('id')
+        .range(from, to)
+      if (error) throw error
+      return (data ?? []) as VehicleFineFileRow[]
+    })
+
+    const byFine = new Map<string, VehicleFineFileRow[]>()
+    for (const file of allFiles) {
+      const list = byFine.get(file.fine_id) ?? []
+      list.push(file)
+      byFine.set(file.fine_id, list)
+    }
+
+    return fines.map((fine) => ({
+      ...fine,
+      files: byFine.get(fine.id) ?? [],
+    }))
+  } catch (err) {
+    console.warn('[vehicleLegal] attachFineFiles fallback', err)
+    return fines.map((fine) => ({ ...fine, files: [] }))
   }
 }
 
@@ -363,6 +401,7 @@ export async function loadVehicleLegalDossier(
   if (queryError) throw new Error(queryError)
 
   const documents = (docsRes.data ?? []) as VehicleDocumentRow[]
+  const finesRaw = (finesRes.data ?? []) as VehicleFineRow[]
   if (documents.length < VEHICLE_DOCUMENT_CATALOG.length) {
     await seedDocumentSlots(supabase, inventoryoracleId)
     const { data: retryDocs, error: retryErr } = await supabase
@@ -372,11 +411,14 @@ export async function loadVehicleLegalDossier(
       .order('category')
       .order('doc_type')
     if (retryErr) throw retryErr
-    const withFiles = await attachDocumentFiles(supabase, (retryDocs ?? []) as VehicleDocumentRow[])
+    const [withFiles, finesWithFiles] = await Promise.all([
+      attachDocumentFiles(supabase, (retryDocs ?? []) as VehicleDocumentRow[]),
+      attachFineFiles(supabase, finesRaw),
+    ])
     return {
       inventoryoracleId,
       documents: withFiles,
-      fines: (finesRes.data ?? []) as VehicleFineRow[],
+      fines: finesWithFiles,
       debts: (debtsRes.data ?? []) as VehicleDebtRow[],
       owners: (ownersRes.data ?? []) as VehicleOwnerRow[],
       events: (eventsRes.data ?? []) as VehicleEventRow[],
@@ -384,11 +426,14 @@ export async function loadVehicleLegalDossier(
     }
   }
 
-  const withFiles = await attachDocumentFiles(supabase, documents)
+  const [withFiles, finesWithFiles] = await Promise.all([
+    attachDocumentFiles(supabase, documents),
+    attachFineFiles(supabase, finesRaw),
+  ])
   return {
     inventoryoracleId,
     documents: withFiles,
-    fines: (finesRes.data ?? []) as VehicleFineRow[],
+    fines: finesWithFiles,
     debts: (debtsRes.data ?? []) as VehicleDebtRow[],
     owners: (ownersRes.data ?? []) as VehicleOwnerRow[],
     events: (eventsRes.data ?? []) as VehicleEventRow[],
@@ -796,7 +841,61 @@ export async function addVehicleFine(
     .select('*')
     .single()
   if (error) throw error
-  return data as VehicleFineRow
+  return { ...(data as VehicleFineRow), files: [] as VehicleFineFileRow[] }
+}
+
+export async function uploadVehicleFineFile(
+  supabase: SupabaseClient,
+  inventoryoracleId: string,
+  fineId: string,
+  file: File,
+  profileId: string | null
+): Promise<VehicleFineFileRow> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+  const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`
+  const filePath = `${inventoryoracleId}/fines/${fineId}/${safeName}`
+
+  const { error: upErr } = await supabase.storage
+    .from(INVENTORY_VEHICLE_DOCS_BUCKET)
+    .upload(filePath, file, { contentType: file.type || undefined })
+  if (upErr) throw upErr
+
+  const { data: urlData } = supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).getPublicUrl(filePath)
+
+  const { data, error } = await supabase
+    .from('inventory_vehicle_fine_files')
+    .insert({
+      fine_id: fineId,
+      file_path: filePath,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      mime_type: file.type || null,
+      uploaded_by: profileId,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as VehicleFineFileRow
+}
+
+export async function deleteVehicleFineFile(
+  supabase: SupabaseClient,
+  fileId: string
+): Promise<void> {
+  const { data: fileRow, error: readErr } = await supabase
+    .from('inventory_vehicle_fine_files')
+    .select('*')
+    .eq('id', fileId)
+    .maybeSingle()
+  if (readErr) throw readErr
+  if (!fileRow) throw new Error('Archivo no encontrado')
+
+  await supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).remove([fileRow.file_path])
+  const { error: delErr } = await supabase
+    .from('inventory_vehicle_fine_files')
+    .delete()
+    .eq('id', fileId)
+  if (delErr) throw delErr
 }
 
 export async function updateVehicleFine(
@@ -810,6 +909,16 @@ export async function updateVehicleFine(
 }
 
 export async function deleteVehicleFine(supabase: SupabaseClient, fineId: string) {
+  // Borrar archivos de storage asociados antes de cascada en BD
+  const { data: files } = await supabase
+    .from('inventory_vehicle_fine_files')
+    .select('file_path')
+    .eq('fine_id', fineId)
+  if (files?.length) {
+    await supabase.storage
+      .from(INVENTORY_VEHICLE_DOCS_BUCKET)
+      .remove(files.map((f) => f.file_path))
+  }
   const { error } = await supabase.from('inventory_vehicle_fines').delete().eq('id', fineId)
   if (error) throw error
 }

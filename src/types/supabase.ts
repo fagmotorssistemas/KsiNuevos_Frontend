@@ -2375,6 +2375,54 @@ export type Database = {
           },
         ]
       }
+      inventory_vehicle_fine_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          file_url: string
+          fine_id: string
+          id: string
+          mime_type: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_url: string
+          fine_id: string
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_url?: string
+          fine_id?: string
+          id?: string
+          mime_type?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_fine_files_fine_id_fkey"
+            columns: ["fine_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_vehicle_fines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_fine_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_vehicle_fines: {
         Row: {
           amount: number
@@ -4306,6 +4354,597 @@ export type Database = {
           },
         ]
       }
+      pilar1_assignments: {
+        Row: {
+          ciclo_index: number
+          created_at: string
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          slot_del_dia: number
+          status: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Insert: {
+          ciclo_index: number
+          created_at?: string
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          slot_del_dia: number
+          status?: string
+          vehicle_id: string
+          vendedor_id: string
+        }
+        Update: {
+          ciclo_index?: number
+          created_at?: string
+          fecha_asignacion?: string
+          fecha_programada?: string
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          slot_del_dia?: number
+          status?: string
+          vehicle_id?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar1_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar1_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar1_scripts: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          objetivo: string | null
+          palabras_count: number
+          status: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo: string | null
+          updated_at: string
+          vehicle_data: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo?: string | null
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string
+          texto_hash?: string
+          titulo?: string | null
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id?: string
+          vendedor_id?: string
+          vendedor_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar1_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "pilar1_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar1_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar1_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar2_assignments: {
+        Row: {
+          created_at: string
+          es_repeticion: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          momento: string
+          slot_mes: number
+          status: string
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          momento: string
+          slot_mes: number
+          status?: string
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion?: string
+          fecha_programada?: string
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          momento?: string
+          slot_mes?: number
+          status?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar2_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar2_scripts: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          momento: string
+          objetivo: string | null
+          palabras_count: number
+          status: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo: string | null
+          updated_at: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          momento: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo?: string | null
+          updated_at?: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          momento?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string
+          texto_hash?: string
+          titulo?: string | null
+          updated_at?: string
+          vendedor_id?: string
+          vendedor_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar2_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "pilar2_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar2_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar3_assignments: {
+        Row: {
+          created_at: string
+          es_repeticion: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          slot_del_dia: number
+          slot_mes: number
+          status: string
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          slot_del_dia: number
+          slot_mes: number
+          status?: string
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion?: string
+          fecha_programada?: string
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          slot_del_dia?: number
+          slot_mes?: number
+          status?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar3_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar3_scripts: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          objetivo: string | null
+          palabras_count: number
+          status: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo: string | null
+          updated_at: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo?: string | null
+          updated_at?: string
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string
+          texto_hash?: string
+          titulo?: string | null
+          updated_at?: string
+          vendedor_id?: string
+          vendedor_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar3_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "pilar3_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar3_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar4_assignments: {
+        Row: {
+          created_at: string
+          es_repeticion: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          slot_mes: number
+          status: string
+          vehicle_id: string | null
+          vendedor_id: string
+        }
+        Insert: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion: string
+          fecha_programada: string
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          slot_mes: number
+          status?: string
+          vehicle_id?: string | null
+          vendedor_id: string
+        }
+        Update: {
+          created_at?: string
+          es_repeticion?: boolean
+          fecha_asignacion?: string
+          fecha_programada?: string
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          slot_mes?: number
+          status?: string
+          vehicle_id?: string | null
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar4_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar4_assignments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar4_scripts: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          facebook_post_id: string | null
+          fecha_generacion: string
+          fecha_publicacion: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id: string
+          objetivo: string | null
+          palabras_count: number
+          status: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo: string | null
+          updated_at: string
+          vehicle_data: Json | null
+          vehicle_id: string | null
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion: string
+          fecha_publicacion?: string | null
+          guion_escenas: Json
+          hook_categoria: string
+          hook_texto: string
+          hook_variacion: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion: string
+          texto_hablado: string
+          texto_hash: string
+          titulo?: string | null
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id?: string | null
+          vendedor_id: string
+          vendedor_nombre: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          facebook_post_id?: string | null
+          fecha_generacion?: string
+          fecha_publicacion?: string | null
+          guion_escenas?: Json
+          hook_categoria?: string
+          hook_texto?: string
+          hook_variacion?: number
+          id?: string
+          objetivo?: string | null
+          palabras_count?: number
+          status?: string
+          texto_guion?: string
+          texto_hablado?: string
+          texto_hash?: string
+          titulo?: string | null
+          updated_at?: string
+          vehicle_data?: Json | null
+          vehicle_id?: string | null
+          vendedor_id?: string
+          vendedor_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar4_scripts_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "pilar4_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar4_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar4_scripts_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_runs: {
         Row: {
           created_at: string
@@ -4473,26 +5112,35 @@ export type Database = {
       }
       raw_full_video_folders: {
         Row: {
+          caption: string | null
           created_at: string
           folder_name: string | null
+          formato: string | null
           id: string
-          inventory_vehicle_id: string
+          inventory_vehicle_id: string | null
+          inventory_vehicle_id_2: string | null
           updated_at: string
           video_paths: string[]
         }
         Insert: {
+          caption?: string | null
           created_at?: string
           folder_name?: string | null
+          formato?: string | null
           id?: string
-          inventory_vehicle_id: string
+          inventory_vehicle_id?: string | null
+          inventory_vehicle_id_2?: string | null
           updated_at?: string
           video_paths?: string[]
         }
         Update: {
+          caption?: string | null
           created_at?: string
           folder_name?: string | null
+          formato?: string | null
           id?: string
-          inventory_vehicle_id?: string
+          inventory_vehicle_id?: string | null
+          inventory_vehicle_id_2?: string | null
           updated_at?: string
           video_paths?: string[]
         }

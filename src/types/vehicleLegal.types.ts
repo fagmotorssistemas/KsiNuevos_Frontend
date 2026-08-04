@@ -82,6 +82,17 @@ export interface VehicleDocumentRow {
   files?: VehicleDocumentFileRow[]
 }
 
+export interface VehicleFineFileRow {
+  id: string
+  fine_id: string
+  file_path: string
+  file_url: string
+  file_name: string
+  mime_type: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface VehicleFineRow {
   id: string
   inventoryoracle_id: string
@@ -92,6 +103,8 @@ export interface VehicleFineRow {
   payer_notes: string | null
   status: string
   created_at: string
+  /** Comprobantes / fotos de la multa (PDF o imagen) */
+  files?: VehicleFineFileRow[]
 }
 
 export interface VehicleDebtRow {
