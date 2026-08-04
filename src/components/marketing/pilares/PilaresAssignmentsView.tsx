@@ -8,6 +8,7 @@ import {
   findPilarScriptForAssignment,
   getPilarAssignmentTitle,
   getPilarVehicleLabel,
+  isPilarGuionListo,
   type PilarAssignmentRow,
   type PilarScript,
 } from '@/types/pilar'
@@ -18,8 +19,8 @@ import { ReelVehicleSummary } from '@/components/marketing/reels/ReelVehicleSumm
 export function PilaresAssignmentsView({
   fecha,
   assignments,
+  scripts,
   loading,
-  onSwitchToVendorTab,
   onRefresh,
   selectedId,
   onSelect,
@@ -30,8 +31,8 @@ export function PilaresAssignmentsView({
 }: {
   fecha: string
   assignments: PilarAssignmentRow[]
+  scripts: PilarScript[]
   loading: boolean
-  onSwitchToVendorTab?: (vendedorId: string) => void
   onRefresh?: () => void
   selectedId: string | null
   onSelect: (assignmentId: string | null) => void
@@ -41,61 +42,24 @@ export function PilaresAssignmentsView({
   hookHints?: string[]
 }) {
   const [generatingId, setGeneratingId] = useState<string | null>(null)
-  const [scriptsByAssignment, setScriptsByAssignment] = useState<Record<string, PilarScript>>({})
-  const [loadingScriptId, setLoadingScriptId] = useState<string | null>(null)
-  const [scriptLoadFailedIds, setScriptLoadFailedIds] = useState<Record<string, boolean>>({})
+
+  const scriptsByAssignment = useMemo(() => {
+    const map: Record<string, PilarScript> = {}
+    for (const a of assignments) {
+      const match = findPilarScriptForAssignment(scripts, a)
+      if (match) map[a.assignment_id] = match
+    }
+    return map
+  }, [assignments, scripts])
 
   useEffect(() => {
-    setScriptsByAssignment({})
-    setScriptLoadFailedIds({})
     const stillValid = selectedId != null && assignments.some((a) => a.assignment_id === selectedId)
     if (!stillValid) onSelect(assignments[0]?.assignment_id ?? null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments])
 
   const selected = assignments.find((a) => a.assignment_id === selectedId) ?? null
-  const selectedScript = selectedId ? scriptsByAssignment[selectedId] : null
-
-  useEffect(() => {
-    if (!selected) return
-    if (selected.status !== 'guion_generado') return
-    if (scriptsByAssignment[selected.assignment_id]) return
-    if (scriptLoadFailedIds[selected.assignment_id]) return
-    if (!selected.vendedor_id) return
-
-    let cancelled = false
-    const assignment = selected
-    setLoadingScriptId(assignment.assignment_id)
-
-    ;(async () => {
-      try {
-        const scripts = await pilaresService.getByVendor(assignment.vendedor_id!, {
-          sistema: assignment.sistema,
-        })
-        const match = findPilarScriptForAssignment(scripts, assignment)
-        if (match && !cancelled) {
-          setScriptsByAssignment((prev) => ({
-            ...prev,
-            [assignment.assignment_id]: match,
-          }))
-          return
-        }
-        if (!cancelled) {
-          setScriptLoadFailedIds((prev) => ({ ...prev, [assignment.assignment_id]: true }))
-        }
-      } catch {
-        if (!cancelled) {
-          setScriptLoadFailedIds((prev) => ({ ...prev, [assignment.assignment_id]: true }))
-        }
-      } finally {
-        if (!cancelled) setLoadingScriptId(null)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [selected, scriptsByAssignment, scriptLoadFailedIds])
+  const selectedScript = selectedId ? scriptsByAssignment[selectedId] ?? null : null
 
   async function handleGenerate(assignment: PilarAssignmentRow) {
     setGeneratingId(assignment.assignment_id)
@@ -105,10 +69,6 @@ export function PilaresAssignmentsView({
         assignment.assignment_id
       )
       if (res.script) {
-        setScriptsByAssignment((prev) => ({
-          ...prev,
-          [assignment.assignment_id]: res.script!,
-        }))
         toast.success('Guión generado')
       } else {
         toast.message(res.detail || 'No se generó ningún guión')
@@ -128,11 +88,11 @@ export function PilaresAssignmentsView({
       <div className="rounded-[1.75rem] border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500 space-y-3">
         <p>
           {listTitle
-            ? `Aún no hay piezas asignadas para ${listTitle} el ${fecha}.`
+            ? `Aún no hay piezas de Marketing para ${listTitle} el ${fecha}.`
             : `No hay asignaciones de pilares para el ${fecha}.`}
         </p>
         <p className="text-xs text-slate-400">
-          El backend planifica y genera solo. Cuando haya assignments aparecerán aquí.
+          El backend planifica y genera solo para Marketing. Cuando haya piezas aparecerán aquí.
         </p>
         {emptyHints.length > 0 ? (
           <ul className="space-y-1.5 pt-1">
@@ -162,7 +122,7 @@ export function PilaresAssignmentsView({
           </p>
           {expectedCount != null && (
             <p className="text-[11px] text-slate-400 mt-1">
-              {assignments.length} de {expectedCount} · {fecha}
+              {assignments.length} de {expectedCount} · Marketing · {fecha}
             </p>
           )}
         </div>
@@ -225,9 +185,7 @@ export function PilaresAssignmentsView({
                     <ReelVehicleSummary vehicle={selected.vehicle_data} size="lg" />
                   </div>
                 ) : null}
-                <p className="text-sm font-semibold text-slate-600 mt-2">
-                  {selected.vendedor_nombre || 'Sin asignar'}
-                </p>
+                <p className="text-sm font-semibold text-slate-600 mt-2">Marketing</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <PilarSistemaBadge
@@ -240,12 +198,6 @@ export function PilaresAssignmentsView({
 
             {selectedScript ? (
               <PilarScriptDetail script={selectedScript} />
-            ) : selected.status === 'guion_generado' &&
-              loadingScriptId === selected.assignment_id ? (
-              <div className="flex items-center justify-center gap-2 text-sm text-slate-500 py-10">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Cargando guión…
-              </div>
             ) : selected.status === 'pendiente_generacion' ? (
               <button
                 type="button"
@@ -260,33 +212,19 @@ export function PilaresAssignmentsView({
                 )}
                 Generar guión
               </button>
-            ) : selected.status === 'guion_generado' ? (
+            ) : isPilarGuionListo(selected.status) ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-3">
-                <p>El assignment dice “guión generado”, pero no se pudo cargar el script.</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setScriptLoadFailedIds((prev) => {
-                        const next = { ...prev }
-                        delete next[selected.assignment_id]
-                        return next
-                      })
-                    }
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-amber-700 text-white text-xs font-bold"
-                  >
-                    Reintentar carga
-                  </button>
-                  {onSwitchToVendorTab && selected.vendedor_id ? (
-                    <button
-                      type="button"
-                      onClick={() => onSwitchToVendorTab(selected.vendedor_id!)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-violet-700 text-white text-xs font-bold"
-                    >
-                      Ver en Por vendedor
-                    </button>
-                  ) : null}
-                </div>
+                <p>
+                  El assignment dice guión generado, pero `/pilares/scripts` no devolvió el script
+                  para esta fecha.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onRefresh?.()}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-amber-700 text-white text-xs font-bold"
+                >
+                  Recargar
+                </button>
               </div>
             ) : (
               <p className="text-sm text-slate-500">Asignación descartada.</p>

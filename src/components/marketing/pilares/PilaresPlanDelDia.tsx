@@ -17,6 +17,7 @@ import {
   PILAR_SHORT_LABELS,
   type PilarAssignmentRow,
   type PilarAssignmentsResponse,
+  type PilarScript,
   type PilarSistema,
 } from '@/types/pilar'
 import { PilaresAssignmentsView } from './PilaresAssignmentsView'
@@ -69,19 +70,19 @@ function hookHintsForSistema(
 export function PilaresPlanDelDia({
   fecha,
   assignments,
+  scripts,
   raw,
   loading,
   onChanged,
-  onSwitchToVendorTab,
   selectedId,
   onSelect,
 }: {
   fecha: string
   assignments: PilarAssignmentRow[]
+  scripts: PilarScript[]
   raw: PilarAssignmentsResponse | null
   loading: boolean
   onChanged: () => void
-  onSwitchToVendorTab?: (vendedorId: string) => void
   selectedId: string | null
   onSelect: (assignmentId: string | null) => void
 }) {
@@ -184,8 +185,8 @@ export function PilaresPlanDelDia({
               {formatFechaLabel(fecha)}
             </h2>
             <p className="mt-2 text-sm text-slate-300 max-w-md">
-              Elige un pilar, revisa hooks del día y descarga o marca el guión. La planificación
-              corre sola en el backend.
+              Elige un pilar, revisa hooks del día y descarga el guión. Todo lo genera Marketing;
+              la planificación corre sola en el backend.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white border border-white/10">
@@ -314,12 +315,12 @@ export function PilaresPlanDelDia({
             <PilaresAssignmentsView
               fecha={fecha}
               assignments={itemsActivos}
+              scripts={scripts.filter((s) => s.sistema === activo.sistema)}
               loading={loading}
               listTitle={activo.label}
               listSubtitle={activo.descripcion}
               expectedCount={activo.count}
               hookHints={hookHintsForSistema(raw, activo.sistema)}
-              onSwitchToVendorTab={onSwitchToVendorTab}
               onRefresh={onChanged}
               selectedId={selectedId}
               onSelect={onSelect}

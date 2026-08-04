@@ -231,6 +231,7 @@ export function normalizePilarScript(raw: unknown, fallbackSistema?: PilarSistem
     (asRecord(o.vehicle_data) as PilarVehicleData | null)
 
   const escenas = Array.isArray(o.guion_escenas) ? (o.guion_escenas as PilarGuionEscena[]) : []
+  const statusRaw = str(o.status) || 'generado'
 
   return {
     id,
@@ -240,11 +241,11 @@ export function normalizePilarScript(raw: unknown, fallbackSistema?: PilarSistem
     hook_variacion: typeof o.hook_variacion === 'number' ? o.hook_variacion : null,
     hook_texto: str(o.hook_texto),
     momento: str(o.momento),
-    status: str(o.status) || 'guion_generado',
+    status: statusRaw,
     palabras_count: typeof o.palabras_count === 'number' ? o.palabras_count : null,
     facebook_post_id: str(o.facebook_post_id),
     vendedor_id: str(o.vendedor_id),
-    vendedor_nombre: str(o.vendedor_nombre),
+    vendedor_nombre: str(o.vendedor_nombre) || str(o.responsable) || 'Marketing',
     vehicle_id: str(o.vehicle_id),
     vehicle,
     titulo: str(o.titulo),
@@ -281,6 +282,11 @@ export function pilarScriptToReelCompat(script: PilarScript) {
   }
 }
 
+export function isPilarGuionListo(status: string | null | undefined): boolean {
+  const v = (status ?? '').toLowerCase()
+  return v === 'guion_generado' || v === 'generado'
+}
+
 export function findPilarScriptForAssignment(
   scripts: PilarScript[],
   assignment: PilarAssignmentRow
@@ -291,8 +297,7 @@ export function findPilarScriptForAssignment(
     scripts.find(
       (s) =>
         s.sistema === assignment.sistema &&
-        (s.hook_texto ?? '') === (assignment.hook_texto ?? '') &&
-        (s.vendedor_id ?? '') === (assignment.vendedor_id ?? '')
+        (s.hook_texto ?? '') === (assignment.hook_texto ?? '')
     ) ?? null
   )
 }

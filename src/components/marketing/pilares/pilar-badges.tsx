@@ -34,20 +34,19 @@ export function PilarSistemaBadge({
 
 export function PilarAssignmentStatusBadge({ status }: { status: string }) {
   const v = (status ?? '').toLowerCase()
-  const cls =
-    v === 'guion_generado'
-      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-      : v === 'descartado'
-        ? 'bg-gray-100 text-gray-600 border-gray-200'
-        : 'bg-amber-100 text-amber-800 border-amber-200'
-  const label =
-    v === 'guion_generado'
-      ? 'Guión generado'
-      : v === 'descartado'
-        ? 'Descartado'
-        : v === 'pendiente_generacion'
-          ? 'Pendiente'
-          : v || '—'
+  const listo = v === 'guion_generado' || v === 'generado'
+  const cls = listo
+    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+    : v === 'descartado'
+      ? 'bg-gray-100 text-gray-600 border-gray-200'
+      : 'bg-amber-100 text-amber-800 border-amber-200'
+  const label = listo
+    ? 'Guión generado'
+    : v === 'descartado'
+      ? 'Descartado'
+      : v === 'pendiente_generacion'
+        ? 'Pendiente'
+        : v || '—'
 
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>

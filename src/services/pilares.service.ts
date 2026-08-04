@@ -27,6 +27,12 @@ export type PilarActionResponse = {
   script?: PilarScript
 }
 
+export type PilarScriptsResponse = {
+  fecha: string
+  responsable: string
+  scripts: PilarScript[]
+}
+
 function normalizeActionResponse(body: unknown, sistema?: PilarSistema): PilarActionResponse {
   if (body && typeof body === 'object') {
     if ('script' in body || 'created' in body || 'detail' in body) {
@@ -43,9 +49,28 @@ function normalizeActionResponse(body: unknown, sistema?: PilarSistema): PilarAc
   return {}
 }
 
+function parseScriptsBody(body: unknown, fallbackSistema?: PilarSistema): PilarScriptsResponse {
+  const o = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  const list: unknown[] = Array.isArray(o.scripts)
+    ? o.scripts
+    : Array.isArray(body)
+      ? body
+      : Array.isArray(o.data)
+        ? (o.data as unknown[])
+        : []
+  return {
+    fecha: typeof o.fecha === 'string' ? o.fecha : '',
+    responsable: typeof o.responsable === 'string' ? o.responsable : 'Marketing',
+    scripts: list
+      .map((item) => normalizePilarScript(item, fallbackSistema))
+      .filter((s): s is PilarScript => !!s),
+  }
+}
+
 export const pilaresService = {
   async getAssignmentsByDate(fecha: string): Promise<{
     fecha: string
+    responsable: string
     raw: PilarAssignmentsResponse
     assignments: PilarAssignmentRow[]
   }> {
@@ -54,12 +79,34 @@ export const pilaresService = {
     const qs = params.toString() ? `?${params.toString()}` : ''
     const res = await fetch(`${PILARES_API_BASE}/assignments${qs}`, { cache: 'no-store' })
     if (!res.ok) throw new Error(await parseError(res))
-    const raw = (await res.json()) as PilarAssignmentsResponse
+    const raw = (await res.json()) as PilarAssignmentsResponse & { responsable?: string }
     return {
       fecha: raw.fecha || fecha,
+      responsable: raw.responsable || 'Marketing',
       raw,
       assignments: flattenPilarAssignments(raw),
     }
+  },
+
+  /** Guiones del día (Marketing). Reemplaza el patrón by-vendor. */
+  async getScriptsByDate(
+    fecha: string,
+    opts?: { sistema?: PilarSistema }
+  ): Promise<PilarScriptsResponse> {
+    const params = new URLSearchParams()
+    if (fecha) params.set('fecha', fecha)
+    if (opts?.sistema) params.set('sistema', opts.sistema)
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const res = await fetch(`${PILARES_API_BASE}/scripts${qs}`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(await parseError(res))
+    const parsed = parseScriptsBody(await res.json(), opts?.sistema)
+    return { ...parsed, fecha: parsed.fecha || fecha }
+  },
+
+  async getToday(): Promise<PilarScriptsResponse> {
+    const res = await fetch(`${PILARES_API_BASE}/today`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(await parseError(res))
+    return parseScriptsBody(await res.json())
   },
 
   async generateAssignment(
@@ -72,50 +119,6 @@ export const pilaresService = {
     )
     if (!res.ok) throw new Error(await parseError(res))
     return normalizeActionResponse(await res.json(), sistema)
-  },
-
-  async getByVendor(
-    vendorId: string,
-    opts?: { sistema?: PilarSistema; fechaDesde?: string; fechaHasta?: string }
-  ): Promise<PilarScript[]> {
-    const params = new URLSearchParams()
-    if (opts?.sistema) params.set('sistema', opts.sistema)
-    if (opts?.fechaDesde) params.set('fecha_desde', opts.fechaDesde)
-    if (opts?.fechaHasta) params.set('fecha_hasta', opts.fechaHasta)
-    const qs = params.toString() ? `?${params.toString()}` : ''
-    const res = await fetch(`${PILARES_API_BASE}/by-vendor/${vendorId}${qs}`, {
-      cache: 'no-store',
-    })
-    if (!res.ok) throw new Error(await parseError(res))
-    const body = await res.json()
-    const list: unknown[] = Array.isArray(body)
-      ? body
-      : Array.isArray(body?.scripts)
-        ? body.scripts
-        : Array.isArray(body?.data)
-          ? body.data
-          : []
-    return list
-      .map((item) => normalizePilarScript(item, opts?.sistema))
-      .filter((s): s is PilarScript => !!s)
-  },
-
-  async markFacebookPost(
-    sistema: PilarSistema,
-    scriptId: string,
-    facebookPostId: string
-  ): Promise<PilarScript> {
-    const res = await fetch(`${PILARES_API_BASE}/${sistema}/${scriptId}/facebook-post`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ facebook_post_id: facebookPostId }),
-    })
-    if (!res.ok) throw new Error(await parseError(res))
-    const body = await res.json()
-    const raw = body && typeof body === 'object' && 'script' in body ? body.script : body
-    const script = normalizePilarScript(raw, sistema)
-    if (!script) throw new Error('Respuesta de facebook-post inválida')
-    return script
   },
 }
 

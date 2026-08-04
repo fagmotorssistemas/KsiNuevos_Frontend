@@ -2,15 +2,16 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { Clapperboard, Loader2, Users } from 'lucide-react'
+import { Clapperboard, Loader2 } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { PilaresByVendorView } from '@/components/marketing/pilares/PilaresByVendorView'
 import { PilaresPlanDelDia } from '@/components/marketing/pilares/PilaresPlanDelDia'
 import { AUTOMATION_API_PUBLIC_URL } from '@/lib/automation-api'
 import { pilaresService } from '@/services/pilares.service'
-import type { PilarAssignmentRow, PilarAssignmentsResponse } from '@/types/pilar'
-
-type Vista = 'dia' | 'vendedor'
+import type {
+  PilarAssignmentRow,
+  PilarAssignmentsResponse,
+  PilarScript,
+} from '@/types/pilar'
 
 function ymd(d: Date) {
   return format(d, 'yyyy-MM-dd')
@@ -32,25 +33,21 @@ function resolveDateFromSearchParams(searchParams: URLSearchParams) {
   return defaultTargetDate()
 }
 
-function resolveVista(searchParams: URLSearchParams): Vista {
-  return searchParams.get('vista') === 'vendedor' ? 'vendedor' : 'dia'
-}
-
 function MarketingPilaresPageInner() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const vista = useMemo(() => resolveVista(searchParams), [searchParams])
   const date = useMemo(() => resolveDateFromSearchParams(searchParams), [searchParams])
   const fechaParam = searchParams.get('fecha')
-  const vendedorParam = searchParams.get('vendedor')
   const [draftDate, setDraftDate] = useState(date)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [assignments, setAssignments] = useState<PilarAssignmentRow[]>([])
+  const [scripts, setScripts] = useState<PilarScript[]>([])
   const [raw, setRaw] = useState<PilarAssignmentsResponse | null>(null)
+  const [responsable, setResponsable] = useState('Marketing')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -61,6 +58,8 @@ function MarketingPilaresPageInner() {
     if (fechaParam && isValidYmd(fechaParam)) return
     const params = new URLSearchParams(searchParams.toString())
     params.set('fecha', defaultTargetDate())
+    params.delete('vista')
+    params.delete('vendedor')
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [fechaParam, pathname, router, searchParams])
 
@@ -92,12 +91,18 @@ function MarketingPilaresPageInner() {
     setLoading(true)
     setError(null)
     try {
-      const res = await pilaresService.getAssignmentsByDate(date)
-      setAssignments(res.assignments)
-      setRaw(res.raw)
+      const [asg, scr] = await Promise.all([
+        pilaresService.getAssignmentsByDate(date),
+        pilaresService.getScriptsByDate(date),
+      ])
+      setAssignments(asg.assignments)
+      setRaw(asg.raw)
+      setResponsable(asg.responsable || scr.responsable || 'Marketing')
+      setScripts(scr.scripts)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudieron cargar las asignaciones')
+      setError(e instanceof Error ? e.message : 'No se pudieron cargar los pilares')
       setAssignments([])
+      setScripts([])
       setRaw(null)
     } finally {
       setLoading(false)
@@ -107,17 +112,6 @@ function MarketingPilaresPageInner() {
   useEffect(() => {
     void load()
   }, [load])
-
-  const vendorOptions = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const a of assignments) {
-      if (!a.vendedor_id) continue
-      const name = a.vendedor_nombre?.trim()
-      if (!name || name.toLowerCase() === 'marketing') continue
-      if (!map.has(a.vendedor_id)) map.set(a.vendedor_id, name)
-    }
-    return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }))
-  }, [assignments])
 
   return (
     <div className="space-y-6">
@@ -130,49 +124,22 @@ function MarketingPilaresPageInner() {
             Guiones V2
           </h1>
           <p className="text-sm text-gray-500 mt-2 max-w-xl">
-            {vista === 'vendedor'
-              ? 'Guiones de pilares por vendedor: revisa, descarga y marca publicaciones.'
-              : 'Organiza el día por pilares (autos, educativo, entretenimiento, humanizar) y revisa hooks.'}
+            Plan del día por pilares. Todo asignado a <strong>{responsable}</strong> — sin
+            vendedores.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-          <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => replaceParams({ vista: null })}
-              className={[
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-                vista === 'dia' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-50',
-              ].join(' ')}
-            >
-              Día
-            </button>
-            <button
-              type="button"
-              onClick={() => replaceParams({ vista: 'vendedor' })}
-              className={[
-                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-                vista === 'vendedor' ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-50',
-              ].join(' ')}
-            >
-              <Users className="h-3.5 w-3.5" />
-              Por vendedor
-            </button>
-          </div>
-
-          {vista === 'dia' ? (
-            <input
-              type="date"
-              value={draftDate}
-              onChange={(e) => setDraftDate(e.target.value)}
-              onBlur={() => commitDate(draftDate)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur()
-              }}
-              className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white"
-            />
-          ) : null}
+          <input
+            type="date"
+            value={draftDate}
+            onChange={(e) => setDraftDate(e.target.value)}
+            onBlur={() => commitDate(draftDate)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+            }}
+            className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white"
+          />
 
           {loading ? (
             <span className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
@@ -183,36 +150,28 @@ function MarketingPilaresPageInner() {
         </div>
       </div>
 
-      {vista === 'dia' && error ? (
+      {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-semibold">
           {error}
           {!/permiso|autorizado|403/i.test(error) ? (
             <p className="mt-2 font-normal text-red-600 text-xs">
-              Verifica que la API de automatizaciones ({AUTOMATION_API_PUBLIC_URL}) esté disponible
-              y exponga `/pilares/*`.
+              Verifica que la API ({AUTOMATION_API_PUBLIC_URL}) exponga `/pilares/assignments` y
+              `/pilares/scripts`.
             </p>
           ) : null}
         </div>
-      ) : null}
-
-      {vista === 'dia' && !error ? (
+      ) : (
         <PilaresPlanDelDia
           fecha={date}
           assignments={assignments}
+          scripts={scripts}
           raw={raw}
           loading={loading}
           onChanged={load}
-          onSwitchToVendorTab={(vendedorId) =>
-            replaceParams({ vista: 'vendedor', vendedor: vendedorId })
-          }
           selectedId={selectedAssignmentId}
           onSelect={setSelectedAssignmentId}
         />
-      ) : null}
-
-      {vista === 'vendedor' ? (
-        <PilaresByVendorView vendorOptions={vendorOptions} initialVendorId={vendedorParam} />
-      ) : null}
+      )}
     </div>
   )
 }
