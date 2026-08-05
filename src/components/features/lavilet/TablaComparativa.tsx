@@ -96,7 +96,7 @@ export function TablaComparativa({ proyectos, selectedId, onSelect, onCompare }:
                       <div className="absolute top-0 left-0 w-2 h-px bg-[#c48b5d]" />
                       <div className="absolute top-0 left-0 w-px h-2 bg-[#c48b5d]" />
 
-                      <div className="grid grid-cols-2 gap-6 mt-2">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 mb-4">
                         <div>
                           <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mb-1">Precio Total</p>
                           <p className="text-lg text-slate-900 font-semibold tracking-wide">
@@ -109,23 +109,35 @@ export function TablaComparativa({ proyectos, selectedId, onSelect, onCompare }:
                             {proyecto.destacado ? "POR VER" : `${proyecto.areaInterna} m²`}
                           </p>
                         </div>
-                        <div className="col-span-2">
-                          <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mb-2">Especificaciones</p>
-                          <div className="flex flex-wrap gap-2">
-                            {proyecto.terraza && (
-                              <span className="px-2 py-1 border border-slate-200 bg-white text-xs font-medium tracking-widest text-slate-700 uppercase">
-                                Terraza
-                              </span>
-                            )}
-                            {proyecto.amenidades.map((amenidad, i) => (
-                              <span key={i} className="px-2 py-1 border border-slate-200 bg-white text-xs font-medium tracking-widest text-slate-700 uppercase">
-                                {amenidad}
-                              </span>
-                            ))}
-                            {!proyecto.terraza && proyecto.amenidades.length === 0 && (
-                              <span className="text-slate-400 italic font-medium text-xs">N/A</span>
-                            )}
-                          </div>
+                        {proyecto.areaTotal && (
+                          <>
+                            <div>
+                              <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mb-1">Área Total</p>
+                              <p className="text-lg text-slate-900 font-semibold tracking-wide">{proyecto.areaTotal} m²</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mb-1">Precio/m² (Total)</p>
+                              <p className="text-lg text-slate-900 font-semibold tracking-wide">${Math.round(proyecto.precio / proyecto.areaTotal).toLocaleString()}</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="col-span-2 md:col-span-4">
+                        <p className="text-xs text-slate-500 font-medium tracking-widest uppercase mb-2">Especificaciones</p>
+                        <div className="flex flex-wrap gap-2">
+                          {proyecto.terraza && (
+                            <span className="px-2 py-1 border border-slate-200 bg-white text-xs font-medium tracking-widest text-slate-700 uppercase">
+                              Terraza
+                            </span>
+                          )}
+                          {proyecto.amenidades.map((amenidad, i) => (
+                            <span key={i} className="px-2 py-1 border border-slate-200 bg-white text-xs font-medium tracking-widest text-slate-700 uppercase">
+                              {amenidad}
+                            </span>
+                          ))}
+                          {!proyecto.terraza && proyecto.amenidades.length === 0 && (
+                            <span className="text-slate-400 italic font-medium text-xs">N/A</span>
+                          )}
                         </div>
                       </div>
 

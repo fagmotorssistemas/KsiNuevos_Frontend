@@ -117,7 +117,7 @@ export function GaleriaProyectos({ proyectos, selectedId }: GaleriaProyectosProp
                       <p className="text-4xl md:text-5xl font-light text-slate-900 mb-3">
                         POR VER
                       </p>
-                      <p className="text-sm text-slate-500 uppercase tracking-widest font-medium">Área Total</p>
+                      <p className="text-sm text-slate-500 uppercase tracking-widest font-medium">Área Interna</p>
                     </div>
                     <div className="p-8 bg-white shadow-sm border border-slate-100 rounded-sm relative overflow-hidden group hover:border-[#c48b5d]/30 transition-colors">
                       <div className="absolute top-0 left-0 w-full h-1 bg-[#c48b5d] transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
@@ -184,19 +184,35 @@ export function GaleriaProyectos({ proyectos, selectedId }: GaleriaProyectosProp
                     {proyecto.terraza ? " Incluye terraza privada." : ""}
                   </p>
                   
-                  <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200">
+                  <div className={`grid grid-cols-2 ${proyecto.areaTotal ? 'md:grid-cols-4' : ''} gap-8 pt-8 border-t border-slate-200`}>
                     <div>
                       <p className="text-3xl font-light text-slate-900">
                         ${Math.round(proyecto.precio / proyecto.areaInterna).toLocaleString()}
                       </p>
-                      <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Precio por m²</p>
+                      <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Precio/m² (Int)</p>
                     </div>
                     <div>
                       <p className="text-3xl font-light text-slate-900">
                         {proyecto.areaInterna} <span className="text-xl">m²</span>
                       </p>
-                      <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Área Total</p>
+                      <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Área Interna</p>
                     </div>
+                    {proyecto.areaTotal && (
+                      <>
+                        <div>
+                          <p className="text-3xl font-light text-slate-900">
+                            ${Math.round(proyecto.precio / proyecto.areaTotal).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Precio/m² (Tot)</p>
+                        </div>
+                        <div>
+                          <p className="text-3xl font-light text-slate-900">
+                            {proyecto.areaTotal} <span className="text-xl">m²</span>
+                          </p>
+                          <p className="text-xs text-slate-500 uppercase tracking-widest mt-2 font-medium">Área Total</p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
