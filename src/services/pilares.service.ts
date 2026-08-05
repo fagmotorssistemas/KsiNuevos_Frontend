@@ -67,6 +67,34 @@ function parseScriptsBody(body: unknown, fallbackSistema?: PilarSistema): PilarS
   }
 }
 
+export type Pilar1ReplaceCandidate = {
+  id: string
+  inventory_vehicle_id?: string
+  marca?: string | null
+  modelo?: string | null
+  año?: number | null
+  presentacion?: string | null
+  precio?: number | null
+  mileage?: number | null
+  color?: string | null
+  [key: string]: unknown
+}
+
+export type Pilar1ReplaceCandidatesResponse = {
+  assignment_id: string
+  fecha?: string
+  current_vehicle_id?: string | null
+  candidates: Pilar1ReplaceCandidate[]
+}
+
+export type Pilar1ReplaceVehicleResponse = {
+  assignment?: unknown
+  previous_vehicle_id?: string | null
+  new_vehicle_id?: string | null
+  script?: PilarScript | null
+  detail?: string
+}
+
 export const pilaresService = {
   async getAssignmentsByDate(fecha: string): Promise<{
     fecha: string
@@ -119,6 +147,45 @@ export const pilaresService = {
     )
     if (!res.ok) throw new Error(await parseError(res))
     return normalizeActionResponse(await res.json(), sistema)
+  },
+
+  async getPilar1ReplaceCandidates(
+    assignmentId: string
+  ): Promise<Pilar1ReplaceCandidatesResponse> {
+    const res = await fetch(
+      `${PILARES_API_BASE}/pilar1/assignments/${assignmentId}/replace-candidates`,
+      { cache: 'no-store' }
+    )
+    if (!res.ok) throw new Error(await parseError(res))
+    const body = (await res.json()) as Pilar1ReplaceCandidatesResponse
+    return {
+      ...body,
+      candidates: Array.isArray(body.candidates) ? body.candidates : [],
+    }
+  },
+
+  async replacePilar1Vehicle(
+    assignmentId: string,
+    opts?: { vehicleId?: string; regenerar?: boolean }
+  ): Promise<Pilar1ReplaceVehicleResponse> {
+    const payload: Record<string, unknown> = {}
+    if (opts?.vehicleId) payload.vehicle_id = opts.vehicleId
+    if (opts?.regenerar != null) payload.regenerar = opts.regenerar
+
+    const res = await fetch(
+      `${PILARES_API_BASE}/pilar1/assignments/${assignmentId}/replace-vehicle`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    )
+    if (!res.ok) throw new Error(await parseError(res))
+    const body = (await res.json()) as Pilar1ReplaceVehicleResponse & { script?: unknown }
+    return {
+      ...body,
+      script: body.script ? normalizePilarScript(body.script, 'pilar1') : null,
+    }
   },
 }
 

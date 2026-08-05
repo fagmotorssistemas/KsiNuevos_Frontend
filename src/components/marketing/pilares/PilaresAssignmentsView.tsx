@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, MessageSquareText, Wand2 } from 'lucide-react'
+import { Loader2, MessageSquareText, RefreshCw, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { pilaresService } from '@/services/pilares.service'
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/types/pilar'
 import { PilarAssignmentStatusBadge, PilarSistemaBadge } from './pilar-badges'
 import { PilarScriptDetail } from './PilarScriptDetail'
+import { Pilar1ReplaceVehicleModal } from './Pilar1ReplaceVehicleModal'
 import { ReelVehicleSummary } from '@/components/marketing/reels/ReelVehicleSummary'
 
 export function PilaresAssignmentsView({
@@ -42,6 +43,7 @@ export function PilaresAssignmentsView({
   hookHints?: string[]
 }) {
   const [generatingId, setGeneratingId] = useState<string | null>(null)
+  const [replaceOpen, setReplaceOpen] = useState(false)
 
   const scriptsByAssignment = useMemo(() => {
     const map: Record<string, PilarScript> = {}
@@ -188,6 +190,16 @@ export function PilaresAssignmentsView({
                 <p className="text-sm font-semibold text-slate-600 mt-2">Marketing</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {selected.sistema === 'pilar1' ? (
+                  <button
+                    type="button"
+                    onClick={() => setReplaceOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-sky-200 bg-sky-50 text-sky-800 text-xs font-bold hover:bg-sky-100"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Reemplazar vehículo
+                  </button>
+                ) : null}
                 <PilarSistemaBadge
                   sistema={selected.sistema}
                   hookCategoria={selected.hook_categoria}
@@ -229,6 +241,16 @@ export function PilaresAssignmentsView({
             ) : (
               <p className="text-sm text-slate-500">Asignación descartada.</p>
             )}
+
+            {selected.sistema === 'pilar1' ? (
+              <Pilar1ReplaceVehicleModal
+                isOpen={replaceOpen}
+                assignmentId={selected.assignment_id}
+                currentVehicleLabel={getPilarVehicleLabel(selected.vehicle_data)}
+                onClose={() => setReplaceOpen(false)}
+                onReplaced={() => onRefresh?.()}
+              />
+            ) : null}
           </div>
         )}
       </main>
