@@ -14,11 +14,16 @@ interface GaleriaProyectosProps {
 export function GaleriaProyectos({ proyectos, selectedId }: GaleriaProyectosProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Ordenar para que el proyecto destacado (Lavilet) aparezca primero en la galería
+  // Ordenar para que el proyecto destacado (Lavilet) aparezca primero en la galería,
+  // y el resto de mayor a menor precio por metro cuadrado.
   const proyectosOrdenados = [...proyectos].sort((a, b) => {
     if (a.destacado) return -1;
     if (b.destacado) return 1;
-    return 0;
+    
+    const precioM2A = a.precio / a.areaInterna;
+    const precioM2B = b.precio / b.areaInterna;
+    
+    return precioM2B - precioM2A;
   });
 
   useEffect(() => {

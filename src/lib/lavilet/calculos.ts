@@ -5,11 +5,8 @@ export function calcularPrecioM2(precio: number, area: number): number {
 }
 
 export function obtenerPromedioMercado(proyectos: Proyecto[]): number {
-  const proyectosMercado = proyectos.filter(p => !p.destacado);
-  if (proyectosMercado.length === 0) return 0;
-  
-  const sumaPrecioM2 = proyectosMercado.reduce((acc, p) => acc + calcularPrecioM2(p.precio, p.areaInterna), 0);
-  return sumaPrecioM2 / proyectosMercado.length;
+  // Retornamos el valor fijo solicitado de $2,024/m²
+  return 2024;
 }
 
 export function calcularDiferenciaVsMercado(precioM2: number, promedioMercado: number): number {

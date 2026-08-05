@@ -11,9 +11,9 @@ interface ComparacionModalProps {
 
 const comparisonData: Record<string, any> = {
   ager: {
-    competitorName: "Áger V",
+    competitorName: "Áger II",
     competitorPoints: [
-      "Precio promedio de $1.992/m² — tocando los $2.000",
+      "Precio de $2.444/m² en su Penthouse",
       "Sin piscina",
       "Sin gimnasio",
       "Sin seguridad 24h confirmada",
@@ -28,12 +28,12 @@ const comparisonData: Record<string, any> = {
       "Con áreas comunales premium",
       "Producto diferenciado, no solo m² construidos"
     ],
-    conclusion: "El mercado ya paga casi $2.000/m² por un edificio sin amenidades — la diferencia con Lavilet no es capricho, es lo que Áger V no ofrece."
+    conclusion: "El mercado ya paga $2.444/m² por un edificio sin amenidades — la diferencia con Lavilet no es capricho, es lo que Áger II no ofrece."
   },
   kira: {
     competitorName: "Kira II",
     competitorPoints: [
-      "Precio de $2.200/m²",
+      "Precio de $2.705/m² en Suite + terraza",
       "Sin piscina ni áreas húmedas",
       "Sin áreas verdes extensas",
       "Acabados estándar",
@@ -48,15 +48,15 @@ const comparisonData: Record<string, any> = {
       "Arquitectura de vanguardia",
       "Amenidades exclusivas completas"
     ],
-    conclusion: "Kira II alcanza los $2.200/m² ofreciendo amenidades básicas y sin piscina. Lavilet justifica su valor al incluir áreas húmedas, acabados de lujo y un diseño de vanguardia."
+    conclusion: "Kira II alcanza los $2.705/m² ofreciendo amenidades básicas y sin piscina. Lavilet justifica su valor al incluir áreas húmedas, acabados de lujo y un diseño de vanguardia."
   },
   samani: {
     competitorName: "Samaní",
     competitorPoints: [
-      "Precio de $2.025/m²",
+      "Precio de $2.019/m² en Suite 401",
       "Cuenta con rooftop y área comercial",
-      "Sin piscina",
-      "Espacios comunes reducidos",
+      "Incluye sauna, hidromasaje y gimnasio",
+      "Cuenta con área BBQ y lobby",
       "Enfoque en densidad",
       "Materiales locales estándar"
     ],
@@ -68,7 +68,7 @@ const comparisonData: Record<string, any> = {
       "Enfoque en calidad de vida y privacidad",
       "Materiales de alta gama"
     ],
-    conclusion: "Samaní ofrece un concepto mixto con área comercial a $2.025/m². Lavilet apuesta por la exclusividad, privacidad y amenidades de lujo como piscina, justificando su propuesta de valor."
+    conclusion: "Samaní ofrece un concepto mixto con área comercial a $2.019/m². Lavilet apuesta por la exclusividad, privacidad y amenidades de lujo como piscina, justificando su propuesta de valor."
   },
   lamaison: {
     competitorName: "La Maison",
@@ -89,13 +89,74 @@ const comparisonData: Record<string, any> = {
       "Terrazas amplias y funcionales"
     ],
     conclusion: "Aunque La Maison cuenta con amenidades similares, su precio de $2.769/m² es considerablemente superior. Lavilet ofrece mejores acabados y diseño por un valor más competitivo."
+  },
+  noa: {
+    competitorName: "NOA",
+    competitorPoints: [
+      "Precio muy elevado de $3.063/m²",
+      "Unidad específica (Depto 406): 2 dorm. y 3 baños",
+      "Incluye balcón y lavandería en solo 46.36 m²",
+      "Cuenta con cine, sauna y gym",
+      "Incluye parqueadero y zona BBQ",
+      "Distribución extremadamente densa para el metraje"
+    ],
+    laviletPoints: [
+      "POR VER",
+      "Espacios amplios y bien distribuidos",
+      "Piscina y gimnasio premium",
+      "Diseño moderno y disruptivo",
+      "Áreas sociales de lujo",
+      "Enfoque en calidad de vida"
+    ],
+    conclusion: "NOA llega a cobrar más de $3.000/m² por departamentos pequeños. Lavilet ofrece un valor mucho más competitivo con amenidades superiores y espacios más amplios."
+  },
+  vento: {
+    competitorName: "Vento",
+    competitorPoints: [
+      "Precio de $2.347/m² en Suite",
+      "Sin piscina",
+      "Amenidades limitadas",
+      "Diseño tradicional",
+      "Áreas comunes básicas",
+      "Menor exclusividad"
+    ],
+    laviletPoints: [
+      "POR VER",
+      "Con piscina y áreas húmedas",
+      "Amenidades exclusivas completas",
+      "Arquitectura de vanguardia",
+      "Club house y áreas sociales",
+      "Alta exclusividad y privacidad"
+    ],
+    conclusion: "Vento alcanza los $2.347/m² con amenidades limitadas. Lavilet justifica su propuesta de valor al ofrecer un estilo de vida superior con piscina y diseño vanguardista."
+  },
+  gales: {
+    competitorName: "Gales",
+    competitorPoints: [
+      "Precio de $2.172/m² en Depto 503",
+      "Unidad de 1 dormitorio en 56.22 m²",
+      "Incluye balcón, bodega y parqueadero",
+      "Sin piscina ni áreas húmedas",
+      "Sin gimnasio",
+      "Amenidades sociales limitadas"
+    ],
+    laviletPoints: [
+      "POR VER",
+      "Espacios amplios y bien distribuidos",
+      "Piscina premium y áreas húmedas",
+      "Gimnasio de última generación",
+      "Club house y áreas sociales amplias",
+      "Diseño moderno y disruptivo"
+    ],
+    conclusion: "Gales cobra $2.172/m² por una unidad básica de 1 dormitorio sin amenidades premium. Lavilet ofrece un valor integral muy superior con piscina, gimnasio y diseño exclusivo."
   }
 };
 
 export function ComparacionModal({ isOpen, onClose, proyectoId }: ComparacionModalProps) {
   if (!isOpen || !proyectoId || proyectoId === 'lavilet') return null;
 
-  const data = comparisonData[proyectoId] || comparisonData['ager']; // Fallback to ager structure if not found
+  // Fallback to ager structure if not found
+  const data = comparisonData[proyectoId] || comparisonData['ager'];
 
   return (
     <AnimatePresence>

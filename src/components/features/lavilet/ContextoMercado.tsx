@@ -21,8 +21,8 @@ export function ContextoMercado() {
     },
     {
       label: "Competidor Directo",
-      value: "La Maison",
-      suffix: "$2,769 por m²",
+      value: "NOA",
+      suffix: "$3,063 por m²",
     }
   ];
 
