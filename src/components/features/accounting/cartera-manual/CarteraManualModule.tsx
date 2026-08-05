@@ -14,7 +14,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Phone,
-  Scale,
   LayoutList,
   AlertTriangle,
   CalendarClock,
@@ -32,7 +31,7 @@ import type {
   CarteraManualEstado,
   CarteraManualRow,
 } from "@/types/carteraManual.types";
-import { LegalCasesTab } from "@/components/features/accounting/wallet/LegalCasesTab";
+import { LegalGestionPanel } from "@/components/features/accounting/wallet/LegalGestionPanel";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -816,23 +815,10 @@ function CarteraManualDetail({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Scale className="h-5 w-5 text-slate-700" />
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Gestión legal de cartera
-            </p>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Mismo flujo que Oracle; equipo legal y finanzas. Cada gestión indica quién la registró.
-            </p>
-          </div>
-        </div>
-        <LegalCasesTab
-          legalContext={{ type: "manual", carteraManualId: row.id }}
-          defaultMontoReferenciaForNewCase={row.saldo_actual}
-        />
-      </div>
+      <LegalGestionPanel
+        legalContext={{ type: "manual", carteraManualId: row.id }}
+        defaultMontoReferenciaForNewCase={row.saldo_actual}
+      />
       {showEdit && (
         <CarteraManualEditModal
           row={row}

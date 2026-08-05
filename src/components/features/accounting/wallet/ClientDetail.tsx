@@ -20,9 +20,8 @@ import { Button } from "@/components/ui/buttontable";
 import { Table, TableCard } from "@/components/ui/table"; 
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { ClientContactInfo } from "./ClientContactInfo";
-// Importamos el nuevo componente
-import { AmortizationTab } from "./AmortizationTab"; 
-import { LegalCasesTab } from "./LegalCasesTab";
+import { AmortizationTab } from "./AmortizationTab";
+import { LegalGestionPanel } from "./LegalGestionPanel";
 
 interface ClientDetailProps {
     clientId: number;
@@ -632,20 +631,9 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
 
             {/* TAB: GESTIÓN LEGAL */}
             {activeTab === 'legal' && (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                Gestión Legal de Cartera
-                            </p>
-                            <p className="text-sm text-slate-500 mt-1">
-                                Gestiones por equipo legal y finanzas; en cada registro se indica quién actuó.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <LegalCasesTab legalContext={{ type: "oracle", clientId }} />
-                </div>
+                <LegalGestionPanel
+                    legalContext={{ type: "oracle", clientId }}
+                />
             )}
         </div>
     );

@@ -83,10 +83,16 @@ const getCanalIcon = (canal: string | null | undefined) => {
 export function LegalCasesTab({
   legalContext,
   defaultMontoReferenciaForNewCase,
+  /** Pestaña operativa: solo estados Nuevo/Gestionando al cambiar estado. */
+  operativeOnly = false,
+  /** Pestaña formal: exige evidencias en Pre-judicial / Judicial / Cerrado / Castigado. */
+  requireFormalGates = false,
 }: {
   legalContext: LegalCaseContext;
   /** Solo cartera manual: prellenar monto referencia al crear caso. */
   defaultMontoReferenciaForNewCase?: number | null;
+  operativeOnly?: boolean;
+  requireFormalGates?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [caseRow, setCaseRow] = useState<LegalCaseRow | null>(null);
@@ -427,6 +433,8 @@ export function LegalCasesTab({
       ) : isChangingStatus ? (
         <ChangeStatusForm
           caseData={c}
+          operativeOnly={operativeOnly}
+          requireFormalGates={requireFormalGates}
           onCancel={() => setIsChangingStatus(false)}
           onSuccess={() => {
             setIsChangingStatus(false);
