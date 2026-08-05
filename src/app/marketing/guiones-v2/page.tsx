@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { Clapperboard, Loader2 } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { PilaresPlanDelDia } from '@/components/marketing/pilares/PilaresPlanDelDia'
+import { PilarComplianceHeaderControls } from '@/components/marketing/pilares/PilarComplianceHeaderControls'
 import { AUTOMATION_API_PUBLIC_URL } from '@/lib/automation-api'
 import { pilaresService } from '@/services/pilares.service'
 import type {
@@ -49,6 +50,7 @@ function MarketingPilaresPageInner() {
   const [raw, setRaw] = useState<PilarAssignmentsResponse | null>(null)
   const [responsable, setResponsable] = useState('Marketing')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null)
+  const [complianceTick, setComplianceTick] = useState(0)
 
   useEffect(() => {
     setDraftDate(date)
@@ -99,6 +101,7 @@ function MarketingPilaresPageInner() {
       setRaw(asg.raw)
       setResponsable(asg.responsable || scr.responsable || 'Marketing')
       setScripts(scr.scripts)
+      setComplianceTick((t) => t + 1)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron cargar los pilares')
       setAssignments([])
@@ -130,6 +133,12 @@ function MarketingPilaresPageInner() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+          <PilarComplianceHeaderControls
+            fecha={date}
+            onSelectFecha={commitDate}
+            refreshKey={complianceTick}
+          />
+
           <input
             type="date"
             value={draftDate}

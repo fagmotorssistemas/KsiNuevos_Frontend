@@ -7,6 +7,7 @@ import {
 } from '@/lib/videos/resolve-job-vehicle'
 import {
   RAW_FULL_CAPTION_FORMATOS,
+  getRawFullFormatoMeta,
   isRawFullCaptionFormato,
   type RawFullCaptionFormato,
 } from '@/lib/videos/raw-full-caption-templates'
@@ -176,7 +177,7 @@ function toSummary(
       id: row.id,
       title: label.title,
       subtitle: [
-        RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === row.formato)?.label,
+        getRawFullFormatoMeta(row.formato)?.label,
         label.subtitle,
       ]
         .filter(Boolean)
@@ -195,7 +196,7 @@ function toSummary(
   }
 
   const customTitle = row.folder_name?.trim() || 'Video sin título'
-  const formatoLabel = RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === row.formato)?.label
+  const formatoLabel = getRawFullFormatoMeta(row.formato)?.label
   return {
     id: row.id,
     title: customTitle,
@@ -381,16 +382,25 @@ export async function createRawFullVideoFolder(opts: {
   const files = opts.files
 
   if (!formatoRaw || !isRawFullCaptionFormato(formatoRaw)) {
-    throw new Error('Selecciona el formato del video (Ficha, POV, Duelo, etc.)')
+    throw new Error(
+      'Selecciona el formato del video (Autos, Educativo, Entretenimiento o Humanizar)'
+    )
   }
   const formato: RawFullCaptionFormato = formatoRaw
-  const meta = RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === formato)!
+  const meta = RAW_FULL_CAPTION_FORMATOS.find((f) => f.id === formato) ?? {
+    id: formato,
+    label: formato,
+    vehiclesRequired: 0 as const,
+    vehiclesAllowed: 0 as const,
+    hint: '',
+    dotClass: 'bg-slate-400',
+  }
 
   if (meta.vehiclesRequired >= 1 && !inventoryVehicleId) {
     throw new Error('Selecciona el vehículo del inventario')
   }
   if (meta.vehiclesRequired >= 2 && !inventoryVehicleId2) {
-    throw new Error('En duelo debes seleccionar dos vehículos')
+    throw new Error('Debes seleccionar dos vehículos')
   }
   if (
     meta.vehiclesAllowed >= 2 &&
@@ -398,7 +408,7 @@ export async function createRawFullVideoFolder(opts: {
     inventoryVehicleId2 &&
     inventoryVehicleId === inventoryVehicleId2
   ) {
-    throw new Error('Los dos vehículos del duelo deben ser distintos')
+    throw new Error('Los dos vehículos deben ser distintos')
   }
   if (!files.length) throw new Error('Selecciona al menos un video')
   if (files.length > RAW_FULL_VIDEOS_MAX_PER_FOLDER) {

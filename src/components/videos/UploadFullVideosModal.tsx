@@ -66,7 +66,7 @@ export function UploadFullVideosModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inventoryRows, setInventoryRows] = useState<InvDetail[]>([])
   const [loadingInventory, setLoadingInventory] = useState(false)
-  const [formato, setFormato] = useState<RawFullCaptionFormato>('ficha_rapida')
+  const [formato, setFormato] = useState<RawFullCaptionFormato>('video_autos')
   const [vehicleId, setVehicleId] = useState('')
   const [vehicleId2, setVehicleId2] = useState('')
   const [files, setFiles] = useState<File[]>([])
@@ -98,7 +98,7 @@ export function UploadFullVideosModal({
   const canSaveCreate = !isAppendMode && files.length > 0 && vehicleOk && !!caption.trim()
 
   const resetForm = useCallback(() => {
-    setFormato('ficha_rapida')
+    setFormato('video_autos')
     setVehicleId('')
     setVehicleId2('')
     setFiles([])
@@ -341,6 +341,12 @@ export function UploadFullVideosModal({
           </div>
 
           <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2.5 text-[12px] text-sky-900 leading-snug">
+              <strong className="font-bold">Recomendación:</strong> nombra el archivo con el
+              vehículo o el tema del día (ej. <em>Nissan-Kicks-2020.mp4</em> o{' '}
+              <em>Error-comun-usado.mp4</em>) para localizarlo rápido en la biblioteca.
+            </div>
+
             {isAppendMode && existingFolder ? (
               <div className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-sm text-violet-900">
                 Carpeta: <strong>{existingFolder.title}</strong> · {existingFolder.videoCount} video(s)
@@ -351,7 +357,7 @@ export function UploadFullVideosModal({
                   <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">
                     Formato del video
                   </label>
-                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {RAW_FULL_CAPTION_FORMATOS.map((f) => (
                       <button
                         key={f.id}
@@ -365,12 +371,13 @@ export function UploadFullVideosModal({
                             setVehicleId2('')
                           }
                         }}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border text-left transition-colors ${
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold border text-left transition-colors flex items-center gap-2 ${
                           formato === f.id
-                            ? 'bg-violet-600 text-white border-violet-600'
+                            ? 'bg-slate-900 text-white border-slate-900'
                             : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                         }`}
                       >
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${f.dotClass}`} />
                         {f.label}
                       </button>
                     ))}

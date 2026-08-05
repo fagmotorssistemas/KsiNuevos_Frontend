@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   CalendarClock,
@@ -18,6 +18,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatBytes, type RawFullVideoFolderSummary, type RawFullVideoItem } from '@/lib/videos/raw-full-videos-library'
+import {
+  RAW_FULL_PILAR_TABS,
+  rawFullFolderToPilarTab,
+  type RawFullPilarTabId,
+} from '@/lib/videos/raw-full-caption-templates'
 import { UploadFullVideosModal } from '@/components/videos/UploadFullVideosModal'
 import { ScheduleRawFullPublishModal } from '@/components/videos/ScheduleRawFullPublishModal'
 import { RawFullPublishingQueuePanel } from '@/components/videos/RawFullPublishingQueuePanel'
@@ -42,6 +47,7 @@ type MainTab = 'library' | 'queue'
 
 export function RawFullVideosLibraryDashboard() {
   const [mainTab, setMainTab] = useState<MainTab>('library')
+  const [pilarTab, setPilarTab] = useState<RawFullPilarTabId>('pilar1')
   const [queueRefreshKey, setQueueRefreshKey] = useState(0)
   const [processingQueue, setProcessingQueue] = useState(false)
   const [folders, setFolders] = useState<RawFullVideoFolderSummary[]>([])
@@ -97,6 +103,10 @@ export function RawFullVideosLibraryDashboard() {
   useEffect(() => {
     if (mainTab === 'library') void loadLibrary()
   }, [loadLibrary, mainTab])
+
+  const filteredFolders = useMemo(() => {
+    return folders.filter((f) => rawFullFolderToPilarTab(f) === pilarTab)
+  }, [folders, pilarTab])
 
   const loadDetail = useCallback(async (folderId: string) => {
     setDetailLoading(true)
@@ -326,19 +336,55 @@ export function RawFullVideosLibraryDashboard() {
                 />
               </div>
 
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                  Formato
+                </p>
+                <div className="inline-flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-100/90 border border-slate-200/80">
+                  {RAW_FULL_PILAR_TABS.map((tab) => {
+                    const active = pilarTab === tab.id
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setPilarTab(tab.id)}
+                        className={[
+                          'inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all',
+                          active
+                            ? tab.activeClass
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/70',
+                        ].join(' ')}
+                      >
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${tab.dotClass}`} />
+                        <span className="hidden md:inline">{tab.label}</span>
+                        <span className="md:hidden">{tab.shortLabel}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {loading ? (
                 <div className="flex justify-center py-16">
                   <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
                 </div>
-              ) : folders.length === 0 ? (
+              ) : filteredFolders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
                   <FolderOpen className="w-10 h-10 text-gray-300 mx-auto" />
-                  <p className="mt-3 font-bold text-gray-800">Sin carpetas aún</p>
-                  <p className="text-sm text-gray-500 mt-1">Sube videos enteros asociados a un vehículo.</p>
+                  <p className="mt-3 font-bold text-gray-800">
+                    Sin carpetas en {RAW_FULL_PILAR_TABS.find((t) => t.id === pilarTab)?.label}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {pilarTab === 'pilar1'
+                      ? 'Aquí aparecen los videos de vehículos (con nombre del auto).'
+                      : pilarTab === 'pilar4'
+                        ? 'Aquí van ganchos / POV sin vehículo.'
+                        : 'Sube un video con el formato de esta pestaña.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {folders.map((f) => (
+                  {filteredFolders.map((f) => (
                     <button
                       key={f.id}
                       type="button"
@@ -356,9 +402,6 @@ export function RawFullVideosLibraryDashboard() {
                           ) : null}
                           <p className="text-xs text-gray-600 mt-2">
                             {f.videoCount} video{f.videoCount === 1 ? '' : 's'} · {formatBytes(f.totalBytes)}
-                          </p>
-                          <p className="text-[11px] text-violet-700 font-semibold mt-1 capitalize">
-                            Subido {formatUploadDay(f.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -423,6 +466,15 @@ export function RawFullVideosLibraryDashboard() {
                       {detailFolder.videoCount} video(s) · {formatBytes(detailFolder.totalBytes)} · Subido{' '}
                       {formatUploadDay(detailFolder.createdAt)}
                     </p>
+                    {detailFolder.formato || detailFolder.folderName ? (
+                      <p className="text-xs font-semibold text-slate-700">
+                        Tema:{' '}
+                        {[detailFolder.subtitle, detailFolder.folderName]
+                          .filter(Boolean)
+                          .filter((x, i, arr) => arr.indexOf(x) === i)
+                          .join(' · ') || detailFolder.title}
+                      </p>
+                    ) : null}
                     {detailFolder.caption ? (
                       <p className="text-xs text-gray-500 whitespace-pre-wrap line-clamp-4 border-t border-gray-100 pt-2">
                         {detailFolder.caption}
@@ -466,7 +518,21 @@ export function RawFullVideosLibraryDashboard() {
                             <p className="text-xs font-semibold text-gray-800 truncate" title={v.name}>
                               {v.name}
                             </p>
+                            {detailFolder.title || detailFolder.subtitle ? (
+                              <p className="text-[11px] text-slate-600 truncate" title={detailFolder.title}>
+                                {detailFolder.subtitle || detailFolder.title}
+                              </p>
+                            ) : null}
                             <p className="text-[11px] text-gray-500">{formatBytes(v.sizeBytes)}</p>
+                            {v.createdAt ? (
+                              <p className="text-[11px] text-violet-700 font-semibold capitalize">
+                                Subido {formatUploadDay(v.createdAt)}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-violet-700 font-semibold capitalize">
+                                Subido {formatUploadDay(detailFolder.createdAt)}
+                              </p>
+                            )}
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"

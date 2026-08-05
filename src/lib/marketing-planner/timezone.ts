@@ -41,10 +41,9 @@ export function ecuadorLocalInputToIso(local: string) {
   const [datePart, timePart = '00:00'] = local.split('T')
   const [y, m, d] = datePart.split('-').map(Number)
   const [h, min] = timePart.split(':').map(Number)
-  const utcGuess = new Date(Date.UTC(y, m - 1, d, h, min))
-  const p = ecuadorCalendarParts(utcGuess)
-  const offsetMin = (h - p.h) * 60 + (min - p.min)
-  return new Date(utcGuess.getTime() + offsetMin * 60_000).toISOString()
+  // America/Guayaquil es UTC−5 todo el año (sin DST).
+  // No usar utcGuess+offset: a medianoche el día en Ecuador cae al día anterior y el offset falla.
+  return new Date(Date.UTC(y, m - 1, d, h + 5, min, 0)).toISOString()
 }
 
 export function formatEcuador(iso: string, pattern: string) {
