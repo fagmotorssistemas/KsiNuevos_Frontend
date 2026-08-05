@@ -144,6 +144,96 @@ export type CaptionVehicleBits = {
 const MAPS = 'https://maps.app.goo.gl/ukJnbKb5kXvtewXX8'
 const WA = 'https://wa.me/593983335555'
 
+/** Bloque fijo al final del caption (Educativo / Entretenimiento / Humanizar). */
+export const RAW_FULL_FIXED_CTA_FOOTER = `✅ 25% de entrada
+✅ Crédito hasta 60 meses
+✅ Recibimos tu vehículo usado como parte de pago
+
+Escríbenos "FINANCIAMIENTO" y evaluamos tu caso sin costo.
+📲 ${WA}
+
+📍 Av. España 6-73 y Sevilla | 📍 Av. Gil Ramírez y Sevilla | 🗺️ ${MAPS}
+
+#KSINUEVOS #Financiamiento #CreditoAuto #AutosUsadosCuenca #VideoEducativo`
+
+export function rawFullFormatoToPilarSistema(
+  formato: RawFullCaptionFormato | string
+): 'pilar1' | 'pilar2' | 'pilar3' | 'pilar4' | null {
+  switch (formato) {
+    case 'video_autos':
+    case 'ficha_rapida':
+    case 'duelo':
+    case 'creativo':
+      return 'pilar1'
+    case 'video_humanizar':
+    case 'detras_camaras':
+      return 'pilar2'
+    case 'video_educativo':
+    case 'financiamiento':
+      return 'pilar3'
+    case 'video_entretenimiento':
+    case 'pov_gancho':
+      return 'pilar4'
+    default:
+      return null
+  }
+}
+
+export function isDayAdaptedCaptionFormato(formato: RawFullCaptionFormato | string): boolean {
+  return (
+    formato === 'video_educativo' ||
+    formato === 'video_entretenimiento' ||
+    formato === 'video_humanizar' ||
+    formato === 'financiamiento' ||
+    formato === 'detras_camaras'
+  )
+}
+
+/**
+ * Copy corto adaptado del guion del día (NO el texto completo del guion).
+ * Usa título / hook / objetivo para decir de qué trata el video + CTA fijo.
+ */
+export function buildAdaptedDayPilarCaption(opts: {
+  titulo?: string | null
+  hookTexto?: string | null
+  objetivo?: string | null
+  formato: RawFullCaptionFormato | string
+}): string {
+  const titulo = opts.titulo?.trim() || ''
+  const hook = opts.hookTexto?.trim() || ''
+  const objetivo = opts.objetivo?.trim() || ''
+
+  const tema = titulo || hook || 'el tema de hoy en KsiNuevos'
+  const gancho = hook && hook !== tema ? hook : ''
+
+  let intro = ''
+  if (opts.formato === 'video_educativo' || opts.formato === 'financiamiento') {
+    intro = `Hoy en KsiNuevos hablamos de algo que casi nadie revisa a tiempo 👀
+
+${tema}${gancho ? `\n\n${gancho}` : ''}
+
+${objetivo ? `${objetivo.slice(0, 160)}${objetivo.length > 160 ? '…' : ''}` : 'Un tip claro y práctico para que compres (o evites) con más seguridad.'}`
+  } else if (opts.formato === 'video_entretenimiento' || opts.formato === 'pov_gancho') {
+    intro = `${tema} 🔥
+
+${gancho || 'Contenido rápido para que te quedes hasta el final.'}
+
+${objetivo ? `${objetivo.slice(0, 140)}${objetivo.length > 140 ? '…' : ''}` : 'Síguenos y cuéntanos en comentarios qué opinas.'}`
+  } else {
+    // humanizar
+    intro = `${tema} 🚙
+
+${gancho || 'Así se vive un día real en KsiNuevos.'}
+
+${objetivo ? `${objetivo.slice(0, 140)}${objetivo.length > 140 ? '…' : ''}` : 'Un vistazo al equipo, al patio y a lo que pasa antes de que un seminuevo llegue a su nuevo dueño.'}`
+  }
+
+  return `${intro.trim()}
+
+${RAW_FULL_FIXED_CTA_FOOTER}`
+}
+
+
 function hashtag(s: string): string {
   return s
     .normalize('NFD')
@@ -192,54 +282,30 @@ Disponible en KSINUEVOS – Cuenca, vehículos seminuevos seleccionados con crit
 }
 
 function captionEducativo(): string {
-  return `¿Crees que no calificas para un crédito de auto? 🤔
-
-En KsiNuevos evaluamos varias opciones de financiamiento según tu caso — ingresos formales, RUC, o capacidad de pago comprobable, lo revisamos gratis contigo.
-
-✅ 25% de entrada
-✅ Crédito hasta 60 meses
-✅ Recibimos tu vehículo usado como parte de pago
-
-Escríbenos "FINANCIAMIENTO" y evaluamos tu caso sin costo.
-📲 ${WA}
-
-📍 Av. España 6-73 y Sevilla | 📍 Av. Gil Ramírez y Sevilla | 🗺️ ${MAPS}
-
-#KSINUEVOS #Financiamiento #CreditoAuto #AutosUsadosCuenca #VideoEducativo`
+  return buildAdaptedDayPilarCaption({
+    formato: 'video_educativo',
+    titulo: 'Tips para comprar un seminuevo con seguridad',
+    hookTexto: null,
+    objetivo: null,
+  })
 }
 
 function captionEntretenimiento(): string {
-  return `Lo que casi nadie revisa antes de comprar un seminuevo 👀
-
-En KsiNuevos verificamos estado real, papeles al día y garantía legal antes de ofrecerte cualquier auto — así evitamos que te pase lo que le pasa a la mayoría.
-
-✅ 25% de entrada
-✅ Crédito hasta 60 meses
-✅ Recibimos tu vehículo usado como parte de pago
-
-Comenta GANCHO y te mandamos toda la información.
-
-Disponible en KSINUEVOS – Cuenca.
-📍 Av. España 6-73 y Sevilla | 📍 Av. Gil Ramírez y Sevilla
-🗺️ ${MAPS} | 📲 ${WA}
-
-#KSINUEVOS #VehiculosSeminuevos #AutosUsadosCuenca #Entretenimiento`
+  return buildAdaptedDayPilarCaption({
+    formato: 'video_entretenimiento',
+    titulo: 'Contenido del día en KsiNuevos',
+    hookTexto: null,
+    objetivo: null,
+  })
 }
 
 function captionHumanizar(): string {
-  return `Así es el día a día en KsiNuevos 🚙
-
-Un vistazo real a lo que pasa antes de que un seminuevo llegue a tus manos: inspección, papeles al día, y todo el cuidado que ponemos en cada unidad.
-
-Porque comprar un auto usado no debería ser un riesgo — por eso en KsiNuevos revisamos todo antes de ofrecerte cualquier vehículo.
-
-👀 Síguenos para más contenido real del concesionario
-📲 Agenda tu visita: ${WA}
-
-📍 Av. España 6-73 y Sevilla | 📍 Av. Gil Ramírez y Sevilla
-🗺️ ${MAPS}
-
-#KSINUEVOS #VehiculosSeminuevos #AutosUsadosCuenca #HumanizarMarca`
+  return buildAdaptedDayPilarCaption({
+    formato: 'video_humanizar',
+    titulo: 'Un día en KsiNuevos',
+    hookTexto: null,
+    objetivo: null,
+  })
 }
 
 export function buildRawFullCaption(opts: {

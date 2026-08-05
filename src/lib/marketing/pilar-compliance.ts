@@ -49,7 +49,7 @@ export const RAW_FORMATO_TO_PILAR: Record<string, PilarSistema> = {
 
 export function mapRawFormatoToPilar(formato: string | null | undefined): PilarSistema | null {
   if (!formato) return null
-  return RAW_FORMATO_TO_PILAR[formato as RawFullCaptionFormato] ?? null
+  return RAW_FORMATO_TO_PILAR[formato] ?? null
 }
 
 function getServiceClient() {

@@ -12,7 +12,10 @@ import {
 } from '@/lib/videos/raw-full-videos-types'
 import {
   RAW_FULL_CAPTION_FORMATOS,
+  buildAdaptedDayPilarCaption,
   buildRawFullCaption,
+  isDayAdaptedCaptionFormato,
+  rawFullFormatoToPilarSistema,
   type CaptionVehicleBits,
   type RawFullCaptionFormato,
 } from '@/lib/videos/raw-full-caption-templates'
@@ -21,6 +24,14 @@ import {
   type InventoryPickerRow,
 } from '@/components/videos/VehicleInventoryPicker'
 import { ScheduleRawFullPublishModal } from '@/components/videos/ScheduleRawFullPublishModal'
+import { pilaresService } from '@/services/pilares.service'
+import { ecuadorCalendarParts } from '@/lib/marketing-planner/timezone'
+import type { PilarAssignmentRow, PilarScript } from '@/types/pilar'
+
+function ecuadorTodayYmd() {
+  const p = ecuadorCalendarParts()
+  return `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
+}
 
 type InvDetail = InventoryPickerRow & {
   engine_displacement?: string | null
@@ -76,6 +87,11 @@ export function UploadFullVideosModal({
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [createdFolderId, setCreatedFolderId] = useState<string | null>(null)
   const [createdPaths, setCreatedPaths] = useState<string[]>([])
+  const [dayScripts, setDayScripts] = useState<PilarScript[]>([])
+  const [dayAssignments, setDayAssignments] = useState<PilarAssignmentRow[]>([])
+  const [dayTopicLabel, setDayTopicLabel] = useState<string | null>(null)
+  const [loadingDayTopic, setLoadingDayTopic] = useState(false)
+  const [selectedDayScriptId, setSelectedDayScriptId] = useState<string | null>(null)
 
   const isAppendMode = !!existingFolder
   const formatoMeta = useMemo(
@@ -107,6 +123,10 @@ export function UploadFullVideosModal({
     setSaving(false)
     setCreatedFolderId(null)
     setCreatedPaths([])
+    setDayScripts([])
+    setDayAssignments([])
+    setDayTopicLabel(null)
+    setSelectedDayScriptId(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
@@ -122,25 +142,37 @@ export function UploadFullVideosModal({
 
     let cancelled = false
     setLoadingInventory(true)
+    setLoadingDayTopic(true)
     const supabase = createClient()
+    const fecha = ecuadorTodayYmd()
+
     void (async () => {
-      const { data, error } = await supabase
-        .from('inventoryoracle')
-        .select(
-          'id, brand, model, year, plate, version, engine_displacement, fuel_type, type, type_body, mileage'
-        )
-        .eq('status', 'disponible')
-        .order('updated_at', { ascending: false })
-        .limit(200)
+      const [invRes, scriptsRes, asgRes] = await Promise.all([
+        supabase
+          .from('inventoryoracle')
+          .select(
+            'id, brand, model, year, plate, version, engine_displacement, fuel_type, type, type_body, mileage'
+          )
+          .eq('status', 'disponible')
+          .order('updated_at', { ascending: false })
+          .limit(200),
+        pilaresService.getScriptsByDate(fecha).catch(() => ({ scripts: [] as PilarScript[] })),
+        pilaresService.getAssignmentsByDate(fecha).catch(() => ({
+          assignments: [] as PilarAssignmentRow[],
+        })),
+      ])
 
       if (cancelled) return
-      if (error) {
+
+      if (invRes.error) {
         toast.error('No se pudo cargar el inventario')
-        setLoadingInventory(false)
-        return
+      } else {
+        setInventoryRows((invRes.data ?? []) as InvDetail[])
       }
-      setInventoryRows((data ?? []) as InvDetail[])
+      setDayScripts(scriptsRes.scripts ?? [])
+      setDayAssignments(asgRes.assignments ?? [])
       setLoadingInventory(false)
+      setLoadingDayTopic(false)
     })()
 
     return () => {
@@ -148,11 +180,98 @@ export function UploadFullVideosModal({
     }
   }, [isOpen, resetForm, isAppendMode])
 
+  const dayTopicsForFormato = useMemo(() => {
+    const sistema = rawFullFormatoToPilarSistema(formato)
+    if (!sistema || !isDayAdaptedCaptionFormato(formato)) return []
+    const fromScripts = dayScripts
+      .filter((s) => s.sistema === sistema)
+      .map((s) => ({
+        id: s.id || s.assignment_id || s.titulo || s.hook_texto || String(Math.random()),
+        titulo: s.titulo,
+        hookTexto: s.hook_texto,
+        objetivo: s.objetivo,
+        label: (s.titulo || s.hook_texto || 'Tema del día').trim(),
+      }))
+    if (fromScripts.length > 0) return fromScripts
+
+    return dayAssignments
+      .filter((a) => a.sistema === sistema)
+      .map((a) => ({
+        id: a.assignment_id,
+        titulo: a.hook_texto,
+        hookTexto: a.hook_texto,
+        objetivo: null as string | null,
+        label: (a.hook_texto || 'Tema del día').trim(),
+      }))
+  }, [formato, dayScripts, dayAssignments])
+
+  function pickDayTopic(nextFormato: RawFullCaptionFormato): {
+    titulo: string | null
+    hookTexto: string | null
+    objetivo: string | null
+    label: string | null
+  } {
+    const sistema = rawFullFormatoToPilarSistema(nextFormato)
+    if (!sistema || !isDayAdaptedCaptionFormato(nextFormato)) {
+      return { titulo: null, hookTexto: null, objetivo: null, label: null }
+    }
+
+    const topics = (() => {
+      const fromScripts = dayScripts
+        .filter((s) => s.sistema === sistema)
+        .map((s) => ({
+          id: s.id || s.assignment_id || '',
+          titulo: s.titulo,
+          hookTexto: s.hook_texto,
+          objetivo: s.objetivo,
+          label: (s.titulo || s.hook_texto || 'Tema del día').trim(),
+        }))
+      if (fromScripts.length) return fromScripts
+      return dayAssignments
+        .filter((a) => a.sistema === sistema)
+        .map((a) => ({
+          id: a.assignment_id,
+          titulo: a.hook_texto,
+          hookTexto: a.hook_texto,
+          objetivo: null as string | null,
+          label: (a.hook_texto || 'Tema del día').trim(),
+        }))
+    })()
+
+    const picked =
+      (selectedDayScriptId
+        ? topics.find((t) => t.id === selectedDayScriptId)
+        : null) ?? topics[0] ?? null
+
+    if (!picked) return { titulo: null, hookTexto: null, objetivo: null, label: null }
+    return {
+      titulo: picked.titulo,
+      hookTexto: picked.hookTexto,
+      objetivo: picked.objetivo,
+      label: picked.label,
+    }
+  }
+
   function regenerateCaption(
     nextFormato: RawFullCaptionFormato,
     id1: string,
     id2: string
   ) {
+    if (isDayAdaptedCaptionFormato(nextFormato)) {
+      const topic = pickDayTopic(nextFormato)
+      setDayTopicLabel(topic.label)
+      setCaption(
+        buildAdaptedDayPilarCaption({
+          formato: nextFormato,
+          titulo: topic.titulo,
+          hookTexto: topic.hookTexto,
+          objetivo: topic.objetivo,
+        })
+      )
+      return
+    }
+
+    setDayTopicLabel(null)
     const v1 = inventoryRows.find((r) => r.id === id1) ?? null
     const v2 = inventoryRows.find((r) => r.id === id2) ?? null
     setCaption(
@@ -167,8 +286,35 @@ export function UploadFullVideosModal({
   useEffect(() => {
     if (!isOpen || isAppendMode) return
     regenerateCaption(formato, vehicleId, vehicleId2)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir/cambiar formato o vehículos
-  }, [isOpen, isAppendMode, formato, vehicleId, vehicleId2, inventoryRows])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- al abrir/cambiar formato, vehículos o temas del día
+  }, [
+    isOpen,
+    isAppendMode,
+    formato,
+    vehicleId,
+    vehicleId2,
+    inventoryRows,
+    dayScripts,
+    dayAssignments,
+    selectedDayScriptId,
+  ])
+
+  useEffect(() => {
+    if (!isDayAdaptedCaptionFormato(formato)) {
+      setSelectedDayScriptId(null)
+      return
+    }
+    if (dayTopicsForFormato.length === 0) {
+      setSelectedDayScriptId(null)
+      return
+    }
+    if (
+      !selectedDayScriptId ||
+      !dayTopicsForFormato.some((t) => t.id === selectedDayScriptId)
+    ) {
+      setSelectedDayScriptId(dayTopicsForFormato[0]!.id)
+    }
+  }, [formato, dayTopicsForFormato, selectedDayScriptId])
 
   function handleFilesChange(list: FileList | null) {
     if (!list?.length) return
@@ -384,6 +530,44 @@ export function UploadFullVideosModal({
                   </div>
                   <p className="mt-1.5 text-[11px] text-gray-500">{formatoMeta.hint}</p>
                 </div>
+
+                {isDayAdaptedCaptionFormato(formato) ? (
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-3 py-2.5 space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-800">
+                      Tema del día (Guiones V2)
+                    </p>
+                    {loadingDayTopic ? (
+                      <p className="text-xs text-emerald-700 inline-flex items-center gap-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Cargando plan de hoy…
+                      </p>
+                    ) : dayTopicsForFormato.length === 0 ? (
+                      <p className="text-xs text-emerald-800">
+                        No hay guion de este pilar para hoy. Se usará un copy genérico + CTA fijo.
+                      </p>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedDayScriptId ?? dayTopicsForFormato[0]?.id ?? ''}
+                          onChange={(e) => setSelectedDayScriptId(e.target.value)}
+                          disabled={saving}
+                          className="w-full rounded-lg border border-emerald-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800"
+                        >
+                          {dayTopicsForFormato.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                        {dayTopicLabel ? (
+                          <p className="text-[11px] text-emerald-900">
+                            Copy adaptado (corto) a: <strong>{dayTopicLabel}</strong>
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                ) : null}
 
                 {formatoMeta.vehiclesAllowed >= 1 ? (
                   <div>
