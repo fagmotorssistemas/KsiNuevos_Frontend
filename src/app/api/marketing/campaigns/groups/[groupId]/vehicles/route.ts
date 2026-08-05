@@ -34,7 +34,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .eq('id', inventoryId)
         .single(),
       campaignsFrom(supabase, 'marketing_campaign_groups')
-        .select('id, vehicle_category, name')
+        .select('id, vehicle_category, name, campaign_month')
         .eq('id', groupId)
         .single(),
       campaignsFrom(supabase, 'marketing_campaign_vehicles')
@@ -66,11 +66,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     )
   }
 
-  const { count: assignedElsewhere } = await campaignsFrom(supabase, 'marketing_campaign_vehicles')
-    .select('id', { count: 'exact', head: true })
+  const { data: assignedElsewhereData } = await campaignsFrom(supabase, 'marketing_campaign_vehicles')
+    .select('id, marketing_campaign_groups!inner(campaign_month)')
     .eq('inventory_id', inventoryId)
+    .eq('marketing_campaign_groups.campaign_month', group.campaign_month)
+    .limit(1)
 
-  if ((assignedElsewhere ?? 0) > 0) {
+  if (assignedElsewhereData && assignedElsewhereData.length > 0) {
     return NextResponse.json(
       { error: 'Este vehículo ya está asignado a otra campaña del mes' },
       { status: 409 }
