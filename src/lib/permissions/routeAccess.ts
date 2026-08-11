@@ -201,12 +201,26 @@ export function isRouteAllowed(pathname: string, ctx: PermissionContext): boolea
     if (!onTaller) return false
   }
 
-  const checks = [
-    ventasRouteDenied(pathname, ctx),
-    accountingRouteDenied(pathname, ctx),
-    marketingRouteDenied(pathname, ctx),
-    moduleRouteDenied(pathname, ctx),
-  ]
+  const vDenied = ventasRouteDenied(pathname, ctx)
+  const aDenied = accountingRouteDenied(pathname, ctx)
+  const mDenied = marketingRouteDenied(pathname, ctx)
+  const modDenied = moduleRouteDenied(pathname, ctx)
 
-  return checks.every((d) => d === null)
+  const vMatch = firstMatchingPrefix(pathname, VENTAS_PATH_ACCESS)
+  const aMatch = firstMatchingPrefix(pathname, ACCOUNTING_PATH_ACCESS)
+  const mMatch = pathMatchesPrefix(pathname, '/marketing')
+
+  const checks = []
+  if (vMatch) checks.push(vDenied)
+  if (aMatch) checks.push(aDenied)
+  if (mMatch) checks.push(mDenied)
+
+  if (checks.length > 0) {
+    const isPermittedByAtLeastOne = checks.some((d) => d === null)
+    if (!isPermittedByAtLeastOne) return false
+  }
+
+  if (modDenied !== null) return false
+
+  return true
 }

@@ -99,6 +99,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'finanzas', slug: 'comprobantes', name: 'Comprobantes', sortOrder: 16, routePrefixes: ['/comprobantes'] },
   { moduleSlug: 'finanzas', slug: 'billing-finanzas', name: 'Facturación', sortOrder: 17, routePrefixes: ['/billing'] },
   { moduleSlug: 'finanzas', slug: 'seguros-cartera', name: 'Seguros (cartera)', sortOrder: 18, routePrefixes: ['/insurance'] },
+  { moduleSlug: 'finanzas', slug: 'financiamiento-finanzas', name: 'Financiamiento', sortOrder: 19, routePrefixes: ['/finance'] },
   // GPS
   { moduleSlug: 'gps', slug: 'inventario-gps', name: 'Inventario GPS', sortOrder: 1 },
   { moduleSlug: 'gps', slug: 'ventas-rastreador', name: 'Ventas rastreador', sortOrder: 2 },

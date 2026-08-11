@@ -16,6 +16,7 @@ import {
     ChevronLeft,
     ChevronRight,
     BanknoteArrowDown,
+    BadgeDollarSign,
     Box,
     StickyNote,
     Receipt,
@@ -59,6 +60,7 @@ const menuItems: MenuItem[] = [
     { name: 'Reporte Documentación', href: '/inventario/reporte-documentacion', icon: FileCheck2 },
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
     { name: 'Comprobantes', href: '/comprobantes', icon: Receipt },
+    { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
 ];
 
 export function AccountingSidebar() {
@@ -130,7 +132,7 @@ export function AccountingSidebar() {
                     bg-white border-r border-gray-200
                     flex flex-col overflow-hidden transition-all duration-300 ease-in-out
                     ${isMobileOpen ? 'translate-x-0 max-md:pointer-events-auto' : '-translate-x-full max-md:pointer-events-none'}
-                    md:translate-x-0 md:pointer-events-auto md:flex max-md:max-h-[100dvh]
+                    md:translate-x-0 md:pointer-events-auto md:flex h-screen max-md:max-h-[100dvh]
                     w-[17.5rem] ${isCollapsed ? 'md:w-20' : 'md:w-[17.5rem]'}
                 `}
             >
