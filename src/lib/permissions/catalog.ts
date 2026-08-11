@@ -29,7 +29,6 @@ export type PrimaryNavItem = {
 
 export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   { href: '/leads', label: 'Ventas', module: 'ventas' },
-  { href: '/finance', label: 'Financiamiento', submodule: 'proformas-credito' },
   { href: '/wallet', label: 'Contabilidad', module: 'finanzas' },
   { href: '/legal/cases', label: 'Gestión Legal', module: 'legal' },
   { href: '/taller/dashboard', label: 'Taller', module: 'taller' },
