@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, StickyNote } from "lucide-react";
 import { LegalCasesTab } from "./LegalCasesTab";
 import type { LegalCaseContext } from "@/types/legal.types";
+import type { NotaGestion } from "@/types/wallet.types";
 
 /** Misma regla que el kanban: Alta / Formal = ≥90 días (3+ meses). */
 export const DIAS_MORA_FORMAL = 90;
@@ -13,10 +14,13 @@ export function LegalGestionPanel({
   defaultMontoReferenciaForNewCase,
   /** Días de mora del cliente/obligación (kanban Temprana/Media/Alta). */
   diasMora = 0,
+  /** Notas Oracle para mostrar historial aunque no haya caso legal. */
+  historialExterno = [],
 }: {
   legalContext: LegalCaseContext;
   defaultMontoReferenciaForNewCase?: number | null;
   diasMora?: number;
+  historialExterno?: NotaGestion[];
 }) {
   const operativaBloqueada = diasMora >= DIAS_MORA_FORMAL;
   const [legalSubTab, setLegalSubTab] = useState<"operativa" | "formal">(
@@ -115,6 +119,7 @@ export function LegalGestionPanel({
           defaultMontoReferenciaForNewCase={defaultMontoReferenciaForNewCase}
           operativeOnly={legalSubTab === "operativa"}
           requireFormalGates={legalSubTab === "formal"}
+          historialExterno={historialExterno}
         />
       )}
     </div>

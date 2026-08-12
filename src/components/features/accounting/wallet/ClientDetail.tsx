@@ -637,6 +637,7 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
                         0,
                         ...data.documentos.map((d) => d.diasMora || 0),
                     )}
+                    historialExterno={data.notas || []}
                 />
             )}
         </div>

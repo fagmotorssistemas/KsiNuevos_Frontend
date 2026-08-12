@@ -28,6 +28,7 @@ export default function WalletPage() {
     // 1. Agregamos 'mora' a las opciones de modo lista
     const [listMode, setListMode] = useState<'risk' | 'all' | 'mora'>('risk');
     const [boardView, setBoardView] = useState<'lista' | 'kanban'>('lista');
+    const [soloSinGestion, setSoloSinGestion] = useState(true);
     
     const [filterMode, setFilterMode] = useState<'all' | 'vencidos' | 'aldia'>('all');
     
@@ -132,82 +133,100 @@ export default function WalletPage() {
                         onFilterChange={setFilterMode} 
                     />
 
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative">
-                        {/* Toggle Lista / Kanban — esquina superior derecha */}
-                        <div className="absolute top-4 right-4 z-10">
-                            <div className="flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 shadow-sm">
-                                <button
-                                    type="button"
-                                    onClick={() => setBoardView('lista')}
-                                    title="Vista lista"
-                                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
-                                        boardView === 'lista'
-                                            ? 'bg-white text-slate-900 shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    <Table2 className="h-3.5 w-3.5" />
-                                    Lista
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setBoardView('kanban')}
-                                    title="Vista tablero"
-                                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
-                                        boardView === 'kanban'
-                                            ? 'bg-white text-slate-900 shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    <Columns3 className="h-3.5 w-3.5" />
-                                    Tablero
-                                </button>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                        {/* Barra de vistas: en flujo, sin absolute (evita solapamiento) */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                            {boardView === 'lista' ? (
+                                <div className="flex p-1 bg-slate-100 rounded-lg w-full sm:w-fit overflow-x-auto">
+                                    <button
+                                        onClick={() => setListMode('risk')}
+                                        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                            listMode === 'risk'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <AlertTriangle className={`h-4 w-4 ${listMode === 'risk' ? 'text-red-500' : ''}`} />
+                                        Prioridad Alta
+                                    </button>
+
+                                    <button
+                                        onClick={handleMoraViewClick}
+                                        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                            listMode === 'mora'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <CalendarClock className={`h-4 w-4 ${listMode === 'mora' ? 'text-orange-500' : ''}`} />
+                                        Mayor Mora
+                                    </button>
+
+                                    <button
+                                        onClick={() => setListMode('all')}
+                                        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
+                                            listMode === 'all'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <LayoutList className={`h-4 w-4 ${listMode === 'all' ? 'text-blue-500' : ''}`} />
+                                        Directorio A-Z
+                                    </button>
+                                </div>
+                            ) : (
+                                <span className="text-xs text-slate-500">
+                                    Tablero por días de mora
+                                </span>
+                            )}
+
+                            <div className="flex items-center gap-2 ml-auto shrink-0">
+                                {boardView === 'kanban' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSoloSinGestion((v) => !v)}
+                                        className={`h-9 px-3 rounded-lg text-xs font-bold border transition ${
+                                            soloSinGestion
+                                                ? 'bg-slate-900 text-white border-slate-900'
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Sin gestión
+                                    </button>
+                                )}
+                                <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBoardView('lista')}
+                                        title="Vista lista"
+                                        className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
+                                            boardView === 'lista'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <Table2 className="h-3.5 w-3.5" />
+                                        Lista
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setBoardView('kanban')}
+                                        title="Vista tablero"
+                                        className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-semibold transition-all ${
+                                            boardView === 'kanban'
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <Columns3 className="h-3.5 w-3.5" />
+                                        Tablero
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
                         {boardView === 'lista' ? (
                             <>
-                                {/* Controles de Pestaña (Tabs) */}
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pr-0 sm:pr-36">
-                                    <div className="flex p-1 bg-slate-100 rounded-lg w-full sm:w-fit overflow-x-auto">
-                                        <button
-                                            onClick={() => setListMode('risk')}
-                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                                listMode === 'risk'
-                                                    ? 'bg-white text-slate-900 shadow-sm'
-                                                    : 'text-slate-500 hover:text-slate-700'
-                                            }`}
-                                        >
-                                            <AlertTriangle className={`h-4 w-4 ${listMode === 'risk' ? 'text-red-500' : ''}`} />
-                                            Prioridad Alta
-                                        </button>
-
-                                        <button
-                                            onClick={handleMoraViewClick}
-                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                                listMode === 'mora'
-                                                    ? 'bg-white text-slate-900 shadow-sm'
-                                                    : 'text-slate-500 hover:text-slate-700'
-                                            }`}
-                                        >
-                                            <CalendarClock className={`h-4 w-4 ${listMode === 'mora' ? 'text-orange-500' : ''}`} />
-                                            Mayor Mora
-                                        </button>
-
-                                        <button
-                                            onClick={() => setListMode('all')}
-                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${
-                                                listMode === 'all'
-                                                    ? 'bg-white text-slate-900 shadow-sm'
-                                                    : 'text-slate-500 hover:text-slate-700'
-                                            }`}
-                                        >
-                                            <LayoutList className={`h-4 w-4 ${listMode === 'all' ? 'text-blue-500' : ''}`} />
-                                            Directorio A-Z
-                                        </button>
-                                    </div>
-                                </div>
-
                                 {listMode === 'risk' && (
                                     <TopDebtorsTable
                                         debtors={topDebtors}
@@ -237,13 +256,12 @@ export default function WalletPage() {
                                 )}
                             </>
                         ) : (
-                            <div className="pt-8 sm:pt-2">
-                                <DebtorsKanbanBoard
-                                    debtors={kanbanDebtors}
-                                    loading={loading || loadingAll}
-                                    onViewDetail={handleSelectClient}
-                                />
-                            </div>
+                            <DebtorsKanbanBoard
+                                debtors={kanbanDebtors}
+                                loading={loading || loadingAll}
+                                onViewDetail={handleSelectClient}
+                                soloSinGestion={soloSinGestion}
+                            />
                         )}
                     </div>
                 </div>

@@ -14,8 +14,11 @@ type CaseLite = {
   fecha_ultima_gestion: string | null;
 };
 
-/** clienteId → tipo de última acción legal (solo informativo en la tarjeta). */
-type LastActionByClient = Record<number, { tipo: string | null }>;
+/** clienteId → última acción legal (tipo + quién). */
+type LastActionByClient = Record<
+  number,
+  { tipo: string | null; usuario: string | null; fecha: string | null }
+>;
 
 /** Temprana ≤30d (1 mes) · Media 31–89d (~2 meses) · Alta ≥90d (3+ meses). */
 function getMoraBucket(diasMora: number): MoraBucket | null {
@@ -55,8 +58,29 @@ function formatTipoAccion(tipo: string | null | undefined): string {
     whatsapp: "WhatsApp",
     email: "Email",
     presencial: "Presencial",
+    visita_cortesia: "Visita",
+    acuerdo_pago: "Acuerdo",
+    recordatorio: "Recordatorio",
+    verificacion: "Verificación",
+    visita_domiciliaria: "Visita dom.",
+    predemanda: "Predemanda",
+    via_judicial: "Vía judicial",
+    recuperacion_administrativa: "Recup. adm.",
+    cierre: "Cierre",
   };
   return map[t] || tipo.replace(/_/g, " ");
+}
+
+function formatUltimaAccion(action?: {
+  tipo: string | null;
+  usuario: string | null;
+  fecha: string | null;
+}): string {
+  if (!action?.tipo) return "Sin gestión";
+  const tipo = formatTipoAccion(action.tipo);
+  const quien = (action.usuario || "").trim();
+  if (quien) return `${tipo} · ${quien}`;
+  return tipo;
 }
 
 const COLUMN_META: Record<
@@ -108,17 +132,20 @@ interface DebtorsKanbanBoardProps {
   debtors: ClienteDeudaSummary[];
   loading?: boolean;
   onViewDetail: (clienteId: number) => void;
+  /** Si true, solo muestra clientes sin última gestión en Supabase. */
+  soloSinGestion?: boolean;
 }
 
 export function DebtorsKanbanBoard({
   debtors,
   loading,
   onViewDetail,
+  soloSinGestion = true,
 }: DebtorsKanbanBoardProps) {
   const [actionsByClient, setActionsByClient] = useState<LastActionByClient>(
     {},
   );
-  const [loadingActions, setLoadingActions] = useState(false);
+  const [loadingActions, setLoadingActions] = useState(true);
 
   const withMora = useMemo(
     () => debtors.filter((d) => d.diasMoraMaximo > 0),
@@ -131,20 +158,37 @@ export function DebtorsKanbanBoard({
       media: [],
       alta: [],
     };
+    // Esperar gestiones antes de filtrar, si no todos aparecen como "sin gestión"
+    if (soloSinGestion && loadingActions) {
+      return buckets;
+    }
     for (const d of withMora) {
       const b = getMoraBucket(d.diasMoraMaximo);
-      if (b) buckets[b].push(d);
+      if (!b) continue;
+      if (soloSinGestion) {
+        // Sin caso / sin eventos en Supabase → pendiente de gestionar
+        const action = actionsByClient[d.clienteId];
+        if (action?.tipo) continue;
+      }
+      buckets[b].push(d);
     }
     for (const key of Object.keys(buckets) as MoraBucket[]) {
       buckets[key].sort((a, b) => b.diasMoraMaximo - a.diasMoraMaximo);
     }
     return buckets;
-  }, [withMora]);
+  }, [withMora, soloSinGestion, actionsByClient, loadingActions]);
+
+  const totalVisibles = useMemo(
+    () =>
+      columns.temprana.length + columns.media.length + columns.alta.length,
+    [columns],
+  );
 
   useEffect(() => {
     const ids = withMora.map((d) => d.clienteId);
     if (ids.length === 0) {
       setActionsByClient({});
+      setLoadingActions(false);
       return;
     }
 
@@ -182,26 +226,58 @@ export function DebtorsKanbanBoard({
         }
 
         const caseIds = [...caseByClient.values()].map((c) => c.id);
-        const tipoByCase = new Map<string, string>();
+        const lastByCase = new Map<
+          string,
+          { tipo: string | null; usuario_id: string | null; fecha: string | null }
+        >();
 
         if (caseIds.length > 0) {
           const { data: events, error: evErr } = await supabase
             .from("case_events")
-            .select("case_id, tipo, fecha")
+            .select("case_id, tipo, fecha, usuario_id")
             .in("case_id", caseIds)
             .order("fecha", { ascending: false });
 
           if (evErr) throw evErr;
           for (const e of events || []) {
-            if (!tipoByCase.has(e.case_id)) {
-              tipoByCase.set(e.case_id, e.tipo);
+            if (!lastByCase.has(e.case_id)) {
+              lastByCase.set(e.case_id, {
+                tipo: e.tipo,
+                usuario_id: e.usuario_id,
+                fecha: e.fecha,
+              });
             }
+          }
+        }
+
+        const userIds = [
+          ...new Set(
+            [...lastByCase.values()]
+              .map((e) => e.usuario_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        const nameById = new Map<string, string>();
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", userIds);
+          for (const p of profiles || []) {
+            if (p.full_name) nameById.set(p.id, p.full_name.trim());
           }
         }
 
         const map: LastActionByClient = {};
         for (const [clientId, c] of caseByClient) {
-          map[clientId] = { tipo: tipoByCase.get(c.id) ?? null };
+          const last = lastByCase.get(c.id);
+          map[clientId] = {
+            tipo: last?.tipo ?? null,
+            usuario: last?.usuario_id
+              ? nameById.get(last.usuario_id) ?? null
+              : null,
+            fecha: last?.fecha ?? null,
+          };
         }
         if (!cancelled) setActionsByClient(map);
       } catch (e) {
@@ -241,8 +317,11 @@ export function DebtorsKanbanBoard({
     <div className="space-y-3">
       <div className="px-1">
         <p className="text-xs text-slate-500">
-          Solo visualización · columnas por días de mora
+          Columnas por días de mora
           {loadingActions ? " · sincronizando gestiones…" : ""}
+          {soloSinGestion && !loadingActions
+            ? ` · ${totalVisibles} sin gestión`
+            : ""}
         </p>
       </div>
 
@@ -266,15 +345,23 @@ export function DebtorsKanbanBoard({
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     {meta.subtitle}
+                    {soloSinGestion ? " · solo sin gestión" : ""}
                   </p>
                 </div>
               </div>
               <div className={`h-0.5 mx-4 mb-3 rounded-full ${meta.bar}`} />
 
               <div className="px-3 pb-3 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                {cards.length === 0 ? (
+                {loadingActions && soloSinGestion ? (
+                  <div className="text-center py-8 text-xs text-slate-400 flex flex-col items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Revisando gestiones…
+                  </div>
+                ) : cards.length === 0 ? (
                   <div className="text-center py-8 text-xs text-slate-400">
-                    Sin clientes en esta columna
+                    {soloSinGestion
+                      ? "No hay clientes sin gestión en esta columna"
+                      : "Sin clientes en esta columna"}
                   </div>
                 ) : (
                   cards.map((d) => {
@@ -319,10 +406,19 @@ export function DebtorsKanbanBoard({
                               {d.diasMoraMaximo} días
                             </span>
                           </div>
-                          <div className="flex justify-between gap-2">
-                            <span className="text-slate-400">Última acción</span>
-                            <span className="font-semibold text-slate-800 truncate max-w-[55%] text-right">
-                              {formatTipoAccion(action?.tipo)}
+                          <div className="flex justify-between gap-2 items-start">
+                            <span className="text-slate-400 shrink-0">
+                              Última acción
+                            </span>
+                            <span
+                              className={`font-semibold truncate max-w-[58%] text-right ${
+                                action?.tipo
+                                  ? "text-slate-800"
+                                  : "text-slate-400"
+                              }`}
+                              title={formatUltimaAccion(action)}
+                            >
+                              {formatUltimaAccion(action)}
                             </span>
                           </div>
                         </div>
