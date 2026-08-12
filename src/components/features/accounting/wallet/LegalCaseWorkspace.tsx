@@ -1012,6 +1012,8 @@ export function LegalCaseWorkspace({
                     );
                   }
 
+                  if (item.kind !== "event") return null;
+
                   const e = item.event;
                   return (
                     <div
