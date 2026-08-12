@@ -183,6 +183,7 @@ export function LegalCasesTab({
       pipeline={requireFormalGates ? "formal" : "operativa"}
       operativeOnly={operativeOnly}
       requireFormalGates={requireFormalGates}
+      historialExterno={historialExterno}
       onRefresh={() => fetchCase({ silent: true })}
     />
   );

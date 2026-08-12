@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CalendarClock,
@@ -36,6 +36,7 @@ import type {
   CaseEventRow,
   CaseStepSkipRow,
 } from "@/types/legal.types";
+import type { NotaGestion } from "@/types/wallet.types";
 import { GestionStepList } from "./GestionStepList";
 import { AddEventForm } from "./AddEventForm";
 import { ChangeStatusForm } from "./ChangeStatusForm";
@@ -60,7 +61,8 @@ import { SkipStepWarningModal } from "./SkipStepWarningModal";
 
 type TimelineItem =
   | { kind: "event"; id: string; at: string; event: CaseEventRow }
-  | { kind: "skip"; id: string; at: string; skip: CaseStepSkipRow };
+  | { kind: "skip"; id: string; at: string; skip: CaseStepSkipRow }
+  | { kind: "externo"; id: string; at: string; nota: NotaGestion };
 
 const OPERATIVA_EVENT_ICONS: Record<string, LucideIcon> = {
   llamada: Phone,
@@ -90,6 +92,56 @@ function canalPillLabel(canal: string | null | undefined): string | null {
   return canal;
 }
 
+const CANALES_COMUNICACION = new Set([
+  "telefono",
+  "whatsapp",
+  "email",
+  "presencial",
+  "mensaje",
+]);
+
+/**
+ * Algunas gestiones antiguas se guardaron como tipo `creacion` pero son llamadas
+ * u otras gestiones (canal + descripción). No deben quedar ocultas en «Sistema».
+ */
+function looksLikeOperativaGestion(e: CaseEventRow): boolean {
+  const t = (e.tipo || "").toLowerCase().trim();
+  if (t && t !== "creacion" && t !== "sistema") return true;
+  const canal = (e.canal || "").toLowerCase().trim();
+  if (CANALES_COMUNICACION.has(canal)) return true;
+  const desc = `${e.descripcion || ""} ${e.detalle || ""}`.toLowerCase();
+  return /llamada|whatsapp|visita|acuerdo|recordatorio|mensaje/.test(desc);
+}
+
+/** Etiqueta visible en bitácora operativa (corrige creacion→llamada cuando aplica). */
+function operativaDisplayTipo(e: CaseEventRow): string {
+  const t = (e.tipo || "").toLowerCase().trim();
+  if (t === "creacion" && looksLikeOperativaGestion(e)) {
+    const canal = (e.canal || "").toLowerCase().trim();
+    if (canal === "telefono") return "llamada";
+    if (canal === "whatsapp") return "whatsapp";
+    if (canal === "presencial") return "visita_cortesia";
+    if (canal === "email") return "email";
+    if (canal === "mensaje") return "mensaje";
+    const desc = (e.descripcion || "").toLowerCase();
+    if (desc.includes("llamada")) return "llamada";
+  }
+  return e.tipo || "evento";
+}
+
+function isNotaEvent(e: CaseEventRow): boolean {
+  const t = (e.tipo || "").toLowerCase();
+  return t.includes("nota") || t === "observacion" || t === "observación";
+}
+
+function isPureSistemaEvent(e: CaseEventRow): boolean {
+  const t = (e.tipo || "").toLowerCase().trim();
+  if (["cambio_estado", "cambio_proceso", "sistema"].includes(t)) return true;
+  // `creacion` real de apertura (sin canal de gestión)
+  if (t === "creacion" && !looksLikeOperativaGestion(e)) return true;
+  return false;
+}
+
 /** UI clásica Temprana/Media (timeline) — solo presentación. */
 function OperativaEventCard({
   event: e,
@@ -98,7 +150,8 @@ function OperativaEventCard({
   event: CaseEventRow;
   actors: CaseFullPayload["actors"];
 }) {
-  const Icon = operativaEventIcon(e.tipo);
+  const displayTipo = operativaDisplayTipo(e);
+  const Icon = operativaEventIcon(displayTipo);
   const canalLabel = canalPillLabel(e.canal);
   const detalleTexto = e.detalle ? stripMetaTags(e.detalle) : "";
 
@@ -111,7 +164,7 @@ function OperativaEventCard({
           <div className="flex items-center gap-2 min-w-0">
             <Icon className="h-4 w-4 text-blue-800 shrink-0" />
             <span className="text-xs font-bold uppercase tracking-wide text-blue-800 truncate">
-              {(e.tipo || "evento").replace(/_/g, " ")}
+              {displayTipo.replace(/_/g, " ")}
             </span>
             {canalLabel && (
               <span className="text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full shrink-0">
@@ -121,7 +174,9 @@ function OperativaEventCard({
           </div>
           <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5 shrink-0">
             <Clock className="h-3 w-3" />
-            {e.fecha ? new Date(e.fecha).toLocaleString() : "—"}
+            {e.fecha
+              ? new Date(e.fecha).toLocaleString("es-EC")
+              : "—"}
           </span>
         </div>
         <div className="p-4 space-y-2">
@@ -148,6 +203,42 @@ function OperativaEventCard({
             <span className="text-[10px] text-slate-500 flex items-center gap-1">
               <UserCircle className="h-3.5 w-3.5" />
               {lineaRegistrante(actors, e.usuario_id) || "Sistema"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistorialExternoCard({ nota }: { nota: NotaGestion }) {
+  return (
+    <div className="relative pl-8">
+      <div className="absolute left-0 top-4 bottom-0 w-px bg-slate-200" />
+      <div className="absolute left-[-7px] top-4 h-3.5 w-3.5 rounded-full border-2 border-amber-300 bg-white z-[1]" />
+      <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b bg-amber-50/60 border-amber-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <StickyNote className="h-4 w-4 text-amber-800 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-wide text-amber-900 truncate">
+              Historial previo
+            </span>
+          </div>
+          <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5 shrink-0">
+            <Clock className="h-3 w-3" />
+            {nota.fecha
+              ? new Date(nota.fecha).toLocaleString("es-EC")
+              : "—"}
+          </span>
+        </div>
+        <div className="p-4 space-y-2">
+          <p className="text-sm text-slate-700 leading-relaxed">
+            {nota.observacion || "—"}
+          </p>
+          <div className="flex justify-end pt-1">
+            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+              <UserCircle className="h-3.5 w-3.5" />
+              {nota.usuario || "Usuario"}
             </span>
           </div>
         </div>
@@ -309,6 +400,7 @@ export function LegalCaseWorkspace({
   pipeline,
   operativeOnly,
   requireFormalGates,
+  historialExterno = [],
   onRefresh,
 }: {
   legalContext: LegalCaseContext;
@@ -317,6 +409,8 @@ export function LegalCaseWorkspace({
   pipeline: LegalPipeline;
   operativeOnly: boolean;
   requireFormalGates: boolean;
+  /** Notas Oracle / gestiones previas al caso (solo se muestran en Temprana/Media). */
+  historialExterno?: NotaGestion[];
   onRefresh: () => Promise<void> | void;
 }) {
   const c = data.case || caseRow;
@@ -350,6 +444,16 @@ export function LegalCaseWorkspace({
   const operativaEvents = allEvents.filter((e) =>
     eventBelongsToPipeline(e.tipo, "operativa"),
   );
+
+  // Si Formal no tiene gestiones de pipeline pero sí notas, abrir Observaciones
+  useEffect(() => {
+    if (pipeline !== "formal") return;
+    if (formalEvents.length > 0) return;
+    if (allEvents.some(isNotaEvent)) {
+      setBitacoraTab("observaciones");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipeline, caseRow.id]);
 
   const bitacoraTabs =
     pipeline === "formal"
@@ -387,19 +491,23 @@ export function LegalCaseWorkspace({
       }
     };
 
-    const isNota = (e: (typeof allEvents)[number]) =>
-      (e.tipo || "").toLowerCase().includes("nota");
-    const isTarea = (e: (typeof allEvents)[number]) =>
-      (e.tipo || "").toLowerCase().includes("tarea");
-    const isSistemaTipo = (e: (typeof allEvents)[number]) => {
-      const t = (e.tipo || "").toLowerCase().trim();
-      return ["sistema", "creacion", "cambio_estado", "cambio_proceso"].includes(
-        t,
-      );
+    const pushHistorialExterno = () => {
+      if (pipeline !== "operativa") return;
+      for (const [idx, nota] of historialExterno.entries()) {
+        items.push({
+          kind: "externo",
+          id: `ext-${nota.fecha}-${idx}`,
+          at: nota.fecha || "",
+          nota,
+        });
+      }
     };
 
+    const isTarea = (e: CaseEventRow) =>
+      (e.tipo || "").toLowerCase().includes("tarea");
+
     if (pipeline === "operativa") {
-      // Temprana/Media: SOLO eventos operativos (sin formal)
+      // Temprana/Media: SOLO eventos operativos (sin formal) + historial Oracle
       switch (activeBitacoraTab) {
         case "comunicaciones":
           pushEvents(
@@ -412,30 +520,25 @@ export function LegalCaseWorkspace({
                   "recordatorio",
                   "notificacion",
                   "visita_cortesia",
-                ].includes((e.tipo || "").toLowerCase()) ||
-                ["telefono", "whatsapp", "email", "presencial"].includes(
-                  (e.canal || "").toLowerCase(),
-                ),
+                  "email",
+                ].includes(operativaDisplayTipo(e).toLowerCase()) ||
+                CANALES_COMUNICACION.has((e.canal || "").toLowerCase()),
             ),
           );
           break;
         case "observaciones":
-          pushEvents(operativaEvents.filter(isNota));
+          pushEvents(operativaEvents.filter(isNotaEvent));
+          pushHistorialExterno();
           break;
         case "tareas":
           pushEvents(operativaEvents.filter(isTarea));
           break;
         case "sistema":
-          pushEvents(
-            operativaEvents.filter(
-              (e) =>
-                isSistemaTipo(e) ||
-                ((e.canal || "").toLowerCase() === "sistema" && isNota(e)),
-            ),
-          );
+          pushEvents(operativaEvents.filter(isPureSistemaEvent));
           break;
         default:
           pushEvents(operativaEvents);
+          pushHistorialExterno();
           break;
       }
     } else {
@@ -455,11 +558,10 @@ export function LegalCaseWorkspace({
           }
           break;
         case "observaciones":
-          // Notas visibles en formal (Añadir Observación) sin mezclar gestiones operativas
-          pushEvents(allEvents.filter(isNota));
+          pushEvents(allEvents.filter(isNotaEvent));
           break;
         case "sistema":
-          pushEvents(allEvents.filter(isSistemaTipo));
+          pushEvents(allEvents.filter(isPureSistemaEvent));
           break;
         default:
           pushEvents(formalEvents);
@@ -849,6 +951,14 @@ export function LegalCaseWorkspace({
               ) : pipeline === "operativa" ? (
                 <div className="relative space-y-4">
                   {timelineItems.map((item) => {
+                    if (item.kind === "externo") {
+                      return (
+                        <HistorialExternoCard
+                          key={item.id}
+                          nota={item.nota}
+                        />
+                      );
+                    }
                     if (item.kind !== "event") return null;
                     return (
                       <OperativaEventCard

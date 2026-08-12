@@ -83,6 +83,17 @@ function formatUltimaAccion(action?: {
   return tipo;
 }
 
+function formatFechaGestion(fecha: string | null | undefined): string | null {
+  if (!fecha) return null;
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("es-EC", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 const COLUMN_META: Record<
   MoraBucket,
   { title: string; subtitle: string; accent: string; bar: string; dot: string }
@@ -419,6 +430,18 @@ export function DebtorsKanbanBoard({
                               title={formatUltimaAccion(action)}
                             >
                               {formatUltimaAccion(action)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <span className="text-slate-400">Última gestión</span>
+                            <span
+                              className={`font-semibold tabular-nums ${
+                                formatFechaGestion(action?.fecha)
+                                  ? "text-slate-800"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {formatFechaGestion(action?.fecha) ?? "—"}
                             </span>
                           </div>
                         </div>

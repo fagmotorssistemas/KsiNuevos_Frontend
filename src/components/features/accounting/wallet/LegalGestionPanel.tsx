@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertTriangle, StickyNote } from "lucide-react";
+import { useState } from "react";
+import { Info } from "lucide-react";
 import { LegalCasesTab } from "./LegalCasesTab";
 import type { LegalCaseContext } from "@/types/legal.types";
 import type { NotaGestion } from "@/types/wallet.types";
 
-/** Misma regla que el kanban: Alta / Formal = ≥90 días (3+ meses). */
+/** Referencia kanban: columna Alta = ≥90 días. No bloquea Temprana/Media. */
 export const DIAS_MORA_FORMAL = 90;
 
 export function LegalGestionPanel({
   legalContext,
   defaultMontoReferenciaForNewCase,
-  /** Días de mora del cliente/obligación (kanban Temprana/Media/Alta). */
+  /** Días de mora del cliente/obligación. */
   diasMora = 0,
   /** Notas Oracle para mostrar historial aunque no haya caso legal. */
   historialExterno = [],
@@ -22,14 +22,13 @@ export function LegalGestionPanel({
   diasMora?: number;
   historialExterno?: NotaGestion[];
 }) {
-  const operativaBloqueada = diasMora >= DIAS_MORA_FORMAL;
+  // Por defecto Temprana/Media: ahí están las gestiones ya hechas.
+  // Formal es pipeline aparte (recién se empieza).
   const [legalSubTab, setLegalSubTab] = useState<"operativa" | "formal">(
-    operativaBloqueada ? "formal" : "operativa",
+    "operativa",
   );
 
-  useEffect(() => {
-    if (operativaBloqueada) setLegalSubTab("formal");
-  }, [operativaBloqueada]);
+  const sugerirFormal = diasMora >= DIAS_MORA_FORMAL;
 
   return (
     <div className="space-y-4">
@@ -40,9 +39,7 @@ export function LegalGestionPanel({
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">
             {legalSubTab === "operativa"
-              ? operativaBloqueada
-                ? "Ventana temprana/media cerrada"
-                : "Cobranza temprana y media"
+              ? "Cobranza temprana y media · gestiones previas"
               : "Pipeline formal · mora 3+ meses"}
           </p>
         </div>
@@ -73,55 +70,26 @@ export function LegalGestionPanel({
         </div>
       </div>
 
-      {legalSubTab === "operativa" && operativaBloqueada ? (
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-8 sm:p-10 space-y-4">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
-            <AlertTriangle className="h-7 w-7" />
-          </div>
-          <div className="text-center space-y-2 max-w-lg mx-auto">
-            <h3 className="text-base font-bold text-slate-900">
-              Temprana / Media bloqueada
-            </h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Este cliente ya superó los{" "}
-              <strong>2 meses de mora</strong> ({diasMora} días · 3+ meses).
-              La gestión suave de Temprana/Media ya no aplica.
-            </p>
-          </div>
-
-          <div className="max-w-lg mx-auto rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3 flex gap-3 text-left">
-            <StickyNote className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wide text-amber-800">
-                Nota
-              </p>
-              <p className="text-sm text-amber-950/90 mt-0.5">
-                No se gestionó el lapso de dos meses (Temprana/Media). Continúa
-                por <strong>Formal (3+ meses)</strong>.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-center pt-1">
-            <button
-              type="button"
-              onClick={() => setLegalSubTab("formal")}
-              className="inline-flex items-center h-10 px-5 rounded-xl bg-violet-600 text-white hover:bg-violet-700 transition text-sm font-semibold shadow-sm"
-            >
-              Ir a Formal (3+ meses)
-            </button>
-          </div>
+      {sugerirFormal && legalSubTab === "operativa" && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex gap-3 items-start">
+          <Info className="h-5 w-5 text-slate-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Este cliente tiene <strong>{diasMora} días de mora</strong>. Las
+            gestiones ya hechas están aquí en Temprana/Media. Cuando quieras
+            iniciar el proceso nuevo, usa la pestaña{" "}
+            <strong>Formal (3+ meses)</strong>.
+          </p>
         </div>
-      ) : (
-        <LegalCasesTab
-          key={legalSubTab}
-          legalContext={legalContext}
-          defaultMontoReferenciaForNewCase={defaultMontoReferenciaForNewCase}
-          operativeOnly={legalSubTab === "operativa"}
-          requireFormalGates={legalSubTab === "formal"}
-          historialExterno={historialExterno}
-        />
       )}
+
+      <LegalCasesTab
+        key={`${legalContext.type}-${legalContext.type === "oracle" ? legalContext.clientId : legalContext.carteraManualId}-${legalSubTab}`}
+        legalContext={legalContext}
+        defaultMontoReferenciaForNewCase={defaultMontoReferenciaForNewCase}
+        operativeOnly={legalSubTab === "operativa"}
+        requireFormalGates={legalSubTab === "formal"}
+        historialExterno={historialExterno}
+      />
     </div>
   );
 }
