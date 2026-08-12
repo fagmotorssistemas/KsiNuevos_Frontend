@@ -5013,6 +5013,7 @@ export type Database = {
           checklist_ingreso: Json | null
           cliente_id: string
           created_at: string | null
+          created_by: string | null
           estado: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable: string | null
           factura_numero: string | null
@@ -5043,6 +5044,7 @@ export type Database = {
           checklist_ingreso?: Json | null
           cliente_id: string
           created_at?: string | null
+          created_by?: string | null
           estado?: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable?: string | null
           factura_numero?: string | null
@@ -5073,6 +5075,7 @@ export type Database = {
           checklist_ingreso?: Json | null
           cliente_id?: string
           created_at?: string | null
+          created_by?: string | null
           estado?: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable?: string | null
           factura_numero?: string | null
@@ -5107,6 +5110,13 @@ export type Database = {
             referencedRelation: "taller_clientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "taller_ordenes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       taller_personal: {
@@ -5117,8 +5127,10 @@ export type Database = {
           datos_bancarios: string | null
           fecha_ingreso: string | null
           id: string
+          nombre_completo: string
           profile_id: string | null
           salario_mensual: number | null
+          telefono: string | null
         }
         Insert: {
           activo?: boolean | null
@@ -5127,8 +5139,10 @@ export type Database = {
           datos_bancarios?: string | null
           fecha_ingreso?: string | null
           id?: string
+          nombre_completo: string
           profile_id?: string | null
           salario_mensual?: number | null
+          telefono?: string | null
         }
         Update: {
           activo?: boolean | null
@@ -5137,8 +5151,10 @@ export type Database = {
           datos_bancarios?: string | null
           fecha_ingreso?: string | null
           id?: string
+          nombre_completo?: string
           profile_id?: string | null
           salario_mensual?: number | null
+          telefono?: string | null
         }
         Relationships: [
           {

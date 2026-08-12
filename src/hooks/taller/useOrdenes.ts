@@ -15,7 +15,8 @@ export function useOrdenes() {
             .from('taller_ordenes')
             .select(`
                 *,
-                cliente:taller_clientes(*)
+                cliente:taller_clientes(*),
+                creado_por:profiles!taller_ordenes_created_by_fkey(full_name)
             `)
             .neq('estado', 'entregado') // Solo trabajos activos
             .order('fecha_ingreso', { ascending: false });
@@ -32,7 +33,8 @@ export function useOrdenes() {
             .from('taller_ordenes')
             .select(`
                 *,
-                cliente:taller_clientes(*)
+                cliente:taller_clientes(*),
+                creado_por:profiles!taller_ordenes_created_by_fkey(full_name)
             `)
             .eq('id', ordenId)
             .single();

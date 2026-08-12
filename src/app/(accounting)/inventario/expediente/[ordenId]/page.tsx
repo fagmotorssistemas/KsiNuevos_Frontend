@@ -21,7 +21,14 @@ export default function InventarioExpedientePage() {
   const placaRef = searchParams.get('placa')
 
   const { supabase } = useAuth()
-  const { subirArchivo, actualizarEstadoContable, fetchExpedientes } = useExpedientes()
+  const {
+    subirArchivo,
+    actualizarEstadoContable,
+    fetchExpedientes,
+    actualizarObservacionesIngreso,
+    actualizarClienteExpediente,
+    eliminarOrden,
+  } = useExpedientes()
 
   const [orden, setOrden] = useState<OrdenTrabajo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -132,6 +139,21 @@ export default function InventarioExpedientePage() {
         onRefreshOrder={async () => {
           await fetchExpedientes()
           await loadOrden()
+        }}
+        onSaveObservaciones={async (texto) => {
+          const result = await actualizarObservacionesIngreso(orden.id, texto)
+          if (result.success) await loadOrden()
+          return result
+        }}
+        onSaveCliente={async (datos) => {
+          const result = await actualizarClienteExpediente(orden.cliente_id, datos)
+          if (result.success) await loadOrden()
+          return result
+        }}
+        onDeleteOrden={async () => {
+          const result = await eliminarOrden(orden.id)
+          if (result.success) router.push('/inventario')
+          return result
         }}
         initialTab="archivos"
         backLabel="Volver al inventario"

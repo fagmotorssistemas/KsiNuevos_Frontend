@@ -738,6 +738,54 @@ export type Database = {
           },
         ]
       }
+      case_step_skips: {
+        Row: {
+          case_id: string
+          created_at: string
+          detalle_texto: string | null
+          id: string
+          motivo: string
+          step_ejecutado: string
+          step_saltado: string
+          usuario_id: string
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          detalle_texto?: string | null
+          id?: string
+          motivo: string
+          step_ejecutado: string
+          step_saltado: string
+          usuario_id: string
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          detalle_texto?: string | null
+          id?: string
+          motivo?: string
+          step_ejecutado?: string
+          step_saltado?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_step_skips_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_step_skips_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_tasks: {
         Row: {
           case_id: string
@@ -3315,6 +3363,39 @@ export type Database = {
           },
         ]
       }
+      marketing_pilar_day_compliance: {
+        Row: {
+          breakdown: Json
+          computed_at: string
+          expected_count: number
+          fecha: string
+          guion_ready_count: number
+          percent: number
+          updated_at: string
+          video_evidence_count: number
+        }
+        Insert: {
+          breakdown?: Json
+          computed_at?: string
+          expected_count?: number
+          fecha: string
+          guion_ready_count?: number
+          percent?: number
+          updated_at?: string
+          video_evidence_count?: number
+        }
+        Update: {
+          breakdown?: Json
+          computed_at?: string
+          expected_count?: number
+          fecha?: string
+          guion_ready_count?: number
+          percent?: number
+          updated_at?: string
+          video_evidence_count?: number
+        }
+        Relationships: []
+      }
       marketing_planner_event_vehicles: {
         Row: {
           created_at: string
@@ -4507,6 +4588,35 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilar1_vehicle_requeue: {
+        Row: {
+          created_at: string
+          id: string
+          month_key: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month_key: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month_key?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilar1_vehicle_requeue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
         ]
@@ -6411,6 +6521,7 @@ export type Database = {
           checklist_ingreso: Json | null
           cliente_id: string
           created_at: string | null
+          created_by: string | null
           estado: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable: string | null
           factura_numero: string | null
@@ -6441,6 +6552,7 @@ export type Database = {
           checklist_ingreso?: Json | null
           cliente_id: string
           created_at?: string | null
+          created_by?: string | null
           estado?: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable?: string | null
           factura_numero?: string | null
@@ -6471,6 +6583,7 @@ export type Database = {
           checklist_ingreso?: Json | null
           cliente_id?: string
           created_at?: string | null
+          created_by?: string | null
           estado?: Database["public"]["Enums"]["taller_estado_orden"] | null
           estado_contable?: string | null
           factura_numero?: string | null
@@ -6505,6 +6618,13 @@ export type Database = {
             referencedRelation: "taller_clientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "taller_ordenes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       taller_personal: {
@@ -6515,8 +6635,10 @@ export type Database = {
           datos_bancarios: string | null
           fecha_ingreso: string | null
           id: string
+          nombre_completo: string
           profile_id: string | null
           salario_mensual: number | null
+          telefono: string | null
         }
         Insert: {
           activo?: boolean | null
@@ -6525,8 +6647,10 @@ export type Database = {
           datos_bancarios?: string | null
           fecha_ingreso?: string | null
           id?: string
+          nombre_completo: string
           profile_id?: string | null
           salario_mensual?: number | null
+          telefono?: string | null
         }
         Update: {
           activo?: boolean | null
@@ -6535,8 +6659,10 @@ export type Database = {
           datos_bancarios?: string | null
           fecha_ingreso?: string | null
           id?: string
+          nombre_completo?: string
           profile_id?: string | null
           salario_mensual?: number | null
+          telefono?: string | null
         }
         Relationships: [
           {
@@ -7880,6 +8006,7 @@ export type Database = {
         Returns: boolean
       }
       can_manage_marketing_campaigns: { Args: never; Returns: boolean }
+      can_manage_pilar_compliance: { Args: never; Returns: boolean }
       can_use_marketing_dev_requests: { Args: never; Returns: boolean }
       can_view_planner_row: {
         Args: {

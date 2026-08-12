@@ -818,6 +818,7 @@ function CarteraManualDetail({
       <LegalGestionPanel
         legalContext={{ type: "manual", carteraManualId: row.id }}
         defaultMontoReferenciaForNewCase={row.saldo_actual}
+        diasMora={row.dias_mora ?? 0}
       />
       {showEdit && (
         <CarteraManualEditModal

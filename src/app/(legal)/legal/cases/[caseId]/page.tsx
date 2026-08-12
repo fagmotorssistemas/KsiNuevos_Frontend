@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { legalCasesService } from "@/services/legalCases.service";
 import type { CaseFullPayload } from "@/types/legal.types";
 import { AddEventForm } from "@/components/features/accounting/wallet/AddEventForm";
+import { labelEstadoVehiculo } from "@/components/features/accounting/wallet/legalGestionCatalogs";
 import {
   ArrowLeft,
   CalendarClock,
@@ -392,7 +393,7 @@ export default function LegalCaseDetailPage() {
                             <Car className="h-3 w-3" /> Vehículo
                           </div>
                           <div className="text-sm font-semibold text-slate-800 capitalize">
-                            {c.estado_vehiculo?.replace('_', ' ') || "—"}
+                            {labelEstadoVehiculo(c.estado_vehiculo)}
                           </div>
                         </div>
                         <div>

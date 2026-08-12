@@ -1,10 +1,131 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Loader2, FileText, CalendarClock, FileUp, Image as ImageIcon, ExternalLink, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Loader2,
+  FileText,
+  CalendarClock,
+  FileUp,
+  Image as ImageIcon,
+  ExternalLink,
+  X,
+  ChevronDown,
+  Check,
+} from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
+
+type SoftOption = { value: string; label: string; disabled?: boolean };
+
+function SoftSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Selecciona…",
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SoftOption[];
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  return (
+    <div ref={rootRef} className={`relative mt-1.5 ${open ? "z-[60]" : "z-10"}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`w-full h-11 px-4 rounded-xl border text-sm text-left outline-none flex items-center justify-between gap-2 transition ${
+          disabled
+            ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
+            : open
+              ? "bg-white border-slate-400 ring-4 ring-slate-100"
+              : "bg-white border-slate-200 hover:border-slate-300"
+        }`}
+      >
+        <span
+          className={`truncate ${
+            selected && selected.value !== ""
+              ? "text-slate-800 font-medium"
+              : "text-slate-400"
+          }`}
+        >
+          {selected?.label || placeholder}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 text-slate-400 shrink-0 transition ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute z-[100] left-0 right-0 top-[calc(100%+6px)] rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <ul className="max-h-56 overflow-y-auto py-1.5" role="listbox">
+            {options.map((opt) => {
+              const active = opt.value === value;
+              return (
+                <li key={opt.value || "__empty"}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    disabled={opt.disabled}
+                    onClick={() => {
+                      if (opt.disabled) return;
+                      onChange(opt.value);
+                      setOpen(false);
+                    }}
+                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between gap-3 transition ${
+                      opt.disabled
+                        ? "text-slate-300 cursor-not-allowed"
+                        : active
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="truncate font-medium">{opt.label}</span>
+                    {active && !opt.disabled && (
+                      <Check className="h-4 w-4 shrink-0" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type CreateCaseFormBaseProps = {
   onCancel: () => void;
@@ -243,56 +364,55 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Tipo de Proceso
           </label>
-          <select
+          <SoftSelect
             value={tipoProceso}
-            onChange={(e) => {
-              setTipoProceso(e.target.value);
-              if (e.target.value === "judicial") setEstado("judicial");
+            onChange={(v) => {
+              setTipoProceso(v);
+              if (v === "judicial") setEstado("judicial");
             }}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="extrajudicial">Cobranza Extrajudicial</option>
-            <option value="demanda_ejecutiva">Demanda Ejecutiva</option>
-            <option value="mediacion">Mediación</option>
-            <option value="judicial">Judicial</option>
-          </select>
+            options={[
+              { value: "extrajudicial", label: "Cobranza Extrajudicial" },
+              { value: "demanda_ejecutiva", label: "Demanda Ejecutiva" },
+              { value: "mediacion", label: "Mediación" },
+              { value: "judicial", label: "Judicial" },
+            ]}
+          />
         </div>
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Objetivo del Caso
           </label>
-          <select
+          <SoftSelect
             value={objetivoCaso}
-            onChange={(e) => setObjetivoCaso(e.target.value)}
+            onChange={setObjetivoCaso}
             disabled={estadoVehiculo === "recuperado"}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white disabled:bg-slate-100 disabled:text-slate-500"
-          >
-            <option value="recuperar_cartera">Recuperar Cartera</option>
-            <option value="retener_vehiculo">Retener Vehículo</option>
-            <option value="renegociar">Renegociar Deuda</option>
-            <option value="recuperacion">Recuperación (Bloqueado)</option>
-          </select>
+            options={[
+              { value: "recuperar_cartera", label: "Recuperar Cartera" },
+              { value: "retener_vehiculo", label: "Retener Vehículo" },
+              { value: "renegociar", label: "Renegociar Deuda" },
+              { value: "recuperacion", label: "Recuperación (Bloqueado)" },
+            ]}
+          />
         </div>
 
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Estado del Vehículo
           </label>
-          <select
+          <SoftSelect
             value={estadoVehiculo}
-            onChange={(e) => {
-              setEstadoVehiculo(e.target.value);
-              if (e.target.value === "recuperado")
-                setObjetivoCaso("recuperacion");
+            onChange={(v) => {
+              setEstadoVehiculo(v);
+              if (v === "recuperado") setObjetivoCaso("recuperacion");
             }}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="poder_cliente">En poder del cliente</option>
-            <option value="retenido">Retenido</option>
-            <option value="abandonado">Abandonado / Desconocido</option>
-            <option value="taller">En taller</option>
-            <option value="recuperado">Recuperado</option>
-          </select>
+            options={[
+              { value: "poder_cliente", label: "En poder del cliente" },
+              { value: "retenido", label: "Retenido" },
+              { value: "abandonado", label: "Abandonado / Desconocido" },
+              { value: "taller", label: "En taller" },
+              { value: "recuperado", label: "Recuperado" },
+            ]}
+          />
         </div>
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -323,53 +443,57 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Estado del Caso
           </label>
-          <select
+          <SoftSelect
             value={estado}
-            onChange={(e) => setEstado(e.target.value)}
+            onChange={setEstado}
             disabled={tipoProceso === "judicial"}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white disabled:bg-slate-100 disabled:text-slate-500"
-          >
-            <option value="nuevo" disabled={tipoProceso === "judicial"}>
-              Nuevo
-            </option>
-            <option value="gestionando">Gestionando</option>
-            <option value="pre_judicial">Pre-Judicial</option>
-            <option value="judicial" disabled={tipoProceso !== "judicial"}>
-              Judicial
-            </option>
-            <option value="cerrado">Cerrado</option>
-            <option value="castigado">Castigado</option>
-          </select>
+            options={[
+              {
+                value: "nuevo",
+                label: "Nuevo",
+                disabled: tipoProceso === "judicial",
+              },
+              { value: "gestionando", label: "Gestionando" },
+              { value: "pre_judicial", label: "Pre-Judicial" },
+              {
+                value: "judicial",
+                label: "Judicial",
+                disabled: tipoProceso !== "judicial",
+              },
+              { value: "cerrado", label: "Cerrado" },
+              { value: "castigado", label: "Castigado" },
+            ]}
+          />
         </div>
 
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Nivel de Riesgo
           </label>
-          <select
+          <SoftSelect
             value={riesgo}
-            onChange={(e) => setRiesgo(e.target.value)}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="bajo">Bajo</option>
-            <option value="medio">Medio</option>
-            <option value="alto">Alto</option>
-          </select>
+            onChange={setRiesgo}
+            options={[
+              { value: "bajo", label: "Bajo" },
+              { value: "medio", label: "Medio" },
+              { value: "alto", label: "Alto" },
+            ]}
+          />
         </div>
 
         <div>
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Prioridad
           </label>
-          <select
+          <SoftSelect
             value={prioridad}
-            onChange={(e) => setPrioridad(e.target.value)}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="baja">Baja</option>
-            <option value="media">Media</option>
-            <option value="alta">Alta</option>
-          </select>
+            onChange={setPrioridad}
+            options={[
+              { value: "baja", label: "Baja" },
+              { value: "media", label: "Media" },
+              { value: "alta", label: "Alta" },
+            ]}
+          />
         </div>
 
         <div>
@@ -379,24 +503,22 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
               (opcional)
             </span>
           </label>
-          <select
+          <SoftSelect
             value={contactabilidad}
-            onChange={(e) => {
-              setContactabilidad(e.target.value);
-              if (
-                e.target.value === "no_contesta" ||
-                e.target.value === "ilocalizable"
-              ) {
+            onChange={(v) => {
+              setContactabilidad(v);
+              if (v === "no_contesta" || v === "ilocalizable") {
                 setIntencionPago("nula");
               }
             }}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="">-- Seleccionar --</option>
-            <option value="contactado">Contactado</option>
-            <option value="no_contesta">No contesta</option>
-            <option value="ilocalizable">Ilocalizable</option>
-          </select>
+            placeholder="Seleccionar…"
+            options={[
+              { value: "", label: "Seleccionar…" },
+              { value: "contactado", label: "Contactado" },
+              { value: "no_contesta", label: "No contesta" },
+              { value: "ilocalizable", label: "Ilocalizable" },
+            ]}
+          />
         </div>
 
         <div className="md:col-span-2">
@@ -406,21 +528,22 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
               (opcional)
             </span>
           </label>
-          <select
+          <SoftSelect
             value={intencionPago}
-            onChange={(e) => setIntencionPago(e.target.value)}
+            onChange={setIntencionPago}
             disabled={
               contactabilidad === "no_contesta" ||
               contactabilidad === "ilocalizable"
             }
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white disabled:bg-slate-100 disabled:text-slate-500"
-          >
-            <option value="">-- Seleccionar --</option>
-            <option value="alta">Alta</option>
-            <option value="media">Media</option>
-            <option value="baja">Baja</option>
-            <option value="nula">Nula / Rechazo</option>
-          </select>
+            placeholder="Seleccionar…"
+            options={[
+              { value: "", label: "Seleccionar…" },
+              { value: "alta", label: "Alta" },
+              { value: "media", label: "Media" },
+              { value: "baja", label: "Baja" },
+              { value: "nula", label: "Nula / Rechazo" },
+            ]}
+          />
         </div>
 
         {/* BLOQUE 3: PLAN DE ACCIÓN */}
@@ -476,17 +599,17 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Canal de gestión
           </label>
-          <select
+          <SoftSelect
             value={canal}
-            onChange={(e) => setCanal(e.target.value)}
-            className="mt-1.5 w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 text-sm font-medium transition-all bg-white"
-          >
-            <option value="sistema">Sistema / Interno</option>
-            <option value="telefono">Llamada Telefónica</option>
-            <option value="whatsapp">WhatsApp / Mensaje</option>
-            <option value="email">Correo Electrónico</option>
-            <option value="presencial">Reunión Presencial</option>
-          </select>
+            onChange={setCanal}
+            options={[
+              { value: "sistema", label: "Sistema / Interno" },
+              { value: "telefono", label: "Llamada Telefónica" },
+              { value: "whatsapp", label: "WhatsApp / Mensaje" },
+              { value: "email", label: "Correo Electrónico" },
+              { value: "presencial", label: "Reunión Presencial" },
+            ]}
+          />
         </div>
 
         <div className="md:col-span-2">

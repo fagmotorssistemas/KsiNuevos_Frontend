@@ -80,12 +80,25 @@ export interface LegalCaseActorBrief {
   role: string | null;
 }
 
+export interface CaseStepSkipRow {
+  id: string;
+  case_id: string;
+  step_saltado: string;
+  step_ejecutado: string;
+  motivo: string;
+  detalle_texto: string | null;
+  usuario_id: string;
+  created_at: string;
+}
+
 export interface CaseFullPayload {
   case: LegalCaseRow | null;
   events: CaseEventRow[];
   tasks_pending: CaseTaskRow[];
   status_history: CaseStatusHistoryRow[];
   etapas: ProcesoEtapaRow[];
+  /** Saltos de paso formal (soft-skip audit). */
+  step_skips?: CaseStepSkipRow[];
   /** Opcional: mapa id usuario → nombre y rol (consulta extra tras RPC). */
   actors?: Record<string, LegalCaseActorBrief>;
 }

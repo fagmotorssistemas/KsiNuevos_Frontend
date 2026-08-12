@@ -13,7 +13,7 @@ import { ExpedienteDetail } from "@/components/features/taller/expedientes/Exped
 import { OrderPrintView } from "@/components/features/taller/OrderPrintView";
 
 export default function ExpedientesPage() {
-    const { ordenes, isLoading, subirArchivo, actualizarEstadoContable, fetchExpedientes } = useExpedientes();
+    const { ordenes, isLoading, subirArchivo, actualizarEstadoContable, fetchExpedientes, actualizarObservacionesIngreso, actualizarClienteExpediente, eliminarOrden } = useExpedientes();
     
     // Estados de Filtros
     const [searchTerm, setSearchTerm] = useState("");
@@ -144,6 +144,17 @@ export default function ExpedientesPage() {
                         onUpdateContable={actualizarEstadoContable}
                         onPrint={() => handlePrint?.()}
                         onRefreshOrder={fetchExpedientes}
+                        onSaveObservaciones={(texto) =>
+                            actualizarObservacionesIngreso(selectedOrder.id, texto)
+                        }
+                        onSaveCliente={(datos) =>
+                            actualizarClienteExpediente(selectedOrder.cliente_id, datos)
+                        }
+                        onDeleteOrden={async () => {
+                            const result = await eliminarOrden(selectedOrder.id);
+                            if (result.success) setSelectedOrder(null);
+                            return result;
+                        }}
                     />
 
                 ) : (

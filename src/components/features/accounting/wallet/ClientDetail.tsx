@@ -633,6 +633,10 @@ export function ClientDetail({ clientId, onBack }: ClientDetailProps) {
             {activeTab === 'legal' && (
                 <LegalGestionPanel
                     legalContext={{ type: "oracle", clientId }}
+                    diasMora={Math.max(
+                        0,
+                        ...data.documentos.map((d) => d.diasMora || 0),
+                    )}
                 />
             )}
         </div>

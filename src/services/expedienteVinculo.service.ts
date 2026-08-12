@@ -57,6 +57,7 @@ export async function fetchExpedienteOrdenById(
       `
       *,
       cliente:taller_clientes(nombre_completo, telefono, email, cedula_ruc, direccion),
+      creado_por:profiles!taller_ordenes_created_by_fkey(full_name),
       transacciones:taller_transacciones(*)
     `
     )

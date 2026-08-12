@@ -678,6 +678,7 @@ CREATE TABLE public.taller_ordenes (
   observaciones_ingreso text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  created_by uuid,
   pdf_url text,
   factura_numero text,
   factura_url text,
@@ -689,6 +690,8 @@ CREATE TABLE public.taller_ordenes (
 );
 CREATE TABLE public.taller_personal (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre_completo text NOT NULL,
+  telefono text,
   profile_id uuid UNIQUE,
   cargo text,
   salario_mensual numeric DEFAULT 0,

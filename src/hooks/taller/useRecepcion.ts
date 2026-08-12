@@ -56,6 +56,10 @@ export function useRecepcion() {
     const crearOrdenIngreso = async (formData: any, fotos: File[]) => {
         setIsLoading(true);
         try {
+            if (!profile?.id) {
+                throw new Error("Debes iniciar sesión para registrar una recepción.");
+            }
+
             // 1. Gestionar Cliente (Crear o Actualizar)
             let clienteId = formData.cliente_id;
             
@@ -85,11 +89,12 @@ export function useRecepcion() {
             // 2. Subir Fotos
             const fotoUrls = await uploadFotos(fotos, formData.vehiculo_placa);
 
-            // 3. Crear la Orden
+            // 3. Crear la Orden (registra quién la creó)
             const { data: orden, error: ordenError } = await supabase
                 .from('taller_ordenes')
                 .insert([{
                     cliente_id: clienteId,
+                    created_by: profile.id,
                     vehiculo_placa: formData.vehiculo_placa?.toUpperCase?.() ?? formData.vehiculo_placa,
                     vehiculo_marca: formData.vehiculo_marca || null,
                     vehiculo_modelo: formData.vehiculo_modelo || null,

@@ -23,7 +23,9 @@ export interface OrdenTrabajo {
     id: string;
     numero_orden: number;
     cliente_id: string;
-    cliente?: Partial<ClienteTaller>; 
+    cliente?: Partial<ClienteTaller>;
+    created_by?: string | null;
+    creado_por?: { full_name: string | null } | null;
     
     vehiculo_placa: string;
     vehiculo_marca: string;
@@ -164,24 +166,14 @@ export interface PagoGasto {
 
 export interface TallerPersonal {
     id: string;
-    profile_id: string;
+    nombre_completo: string;
+    telefono?: string | null;
+    profile_id?: string | null;
     cargo: string;
     salario_mensual: number;
     fecha_ingreso?: string;
     activo: boolean;
     datos_bancarios?: string;
-    profile?: { 
-        full_name: string; 
-        email: string; 
-        phone: string;
-        role?: string;
-    };
-}
-
-export interface CandidatoProfile {
-    id: string;
-    full_name: string;
-    email: string;
 }
 
 // Interfaz actualizada para manejar presupuesto real y gastos

@@ -13,8 +13,14 @@ interface DetailProps {
     onTriggerUpload: (bucket: any, transaccionId?: string) => void;
     onUpdateContable: (id: string, status: string) => void;
     onPrint: () => void;
-    /** Refrescar lista de órdenes (ej. tras cerrar el modal de presupuesto o cambiar estado) */
     onRefreshOrder?: () => void;
+    onSaveObservaciones?: (texto: string) => Promise<{ success: boolean; error?: string }>;
+    onSaveCliente?: (datos: {
+        nombre_completo: string;
+        telefono?: string;
+        email?: string;
+    }) => Promise<{ success: boolean; error?: string }>;
+    onDeleteOrden?: () => Promise<{ success: boolean; error?: string }>;
     initialTab?: 'resumen' | 'finanzas' | 'archivos';
     backLabel?: string;
     subtitle?: string;
@@ -28,6 +34,9 @@ export function ExpedienteDetail({
     onUpdateContable,
     onPrint,
     onRefreshOrder,
+    onSaveObservaciones,
+    onSaveCliente,
+    onDeleteOrden,
     initialTab = 'resumen',
     backLabel = 'Volver a Carpetas',
     subtitle,
@@ -44,7 +53,6 @@ export function ExpedienteDetail({
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header del Expediente */}
             <div className="border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
                 <div>
                     <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 mb-4 font-medium transition-colors">
@@ -65,8 +73,7 @@ export function ExpedienteDetail({
                         </div>
                     </div>
                 </div>
-                
-                {/* Selector de Tabs */}
+
                 <div className="flex bg-slate-100 p-1 rounded-xl">
                     <button onClick={() => setActiveTab('resumen')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'resumen' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Resumen</button>
                     <button onClick={() => setActiveTab('finanzas')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'finanzas' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>Finanzas</button>
@@ -74,23 +81,24 @@ export function ExpedienteDetail({
                 </div>
             </div>
 
-            {/* Contenedor del contenido */}
             <div className="flex-1 p-4 bg-slate-50/30 overflow-y-auto">
                 <div className=" mx-auto">
-                    {/* Pasamos la función al Tab de Resumen */}
                     {activeTab === 'resumen' && (
                         <ResumenTab
                             orden={orden}
                             onUpdateContable={onUpdateContable}
                             onAssignPresupuesto={() => setShowWorkOrderModal(true)}
                             refreshDeps={presupuestoUpdatedCount}
+                            onSaveObservaciones={onSaveObservaciones}
+                            onSaveCliente={onSaveCliente}
+                            onDeleteOrden={onDeleteOrden}
                         />
                     )}
-                    
+
                     {activeTab === 'finanzas' && (
                         <FinanzasTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} />
                     )}
-                    
+
                     {activeTab === 'archivos' && (
                         <ArchivosTab orden={orden} isUploading={isUploading} onTriggerUpload={onTriggerUpload} onPrint={onPrint} />
                     )}
