@@ -64,10 +64,10 @@ export function useCreditSimulator() {
         customDownPaymentAmount: 6000, // 60% de 10000
         
         termMonths: 36,
-        interestRateMonthly: 1.5,
+        interestRateMonthly: 1.8,
         adminFee: 386,
         gpsFee: 686,
-        insuranceFee: 400,
+        insuranceFee: 500,
         startDate: new Date().toISOString().split('T')[0],
         selectedVehicle: null 
     };
@@ -119,7 +119,7 @@ export function useCreditSimulator() {
                     if (foundCar) {
                         updated.selectedVehicle = foundCar;
                         updated.vehiclePrice = foundCar.price || 0;
-                        updated.insuranceFee = Math.round((foundCar.price || 0) * 0.03);
+                        updated.insuranceFee = Math.round((foundCar.price || 0) * 0.05);
                         // Al cambiar vehículo, solemos querer mantener el porcentaje o resetear a uno estándar
                         // Mantenemos el modo actual o reseteamos a porcentaje si se prefiere
                     }
