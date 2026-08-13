@@ -1,5 +1,53 @@
 import { LeadWithDetails, LeadsFilters, SortDescriptor } from "@/types/leads.types";
 
+type InterestCarLike = {
+    brand?: string | null;
+    model?: string | null;
+    year?: number | string | null;
+};
+
+const searchTokens = (search: string) => search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+const carHaystack = (car: InterestCarLike) =>
+    `${car.brand ?? ""} ${car.model ?? ""} ${car.year ?? ""}`.toLowerCase();
+
+export function carMatchesSearch(car: InterestCarLike, search: string): boolean {
+    const tokens = searchTokens(search);
+    if (tokens.length === 0) return false;
+    const haystack = carHaystack(car);
+    return tokens.every((token) => haystack.includes(token));
+}
+
+/** Auto a mostrar en Interés: el que coincide con la búsqueda; si no, el primero. */
+export function getDisplayInterestCar<T extends InterestCarLike>(
+    cars: T[] | undefined | null,
+    search: string
+): T | undefined {
+    if (!cars?.length) return undefined;
+    const tokens = searchTokens(search);
+    if (tokens.length === 0) return cars[0];
+
+    const fullMatch = cars.find((car) => carMatchesSearch(car, search));
+    if (fullMatch) return fullMatch;
+
+    const anyTokenMatch = cars.find((car) => {
+        const haystack = carHaystack(car);
+        return tokens.some((token) => haystack.includes(token));
+    });
+    return anyTokenMatch ?? cars[0];
+}
+
+export function formatInterestVehicle(
+    cars: InterestCarLike[] | undefined | null,
+    search: string
+): string {
+    const car = getDisplayInterestCar(cars, search);
+    if (!car) return "";
+    const label = [car.brand, car.model, car.year].filter(Boolean).join(" ").trim();
+    const extra = (cars?.length ?? 0) > 1 ? ` (+${cars!.length - 1})` : "";
+    return `${label}${extra}`;
+}
+
 // Tu helper de fechas exacto
 const isSameDate = (date1: Date, date2: Date) => {
     return date1.toLocaleDateString('en-CA') === date2.toLocaleDateString('en-CA');

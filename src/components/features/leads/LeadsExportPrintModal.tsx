@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchLeadsAPI } from "@/services/leads.service";
 import type { DateFilter, LeadWithDetails, LeadsFilters } from "@/types/leads.types";
+import { formatInterestVehicle } from "@/utils/leads.logic";
 
 export type LeadsExportDateMode =
     | "today"
@@ -51,10 +52,8 @@ function getEcuadorDateISO(): string {
     return new Date().toLocaleDateString("en-CA", { timeZone: "America/Guayaquil" });
 }
 
-function formatInterest(lead: LeadWithDetails): string {
-    const car = lead.interested_cars?.[0];
-    if (!car) return "";
-    return [car.brand, car.model, car.year].filter(Boolean).join(" ").trim();
+function formatInterest(lead: LeadWithDetails, search: string): string {
+    return formatInterestVehicle(lead.interested_cars, search);
 }
 
 function formatTemperature(lead: LeadWithDetails): string {
@@ -163,7 +162,7 @@ export function LeadsExportPrintModal({
             {
                 key: "interes",
                 label: "Interés",
-                getValue: formatInterest,
+                getValue: (lead) => formatInterest(lead, baseFilters.search),
             },
             {
                 key: "resumen",
@@ -186,7 +185,7 @@ export function LeadsExportPrintModal({
         }
 
         return cols;
-    }, [isAdmin]);
+    }, [isAdmin, baseFilters.search]);
 
     const canSubmit = dateMode !== "exactDate" || Boolean(exactDate);
 

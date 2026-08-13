@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -15,6 +15,7 @@ import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
 
 
 const MARKETING_DEFAULT_ASSIGNEE_NAME_PART = "fagmotors";
+const SEARCH_DEBOUNCE_MS = 400;
 
 export function useLeads() {
     const { supabase, user, profile, isLoading: isAuthLoading } = useAuth();
@@ -72,6 +73,10 @@ export function useLeads() {
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
     const didInitFromUrlRef = useRef(false);
     const marketingAssigneeDefaultHandledRef = useRef(false);
+    const fetchGenRef = useRef(0);
+
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
 
     useEffect(() => {
         if (didInitFromUrlRef.current) return;
@@ -145,8 +150,53 @@ export function useLeads() {
         };
     }, [isAuthLoading, user, profile, sellers, sellersHydrated, searchParams, supabase]);
 
+    useEffect(() => {
+        if (!filters.search.trim()) {
+            setDebouncedSearch("");
+            setPage(1);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setDebouncedSearch(filters.search);
+            setPage(1);
+        }, SEARCH_DEBOUNCE_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [filters.search]);
+
+    const queryFilters = useMemo<LeadsFilters>(
+        () => ({
+            search: debouncedSearch,
+            status: filters.status,
+            temperature: filters.temperature,
+            dateRange: filters.dateRange,
+            exactDate: filters.exactDate,
+            assignedTo: filters.assignedTo,
+            requestStatus: filters.requestStatus,
+            hasBudget: filters.hasBudget,
+            hasTradeIn: filters.hasTradeIn,
+            onlyInteractions: filters.onlyInteractions,
+            withoutResume: filters.withoutResume,
+        }),
+        [
+            debouncedSearch,
+            filters.status,
+            filters.temperature,
+            filters.dateRange,
+            filters.exactDate,
+            filters.assignedTo,
+            filters.requestStatus,
+            filters.hasBudget,
+            filters.hasTradeIn,
+            filters.onlyInteractions,
+            filters.withoutResume,
+        ]
+    );
+
     const resetFilters = () => {
         setPage(1);
+        setDebouncedSearch("");
         setFilters({
             search: '',
             status: 'all',
@@ -164,7 +214,8 @@ export function useLeads() {
 
     const loadLeads = useCallback(async (showLoadingScreen = true) => {
         if (!user) return;
-        
+        const gen = ++fetchGenRef.current;
+
         if (showLoadingScreen) {
             setIsLoading(true);
             setLeads([]);
@@ -173,26 +224,30 @@ export function useLeads() {
         }
 
         try {
-            const leadsData = await fetchLeadsAPI(supabase, page, rowsPerPage, filters, {
+            const leadsData = await fetchLeadsAPI(supabase, page, rowsPerPage, queryFilters, {
                 cachedTotal: page > 1 ? totalCount : undefined,
                 cachedResponded: page > 1 ? respondedCount : undefined,
             });
 
+            if (gen !== fetchGenRef.current) return;
+
             setLeads(leadsData.data);
             setTotalCount(leadsData.count);
             setRespondedCount(leadsData.respondedCount);
+            setAppliedSearchQuery(queryFilters.search);
 
-            const breakdownPromise = filters.exactDate
-                ? fetchLeadDayMetricBreakdown(supabase, filters.exactDate, filters.assignedTo)
+            const breakdownPromise = queryFilters.exactDate
+                ? fetchLeadDayMetricBreakdown(supabase, queryFilters.exactDate, queryFilters.assignedTo)
                 : Promise.resolve(null);
 
             void Promise.all([
-                fetchDailyInteractions(supabase, filters.assignedTo, filters.exactDate),
-                fetchRequestStats(supabase, filters.assignedTo),
-                fetchBudgetStats(supabase, filters.assignedTo),
-                fetchTradeInLeadsCount(supabase, filters.assignedTo),
+                fetchDailyInteractions(supabase, queryFilters.assignedTo, queryFilters.exactDate),
+                fetchRequestStats(supabase, queryFilters.assignedTo),
+                fetchBudgetStats(supabase, queryFilters.assignedTo),
+                fetchTradeInLeadsCount(supabase, queryFilters.assignedTo),
                 breakdownPromise,
             ]).then(([interactions, stats, bCount, tradeInCount, breakdown]) => {
+                if (gen !== fetchGenRef.current) return;
                 setInteractionsCount(interactions);
                 setRequestStats(stats);
                 setBudgetCount(bCount);
@@ -201,21 +256,23 @@ export function useLeads() {
             });
             
         } catch (error) {
+            if (gen !== fetchGenRef.current) return;
             console.error("Error cargando leads:", error);
             setLeads([]);
             setTotalCount(0);
             setRespondedCount(0);
         } finally {
+            if (gen !== fetchGenRef.current) return;
             setIsLoading(false);
             setIsRefetching(false);
         }
-    }, [supabase, user, page, filters]);
+    }, [supabase, user, page, queryFilters]);
 
     useEffect(() => {
         if (!isAuthLoading && user) {
             loadLeads(true); 
         }
-    }, [isAuthLoading, user, page, filters, loadLeads]); 
+    }, [isAuthLoading, user, page, queryFilters, loadLeads]); 
 
     useEffect(() => {
         if (!isAuthLoading && user) {
@@ -261,7 +318,8 @@ export function useLeads() {
     }, [supabase, user, loadLeads]);
 
     const updateFilter = (keyOrFilters: keyof LeadsFilters | Partial<LeadsFilters>, value?: any) => {
-        setPage(1);
+        const isSearchOnly = keyOrFilters === "search";
+        if (!isSearchOnly) setPage(1);
         if (typeof keyOrFilters === 'object') {
             setFilters(prev => ({ ...prev, ...keyOrFilters }));
         } else {
@@ -293,6 +351,7 @@ export function useLeads() {
         isLoading,
         isRefetching,
         filters, updateFilter,
+        appliedSearchQuery,
         sellers,
         reload: () => loadLeads(true),
         resetFilters,

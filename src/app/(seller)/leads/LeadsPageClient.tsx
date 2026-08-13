@@ -29,6 +29,7 @@ export default function LeadsPageClient() {
     sortDescriptor,
     setSortDescriptor,
     filters,
+    appliedSearchQuery,
     updateFilter,
     resetFilters,
     reload,
@@ -112,6 +113,7 @@ export default function LeadsPageClient() {
         rowsPerPage={rowsPerPage}
         onPageChange={setPage}
         currentUserRole={profile?.role}
+        searchQuery={appliedSearchQuery}
       />
 
       {isModalOpen && selectedLead && (

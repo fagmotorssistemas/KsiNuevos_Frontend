@@ -17,6 +17,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { BadgeWithIcon } from "@/components/ui/badges";
 import { Button } from "@/components/ui/buttontable";
 import type { LeadWithDetails, SortDescriptor } from "@/types/leads.types";
+import { getDisplayInterestCar } from "@/utils/leads.logic";
 
 interface LeadsListProps {
     leads: LeadWithDetails[];
@@ -29,6 +30,7 @@ interface LeadsListProps {
     rowsPerPage: number;
     onPageChange: (newPage: number) => void;
     currentUserRole: string | null | undefined;
+    searchQuery?: string;
 }
 
 export function LeadsList({
@@ -41,7 +43,8 @@ export function LeadsList({
     totalCount,
     rowsPerPage,
     onPageChange,
-    currentUserRole
+    currentUserRole,
+    searchQuery = "",
 }: LeadsListProps) {
 
     const showResponsibleColumn =
@@ -143,7 +146,8 @@ export function LeadsList({
                     {(item: LeadWithDetails) => {
                         const statusConfig = getStatusConfig(item.status);
                         const statusLabel = statusConfig.label || item.status || 'Nuevo';
-                        const primaryCar = item.interested_cars?.[0];
+                        const primaryCar = getDisplayInterestCar(item.interested_cars, searchQuery);
+                        const extraCarsCount = Math.max(0, (item.interested_cars?.length ?? 0) - 1);
                         const responsableName = item.profiles?.full_name;
                         const lowerSource = String(item.source || '').toLowerCase();
                         const isSpecialSource = ['waba', 'tiktok_kommo', 'instagram_business'].includes(lowerSource);
@@ -216,7 +220,14 @@ export function LeadsList({
                                             <span className="text-sm font-medium text-slate-800 truncate" title={`${primaryCar.brand} ${primaryCar.model}`}>
                                                 {primaryCar.brand} {primaryCar.model}
                                             </span>
-                                            <span className="text-xs text-slate-500">{primaryCar.year}</span>
+                                            <span className="text-xs text-slate-500">
+                                                {primaryCar.year}
+                                                {extraCarsCount > 0 && (
+                                                    <span className="ml-1 text-slate-400" title={`${extraCarsCount} vehículo${extraCarsCount === 1 ? "" : "s"} más`}>
+                                                        +{extraCarsCount}
+                                                    </span>
+                                                )}
+                                            </span>
                                         </div>
                                     ) : (
                                         <span className="text-xs text-slate-400 italic">Sin vehículo de interés</span>
