@@ -30,7 +30,7 @@ function BadgeDisposicion({ estado }: { estado?: string | null }) {
     );
 }
 import { useInventarioSIM } from "@/hooks/useInventarioSim";
-import { RefreshCw, Box, CreditCard, Pencil, X, Plus } from "lucide-react";
+import { RefreshCw, Box, CreditCard, Pencil, X, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export function InventarioTabs() {
@@ -44,6 +44,7 @@ export function InventarioTabs() {
     const [filtroModeloId, setFiltroModeloId] = useState<string>("");
     const [filtroEstado, setFiltroEstado] = useState<EstadoConeccionGPS | "TODOS">("TODOS");
     const [filtroStockVendido, setFiltroStockVendido] = useState<'TODOS' | 'STOCK' | 'VENDIDOS'>('TODOS');
+    const [filtroImei, setFiltroImei] = useState("");
 
     const loadInventarioGPS = useCallback(async () => {
         const data = await rastreadoresService.getInventarioCompleto();
@@ -176,12 +177,14 @@ export function InventarioTabs() {
     }, [inventarioFiltradoPorModelo]);
 
     const inventarioGPSFiltrado = useMemo(() => {
+        const imeiQuery = filtroImei.trim().toLowerCase();
         return inventarioFiltradoPorModelo.filter(item => {
             const estadoItem = (item.estado_coneccion ?? "offline") as EstadoConeccionGPS;
             const matchEstado = filtroEstado === "TODOS" || estadoItem === filtroEstado;
-            return matchEstado;
+            const matchImei = !imeiQuery || (item.imei ?? "").toLowerCase().includes(imeiQuery);
+            return matchEstado && matchImei;
         });
-    }, [inventarioFiltradoPorModelo, filtroEstado]);
+    }, [inventarioFiltradoPorModelo, filtroEstado, filtroImei]);
 
     // ==========================================
     // 3. LÓGICA DE SIMS (Usando tu nuevo hook)
@@ -269,6 +272,16 @@ export function InventarioTabs() {
 
                             {activeTab === 'GPS' && (
                                 <div className="flex flex-wrap gap-2 items-center">
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={filtroImei}
+                                            onChange={e => setFiltroImei(e.target.value)}
+                                            placeholder="Buscar IMEI..."
+                                            className="pl-8 pr-3 py-1.5 w-44 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-mono font-bold text-slate-600 placeholder:font-sans placeholder:font-black placeholder:uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
                                     <select
                                         value={filtroStockVendido}
                                         onChange={e => setFiltroStockVendido(e.target.value as 'TODOS' | 'STOCK' | 'VENDIDOS')}
@@ -333,7 +346,7 @@ export function InventarioTabs() {
                             )}
                         </div>
                         
-                        <div className="max-h-[500px] overflow-y-auto">
+                        <div className="min-h-[60vh] max-h-[calc(100vh-260px)] overflow-y-auto">
                             
                             {/* TABLA DE GPS */}
                             {activeTab === 'GPS' && (
