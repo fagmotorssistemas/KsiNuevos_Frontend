@@ -7,11 +7,11 @@ import { rastreadoresService } from "@/services/rastreadores.service";
 import { useAuth } from "@/hooks/useAuth";
 
 const ESTADOS_GPS = [
-    { value: 'PENDIENTE_INSTALACION', label: 'Pendiente Instalación' },
+    { value: 'VENDIDO', label: 'Pendiente Instalación' },
     { value: 'INSTALADO', label: 'Instalado' },
-    { value: 'ACTIVO', label: 'Activo' },
-    { value: 'SUSPENDIDO', label: 'Suspendido' },
-    { value: 'RETIRADO', label: 'Retirado' }
+    { value: 'STOCK', label: 'En Stock' },
+    { value: 'RMA', label: 'RMA' },
+    { value: 'BAJA', label: 'Baja' }
 ] as const;
 
 interface HistorialGPSProps {
@@ -109,7 +109,7 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
             )}
             <div className="space-y-4">
                 {historialgps.map((gps) => {
-                    const estadoActual = estadosSeleccionados[gps.id] || gps.estado || 'PENDIENTE_INSTALACION';
+                    const estadoActual = estadosSeleccionados[gps.id] || gps.estado || 'VENDIDO';
                     const activeTab = tabs[gps.id] || 'DATOS';
 
                     const urlsEvidenciaRastreador = gps.url_evidencia_gps ? gps.url_evidencia_gps.split(',').filter(Boolean) : [];

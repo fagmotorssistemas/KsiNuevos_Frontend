@@ -333,15 +333,13 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                     gpsIdParaVenta = gpsCreado.id;
                 }
 
-                if (stockItem) {
-                    const { error: updateError } = await supabase
-                        .from('gps_inventario')
-                        .update({ estado: 'VENDIDO' })
-                        .eq('id', stockItem.id);
-                    if (updateError) {
-                        console.error('Error actualizando estado GPS a VENDIDO:', updateError);
-                        toast.error('Venta registrada pero no se pudo actualizar estado del dispositivo en bodega.');
-                    }
+                const { error: updateError } = await supabase
+                    .from('gps_inventario')
+                    .update({ estado: 'INSTALADO', estado_coneccion: 'online' })
+                    .eq('id', gpsIdParaVenta);
+                if (updateError) {
+                    console.error('Error actualizando GPS a INSTALADO/online:', updateError);
+                    toast.error('Venta registrada pero no se pudo actualizar estado del dispositivo.');
                 }
 
                 const precioTotal = seleccionado!.totalRastreador;

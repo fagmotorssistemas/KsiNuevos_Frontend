@@ -22,6 +22,13 @@ function BadgeEstado({ estado }: { estado?: EstadoConeccionGPS | null }) {
 
 function BadgeDisposicion({ estado }: { estado?: string | null }) {
     const v = (estado ?? "STOCK") as string;
+    if (v === "INSTALADO") {
+        return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border bg-blue-100 text-blue-800 border-blue-200">
+                Instalado
+            </span>
+        );
+    }
     const isVendido = v === "VENDIDO";
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase border ${isVendido ? "bg-rose-100 text-rose-800 border-rose-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
@@ -128,11 +135,14 @@ export function InventarioTabs() {
     const inventarioFiltradoPorStockVendido = useMemo(() => {
         if (filtroStockVendido === 'TODOS') return inventarioGPS;
         if (filtroStockVendido === 'STOCK') return inventarioGPS.filter(item => item.estado === 'STOCK');
-        return inventarioGPS.filter(item => item.estado === 'VENDIDO');
+        return inventarioGPS.filter(item => item.estado === 'VENDIDO' || item.estado === 'INSTALADO');
     }, [inventarioGPS, filtroStockVendido]);
 
     const totalEnStock = useMemo(() => inventarioGPS.filter(i => i.estado === 'STOCK').length, [inventarioGPS]);
-    const totalVendidos = useMemo(() => inventarioGPS.filter(i => i.estado === 'VENDIDO').length, [inventarioGPS]);
+    const totalVendidos = useMemo(
+        () => inventarioGPS.filter(i => i.estado === 'VENDIDO' || i.estado === 'INSTALADO').length,
+        [inventarioGPS]
+    );
     const totalStockGPS = inventarioGPS.length;
     const valorInventarioGPS = useMemo(
         () => inventarioGPS.filter(i => i.estado === 'STOCK').reduce(
