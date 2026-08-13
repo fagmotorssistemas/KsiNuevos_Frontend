@@ -7,6 +7,17 @@ export type LegalCaseContext =
   | { type: "oracle"; clientId: number }
   | { type: "manual"; carteraManualId: string };
 
+/** Observación previa a aperturar caso (no bloquea la apertura). */
+export interface LegalPrecaseNote {
+  id: string;
+  id_sistema: number | null;
+  cartera_manual_id: string | null;
+  observacion: string;
+  usuario_id: string;
+  created_at: string;
+  usuario_nombre?: string | null;
+}
+
 export interface ProcesoEtapaRow {
   id: string; // uuid
   tipo_proceso: string;

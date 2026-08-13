@@ -387,5 +387,101 @@ export const legalCasesService = {
       };
     });
   },
+
+  async listPrecaseNotes(ctx: {
+    type: 'oracle' | 'manual';
+    clientId?: number;
+    carteraManualId?: string;
+  }): Promise<
+    {
+      id: string;
+      id_sistema: number | null;
+      cartera_manual_id: string | null;
+      observacion: string;
+      usuario_id: string;
+      created_at: string;
+      usuario_nombre: string | null;
+    }[]
+  > {
+    const supabase = createClient();
+    let q = (supabase as any)
+      .from('legal_precase_notes')
+      .select('id, id_sistema, cartera_manual_id, observacion, usuario_id, created_at')
+      .order('created_at', { ascending: false });
+
+    if (ctx.type === 'oracle') {
+      if (ctx.clientId == null) return [];
+      q = q.eq('id_sistema', ctx.clientId);
+    } else {
+      if (!ctx.carteraManualId) return [];
+      q = q.eq('cartera_manual_id', ctx.carteraManualId);
+    }
+
+    const { data, error } = await q;
+    if (error) throw error;
+    const rows = (data ?? []) as {
+      id: string;
+      id_sistema: number | null;
+      cartera_manual_id: string | null;
+      observacion: string;
+      usuario_id: string;
+      created_at: string;
+    }[];
+    const userIds = [
+      ...new Set(rows.map((r) => r.usuario_id).filter(Boolean)),
+    ];
+    const nameById = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+      for (const p of profiles ?? []) {
+        if (p.full_name) nameById.set(p.id, p.full_name.trim());
+      }
+    }
+    return rows.map((r) => ({
+      ...r,
+      usuario_nombre: nameById.get(r.usuario_id) ?? null,
+    }));
+  },
+
+  async addPrecaseNote(input: {
+    type: 'oracle' | 'manual';
+    clientId?: number;
+    carteraManualId?: string;
+    observacion: string;
+  }): Promise<void> {
+    const texto = input.observacion.trim();
+    if (!texto) throw new Error('Escribe una observación');
+
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser();
+    if (authErr) throw authErr;
+    if (!user) throw new Error('Sesión no válida');
+
+    const row =
+      input.type === 'oracle'
+        ? {
+            id_sistema: input.clientId!,
+            cartera_manual_id: null as string | null,
+            observacion: texto,
+            usuario_id: user.id,
+          }
+        : {
+            id_sistema: null as number | null,
+            cartera_manual_id: input.carteraManualId!,
+            observacion: texto,
+            usuario_id: user.id,
+          };
+
+    const { error } = await (supabase as any)
+      .from('legal_precase_notes')
+      .insert(row);
+    if (error) throw error;
+  },
 };
 
