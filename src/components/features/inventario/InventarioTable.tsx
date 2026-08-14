@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { InventorySellerPicker } from "@/components/features/inventory/InventorySellerPicker";
 import { formatRevertCountdown, formatInventoryPrice, isPromoPublicPriceActive, buildPromoReasonFromSeller, isVehicleAvailableForPriceRules } from "@/lib/inventario/inventory-pricing";
+import { matchesInventorySearch } from "@/lib/inventario/inventorySearch";
 
 function PricingFormField({
     label,
@@ -372,11 +373,20 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     };
 
     // Filtrado
-    const filteredVehiculos = vehiculos.filter(v => 
-        (v.marca?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (v.modelo?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (v.placa?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (v.chasis?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+    const filteredVehiculos = vehiculos.filter((v) =>
+        matchesInventorySearch(searchTerm, [
+            v.marca,
+            v.modelo,
+            v.anioModelo,
+            v.descripcion,
+            v.placa,
+            v.placaCaracteristica,
+            v.chasis,
+            v.color,
+            v.tipo,
+            v.version,
+            v.motor,
+        ])
     );
 
     // Paginación

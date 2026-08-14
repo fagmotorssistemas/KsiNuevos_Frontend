@@ -12,6 +12,7 @@ import {
 
 import { useAuth } from "@/hooks/useAuth";
 import { normalizePlate } from "@/lib/inventario/normalizePlate";
+import { matchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import {
     VEHICLE_DOCUMENT_CATALOG,
     docCatalogByType,
@@ -302,12 +303,19 @@ export function InventarioDocumentReport({
                 : vehiculos.filter((v) => v.stock === 0);
 
         if (search.trim()) {
-            const q = search.toLowerCase();
-            list = list.filter(
-                (v) =>
-                    v.marca?.toLowerCase().includes(q) ||
-                    v.modelo?.toLowerCase().includes(q) ||
-                    v.placa?.toLowerCase().includes(q)
+            list = list.filter((v) =>
+                matchesInventorySearch(search, [
+                    v.marca,
+                    v.modelo,
+                    v.anioModelo,
+                    v.descripcion,
+                    v.placa,
+                    v.placaCaracteristica,
+                    v.chasis,
+                    v.color,
+                    v.tipo,
+                    v.version,
+                ])
             );
         }
 

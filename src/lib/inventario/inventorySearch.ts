@@ -13,24 +13,14 @@ export type InventorySearchableCar = {
 
 const compact = (value: string) => value.replace(/[\s\-_]/g, "");
 
-export function carMatchesInventorySearch(
-    car: InventorySearchableCar,
-    search: string
+export function matchesInventorySearch(
+    search: string,
+    values: Array<string | number | null | undefined>
 ): boolean {
     const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (tokens.length === 0) return true;
 
-    const haystack = [
-        car.brand,
-        car.model,
-        car.year,
-        car.color,
-        car.plate,
-        car.plate_short,
-        car.vin,
-        car.type_body,
-        car.location,
-    ]
+    const haystack = values
         .filter((value) => value != null && String(value).trim() !== "")
         .join(" ")
         .toLowerCase();
@@ -42,4 +32,21 @@ export function carMatchesInventorySearch(
         const compactToken = compact(token);
         return compactToken.length > 0 && compactHaystack.includes(compactToken);
     });
+}
+
+export function carMatchesInventorySearch(
+    car: InventorySearchableCar,
+    search: string
+): boolean {
+    return matchesInventorySearch(search, [
+        car.brand,
+        car.model,
+        car.year,
+        car.color,
+        car.plate,
+        car.plate_short,
+        car.vin,
+        car.type_body,
+        car.location,
+    ]);
 }
