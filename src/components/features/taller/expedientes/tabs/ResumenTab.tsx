@@ -178,19 +178,19 @@ export function ResumenTab({
                             </div>
                         ) : tienePresupuesto ? (
                             <div>
-                                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100 mb-3">
-                                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Total estimado</p>
-                                    <p className="text-2xl font-black text-emerald-700">${totalPresupuesto.toFixed(2)}</p>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Total estimado</p>
+                                        <p className="text-2xl font-black text-emerald-700">${totalPresupuesto.toFixed(2)}</p>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Abonado</p>
+                                        <p className="text-2xl font-black text-amber-500">${abonado.toFixed(2)}</p>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Abonado</p>
-                                        <p className="text-sm font-bold text-emerald-600">${abonado.toFixed(2)}</p>
-                                    </div>
-                                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pendiente</p>
-                                        <p className="text-sm font-bold text-amber-500">${pendiente.toFixed(2)}</p>
-                                    </div>
+                                <div className="p-5 bg-emerald-50 rounded-xl border border-emerald-100 mb-4">
+                                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">Pendiente</p>
+                                    <p className="text-4xl font-black text-emerald-700">${pendiente.toFixed(2)}</p>
                                 </div>
                                 <div className="space-y-2">
                                     {detallesPresupuesto.slice(0, 5).map((d) => (
