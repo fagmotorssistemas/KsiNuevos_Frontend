@@ -15,9 +15,10 @@ interface TransactionModalProps {
     onSave: (data: any, file: File | null) => Promise<any>;
     defaultOrdenId?: string;
     defaultTipo?: string;
+    lockOrden?: boolean;
 }
 
-export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrdenId, defaultTipo }: TransactionModalProps) {
+export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrdenId, defaultTipo, lockOrden = false }: TransactionModalProps) {
     const { supabase } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
 
@@ -196,7 +197,7 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
             monto: parseFloat(monto),
             descripcion,
             cuenta_id: cuentaId,
-            orden_id: ordenId || null,
+            orden_id: lockOrden ? (defaultOrdenId || null) : (ordenId || null),
             forma_pago: formaPago
         }, file);
 
@@ -313,52 +314,60 @@ export function TransactionModal({ isOpen, onClose, cuentas, onSave, defaultOrde
                         />
                     </div>
 
-                    {/* Vincular a Orden: combobox único (escribes y se filtran las opciones) */}
+                    {/* Vincular a Orden: en expedientes queda fija; en finanzas se puede buscar */}
                     <div ref={ordenComboboxRef} className="relative">
                         <label className="text-xs font-bold text-slate-500 uppercase block mb-1 flex items-center gap-2">
                             <Search className="h-3 w-3" /> Vincular a Orden {tipo === 'ingreso' ? '(Necesario para cobros)' : '(Opcional)'}
                         </label>
-                        <div className="flex rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-                            <input
-                                type="text"
-                                placeholder="Escribe placa, marca o modelo para buscar..."
-                                className="flex-1 min-w-0 px-3 py-2 rounded-l-lg outline-none text-sm"
-                                value={valorInputOrden}
-                                onChange={(e) => alCambiarInputOrden(e.target.value)}
-                                onFocus={() => setOrdenDropdownAbierto(true)}
-                            />
-                            {ordenSeleccionada && (
-                                <button
-                                    type="button"
-                                    onClick={alLimpiarOrden}
-                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-r-lg shrink-0"
-                                    title="Quitar vinculación"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            )}
-                        </div>
-                        {ordenDropdownAbierto && (
-                            <div className="absolute z-10 w-full mt-1 py-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                                {buscandoOrden && searchOrden.trim() ? (
-                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Buscando...</div>
-                                ) : searchOrden.trim() && opcionesSelect.length === 0 ? (
-                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Sin resultados</div>
-                                ) : opcionesSelect.length === 0 ? (
-                                    <div className="px-3 py-4 text-center text-sm text-slate-500">Escribe para buscar una orden</div>
-                                ) : (
-                                    opcionesSelect.map(o => (
-                                        <button
-                                            key={o.id}
-                                            type="button"
-                                            className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 transition-colors ${ordenId === o.id ? 'bg-blue-50 text-blue-800 font-medium' : 'text-slate-700'}`}
-                                            onClick={() => alSeleccionarOrden(o)}
-                                        >
-                                            {labelOrden(o)}
-                                        </button>
-                                    ))
-                                )}
+                        {lockOrden ? (
+                            <div className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700">
+                                {ordenSeleccionada ? labelOrden(ordenSeleccionada) : 'Cargando orden...'}
                             </div>
+                        ) : (
+                            <>
+                                <div className="flex rounded-lg border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                                    <input
+                                        type="text"
+                                        placeholder="Escribe placa, marca o modelo para buscar..."
+                                        className="flex-1 min-w-0 px-3 py-2 rounded-l-lg outline-none text-sm"
+                                        value={valorInputOrden}
+                                        onChange={(e) => alCambiarInputOrden(e.target.value)}
+                                        onFocus={() => setOrdenDropdownAbierto(true)}
+                                    />
+                                    {ordenSeleccionada && (
+                                        <button
+                                            type="button"
+                                            onClick={alLimpiarOrden}
+                                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-r-lg shrink-0"
+                                            title="Quitar vinculación"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                {ordenDropdownAbierto && (
+                                    <div className="absolute z-10 w-full mt-1 py-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                                        {buscandoOrden && searchOrden.trim() ? (
+                                            <div className="px-3 py-4 text-center text-sm text-slate-500">Buscando...</div>
+                                        ) : searchOrden.trim() && opcionesSelect.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-sm text-slate-500">Sin resultados</div>
+                                        ) : opcionesSelect.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-sm text-slate-500">Escribe para buscar una orden</div>
+                                        ) : (
+                                            opcionesSelect.map(o => (
+                                                <button
+                                                    key={o.id}
+                                                    type="button"
+                                                    className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 transition-colors ${ordenId === o.id ? 'bg-blue-50 text-blue-800 font-medium' : 'text-slate-700'}`}
+                                                    onClick={() => alSeleccionarOrden(o)}
+                                                >
+                                                    {labelOrden(o)}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
