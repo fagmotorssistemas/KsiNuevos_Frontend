@@ -119,7 +119,7 @@ export function useCreditSimulator() {
                     if (foundCar) {
                         updated.selectedVehicle = foundCar;
                         updated.vehiclePrice = foundCar.price || 0;
-                        updated.insuranceFee = Math.round((foundCar.price || 0) * 0.05);
+                        updated.insuranceFee = Math.round((foundCar.price || 0) * 0.03);
                         // Al cambiar vehículo, solemos querer mantener el porcentaje o resetear a uno estándar
                         // Mantenemos el modo actual o reseteamos a porcentaje si se prefiere
                     }
