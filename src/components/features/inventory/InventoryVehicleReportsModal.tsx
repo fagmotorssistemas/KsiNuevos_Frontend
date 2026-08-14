@@ -21,6 +21,7 @@ import {
     type ListingChecklistKey,
 } from "@/types/inventory-listing-checklist";
 import { formatInventoryPrice } from "@/lib/inventario/inventory-pricing";
+import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 
 type ReportView = "disponible" | "vendido";
 
@@ -156,14 +157,7 @@ export function InventoryVehicleReport({
     const filteredCars = useMemo(() => {
         let list = cars.filter((c) => c.status === activeView);
         if (search.trim()) {
-            const q = search.toLowerCase();
-            list = list.filter(
-                (c) =>
-                    c.brand.toLowerCase().includes(q) ||
-                    c.model.toLowerCase().includes(q) ||
-                    (c.plate && c.plate.toLowerCase().includes(q)) ||
-                    (c.plate_short && c.plate_short.toLowerCase().includes(q))
-            );
+            list = list.filter((c) => carMatchesInventorySearch(c, search));
         }
         if (sortKey) {
             const dir = sortAsc ? 1 : -1;

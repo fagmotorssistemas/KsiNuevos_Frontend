@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import type { Database } from "@/types/supabase";
 
 // --- TIPOS ---
@@ -70,15 +71,7 @@ export function useInventory() {
 
         // --- FILTROS ---
         if (filters.search.trim()) {
-            const query = filters.search.toLowerCase();
-            result = result.filter(car => 
-                car.brand.toLowerCase().includes(query) || 
-                car.model.toLowerCase().includes(query) ||
-                (car.plate && car.plate.toLowerCase().includes(query)) ||
-                (car.vin && car.vin.toLowerCase().includes(query)) ||
-                // @ts-ignore - plate_short debe agregarse a la tabla inventoryoracle
-                (car.plate_short && car.plate_short.toLowerCase().includes(query))
-            );
+            result = result.filter((car) => carMatchesInventorySearch(car, filters.search));
         }
 
         if (filters.status !== 'all') {
