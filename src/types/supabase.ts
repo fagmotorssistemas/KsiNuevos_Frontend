@@ -3133,6 +3133,48 @@ export type Database = {
           },
         ]
       }
+      legal_precase_notes: {
+        Row: {
+          cartera_manual_id: string | null
+          created_at: string
+          id: string
+          id_sistema: number | null
+          observacion: string
+          usuario_id: string
+        }
+        Insert: {
+          cartera_manual_id?: string | null
+          created_at?: string
+          id?: string
+          id_sistema?: number | null
+          observacion: string
+          usuario_id: string
+        }
+        Update: {
+          cartera_manual_id?: string | null
+          created_at?: string
+          id?: string
+          id_sistema?: number | null
+          observacion?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_precase_notes_cartera_manual_id_fkey"
+            columns: ["cartera_manual_id"]
+            isOneToOne: false
+            referencedRelation: "cartera_manual"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_precase_notes_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_campaign_groups: {
         Row: {
           campaign_month: string
@@ -6350,6 +6392,7 @@ export type Database = {
           id: string
           orden_id: string
           precio_unitario: number | null
+          precio_unitario_inicial: number | null
           total: number | null
         }
         Insert: {
@@ -6360,6 +6403,7 @@ export type Database = {
           id?: string
           orden_id: string
           precio_unitario?: number | null
+          precio_unitario_inicial?: number | null
           total?: number | null
         }
         Update: {
@@ -6370,6 +6414,7 @@ export type Database = {
           id?: string
           orden_id?: string
           precio_unitario?: number | null
+          precio_unitario_inicial?: number | null
           total?: number | null
         }
         Relationships: [
@@ -6516,6 +6561,48 @@ export type Database = {
           },
         ]
       }
+      taller_observaciones_ingreso_historial: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          es_inicial: boolean
+          id: string
+          orden_id: string
+          texto: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          es_inicial?: boolean
+          id?: string
+          orden_id: string
+          texto: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          es_inicial?: boolean
+          id?: string
+          orden_id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "taller_obs_ingreso_historial_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taller_obs_ingreso_historial_orden_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "taller_ordenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       taller_ordenes: {
         Row: {
           checklist_ingreso: Json | null
@@ -6538,6 +6625,7 @@ export type Database = {
           nivel_gasolina: number | null
           numero_orden: number
           observaciones_ingreso: string | null
+          observaciones_ingreso_inicial: string | null
           pdf_url: string | null
           total_final_cliente: number | null
           updated_at: string | null
@@ -6569,6 +6657,7 @@ export type Database = {
           nivel_gasolina?: number | null
           numero_orden?: number
           observaciones_ingreso?: string | null
+          observaciones_ingreso_inicial?: string | null
           pdf_url?: string | null
           total_final_cliente?: number | null
           updated_at?: string | null
@@ -6600,6 +6689,7 @@ export type Database = {
           nivel_gasolina?: number | null
           numero_orden?: number
           observaciones_ingreso?: string | null
+          observaciones_ingreso_inicial?: string | null
           pdf_url?: string | null
           total_final_cliente?: number | null
           updated_at?: string | null
@@ -6670,6 +6760,69 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      taller_presupuesto_historial: {
+        Row: {
+          action: string
+          cantidad: number | null
+          changed_by: string | null
+          created_at: string
+          descripcion: string | null
+          descripcion_anterior: string | null
+          id: string
+          motivo: string | null
+          orden_id: string
+          precio_unitario: number | null
+          precio_unitario_anterior: number | null
+          total_antes: number | null
+          total_despues: number | null
+        }
+        Insert: {
+          action: string
+          cantidad?: number | null
+          changed_by?: string | null
+          created_at?: string
+          descripcion?: string | null
+          descripcion_anterior?: string | null
+          id?: string
+          motivo?: string | null
+          orden_id: string
+          precio_unitario?: number | null
+          precio_unitario_anterior?: number | null
+          total_antes?: number | null
+          total_despues?: number | null
+        }
+        Update: {
+          action?: string
+          cantidad?: number | null
+          changed_by?: string | null
+          created_at?: string
+          descripcion?: string | null
+          descripcion_anterior?: string | null
+          id?: string
+          motivo?: string | null
+          orden_id?: string
+          precio_unitario?: number | null
+          precio_unitario_anterior?: number | null
+          total_antes?: number | null
+          total_despues?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "taller_presupuesto_historial_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taller_presupuesto_historial_orden_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "taller_ordenes"
             referencedColumns: ["id"]
           },
         ]

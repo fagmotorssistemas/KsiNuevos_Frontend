@@ -111,6 +111,7 @@ export function ExpedienteDetail({
                 onClose={handleCloseWorkOrderModal}
                 onStatusChange={(id, status) => onRefreshOrder?.()}
                 onPrint={onPrint}
+                initialTab="presupuesto"
             />
         </div>
     );

@@ -50,6 +50,7 @@ export interface OrdenTrabajo {
     checklist_ingreso: Record<string, boolean>;
     inventario_pertenencias: Record<string, boolean>;
     observaciones_ingreso?: string;
+    observaciones_ingreso_inicial?: string | null;
     fotos_ingreso_urls: string[];
     /** URLs de fotos de evidencia de salida (vehículo después del trabajo) */
     fotos_salida_urls?: string[] | null;
@@ -126,9 +127,39 @@ export interface DetalleOrden {
     orden_id: string;
     descripcion: string;
     precio_unitario: number;
+    precio_unitario_inicial?: number | null;
     cantidad: number;
     total: number;
     estado_trabajo: string;
+}
+
+export type PresupuestoHistorialAction = 'agregar' | 'editar';
+
+export interface PresupuestoHistorialRow {
+    id: string;
+    orden_id: string;
+    changed_by: string | null;
+    action: PresupuestoHistorialAction;
+    descripcion: string | null;
+    precio_unitario: number | null;
+    cantidad: number | null;
+    descripcion_anterior: string | null;
+    precio_unitario_anterior: number | null;
+    motivo: string | null;
+    total_antes: number | null;
+    total_despues: number | null;
+    created_at: string;
+    changed_by_profile?: { full_name: string | null } | null;
+}
+
+export interface ObservacionIngresoHistorialRow {
+    id: string;
+    orden_id: string;
+    created_by: string | null;
+    texto: string;
+    es_inicial?: boolean;
+    created_at: string;
+    created_by_profile?: { full_name: string | null } | null;
 }
 
 export interface TallerProveedor {

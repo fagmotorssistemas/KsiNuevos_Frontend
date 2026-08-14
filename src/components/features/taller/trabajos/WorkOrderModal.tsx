@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { X, Wrench, Package, Clock, User, Loader2, Plus, Trash2, DollarSign, Printer, CalendarClock, Search, Camera, ImagePlus, Save } from "lucide-react";
+import { X, Wrench, Package, Clock, User, Loader2, Plus, DollarSign, Printer, CalendarClock, Search, Camera, ImagePlus, Save, History, Pencil, Trash2, FileText, UserCircle } from "lucide-react";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
-import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo } from "@/types/taller";
+import { OrdenTrabajo, ConsumoMaterial, DetalleOrden, ServicioCatalogo, PresupuestoHistorialRow, ObservacionIngresoHistorialRow } from "@/types/taller";
 import { useInventario } from "@/hooks/taller/useInventario";
+import { useAuth } from "@/hooks/useAuth";
 
 interface WorkOrderModalProps {
     orden: OrdenTrabajo | null;
@@ -12,21 +13,26 @@ interface WorkOrderModalProps {
     onClose: () => void;
     onStatusChange: (id: string, status: string) => void;
     onPrint: () => void;
+    initialTab?: 'info' | 'presupuesto' | 'materiales' | 'evidencia';
 }
 
-export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint }: WorkOrderModalProps) {
+export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint, initialTab = 'info' }: WorkOrderModalProps) {
+    const { profile } = useAuth();
+    const isAdmin = (profile?.role || "").toLowerCase().trim() === "admin";
     const { items: inventario } = useInventario();
     const {
         registrarConsumo, fetchConsumosOrden,
-        fetchDetallesOrden, agregarDetalle, eliminarDetalle,
+        fetchDetallesOrden, agregarDetalle, actualizarDetalle, fetchHistorialPresupuesto, eliminarHistorialPresupuesto,
         fetchServiciosCatalogo,
         actualizarEstadoContable,
         actualizarObservacionesIngreso,
+        fetchHistorialObservacionesIngreso,
+        eliminarHistorialObservacionesIngreso,
         uploadFotoSalida,
         actualizarFotosSalida
     } = useOrdenes();
 
-    const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales' | 'evidencia'>('info');
+    const [activeTab, setActiveTab] = useState<'info' | 'presupuesto' | 'materiales' | 'evidencia'>(initialTab);
 
     // @ts-ignore
     const [localEstadoContable, setLocalEstadoContable] = useState(orden?.estado_contable || 'pendiente');
@@ -47,6 +53,16 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     const [isAddingService, setIsAddingService] = useState(false);
     const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
     const serviceSearchRef = useRef<HTMLDivElement>(null);
+    const [historial, setHistorial] = useState<PresupuestoHistorialRow[]>([]);
+    const [loadingHistorial, setLoadingHistorial] = useState(false);
+    const [presupuestoView, setPresupuestoView] = useState<'items' | 'historial'>('items');
+    const [editingItem, setEditingItem] = useState<DetalleOrden | null>(null);
+    const [editPrecio, setEditPrecio] = useState("");
+    const [editMotivo, setEditMotivo] = useState("");
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editError, setEditError] = useState("");
+    const [deletingHistorialId, setDeletingHistorialId] = useState<string | null>(null);
+    const [deletingObsHistorialId, setDeletingObsHistorialId] = useState<string | null>(null);
 
     const [fotosSalida, setFotosSalida] = useState<string[]>([]);
     const [uploadingFoto, setUploadingFoto] = useState(false);
@@ -54,6 +70,8 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
     const [localObservaciones, setLocalObservaciones] = useState("");
     const [savingObservaciones, setSavingObservaciones] = useState(false);
+    const [obsHistorial, setObsHistorial] = useState<ObservacionIngresoHistorialRow[]>([]);
+    const [loadingObsHistorial, setLoadingObsHistorial] = useState(false);
 
     const serviciosFiltrados = useMemo(() => {
         const q = descServicio.trim().toLowerCase();
@@ -66,6 +84,13 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
             loadConsumos();
             loadPresupuesto();
             loadCatalogos();
+            loadHistorial();
+            loadHistorialObservaciones();
+            setActiveTab(initialTab);
+            setPresupuestoView('items');
+            setEditingItem(null);
+            setEditMotivo("");
+            setEditError("");
             // @ts-ignore
             setLocalEstadoContable(orden.estado_contable || 'pendiente');
             setShowEntregaConfirm(false);
@@ -90,6 +115,64 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
         if (!orden) return;
         const data = await fetchDetallesOrden(orden.id);
         setDetalles(data);
+    };
+
+    const loadHistorialObservaciones = async () => {
+        if (!orden) return;
+        setLoadingObsHistorial(true);
+        const data = await fetchHistorialObservacionesIngreso(orden.id);
+        setObsHistorial(data);
+        setLoadingObsHistorial(false);
+    };
+
+    const groupedObsHistorial = useMemo(() => {
+        const map = new Map<string, ObservacionIngresoHistorialRow[]>();
+        for (const row of obsHistorial) {
+            const key = new Date(row.created_at).toLocaleDateString('es-EC');
+            const list = map.get(key) ?? [];
+            list.push(row);
+            map.set(key, list);
+        }
+        return Array.from(map.entries());
+    }, [obsHistorial]);
+
+    const loadHistorial = async () => {
+        if (!orden) return;
+        setLoadingHistorial(true);
+        const data = await fetchHistorialPresupuesto(orden.id);
+        setHistorial(data);
+        setLoadingHistorial(false);
+    };
+
+    const handleDeleteHistorial = async (id: string) => {
+        if (!isAdmin) return;
+        const ok = confirm("¿Eliminar esta entrada? El precio del ítem volverá al valor anterior. Esta acción no se puede deshacer.");
+        if (!ok) return;
+        setDeletingHistorialId(id);
+        const result = await eliminarHistorialPresupuesto(id);
+        setDeletingHistorialId(null);
+        if (result.success) {
+            await Promise.all([loadHistorial(), loadPresupuesto()]);
+        } else if (result.error) {
+            alert(result.error);
+        }
+    };
+
+    const handleDeleteObservacionHistorial = async (id: string) => {
+        if (!isAdmin) return;
+        const ok = confirm("¿Eliminar esta observación? El texto volverá al valor anterior o al inicial. Esta acción no se puede deshacer.");
+        if (!ok) return;
+        setDeletingObsHistorialId(id);
+        const result = await eliminarHistorialObservacionesIngreso(id);
+        setDeletingObsHistorialId(null);
+        if (result.success) {
+            if (result.textoRestaurado !== undefined) {
+                setLocalObservaciones(result.textoRestaurado ?? "");
+            }
+            await loadHistorialObservaciones();
+        } else if (result.error) {
+            alert(result.error);
+        }
     };
 
     const handleEstadoContableChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -168,16 +251,47 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
 
         if (result.success) {
             await loadPresupuesto();
+            await loadHistorial();
             setDescServicio("");
             setPrecioServicio("");
         }
         setIsAddingService(false);
     };
 
-    const handleDeleteService = async (id: string) => {
-        if (confirm("¿Eliminar este item del presupuesto?")) {
-            await eliminarDetalle(id);
-            loadPresupuesto();
+    const handleStartEdit = (det: DetalleOrden) => {
+        setEditingItem(det);
+        setEditPrecio(String(det.precio_unitario));
+        setEditMotivo("");
+        setEditError("");
+    };
+
+    const handleCancelEdit = () => {
+        setEditingItem(null);
+        setEditPrecio("");
+        setEditMotivo("");
+        setEditError("");
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingItem || !editPrecio) return;
+        const motivo = editMotivo.trim();
+        if (!motivo) {
+            setEditError("El motivo es obligatorio.");
+            return;
+        }
+        setSavingEdit(true);
+        setEditError("");
+        const result = await actualizarDetalle(editingItem.id, {
+            precio_unitario: parseFloat(editPrecio),
+            motivo,
+        });
+        setSavingEdit(false);
+        if (result.success) {
+            handleCancelEdit();
+            await loadPresupuesto();
+            await loadHistorial();
+        } else if (result.error) {
+            setEditError(result.error);
         }
     };
 
@@ -208,6 +322,74 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative">
+
+                {editingItem && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-2xl p-4">
+                        <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full animate-in zoom-in-95">
+                            <h3 className="text-lg font-black text-slate-900 mb-1">Editar presupuesto</h3>
+                            <p className="text-sm text-slate-500 mb-5">
+                                La descripción no se modifica. Cambia el monto e indica el motivo.
+                            </p>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Descripción</label>
+                                    <p className="px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-sm font-medium text-slate-800">
+                                        {editingItem.descripcion}
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Precio ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={editPrecio}
+                                        onChange={(e) => setEditPrecio(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">
+                                        Motivo del cambio <span className="text-red-500">*</span>
+                                    </label>
+                                    <textarea
+                                        required
+                                        rows={3}
+                                        value={editMotivo}
+                                        onChange={(e) => {
+                                            setEditMotivo(e.target.value);
+                                            if (editError) setEditError("");
+                                        }}
+                                        placeholder="Ej: Se agregó pintura de guardachoque..."
+                                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+                                    />
+                                </div>
+                                {editError && (
+                                    <p className="text-xs font-medium text-red-600">{editError}</p>
+                                )}
+                            </div>
+                            <div className="flex gap-3 justify-end mt-6">
+                                <button
+                                    type="button"
+                                    disabled={savingEdit}
+                                    onClick={handleCancelEdit}
+                                    className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={savingEdit}
+                                    onClick={handleSaveEdit}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                    {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                    Guardar cambio
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {showEntregaConfirm && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-2xl p-4">
@@ -366,7 +548,11 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                             setSavingObservaciones(true);
                                             const result = await actualizarObservacionesIngreso(orden.id, localObservaciones);
                                             setSavingObservaciones(false);
-                                            if (!result.success) alert("Error al guardar: " + result.error);
+                                            if (!result.success) {
+                                                alert("Error al guardar: " + result.error);
+                                                return;
+                                            }
+                                            await loadHistorialObservaciones();
                                         }}
                                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 transition-colors"
                                     >
@@ -375,6 +561,77 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                     </button>
                                 </div>
                             </div>
+
+                            {(loadingObsHistorial || obsHistorial.length > 0) && (
+                                <div className="space-y-4">
+                                    {loadingObsHistorial && obsHistorial.length === 0 ? (
+                                        <div className="flex items-center justify-center gap-2 text-slate-400 py-6">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <span className="text-sm">Cargando historial...</span>
+                                        </div>
+                                    ) : (
+                                        groupedObsHistorial.map(([dateLabel, items]) => (
+                                            <div key={dateLabel} className="space-y-4">
+                                                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-1 shadow-sm">
+                                                    <CalendarClock className="h-3.5 w-3.5" />
+                                                    {dateLabel}
+                                                </div>
+                                                {items.map((row) => (
+                                                    <div key={row.id} className="relative pl-8">
+                                                        <div className="absolute left-0 top-1 h-6 w-6 rounded-full bg-white border-2 border-slate-300 shadow-sm flex items-center justify-center text-slate-500 z-10">
+                                                            <FileText className="h-3.5 w-3.5" />
+                                                        </div>
+                                                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:border-slate-300 transition-colors">
+                                                            <div className={`px-5 py-3 border-b flex items-center justify-between ${
+                                                                row.es_inicial ? "bg-slate-100/80 border-slate-200" : "bg-blue-50/50 border-blue-100"
+                                                            }`}>
+                                                                <span className={`text-xs font-bold uppercase tracking-wide ${
+                                                                    row.es_inicial ? "text-slate-700" : "text-blue-800"
+                                                                }`}>
+                                                                    {row.es_inicial ? "Inicial" : "Observación"}
+                                                                </span>
+                                                                <div className="text-xs font-mono text-slate-500 flex items-center gap-1.5 bg-white/60 px-2 py-1 rounded shadow-sm border border-slate-100">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    {new Date(row.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-5 space-y-4">
+                                                                <p className="text-[15px] font-semibold text-slate-800 leading-snug whitespace-pre-wrap">
+                                                                    {row.texto}
+                                                                </p>
+                                                                <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100 border-dashed">
+                                                                    {isAdmin && !row.es_inicial ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={deletingObsHistorialId === row.id}
+                                                                            onClick={() => handleDeleteObservacionHistorial(row.id)}
+                                                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                                            title="Eliminar observación (solo admin)"
+                                                                            aria-label="Eliminar observación del historial"
+                                                                        >
+                                                                            {deletingObsHistorialId === row.id ? (
+                                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                                            ) : (
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            )}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <div />
+                                                                    )}
+                                                                    <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                                                        <UserCircle className="h-4 w-4" />
+                                                                        {row.created_by_profile?.full_name || "Usuario"}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
 
                             <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                                 <h3 className="text-sm font-bold text-blue-800 mb-3">Mover Etapa (Taller)</h3>
@@ -476,17 +733,115 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                             </form>
 
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/70 flex justify-between items-center">
-                                    <span className="text-sm font-bold text-slate-700">Items del presupuesto</span>
-
+                                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/70 flex justify-between items-center gap-3">
+                                    <span className="text-sm font-bold text-slate-700">
+                                        {presupuestoView === 'historial' ? 'Historial de presupuesto' : 'Items del presupuesto'}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPresupuestoView((v) => v === 'items' ? 'historial' : 'items')}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            presupuestoView === 'historial'
+                                                ? 'bg-slate-800 text-white'
+                                                : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                        }`}
+                                    >
+                                        <History className="h-3.5 w-3.5" />
+                                        Historial
+                                    </button>
                                 </div>
+                                {presupuestoView === 'historial' ? (
+                                    loadingHistorial ? (
+                                        <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                            <span className="text-sm">Cargando historial...</span>
+                                        </div>
+                                    ) : historial.length === 0 ? (
+                                        <p className="px-5 py-10 text-center text-slate-400 text-sm">
+                                            Aún no hay cambios registrados en este presupuesto.
+                                        </p>
+                                    ) : (
+                                        <ul className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                                            {historial.map((row) => {
+                                                const fecha = new Date(row.created_at).toLocaleString('es-EC', {
+                                                    dateStyle: 'short',
+                                                    timeStyle: 'short',
+                                                });
+                                                const esEditar = row.action === 'editar';
+                                                return (
+                                                    <li key={row.id} className="px-5 py-4">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${esEditar ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                                                                {esEditar ? 'Edición' : 'Alta'}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500">{fecha}</span>
+                                                            <span className="text-xs font-medium text-slate-700">
+                                                                {row.changed_by_profile?.full_name || 'Usuario'}
+                                                            </span>
+                                                        </div>
+                                                        {esEditar ? (
+                                                            <p className="text-sm text-slate-800">
+                                                                <span className="font-medium">{row.descripcion}</span>
+                                                                {row.precio_unitario_anterior != null && (
+                                                                    <span className="font-mono text-slate-400"> ${Number(row.precio_unitario_anterior).toFixed(2)}</span>
+                                                                )}
+                                                                <span className="text-slate-400"> → </span>
+                                                                {row.precio_unitario != null && (
+                                                                    <span className="font-mono font-bold">${Number(row.precio_unitario).toFixed(2)}</span>
+                                                                )}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-sm text-slate-800">
+                                                                {row.descripcion}
+                                                                {row.precio_unitario != null && (
+                                                                    <span className="font-mono font-bold"> ${Number(row.precio_unitario).toFixed(2)}</span>
+                                                                )}
+                                                            </p>
+                                                        )}
+                                                        {row.motivo && (
+                                                            <p className="text-xs text-slate-600 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                                                                <span className="font-bold text-slate-500 uppercase tracking-wide">Motivo: </span>
+                                                                {row.motivo}
+                                                            </p>
+                                                        )}
+                                                        {row.total_antes != null && row.total_despues != null && (
+                                                            <p className="text-xs text-slate-500 mt-1 font-mono">
+                                                                Total ${Number(row.total_antes).toFixed(2)} → ${Number(row.total_despues).toFixed(2)}
+                                                            </p>
+                                                        )}
+                                                        </div>
+                                                        {isAdmin && esEditar && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={deletingHistorialId === row.id}
+                                                                onClick={() => handleDeleteHistorial(row.id)}
+                                                                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                                                                title="Eliminar del historial (solo admin)"
+                                                                aria-label="Eliminar entrada del historial"
+                                                            >
+                                                                {deletingHistorialId === row.id ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                        </div>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )
+                                ) : (
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left min-w-[400px]">
                                         <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wide border-b border-slate-200">
                                             <tr>
                                                 <th className="px-4 py-3">Descripción</th>
                                                 <th className="px-4 py-3 text-right w-28">Precio</th>
-                                                <th className="px-4 py-3 w-12"></th>
+                                                <th className="px-4 py-3 w-16"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -497,11 +852,11 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                                     <td className="px-4 py-3">
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleDeleteService(det.id)}
-                                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                            title="Eliminar"
+                                                            onClick={() => handleStartEdit(det)}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                            title="Editar presupuesto"
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Pencil className="h-4 w-4" />
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -523,6 +878,7 @@ export function WorkOrderModal({ orden, isOpen, onClose, onStatusChange, onPrint
                                         </tbody>
                                     </table>
                                 </div>
+                                )}
                             </div>
                         </div>
                     )}

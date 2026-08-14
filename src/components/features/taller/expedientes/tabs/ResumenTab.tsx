@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Clock, DollarSign, FileText, Wrench, Loader2, Pencil, Save, X, Trash2 } from "lucide-react";
+import { User, Clock, DollarSign, FileText, Wrench, Loader2, Pencil, Trash2 } from "lucide-react";
 import { OrdenTrabajo } from "@/types/taller";
 import { useOrdenes } from "@/hooks/taller/useOrdenes";
 
@@ -25,25 +25,11 @@ export function ResumenTab({
     orden,
     onAssignPresupuesto,
     refreshDeps = 0,
-    onSaveObservaciones,
-    onSaveCliente,
     onDeleteOrden,
 }: ResumenTabProps) {
     const { fetchDetallesOrden } = useOrdenes();
     const [detallesPresupuesto, setDetallesPresupuesto] = useState<{ id: string; descripcion: string; precio_unitario: number; cantidad: number }[]>([]);
     const [loadingPresupuesto, setLoadingPresupuesto] = useState(true);
-
-    const [editingObs, setEditingObs] = useState(false);
-    const [obsDraft, setObsDraft] = useState(orden.observaciones_ingreso || "");
-    const [savingObs, setSavingObs] = useState(false);
-
-    const [editingCliente, setEditingCliente] = useState(false);
-    const [clienteDraft, setClienteDraft] = useState({
-        nombre_completo: orden.cliente?.nombre_completo || "",
-        telefono: orden.cliente?.telefono || "",
-        email: orden.cliente?.email || "",
-    });
-    const [savingCliente, setSavingCliente] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
@@ -54,20 +40,6 @@ export function ResumenTab({
             setLoadingPresupuesto(false);
         });
     }, [orden?.id, refreshDeps]);
-
-    useEffect(() => {
-        if (!editingObs) setObsDraft(orden.observaciones_ingreso || "");
-    }, [orden.observaciones_ingreso, editingObs]);
-
-    useEffect(() => {
-        if (!editingCliente) {
-            setClienteDraft({
-                nombre_completo: orden.cliente?.nombre_completo || "",
-                telefono: orden.cliente?.telefono || "",
-                email: orden.cliente?.email || "",
-            });
-        }
-    }, [orden.cliente, editingCliente]);
 
     const totalPresupuesto = detallesPresupuesto.reduce((acc, d) => acc + d.precio_unitario * d.cantidad, 0);
     const tienePresupuesto = detallesPresupuesto.length > 0;
@@ -93,22 +65,6 @@ export function ResumenTab({
         }
     };
 
-    const handleSaveObs = async () => {
-        if (!onSaveObservaciones) return;
-        setSavingObs(true);
-        const result = await onSaveObservaciones(obsDraft);
-        setSavingObs(false);
-        if (result.success) setEditingObs(false);
-    };
-
-    const handleSaveCliente = async () => {
-        if (!onSaveCliente) return;
-        setSavingCliente(true);
-        const result = await onSaveCliente(clienteDraft);
-        setSavingCliente(false);
-        if (result.success) setEditingCliente(false);
-    };
-
     const handleDelete = async () => {
         if (!onDeleteOrden) return;
         const ok = confirm(
@@ -128,54 +84,10 @@ export function ResumenTab({
                     <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-slate-400" /> Lo que el cliente solicitó
                     </h3>
-                    {onSaveObservaciones && !editingObs && (
-                        <button
-                            type="button"
-                            onClick={() => setEditingObs(true)}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
-                        >
-                            <Pencil className="h-3.5 w-3.5" /> Editar
-                        </button>
-                    )}
                 </div>
-
-                {editingObs ? (
-                    <div className="space-y-3">
-                        <textarea
-                            value={obsDraft}
-                            onChange={(e) => setObsDraft(e.target.value)}
-                            rows={4}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 text-sm resize-y"
-                            placeholder="Ej: Lavar, lubricar, revisar frenos..."
-                        />
-                        <div className="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                disabled={savingObs}
-                                onClick={() => {
-                                    setObsDraft(orden.observaciones_ingreso || "");
-                                    setEditingObs(false);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100"
-                            >
-                                <X className="h-4 w-4" /> Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                disabled={savingObs}
-                                onClick={handleSaveObs}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {savingObs ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 min-h-[60px] whitespace-pre-wrap">
-                        {orden.observaciones_ingreso?.trim() || "No se registraron observaciones ni solicitudes del cliente al ingreso."}
-                    </p>
-                )}
+                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 min-h-[60px] whitespace-pre-wrap">
+                    {orden.observaciones_ingreso?.trim() || "No se registraron observaciones ni solicitudes del cliente al ingreso."}
+                </p>
             </div>
 
             {/* Cliente */}
@@ -184,87 +96,23 @@ export function ResumenTab({
                     <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         <User className="h-4 w-4 text-slate-400" /> Datos del Cliente
                     </h3>
-                    {onSaveCliente && orden.cliente_id && !editingCliente && (
-                        <button
-                            type="button"
-                            onClick={() => setEditingCliente(true)}
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
-                        >
-                            <Pencil className="h-3.5 w-3.5" /> Editar
-                        </button>
-                    )}
                 </div>
-
-                {editingCliente ? (
-                    <div className="space-y-3">
+                <div className="space-y-4">
+                    <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase">Nombre Completo</p>
+                        <p className="font-medium text-slate-800">{orden.cliente?.nombre_completo}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Nombre completo</label>
-                            <input
-                                type="text"
-                                required
-                                value={clienteDraft.nombre_completo}
-                                onChange={(e) => setClienteDraft((d) => ({ ...d, nombre_completo: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                            />
+                            <p className="text-xs font-bold text-slate-400 uppercase">Teléfono</p>
+                            <p className="text-sm text-slate-700">{orden.cliente?.telefono || 'N/A'}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Teléfono</label>
-                                <input
-                                    type="tel"
-                                    value={clienteDraft.telefono}
-                                    onChange={(e) => setClienteDraft((d) => ({ ...d, telefono: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    value={clienteDraft.email}
-                                    onChange={(e) => setClienteDraft((d) => ({ ...d, email: e.target.value }))}
-                                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-2 pt-1">
-                            <button
-                                type="button"
-                                disabled={savingCliente}
-                                onClick={() => setEditingCliente(false)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100"
-                            >
-                                <X className="h-4 w-4" /> Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                disabled={savingCliente}
-                                onClick={handleSaveCliente}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                            >
-                                {savingCliente ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                                Guardar
-                            </button>
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase">Email</p>
+                            <p className="text-sm text-slate-700">{orden.cliente?.email || 'N/A'}</p>
                         </div>
                     </div>
-                ) : (
-                    <div className="space-y-4">
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase">Nombre Completo</p>
-                            <p className="font-medium text-slate-800">{orden.cliente?.nombre_completo}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase">Teléfono</p>
-                                <p className="text-sm text-slate-700">{orden.cliente?.telefono || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase">Email</p>
-                                <p className="text-sm text-slate-700">{orden.cliente?.email || 'N/A'}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </div>
             </div>
 
             {/* Tiempos */}

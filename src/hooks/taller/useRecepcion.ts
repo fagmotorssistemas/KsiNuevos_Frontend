@@ -108,13 +108,27 @@ export function useRecepcion() {
                     checklist_ingreso: formData.checklist ?? {},
                     inventario_pertenencias: formData.inventario ?? {},
                     observaciones_ingreso: formData.observaciones || null,
+                    observaciones_ingreso_inicial: formData.observaciones || null,
                     fotos_ingreso_urls: fotoUrls,
                     estado: 'recepcion',
-                }])
+                } as any])
                 .select()
                 .single();
 
             if (ordenError) throw ordenError;
+
+            const textoIngreso = formData.observaciones?.trim();
+            if (textoIngreso && orden?.id) {
+                const { error: histError } = await (supabase as any)
+                    .from('taller_observaciones_ingreso_historial')
+                    .insert({
+                        orden_id: orden.id,
+                        created_by: profile.id,
+                        texto: textoIngreso,
+                        es_inicial: true,
+                    });
+                if (histError) console.error('[taller_observaciones_ingreso_historial]', histError.message);
+            }
 
             return { success: true, ordenId: orden.numero_orden };
 
