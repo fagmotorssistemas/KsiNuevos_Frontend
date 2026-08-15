@@ -6,7 +6,7 @@ interface FilterCategoryProps {
 }
 
 // Puedes traer esto de una constante o base de datos más adelante
-const CATEGORY_OPTIONS = ["SUV", "Sedan", "Hatchback", "Camioneta", "Coupe"];
+const CATEGORY_OPTIONS = ["SUV", "Sedan", "Hatchback", "Camioneta", "Coupe", "Furgoneta"];
 
 export const FilterCategory = ({ selected, onChange }: FilterCategoryProps) => {
   
