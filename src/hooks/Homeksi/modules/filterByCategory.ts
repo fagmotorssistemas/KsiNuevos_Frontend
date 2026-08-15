@@ -17,6 +17,22 @@ const CATEGORY_ALIASES: Record<string, string[]> = {
   coupe: ["coupe", "cupe"],
 };
 
+/**
+ * Oracle a veces pone combustible+letra en type_body (hibrido-j).
+ * Solo j = jeep/SUV; el resto de híbridos no se clasifica todavía.
+ */
+function isHybridJeep(typeBody: string): boolean {
+  const n = normalizeType(typeBody);
+
+  const withSeparator = n.match(
+    /(?:h[iy]?b+r?[iy]?d[oa]?|hybrid)\s*[-_\/.]\s*j\b/,
+  );
+  if (withSeparator) return true;
+
+  const glued = n.replace(/[\s\-_\/.]/g, "");
+  return /^(?:h[iy]?b+r?[iy]?d[oa]?|hybrid)j$/.test(glued);
+}
+
 function acceptedTypesFor(categories: string[]): Set<string> {
   const accepted = new Set<string>();
   for (const category of categories) {
@@ -33,9 +49,11 @@ export const filterByCategory = (cars: InventoryCar[], categories: string[]): In
   if (!categories || categories.length === 0) return cars;
 
   const accepted = acceptedTypesFor(categories);
+  const suvSelected = categories.some((category) => normalizeType(category) === "suv");
 
   return cars.filter((car) => {
     if (!car.type_body) return false;
-    return accepted.has(normalizeType(car.type_body));
+    if (accepted.has(normalizeType(car.type_body))) return true;
+    return suvSelected && isHybridJeep(car.type_body);
   });
 };
