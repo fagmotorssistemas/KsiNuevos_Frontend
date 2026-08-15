@@ -10,7 +10,7 @@ function normalizeType(value: string): string {
 
 /** Tipos guardados que cuentan como cada opción del filtro de Comprar. */
 const CATEGORY_ALIASES: Record<string, string[]> = {
-  suv: ["suv", "jeep"],
+  suv: ["suv", "jeep", "station wagon"],
   camioneta: ["camioneta", "cabina doble", "cabina simple", "doble cabina"],
   sedan: ["sedan"],
   hatchback: ["hatchback", "hatckback"],
