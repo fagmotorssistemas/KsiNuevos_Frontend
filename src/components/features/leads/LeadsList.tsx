@@ -95,6 +95,18 @@ export function LeadsList({
         return <User className="h-3 w-3" />;
     };
 
+    const formatResumeUpdatedAt = (iso: string | null | undefined) => {
+        if (!iso) return null;
+        return new Date(iso).toLocaleString('es-EC', {
+            timeZone: 'America/Guayaquil',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
     if (isLoading) {
         return <div className="p-10 text-center text-slate-400">Cargando leads...</div>;
     }
@@ -235,9 +247,19 @@ export function LeadsList({
                                 </Table.Cell>
 
                                 <Table.Cell className="hidden lg:table-cell max-w-[80px]">
-                                    <p className="truncate text-sm text-slate-600" title={item.resume || ''}>
-                                        {item.resume || <span className="text-slate-400 italic">Sin resumen ...</span>}
-                                    </p>
+                                    <div className="flex flex-col gap-0.5">
+                                        <p className="truncate text-sm text-slate-600" title={item.resume || ''}>
+                                            {item.resume || <span className="text-slate-400 italic">Sin resumen ...</span>}
+                                        </p>
+                                        {item.resume_updated_at && (
+                                            <span
+                                                className="text-[10px] text-slate-400 whitespace-nowrap"
+                                                title={item.resume_updated_at}
+                                            >
+                                                {formatResumeUpdatedAt(item.resume_updated_at)}
+                                            </span>
+                                        )}
+                                    </div>
                                 </Table.Cell>
 
                                 <Table.Cell>
