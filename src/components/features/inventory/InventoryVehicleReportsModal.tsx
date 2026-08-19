@@ -168,8 +168,8 @@ export function InventoryVehicleReport({
                     case "year":
                         return ((a.year ?? 0) - (b.year ?? 0)) * dir;
                     case "plate":
-                        return (a.plate_short || a.plate || "").localeCompare(
-                            b.plate_short || b.plate || "",
+                        return (a.plate || a.plate_short || "").localeCompare(
+                            b.plate || b.plate_short || "",
                             "es"
                         ) * dir;
                     case "price":
@@ -322,7 +322,7 @@ export function InventoryVehicleReport({
                                                 img_gallery_urls: car.img_gallery_urls,
                                             }
                                         );
-                                        const plate = car.plate_short || car.plate || "S/P";
+                                        const plate = car.plate || car.plate_short || "S/P";
 
                                         return (
                                             <tr key={car.id} className="hover:bg-red-50/30 transition-colors border-b border-slate-100 last:border-0">
