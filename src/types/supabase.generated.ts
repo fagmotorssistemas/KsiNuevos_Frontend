@@ -5435,6 +5435,7 @@ export type Database = {
           brand: string
           budget_max: number | null
           client_name: string | null
+          client_phone: string | null
           color_preference: string | null
           created_at: string | null
           id: number
@@ -5453,6 +5454,7 @@ export type Database = {
           brand: string
           budget_max?: number | null
           client_name?: string | null
+          client_phone?: string | null
           color_preference?: string | null
           created_at?: string | null
           id?: number
@@ -5471,6 +5473,7 @@ export type Database = {
           brand?: string
           budget_max?: number | null
           client_name?: string | null
+          client_phone?: string | null
           color_preference?: string | null
           created_at?: string | null
           id?: number

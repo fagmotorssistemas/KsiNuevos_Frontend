@@ -1,5 +1,5 @@
-import { Calendar, User, CheckCircle2, XCircle, Trash2, DollarSign } from "lucide-react";
-import { VehicleRequest, getPriorityColor, getStatusColor, RequestStatusType } from "./constants";
+import { Calendar, User, Phone, CheckCircle2, XCircle, Trash2, DollarSign } from "lucide-react";
+import { VehicleRequest, getPriorityColor, getStatusColor, RequestStatusType, resolveClientPhone } from "./constants";
 
 interface RequestCardProps {
     request: VehicleRequest;
@@ -8,6 +8,8 @@ interface RequestCardProps {
 }
 
 export default function RequestCard({ request, onStatusChange, onDelete }: RequestCardProps) {
+    const phone = resolveClientPhone(request.client_phone, request.client_name);
+
     return (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden">
             {/* Header de la Tarjeta */}
@@ -46,12 +48,30 @@ export default function RequestCard({ request, onStatusChange, onDelete }: Reque
                     </div>
                 </div>
 
-                {request.client_name && (
-                    <div className="flex items-center gap-2 text-sm text-brand-600 bg-brand-50 p-2 rounded-lg border border-brand-100">
-                        <User className="h-4 w-4" />
-                        <span className="font-medium truncate">Para: {request.client_name}</span>
+                <div className="space-y-1.5">
+                    {request.client_name && (
+                        <div className="flex items-center gap-2 text-sm text-brand-600 bg-brand-50 p-2 rounded-lg border border-brand-100">
+                            <User className="h-4 w-4 shrink-0" />
+                            <span className="font-medium truncate">Para: {request.client_name}</span>
+                        </div>
+                    )}
+                    <div
+                        className={`flex items-center gap-2 text-sm p-2 rounded-lg border ${
+                            phone
+                                ? "text-emerald-700 bg-emerald-50 border-emerald-100"
+                                : "text-slate-400 bg-slate-50 border-slate-100"
+                        }`}
+                    >
+                        <Phone className="h-4 w-4 shrink-0" />
+                        {phone ? (
+                            <a href={`tel:${phone}`} className="font-medium truncate hover:underline">
+                                Con número: {phone}
+                            </a>
+                        ) : (
+                            <span className="font-medium">Sin número</span>
+                        )}
                     </div>
-                )}
+                </div>
 
                 {request.notes && (
                     <p className="text-xs text-slate-500 italic bg-slate-50 p-2 rounded border border-slate-100">

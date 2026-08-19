@@ -13,10 +13,26 @@ export interface VehicleRequest {
     status: RequestStatusType;
     priority: RequestPriorityType;
     client_name: string | null;
+    client_phone: string | null;
     notes: string | null;
     created_at: string;
     requested_by: string;
     profiles?: { full_name: string };
+}
+
+/** Celular guardado, o el que viene pegado en el nombre del cliente. */
+export function resolveClientPhone(phone?: string | null, name?: string | null): string {
+    const saved = phone?.trim() || "";
+    if (saved) return saved;
+    if (!name) return "";
+
+    const digits = name.replace(/\D/g, "");
+    if (digits.length >= 12 && digits.startsWith("5939")) return `0${digits.slice(3, 12)}`;
+    if (digits.length >= 10 && digits.startsWith("09")) return digits.slice(0, 10);
+    if (digits.length >= 9 && digits.startsWith("9") && !digits.startsWith("09")) {
+        return `0${digits.slice(0, 9)}`;
+    }
+    return "";
 }
 
 // Helpers visuales

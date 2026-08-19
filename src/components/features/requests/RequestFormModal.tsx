@@ -6,6 +6,7 @@ import {
     DollarSign,
     Calendar,
     User,
+    Phone,
     CarFront,
     Palette,
     FileText,
@@ -32,6 +33,7 @@ interface NewRequestState {
     budget_max: string;
     color_preference: string;
     client_name: string;
+    client_phone: string;
     priority: RequestPriorityType;
     notes: string;
 }
@@ -49,6 +51,7 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
         budget_max: '',
         color_preference: '',
         client_name: '',
+        client_phone: '',
         priority: 'media',
         notes: ''
     });
@@ -74,6 +77,7 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
             { key: 'budget_max', label: 'Presupuesto' },
             { key: 'color_preference', label: 'Color' },
             { key: 'client_name', label: 'Nombre del Cliente' },
+            { key: 'client_phone', label: 'Celular' },
             { key: 'notes', label: 'Notas' }
         ];
 
@@ -106,6 +110,7 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
             budget_max: cleanBudget,
             color_preference: newRequest.color_preference,
             client_name: newRequest.client_name,
+            client_phone: newRequest.client_phone.trim(),
             priority: newRequest.priority,
             notes: newRequest.notes
         });
@@ -117,7 +122,7 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
             setNewRequest({
                 brand: '', model: '', year_min: '', year_max: '',
                 budget_max: '', color_preference: '', client_name: '',
-                priority: 'media', notes: ''
+                client_phone: '', priority: 'media', notes: ''
             });
         } else {
             console.error("Error creando pedido:", insertError);
@@ -297,19 +302,37 @@ export default function RequestFormModal({ isOpen, onClose, onSuccess }: Request
 
                         {/* SECCIÓN 3: CLIENTE Y NOTAS */}
                         <div className="pt-6 border-t border-slate-100 space-y-6">
-                            <div>
-                                <InputLabel label="Cliente / Referencia" required />
-                                <div className="relative">
-                                    <div className={iconContainerClass}>
-                                        <User className="h-5 w-5" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <InputLabel label="Cliente / Referencia" required />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <User className="h-5 w-5" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className={`${inputClasses} ${error && !newRequest.client_name ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                            placeholder="Nombre del interesado"
+                                            value={newRequest.client_name}
+                                            onChange={e => setNewRequest({ ...newRequest, client_name: e.target.value })}
+                                        />
                                     </div>
-                                    <input
-                                        type="text"
-                                        className={`${inputClasses} ${error && !newRequest.client_name ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
-                                        placeholder="Nombre del interesado"
-                                        value={newRequest.client_name}
-                                        onChange={e => setNewRequest({ ...newRequest, client_name: e.target.value })}
-                                    />
+                                </div>
+                                <div>
+                                    <InputLabel label="Celular" required />
+                                    <div className="relative">
+                                        <div className={iconContainerClass}>
+                                            <Phone className="h-5 w-5" />
+                                        </div>
+                                        <input
+                                            type="tel"
+                                            inputMode="tel"
+                                            className={`${inputClasses} ${error && !newRequest.client_phone ? 'border-red-300 bg-red-50 focus:border-red-500' : ''}`}
+                                            placeholder="Ej: 0991234567"
+                                            value={newRequest.client_phone}
+                                            onChange={e => setNewRequest({ ...newRequest, client_phone: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

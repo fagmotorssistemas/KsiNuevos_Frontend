@@ -62,6 +62,7 @@ export type Database = {
           lead_id: number | null
           location: string | null
           notes: string | null
+          reminder_sent_at: string | null
           responsible_id: string
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"] | null
@@ -76,6 +77,7 @@ export type Database = {
           lead_id?: number | null
           location?: string | null
           notes?: string | null
+          reminder_sent_at?: string | null
           responsible_id: string
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"] | null
@@ -90,6 +92,7 @@ export type Database = {
           lead_id?: number | null
           location?: string | null
           notes?: string | null
+          reminder_sent_at?: string | null
           responsible_id?: string
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"] | null
@@ -3017,6 +3020,7 @@ export type Database = {
           name: string
           phone: string
           presupuesto_cliente: string | null
+          recordatorio_sugerencia_enviado: boolean | null
           respondio_post_fotos: boolean | null
           resume: string | null
           resume_updated_at: string | null
@@ -3045,6 +3049,7 @@ export type Database = {
           name: string
           phone?: string
           presupuesto_cliente?: string | null
+          recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
           resume_updated_at?: string | null
@@ -3073,6 +3078,7 @@ export type Database = {
           name?: string
           phone?: string
           presupuesto_cliente?: string | null
+          recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
           resume_updated_at?: string | null
@@ -6106,6 +6112,7 @@ export type Database = {
           manual_vehicle_description: string | null
           observation: string | null
           phone: string | null
+          recordatorio_1h_enviado: boolean | null
           salesperson_id: string | null
           source: Database["public"]["Enums"]["visit_source"] | null
           test_drive: boolean | null
@@ -6123,6 +6130,7 @@ export type Database = {
           manual_vehicle_description?: string | null
           observation?: string | null
           phone?: string | null
+          recordatorio_1h_enviado?: boolean | null
           salesperson_id?: string | null
           source?: Database["public"]["Enums"]["visit_source"] | null
           test_drive?: boolean | null
@@ -6140,6 +6148,7 @@ export type Database = {
           manual_vehicle_description?: string | null
           observation?: string | null
           phone?: string | null
+          recordatorio_1h_enviado?: boolean | null
           salesperson_id?: string | null
           source?: Database["public"]["Enums"]["visit_source"] | null
           test_drive?: boolean | null
@@ -7096,6 +7105,7 @@ export type Database = {
           brand: string
           budget_max: number | null
           client_name: string | null
+          client_phone: string | null
           color_preference: string | null
           created_at: string | null
           id: number
@@ -7114,6 +7124,7 @@ export type Database = {
           brand: string
           budget_max?: number | null
           client_name?: string | null
+          client_phone?: string | null
           color_preference?: string | null
           created_at?: string | null
           id?: number
@@ -7132,6 +7143,7 @@ export type Database = {
           brand?: string
           budget_max?: number | null
           client_name?: string | null
+          client_phone?: string | null
           color_preference?: string | null
           created_at?: string | null
           id?: number
@@ -8290,6 +8302,19 @@ export type Database = {
           submodule_slug: string
         }[]
       }
+      get_showroom_visitas_recordatorio: {
+        Args: never
+        Returns: {
+          client_name: string
+          cliente_registrado: boolean
+          lead_id_kommo: number
+          phone: string
+          vehiculo: string
+          vehiculo_id: string
+          visit_end: string
+          visit_id: number
+        }[]
+      }
       has_any_profile_role: { Args: { p_roles: string[] }; Returns: boolean }
       is_admin_or_marketing: { Args: never; Returns: boolean }
       is_authenticated_staff: { Args: never; Returns: boolean }
@@ -8360,6 +8385,10 @@ export type Database = {
           price: number
           year: number
         }[]
+      }
+      marcar_recordatorio_showroom_enviado: {
+        Args: { p_visit_id: number }
+        Returns: undefined
       }
       mark_overdue_case_tasks: { Args: never; Returns: number }
       match_inventory: {
@@ -8634,6 +8663,8 @@ export type Database = {
         Args: { p_profile_id: string; p_role_id: string }
         Returns: undefined
       }
+      send_appointment_reminders: { Args: never; Returns: undefined }
+      send_lead_suggestion_reminders: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       update_price_statistics: {
