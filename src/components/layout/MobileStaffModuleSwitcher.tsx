@@ -90,7 +90,7 @@ export function MobileStaffModuleSwitcher({ icon, fallbackLabel }: Props) {
           >
             {navItems.map((item) => {
               const href = resolvePrimaryNavItemHref(item, permCtx) ?? item.href
-              const isActive = pathnameBelongsToPrimaryNavItem(pathname ?? '', item)
+              const isActive = activeItem?.label === item.label
 
               return (
                 <Link
