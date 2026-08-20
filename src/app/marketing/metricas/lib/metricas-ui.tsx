@@ -132,7 +132,9 @@ export function KpiTile({
       >
         {value}
       </p>
-      {hint && <p className="mt-2 text-xs text-slate-500 leading-relaxed font-medium">{hint}</p>}
+      {hint && (
+        <p className="mt-2 text-xs text-slate-500 leading-relaxed font-medium whitespace-pre-line">{hint}</p>
+      )}
     </div>
   )
 }

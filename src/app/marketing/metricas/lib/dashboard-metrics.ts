@@ -129,6 +129,10 @@ export type DashboardMetrics = {
     /** Gasto del mes en campañas pausadas/apagadas del lote. */
     spendPaused: number
     contactsFromAds: number
+    /** Contactos Meta en campañas ACTIVE (mismo universo que inversión). */
+    contactsActive: number
+    /** Contactos Meta en campañas pausadas/apagadas (mismo universo que inversión). */
+    contactsPaused: number
     cplReal: number | null
     reachTotal: number
     impressionsTotal: number
@@ -714,29 +718,47 @@ type CampaignGeneralRowDb = {
   updated_at?: string | null
   date_start: string | null
   date_stop: string | null
-  raw_data?: {
-    effective_status?: string | null
-    status?: string | null
-    campaign?: { effective_status?: string | null; status?: string | null } | null
-  } | null
+  /** Alias PostgREST `raw_data->>effective_status` (o columna si existiera). */
+  effective_status?: string | null
+  raw_data?: unknown
 }
 
-function campaignEffectiveStatusFromRaw(
-  raw: CampaignGeneralRowDb['raw_data']
-): string | null {
-  if (!raw || typeof raw !== 'object') return null
-  const nested =
-    raw && typeof (raw as { campaign?: unknown }).campaign === 'object'
-      ? ((raw as { campaign?: { effective_status?: string | null; status?: string | null } })
-          .campaign ?? null)
-      : null
-  const eff =
-    raw.effective_status ??
-    raw.status ??
-    nested?.effective_status ??
-    nested?.status
-  const s = String(eff ?? '').trim()
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function statusFromUnknown(value: unknown): string | null {
+  const s = String(value ?? '').trim()
   return s || null
+}
+
+/** Status de campaña: columna/alias, raw_data.effective_status o campaign.effective_status. */
+export function campaignEffectiveStatusFromRaw(raw: unknown): string | null {
+  const obj = parseJsonObject(raw)
+  if (!obj) return null
+  const nested = parseJsonObject(obj.campaign)
+  return (
+    statusFromUnknown(obj.effective_status) ??
+    statusFromUnknown(obj.status) ??
+    statusFromUnknown(nested?.effective_status) ??
+    statusFromUnknown(nested?.status)
+  )
+}
+
+function resolveCampaignEffectiveStatus(row: CampaignGeneralRowDb): string | null {
+  return statusFromUnknown(row.effective_status) ?? campaignEffectiveStatusFromRaw(row.raw_data)
 }
 
 export function isCampaignActiveStatus(status: string | null | undefined): boolean {
@@ -752,7 +774,7 @@ async function loadGeneralCampaignMetricsInMonth(
   const { data, error } = await db
     .from('meta_campaign_metrics')
     .select(
-      'campaign_id, campaign_name, spend, leads_count, reach, impressions, clicks, cost_per_lead, updated_at, date_start, date_stop, raw_data'
+      'campaign_id, campaign_name, spend, leads_count, reach, impressions, clicks, cost_per_lead, updated_at, date_start, date_stop, raw_data, effective_status:raw_data->>effective_status'
     )
     .limit(10000)
   if (error) throw error
@@ -770,7 +792,7 @@ async function loadGeneralCampaignMetricsInMonth(
     clicks: num(row.clicks),
     cost_per_lead: row.cost_per_lead != null ? num(row.cost_per_lead) : null,
     ads_count: null,
-    effective_status: campaignEffectiveStatusFromRaw(row.raw_data),
+    effective_status: resolveCampaignEffectiveStatus(row),
   })
 
   const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
@@ -2032,21 +2054,27 @@ export async function fetchDashboardMetrics(
     snapshotDatesUsed.length > 0 ? snapshotDatesUsed[snapshotDatesUsed.length - 1] : null
 
   // Inversión y contactos (ads) a nivel campaña: solo meta_campaign_metrics (sin sumar meta_ad_vehicle_metrics).
+  // Universo = prendidas + apagadas del mes (mismo lote para spend, leads y CPL).
   let spendTotal = 0
   let spendActive = 0
   let spendPaused = 0
   let activeCampaignsCount = 0
   let pausedCampaignsCount = 0
   let leadsFromAds = 0
+  let contactsActive = 0
+  let contactsPaused = 0
   for (const row of generalSnapshots) {
     const spend = num(row.spend)
+    const leads = num(row.leads_count)
     spendTotal += spend
-    leadsFromAds += num(row.leads_count)
+    leadsFromAds += leads
     if (isCampaignActiveStatus(row.effective_status)) {
       spendActive += spend
+      contactsActive += leads
       activeCampaignsCount += 1
     } else {
       spendPaused += spend
+      contactsPaused += leads
       pausedCampaignsCount += 1
     }
   }
@@ -2125,6 +2153,8 @@ export async function fetchDashboardMetrics(
       spendActive,
       spendPaused,
       contactsFromAds: leadsFromAds,
+      contactsActive,
+      contactsPaused,
       cplReal: cplFromAds,
       reachTotal,
       impressionsTotal,

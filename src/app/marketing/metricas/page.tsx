@@ -263,18 +263,18 @@ export default function MarketingMetricasPage() {
               <KpiTile
                 label="Inversión total"
                 value={fmtUsd(data?.paid.spendTotal)}
-                hint={`Prendidas ${fmtUsd(data?.paid.spendActive)} · Apagadas ${fmtUsd(data?.paid.spendPaused)}. ${fmtInt(data?.paid.activeCampaigns)} on · ${fmtInt(data?.paid.pausedCampaigns)} off · ${fmtInt(data?.paid.vehiclesWithAds)} autos con desglose.`}
+                hint={`Prendidas ${fmtUsd(data?.paid.spendActive)} · Apagadas ${fmtUsd(data?.paid.spendPaused)}\n${fmtInt(data?.paid.activeCampaigns)} on · ${fmtInt(data?.paid.pausedCampaigns)} off`}
                 accent="violet"
               />
               <KpiTile
                 label="Contactos (ads)"
                 value={fmtInt(data?.paid.contactsFromAds)}
-                hint="Contactos que Meta atribuye a tus anuncios (mensajes, WhatsApp, formularios)."
+                hint={`Prendidas ${fmtInt(data?.paid.contactsActive)} · Apagadas ${fmtInt(data?.paid.contactsPaused)}\nMismo universo que inversión (on + off).`}
               />
               <KpiTile
                 label="CPL real"
                 value={fmtUsd(data?.paid.cplReal)}
-                hint="Costo por contacto según Meta: inversión ÷ contactos (ads)."
+                hint="Inversión total ÷ contactos (ads). Prendidas y apagadas."
                 accent="emerald"
               />
               <KpiTile
@@ -287,8 +287,8 @@ export default function MarketingMetricasPage() {
                 value={fmtInt(data?.paid.impressionsTotal)}
                 hint={
                   data?.paid.ctrPct != null
-                    ? `Veces que se mostró el anuncio este mes. ${fmtPct(data.paid.ctrPct)} de quienes lo vieron hicieron clic.`
-                    : 'Veces que se mostró el anuncio en campañas activas del mes.'
+                    ? `Veces que se mostró el anuncio este mes (on + off). ${fmtPct(data.paid.ctrPct)} de quienes lo vieron hicieron clic.`
+                    : 'Veces que se mostró el anuncio este mes (campañas prendidas y apagadas).'
                 }
               />
               <KpiTile
