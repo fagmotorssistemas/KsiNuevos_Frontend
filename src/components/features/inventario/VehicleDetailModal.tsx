@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Car,
   X,
@@ -16,6 +16,7 @@ import {
   Cog,
   Tag,
   MapPin,
+  Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
@@ -27,11 +28,27 @@ import { MultasDeudasTab } from './legal/tabs/MultasDeudasTab'
 import { HistorialVehiculoTab } from './legal/tabs/HistorialVehiculoTab'
 import { NotasInternasTab } from './legal/tabs/NotasInternasTab'
 
+/** Tipos que van en "Movimientos contables" (stock / kardex). El resto → "Gastos de vehículo". */
+const TIPOS_MOVIMIENTO_INVENTARIO = [
+  'INGRESO DE BODEGA EN CANTIDADES',
+  'AJUSTES DE INVENTARIOS',
+  'NOTA DE ENTREGA',
+] as const
+
+function normalizeTipoTransaccion(tipo: string | null | undefined): string {
+  return (tipo || '').toUpperCase().trim().replace(/\s+/g, ' ')
+}
+
+function isMovimientoInventario(mov: MovimientoKardex): boolean {
+  const tipo = normalizeTipoTransaccion(mov.tipoTransaccion)
+  return TIPOS_MOVIMIENTO_INVENTARIO.some((t) => tipo.includes(t))
+}
+
 function getPrecioVentaFromHistorial(historial: MovimientoKardex[]): number | null {
   if (!historial?.length) return null
-  const notaEntrega = historial.find((m) => m.tipoTransaccion?.toUpperCase().includes('NOTA DE ENTREGA'))
+  const notaEntrega = historial.find((m) => normalizeTipoTransaccion(m.tipoTransaccion).includes('NOTA DE ENTREGA'))
   if (notaEntrega != null) return notaEntrega.total
-  const egresos = historial.filter((m) => !m.esIngreso)
+  const egresos = historial.filter((m) => !m.esIngreso && isMovimientoInventario(m))
   return egresos.length ? egresos[egresos.length - 1].total : null
 }
 
@@ -42,6 +59,7 @@ export type VehicleDetailTab =
   | 'notas'
   | 'ficha'
   | 'movimientos'
+  | 'gastos'
 
 type Props = {
   vehiculo: VehiculoInventario
@@ -64,38 +82,53 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
     true,
     vehiculo.proId
   )
-  const legalTabActive = activeTab !== 'ficha' && activeTab !== 'movimientos'
+  const legalTabActive = activeTab !== 'ficha' && activeTab !== 'movimientos' && activeTab !== 'gastos'
 
   const authorName = profile?.full_name?.trim() || 'Equipo KSI'
+
+  const movimientosInventario = useMemo(
+    () => historial.filter(isMovimientoInventario),
+    [historial]
+  )
+  const gastosVehiculo = useMemo(
+    () => historial.filter((m) => !isMovimientoInventario(m)),
+    [historial]
+  )
 
   const handleLegalRefresh = () => {
     void refresh()
     onLegalChange?.()
   }
 
+  const loadHistorialIfNeeded = async () => {
+    if (historial.length > 0 || loadingHistorial) return
+    try {
+      setLoadingHistorial(true)
+      setHistorialError(null)
+      const data = await inventarioService.getDetalleVehiculo(vehiculo.placa)
+      const movimientos = data.historialMovimientos || []
+      setHistorial(movimientos)
+      const precioVenta = getPrecioVentaFromHistorial(movimientos)
+      if (precioVenta != null && onPrecioVenta) onPrecioVenta(vehiculo.placa, precioVenta)
+    } catch (error) {
+      console.error('Error cargando historial', error)
+      setHistorialError('No se pudieron cargar los movimientos contables.')
+    } finally {
+      setLoadingHistorial(false)
+    }
+  }
+
   const handleTabChange = async (tab: VehicleDetailTab) => {
     setActiveTab(tab)
-    if (tab === 'movimientos' && historial.length === 0 && !loadingHistorial) {
-      try {
-        setLoadingHistorial(true)
-        setHistorialError(null)
-        const data = await inventarioService.getDetalleVehiculo(vehiculo.placa)
-        const movimientos = data.historialMovimientos || []
-        setHistorial(movimientos)
-        const precioVenta = getPrecioVentaFromHistorial(movimientos)
-        if (precioVenta != null && onPrecioVenta) onPrecioVenta(vehiculo.placa, precioVenta)
-      } catch (error) {
-        console.error('Error cargando historial', error)
-        setHistorialError('No se pudieron cargar los movimientos contables.')
-      } finally {
-        setLoadingHistorial(false)
-      }
+    if (tab === 'movimientos' || tab === 'gastos') {
+      await loadHistorialIfNeeded()
     }
   }
 
   const tabs: { id: VehicleDetailTab; label: string; icon: typeof FileText }[] = [
     { id: 'ficha', label: 'Ficha técnica', icon: FileText },
     { id: 'movimientos', label: 'Movimientos contables', icon: Cog },
+    { id: 'gastos', label: 'Gastos de vehículo', icon: Wallet },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen },
     { id: 'multas', label: 'Multas', icon: Scale },
     { id: 'historial', label: 'Historial', icon: History },
@@ -249,13 +282,34 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
                   <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-500" />
                   <p className="text-sm">Cargando movimientos contables…</p>
                 </div>
-              ) : historial.length === 0 ? (
+              ) : movimientosInventario.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                   <History className="h-8 w-8 mb-2 opacity-50" />
-                  <p>No hay registros de movimientos para este vehículo.</p>
+                  <p>No hay ingresos, ajustes ni notas de entrega para este vehículo.</p>
                 </div>
               ) : (
-                <MovimientosTimeline historial={historial} />
+                <MovimientosTimeline historial={movimientosInventario} />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'gastos' && (
+            <div className="animate-in slide-in-from-right-4 duration-300">
+              {historialError && (
+                <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">{historialError}</div>
+              )}
+              {loadingHistorial ? (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-500" />
+                  <p className="text-sm">Cargando gastos del vehículo…</p>
+                </div>
+              ) : gastosVehiculo.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <Wallet className="h-8 w-8 mb-2 opacity-50" />
+                  <p>No hay gastos adicionales registrados para este vehículo.</p>
+                </div>
+              ) : (
+                <MovimientosTimeline historial={gastosVehiculo} variant="gastos" />
               )}
             </div>
           )}
@@ -284,48 +338,76 @@ function FichaSection({
   )
 }
 
-function MovimientosTimeline({ historial }: { historial: MovimientoKardex[] }) {
+function MovimientosTimeline({
+  historial,
+  variant = 'inventario',
+}: {
+  historial: MovimientoKardex[]
+  variant?: 'inventario' | 'gastos'
+}) {
   return (
     <div className="relative">
       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200" />
       <div className="space-y-6">
-        {historial.map((mov, idx) => (
-          <div key={idx} className="relative pl-10 group">
-            <div
-              className={`absolute left-[10px] top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 z-10 
-                ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') ? 'bg-orange-500 ring-orange-200' : mov.esIngreso ? 'bg-emerald-500 ring-emerald-200' : 'bg-blue-500 ring-blue-200'}`}
-            />
-            <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded border 
-                        ${mov.tipoTransaccion.includes('NOTA DE ENTREGA') ? 'bg-orange-50 text-orange-700 border-orange-100' : mov.esIngreso ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}
-                    >
-                      {mov.tipoTransaccion}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">{mov.fecha}</span>
-                  </div>
-                  <h4 className="font-medium text-slate-800 mt-1">{mov.concepto}</h4>
-                  {mov.clienteProveedor && (
-                    <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                      <User className="h-3 w-3" />
-                      {mov.clienteProveedor}
+        {historial.map((mov, idx) => {
+          const tipo = normalizeTipoTransaccion(mov.tipoTransaccion)
+          const isNotaEntrega = tipo.includes('NOTA DE ENTREGA')
+          const isGasto = variant === 'gastos'
+          const badgeClass = isNotaEntrega
+            ? 'bg-orange-50 text-orange-700 border-orange-100'
+            : isGasto
+              ? 'bg-amber-50 text-amber-800 border-amber-100'
+              : mov.esIngreso
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                : 'bg-blue-50 text-blue-700 border-blue-100'
+          const dotClass = isNotaEntrega
+            ? 'bg-orange-500 ring-orange-200'
+            : isGasto
+              ? 'bg-amber-500 ring-amber-200'
+              : mov.esIngreso
+                ? 'bg-emerald-500 ring-emerald-200'
+                : 'bg-blue-500 ring-blue-200'
+
+          return (
+            <div key={idx} className="relative pl-10 group">
+              <div
+                className={`absolute left-[10px] top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 z-10 ${dotClass}`}
+              />
+              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${badgeClass}`}>
+                        {mov.tipoTransaccion}
+                      </span>
+                      <span className="text-xs text-slate-400 font-mono">{mov.fecha}</span>
                     </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className={`text-sm font-bold flex items-center justify-end gap-1 ${mov.esIngreso ? 'text-emerald-600' : 'text-slate-700'}`}>
-                    {mov.esIngreso ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                    ${mov.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <h4 className="font-medium text-slate-800 mt-1">{mov.concepto}</h4>
+                    {mov.clienteProveedor && (
+                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                        <User className="h-3 w-3" />
+                        {mov.clienteProveedor}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-1 bg-slate-50 px-1.5 py-0.5 rounded inline-block">Doc: {mov.documento}</div>
+                  <div className="text-right">
+                    <div
+                      className={`text-sm font-bold flex items-center justify-end gap-1 ${
+                        mov.esIngreso ? 'text-emerald-600' : isGasto ? 'text-amber-700' : 'text-slate-700'
+                      }`}
+                    >
+                      {mov.esIngreso ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
+                      ${mov.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1 bg-slate-50 px-1.5 py-0.5 rounded inline-block">
+                      Doc: {mov.documento}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
