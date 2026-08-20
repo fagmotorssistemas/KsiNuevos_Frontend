@@ -20,6 +20,7 @@ const MARKETING_API_PATH_ACCESS: { prefix: string; submodule: string }[] = [
   { prefix: '/api/marketing/capi', submodule: 'metricas-campana' },
   { prefix: '/api/marketing/noticiero', submodule: 'blog-posts' },
   { prefix: '/api/marketing/inventory-video-dashboard', submodule: 'metricas-campana' },
+  { prefix: '/api/marketing/inventory-creatives', submodule: 'metricas-campana' },
   { prefix: '/api/marketing/campaigns', submodule: 'metricas-campana' },
 ]
 

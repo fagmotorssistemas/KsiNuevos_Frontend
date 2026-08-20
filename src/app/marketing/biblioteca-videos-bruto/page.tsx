@@ -1,5 +1,5 @@
-import { RawFullVideosLibraryDashboard } from '@/components/videos/RawFullVideosLibraryDashboard'
+import { redirect } from 'next/navigation'
 
-export default function BibliotecaVideosBrutoPage() {
-  return <RawFullVideosLibraryDashboard />
+export default function BibliotecaVideosBrutoRedirect() {
+  redirect('/marketing/inventariado-marketing')
 }

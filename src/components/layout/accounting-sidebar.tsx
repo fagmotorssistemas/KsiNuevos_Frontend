@@ -25,6 +25,7 @@ import {
     HandCoins,
     FileCheck2,
     MessageSquareOff,
+    FileBadge,
 } from 'lucide-react';
 
 import {
@@ -60,7 +61,8 @@ const menuItems: MenuItem[] = [
     { name: 'Reporte Documentación', href: '/inventario/reporte-documentacion', icon: FileCheck2 },
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
     { name: 'Comprobantes', href: '/comprobantes', icon: Receipt },
-    { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign },
+    { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
+    { name: 'Proforma bancaria', href: '/finance/proforma-bancaria', icon: FileBadge },
 ];
 
 export function AccountingSidebar() {

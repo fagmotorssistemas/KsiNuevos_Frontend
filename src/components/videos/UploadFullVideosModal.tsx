@@ -49,6 +49,8 @@ interface UploadFullVideosModalProps {
   /** Tras programar publicación (abre cola en el padre). */
   onScheduled?: () => void
   existingFolder?: { id: string; title: string; videoCount: number } | null
+  initialFormato?: RawFullCaptionFormato
+  initialVehicleId?: string | null
 }
 
 function toCaptionBits(v: InvDetail | null | undefined): Partial<CaptionVehicleBits> | null {
@@ -73,6 +75,8 @@ export function UploadFullVideosModal({
   onSaved,
   onScheduled,
   existingFolder = null,
+  initialFormato,
+  initialVehicleId,
 }: UploadFullVideosModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inventoryRows, setInventoryRows] = useState<InvDetail[]>([])
@@ -135,6 +139,10 @@ export function UploadFullVideosModal({
       resetForm()
       return
     }
+    if (!isAppendMode) {
+      setFormato(initialFormato ?? 'video_autos')
+      setVehicleId(initialVehicleId?.trim() ?? '')
+    }
     if (isAppendMode) {
       setLoadingInventory(false)
       return
@@ -178,7 +186,7 @@ export function UploadFullVideosModal({
     return () => {
       cancelled = true
     }
-  }, [isOpen, resetForm, isAppendMode])
+  }, [isOpen, resetForm, isAppendMode, initialFormato, initialVehicleId])
 
   const dayTopicsForFormato = useMemo(() => {
     const sistema = rawFullFormatoToPilarSistema(formato)

@@ -124,6 +124,10 @@ export type DashboardMetrics = {
   }
   paid: {
     spendTotal: number
+    /** Gasto del mes en campañas aún ACTIVE. */
+    spendActive: number
+    /** Gasto del mes en campañas pausadas/apagadas del lote. */
+    spendPaused: number
     contactsFromAds: number
     cplReal: number | null
     reachTotal: number
@@ -131,6 +135,7 @@ export type DashboardMetrics = {
     clicksTotal: number
     ctrPct: number | null
     activeCampaigns: number
+    pausedCampaigns: number
     campaignsWithSpend: number
     vehiclesWithAds: number
     generalCampaignsCount: number
@@ -694,6 +699,7 @@ type GeneralRowDb = {
   clicks: number
   cost_per_lead: number | null
   ads_count: number | null
+  effective_status: string | null
 }
 
 type CampaignGeneralRowDb = {
@@ -708,6 +714,33 @@ type CampaignGeneralRowDb = {
   updated_at?: string | null
   date_start: string | null
   date_stop: string | null
+  raw_data?: {
+    effective_status?: string | null
+    status?: string | null
+    campaign?: { effective_status?: string | null; status?: string | null } | null
+  } | null
+}
+
+function campaignEffectiveStatusFromRaw(
+  raw: CampaignGeneralRowDb['raw_data']
+): string | null {
+  if (!raw || typeof raw !== 'object') return null
+  const nested =
+    raw && typeof (raw as { campaign?: unknown }).campaign === 'object'
+      ? ((raw as { campaign?: { effective_status?: string | null; status?: string | null } })
+          .campaign ?? null)
+      : null
+  const eff =
+    raw.effective_status ??
+    raw.status ??
+    nested?.effective_status ??
+    nested?.status
+  const s = String(eff ?? '').trim()
+  return s || null
+}
+
+export function isCampaignActiveStatus(status: string | null | undefined): boolean {
+  return String(status ?? '').toUpperCase() === 'ACTIVE'
 }
 
 /** Campañas a nivel cuenta (inventory_id null) desde meta_campaign_metrics. */
@@ -719,7 +752,7 @@ async function loadGeneralCampaignMetricsInMonth(
   const { data, error } = await db
     .from('meta_campaign_metrics')
     .select(
-      'campaign_id, campaign_name, spend, leads_count, reach, impressions, clicks, cost_per_lead, updated_at, date_start, date_stop'
+      'campaign_id, campaign_name, spend, leads_count, reach, impressions, clicks, cost_per_lead, updated_at, date_start, date_stop, raw_data'
     )
     .limit(10000)
   if (error) throw error
@@ -737,6 +770,7 @@ async function loadGeneralCampaignMetricsInMonth(
     clicks: num(row.clicks),
     cost_per_lead: row.cost_per_lead != null ? num(row.cost_per_lead) : null,
     ads_count: null,
+    effective_status: campaignEffectiveStatusFromRaw(row.raw_data),
   })
 
   const campaignMonth = sinceReportDate.slice(0, 7) as MetricasCampaignMonth
@@ -1999,10 +2033,22 @@ export async function fetchDashboardMetrics(
 
   // Inversión y contactos (ads) a nivel campaña: solo meta_campaign_metrics (sin sumar meta_ad_vehicle_metrics).
   let spendTotal = 0
+  let spendActive = 0
+  let spendPaused = 0
+  let activeCampaignsCount = 0
+  let pausedCampaignsCount = 0
   let leadsFromAds = 0
   for (const row of generalSnapshots) {
-    spendTotal += num(row.spend)
+    const spend = num(row.spend)
+    spendTotal += spend
     leadsFromAds += num(row.leads_count)
+    if (isCampaignActiveStatus(row.effective_status)) {
+      spendActive += spend
+      activeCampaignsCount += 1
+    } else {
+      spendPaused += spend
+      pausedCampaignsCount += 1
+    }
   }
 
   const impressionsTotal = campaignImpressionsTotal
@@ -2076,13 +2122,16 @@ export async function fetchDashboardMetrics(
     },
     paid: {
       spendTotal,
+      spendActive,
+      spendPaused,
       contactsFromAds: leadsFromAds,
       cplReal: cplFromAds,
       reachTotal,
       impressionsTotal,
       clicksTotal,
       ctrPct,
-      activeCampaigns: allCampaigns.length,
+      activeCampaigns: activeCampaignsCount,
+      pausedCampaigns: pausedCampaignsCount,
       campaignsWithSpend,
       vehiclesWithAds: byVehicle.length,
       generalCampaignsCount: generalSnapshots.length,

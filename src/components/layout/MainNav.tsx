@@ -9,8 +9,10 @@ import {
   getPrimaryNavLinkSizeClasses,
   shouldCompactPrimaryNav,
   resolvePrimaryNavItemHref,
+  resolveActivePrimaryNavItem,
   type PermissionContext,
 } from "@/lib/permissions";
+import { usePreferredPrimaryModule } from "@/hooks/useSidebarShell";
 
 export function MainNav({
   className,
@@ -21,6 +23,7 @@ export function MainNav({
 }) {
   const pathname = usePathname();
   const { profile, permissionMap } = useAuth();
+  const preferredModule = usePreferredPrimaryModule();
 
   const permCtx: PermissionContext = useMemo(
     () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
@@ -33,6 +36,10 @@ export function MainNav({
     return items.filter((item) => item.module === "lavilet");
   }, [permCtx, laviletOnly]);
   const compact = shouldCompactPrimaryNav(navItems.length);
+  const activeItem = useMemo(
+    () => resolveActivePrimaryNavItem(pathname ?? "", permCtx, preferredModule),
+    [pathname, permCtx, preferredModule]
+  );
 
   return (
     <nav
@@ -40,7 +47,7 @@ export function MainNav({
     >
       {navItems.map((item) => {
         const href = resolvePrimaryNavItemHref(item, permCtx) ?? item.href;
-        const isActive = pathname?.startsWith(href);
+        const isActive = activeItem?.label === item.label;
 
         return (
           <Link

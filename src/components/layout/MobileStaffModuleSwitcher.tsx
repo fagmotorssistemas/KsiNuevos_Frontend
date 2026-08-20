@@ -7,11 +7,11 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   buildPrimaryNavItems,
   getPrimaryNavLinkSizeClasses,
-  pathnameBelongsToPrimaryNavItem,
   resolveActivePrimaryNavItem,
   resolvePrimaryNavItemHref,
   type PermissionContext,
 } from '@/lib/permissions'
+import { usePreferredPrimaryModule } from '@/hooks/useSidebarShell'
 
 type Props = {
   icon?: ReactNode
@@ -29,11 +29,12 @@ export function MobileStaffModuleSwitcher({ icon, fallbackLabel }: Props) {
     () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
     [profile?.role, permissionMap]
   )
+  const preferredModule = usePreferredPrimaryModule()
 
   const navItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
   const activeItem = useMemo(
-    () => resolveActivePrimaryNavItem(pathname ?? '', permCtx),
-    [pathname, permCtx]
+    () => resolveActivePrimaryNavItem(pathname ?? '', permCtx, preferredModule),
+    [pathname, permCtx, preferredModule]
   )
   const label = activeItem?.label ?? fallbackLabel
   const sizeClasses = getPrimaryNavLinkSizeClasses(navItems.length)

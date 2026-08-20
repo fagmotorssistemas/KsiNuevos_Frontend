@@ -1,5 +1,5 @@
-import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
+import { redirect } from 'next/navigation'
 
-export default function BibliotecaClipsPage() {
-  return <RawClipsLibraryDashboard />
+export default function BibliotecaClipsRedirect() {
+  redirect('/marketing/inventariado-marketing')
 }

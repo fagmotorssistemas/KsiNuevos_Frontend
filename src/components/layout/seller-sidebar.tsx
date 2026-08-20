@@ -18,6 +18,7 @@ import {
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
     FileText,        // Proformas guardadas
+    Landmark,        // Proforma bancaria
     LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +46,7 @@ const menuItems: MenuItem[] = [
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
     { name: 'Proformas', href: '/finance/proformas', icon: FileText },
+    { name: 'Proforma bancaria', href: '/finance/proforma-bancaria', icon: Landmark },
 ];
 
 export function SellerSidebar() {

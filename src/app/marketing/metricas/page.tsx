@@ -263,7 +263,7 @@ export default function MarketingMetricasPage() {
               <KpiTile
                 label="Inversión total"
                 value={fmtUsd(data?.paid.spendTotal)}
-                hint={`Gasto total de campañas en Meta. ${fmtInt(data?.paid.generalCampaignsCount)} campañas · ${fmtInt(data?.paid.vehiclesWithAds)} autos con desglose.`}
+                hint={`Prendidas ${fmtUsd(data?.paid.spendActive)} · Apagadas ${fmtUsd(data?.paid.spendPaused)}. ${fmtInt(data?.paid.activeCampaigns)} on · ${fmtInt(data?.paid.pausedCampaigns)} off · ${fmtInt(data?.paid.vehiclesWithAds)} autos con desglose.`}
                 accent="violet"
               />
               <KpiTile

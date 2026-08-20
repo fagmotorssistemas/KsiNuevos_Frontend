@@ -31,5 +31,17 @@ export function getSidebarShell(): SidebarShell {
   return 'accounting'
 }
 
+/** Módulo del nav principal asociado al sidebar persistido (rutas compartidas como /finance). */
+export function primaryModuleFromShell(
+  shell: SidebarShell | null
+): 'ventas' | 'finanzas' | 'marketing' | 'taller' | 'seguros' | null {
+  if (shell === 'seller') return 'ventas'
+  if (shell === 'accounting' || shell === 'rastreadores') return 'finanzas'
+  if (shell === 'marketing' || shell === 'scraper') return 'marketing'
+  if (shell === 'taller') return 'taller'
+  if (shell === 'seguros') return 'seguros'
+  return null
+}
+
 /** Ruta global de solicitudes a desarrollo (visible para todo el personal). */
 export const SOLICITUDES_DESARROLLO_HREF = '/solicitudes-desarrollo'

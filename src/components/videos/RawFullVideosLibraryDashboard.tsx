@@ -45,9 +45,35 @@ function formatUploadDay(iso: string): string {
 
 type MainTab = 'library' | 'queue'
 
-export function RawFullVideosLibraryDashboard() {
-  const [mainTab, setMainTab] = useState<MainTab>('library')
-  const [pilarTab, setPilarTab] = useState<RawFullPilarTabId>('pilar1')
+export type RawFullVideosLibraryDashboardProps = {
+  embedded?: boolean
+  hideHeader?: boolean
+  inventoryVehicleId?: string
+  vehicleTitle?: string
+  lockedPilarTab?: RawFullPilarTabId
+  hidePilarTabs?: boolean
+  hideMainTabs?: boolean
+  forceMainTab?: MainTab
+  hideUploadButton?: boolean
+  refreshKey?: number
+  onOpenQueue?: () => void
+}
+
+export function RawFullVideosLibraryDashboard({
+  embedded = false,
+  hideHeader = false,
+  inventoryVehicleId,
+  vehicleTitle,
+  lockedPilarTab,
+  hidePilarTabs = false,
+  hideMainTabs = false,
+  forceMainTab,
+  hideUploadButton = false,
+  refreshKey = 0,
+  onOpenQueue,
+}: RawFullVideosLibraryDashboardProps = {}) {
+  const [mainTab, setMainTab] = useState<MainTab>(forceMainTab ?? 'library')
+  const [pilarTab, setPilarTab] = useState<RawFullPilarTabId>(lockedPilarTab ?? 'pilar1')
   const [queueRefreshKey, setQueueRefreshKey] = useState(0)
   const [processingQueue, setProcessingQueue] = useState(false)
   const [folders, setFolders] = useState<RawFullVideoFolderSummary[]>([])
@@ -79,11 +105,16 @@ export function RawFullVideosLibraryDashboard() {
     return () => clearTimeout(t)
   }, [q])
 
+  const effectiveMainTab = forceMainTab ?? mainTab
+  const effectivePilarTab = lockedPilarTab ?? pilarTab
+  const showPilarTabs = !hidePilarTabs && !lockedPilarTab && !inventoryVehicleId
+
   const loadLibrary = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: '1', pageSize: '48' })
       if (debouncedQ) params.set('q', debouncedQ)
+      if (inventoryVehicleId?.trim()) params.set('inventoryVehicleId', inventoryVehicleId.trim())
       const res = await fetch(`/api/videos/raw-full/library?${params}`, { credentials: 'include' })
       const data = (await res.json()) as {
         error?: string
@@ -98,15 +129,31 @@ export function RawFullVideosLibraryDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedQ])
+  }, [debouncedQ, inventoryVehicleId])
 
   useEffect(() => {
-    if (mainTab === 'library') void loadLibrary()
-  }, [loadLibrary, mainTab])
+    if (effectiveMainTab === 'library') void loadLibrary()
+  }, [loadLibrary, effectiveMainTab, refreshKey])
+
+  useEffect(() => {
+    setSelectedId(null)
+    setDetailFolder(null)
+    setVideos([])
+  }, [inventoryVehicleId, lockedPilarTab])
 
   const filteredFolders = useMemo(() => {
-    return folders.filter((f) => rawFullFolderToPilarTab(f) === pilarTab)
-  }, [folders, pilarTab])
+    if (inventoryVehicleId) return folders
+    return folders.filter((f) => rawFullFolderToPilarTab(f) === effectivePilarTab)
+  }, [folders, effectivePilarTab, inventoryVehicleId])
+
+  const displayStats = useMemo(() => {
+    if (!lockedPilarTab && !inventoryVehicleId) return stats
+    return {
+      totalFolders: filteredFolders.length,
+      totalVideos: filteredFolders.reduce((sum, f) => sum + f.videoCount, 0),
+      totalBytes: filteredFolders.reduce((sum, f) => sum + f.totalBytes, 0),
+    }
+  }, [filteredFolders, inventoryVehicleId, lockedPilarTab, stats])
 
   const loadDetail = useCallback(async (folderId: string) => {
     setDetailLoading(true)
@@ -200,39 +247,31 @@ export function RawFullVideosLibraryDashboard() {
     }
   }
 
+  function goToQueue() {
+    if (onOpenQueue) {
+      onOpenQueue()
+      return
+    }
+    setMainTab('queue')
+    setQueueRefreshKey((k) => k + 1)
+  }
+
+  const lockedTabLabel =
+    RAW_FULL_PILAR_TABS.find((t) => t.id === effectivePilarTab)?.label ?? 'este formato'
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Marketing</p>
-          <h1 className="text-2xl font-extrabold text-gray-900 mt-0.5">Biblioteca de videos en bruto</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Videos enteros ya creados en otra herramienta. Cola de publicación propia (no se mezcla con Videos).
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {mainTab === 'library' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => void loadLibrary()}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Actualizar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAppendTarget(null)
-                  setUploadOpen(true)
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
-              >
-                <Plus className="w-4 h-4" />
-                Subir videos
-              </button>
-            </>
+      {hideHeader ? (
+        <div className="flex flex-wrap justify-end gap-2">
+          {effectiveMainTab === 'library' ? (
+            <button
+              type="button"
+              onClick={() => void loadLibrary()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Actualizar
+            </button>
           ) : (
             <>
               <button
@@ -258,42 +297,122 @@ export function RawFullVideosLibraryDashboard() {
               </button>
             </>
           )}
+          {!hideUploadButton && effectiveMainTab === 'library' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setAppendTarget(null)
+                setUploadOpen(true)
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+            >
+              <Plus className="w-4 h-4" />
+              Subir videos
+            </button>
+          ) : null}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Marketing</p>
+            <h1 className="text-2xl font-extrabold text-gray-900 mt-0.5">
+              {vehicleTitle ? `Videos en bruto · ${vehicleTitle}` : 'Biblioteca de videos en bruto'}
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {embedded
+                ? 'Videos enteros de este vehículo, listos para programar publicación.'
+                : 'Videos enteros ya creados en otra herramienta. Cola de publicación propia (no se mezcla con Videos).'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {effectiveMainTab === 'library' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void loadLibrary()}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Actualizar
+                </button>
+                {!hideUploadButton ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppendTarget(null)
+                      setUploadOpen(true)
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Subir videos
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setQueueRefreshKey((k) => k + 1)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Actualizar
+                </button>
+                <button
+                  type="button"
+                  disabled={processingQueue}
+                  onClick={() => void runProcessNow()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50"
+                >
+                  {processingQueue ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="w-4 h-4" />
+                  )}
+                  Procesar cola ahora
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setMainTab('library')
-            setSelectedId(null)
-            setDetailFolder(null)
-            setVideos([])
-          }}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
-            mainTab === 'library'
-              ? 'bg-violet-600 text-white border-violet-600'
-              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4" />
-          Carpetas
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainTab('queue')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
-            mainTab === 'queue'
-              ? 'bg-violet-600 text-white border-violet-600'
-              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <ListVideo className="w-4 h-4" />
-          Cola programados
-        </button>
-      </div>
+      {!hideMainTabs ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab('library')
+              setSelectedId(null)
+              setDetailFolder(null)
+              setVideos([])
+            }}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+              effectiveMainTab === 'library'
+                ? 'bg-violet-600 text-white border-violet-600'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4" />
+            Carpetas
+          </button>
+          <button
+            type="button"
+            onClick={() => setMainTab('queue')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+              effectiveMainTab === 'queue'
+                ? 'bg-violet-600 text-white border-violet-600'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <ListVideo className="w-4 h-4" />
+            Cola programados
+          </button>
+        </div>
+      ) : null}
 
-      {mainTab === 'queue' ? (
+      {effectiveMainTab === 'queue' ? (
         <div className="space-y-4">
           <div className="rounded-[1.5rem] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-slate-50 px-5 py-4">
             <h2 className="text-lg font-extrabold text-gray-900">Cola de publicación</h2>
@@ -309,20 +428,22 @@ export function RawFullVideosLibraryDashboard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-bold uppercase text-gray-500">Carpetas</p>
-              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalFolders}</p>
+          {!inventoryVehicleId ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase text-gray-500">Carpetas</p>
+                <p className="text-xl font-extrabold text-gray-900 mt-0.5">{displayStats.totalFolders}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase text-gray-500">Videos</p>
+                <p className="text-xl font-extrabold text-gray-900 mt-0.5">{displayStats.totalVideos}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-bold uppercase text-gray-500">Peso (página)</p>
+                <p className="text-xl font-extrabold text-gray-900 mt-0.5">{formatBytes(displayStats.totalBytes)}</p>
+              </div>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-bold uppercase text-gray-500">Videos</p>
-              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.totalVideos}</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-bold uppercase text-gray-500">Peso (página)</p>
-              <p className="text-xl font-extrabold text-gray-900 mt-0.5">{formatBytes(stats.totalBytes)}</p>
-            </div>
-          </div>
+          ) : null}
 
           {!selectedId ? (
             <>
@@ -331,38 +452,44 @@ export function RawFullVideosLibraryDashboard() {
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Buscar por título, marca, modelo, placa…"
+                  placeholder={
+                    inventoryVehicleId
+                      ? 'Buscar carpeta de este vehículo…'
+                      : 'Buscar por título, marca, modelo, placa…'
+                  }
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm"
                 />
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                  Formato
-                </p>
-                <div className="inline-flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-100/90 border border-slate-200/80">
-                  {RAW_FULL_PILAR_TABS.map((tab) => {
-                    const active = pilarTab === tab.id
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setPilarTab(tab.id)}
-                        className={[
-                          'inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all',
-                          active
-                            ? tab.activeClass
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/70',
-                        ].join(' ')}
-                      >
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${tab.dotClass}`} />
-                        <span className="hidden md:inline">{tab.label}</span>
-                        <span className="md:hidden">{tab.shortLabel}</span>
-                      </button>
-                    )
-                  })}
+              {showPilarTabs ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                    Formato
+                  </p>
+                  <div className="inline-flex flex-wrap gap-1 p-1 rounded-2xl bg-slate-100/90 border border-slate-200/80">
+                    {RAW_FULL_PILAR_TABS.map((tab) => {
+                      const active = effectivePilarTab === tab.id
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setPilarTab(tab.id)}
+                          className={[
+                            'inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all',
+                            active
+                              ? tab.activeClass
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-white/70',
+                          ].join(' ')}
+                        >
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${tab.dotClass}`} />
+                          <span className="hidden md:inline">{tab.label}</span>
+                          <span className="md:hidden">{tab.shortLabel}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {loading ? (
                 <div className="flex justify-center py-16">
@@ -372,14 +499,18 @@ export function RawFullVideosLibraryDashboard() {
                 <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
                   <FolderOpen className="w-10 h-10 text-gray-300 mx-auto" />
                   <p className="mt-3 font-bold text-gray-800">
-                    Sin carpetas en {RAW_FULL_PILAR_TABS.find((t) => t.id === pilarTab)?.label}
+                    {inventoryVehicleId
+                      ? 'Sin videos en bruto para este vehículo'
+                      : `Sin carpetas en ${lockedTabLabel}`}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    {pilarTab === 'pilar1'
-                      ? 'Aquí aparecen los videos de vehículos (con nombre del auto).'
-                      : pilarTab === 'pilar4'
-                        ? 'Aquí van ganchos / POV sin vehículo.'
-                        : 'Sube un video con el formato de esta pestaña.'}
+                    {inventoryVehicleId
+                      ? 'Usa Subir videos para asociar material de Video Autos a este auto.'
+                      : effectivePilarTab === 'pilar1'
+                        ? 'Aquí aparecen los videos de vehículos (con nombre del auto).'
+                        : effectivePilarTab === 'pilar4'
+                          ? 'Aquí van ganchos / POV sin vehículo.'
+                          : 'Sube un video con el formato de esta pestaña.'}
                   </p>
                 </div>
               ) : (
@@ -604,8 +735,8 @@ export function RawFullVideosLibraryDashboard() {
         }}
         onScheduled={() => {
           void loadLibrary()
-          setMainTab('queue')
-          setQueueRefreshKey((k) => k + 1)
+          if (selectedId) void loadDetail(selectedId)
+          goToQueue()
         }}
       />
 
@@ -618,8 +749,7 @@ export function RawFullVideosLibraryDashboard() {
         initialVehicleId={scheduleTarget?.vehicleId ?? null}
         onScheduled={() => {
           setScheduleTarget(null)
-          setMainTab('queue')
-          setQueueRefreshKey((k) => k + 1)
+          goToQueue()
           toast.success('Programado — revisa la cola de esta biblioteca')
         }}
       />

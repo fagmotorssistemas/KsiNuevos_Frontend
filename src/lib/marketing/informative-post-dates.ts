@@ -38,6 +38,26 @@ export function getPostDayKeyEcuador(post: InformativePostDateFields): string {
   return `${p.y}-${pad(p.m)}-${pad(p.day)}`
 }
 
+/** 0 = domingo … 2 = martes … 4 = jueves (calendario Ecuador). */
+export function getPostWeekdayEcuador(post: InformativePostDateFields): number | null {
+  const iso = getPostDisplayIso(post)
+  if (!iso) return null
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Guayaquil',
+    weekday: 'short',
+  }).format(new Date(iso))
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  }
+  return map[weekday] ?? null
+}
+
 export function formatPostDayHeader(dayKey: string): string {
   if (dayKey === 'sin-fecha') return 'Sin fecha'
   try {

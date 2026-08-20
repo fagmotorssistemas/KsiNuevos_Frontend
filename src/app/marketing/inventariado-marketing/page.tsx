@@ -11,6 +11,13 @@ import {
   Film,
   ArrowLeft,
   FolderOpen,
+  Plus,
+  ListVideo,
+  GraduationCap,
+  Sparkles,
+  Heart,
+  PlayCircle,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { Pagination } from '@/shared/components/Pagination'
 import {
@@ -19,7 +26,11 @@ import {
   type InventoryKpiSummary,
 } from '@/components/features/inventory/InventoryKpiStats'
 import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
+import { RawFullVideosLibraryDashboard } from '@/components/videos/RawFullVideosLibraryDashboard'
+import { UploadFullVideosModal } from '@/components/videos/UploadFullVideosModal'
 import { VideoJobList } from '@/components/videos/VideoJobList'
+import { VehicleAiCreativesGallery } from '@/components/marketing/VehicleAiCreativesGallery'
+import type { RawFullCaptionFormato } from '@/lib/videos/raw-full-caption-templates'
 
 type Row = {
   id: string
@@ -67,8 +78,8 @@ function formatVehicleTitle(row: Row) {
   return `${toTitleCase(row.brand)} ${toTitleCase(row.model)} ${row.year}`
 }
 
-type PageTab = 'inventario' | 'clips'
-type VehicleDetailTab = 'reels' | 'raw-clips'
+type PageTab = 'inventario' | 'educativo' | 'entretenimiento' | 'humanizar' | 'cola' | 'vehiculo'
+type VehicleDetailTab = 'reels' | 'raw-clips' | 'raw-full' | 'ai-gallery'
 
 function tabButtonClass(active: boolean) {
   return `inline-flex items-center gap-2 rounded-t-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
@@ -110,6 +121,8 @@ export default function InventariadoMarketingPage() {
   const [activeTab, setActiveTab] = useState<PageTab>('inventario')
   const [vehicleDetailTab, setVehicleDetailTab] = useState<VehicleDetailTab>('reels')
   const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
 
   const lastFilterSig = useRef<string | null>(null)
   const pendingFilterReset = useRef(false)
@@ -195,19 +208,43 @@ export default function InventariadoMarketingPage() {
     if (filter === 'active') setInventoryStatus('disponible')
     else if (filter === 'baja') setInventoryStatus('vendido')
     else setInventoryStatus('all')
+    setActiveTab('inventario')
   }
 
   function handleVehicleSelect(row: Row) {
     setSelectedVehicle(row)
     setVehicleDetailTab('reels')
-    setActiveTab('clips')
+    setActiveTab('vehiculo')
   }
 
   function handleBackToInventory() {
     setActiveTab('inventario')
   }
 
+  function openQueueTab() {
+    setActiveTab('cola')
+    setLibraryRefreshKey((k) => k + 1)
+  }
+
+  function uploadFormato(): RawFullCaptionFormato {
+    if (activeTab === 'educativo') return 'video_educativo'
+    if (activeTab === 'entretenimiento') return 'video_entretenimiento'
+    if (activeTab === 'humanizar') return 'video_humanizar'
+    return 'video_autos'
+  }
+
   const selectedVehicleTitle = selectedVehicle ? formatVehicleTitle(selectedVehicle) : null
+  const uploadVehicleId =
+    activeTab === 'vehiculo' && selectedVehicle ? selectedVehicle.id : null
+
+  const rawFullEmbed = {
+    embedded: true as const,
+    hideHeader: true,
+    hideMainTabs: true,
+    hideUploadButton: true,
+    refreshKey: libraryRefreshKey,
+    onOpenQueue: openQueueTab,
+  }
 
   return (
     <div className="space-y-6">
@@ -219,11 +256,28 @@ export default function InventariadoMarketingPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Inventariado marketing</h1>
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-              Inventario con reels generados vinculados al vehículo y estado de publicación en redes. Haz clic en un
-              vehículo para ver sus reels y clips en bruto.
+              Inventario con reels, clips y videos en bruto por vehículo. El contenido educativo, de
+              entretenimiento y de marca está en las pestañas de esta misma página.
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setUploadOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold shrink-0 self-start"
+        >
+          <Plus className="w-4 h-4" />
+          Subir videos
+        </button>
+      </div>
+
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <InventoryKpiStats
+          data={kpiSummary}
+          loading={kpiLoading && !kpiSummary}
+          activeFilter={activeKpiFilter}
+          onFilterChange={handleKpiFilterChange}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
@@ -235,38 +289,81 @@ export default function InventariadoMarketingPage() {
           <ClipboardList className="w-4 h-4" />
           Inventario
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('educativo')}
+          className={tabButtonClass(activeTab === 'educativo')}
+        >
+          <GraduationCap className="w-4 h-4" />
+          Video Educativo
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('entretenimiento')}
+          className={tabButtonClass(activeTab === 'entretenimiento')}
+        >
+          <Sparkles className="w-4 h-4" />
+          Video Entretenimiento
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('humanizar')}
+          className={tabButtonClass(activeTab === 'humanizar')}
+        >
+          <Heart className="w-4 h-4" />
+          Video Humanizar Marca
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('cola')}
+          className={tabButtonClass(activeTab === 'cola')}
+        >
+          <ListVideo className="w-4 h-4" />
+          Cola programados
+        </button>
         {selectedVehicle ? (
           <button
             type="button"
-            onClick={() => setActiveTab('clips')}
-            className={`${tabButtonClass(activeTab === 'clips')} max-w-full`}
+            onClick={() => setActiveTab('vehiculo')}
+            className={tabButtonClass(activeTab === 'vehiculo')}
           >
             <Film className="w-4 h-4 shrink-0" />
-            <span className="truncate">{selectedVehicleTitle}</span>
+            Vehículo
           </button>
         ) : null}
       </div>
 
-      {activeTab === 'clips' && selectedVehicle ? (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-xl font-extrabold text-gray-900">{selectedVehicleTitle}</h2>
-              {selectedVehicle.plate ? (
-                <p className="text-xs text-gray-400 mt-0.5">Placa: {selectedVehicle.plate}</p>
-              ) : null}
+      {activeTab === 'vehiculo' && selectedVehicle ? (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="flex flex-col gap-4 px-4 sm:px-6 pt-4 sm:pt-5">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={handleBackToInventory}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 shrink-0"
+                aria-label="Volver al inventario"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 truncate">
+                  {selectedVehicleTitle}
+                </h2>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-gray-500">
+                  {selectedVehicle.plate ? <span>Placa {selectedVehicle.plate}</span> : null}
+                  {selectedVehicle.plate && selectedVehicle.status ? (
+                    <span className="text-gray-300">·</span>
+                  ) : null}
+                  {selectedVehicle.status ? (
+                    <span className="inline-flex font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                      {formatStatus(selectedVehicle.status)}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleBackToInventory}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shrink-0 self-start"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Volver al inventario
-            </button>
-          </div>
 
-          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
+            <div className="flex flex-wrap gap-1 border-b border-gray-200">
             <button
               type="button"
               onClick={() => setVehicleDetailTab('reels')}
@@ -283,13 +380,31 @@ export default function InventariadoMarketingPage() {
               <FolderOpen className="w-4 h-4" />
               Clips en bruto
             </button>
+            <button
+              type="button"
+              onClick={() => setVehicleDetailTab('raw-full')}
+              className={tabButtonClass(vehicleDetailTab === 'raw-full')}
+            >
+              <PlayCircle className="w-4 h-4" />
+              Videos en bruto
+            </button>
+            <button
+              type="button"
+              onClick={() => setVehicleDetailTab('ai-gallery')}
+              className={tabButtonClass(vehicleDetailTab === 'ai-gallery')}
+            >
+              <ImageIcon className="w-4 h-4" />
+              Galería IA
+            </button>
+            </div>
           </div>
 
+          <div className="p-4 sm:p-6">
           {vehicleDetailTab === 'reels' ? (
             <section aria-label="Reels del vehículo">
               <VideoJobList embedded inventoryVehicleId={selectedVehicle.id} />
             </section>
-          ) : (
+          ) : vehicleDetailTab === 'raw-clips' ? (
             <section aria-label="Clips en bruto">
               <RawClipsLibraryDashboard
                 embedded
@@ -298,8 +413,33 @@ export default function InventariadoMarketingPage() {
                 vehicleTitle={selectedVehicleTitle ?? undefined}
               />
             </section>
+          ) : vehicleDetailTab === 'raw-full' ? (
+            <section aria-label="Videos en bruto">
+              <RawFullVideosLibraryDashboard
+                {...rawFullEmbed}
+                forceMainTab="library"
+                inventoryVehicleId={selectedVehicle.id}
+                vehicleTitle={selectedVehicleTitle ?? undefined}
+              />
+            </section>
+          ) : (
+            <section aria-label="Galería IA">
+              <VehicleAiCreativesGallery
+                vehicleId={selectedVehicle.id}
+                vehicleTitle={selectedVehicleTitle ?? undefined}
+              />
+            </section>
           )}
+          </div>
         </div>
+      ) : activeTab === 'educativo' ? (
+        <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="library" lockedPilarTab="pilar3" />
+      ) : activeTab === 'entretenimiento' ? (
+        <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="library" lockedPilarTab="pilar4" />
+      ) : activeTab === 'humanizar' ? (
+        <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="library" lockedPilarTab="pilar2" />
+      ) : activeTab === 'cola' ? (
+        <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="queue" />
       ) : (
         <>
       {capped ? (
@@ -311,15 +451,6 @@ export default function InventariadoMarketingPage() {
           </p>
         </div>
       ) : null}
-
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <InventoryKpiStats
-          data={kpiSummary}
-          loading={kpiLoading && !kpiSummary}
-          activeFilter={activeKpiFilter}
-          onFilterChange={handleKpiFilterChange}
-        />
-      </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -486,6 +617,21 @@ export default function InventariadoMarketingPage() {
       </div>
         </>
       )}
+
+      <UploadFullVideosModal
+        isOpen={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        initialFormato={uploadFormato()}
+        initialVehicleId={uploadVehicleId}
+        onSaved={() => {
+          setLibraryRefreshKey((k) => k + 1)
+          if (activeTab === 'vehiculo') setVehicleDetailTab('raw-full')
+        }}
+        onScheduled={() => {
+          setLibraryRefreshKey((k) => k + 1)
+          setActiveTab('cola')
+        }}
+      />
     </div>
   )
 }

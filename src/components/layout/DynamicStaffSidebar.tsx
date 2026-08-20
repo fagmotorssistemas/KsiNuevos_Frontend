@@ -11,14 +11,17 @@ import { SegurosSidebar } from '@/components/layout/seguros-sidebar'
 
 /**
  * Muestra el sidebar del último módulo visitado (persistido en localStorage).
- * Fallback: contabilidad.
+ * No monta ningún sidebar hasta leer el valor guardado, para que rutas
+ * compartidas como /finance no pisen Ventas con Contabilidad.
  */
 export function DynamicStaffSidebar() {
-  const [shell, setShell] = useState<SidebarShell>('accounting')
+  const [shell, setShell] = useState<SidebarShell | null>(null)
 
   useEffect(() => {
     setShell(getSidebarShell())
   }, [])
+
+  if (!shell) return null
 
   switch (shell) {
     case 'seller':

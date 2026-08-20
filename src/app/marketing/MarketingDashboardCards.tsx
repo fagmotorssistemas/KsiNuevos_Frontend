@@ -9,7 +9,6 @@ import {
     BarChart3,
     CalendarDays,
     Sparkles,
-    FolderOpen,
     Code2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,8 +39,8 @@ const marketingCards: DashboardCard[] = [
     },
     {
         href: '/marketing/publicaciones',
-        title: 'Publicaciones',
-        description: 'Videos publicados con métricas y posts informativos/educativos.',
+        title: 'Noticias',
+        description: 'Posts informativos y educativos publicados en redes.',
         icon: Megaphone,
         iconClassName: 'bg-violet-600 shadow-violet-500/20',
         arrowClassName: 'text-violet-600',
@@ -73,15 +72,6 @@ const marketingCards: DashboardCard[] = [
         iconClassName: 'bg-gradient-to-br from-violet-500 to-violet-700 shadow-violet-500/20',
         arrowClassName: 'text-violet-600',
         borderHoverClassName: 'hover:border-violet-200',
-    },
-    {
-        href: '/marketing/biblioteca-clips',
-        title: 'Biblioteca de clips',
-        description: 'Clips en bruto por job: material fuente antes de la edición del reel.',
-        icon: FolderOpen,
-        iconClassName: 'bg-sky-600 shadow-sky-500/20',
-        arrowClassName: 'text-sky-600',
-        borderHoverClassName: 'hover:border-sky-200',
     },
 ];
 

@@ -57,12 +57,18 @@ export function pathnameBelongsToPrimaryNavItem(pathname: string, item: PrimaryN
 
 export function resolveActivePrimaryNavItem(
   pathname: string,
-  ctx: PermissionContext
+  ctx: PermissionContext,
+  preferredModule?: string | null
 ): PrimaryNavItem | null {
-  for (const item of buildPrimaryNavItems(ctx)) {
-    if (pathnameBelongsToPrimaryNavItem(pathname, item)) return item
+  const matches = buildPrimaryNavItems(ctx).filter((item) =>
+    pathnameBelongsToPrimaryNavItem(pathname, item)
+  )
+  if (matches.length === 0) return null
+  if (preferredModule) {
+    const preferred = matches.find((item) => item.module === preferredModule)
+    if (preferred) return preferred
   }
-  return null
+  return matches[0]
 }
 
 export function canSeePrimaryNavItem(ctx: PermissionContext, item: PrimaryNavItem): boolean {
