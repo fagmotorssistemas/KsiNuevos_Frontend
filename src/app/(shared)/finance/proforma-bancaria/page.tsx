@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Landmark, Loader2, Printer, RefreshCcw, User } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { InventorySearch } from "@/components/features/financing/InventorySearch";
 import { InputGroup, type InventoryCarRow } from "@/components/features/financing/FinancingUtils";
 import {
   BankProformaDocument,
-  BANK_PROFORMA_ADVISOR,
+  advisorFromProfile,
   type BankProformaClient,
 } from "@/components/features/financing/BankProformaDocument";
 
@@ -28,6 +29,8 @@ const EMPTY_CLIENT: BankProformaClient = {
 
 export default function BankProformaPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { profile } = useAuth();
+  const advisor = useMemo(() => advisorFromProfile(profile), [profile]);
 
   const [inventory, setInventory] = useState<InventoryCarRow[]>([]);
   const [isLoadingInventory, setIsLoadingInventory] = useState(true);
@@ -210,9 +213,10 @@ export default function BankProformaPage() {
 
           <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 text-sm text-neutral-600">
             <p className="font-semibold text-neutral-800 mb-1">Firma de la proforma</p>
-            <p className="uppercase font-bold text-neutral-900">{BANK_PROFORMA_ADVISOR.name}</p>
-            <p>{BANK_PROFORMA_ADVISOR.title}</p>
-            <p>{BANK_PROFORMA_ADVISOR.phone}</p>
+            <p className="uppercase font-bold text-neutral-900">{advisor.name}</p>
+            <p>{advisor.title}</p>
+            <p>{advisor.phone || "Sin teléfono en el perfil"}</p>
+            <p className="text-xs text-neutral-500 mt-2">Se toma de tu sesión (nombre, rol y teléfono del perfil).</p>
           </div>
         </div>
 
@@ -225,7 +229,7 @@ export default function BankProformaPage() {
                 vehicle={selectedVehicle}
                 price={price}
                 photoUrl={selectedVehicle?.img_main_url || null}
-                advisor={BANK_PROFORMA_ADVISOR}
+                advisor={advisor}
                 addressedTo={addressedTo}
                 optionalNote={optionalNote}
               />

@@ -22,11 +22,43 @@ export type BankProformaAdvisor = {
   phone: string;
 };
 
-export const BANK_PROFORMA_ADVISOR: BankProformaAdvisor = {
-  name: "Econ. Felipe Cabrera",
-  title: "Jefe comercial",
-  phone: "099 907 5030 - 099 985 7833",
+const ADVISOR_TITLE_BY_ROLE: Record<string, string> = {
+  vendedor: "Asesor comercial",
+  admin: "Jefe comercial",
+  finanzas: "Asesor financiero",
+  contable: "Contable",
+  marketing: "Marketing",
+  abogado: "Asesor legal",
+  abogada: "Asesora legal",
+  taller: "Taller",
 };
+
+function advisorTitleFromRole(role: string | null | undefined): string {
+  const key = (role ?? "").toLowerCase().trim();
+  if (!key) return "Asesor comercial";
+  return ADVISOR_TITLE_BY_ROLE[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function formatAdvisorPhone(phone: string | null | undefined): string {
+  const raw = (phone ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  }
+  return raw;
+}
+
+/** Firma del pie: datos del usuario en sesión (profiles). */
+export function advisorFromProfile(
+  profile: { full_name?: string | null; phone?: string | null; role?: string | null } | null
+): BankProformaAdvisor {
+  return {
+    name: (profile?.full_name ?? "").trim() || "ASESOR",
+    title: advisorTitleFromRole(profile?.role),
+    phone: formatAdvisorPhone(profile?.phone),
+  };
+}
 
 type BankProformaDocumentProps = {
   dateLabel: string;
