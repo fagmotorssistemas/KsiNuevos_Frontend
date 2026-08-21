@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
     Wallet,
     Users,
+    Clock,
     Landmark,
     FileText,
     Menu,
@@ -51,6 +52,7 @@ const menuItems: MenuItem[] = [
     { name: 'Cartera manual', href: '/cartera-manual', icon: HandCoins },
     { name: 'Mensajes cartera', href: '/mensajes-cartera', icon: MessageSquareOff },
     { name: 'Personal', href: '/employee', icon: Users },
+    { name: 'Marcaciones', href: '/marcaciones', icon: Clock },
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Movimientos', href: '/financing', icon: FileText },

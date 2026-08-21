@@ -60,14 +60,34 @@ export function canSeeVentasSidebarHref(href: string, ctx: PermissionContext): b
   return canAccessSubmodule(ctx, rule.submodule)
 }
 
-export function marketingRouteDenied(pathname: string, ctx: PermissionContext): string | null {
-  if (isAppAdminRole(ctx)) return null
-  if (!pathMatchesPrefix(pathname, '/marketing')) return null
+function isVendedorRole(ctx: PermissionContext): boolean {
+  return (ctx.baseRole ?? '').toString().toLowerCase().trim() === 'vendedor'
+}
 
+/** Excepciones de rol base (aunque el submódulo esté habilitado en permisos). */
+function marketingHrefBlockedForBaseRole(pathname: string, ctx: PermissionContext): string | null {
   const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
   if (pathMatchesPrefix(pathname, '/marketing/planificador') && role === 'contable') {
     return 'planificador'
   }
+  if (pathMatchesPrefix(pathname, '/marketing/noticiero') && role === 'vendedor') {
+    return 'blog-posts'
+  }
+  return null
+}
+
+/** Inventariado marketing es visible para vendedores aunque no tengan métricas/CAPI/campañas. */
+function marketingHrefAllowedForBaseRole(pathname: string, ctx: PermissionContext): boolean {
+  return isVendedorRole(ctx) && pathMatchesPrefix(pathname, '/marketing/inventariado-marketing')
+}
+
+export function marketingRouteDenied(pathname: string, ctx: PermissionContext): string | null {
+  if (isAppAdminRole(ctx)) return null
+  if (!pathMatchesPrefix(pathname, '/marketing')) return null
+
+  const roleBlock = marketingHrefBlockedForBaseRole(pathname, ctx)
+  if (roleBlock) return roleBlock
+  if (marketingHrefAllowedForBaseRole(pathname, ctx)) return null
 
   if (pathname === '/marketing') {
     return canAccessModule(ctx, MODULE_SLUGS.marketing) ? null : MODULE_SLUGS.marketing
@@ -83,6 +103,8 @@ export function marketingRouteDenied(pathname: string, ctx: PermissionContext): 
 
 export function canSeeMarketingSidebarHref(href: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
+  if (marketingHrefBlockedForBaseRole(href, ctx)) return false
+  if (marketingHrefAllowedForBaseRole(href, ctx)) return true
   if (href === '/marketing') {
     return canAccessModule(ctx, MODULE_SLUGS.marketing)
   }

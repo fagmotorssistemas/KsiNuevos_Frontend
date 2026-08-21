@@ -89,7 +89,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'finanzas', slug: 'asesoria-financiamiento', name: 'Asesoría financiamiento', sortOrder: 6 },
   { moduleSlug: 'finanzas', slug: 'notas-de-ventas', name: 'Notas de ventas', sortOrder: 7, routePrefixes: ['/notasdeventas'] },
   { moduleSlug: 'finanzas', slug: 'dashboard-finanzas', name: 'Dashboard', sortOrder: 8, routePrefixes: ['/dashboard'] },
-  { moduleSlug: 'finanzas', slug: 'empleados-finanzas', name: 'Personal', sortOrder: 9, routePrefixes: ['/employee'] },
+  { moduleSlug: 'finanzas', slug: 'empleados-finanzas', name: 'Personal', sortOrder: 9, routePrefixes: ['/employee', '/marcaciones'] },
   { moduleSlug: 'finanzas', slug: 'tesoreria', name: 'Tesorería', sortOrder: 10, routePrefixes: ['/treasury'] },
   { moduleSlug: 'finanzas', slug: 'reporte-ventas', name: 'Reporte de ventas', sortOrder: 11, routePrefixes: ['/salesreport'] },
   { moduleSlug: 'finanzas', slug: 'movimientos-financiamiento', name: 'Movimientos / financiamiento', sortOrder: 12, routePrefixes: ['/financing'] },

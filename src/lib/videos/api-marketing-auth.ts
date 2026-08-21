@@ -41,8 +41,23 @@ function staffMarketingApiEnumAllowed(ctx: PermissionContext): boolean {
   return role === 'marketing' || role === 'contable' || role === 'vendedor'
 }
 
+const VENDEDOR_INVENTARIADO_API_PREFIXES = [
+  '/api/marketing/inventory-video-dashboard',
+  '/api/marketing/inventory-creatives',
+] as const
+
 function canAccessMarketingApi(pathname: string, ctx: PermissionContext): boolean {
   if (isAppAdminRole(ctx)) return true
+  const role = (ctx.baseRole ?? '').toString().toLowerCase().trim()
+  if (role === 'vendedor' && pathMatchesPrefix(pathname, '/api/marketing/noticiero')) {
+    return false
+  }
+  if (
+    role === 'vendedor' &&
+    VENDEDOR_INVENTARIADO_API_PREFIXES.some((prefix) => pathMatchesPrefix(pathname, prefix))
+  ) {
+    return true
+  }
   if (staffMarketingApiEnumAllowed(ctx)) return true
 
   const submodule = resolveMarketingApiSubmodule(pathname)

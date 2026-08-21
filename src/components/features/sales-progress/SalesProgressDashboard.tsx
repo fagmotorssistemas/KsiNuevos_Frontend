@@ -41,7 +41,10 @@ function num(value: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-const CONTESTED_LEAD_CAP = 20;
+function contestedLeadCap(row: SalesProgressCategoryRow): number {
+  const fromRow = Math.abs(num(row.cap));
+  return fromRow > 0 ? fromRow : 40;
+}
 
 const SHOWROOM_EMPTY: SalesProgressCategoryRow = {
   categoria: 'showroom_followup',
@@ -180,7 +183,7 @@ function categoryCapLabel(row: SalesProgressCategoryRow): { done: number; max: n
   const done = num(row.cantidad);
   const pair = CATEGORY_UNITS[row.categoria] ?? ['acción', 'acciones'];
   if (row.categoria === 'lead_status_change') {
-    return { done, max: CONTESTED_LEAD_CAP, unit: done === 1 ? pair[0] : pair[1] };
+    return { done, max: contestedLeadCap(row), unit: done === 1 ? pair[0] : pair[1] };
   }
   return {
     done,
@@ -200,7 +203,8 @@ function CategoryBar({
 }) {
   const puntos = num(row.puntos);
   const cap = categoryCapLabel(row);
-  const progressMax = row.categoria === 'lead_status_change' ? CONTESTED_LEAD_CAP : Math.abs(num(row.cap)) || 1;
+  const progressMax =
+    row.categoria === 'lead_status_change' ? contestedLeadCap(row) : Math.abs(num(row.cap)) || 1;
   const progressValue = row.categoria === 'lead_status_change' ? cap.done : Math.abs(puntos);
   const width = Math.min(100, (progressValue / progressMax) * 100);
   const Icon = CATEGORY_ICON[row.categoria] ?? FileText;
@@ -209,7 +213,7 @@ function CategoryBar({
   const subtitle =
     row.categoria === 'lead_status_change'
       ? empty
-        ? `Tope ${CONTESTED_LEAD_CAP} leads`
+        ? `Tope ${contestedLeadCap(row)} leads`
         : `${cap.done} de ${cap.max} ${cap.unit}`
       : empty
         ? `Tope ${row.cap} pts`

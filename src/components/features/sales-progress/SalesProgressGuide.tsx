@@ -6,9 +6,9 @@ import { useEffect, useState } from 'react';
 const ITEMS = [
   {
     label: 'Leads contestados',
-    pts: '+2',
-    cap: '20 leads · 40 pts',
-    when: 'Guardó el resumen ejecutivo hoy. Un lead cuenta una sola vez. Es la mayor parte del día, pero sola no llega a 80.',
+    pts: '+1',
+    cap: '40 leads · 40 pts',
+    when: 'Guardó el resumen ejecutivo hoy. Un lead = 1 punto, una sola vez. Meta: 40 al día (Juan: 50).',
   },
   {
     label: 'Visitas showroom',
@@ -101,8 +101,8 @@ export function SalesProgressGuide() {
                   Ecuador). El score mira si el vendedor gestionó y avanzó hacia la venta, no si solo abrió pantallas.
                 </p>
                 <p>
-                  Contestados son la mayor parte (<strong className="font-semibold text-slate-900">40 pts</strong>), pero
-                  con volumen y showroom no llegas a 80. Para 80 hacen falta también ganado, asesoría, citas o proforma.
+                  Contestados son la mayor parte: <strong className="font-semibold text-slate-900">40 leads = 40 pts</strong>{' '}
+                  (1 por lead). Con solo eso no llegas a 80: hacen falta también ganado, asesoría, citas o proforma.
                 </p>
               </section>
 
@@ -152,13 +152,13 @@ export function SalesProgressGuide() {
                 <ul className="space-y-1.5">
                   <li>
                     <strong className="font-semibold text-slate-900">Felipe, Vanessa y Xavier</strong> — pipeline del día.
-                    Se espera que trabajen los leads que llegan hoy.
+                    Se espera que trabajen los leads que llegan hoy. Tope de contestados: 40 al día.
                   </li>
                   <li>
                     <strong className="font-semibold text-slate-900">Juan</strong> — cartera estrancada (leads viejos,
-                    no los del día). No se le pide pipeline nuevo. En el ranking ves cuántos{' '}
-                    <strong className="font-semibold text-slate-900">gestionó hoy</strong> (resumen ejecutivo), aunque el
-                    lead no sea de hoy. Suma con las mismas categorías que el resto.
+                    no los del día). No se le pide pipeline nuevo. Tope de contestados: 50 al día. En el ranking ves
+                    cuántos <strong className="font-semibold text-slate-900">gestionó hoy</strong> (resumen ejecutivo),
+                    aunque el lead no sea de hoy. Suma con las mismas categorías que el resto.
                   </li>
                 </ul>
               </section>
