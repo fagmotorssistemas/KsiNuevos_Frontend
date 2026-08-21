@@ -57,7 +57,7 @@ export default function InventoryPage() {
     const handleUpdateSuccess = async (patch: Partial<InventoryCar>) => {
         if (selectedCar) {
             patchCar(selectedCar.id, patch);
-            setSelectedCar((prev) => (prev ? { ...prev, ...patch } : null));
+            setSelectedCar({ ...selectedCar, ...patch });
         }
         await reload({ silent: true });
     };

@@ -20,6 +20,7 @@ import {
     FileText,        // Proformas guardadas
     Landmark,        // Proforma bancaria
     LayoutGrid,
+    TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
@@ -37,7 +38,8 @@ type MenuItem = {
 };
 
 const menuItems: MenuItem[] = [
-    { name: 'Leads', href: '/leads', icon: UserPlus },
+    { name: 'Progreso', href: '/leads/progreso', icon: TrendingUp },
+    { name: 'Leads', href: '/leads', icon: UserPlus, exact: true },
     { name: 'Showroom', href: '/showroom', icon: Store },
     { name: 'Agenda', href: '/agenda', icon: CalendarDays },
     { name: 'Inventario', href: '/inventory', icon: Package, exact: true },

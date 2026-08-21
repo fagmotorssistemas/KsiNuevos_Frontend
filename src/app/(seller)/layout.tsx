@@ -26,7 +26,7 @@ export default function AccountingLayout({
                    - 'print:h-auto': Permite que el div crezca tanto como el contenido requiera.
                    - 'print:p-0': (Opcional) Quita el padding para aprovechar todo el papel.
                 */}
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-20 md:pt-8 w-full print:overflow-visible print:h-auto print:p-0">
+                <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-20 md:pt-8 w-full print:overflow-visible print:h-auto print:p-0">
                     
                     {/* Contenedor con ancho máximo */}
                     <div className="max-w-7xl mx-auto h-full print:h-auto print:w-full print:max-w-none">

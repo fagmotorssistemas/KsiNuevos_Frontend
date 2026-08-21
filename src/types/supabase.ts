@@ -328,6 +328,51 @@ export type Database = {
           },
         ]
       }
+      asesoria_status_history: {
+        Row: {
+          asesoria_id: number
+          changed_by: string | null
+          id: number
+          lead_id: number
+          new_estado: string
+          old_estado: string | null
+          recorded_at: string
+        }
+        Insert: {
+          asesoria_id: number
+          changed_by?: string | null
+          id?: never
+          lead_id: number
+          new_estado: string
+          old_estado?: string | null
+          recorded_at?: string
+        }
+        Update: {
+          asesoria_id?: number
+          changed_by?: string | null
+          id?: never
+          lead_id?: number
+          new_estado?: string
+          old_estado?: string | null
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asesoria_status_history_asesoria_id_fkey"
+            columns: ["asesoria_id"]
+            isOneToOne: false
+            referencedRelation: "asesoria_financiamiento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asesoria_status_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_recovery_markers: {
         Row: {
           marker_key: string
@@ -1410,6 +1455,48 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_progress_snapshot: {
+        Row: {
+          cantidad: number
+          categoria: string
+          fecha: string
+          puntos: number
+          updated_at: string
+          vendedor_id: string
+        }
+        Insert: {
+          cantidad?: number
+          categoria: string
+          fecha: string
+          puntos?: number
+          updated_at?: string
+          vendedor_id: string
+        }
+        Update: {
+          cantidad?: number
+          categoria?: string
+          fecha?: string
+          puntos?: number
+          updated_at?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_progress_snapshot_categoria_fkey"
+            columns: ["categoria"]
+            isOneToOne: false
+            referencedRelation: "sales_progress_weights"
+            referencedColumns: ["category"]
+          },
+          {
+            foreignKeyName: "daily_progress_snapshot_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       datos_solicitados_clientes: {
         Row: {
           estado: string | null
@@ -1807,6 +1894,7 @@ export type Database = {
           lead_id: number
           updated_at: string | null
           vehicle_uid: string | null
+          ya_notificado: boolean
         }
         Insert: {
           created_at?: string | null
@@ -1815,6 +1903,7 @@ export type Database = {
           lead_id: number
           updated_at?: string | null
           vehicle_uid?: string | null
+          ya_notificado?: boolean
         }
         Update: {
           created_at?: string | null
@@ -1823,6 +1912,7 @@ export type Database = {
           lead_id?: number
           updated_at?: string | null
           vehicle_uid?: string | null
+          ya_notificado?: boolean
         }
         Relationships: [
           {
@@ -2968,6 +3058,58 @@ export type Database = {
           },
         ]
       }
+      lead_status_history: {
+        Row: {
+          assigned_to: string | null
+          changed_by: string | null
+          id: number
+          lead_id: number
+          new_status: Database["public"]["Enums"]["lead_status"]
+          old_status: Database["public"]["Enums"]["lead_status"] | null
+          recorded_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          changed_by?: string | null
+          id?: never
+          lead_id: number
+          new_status: Database["public"]["Enums"]["lead_status"]
+          old_status?: Database["public"]["Enums"]["lead_status"] | null
+          recorded_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          changed_by?: string | null
+          id?: never
+          lead_id?: number
+          new_status?: Database["public"]["Enums"]["lead_status"]
+          old_status?: Database["public"]["Enums"]["lead_status"] | null
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_status_history_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_status_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_status_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_temperature_history: {
         Row: {
           campaign_month: string
@@ -3003,6 +3145,7 @@ export type Database = {
       leads: {
         Row: {
           assigned_to: string | null
+          autos_similares_notificados: number
           behavior_signals: Json | null
           budget: string | null
           contact_id: number | null
@@ -3010,6 +3153,7 @@ export type Database = {
           day_detected: string | null
           email: string | null
           fecha_ultimo_contacto: string | null
+          felicitacion_compra_enviada: boolean | null
           financing: boolean | null
           fotos_enviadas_at: string | null
           hour_detected: string | null
@@ -3032,6 +3176,7 @@ export type Database = {
         }
         Insert: {
           assigned_to?: string | null
+          autos_similares_notificados?: number
           behavior_signals?: Json | null
           budget?: string | null
           contact_id?: number | null
@@ -3039,6 +3184,7 @@ export type Database = {
           day_detected?: string | null
           email?: string | null
           fecha_ultimo_contacto?: string | null
+          felicitacion_compra_enviada?: boolean | null
           financing?: boolean | null
           fotos_enviadas_at?: string | null
           hour_detected?: string | null
@@ -3061,6 +3207,7 @@ export type Database = {
         }
         Update: {
           assigned_to?: string | null
+          autos_similares_notificados?: number
           behavior_signals?: Json | null
           budget?: string | null
           contact_id?: number | null
@@ -3068,6 +3215,7 @@ export type Database = {
           day_detected?: string | null
           email?: string | null
           fecha_ultimo_contacto?: string | null
+          felicitacion_compra_enviada?: boolean | null
           financing?: boolean | null
           fotos_enviadas_at?: string | null
           hour_detected?: string | null
@@ -5606,6 +5754,62 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      sales_progress_seller_config: {
+        Row: {
+          rol: string
+          sort_order: number
+          vendedor_id: string
+        }
+        Insert: {
+          rol: string
+          sort_order?: number
+          vendedor_id: string
+        }
+        Update: {
+          rol?: string
+          sort_order?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_progress_seller_config_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_progress_weights: {
+        Row: {
+          active: boolean
+          axis: string
+          category: string
+          daily_cap_points: number
+          label: string
+          points: number
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          axis: string
+          category: string
+          daily_cap_points?: number
+          label: string
+          points: number
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          axis?: string
+          category?: string
+          daily_cap_points?: number
+          label?: string
+          points?: number
+          sort_order?: number
         }
         Relationships: []
       }
@@ -8302,11 +8506,23 @@ export type Database = {
           submodule_slug: string
         }[]
       }
+      get_sales_daily_progress: {
+        Args: { p_fecha?: string; p_vendedor_id?: string }
+        Returns: Json
+      }
+      get_sales_progress_events: {
+        Args: { p_categoria: string; p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      get_sales_progress_sellers: { Args: never; Returns: Json }
       get_showroom_visitas_recordatorio: {
         Args: never
         Returns: {
           client_name: string
           cliente_registrado: boolean
+          contact_id: number
+          img_gallery_urls: string[]
+          img_main_url: string
           lead_id_kommo: number
           phone: string
           vehiculo: string
@@ -8410,6 +8626,24 @@ export type Database = {
         }[]
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
+      notificar_intereses_similares: {
+        Args: {
+          p_brand: string
+          p_inventory_id: string
+          p_max_notificaciones?: number
+          p_model: string
+        }
+        Returns: {
+          carro_interes_anio: number
+          carro_interes_marca: string
+          carro_interes_modelo: string
+          carro_nuevo_marca: string
+          carro_nuevo_modelo: string
+          lead_id_kommo: number
+          nombre: string
+          numero: string
+        }[]
+      }
       paginated_lead_ids_for_temperature_filter: {
         Args: {
           p_assigned_to?: string
@@ -8423,6 +8657,10 @@ export type Database = {
         Returns: {
           lead_id: number
         }[]
+      }
+      refresh_daily_progress_snapshot: {
+        Args: { p_fecha?: string }
+        Returns: number
       }
       reset_leads_temperature_monthly: { Args: never; Returns: number }
       rls_roles_gps: { Args: never; Returns: string[] }
@@ -8659,6 +8897,56 @@ export type Database = {
             }
             Returns: string
           }
+      sales_progress_apply_weights: {
+        Args: { p_fecha: string; p_include_stale?: boolean }
+        Returns: {
+          axis: string
+          cantidad: number
+          cap: number
+          categoria: string
+          label: string
+          puntos: number
+          puntos_brutos: number
+          sort_order: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_day_pipeline_stats: {
+        Args: { p_fecha: string }
+        Returns: {
+          backlog_abiertos: number
+          con_historial: number
+          ingresados: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_event_counts: {
+        Args: { p_fecha: string }
+        Returns: {
+          cantidad: number
+          categoria: string
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_team_trend: {
+        Args: { p_fecha: string }
+        Returns: {
+          fecha: string
+          porcentaje: number
+          puntos_actividad: number
+          puntos_avance: number
+          puntos_total: number
+          vendedores: number
+        }[]
+      }
+      sales_stale_lead_counts: {
+        Args: never
+        Returns: {
+          cantidad: number
+          nombres: string[]
+          vendedor_id: string
+        }[]
+      }
       seed_profile_permissions_from_role: {
         Args: { p_profile_id: string; p_role_id: string }
         Returns: undefined
