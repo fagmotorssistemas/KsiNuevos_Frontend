@@ -155,9 +155,10 @@ export function SalesProgressGuide() {
                     Se espera que trabajen los leads que llegan hoy.
                   </li>
                   <li>
-                    <strong className="font-semibold text-slate-900">Juan</strong> — cartera estrancada. El backlog no
-                    resta. En el ranking ves <strong className="font-semibold text-slate-900">gestionados hoy</strong>{' '}
-                    (resumen ejecutivo), aunque el lead no sea de hoy. Suma con las mismas categorías.
+                    <strong className="font-semibold text-slate-900">Juan</strong> — cartera estrancada (leads viejos,
+                    no los del día). No se le pide pipeline nuevo. En el ranking ves cuántos{' '}
+                    <strong className="font-semibold text-slate-900">gestionó hoy</strong> (resumen ejecutivo), aunque el
+                    lead no sea de hoy. Suma con las mismas categorías que el resto.
                   </li>
                 </ul>
               </section>
