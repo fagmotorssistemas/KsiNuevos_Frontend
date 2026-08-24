@@ -55,12 +55,15 @@ export type Database = {
       }
       appointments: {
         Row: {
+          client_attended: boolean | null
           created_at: string | null
           external_client_name: string | null
           id: number
           is_completed: boolean
           lead_id: number | null
           location: string | null
+          no_show_follow_up: string | null
+          no_show_reason: string | null
           notes: string | null
           reminder_sent_at: string | null
           responsible_id: string
@@ -70,12 +73,15 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_attended?: boolean | null
           created_at?: string | null
           external_client_name?: string | null
           id?: number
           is_completed?: boolean
           lead_id?: number | null
           location?: string | null
+          no_show_follow_up?: string | null
+          no_show_reason?: string | null
           notes?: string | null
           reminder_sent_at?: string | null
           responsible_id: string
@@ -85,12 +91,15 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_attended?: boolean | null
           created_at?: string | null
           external_client_name?: string | null
           id?: number
           is_completed?: boolean
           lead_id?: number | null
           location?: string | null
+          no_show_follow_up?: string | null
+          no_show_reason?: string | null
           notes?: string | null
           reminder_sent_at?: string | null
           responsible_id?: string
@@ -4349,6 +4358,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notas_venta_procesadas: {
+        Row: {
+          cco_codigo: string
+          cliente_id: string | null
+          cliente_nombre: string | null
+          fecha_venta: string | null
+          felicitacion_enviada_at: string | null
+          id: number
+          nota_venta: string | null
+        }
+        Insert: {
+          cco_codigo: string
+          cliente_id?: string | null
+          cliente_nombre?: string | null
+          fecha_venta?: string | null
+          felicitacion_enviada_at?: string | null
+          id?: never
+          nota_venta?: string | null
+        }
+        Update: {
+          cco_codigo?: string
+          cliente_id?: string | null
+          cliente_nombre?: string | null
+          fecha_venta?: string | null
+          felicitacion_enviada_at?: string | null
+          id?: never
+          nota_venta?: string | null
+        }
+        Relationships: []
+      }
       noticiero_config: {
         Row: {
           avatar_rotation: string[]
@@ -8518,6 +8557,7 @@ export type Database = {
       get_showroom_visitas_recordatorio: {
         Args: never
         Returns: {
+          assigned_to: string
           client_name: string
           cliente_registrado: boolean
           contact_id: number
@@ -8527,6 +8567,7 @@ export type Database = {
           phone: string
           vehiculo: string
           vehiculo_id: string
+          vendedor: string
           visit_end: string
           visit_id: number
         }[]
@@ -8911,6 +8952,53 @@ export type Database = {
           vendedor_id: string
         }[]
       }
+      sales_progress_appointment_managed: {
+        Args: { ap: Database["public"]["Tables"]["appointments"]["Row"] }
+        Returns: boolean
+      }
+      sales_progress_asesoria_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          ingresadas: number
+          llenadas: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_asesoria_events_json: {
+        Args: { p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      sales_progress_asesoria_gestion_completa: {
+        Args: {
+          g: Database["public"]["Tables"]["asesoria_financiamiento_gestion"]["Row"]
+        }
+        Returns: boolean
+      }
+      sales_progress_datos_faltantes_contestada: {
+        Args: {
+          d: Database["public"]["Tables"]["datos_solicitados_clientes"]["Row"]
+        }
+        Returns: boolean
+      }
+      sales_progress_datos_faltantes_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          contestadas: number
+          ingresadas: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_datos_faltantes_events_json: {
+        Args: { p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      sales_progress_day_lead_citas: {
+        Args: { p_fecha: string }
+        Returns: {
+          con_cita: number
+          vendedor_id: string
+        }[]
+      }
       sales_progress_day_pipeline_stats: {
         Args: { p_fecha: string }
         Returns: {
@@ -8925,6 +9013,14 @@ export type Database = {
         Returns: {
           cantidad: number
           categoria: string
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_showroom_gestion_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          cantidad: number
+          puntos: number
           vendedor_id: string
         }[]
       }

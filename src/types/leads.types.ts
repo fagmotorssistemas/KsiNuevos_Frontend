@@ -30,7 +30,12 @@ export type LeadsFilters = {
     status: string | 'all';
     temperature: string | 'all';
     dateRange: DateFilter;
-    exactDate: string; 
+    /** Día único (métricas / compatibilidad). Se sincroniza cuando inicio = fin. */
+    exactDate: string;
+    /** YYYY-MM-DD inicio del rango personalizado. */
+    dateFrom: string;
+    /** YYYY-MM-DD fin del rango personalizado. */
+    dateTo: string;
     assignedTo: string | 'all';
     requestStatus?: string | 'all';
     hasBudget?: boolean;

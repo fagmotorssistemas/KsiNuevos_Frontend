@@ -5,6 +5,18 @@ import { useEffect, useState } from 'react';
 
 const ITEMS = [
   {
+    label: 'Llegaron → cita',
+    pts: '%',
+    cap: 'tasa, no puntos',
+    when: 'De los leads que llegaron hoy, cuántos ya tienen una cita creada hoy. El porcentaje es citas ÷ leads del día.',
+  },
+  {
+    label: 'Info. faltante',
+    pts: '%',
+    cap: 'tasa, no puntos',
+    when: 'De las solicitudes de info. faltante que llegaron hoy, cuántas se contestaron (nota + En proceso o Resuelto). Si llegó 1 y se contestó, 100%. Si llegó y no contestaron nada, 0%.',
+  },
+  {
     label: 'Leads contestados',
     pts: '+1',
     cap: '40 leads · 40 pts',
@@ -14,7 +26,13 @@ const ITEMS = [
     label: 'Visitas showroom',
     pts: '+4',
     cap: '3 visitas · 12 pts',
-    when: 'Toda visita del día asignada al vendedor, con o sin gestión escrita.',
+    when: 'Registrar la visita en Showroom. Suma aunque no escribas seguimiento.',
+  },
+  {
+    label: 'Seguimiento showroom',
+    pts: '+3 / +2 / +1',
+    cap: 'tope 9 pts (extra)',
+    when: 'Escribir la primera gestión de la visita. Mismo día = 3, al día siguiente = 2, a los 2+ días = 1. Sin gestión = 0. La nota al crear la visita no cuenta.',
   },
   {
     label: 'Lead ganado',
@@ -25,14 +43,14 @@ const ITEMS = [
   {
     label: 'Asesoría avanzada',
     pts: '+5',
-    cap: '3 · 15 pts',
-    when: 'Mueve la asesoría de financiamiento a En proceso o Resuelto.',
+    cap: 'sin tope',
+    when: 'Llena la gestión completa (no basta el estado). De las que llegaron hoy, cuántas se enviaron llenas. Un cliente cuenta una vez. Si llegan más, sigue sumando.',
   },
   {
     label: 'Cita completada',
     pts: '+5',
     cap: '2 citas · 10 pts',
-    when: 'Marca la cita como completada en Agenda.',
+    when: 'En Agenda: Si vino suma. Si no vino también suma cuando dejan el motivo y si se llamó o se dejó un mensaje (así se ve que estuvieron atentos).',
   },
   {
     label: 'Proforma PDF',
@@ -103,6 +121,8 @@ export function SalesProgressGuide() {
                 <p>
                   Contestados son la mayor parte: <strong className="font-semibold text-slate-900">40 leads = 40 pts</strong>{' '}
                   (1 por lead). Con solo eso no llegas a 80: hacen falta también ganado, asesoría, citas o proforma.
+                  <strong className="font-semibold text-slate-900"> Llegaron → cita</strong> es una tasa aparte, no entra
+                  al score.
                 </p>
               </section>
 
@@ -115,8 +135,8 @@ export function SalesProgressGuide() {
                   </li>
                   <li>
                     En el ranking, <strong className="font-semibold text-slate-900">llegaron</strong> son leads nuevos del
-                    día. <strong className="font-semibold text-slate-900">Contestados</strong> son resúmenes ejecutivos
-                    guardados hoy (de cualquier lead).
+                    día. <strong className="font-semibold text-slate-900">A cita</strong> es cuántos de esos ya tienen
+                    una cita creada el mismo día (tasa, no puntos).
                   </li>
                   <li>
                     Toca una categoría para ver el detalle. Si está en 0, esa palanca no se usó.
@@ -144,7 +164,7 @@ export function SalesProgressGuide() {
                     </li>
                   ))}
                 </ul>
-                <p className="text-xs text-slate-400">40 + 12 + 20 + 15 + 10 + 3 = 100</p>
+                <p className="text-xs text-slate-400">40 + 12 + 20 + 15 + 10 + 3 = 100. El seguimiento showroom suma aparte (hasta 9 pts extra).</p>
               </section>
 
               <section className="space-y-2">
@@ -170,6 +190,7 @@ export function SalesProgressGuide() {
                   <li>Cambiar el estado sin guardar el resumen ejecutivo.</li>
                   <li>Cerrar como Perdido (solo Ganado suma).</li>
                   <li>El historial de interacciones: no suma aparte del resumen.</li>
+                  <li>La observación al crear la visita: no es seguimiento (hay que escribir la gestión).</li>
                   <li>Acciones de otro vendedor o de otro día (corte 00:00 Ecuador).</li>
                 </ul>
               </section>

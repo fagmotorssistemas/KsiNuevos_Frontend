@@ -37,6 +37,7 @@ export type Database = {
       }
       appointments: {
         Row: {
+          client_attended: boolean | null
           created_at: string | null
           external_client_name: string | null
           id: number
@@ -44,6 +45,8 @@ export type Database = {
           lead_id: number | null
           location: string | null
           notes: string | null
+          no_show_follow_up: string | null
+          no_show_reason: string | null
           responsible_id: string
           start_time: string
           status: Database["public"]["Enums"]["appointment_status"] | null
@@ -51,6 +54,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_attended?: boolean | null
           created_at?: string | null
           external_client_name?: string | null
           id?: number
@@ -58,6 +62,8 @@ export type Database = {
           lead_id?: number | null
           location?: string | null
           notes?: string | null
+          no_show_follow_up?: string | null
+          no_show_reason?: string | null
           responsible_id: string
           start_time: string
           status?: Database["public"]["Enums"]["appointment_status"] | null
@@ -65,6 +71,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_attended?: boolean | null
           created_at?: string | null
           external_client_name?: string | null
           id?: number
@@ -72,6 +79,8 @@ export type Database = {
           lead_id?: number | null
           location?: string | null
           notes?: string | null
+          no_show_follow_up?: string | null
+          no_show_reason?: string | null
           responsible_id?: string
           start_time?: string
           status?: Database["public"]["Enums"]["appointment_status"] | null

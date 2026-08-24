@@ -1,6 +1,7 @@
 // src/components/LeadDatosPedidosTab.tsx
 import { useState } from 'react';
 import { FileQuestion, Save, MessageSquareText } from "lucide-react";
+import { toast } from "sonner";
 import { useLeadRequests } from '@/hooks/useLeadRequests';
 import { REQUEST_STATUS_CONFIG, RequestStatus, ClientRequestRow } from '@/types/requests.types';
 
@@ -59,6 +60,10 @@ function RequestCard({
   const [dirty, setDirty] = useState(false); // Para saber si hay cambios sin guardar
 
   const handleSave = async () => {
+    if ((status === 'en_proceso' || status === 'resuelto') && !notes.trim()) {
+      toast.error('Escribe la respuesta. Solo cambiar el estado no cuenta como contestada.');
+      return;
+    }
     await onSave(request.id, status, notes);
     setDirty(false);
   };
@@ -116,6 +121,9 @@ function RequestCard({
         {/* Text Area de Notas */}
         <div>
             <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Notas de resolución / Comentarios</label>
+            <p className="text-[10px] text-slate-400 -mt-1 mb-1">
+              Hay que contestar aquí. El estado solo no cuenta.
+            </p>
             <textarea
                 className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
                 rows={2}

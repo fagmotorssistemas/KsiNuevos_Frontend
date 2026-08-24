@@ -62,6 +62,8 @@ export function useLeads() {
         temperature: 'all',
         dateRange: 'all',
         exactDate: '',
+        dateFrom: '',
+        dateTo: '',
         assignedTo: 'all',
         requestStatus: 'all',
         hasBudget: false,
@@ -172,6 +174,8 @@ export function useLeads() {
             temperature: filters.temperature,
             dateRange: filters.dateRange,
             exactDate: filters.exactDate,
+            dateFrom: filters.dateFrom || '',
+            dateTo: filters.dateTo || '',
             assignedTo: filters.assignedTo,
             requestStatus: filters.requestStatus,
             hasBudget: filters.hasBudget,
@@ -185,6 +189,8 @@ export function useLeads() {
             filters.temperature,
             filters.dateRange,
             filters.exactDate,
+            filters.dateFrom,
+            filters.dateTo,
             filters.assignedTo,
             filters.requestStatus,
             filters.hasBudget,
@@ -203,6 +209,8 @@ export function useLeads() {
             temperature: 'all',
             dateRange: 'all',
             exactDate: '',
+            dateFrom: '',
+            dateTo: '',
             assignedTo: 'all',
             requestStatus: 'all',
             hasBudget: false,
@@ -241,7 +249,12 @@ export function useLeads() {
                 : Promise.resolve(null);
 
             void Promise.all([
-                fetchDailyInteractions(supabase, queryFilters.assignedTo, queryFilters.exactDate),
+                fetchDailyInteractions(
+                    supabase,
+                    queryFilters.assignedTo,
+                    queryFilters.dateFrom || queryFilters.exactDate,
+                    queryFilters.dateTo || queryFilters.exactDate
+                ),
                 fetchRequestStats(supabase, queryFilters.assignedTo),
                 fetchBudgetStats(supabase, queryFilters.assignedTo),
                 fetchTradeInLeadsCount(supabase, queryFilters.assignedTo),
@@ -325,11 +338,17 @@ export function useLeads() {
         } else {
             const key = keyOrFilters as keyof LeadsFilters;
             if (key === 'exactDate' && value !== '') {
-                setFilters(prev => ({ ...prev, exactDate: value, dateRange: 'all' }));
+                setFilters(prev => ({
+                    ...prev,
+                    exactDate: value,
+                    dateFrom: value,
+                    dateTo: value,
+                    dateRange: 'all',
+                }));
             } else if (key === 'exactDate' && value === '') {
-                setFilters(prev => ({ ...prev, exactDate: '' }));
+                setFilters(prev => ({ ...prev, exactDate: '', dateFrom: '', dateTo: '' }));
             } else if (key === 'dateRange') {
-                setFilters(prev => ({ ...prev, dateRange: value, exactDate: '' }));
+                setFilters(prev => ({ ...prev, dateRange: value, exactDate: '', dateFrom: '', dateTo: '' }));
             } else if (key === 'status') {
                 setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false }));
             } else {

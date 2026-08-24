@@ -4,6 +4,7 @@ import { useLeadFinancialAdvisory } from "@/hooks/useLeadFinancialAdvisory";
 import { toast } from "sonner";
 import {
   FINANCIAL_ADVISORY_STATUS_CONFIG,
+  missingFinancialAdvisoryFields,
   type FinancialAdvisoryGestionType,
   type FinancialAdvisoryRecord,
   type FinancialAdvisoryStatus,
@@ -33,6 +34,8 @@ export function LeadAsesoriaFinanciamientoTab({ leadId }: { leadId: number }) {
     uploadingEvidence,
   } = useLeadFinancialAdvisory(leadId);
 
+  const displayRecord = useMemo(() => pickSingleAdvisory(records), [records]);
+
   if (loading) return <div className="p-8 text-center text-slate-400 text-xs">Cargando asesorias...</div>;
 
   return (
@@ -49,29 +52,59 @@ export function LeadAsesoriaFinanciamientoTab({ leadId }: { leadId: number }) {
         </div>
       </div>
 
-      {records.length === 0 ? (
+      {!displayRecord ? (
         <div className="text-center p-10 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-xl">
           <WalletCards className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p>No hay solicitudes de asesoria financiera para este lead.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {records.map((record) => (
-            <FinancialAdvisoryCard
-              key={record.id}
-              record={record}
-              onSave={updateRecord}
-              isUpdating={updating === record.id}
-              onCreateGestion={createGestion}
-              onUpdateGestion={updateGestion}
-              onUploadEvidence={uploadEvidence}
-              uploadingEvidence={uploadingEvidence}
-            />
-          ))}
-        </div>
+        <FinancialAdvisoryCard
+          record={displayRecord}
+          onSave={updateRecord}
+          isUpdating={updating === displayRecord.id}
+          onCreateGestion={createGestion}
+          onUpdateGestion={updateGestion}
+          onUploadEvidence={uploadEvidence}
+          uploadingEvidence={uploadingEvidence}
+        />
       )}
     </div>
   );
+}
+
+function advisoryTime(record: FinancialAdvisoryRecord): number {
+  const t = record.fecha_solicitud ? new Date(record.fecha_solicitud).getTime() : 0;
+  return Number.isFinite(t) ? t : record.id;
+}
+
+function advisoryRank(estado: FinancialAdvisoryRecord["estado"]): number {
+  if (estado === "en_proceso") return 0;
+  if (estado === "pendiente") return 1;
+  return 2;
+}
+
+/** Un cliente = una asesoría en pantalla, aunque haya filas duplicadas. */
+function pickSingleAdvisory(records: FinancialAdvisoryRecord[]): FinancialAdvisoryRecord | null {
+  if (records.length === 0) return null;
+
+  const primary = [...records].sort((a, b) => {
+    const byStatus = advisoryRank(a.estado) - advisoryRank(b.estado);
+    if (byStatus !== 0) return byStatus;
+    return advisoryTime(b) - advisoryTime(a);
+  })[0];
+
+  const gestiones = records
+    .flatMap((row) => row.gestiones ?? [])
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const seen = new Set<number>();
+  const uniqueGestiones = gestiones.filter((g) => {
+    if (seen.has(g.id)) return false;
+    seen.add(g.id);
+    return true;
+  });
+
+  return { ...primary, gestiones: uniqueGestiones };
 }
 
 function FinancialAdvisoryCard({
@@ -171,8 +204,55 @@ function FinancialAdvisoryCard({
   }, [selectedGestionId, selectedGestion]);
 
   const handleSave = async () => {
+    if (status === "en_proceso" || status === "resuelto") {
+      const completeSaved = (record.gestiones ?? []).some(
+        (g) => missingFinancialAdvisoryFields(g).length === 0
+      );
+      if (!completeSaved) {
+        toast.error("Llena la gestión completa para pasar a En proceso o Resuelto. El estado solo no suma puntos.");
+        return;
+      }
+    }
     await onSave(record.id, status, notes);
     setDirty(false);
+  };
+
+  const handleSaveGestion = async () => {
+    const missing = missingFinancialAdvisoryFields(gestionDraft);
+    if (missing.length > 0) {
+      toast.error(`Completa la gestión: ${missing.join(", ")}.`);
+      return;
+    }
+    if (selectedGestionId == null) {
+      const res = await onCreateGestion(record.id, buildGestionPayload(gestionDraft));
+      if (!res?.success) {
+        toast.error("No se pudo guardar la gestión. Completa los campos e intenta de nuevo.");
+        return;
+      }
+      if (res?.data?.id) setSelectedGestionId(res.data.id);
+      if (status === "pendiente") {
+        setStatus("en_proceso");
+        await onSave(record.id, "en_proceso", notes);
+        setDirty(false);
+      }
+      setDirtyGestion(false);
+      toast.success("Gestión guardada. Suma en Asesoría avanzada.");
+      return;
+    }
+
+    if (!selectedGestion) return;
+    const updated = await onUpdateGestion(selectedGestion.id, buildGestionPayload(gestionDraft));
+    if (!updated?.success) {
+      toast.error("No se pudo guardar la gestión. Completa los campos e intenta de nuevo.");
+      return;
+    }
+    if (status === "pendiente") {
+      setStatus("en_proceso");
+      await onSave(record.id, "en_proceso", notes);
+      setDirty(false);
+    }
+    setDirtyGestion(false);
+    toast.success("Gestión guardada. Suma en Asesoría avanzada.");
   };
 
   const handleStartNewGestionDraft = () => {
@@ -215,20 +295,6 @@ function FinancialAdvisoryCard({
     monto_aprobable_max: d.monto_aprobable_max ?? null,
     plazo_meses_max: d.plazo_meses_max ?? null,
   });
-
-  const handleSaveGestion = async () => {
-    if (selectedGestionId == null) {
-      // Nueva gestión: se crea en DB solo al presionar guardar.
-      const res = await onCreateGestion(record.id, buildGestionPayload(gestionDraft));
-      if (res?.data?.id) setSelectedGestionId(res.data.id);
-      setDirtyGestion(false);
-      return;
-    }
-
-    if (!selectedGestion) return;
-    await onUpdateGestion(selectedGestion.id, buildGestionPayload(gestionDraft));
-    setDirtyGestion(false);
-  };
 
   /** Si la gestión ya existe en DB, persiste el borrador completo (incluye pdf_urls / image_urls) sin esperar al botón. */
   const persistGestionIfSaved = async (nextDraft: typeof gestionDraft) => {
@@ -275,6 +341,9 @@ function FinancialAdvisoryCard({
       <div className="p-4 bg-white grid gap-4">
         <div className="grid gap-3">
           <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Estado de la asesoría</label>
+          <p className="text-[10px] text-slate-400 -mt-2 mb-1">
+            Cambiar el estado no suma puntos. Hay que guardar la gestión completa.
+          </p>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FINANCIAL_ADVISORY_STATUS_CONFIG) as FinancialAdvisoryStatus[]).map((s) => (
               <button
@@ -304,7 +373,7 @@ function FinancialAdvisoryCard({
             <div>
               <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Gestión realizada</div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Registra si se llamó, si fue personal o si se gestionó por mensaje, y los datos/evidencias.
+                Llena todo: tipo, detalle, si aplica, banco y asesor. El estado solo no suma puntos.
               </div>
             </div>
             <button

@@ -48,10 +48,47 @@ export function formatInterestVehicle(
     return `${label}${extra}`;
 }
 
-// Tu helper de fechas exacto
-const isSameDate = (date1: Date, date2: Date) => {
-    return date1.toLocaleDateString('en-CA') === date2.toLocaleDateString('en-CA');
-};
+/** Rango personalizado YYYY-MM-DD (inicio/fin). Compatibilidad: solo exactDate. */
+export function getLeadsCustomYmdRange(
+    filters: Pick<LeadsFilters, "dateFrom" | "dateTo" | "exactDate">
+): { from: string; to: string } | null {
+    const from = filters.dateFrom || filters.exactDate || filters.dateTo;
+    const to = filters.dateTo || filters.dateFrom || filters.exactDate;
+    if (!from && !to) return null;
+    const start = from || to!;
+    const end = to || from!;
+    return start <= end ? { from: start, to: end } : { from: end, to: start };
+}
+
+export function withCustomDateRange(
+    from: string,
+    to: string,
+    changed: "from" | "to" | "both" = "both"
+): Pick<LeadsFilters, "dateFrom" | "dateTo" | "exactDate" | "dateRange"> {
+    let dateFrom = from;
+    let dateTo = to;
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        if (changed === "from") dateTo = dateFrom;
+        else if (changed === "to") dateFrom = dateTo;
+        else {
+            const swap = dateFrom;
+            dateFrom = dateTo;
+            dateTo = swap;
+        }
+    }
+    return {
+        dateFrom,
+        dateTo,
+        exactDate: dateFrom && dateTo && dateFrom === dateTo ? dateFrom : "",
+        dateRange: "all",
+    };
+}
+
+export const emptyCustomDateRange = {
+    dateFrom: "",
+    dateTo: "",
+    exactDate: "",
+} as const;
 
 /**
  * Lógica exacta de filtrado y ordenamiento que tenías en 'processedLeads'
@@ -85,12 +122,14 @@ export const processLeadsLogic = (
     if (filters.assignedTo !== 'all') filtered = filtered.filter(l => l.assigned_to === filters.assignedTo);
 
     // 4. Filtros de Fecha
-    if (filters.exactDate) {
+    const customRange = getLeadsCustomYmdRange(filters);
+    if (customRange) {
         filtered = filtered.filter(l => {
             if (!l.created_at) return false;
-            const filterDate = new Date(filters.exactDate + 'T12:00:00');
-            const leadDate = new Date(l.created_at);
-            return isSameDate(leadDate, filterDate);
+            const leadYmd = new Date(l.created_at).toLocaleDateString('en-CA', {
+                timeZone: 'America/Guayaquil',
+            });
+            return leadYmd >= customRange.from && leadYmd <= customRange.to;
         });
     } else if (filters.dateRange !== 'all') {
         const now = new Date();
