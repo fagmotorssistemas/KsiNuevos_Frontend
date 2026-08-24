@@ -15,7 +15,9 @@ import { SegurosSidebar } from '@/components/layout/seguros-sidebar'
  * compartidas como /finance no pisen Ventas con Contabilidad.
  */
 export function DynamicStaffSidebar() {
-  const [shell, setShell] = useState<SidebarShell | null>(null)
+  const [shell, setShell] = useState<SidebarShell | null>(() =>
+    typeof window === "undefined" ? null : getSidebarShell()
+  )
 
   useEffect(() => {
     setShell(getSidebarShell())

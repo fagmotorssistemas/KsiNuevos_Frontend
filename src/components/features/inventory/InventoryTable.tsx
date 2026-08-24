@@ -5,6 +5,7 @@ import {
     ImageIcon,
     FileText,
     Download,
+    Calendar,
 } from "lucide-react";
 import jsPDF from "jspdf";
 
@@ -215,6 +216,16 @@ interface InventoryTableProps {
     currentUserId?: string | null;
 }
 
+const formatIngreso = (value: string | null) => {
+    if (!value) return null;
+    return new Date(value).toLocaleDateString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+};
+
 export function InventoryTable({ 
     cars, 
     onEdit, 
@@ -239,6 +250,8 @@ export function InventoryTable({
 
     const formatKm = (km: number | null) => 
         km ? `${km.toLocaleString()} km` : '0 km';
+
+    const emptyColSpan = 8 + (canViewPrices ? 2 : 0);
 
     const getStatusPillClass = (status: string | null) => {
         switch (status) {
@@ -321,6 +334,7 @@ export function InventoryTable({
                                 <th className="px-4 py-3 font-semibold hidden md:table-cell">Kilometraje</th>
                                 <th className="px-4 py-3 font-semibold text-center">Estado</th>
                                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Ubicación</th>
+                                <th className="px-4 py-3 font-semibold whitespace-nowrap">Fecha ingreso</th>
                                 <th className="px-4 py-3 font-semibold text-right">Acciones</th>
                             </tr>
                         </thead>
@@ -330,6 +344,7 @@ export function InventoryTable({
                                     const hasImages =
                                         !!car.img_main_url ||
                                         (car.img_gallery_urls && car.img_gallery_urls.length > 0);
+                                    const ingreso = formatIngreso(car.created_at);
 
                                     return (
                                         <tr
@@ -419,6 +434,16 @@ export function InventoryTable({
                                                     {car.location || 'Patio'}
                                                 </div>
                                             </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {ingreso ? (
+                                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                                        <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                                        <span className="font-medium capitalize">{ingreso}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-400">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-right">
                                                 <div className="flex justify-end items-center gap-2">
                                                     <button
@@ -470,7 +495,7 @@ export function InventoryTable({
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                                    <td colSpan={emptyColSpan} className="px-4 py-8 text-center text-slate-400">
                                         No se encontraron vehículos.
                                     </td>
                                 </tr>

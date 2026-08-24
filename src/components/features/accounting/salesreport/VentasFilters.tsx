@@ -26,6 +26,8 @@ interface VentasFiltersProps {
     availableBrands: string[];
     availableAgencies: string[];
     availableAgents: string[];
+    /** En el módulo de ventas se oculta el filtro de vendedor. */
+    hideVentasOnlyFilters?: boolean;
 }
 
 export function VentasFilters({ 
@@ -34,7 +36,8 @@ export function VentasFilters({
     onClearFilters,
     availableBrands,
     availableAgencies, // Mantenido aunque no se usaba en el original activo
-    availableAgents
+    availableAgents,
+    hideVentasOnlyFilters = false,
 }: VentasFiltersProps) {
 
     const datePresets: { label: string, value: DateRangePreset }[] = [
@@ -49,8 +52,8 @@ export function VentasFilters({
         filters.search !== '' || 
         filters.brand !== 'all' || 
         filters.agency !== 'all' || 
-        filters.salesperson !== 'all' || 
-        filters.datePreset !== 'all';
+        (!hideVentasOnlyFilters && filters.salesperson !== 'all') || 
+        filters.datePreset !== (hideVentasOnlyFilters ? 'this_month' : 'all');
 
     return (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-200/50 p-6 mb-8">
@@ -120,8 +123,8 @@ export function VentasFilters({
                 {/* Fila 2: Selectores Específicos */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-6 items-end">
                     
-                    {/* Selector de Marca - 5 columnas */}
-                    <div className="lg:col-span-5 space-y-2">
+                    {/* Selector de Marca */}
+                    <div className={`${hideVentasOnlyFilters ? 'lg:col-span-10' : 'lg:col-span-5'} space-y-2`}>
                         <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
                             <Tag className="h-3.5 w-3.5" /> Marca del Vehículo
                         </label>
@@ -142,7 +145,7 @@ export function VentasFilters({
                         </div>
                     </div>
 
-                    {/* Selector de Vendedor - 5 columnas */}
+                    {!hideVentasOnlyFilters && (
                     <div className="lg:col-span-5 space-y-2">
                         <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
                             <User className="h-3.5 w-3.5" /> Vendedor Asignado
@@ -163,6 +166,7 @@ export function VentasFilters({
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Botón Limpiar - 2 columnas */}
                     <div className="lg:col-span-2">

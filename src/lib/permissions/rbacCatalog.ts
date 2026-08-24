@@ -73,6 +73,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'ventas', slug: 'solicitudes-web', name: 'Solicitudes web', sortOrder: 4, routePrefixes: ['/requests'] },
   { moduleSlug: 'ventas', slug: 'visitas-showroom', name: 'Visitas showroom', sortOrder: 5, routePrefixes: ['/showroom', '/agenda'] },
   { moduleSlug: 'ventas', slug: 'tareas-ventas', name: 'Tareas', sortOrder: 6, routePrefixes: ['/tareas'] },
+  { moduleSlug: 'ventas', slug: 'reporte-ventas-comercial', name: 'Reporte de ventas', sortOrder: 7, routePrefixes: ['/salesreport'] },
   // Taller (acceso por prefijo /taller en moduleRouteDenied; submódulos para permisos granulares)
   { moduleSlug: 'taller', slug: 'ordenes-trabajo', name: 'Órdenes de trabajo', sortOrder: 1 },
   { moduleSlug: 'taller', slug: 'clientes-taller', name: 'Clientes taller', sortOrder: 2 },

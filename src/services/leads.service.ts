@@ -1,4 +1,4 @@
-import { LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
+import { LeadWithDetails, LeadsFilters, TradeInCarRow, LeadCallRequest, LeadCallStats, LeadCallEvent, CALL_REQUEST_MAX_POSTPONES } from "@/types/leads.types";
 import { getLeadsCustomYmdRange } from "@/utils/leads.logic";
 
 export const fetchSellersRequest = async (supabase: any) => {
@@ -221,11 +221,30 @@ const temperatureFilterRpcParams = (
     return params;
 };
 
+const isCallFilterActive = (filters: LeadsFilters) =>
+    Boolean(filters.callFilter && filters.callFilter !== "all");
+
+const applyCallStatusFilter = (query: any, filters: LeadsFilters) => {
+    const callFilter = filters.callFilter;
+    if (!callFilter || callFilter === "all") return query;
+    const nowIso = new Date().toISOString();
+    if (callFilter === "pendiente") {
+        return query
+            .eq("quiere_llamada", true)
+            .or(`llamada_posponer_hasta.is.null,llamada_posponer_hasta.lte."${nowIso}"`);
+    }
+    if (callFilter === "aplazada") {
+        return query.eq("quiere_llamada", true).gt("llamada_posponer_hasta", nowIso);
+    }
+    return query.not("llamada_gestionada_at", "is", null);
+};
+
 const isBoardFastPathEligible = (filters: LeadsFilters) =>
     !filters.search?.trim() &&
     !filters.hasTradeIn &&
     !filters.onlyInteractions &&
     !filters.withoutResume &&
+    !isCallFilterActive(filters) &&
     filters.status !== 'datos_pedidos' &&
     filters.status !== 'asesoria_financiamiento';
 
@@ -776,6 +795,8 @@ export const fetchLeadsAPI = async (
             query = applyWithoutResumeFilter(query);
         }
 
+        query = applyCallStatusFilter(query, filters);
+
         // Intersect all idFilters (búsqueda, trade-in, etc.; temperatura va aparte)
         if (idFilters.length > 0) {
             let finalIds = idFilters[0];
@@ -804,7 +825,7 @@ export const fetchLeadsAPI = async (
         }
 
         // Filtro de fecha por ingreso (created_at), también con temperatura activa.
-        if (!filters.onlyInteractions) {
+        if (!filters.onlyInteractions && !isCallFilterActive(filters)) {
             query = applyLeadsCreatedAtRangeFromFilters(query, filters);
         }
 
@@ -866,12 +887,13 @@ export const fetchLeadsAPI = async (
         if (filters.hasBudget) {
             respondedQuery = respondedQuery.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
+        respondedQuery = applyCallStatusFilter(respondedQuery, filters);
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
             respondedQuery = respondedQuery.eq('status', filters.status);
         }
         if (filters.assignedTo && filters.assignedTo !== 'all') respondedQuery = respondedQuery.eq('assigned_to', filters.assignedTo);
 
-        if (!filters.onlyInteractions) {
+        if (!filters.onlyInteractions && !isCallFilterActive(filters)) {
             respondedQuery = applyLeadsCreatedAtRangeFromFilters(respondedQuery, filters);
         }
 
@@ -1120,3 +1142,218 @@ export const fetchBudgetStats = async (supabase: any, assignedTo: string) => {
         return 0;
     }
 };
+
+export const CALL_REQUEST_SELECT =
+    "id, name, phone, assigned_to, quiere_llamada, llamada_posponer_hasta, llamada_posponer_razon, llamada_posponer_veces";
+
+export async function fetchCallRequests(
+    supabase: any,
+    assignedTo?: string | "all"
+): Promise<LeadCallRequest[]> {
+    let query = supabase
+        .from("leads")
+        .select(CALL_REQUEST_SELECT)
+        .eq("quiere_llamada", true)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+    if (assignedTo && assignedTo !== "all") {
+        query = query.eq("assigned_to", assignedTo);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.warn("fetchCallRequests:", error);
+        return [];
+    }
+    return (data ?? []) as LeadCallRequest[];
+}
+
+export async function markCallRequestManaged(
+    supabase: any,
+    lead: LeadCallRequest,
+    userId: string
+) {
+    const { error } = await supabase
+        .from("leads")
+        .update({
+            quiere_llamada: false,
+            llamada_gestionada_at: new Date().toISOString(),
+        })
+        .eq("id", lead.id)
+        .eq("quiere_llamada", true);
+
+    if (error) throw error;
+
+    await supabase.from("lead_llamada_eventos").insert({
+        lead_id: lead.id,
+        tipo: "gestionada",
+        created_by: userId,
+    });
+
+    await supabase.from("interactions").insert({
+        lead_id: lead.id,
+        type: "llamada",
+        result: "completado",
+        content: "EL CLIENTE SOLICITA LLAMADA — gestionada",
+        responsible_id: userId,
+    });
+}
+
+export async function postponeCallRequest(
+    supabase: any,
+    lead: LeadCallRequest,
+    input: { reason: string; untilIso: string; createdBy?: string }
+) {
+    const used = lead.llamada_posponer_veces ?? 0;
+    if (used >= CALL_REQUEST_MAX_POSTPONES) {
+        throw new Error("Ya no se puede aplazar más. Debes gestionar la llamada.");
+    }
+
+    const { error } = await supabase
+        .from("leads")
+        .update({
+            llamada_posponer_hasta: input.untilIso,
+            llamada_posponer_razon: input.reason,
+            llamada_posponer_veces: used + 1,
+        })
+        .eq("id", lead.id)
+        .eq("quiere_llamada", true);
+
+    if (error) throw error;
+
+    await supabase.from("lead_llamada_eventos").insert({
+        lead_id: lead.id,
+        tipo: "aplazada",
+        razon: input.reason,
+        programado_hasta: input.untilIso,
+        created_by: input.createdBy ?? null,
+    });
+}
+
+export async function fetchCallStats(
+    supabase: any,
+    assignedTo: string
+): Promise<LeadCallStats> {
+    const empty: LeadCallStats = { pendiente: 0, aplazada: 0, llamado: 0 };
+    try {
+        const nowIso = new Date().toISOString();
+        const withAssignee = (q: any) =>
+            assignedTo && assignedTo !== "all" ? q.eq("assigned_to", assignedTo) : q;
+
+        const [pendienteRes, aplazadaRes, llamadoRes] = await Promise.all([
+            withAssignee(
+                supabase
+                    .from("leads")
+                    .select("id", { count: "exact", head: true })
+                    .eq("quiere_llamada", true)
+                    .or(`llamada_posponer_hasta.is.null,llamada_posponer_hasta.lte."${nowIso}"`)
+            ),
+            withAssignee(
+                supabase
+                    .from("leads")
+                    .select("id", { count: "exact", head: true })
+                    .eq("quiere_llamada", true)
+                    .gt("llamada_posponer_hasta", nowIso)
+            ),
+            withAssignee(
+                supabase
+                    .from("leads")
+                    .select("id", { count: "exact", head: true })
+                    .not("llamada_gestionada_at", "is", null)
+            ),
+        ]);
+
+        return {
+            pendiente: pendienteRes.count || 0,
+            aplazada: aplazadaRes.count || 0,
+            llamado: llamadoRes.count || 0,
+        };
+    } catch (error) {
+        console.warn("fetchCallStats:", error);
+        return empty;
+    }
+}
+
+function mapCallHistoryRows(data: any[]): LeadCallEvent[] {
+    return data.map((row) => {
+        const lead = Array.isArray(row.leads) ? row.leads[0] : row.leads;
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        return {
+            id: String(row.id),
+            lead_id: Number(row.lead_id),
+            tipo: row.tipo,
+            razon: row.razon ?? null,
+            programado_hasta: row.programado_hasta ?? null,
+            created_at: row.created_at,
+            lead_name: lead?.name ?? "Lead",
+            created_by_name: profile?.full_name ?? null,
+        };
+    });
+}
+
+export async function fetchCallHistory(
+    supabase: any,
+    assignedTo: string
+): Promise<LeadCallEvent[]> {
+    try {
+        let query = supabase
+            .from("lead_llamada_eventos")
+            .select(
+                "id, lead_id, tipo, razon, programado_hasta, created_at, created_by, leads!lead_llamada_eventos_lead_id_fkey!inner(name, assigned_to), profiles!lead_llamada_eventos_created_by_fkey(full_name)"
+            )
+            .order("created_at", { ascending: false })
+            .limit(40);
+
+        if (assignedTo && assignedTo !== "all") {
+            query = query.eq("leads.assigned_to", assignedTo);
+        }
+
+        const { data, error } = await query;
+        if (!error) return mapCallHistoryRows((data ?? []) as any[]);
+        console.warn("fetchCallHistory:", error);
+    } catch (error) {
+        console.warn("fetchCallHistory:", error);
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from("lead_llamada_eventos")
+            .select("id, lead_id, tipo, razon, programado_hasta, created_at, created_by")
+            .order("created_at", { ascending: false })
+            .limit(40);
+        if (error || !data?.length) return [];
+
+        const leadIds = [...new Set(data.map((row: any) => row.lead_id))];
+        const { data: leads } = await supabase
+            .from("leads")
+            .select("id, name, assigned_to")
+            .in("id", leadIds);
+        const profileIds = [...new Set(data.map((row: any) => row.created_by).filter(Boolean))];
+        const { data: profiles } = profileIds.length
+            ? await supabase.from("profiles").select("id, full_name").in("id", profileIds)
+            : { data: [] };
+
+        const leadById = Object.fromEntries((leads ?? []).map((lead: any) => [lead.id, lead]));
+        const profileById = Object.fromEntries((profiles ?? []).map((profile: any) => [profile.id, profile]));
+
+        return data
+            .filter((row: any) => {
+                if (!assignedTo || assignedTo === "all") return true;
+                return leadById[row.lead_id]?.assigned_to === assignedTo;
+            })
+            .map((row: any) => ({
+                id: String(row.id),
+                lead_id: Number(row.lead_id),
+                tipo: row.tipo,
+                razon: row.razon ?? null,
+                programado_hasta: row.programado_hasta ?? null,
+                created_at: row.created_at,
+                lead_name: leadById[row.lead_id]?.name ?? "Lead",
+                created_by_name: profileById[row.created_by]?.full_name ?? null,
+            }));
+    } catch (error) {
+        console.warn("fetchCallHistory fallback:", error);
+        return [];
+    }
+}

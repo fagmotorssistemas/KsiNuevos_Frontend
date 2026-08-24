@@ -1,20 +1,22 @@
 import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Search,
     X,
     ChevronDown,
     Calendar,
-    Flame,
     Activity,
-    User,
     MessageSquare,
     ClipboardList,
     BellRing,
     ArrowLeftRight,
     HelpCircle,
+    Phone,
+    Clock,
+    Check,
 } from "lucide-react";
 
-import type { DateFilter, LeadsFilters } from "@/types/leads.types";
+import type { CallFilter, DateFilter, LeadCallEvent, LeadCallStats, LeadsFilters } from "@/types/leads.types";
 import type { LeadDayMetricBreakdown } from "@/services/leads.service";
 import {
     emptyCustomDateRange,
@@ -33,6 +35,8 @@ interface LeadsToolbarProps {
     dayBreakdown?: LeadDayMetricBreakdown | null;
     budgetCount?: number;        // Métrica 3: Leads con presupuesto
     tradeInLeadsCount?: number; // Leads con al menos un trade_in_cars
+    callStats?: LeadCallStats;
+    callHistory?: LeadCallEvent[];
     requestStats?: {
         datosPedidos: { pendiente: number; en_proceso: number; resuelto: number; total: number };
         asesoria: { pendiente: number; en_proceso: number; resuelto: number; total: number };
@@ -41,40 +45,134 @@ interface LeadsToolbarProps {
     sellers?: { id: string; full_name: string }[];
 }
 
-const selectBaseClass =
-    "h-10 w-full appearance-none rounded-lg border border-slate-200 bg-slate-50/50 pl-10 pr-8 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-white focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer";
+type FilterOption = {
+    value: string;
+    label: string;
+    dot?: string;
+};
 
-const CustomSelect = ({
-    value,
-    onChange,
-    icon: Icon,
+const STATUS_OPTIONS: FilterOption[] = [
+    { value: "all", label: "Todos", dot: "bg-slate-300" },
+    { value: "nuevo", label: "Nuevo", dot: "bg-indigo-500" },
+    { value: "contactado", label: "Contactado", dot: "bg-sky-500" },
+    { value: "interesado", label: "Interesado", dot: "bg-violet-500" },
+    { value: "negociando", label: "Negociando", dot: "bg-amber-500" },
+    { value: "ganado", label: "Ganado", dot: "bg-emerald-500" },
+    { value: "perdido", label: "Perdido", dot: "bg-rose-500" },
+    { value: "en_proceso", label: "En proceso", dot: "bg-slate-500" },
+    { value: "datos_pedidos", label: "Info. faltante", dot: "bg-purple-500" },
+    { value: "asesoria_financiamiento", label: "Asesoría financiamiento", dot: "bg-teal-500" },
+];
+
+const DATE_OPTIONS: FilterOption[] = [
+    { value: "all", label: "Todo el tiempo" },
+    { value: "today", label: "Hoy" },
+    { value: "7days", label: "Últimos 7 días" },
+    { value: "15days", label: "Últimos 15 días" },
+    { value: "thisMonth", label: "Este mes" },
+    { value: "custom", label: "Rango personalizado" },
+];
+
+const TEMP_OPTIONS = [
+    { value: "all", label: "Todas", active: "bg-white text-slate-800 shadow-sm", idle: "text-slate-500 hover:text-slate-800" },
+    { value: "caliente", label: "Caliente", active: "bg-rose-500 text-white shadow-sm", idle: "text-rose-600 hover:bg-rose-50" },
+    { value: "tibio", label: "Tibio", active: "bg-amber-400 text-amber-950 shadow-sm", idle: "text-amber-700 hover:bg-amber-50" },
+    { value: "frio", label: "Frío", active: "bg-sky-500 text-white shadow-sm", idle: "text-sky-700 hover:bg-sky-50" },
+] as const;
+
+function FilterField({
+    label,
     children,
     className = "",
-    selectClassName = "",
 }: {
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-    icon: any;
-    children: React.ReactNode;
+    label: string;
+    children: ReactNode;
     className?: string;
-    selectClassName?: string;
-}) => (
-    <div className={`relative isolate w-full min-w-0 ${className}`}>
-        <div className="absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <Icon className="h-4 w-4" />
-        </div>
-        <select
-            className={`${selectBaseClass} ${selectClassName}`.trim()}
-            value={value}
-            onChange={onChange}
-        >
+}) {
+    return (
+        <div className={`min-w-0 ${className}`}>
+            <p className="mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                {label}
+            </p>
             {children}
-        </select>
-        <div className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <ChevronDown className="h-3.5 w-3.5" />
         </div>
-    </div>
-);
+    );
+}
+
+function FilterDropdown({
+    label,
+    value,
+    options,
+    open,
+    onToggle,
+    onChange,
+    menuClassName = "w-56",
+}: {
+    label: string;
+    value: string;
+    options: FilterOption[];
+    open: boolean;
+    onToggle: () => void;
+    onChange: (value: string) => void;
+    menuClassName?: string;
+}) {
+    const selected = options.find((option) => option.value === value) ?? options[0];
+    const isActive = value !== "all";
+
+    return (
+        <FilterField label={label} className="relative">
+            <button
+                type="button"
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                onClick={onToggle}
+                className={`flex h-10 w-full min-w-[9rem] items-center gap-2 rounded-xl border px-3 text-left text-sm font-medium shadow-sm transition-all ${
+                    isActive || open
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-950"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+            >
+                {selected?.dot && (
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${selected.dot}`} />
+                )}
+                <span className="min-w-0 flex-1 truncate">{selected?.label}</span>
+                <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+                />
+            </button>
+            {open && (
+                <div
+                    role="listbox"
+                    className={`absolute left-0 top-[calc(100%+0.4rem)] z-[90] max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl ${menuClassName}`}
+                >
+                    {options.map((option) => {
+                        const active = option.value === value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                onClick={() => onChange(option.value)}
+                                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                                    active
+                                        ? "bg-indigo-50 font-semibold text-indigo-950"
+                                        : "text-slate-600 hover:bg-slate-50"
+                                }`}
+                            >
+                                {option.dot ? (
+                                    <span className={`h-2 w-2 shrink-0 rounded-full ${option.dot}`} />
+                                ) : null}
+                                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                                {active && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </FilterField>
+    );
+}
 
 // Helper seguro para obtener fecha Ecuador usando Intl (Infalible)
 const getEcuadorDateISO = () => {
@@ -82,13 +180,29 @@ const getEcuadorDateISO = () => {
 };
 
 function formatDayLabel(ymd: string) {
-    const [y, m, d] = ymd.split('-');
-    if (!y || !m || !d) return ymd;
-    return `${d}/${m}/${y}`;
+    const [, month, day] = ymd.split("-");
+    if (!month || !day) return ymd;
+    return `${day}/${month}`;
+}
+
+function formatCallEventWhen(iso: string) {
+    return new Date(iso).toLocaleString("es-EC", {
+        timeZone: "America/Guayaquil",
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function callEventLabel(tipo: LeadCallEvent["tipo"]) {
+    if (tipo === "solicitud") return "Solicitó llamada";
+    if (tipo === "aplazada") return "Aplazada";
+    return "Llamada hecha";
 }
 
 const dateInputClass =
-    "h-10 w-[11rem] max-w-full bg-transparent pl-1 pr-1 text-sm font-medium text-slate-700 outline-none [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-clear-button]:hidden [&::-webkit-inner-spin-button]:hidden";
+    "h-10 w-[8.75rem] shrink-0 bg-transparent px-0.5 text-sm font-medium text-slate-700 outline-none [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-clear-button]:hidden [&::-webkit-inner-spin-button]:hidden";
 
 /** Tooltip al pasar el mouse: explica de dónde sale cada métrica del footer. */
 function MetricHint({
@@ -141,6 +255,8 @@ export function LeadsToolbar({
     dayBreakdown = null,
     budgetCount = 0,
     tradeInLeadsCount = 0,
+    callStats = { pendiente: 0, aplazada: 0, llamado: 0 },
+    callHistory = [],
     requestStats = { 
         datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
         asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
@@ -152,6 +268,43 @@ export function LeadsToolbar({
     const canFilterByAssignee =
         currentUserRole?.toLowerCase().trim() === 'admin' ||
         currentUserRole?.toLowerCase().trim() === 'marketing';
+    const callFilter = filters.callFilter || "all";
+    const setCallFilter = (next: CallFilter) => {
+        onFilterChange({
+            callFilter: callFilter === next ? "all" : next,
+            hasBudget: false,
+            hasTradeIn: false,
+            onlyInteractions: false,
+            withoutResume: false,
+        });
+    };
+    const callFilterActive = callFilter !== "all";
+    const [callMenuOpen, setCallMenuOpen] = useState(false);
+    const callMenuRef = useRef<HTMLDivElement>(null);
+    const [openFilter, setOpenFilter] = useState<"status" | "date" | "assignee" | null>(null);
+    const filterMenusRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!callMenuOpen) return;
+        const onPointerDown = (event: MouseEvent) => {
+            if (!callMenuRef.current?.contains(event.target as Node)) {
+                setCallMenuOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        return () => document.removeEventListener("mousedown", onPointerDown);
+    }, [callMenuOpen]);
+
+    useEffect(() => {
+        if (!openFilter) return;
+        const onPointerDown = (event: MouseEvent) => {
+            if (!filterMenusRef.current?.contains(event.target as Node)) {
+                setOpenFilter(null);
+            }
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        return () => document.removeEventListener("mousedown", onPointerDown);
+    }, [openFilter]);
     const assignedToValue = filters.assignedTo || 'all';
 
     const customRange = getLeadsCustomYmdRange(filters);
@@ -167,6 +320,7 @@ export function LeadsToolbar({
         filters.hasTradeIn ||
         filters.onlyInteractions ||
         filters.withoutResume ||
+        (filters.callFilter && filters.callFilter !== 'all') ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
         (canFilterByAssignee && assignedToValue !== 'all');
 
@@ -227,77 +381,80 @@ export function LeadsToolbar({
 
     return (
         <div className="space-y-4">
-            {/* Contenedor Principal de Filtros */}
-            <div className="flex flex-col xl:flex-row gap-4 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
+                <div
+                    ref={filterMenusRef}
+                    className="flex flex-wrap items-end gap-3"
+                >
+                    <FilterField label="Buscar" className="w-64 max-w-full shrink-0">
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Nombre, teléfono o ID..."
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50/80 pl-9 pr-3 text-sm font-medium text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-indigo-200 focus:bg-white focus:ring-2 focus:ring-indigo-100"
+                                value={filters.search}
+                                onChange={(e) => onFilterChange("search", e.target.value)}
+                            />
+                        </div>
+                    </FilterField>
 
-                {/* 1. BUSCADOR */}
-                <div className="flex-1 relative group">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-500 transition-colors">
-                        <Search className="h-4.5 w-4.5" />
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nombre, teléfono, ID Kommo o vehículo..."
-                        className="h-11 w-full rounded-xl border-none bg-transparent pl-11 pr-4 text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:ring-0 focus:bg-slate-50/50 transition-all"
-                        value={filters.search}
-                        onChange={(e) => onFilterChange('search', e.target.value)}
-                    />
-                </div>
-
-                {/* 2. FILTROS */}
-                <div className="p-1 xl:p-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:flex xl:flex-wrap gap-3 items-center min-w-0 w-full xl:w-auto">
-
-                    <div className="min-w-[150px] shrink-0 relative">
-                        <CustomSelect
-                            icon={Activity}
+                    <div className="relative shrink-0">
+                        <FilterDropdown
+                            label="Estado"
                             value={filters.status}
-                            onChange={(e) => onFilterChange('status', e.target.value)}
-                        >
-                            <option value="all">Estado: Todos</option>
-                            <option value="nuevo">🔵 Nuevo</option>
-                            <option value="contactado">📞 Contactado</option>
-                            <option value="interesado">🤔 Interesado</option>
-                            <option value="negociando">🤝 Negociando</option>
-                            <option value="ganado">✅ Ganado</option>
-                            <option value="perdido">❌ Perdido</option>
-                            <option value="en_proceso">⏳ En Proceso</option>
-                            <option value="datos_pedidos">📋 Info. Faltante</option>
-                            <option value="asesoria_financiamiento">🏦 Asesoria Financiamiento</option>
-                        </CustomSelect>
-                        {filters.requestStatus && filters.requestStatus !== 'all' && (
-                            <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm capitalize z-10">
-                                {filters.requestStatus.replace('_', ' ')}
-                            </div>
+                            options={STATUS_OPTIONS}
+                            open={openFilter === "status"}
+                            onToggle={() => setOpenFilter((current) => (current === "status" ? null : "status"))}
+                            onChange={(value) => {
+                                onFilterChange("status", value);
+                                setOpenFilter(null);
+                            }}
+                            menuClassName="w-60"
+                        />
+                        {filters.requestStatus && filters.requestStatus !== "all" && (
+                            <span className="absolute -top-1 right-0 rounded-full bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold capitalize text-white shadow-sm">
+                                {filters.requestStatus.replace("_", " ")}
+                            </span>
                         )}
                     </div>
 
-                    <div className="min-w-[150px] shrink-0">
-                        <CustomSelect
-                            icon={Flame}
-                            value={filters.temperature}
-                            onChange={(e) => onFilterChange('temperature', e.target.value)}
-                            selectClassName="pr-9"
-                        >
-                            <option value="all">Temp: Todas</option>
-                            <option value="caliente">🔥 Caliente</option>
-                            <option value="tibio">⛅ Tibio</option>
-                            <option value="frio">🧊 Frío</option>
-                        </CustomSelect>
-                    </div>
+                    <FilterField label="Temperatura" className="shrink-0">
+                        <div className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm">
+                            {TEMP_OPTIONS.map((option) => {
+                                const active = filters.temperature === option.value;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => {
+                                            setOpenFilter(null);
+                                            onFilterChange("temperature", option.value);
+                                        }}
+                                        className={`rounded-[0.65rem] px-2.5 py-1.5 text-xs font-semibold transition-all sm:px-3 ${
+                                            active ? option.active : option.idle
+                                        }`}
+                                    >
+                                        {option.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </FilterField>
 
-                    {/* Fecha: filtra por ingreso del lead (created_at, Ecuador) */}
-                    <div className="min-w-0 w-full md:w-auto shrink-0">
-                        {isCustomRange ? (
-                            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                <div className="flex h-10 min-w-0 items-center rounded-lg border border-slate-200 bg-slate-50/50 shadow-sm">
-                                    <span className="pl-2.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
-                                        Inicio
+                    {isCustomRange ? (
+                        <FilterField label="Fecha de ingreso" className="shrink-0">
+                            <div className="flex items-center gap-1.5">
+                                <div className="flex h-10 items-center rounded-xl border border-indigo-200 bg-indigo-50/40 shadow-sm">
+                                    <Calendar className="ml-2.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
+                                    <span className="pl-1.5 pr-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                        De
                                     </span>
                                     <input
                                         type="date"
                                         aria-label="Fecha de inicio"
                                         className={dateInputClass}
-                                        value={customRange?.from ?? ''}
+                                        value={customRange?.from ?? ""}
                                         max={customRange?.to || undefined}
                                         onChange={(e) => {
                                             if (!e.target.value) return;
@@ -305,22 +462,22 @@ export function LeadsToolbar({
                                                 withCustomDateRange(
                                                     e.target.value,
                                                     customRange?.to || e.target.value,
-                                                    'from'
+                                                    "from"
                                                 )
                                             );
                                         }}
                                     />
-                                    <span className="px-0.5 text-slate-300 select-none" aria-hidden>
-                                        –
+                                    <span className="px-0.5 text-slate-300" aria-hidden>
+                                        —
                                     </span>
-                                    <span className="pl-1.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
-                                        Fin
+                                    <span className="pl-1 pr-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                        A
                                     </span>
                                     <input
                                         type="date"
                                         aria-label="Fecha de fin"
                                         className={dateInputClass}
-                                        value={customRange?.to ?? ''}
+                                        value={customRange?.to ?? ""}
                                         min={customRange?.from || undefined}
                                         onChange={(e) => {
                                             if (!e.target.value) return;
@@ -328,7 +485,7 @@ export function LeadsToolbar({
                                                 withCustomDateRange(
                                                     customRange?.from || e.target.value,
                                                     e.target.value,
-                                                    'to'
+                                                    "to"
                                                 )
                                             );
                                         }}
@@ -339,57 +496,195 @@ export function LeadsToolbar({
                                     onClick={() =>
                                         onFilterChange({
                                             ...emptyCustomDateRange,
-                                            dateRange: 'all',
+                                            dateRange: "all",
                                         })
                                     }
-                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-colors"
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-500"
                                     title="Volver a rangos"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                        ) : (
-                            <CustomSelect
-                                icon={Calendar}
-                                value={filters.dateRange}
-                                onChange={(e) => {
-                                    if (e.target.value === 'custom') {
-                                        const today = getEcuadorDateISO();
-                                        onFilterChange(withCustomDateRange(today, today));
-                                    } else {
-                                        onFilterChange({
-                                            dateRange: e.target.value as DateFilter,
-                                            ...emptyCustomDateRange,
-                                        });
-                                    }
-                                }}
-                            >
-                                <option value="all">📅 Todo el tiempo</option>
-                                <option value="today">Hoy (Creados hoy)</option>
-                                <option value="7days">Últimos 7 días</option>
-                                <option value="15days">Últimos 15 días</option>
-                                <option value="thisMonth">Este mes</option>
-                                <option value="custom">🔎 Rango de fechas...</option>
-                            </CustomSelect>
-                        )}
-                    </div>
+                        </FilterField>
+                    ) : (
+                        <FilterDropdown
+                            label="Fecha de ingreso"
+                            value={filters.dateRange}
+                            options={DATE_OPTIONS}
+                            open={openFilter === "date"}
+                            onToggle={() => setOpenFilter((current) => (current === "date" ? null : "date"))}
+                            onChange={(value) => {
+                                setOpenFilter(null);
+                                if (value === "custom") {
+                                    const today = getEcuadorDateISO();
+                                    onFilterChange(withCustomDateRange(today, today));
+                                    return;
+                                }
+                                onFilterChange({
+                                    dateRange: value as DateFilter,
+                                    ...emptyCustomDateRange,
+                                });
+                            }}
+                            menuClassName="w-52"
+                        />
+                    )}
 
                     {canFilterByAssignee && (
-                        <div className="min-w-[160px] shrink-0">
-                            <CustomSelect
-                                icon={User}
-                                value={assignedToValue}
-                                onChange={(e) => onFilterChange('assignedTo', e.target.value)}
-                            >
-                                <option value="all">Resp: Todos</option>
-                                {sellers?.map((seller) => (
-                                    <option key={seller.id} value={seller.id}>
-                                        {seller.full_name}
-                                    </option>
-                                ))}
-                            </CustomSelect>
-                        </div>
+                        <FilterDropdown
+                            label="Responsable"
+                            value={assignedToValue}
+                            options={[
+                                { value: "all", label: "Todos" },
+                                ...sellers.map((seller) => ({
+                                    value: seller.id,
+                                    label: seller.full_name,
+                                })),
+                            ]}
+                            open={openFilter === "assignee"}
+                            onToggle={() =>
+                                setOpenFilter((current) => (current === "assignee" ? null : "assignee"))
+                            }
+                            onChange={(value) => {
+                                onFilterChange("assignedTo", value);
+                                setOpenFilter(null);
+                            }}
+                            menuClassName="w-64"
+                        />
                     )}
+
+                    <FilterField label={"\u00a0"} className="relative z-[100] ml-auto shrink-0">
+                        <div ref={callMenuRef}>
+                            <button
+                                type="button"
+                                title="Gestión de llamadas"
+                                aria-label="Gestión de llamadas"
+                                aria-expanded={callMenuOpen}
+                                onClick={() => {
+                                    setOpenFilter(null);
+                                    setCallMenuOpen((open) => !open);
+                                }}
+                                className={`relative flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all ${
+                                    callFilterActive || callMenuOpen
+                                        ? "border-red-200 bg-red-50 text-red-700"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                                }`}
+                            >
+                                <Phone className="h-4 w-4" />
+                                {callStats.pendiente > 0 && (
+                                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                                        {callStats.pendiente}
+                                    </span>
+                                )}
+                            </button>
+                        {callMenuOpen && (
+                            <div className="absolute right-0 top-[calc(100%+0.4rem)] w-[22rem] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                                <h4 className="mb-2 border-b border-slate-100 px-2 pb-1.5 text-[10px] font-bold uppercase text-slate-400">
+                                    Filtro e historial
+                                </h4>
+                                <div className="space-y-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCallFilter("pendiente")}
+                                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                                            callFilter === "pendiente"
+                                                ? "border-red-200 bg-red-50 text-red-800 shadow-sm"
+                                                : "border-transparent text-slate-600 hover:border-red-100 hover:bg-red-50/50"
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-semibold">
+                                            <Phone className="h-3.5 w-3.5 text-red-500" />
+                                            Pendiente / no llamado
+                                        </span>
+                                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">
+                                            {callStats.pendiente}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCallFilter("aplazada")}
+                                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                                            callFilter === "aplazada"
+                                                ? "border-amber-200 bg-amber-50 text-amber-900 shadow-sm"
+                                                : "border-transparent text-slate-600 hover:border-amber-100 hover:bg-amber-50/50"
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-semibold">
+                                            <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                            Aplazadas
+                                        </span>
+                                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                                            {callStats.aplazada}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCallFilter("llamado")}
+                                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors ${
+                                            callFilter === "llamado"
+                                                ? "border-emerald-200 bg-emerald-50 text-emerald-900 shadow-sm"
+                                                : "border-transparent text-slate-600 hover:border-emerald-100 hover:bg-emerald-50/50"
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-semibold">
+                                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                            Ya llamadas
+                                        </span>
+                                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                                            {callStats.llamado}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                <h4 className="mb-1.5 mt-3 border-b border-slate-100 px-2 pb-1.5 text-[10px] font-bold uppercase text-slate-400">
+                                    Historial
+                                </h4>
+                                <div className="max-h-56 space-y-1.5 overflow-y-auto px-1">
+                                    {callHistory.length === 0 ? (
+                                        <p className="px-2 py-3 text-xs text-slate-400">
+                                            Aún no hay movimientos de llamada.
+                                        </p>
+                                    ) : (
+                                        callHistory.map((event) => (
+                                            <div
+                                                key={event.id}
+                                                className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2"
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="truncate text-sm font-semibold text-slate-800">
+                                                        {event.lead_name}
+                                                    </p>
+                                                    <span
+                                                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                                            event.tipo === "gestionada"
+                                                                ? "bg-emerald-100 text-emerald-800"
+                                                                : event.tipo === "aplazada"
+                                                                  ? "bg-amber-100 text-amber-800"
+                                                                  : "bg-red-100 text-red-800"
+                                                        }`}
+                                                    >
+                                                        {callEventLabel(event.tipo)}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                                    {formatCallEventWhen(event.created_at)}
+                                                    {event.created_by_name ? ` · ${event.created_by_name}` : ""}
+                                                </p>
+                                                {event.tipo === "aplazada" && event.razon && (
+                                                    <p className="mt-1 text-[11px] text-slate-600">
+                                                        Motivo: {event.razon}
+                                                        {event.programado_hasta
+                                                            ? ` · para ${formatCallEventWhen(event.programado_hasta)}`
+                                                            : ""}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        </div>
+                    </FilterField>
                 </div>
             </div>
 
@@ -439,6 +734,7 @@ export function LeadsToolbar({
                                 onlyInteractions: false,
                                 hasBudget: false,
                                 hasTradeIn: false,
+                                callFilter: "all",
                             });
                         }}
                     >
@@ -562,6 +858,7 @@ export function LeadsToolbar({
                                                         hasBudget: false,
                                                         onlyInteractions: false,
                                                         withoutResume: false,
+                                                        callFilter: "all",
                                                     })
                                                 }
                                                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${

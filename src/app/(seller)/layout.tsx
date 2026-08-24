@@ -29,7 +29,7 @@ export default function AccountingLayout({
                 <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-20 md:pt-8 w-full print:overflow-visible print:h-auto print:p-0">
                     
                     {/* Contenedor con ancho máximo */}
-                    <div className="max-w-7xl mx-auto h-full print:h-auto print:w-full print:max-w-none">
+                    <div className="max-w-[90rem] mx-auto h-full print:h-auto print:w-full print:max-w-none">
                         {children}
                     </div>
                 </div>

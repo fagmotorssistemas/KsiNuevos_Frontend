@@ -21,10 +21,11 @@ import {
     Landmark,        // Proforma bancaria
     LayoutGrid,
     TrendingUp,
+    PieChart,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
-import { canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
+import { canSeeAccountingSidebarHref, canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
@@ -44,6 +45,7 @@ const menuItems: MenuItem[] = [
     { name: 'Agenda', href: '/agenda', icon: CalendarDays },
     { name: 'Inventario', href: '/inventory', icon: Package, exact: true },
     { name: 'Reportes Vehiculares', href: '/inventory/reportes-vehiculares', icon: LayoutGrid },
+    { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
@@ -67,7 +69,12 @@ export function SellerSidebar() {
     );
 
     const displayedMenuItems = useMemo(
-        () => menuItems.filter((item) => canSeeVentasSidebarHref(item.href, permCtx)),
+        () =>
+            menuItems.filter(
+                (item) =>
+                    canSeeVentasSidebarHref(item.href, permCtx) ||
+                    (item.href === '/salesreport' && canSeeAccountingSidebarHref('/salesreport', permCtx))
+            ),
         [permCtx]
     );
 

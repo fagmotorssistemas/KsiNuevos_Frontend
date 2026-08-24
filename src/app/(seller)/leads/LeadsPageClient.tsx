@@ -6,9 +6,11 @@ import { FileSpreadsheet } from "lucide-react";
 
 // Features
 import { useLeads } from "@/hooks/useLeads";
+import { useLeadCallRequests } from "@/hooks/useLeadCallRequests";
 import type { LeadWithDetails } from "@/types/leads.types";
 import { LeadsList } from "@/components/features/leads/LeadsList";
 import { LeadDetailModal } from "@/components/features/leads/Detail/LeadDetailModal";
+import { LeadCallRequestModal } from "@/components/features/leads/LeadCallRequestModal";
 import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
 import { LeadsExportPrintModal } from "@/components/features/leads/LeadsExportPrintModal";
 import { Button } from "@/components/ui/buttontable";
@@ -24,6 +26,8 @@ export default function LeadsPageClient() {
     dayBreakdown,
     budgetCount,
     tradeInLeadsCount,
+    callStats,
+    callHistory,
     requestStats,
     isLoading,
     sortDescriptor,
@@ -38,6 +42,14 @@ export default function LeadsPageClient() {
     rowsPerPage,
     sellers,
   } = useLeads();
+
+  const {
+    current: callRequestLead,
+    remaining: callRequestRemaining,
+    submitting: callRequestSubmitting,
+    markManaged,
+    postpone,
+  } = useLeadCallRequests();
 
   const { profile, supabase } = useAuth();
   const isAdmin = profile?.role?.toLowerCase().trim() === "admin";
@@ -61,7 +73,7 @@ export default function LeadsPageClient() {
 
   return (
     // ESTRUCTURA SHOWROOM: max-w-7xl mx-auto centra y controla el ancho
-    <div className="p-4 max-w-6xl mx-auto space-y-6 bg-gray-50 min-h-screen">
+    <div className="p-4 w-full space-y-6 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
         <div>
           <h1 className="text-3xl font-semibold text-slate-900">Tablero de Leads</h1>
@@ -97,6 +109,8 @@ export default function LeadsPageClient() {
         dayBreakdown={dayBreakdown}
         budgetCount={budgetCount}
         tradeInLeadsCount={tradeInLeadsCount}
+        callStats={callStats}
+        callHistory={callHistory}
         requestStats={requestStats}
         currentUserRole={profile?.role}
         sellers={sellers}
@@ -127,6 +141,22 @@ export default function LeadsPageClient() {
         baseFilters={filters}
         isAdmin={isAdmin}
       />
+
+      {callRequestLead && (
+        <LeadCallRequestModal
+          lead={callRequestLead}
+          remaining={callRequestRemaining}
+          submitting={callRequestSubmitting}
+          onManaged={async () => {
+            await markManaged();
+            reload();
+          }}
+          onPostpone={async (reason, untilIso) => {
+            await postpone(reason, untilIso);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }

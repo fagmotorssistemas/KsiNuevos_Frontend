@@ -9,9 +9,11 @@ import {
     fetchRequestStats,
     fetchBudgetStats,
     fetchTradeInLeadsCount,
+    fetchCallStats,
+    fetchCallHistory,
     type LeadDayMetricBreakdown,
 } from "@/services/leads.service";
-import { LeadWithDetails, LeadsFilters } from "@/types/leads.types";
+import { LeadWithDetails, LeadsFilters, type LeadCallStats, type LeadCallEvent } from "@/types/leads.types";
 
 
 const MARKETING_DEFAULT_ASSIGNEE_NAME_PART = "fagmotors";
@@ -34,6 +36,12 @@ export function useLeads() {
     
     const [budgetCount, setBudgetCount] = useState(0);
     const [tradeInLeadsCount, setTradeInLeadsCount] = useState(0);
+    const [callStats, setCallStats] = useState<LeadCallStats>({
+        pendiente: 0,
+        aplazada: 0,
+        llamado: 0,
+    });
+    const [callHistory, setCallHistory] = useState<LeadCallEvent[]>([]);
 
     // NOTIFICACIONES PENDIENTES
     const [requestStats, setRequestStats] = useState({
@@ -70,6 +78,7 @@ export function useLeads() {
         hasTradeIn: false,
         onlyInteractions: false,
         withoutResume: false,
+        callFilter: 'all',
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -182,6 +191,7 @@ export function useLeads() {
             hasTradeIn: filters.hasTradeIn,
             onlyInteractions: filters.onlyInteractions,
             withoutResume: filters.withoutResume,
+            callFilter: filters.callFilter || 'all',
         }),
         [
             debouncedSearch,
@@ -197,6 +207,7 @@ export function useLeads() {
             filters.hasTradeIn,
             filters.onlyInteractions,
             filters.withoutResume,
+            filters.callFilter,
         ]
     );
 
@@ -217,6 +228,7 @@ export function useLeads() {
             hasTradeIn: false,
             onlyInteractions: false,
             withoutResume: false,
+            callFilter: 'all',
         });
     };
 
@@ -258,13 +270,17 @@ export function useLeads() {
                 fetchRequestStats(supabase, queryFilters.assignedTo),
                 fetchBudgetStats(supabase, queryFilters.assignedTo),
                 fetchTradeInLeadsCount(supabase, queryFilters.assignedTo),
+                fetchCallStats(supabase, queryFilters.assignedTo),
+                fetchCallHistory(supabase, queryFilters.assignedTo),
                 breakdownPromise,
-            ]).then(([interactions, stats, bCount, tradeInCount, breakdown]) => {
+            ]).then(([interactions, stats, bCount, tradeInCount, callCounts, callEvents, breakdown]) => {
                 if (gen !== fetchGenRef.current) return;
                 setInteractionsCount(interactions);
                 setRequestStats(stats);
                 setBudgetCount(bCount);
                 setTradeInLeadsCount(tradeInCount);
+                setCallStats(callCounts);
+                setCallHistory(callEvents);
                 setDayBreakdown(breakdown);
             });
             
@@ -350,7 +366,7 @@ export function useLeads() {
             } else if (key === 'dateRange') {
                 setFilters(prev => ({ ...prev, dateRange: value, exactDate: '', dateFrom: '', dateTo: '' }));
             } else if (key === 'status') {
-                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false }));
+                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false, callFilter: 'all' }));
             } else {
                 setFilters(prev => ({ ...prev, [key]: value }));
             }
@@ -365,6 +381,8 @@ export function useLeads() {
         dayBreakdown,
         budgetCount,
         tradeInLeadsCount,
+        callStats,
+        callHistory,
         requestStats,
         page, setPage, rowsPerPage,
         isLoading,

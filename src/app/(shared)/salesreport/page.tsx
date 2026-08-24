@@ -7,9 +7,11 @@ import { VentasKpiStats } from "@/components/features/accounting/salesreport/Ven
 import { VentasTable } from "@/components/features/accounting/salesreport/VentasTable";
 import { VentasFilters, FilterState, DateRangePreset } from "@/components/features/accounting/salesreport/VentasFilters";
 import { ResumenVentas, VentaVehiculo } from "@/types/ventas.types";
+import { useSidebarShell } from "@/hooks/useSidebarShell";
 
 export default function VentasPage() {
     const { data, loading, refresh } = useVentasData();
+    const isVentasModule = useSidebarShell() === "seller";
 
     // Estado inicial de los filtros
     const [filters, setFilters] = useState<FilterState>({
@@ -52,7 +54,7 @@ export default function VentasPage() {
             // B. Filtros de Selectores
             if (filters.brand !== 'all' && venta.marca !== filters.brand) return false;
             if (filters.agency !== 'all' && venta.agencia !== filters.agency) return false;
-            if (filters.salesperson !== 'all' && venta.agenteVenta !== filters.salesperson) return false;
+            if (!isVentasModule && filters.salesperson !== 'all' && venta.agenteVenta !== filters.salesperson) return false;
 
             // C. Filtro de Fechas Avanzado
             if (filters.datePreset !== 'all') {
@@ -91,7 +93,7 @@ export default function VentasPage() {
 
             return true;
         });
-    }, [data, filters]);
+    }, [data, filters, isVentasModule]);
 
     // 3. Recalcular KPIs basados en los datos filtrados (Next Level Feature)
     const calculatedStats: ResumenVentas | null = useMemo(() => {
@@ -141,7 +143,7 @@ export default function VentasPage() {
             brand: 'all',
             agency: 'all',
             salesperson: 'all',
-            datePreset: 'all'
+            datePreset: isVentasModule ? 'this_month' : 'all'
         });
     };
 
@@ -187,6 +189,7 @@ export default function VentasPage() {
                     availableBrands={options.brands}
                     availableAgencies={options.agencies}
                     availableAgents={options.agents}
+                    hideVentasOnlyFilters={isVentasModule}
                 />
 
                 {/* 1. Dashboard de Métricas (Usa calculatedStats para ser reactivo) */}

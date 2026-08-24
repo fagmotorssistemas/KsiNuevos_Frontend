@@ -10,7 +10,9 @@ import {
 
 export function useSidebarShell(): SidebarShell | null {
   const pathname = usePathname()
-  const [shell, setShell] = useState<SidebarShell | null>(null)
+  const [shell, setShell] = useState<SidebarShell | null>(() =>
+    typeof window === "undefined" ? null : getSidebarShell()
+  )
 
   useEffect(() => {
     setShell(getSidebarShell())

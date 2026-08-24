@@ -48,4 +48,40 @@ export type LeadsFilters = {
     onlyInteractions?: boolean;
     /** Solo leads sin resumen ejecutivo (no respondidos). */
     withoutResume?: boolean;
+    /** Filtro de solicitud de llamada: pendiente, aplazada o ya llamada. */
+    callFilter?: CallFilter;
+};
+
+export type CallFilter = "all" | "pendiente" | "aplazada" | "llamado";
+
+export type LeadCallStats = {
+    pendiente: number;
+    aplazada: number;
+    llamado: number;
+};
+
+export type LeadCallEventTipo = "solicitud" | "aplazada" | "gestionada";
+
+export type LeadCallEvent = {
+    id: string;
+    lead_id: number;
+    tipo: LeadCallEventTipo;
+    razon: string | null;
+    programado_hasta: string | null;
+    created_at: string;
+    lead_name: string;
+    created_by_name: string | null;
+};
+
+export const CALL_REQUEST_MAX_POSTPONES = 2;
+
+export type LeadCallRequest = {
+    id: number;
+    name: string;
+    phone: string;
+    assigned_to: string | null;
+    quiere_llamada: boolean | null;
+    llamada_posponer_hasta: string | null;
+    llamada_posponer_razon: string | null;
+    llamada_posponer_veces: number;
 };

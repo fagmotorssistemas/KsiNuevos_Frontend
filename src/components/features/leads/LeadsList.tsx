@@ -8,7 +8,7 @@ import {
     Phone,
     MessageCircle,
     User,
-    Landmark
+    Landmark,
 } from "lucide-react";
 
 import { PaginationPageMinimalCenter } from "@/components/ui/pagination";
@@ -107,6 +107,17 @@ export function LeadsList({
         });
     };
 
+    const getCallStatus = (lead: LeadWithDetails) => {
+        if (lead.quiere_llamada) {
+            if (lead.llamada_posponer_hasta && new Date(lead.llamada_posponer_hasta).getTime() > Date.now()) {
+                return "aplazada" as const;
+            }
+            return "pendiente" as const;
+        }
+        if (lead.llamada_gestionada_at) return "llamado" as const;
+        return null;
+    };
+
     if (isLoading) {
         return <div className="p-10 text-center text-slate-400">Cargando leads...</div>;
     }
@@ -169,6 +180,7 @@ export function LeadsList({
                             item.month_temperature !== item.temperature
                                 ? `Mes actual: ${item.month_temperature} · operativo: ${item.temperature ?? '—'}`
                                 : undefined;
+                        const callStatus = getCallStatus(item);
 
                         return (
                             <Table.Row id={item.id}>
@@ -187,10 +199,24 @@ export function LeadsList({
                                                 <span className={isSpecialSource ? '' : 'capitalize'}>
                                                     {getFormattedSource(item.source)}
                                                 </span>
-                                                {/* Opcional: Mostrar ID pequeño aquí si se necesita referencia, descomentar si se desea:
-                                                <span className="text-slate-300 mx-1">|</span>
-                                                <span className="text-slate-400">#{item.lead_id_kommo || item.id}</span> 
-                                                */}
+                                                {callStatus === "pendiente" && (
+                                                    <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                                                        <Phone className="h-2.5 w-2.5" />
+                                                        Pendiente
+                                                    </span>
+                                                )}
+                                                {callStatus === "aplazada" && (
+                                                    <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                                        <Clock className="h-2.5 w-2.5" />
+                                                        Aplazada
+                                                    </span>
+                                                )}
+                                                {callStatus === "llamado" && (
+                                                    <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                                                        <Check className="h-2.5 w-2.5" />
+                                                        Llamado
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

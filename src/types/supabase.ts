@@ -2981,6 +2981,51 @@ export type Database = {
           },
         ]
       }
+      lead_llamada_eventos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: number
+          programado_hasta: string | null
+          razon: string | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: number
+          programado_hasta?: string | null
+          razon?: string | null
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: number
+          programado_hasta?: string | null
+          razon?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_llamada_eventos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_llamada_eventos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_recovery: {
         Row: {
           id: number
@@ -3168,11 +3213,16 @@ export type Database = {
           hour_detected: string | null
           id: number
           lead_id_kommo: number
+          llamada_gestionada_at: string | null
+          llamada_posponer_hasta: string | null
+          llamada_posponer_razon: string | null
+          llamada_posponer_veces: number
           mensaje_post_fotos_enviado: boolean | null
           mensajes_enviados: string[]
           name: string
           phone: string
           presupuesto_cliente: string | null
+          quiere_llamada: boolean | null
           recordatorio_sugerencia_enviado: boolean | null
           respondio_post_fotos: boolean | null
           resume: string | null
@@ -3199,11 +3249,16 @@ export type Database = {
           hour_detected?: string | null
           id?: number
           lead_id_kommo: number
+          llamada_gestionada_at?: string | null
+          llamada_posponer_hasta?: string | null
+          llamada_posponer_razon?: string | null
+          llamada_posponer_veces?: number
           mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name: string
           phone?: string
           presupuesto_cliente?: string | null
+          quiere_llamada?: boolean | null
           recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
@@ -3230,11 +3285,16 @@ export type Database = {
           hour_detected?: string | null
           id?: number
           lead_id_kommo?: number
+          llamada_gestionada_at?: string | null
+          llamada_posponer_hasta?: string | null
+          llamada_posponer_razon?: string | null
+          llamada_posponer_veces?: number
           mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name?: string
           phone?: string
           presupuesto_cliente?: string | null
+          quiere_llamada?: boolean | null
           recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
           resume?: string | null
@@ -5320,6 +5380,36 @@ export type Database = {
           status?: string
           type?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      postventa_recordatorios: {
+        Row: {
+          cco_codigo: string
+          contact_id: number | null
+          id: number
+          lead_id_kommo: number | null
+          proximo_recordatorio: string
+          ultimo_enviado_at: string | null
+          vehicle_info: string | null
+        }
+        Insert: {
+          cco_codigo: string
+          contact_id?: number | null
+          id?: never
+          lead_id_kommo?: number | null
+          proximo_recordatorio: string
+          ultimo_enviado_at?: string | null
+          vehicle_info?: string | null
+        }
+        Update: {
+          cco_codigo?: string
+          contact_id?: number | null
+          id?: never
+          lead_id_kommo?: number | null
+          proximo_recordatorio?: string
+          ultimo_enviado_at?: string | null
+          vehicle_info?: string | null
         }
         Relationships: []
       }
