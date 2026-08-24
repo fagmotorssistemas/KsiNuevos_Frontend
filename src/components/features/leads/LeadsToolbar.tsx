@@ -16,6 +16,11 @@ import {
 
 import type { DateFilter, LeadsFilters } from "@/types/leads.types";
 import type { LeadDayMetricBreakdown } from "@/services/leads.service";
+import {
+    emptyCustomDateRange,
+    getLeadsCustomYmdRange,
+    withCustomDateRange,
+} from "@/utils/leads.logic";
 
 
 interface LeadsToolbarProps {
@@ -82,6 +87,9 @@ function formatDayLabel(ymd: string) {
     return `${d}/${m}/${y}`;
 }
 
+const dateInputClass =
+    "h-10 w-[11rem] max-w-full bg-transparent pl-1 pr-1 text-sm font-medium text-slate-700 outline-none [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-clear-button]:hidden [&::-webkit-inner-spin-button]:hidden";
+
 /** Tooltip al pasar el mouse: explica de dónde sale cada métrica del footer. */
 function MetricHint({
     children,
@@ -146,11 +154,14 @@ export function LeadsToolbar({
         currentUserRole?.toLowerCase().trim() === 'marketing';
     const assignedToValue = filters.assignedTo || 'all';
 
+    const customRange = getLeadsCustomYmdRange(filters);
+    const isCustomRange = Boolean(customRange);
+
     const hasActiveFilters =
         filters.status !== 'all' ||
         filters.temperature !== 'all' ||
         filters.dateRange !== 'all' ||
-        filters.exactDate !== '' ||
+        isCustomRange ||
         filters.search !== '' ||
         filters.hasBudget ||
         filters.hasTradeIn ||
@@ -164,15 +175,20 @@ export function LeadsToolbar({
 
     // Texto dinámico para la nueva métrica
     const getInteractionLabel = () => {
-        if (filters.exactDate) {
-            const [y, m, d] = filters.exactDate.split('-');
-            return `Gestión del ${d}/${m}`;
+        if (customRange) {
+            if (customRange.from === customRange.to) {
+                const [y, m, d] = customRange.from.split('-');
+                return `Gestión del ${d}/${m}`;
+            }
+            return `Gestión ${formatDayLabel(customRange.from)} – ${formatDayLabel(customRange.to)}`;
         }
         return "Gestión de Hoy";
     };
 
-    const dateLabel = filters.exactDate
-        ? formatDayLabel(filters.exactDate)
+    const dateLabel = customRange
+        ? customRange.from === customRange.to
+            ? formatDayLabel(customRange.from)
+            : `${formatDayLabel(customRange.from)} – ${formatDayLabel(customRange.to)}`
         : filters.dateRange === 'today'
           ? 'hoy'
           : filters.dateRange !== 'all'
@@ -195,7 +211,11 @@ export function LeadsToolbar({
               ? ['Tienen resumen en la ficha (pudo guardarse otro día).']
               : ['Cuántos de la lista ya tienen resumen.'];
 
-    const gestionDayLabel = filters.exactDate ? formatDayLabel(filters.exactDate) : 'hoy';
+    const gestionDayLabel = customRange
+        ? customRange.from === customRange.to
+            ? formatDayLabel(customRange.from)
+            : `${formatDayLabel(customRange.from)} – ${formatDayLabel(customRange.to)}`
+        : 'hoy';
 
     const interactionsHintLines =
         dayBreakdown && filters.exactDate
@@ -266,25 +286,66 @@ export function LeadsToolbar({
                     </div>
 
                     {/* Fecha: filtra por ingreso del lead (created_at, Ecuador) */}
-                    <div className="min-w-[200px] max-w-full shrink-0">
-                        {filters.exactDate ? (
-                            <div className="relative isolate flex items-center rounded-lg border border-slate-200 bg-slate-50/50 shadow-sm">
-                                <div className="absolute left-3 z-10 text-brand-500 pointer-events-none">
-                                    <Calendar className="h-4 w-4" />
+                    <div className="min-w-0 w-full md:w-auto shrink-0">
+                        {isCustomRange ? (
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                <div className="flex h-10 min-w-0 items-center rounded-lg border border-slate-200 bg-slate-50/50 shadow-sm">
+                                    <span className="pl-2.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                                        Inicio
+                                    </span>
+                                    <input
+                                        type="date"
+                                        aria-label="Fecha de inicio"
+                                        className={dateInputClass}
+                                        value={customRange?.from ?? ''}
+                                        max={customRange?.to || undefined}
+                                        onChange={(e) => {
+                                            if (!e.target.value) return;
+                                            onFilterChange(
+                                                withCustomDateRange(
+                                                    e.target.value,
+                                                    customRange?.to || e.target.value,
+                                                    'from'
+                                                )
+                                            );
+                                        }}
+                                    />
+                                    <span className="px-0.5 text-slate-300 select-none" aria-hidden>
+                                        –
+                                    </span>
+                                    <span className="pl-1.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shrink-0">
+                                        Fin
+                                    </span>
+                                    <input
+                                        type="date"
+                                        aria-label="Fecha de fin"
+                                        className={dateInputClass}
+                                        value={customRange?.to ?? ''}
+                                        min={customRange?.from || undefined}
+                                        onChange={(e) => {
+                                            if (!e.target.value) return;
+                                            onFilterChange(
+                                                withCustomDateRange(
+                                                    customRange?.from || e.target.value,
+                                                    e.target.value,
+                                                    'to'
+                                                )
+                                            );
+                                        }}
+                                    />
                                 </div>
-                                <input
-                                    type="date"
-                                    className="h-10 w-full rounded-lg border-0 bg-transparent pl-10 pr-10 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                                    value={filters.exactDate}
-                                    onChange={(e) => onFilterChange('exactDate', e.target.value)}
-                                />
                                 <button
                                     type="button"
-                                    onClick={() => onFilterChange('exactDate', '')}
-                                    className="absolute right-9 z-10 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+                                    onClick={() =>
+                                        onFilterChange({
+                                            ...emptyCustomDateRange,
+                                            dateRange: 'all',
+                                        })
+                                    }
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-colors"
                                     title="Volver a rangos"
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="h-4 w-4" />
                                 </button>
                             </div>
                         ) : (
@@ -294,11 +355,11 @@ export function LeadsToolbar({
                                 onChange={(e) => {
                                     if (e.target.value === 'custom') {
                                         const today = getEcuadorDateISO();
-                                        onFilterChange({ exactDate: today, dateRange: 'all' });
+                                        onFilterChange(withCustomDateRange(today, today));
                                     } else {
                                         onFilterChange({
                                             dateRange: e.target.value as DateFilter,
-                                            exactDate: '',
+                                            ...emptyCustomDateRange,
                                         });
                                     }
                                 }}
@@ -308,7 +369,7 @@ export function LeadsToolbar({
                                 <option value="7days">Últimos 7 días</option>
                                 <option value="15days">Últimos 15 días</option>
                                 <option value="thisMonth">Este mes</option>
-                                <option value="custom">🔎 Fecha exacta...</option>
+                                <option value="custom">🔎 Rango de fechas...</option>
                             </CustomSelect>
                         )}
                     </div>
@@ -413,12 +474,27 @@ export function LeadsToolbar({
                         }`}
                         onClick={() => {
                             const next = !filters.onlyInteractions;
-                            const ensureDate = next && !filters.exactDate ? getEcuadorDateISO() : filters.exactDate;
+                            if (!next) {
+                                onFilterChange({ onlyInteractions: false, withoutResume: false });
+                                return;
+                            }
+                            const range = getLeadsCustomYmdRange(filters);
+                            if (range) {
+                                onFilterChange({
+                                    onlyInteractions: true,
+                                    withoutResume: false,
+                                    hasBudget: false,
+                                    hasTradeIn: false,
+                                });
+                                return;
+                            }
+                            const today = getEcuadorDateISO();
                             onFilterChange({
-                                onlyInteractions: next,
+                                onlyInteractions: true,
                                 withoutResume: false,
-                                dateRange: 'all',
-                                exactDate: ensureDate,
+                                hasBudget: false,
+                                hasTradeIn: false,
+                                ...withCustomDateRange(today, today),
                             });
                         }}
                     >

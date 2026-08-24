@@ -33,6 +33,7 @@ import {
     mapInterestedCarsToAppointmentVehicles,
     type AppointmentLeadVehicle,
 } from "@/components/features/agenda/AppointmentModal";
+import { AppointmentOutcomeModal } from "@/components/features/agenda/AppointmentOutcomeModal";
 import { BotSuggestionCard } from "@/components/features/agenda/BotSuggestionCard";
 
 import { Button } from "@/components/ui/buttontable"; 
@@ -49,6 +50,8 @@ export default function AgendaPage() {
 
     const [isWebModalOpen, setIsWebModalOpen] = useState(false);
     const [selectedWebAppointment, setSelectedWebAppointment] = useState<WebApptType | null>(null);
+    const [noShowAppointment, setNoShowAppointment] = useState<AppointmentWithDetails | null>(null);
+    const [savingNoShow, setSavingNoShow] = useState(false);
 
     // -- ESTADO PARA SUB-PESTAÑAS DE HISTORIAL --
     const [historySubTab, setHistorySubTab] = useState<'leads' | 'web'>('leads');
@@ -67,7 +70,7 @@ export default function AgendaPage() {
         setActiveTab,
         filters,
         setFilters,
-        actions: { markAsCompleted, cancelAppointment, discardSuggestion },
+        actions: { markAsCompleted, markAsNoShow, discardSuggestion },
         refresh
     } = useAgenda();
 
@@ -189,7 +192,7 @@ export default function AgendaPage() {
                         appointment={appt} 
                         isAdminView={isAdmin} 
                         onComplete={markAsCompleted}
-                        onCancel={cancelAppointment}
+                        onNoShow={setNoShowAppointment}
                         onEdit={handleEdit}
                     />
                 ))}
@@ -587,6 +590,27 @@ export default function AgendaPage() {
             </div>
 
             {/* MODALES */}
+            <AppointmentOutcomeModal
+                isOpen={!!noShowAppointment}
+                clientName={noShowAppointment?.lead?.name || noShowAppointment?.external_client_name}
+                appointmentTitle={noShowAppointment?.title}
+                submitting={savingNoShow}
+                onClose={() => {
+                    if (savingNoShow) return;
+                    setNoShowAppointment(null);
+                }}
+                onConfirm={async ({ reason, followUp }) => {
+                    if (!noShowAppointment) return;
+                    setSavingNoShow(true);
+                    try {
+                        await markAsNoShow(noShowAppointment.id, { reason, followUp });
+                        setNoShowAppointment(null);
+                    } finally {
+                        setSavingNoShow(false);
+                    }
+                }}
+            />
+
             <AppointmentModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}

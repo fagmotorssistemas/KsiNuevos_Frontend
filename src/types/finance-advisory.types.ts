@@ -71,3 +71,46 @@ export const FINANCIAL_ADVISORY_STATUS_CONFIG: Record<
 };
 
 export const FINANCIAL_ADVISORY_ICON = Landmark;
+
+type GestionCompletenessInput = {
+  tipo?: string | null;
+  gestion_detalle?: string | null;
+  aplica?: boolean | null;
+  motivo_no_aplica?: string | null;
+  banco_deseado?: string | null;
+  asesor_contactado_nombre?: string | null;
+  asesor_contactado_telefono?: string | null;
+  se_solicito_cedula?: boolean | null;
+  cedula?: string | null;
+  requiere_garante?: boolean | null;
+  garante_detalle?: string | null;
+  monto_aprobable_max?: number | null;
+  plazo_meses_max?: number | null;
+};
+
+function filled(value: string | null | undefined): boolean {
+  return Boolean(value && value.trim());
+}
+
+/** Campos que faltan para considerar la gestión completa (suma puntos). */
+export function missingFinancialAdvisoryFields(input: GestionCompletenessInput): string[] {
+  const missing: string[] = [];
+  if (!filled(input.tipo)) missing.push("tipo de gestión");
+  if (!filled(input.gestion_detalle)) missing.push("qué gestión se hizo");
+  if (input.aplica == null) missing.push("si el cliente puede aplicar");
+  if (input.aplica === false && !filled(input.motivo_no_aplica)) missing.push("motivo de no aplica");
+  if (input.aplica === true) {
+    if (input.monto_aprobable_max == null) missing.push("monto máximo");
+    if (input.plazo_meses_max == null) missing.push("plazo en meses");
+  }
+  if (!filled(input.banco_deseado)) missing.push("banco deseado");
+  if (!filled(input.asesor_contactado_nombre)) missing.push("nombre del asesor");
+  if (!filled(input.asesor_contactado_telefono)) missing.push("teléfono del asesor");
+  if (input.se_solicito_cedula && !filled(input.cedula)) missing.push("cédula");
+  if (input.requiere_garante && !filled(input.garante_detalle)) missing.push("detalle del garante");
+  return missing;
+}
+
+export function isFinancialAdvisoryGestionComplete(input: GestionCompletenessInput): boolean {
+  return missingFinancialAdvisoryFields(input).length === 0;
+}

@@ -22,6 +22,7 @@ export type SalesProgressRankingRow = {
   stale_leads: number;
   leads_ingresados: number;
   leads_con_historial: number;
+  leads_con_cita: number;
   backlog_abiertos: number;
 };
 
@@ -42,6 +43,9 @@ export type SalesDailyProgressPayload = {
   es_admin: boolean;
   leads_ingresados: number;
   leads_con_historial: number;
+  leads_con_cita: number;
+  datos_faltantes_hoy: number;
+  datos_faltantes_contestados: number;
   backlog_abiertos: number;
   categorias: SalesProgressCategoryRow[];
   puntos_actividad: number;

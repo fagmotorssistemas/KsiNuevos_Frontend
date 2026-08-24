@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, AlertTriangle, Trophy, RefreshCw, X, FileText, Store, CircleCheck, Landmark, CalendarCheck, FileSpreadsheet, ChevronRight } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Trophy, RefreshCw, X, FileText, Store, MessageSquare, CircleCheck, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
 import { useSalesDailyProgress } from '@/hooks/useSalesDailyProgress';
 import { SalesProgressGuide } from '@/components/features/sales-progress/SalesProgressGuide';
@@ -41,6 +41,11 @@ function num(value: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function citaPct(conCita: number, ingresados: number): number {
+  if (ingresados <= 0) return 0;
+  return Math.round((conCita / ingresados) * 100);
+}
+
 function contestedLeadCap(row: SalesProgressCategoryRow): number {
   const fromRow = Math.abs(num(row.cap));
   return fromRow > 0 ? fromRow : 40;
@@ -56,14 +61,33 @@ const SHOWROOM_EMPTY: SalesProgressCategoryRow = {
   cap: 12,
 };
 
-function categoriesForDisplay(rows: SalesProgressCategoryRow[]): SalesProgressCategoryRow[] {
-  const list = rows.filter((row) => row.categoria !== 'stale_leads' && row.categoria !== 'lead_interaction');
-  if (list.some((row) => row.categoria === 'showroom_followup')) return list;
+const SHOWROOM_GESTION_EMPTY: SalesProgressCategoryRow = {
+  categoria: 'showroom_gestion',
+  label: 'Seguimiento showroom',
+  axis: 'avance',
+  cantidad: 0,
+  puntos_brutos: 0,
+  puntos: 0,
+  cap: 9,
+};
 
-  const afterContested = list.findIndex((row) => row.categoria === 'lead_status_change');
-  const beforeClosed = list.findIndex((row) => row.categoria === 'lead_closed');
-  const insertAt = afterContested >= 0 ? afterContested + 1 : beforeClosed >= 0 ? beforeClosed : list.length;
-  return [...list.slice(0, insertAt), SHOWROOM_EMPTY, ...list.slice(insertAt)];
+function categoriesForDisplay(rows: SalesProgressCategoryRow[]): SalesProgressCategoryRow[] {
+  let list = rows.filter((row) => row.categoria !== 'stale_leads' && row.categoria !== 'lead_interaction');
+
+  if (!list.some((row) => row.categoria === 'showroom_followup')) {
+    const afterContested = list.findIndex((row) => row.categoria === 'lead_status_change');
+    const beforeClosed = list.findIndex((row) => row.categoria === 'lead_closed');
+    const insertAt = afterContested >= 0 ? afterContested + 1 : beforeClosed >= 0 ? beforeClosed : list.length;
+    list = [...list.slice(0, insertAt), SHOWROOM_EMPTY, ...list.slice(insertAt)];
+  }
+
+  if (!list.some((row) => row.categoria === 'showroom_gestion')) {
+    const afterShowroom = list.findIndex((row) => row.categoria === 'showroom_followup');
+    const insertAt = afterShowroom >= 0 ? afterShowroom + 1 : list.length;
+    list = [...list.slice(0, insertAt), SHOWROOM_GESTION_EMPTY, ...list.slice(insertAt)];
+  }
+
+  return list;
 }
 
 function formatWeekday(isoDate: string): string {
@@ -116,16 +140,18 @@ function formatTime(iso: string): string {
 const CATEGORY_ICON: Record<string, typeof FileText> = {
   lead_status_change: FileText,
   showroom_followup: Store,
+  showroom_gestion: MessageSquare,
   lead_closed: CircleCheck,
   asesoria_advanced: Landmark,
   appointment_completed: CalendarCheck,
   proforma_generated: FileSpreadsheet,
+  leads_to_cita: CalendarPlus,
+  datos_faltantes: ClipboardList,
 };
 
-const CATEGORY_TONE: Record<
-  string,
-  { wrap: string; icon: string; bar: string; pts: string; ptsWrap: string }
-> = {
+type CategoryTone = { wrap: string; icon: string; bar: string; pts: string; ptsWrap: string };
+
+const CATEGORY_TONE: Record<string, CategoryTone> = {
   lead_status_change: {
     wrap: 'bg-sky-50',
     icon: 'text-sky-600',
@@ -139,6 +165,13 @@ const CATEGORY_TONE: Record<
     bar: 'bg-violet-500',
     pts: 'text-violet-800',
     ptsWrap: 'bg-violet-50',
+  },
+  showroom_gestion: {
+    wrap: 'bg-fuchsia-50',
+    icon: 'text-fuchsia-600',
+    bar: 'bg-fuchsia-500',
+    pts: 'text-fuchsia-800',
+    ptsWrap: 'bg-fuchsia-50',
   },
   lead_closed: {
     wrap: 'bg-emerald-50',
@@ -168,56 +201,89 @@ const CATEGORY_TONE: Record<
     pts: 'text-indigo-800',
     ptsWrap: 'bg-indigo-50',
   },
+  leads_to_cita: {
+    wrap: 'bg-blue-50',
+    icon: 'text-blue-600',
+    bar: 'bg-blue-500',
+    pts: 'text-blue-800',
+    ptsWrap: 'bg-blue-50',
+  },
+  datos_faltantes: {
+    wrap: 'bg-purple-50',
+    icon: 'text-purple-600',
+    bar: 'bg-purple-500',
+    pts: 'text-purple-800',
+    ptsWrap: 'bg-purple-50',
+  },
 };
 
 const CATEGORY_UNITS: Record<string, [string, string]> = {
   lead_status_change: ['lead', 'leads'],
   showroom_followup: ['visita', 'visitas'],
+  showroom_gestion: ['seguimiento', 'seguimientos'],
   lead_closed: ['ganado', 'ganados'],
   asesoria_advanced: ['asesoría', 'asesorías'],
   appointment_completed: ['cita', 'citas'],
   proforma_generated: ['proforma', 'proformas'],
 };
 
-function categoryCapLabel(row: SalesProgressCategoryRow): { done: number; max: number; unit: string } {
-  const done = num(row.cantidad);
-  const pair = CATEGORY_UNITS[row.categoria] ?? ['acción', 'acciones'];
-  if (row.categoria === 'lead_status_change') {
-    return { done, max: contestedLeadCap(row), unit: done === 1 ? pair[0] : pair[1] };
-  }
-  return {
-    done,
-    max: Math.abs(num(row.cap)) || 1,
-    unit: done === 1 ? pair[0] : pair[1],
-  };
+function pointsCap(row: SalesProgressCategoryRow): number {
+  if (row.categoria === 'lead_status_change') return contestedLeadCap(row);
+  return Math.abs(num(row.cap)) || 1;
 }
 
-function CategoryBar({
-  row,
+function pointsPercent(row: SalesProgressCategoryRow): number {
+  if (row.categoria === 'asesoria_advanced') {
+    const arrived = Math.abs(num(row.cap));
+    const filled = num(row.cantidad);
+    if (arrived <= 0) return 0;
+    return Math.min(100, Math.max(0, Math.round((filled / arrived) * 100)));
+  }
+  const cap = pointsCap(row);
+  if (cap <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((Math.abs(num(row.puntos)) / cap) * 100)));
+}
+
+function categorySubtitle(row: SalesProgressCategoryRow): string {
+  if (row.categoria === 'asesoria_advanced') {
+    const arrived = Math.abs(num(row.cap));
+    const filled = num(row.cantidad);
+    const puntos = num(row.puntos);
+    if (arrived <= 0) return 'Hoy no llegaron asesorías';
+    const unit = arrived === 1 ? 'asesoría' : 'asesorías';
+    return `${filled} de ${arrived} ${unit} de hoy llenas · ${puntos} pts`;
+  }
+  const puntos = num(row.puntos);
+  const cap = pointsCap(row);
+  const qty = num(row.cantidad);
+  const pair = CATEGORY_UNITS[row.categoria];
+  const unit = pair ? (qty === 1 ? pair[0] : pair[1]) : null;
+  const ptsLine = `${puntos} de ${cap} pts`;
+  if (!unit || qty <= 0 || puntos === qty) return ptsLine;
+  return `${ptsLine} · ${qty} ${unit}`;
+}
+
+function MetricBar({
+  label,
+  subtitle,
+  percent,
   selected,
+  muted,
+  Icon,
+  tone,
   onSelect,
 }: {
-  row: SalesProgressCategoryRow;
+  label: string;
+  subtitle: string;
+  percent: number;
   selected: boolean;
+  muted?: boolean;
+  Icon: typeof FileText;
+  tone: CategoryTone;
   onSelect: () => void;
 }) {
-  const puntos = num(row.puntos);
-  const cap = categoryCapLabel(row);
-  const progressMax =
-    row.categoria === 'lead_status_change' ? contestedLeadCap(row) : Math.abs(num(row.cap)) || 1;
-  const progressValue = row.categoria === 'lead_status_change' ? cap.done : Math.abs(puntos);
-  const width = Math.min(100, (progressValue / progressMax) * 100);
-  const Icon = CATEGORY_ICON[row.categoria] ?? FileText;
-  const tone = CATEGORY_TONE[row.categoria] ?? CATEGORY_TONE.lead_closed;
-  const empty = cap.done === 0;
-  const subtitle =
-    row.categoria === 'lead_status_change'
-      ? empty
-        ? `Tope ${contestedLeadCap(row)} leads`
-        : `${cap.done} de ${cap.max} ${cap.unit}`
-      : empty
-        ? `Tope ${row.cap} pts`
-        : `${cap.done} ${cap.unit}`;
+  const pct = Math.min(100, Math.max(0, Math.round(percent)));
+  const empty = muted ?? pct === 0;
 
   return (
     <button
@@ -243,21 +309,18 @@ function CategoryBar({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
             <p className={`text-sm font-semibold leading-5 truncate ${empty ? 'text-slate-500' : 'text-slate-900'}`}>
-              {row.label.replace(' (resumen)', '')}
+              {label}
             </p>
             <div className="flex items-center gap-1.5 shrink-0">
               <span
                 className={`rounded-lg px-2 py-0.5 text-xs font-black tabular-nums ${
-                  puntos < 0
-                    ? 'bg-red-50 text-red-700'
-                    : empty
-                      ? 'bg-white text-slate-300 border border-slate-100'
-                      : `${tone.ptsWrap} ${tone.pts}`
+                  empty
+                    ? 'bg-white text-slate-300 border border-slate-100'
+                    : `${tone.ptsWrap} ${tone.pts}`
                 }`}
               >
-                {puntos > 0 ? '+' : ''}
-                {puntos}
-                <span className={`ml-0.5 font-semibold ${empty ? 'text-slate-300' : 'opacity-70'}`}>pts</span>
+                {pct}
+                <span className={`ml-0.5 font-semibold ${empty ? 'text-slate-300' : 'opacity-70'}`}>%</span>
               </span>
               <ChevronRight
                 className={`h-4 w-4 transition-transform ${
@@ -270,12 +333,36 @@ function CategoryBar({
           <div className="mt-2.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
               className={`h-full rounded-full transition-[width] duration-300 ${empty ? 'bg-slate-200' : tone.bar}`}
-              style={{ width: `${empty ? 0 : Math.max(width, 8)}%` }}
+              style={{ width: `${pct}%` }}
             />
           </div>
         </div>
       </div>
     </button>
+  );
+}
+
+function CategoryBar({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: SalesProgressCategoryRow;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const percent = pointsPercent(row);
+  return (
+    <MetricBar
+      label={row.label.replace(' (resumen)', '')}
+      subtitle={categorySubtitle(row)}
+      percent={percent}
+      selected={selected}
+      muted={percent === 0}
+      Icon={CATEGORY_ICON[row.categoria] ?? FileText}
+      tone={CATEGORY_TONE[row.categoria] ?? CATEGORY_TONE.lead_closed}
+      onSelect={onSelect}
+    />
   );
 }
 
@@ -388,10 +475,20 @@ export function SalesProgressDashboard() {
   const weekAvg = Math.round(
     trendDays.reduce((sum, point) => sum + trendPercent(point), 0) / Math.max(1, trendDays.length)
   );
+  const ingresados = num(data?.leads_ingresados);
+  const conCita = num(data?.leads_con_cita);
+  const conversionPct = citaPct(conCita, ingresados);
+  const faltantesHoy = num(data?.datos_faltantes_hoy);
+  const faltantesOk = num(data?.datos_faltantes_contestados);
+  const faltantesPct = citaPct(faltantesOk, faltantesHoy);
   const selectedLabel =
     selectedCategory === 'leads_ingresados'
       ? 'Leads que llegaron hoy'
-      : categoryRows.find((row) => row.categoria === selectedCategory)?.label ?? 'Detalle';
+      : selectedCategory === 'leads_to_cita'
+        ? 'Llegaron → cita'
+        : selectedCategory === 'datos_faltantes'
+          ? 'Info. faltante'
+          : categoryRows.find((row) => row.categoria === selectedCategory)?.label ?? 'Detalle';
 
   return (
     <div className="space-y-6">
@@ -477,7 +574,9 @@ export function SalesProgressDashboard() {
                 hint={
                   data.rol === 'estrancado'
                     ? `${num(data.backlog_abiertos).toLocaleString('es-EC')} en cartera · ver detalle`
-                    : `${num(data.leads_con_historial)} contestados hoy · ver lista`
+                    : ingresados === 0
+                      ? `${num(data.leads_con_historial)} contestados hoy · ver lista`
+                      : `${conCita} de ${ingresados} a cita (${conversionPct}%) · ${num(data.leads_con_historial)} contestados`
                 }
                 accent="text-slate-900"
                 selected={
@@ -522,6 +621,46 @@ export function SalesProgressDashboard() {
                 </span>
               </div>
               <div className="p-3 space-y-1.5">
+                {data.rol !== 'estrancado' && (
+                  <MetricBar
+                    label="Llegaron → cita"
+                    subtitle={
+                      ingresados === 0
+                        ? 'Hoy no llegaron leads nuevos'
+                        : `${conCita} de ${ingresados} leads de hoy se volvieron cita`
+                    }
+                    percent={conversionPct}
+                    selected={selectedCategory === 'leads_to_cita'}
+                    muted={ingresados === 0}
+                    Icon={CalendarPlus}
+                    tone={CATEGORY_TONE.leads_to_cita}
+                    onSelect={() =>
+                      selectedCategory === 'leads_to_cita'
+                        ? closeCategory()
+                        : void openCategory('leads_to_cita')
+                    }
+                  />
+                )}
+                {data.rol !== 'estrancado' && (
+                  <MetricBar
+                    label="Info. faltante"
+                    subtitle={
+                      faltantesHoy === 0
+                        ? 'Hoy no llegaron solicitudes de info. faltante'
+                        : `${faltantesOk} de ${faltantesHoy} de hoy contestadas`
+                    }
+                    percent={faltantesPct}
+                    selected={selectedCategory === 'datos_faltantes'}
+                    muted={faltantesHoy === 0}
+                    Icon={ClipboardList}
+                    tone={CATEGORY_TONE.datos_faltantes}
+                    onSelect={() =>
+                      selectedCategory === 'datos_faltantes'
+                        ? closeCategory()
+                        : void openCategory('datos_faltantes')
+                    }
+                  />
+                )}
                 {categoryRows.map((row) => (
                   <CategoryBar
                     key={row.categoria}
@@ -571,7 +710,7 @@ export function SalesProgressDashboard() {
                         <p className="text-[11px] text-slate-400">
                           {row.rol === 'estrancado'
                             ? `${num(row.leads_con_historial)} gestionados hoy · ${num(row.backlog_abiertos).toLocaleString('es-EC')} en cartera`
-                            : `${num(row.leads_ingresados)} llegaron · ${num(row.leads_con_historial)} contestados`}
+                            : `${num(row.leads_ingresados)} llegaron · ${num(row.leads_con_cita)} a cita (${citaPct(num(row.leads_con_cita), num(row.leads_ingresados))}%)`}
                         </p>
                       </div>
                       <span className="text-sm font-bold tabular-nums text-slate-900">{num(row.puntos_total)}</span>

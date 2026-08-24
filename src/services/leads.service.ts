@@ -1,5 +1,6 @@
 import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import { LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
+import { getLeadsCustomYmdRange } from "@/utils/leads.logic";
 
 export const fetchSellersRequest = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('id, full_name').eq('status', 'activo').eq('role', 'vendedor').order('full_name');
@@ -47,8 +48,12 @@ type LeadsTemperatureHistoryScope =
  * - Este mes / fecha exacta → mes calendario Ecuador de referencia.
  */
 const getTemperatureHistoryScope = (filters: LeadsFilters): LeadsTemperatureHistoryScope => {
-    if (filters.exactDate) {
-        return { mode: 'month', campaignMonth: `${filters.exactDate.slice(0, 7)}-01` };
+    const customRange = getLeadsCustomYmdRange(filters);
+    if (customRange) {
+        if (customRange.from.slice(0, 7) === customRange.to.slice(0, 7)) {
+            return { mode: 'month', campaignMonth: `${customRange.from.slice(0, 7)}-01` };
+        }
+        return { mode: 'all' };
     }
     if (filters.dateRange === 'all') {
         return { mode: 'all' };
@@ -64,8 +69,12 @@ const getLeadsCreatedAtRangeFromFilters = (
     filters: LeadsFilters
 ): { start: string; end: string } | null => {
     if (filters.onlyInteractions) return null;
-    if (filters.exactDate) {
-        return getEcuadorRange(filters.exactDate);
+    const customRange = getLeadsCustomYmdRange(filters);
+    if (customRange) {
+        return {
+            start: `${customRange.from}T00:00:00-05:00`,
+            end: `${customRange.to}T23:59:59-05:00`,
+        };
     }
     if (filters.dateRange === 'all') return null;
 
@@ -729,10 +738,15 @@ export const fetchLeadsAPI = async (
             }
         }
 
-        // Solo gestionados: resumen guardado ese día (updated_at solo cambia con resume).
+        // Solo gestionados: resumen guardado en el rango (updated_at solo cambia con resume).
         if (filters.onlyInteractions) {
-            const targetDateStr = filters.exactDate ? filters.exactDate : getEcuadorDateISO();
-            const { start, end } = getEcuadorRange(targetDateStr);
+            const customRange = getLeadsCustomYmdRange(filters);
+            const { start, end } = customRange
+                ? {
+                      start: `${customRange.from}T00:00:00-05:00`,
+                      end: `${customRange.to}T23:59:59-05:00`,
+                  }
+                : getEcuadorRange(getEcuadorDateISO());
             const gestionLeadIds = await fetchLeadIdsGestionadosInRange(
                 supabase,
                 start,
@@ -983,11 +997,18 @@ export const fetchLeadDayMetricBreakdown = async (
     }
 }
 
-// --- GESTIONADOS HOY (Métrica 2): leads con resumen ejecutivo guardado ese día.
-export const fetchDailyInteractions = async (supabase: any, assignedTo: string, exactDate: string) => {
+// --- GESTIONADOS (Métrica 2): leads con resumen ejecutivo guardado en el rango.
+export const fetchDailyInteractions = async (
+    supabase: any,
+    assignedTo: string,
+    dateFrom: string,
+    dateTo: string = ''
+) => {
     try {
-        const targetDateStr = exactDate ? exactDate : getEcuadorDateISO();
-        const { start, end } = getEcuadorRange(targetDateStr);
+        const from = dateFrom || dateTo || getEcuadorDateISO();
+        const to = dateTo || dateFrom || from;
+        const start = `${from}T00:00:00-05:00`;
+        const end = `${to}T23:59:59-05:00`;
         const ids = await fetchLeadIdsGestionadosInRange(supabase, start, end, assignedTo);
         return ids.length;
     } catch (error) {

@@ -18,6 +18,13 @@ export type BotSuggestionLead = LeadRow & {
     interested_cars: CarRowWithVehicle[];
 };
 
+export type AppointmentNoShowFollowUp = "llamada" | "mensaje";
+
+export type AppointmentNoShowDetails = {
+    reason: string;
+    followUp: AppointmentNoShowFollowUp;
+};
+
 export type AppointmentWithDetails = AppointmentRow & {
     is_completed?: boolean;
     lead: (LeadRow & {
@@ -307,18 +314,45 @@ export function useAgenda() {
 
     // 5. ACCIONES
     const markAsCompleted = async (id: number) => {
+        const updates = {
+            status: 'completada' as const,
+            is_completed: true,
+            client_attended: true,
+            no_show_reason: null,
+            no_show_follow_up: null,
+        };
         setAllAppointments((prev) =>
-            prev.map((a) =>
-                a.id === id ? { ...a, status: 'completada', is_completed: true } : a
-            )
+            prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
         );
         const { error } = await supabase
             .from('appointments')
-            .update({ status: 'completada', is_completed: true })
+            .update(updates)
             .eq('id', id);
         if (error) {
             console.error('Error al completar cita:', error.message);
             await fetchAppointments();
+        }
+    };
+
+    const markAsNoShow = async (id: number, details: AppointmentNoShowDetails) => {
+        const updates = {
+            status: 'no_asistio' as const,
+            is_completed: true,
+            client_attended: false,
+            no_show_reason: details.reason.trim(),
+            no_show_follow_up: details.followUp,
+        };
+        setAllAppointments((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
+        );
+        const { error } = await supabase
+            .from('appointments')
+            .update(updates)
+            .eq('id', id);
+        if (error) {
+            console.error('Error al registrar no asistencia:', error.message);
+            await fetchAppointments();
+            throw error;
         }
     };
 
@@ -395,6 +429,6 @@ export function useAgenda() {
         activeTab,
         setActiveTab,
         refresh: () => { fetchAppointments(); fetchBotSuggestions(); },
-        actions: { markAsCompleted, cancelAppointment, updateAppointment, discardSuggestion }
+        actions: { markAsCompleted, markAsNoShow, cancelAppointment, updateAppointment, discardSuggestion }
     };
 }

@@ -69,6 +69,8 @@ function buildExportFilters(
         return {
             ...baseFilters,
             exactDate,
+            dateFrom: exactDate,
+            dateTo: exactDate,
             dateRange: "all",
             onlyInteractions: false,
         };
@@ -76,6 +78,8 @@ function buildExportFilters(
     return {
         ...baseFilters,
         exactDate: "",
+        dateFrom: "",
+        dateTo: "",
         dateRange: dateMode as DateFilter,
         onlyInteractions: false,
     };
