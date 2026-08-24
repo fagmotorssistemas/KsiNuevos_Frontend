@@ -1,3 +1,4 @@
+import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import { LeadWithDetails, LeadsFilters, TradeInCarRow } from "@/types/leads.types";
 
 export const fetchSellersRequest = async (supabase: any) => {
@@ -631,24 +632,27 @@ export const fetchLeadsAPI = async (
         if (filters.search) {
             const tokens = searchTokens(filters.search);
             if (tokens.length > 0) {
-                // Vehículo: lead_ids con brand o model que contengan TODOS los tokens (kia + st → Kia Stonic)
-                const tokenLeadIds = await Promise.all(
-                    tokens.map(async (token) => {
-                        const { data: newData } = await supabase
-                            .from('interested_cars')
-                            .select('lead_id, inventoryoracle!inner(brand, model)')
-                            .or(`brand.ilike.%${token}%,model.ilike.%${token}%`, { foreignTable: 'inventoryoracle' });
-
-                        const ids = new Set([
-                            ...(newData || []).map((x: any) => x.lead_id)
-                        ]);
-                        return Array.from(ids);
-                    })
-                ) as number[][];
-                const vehicleSets = tokenLeadIds.map((ids) => new Set(ids));
-                const vehicleMatchLeadIds = vehicleSets.length === 1
-                    ? [...vehicleSets[0]]
-                    : [...vehicleSets[0]].filter((id) => vehicleSets.every((set) => set.has(id)));
+                // Vehículo: misma lógica que inventario (dmax ≈ d-max) sobre inventoryoracle (~250 filas)
+                let vehicleMatchLeadIds: number[] = [];
+                const { data: inventoryRows } = await supabase
+                    .from("inventoryoracle")
+                    .select("id, brand, model");
+                const matchedInventoryIds = (inventoryRows || [])
+                    .filter((car: { brand?: string | null; model?: string | null }) =>
+                        carMatchesInventorySearch(car, filters.search)
+                    )
+                    .map((car: { id: string }) => car.id);
+                if (matchedInventoryIds.length > 0) {
+                    const { data: interestRows } = await supabase
+                        .from("interested_cars")
+                        .select("lead_id")
+                        .in("inventory_id", matchedInventoryIds);
+                    vehicleMatchLeadIds = [
+                        ...new Set(
+                            ((interestRows as { lead_id: number }[] | null) ?? []).map((r) => r.lead_id)
+                        ),
+                    ];
+                }
 
                 // Nombre: leads donde name contiene TODOS los tokens (AND)
                 let nameIds: number[] = [];

@@ -1,3 +1,4 @@
+import { matchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import { LeadWithDetails, LeadsFilters, SortDescriptor } from "@/types/leads.types";
 
 type InterestCarLike = {
@@ -8,14 +9,8 @@ type InterestCarLike = {
 
 const searchTokens = (search: string) => search.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
-const carHaystack = (car: InterestCarLike) =>
-    `${car.brand ?? ""} ${car.model ?? ""} ${car.year ?? ""}`.toLowerCase();
-
 export function carMatchesSearch(car: InterestCarLike, search: string): boolean {
-    const tokens = searchTokens(search);
-    if (tokens.length === 0) return false;
-    const haystack = carHaystack(car);
-    return tokens.every((token) => haystack.includes(token));
+    return matchesInventorySearch(search, [car.brand, car.model, car.year]);
 }
 
 /** Auto a mostrar en Interés: el que coincide con la búsqueda; si no, el primero. */
@@ -30,10 +25,9 @@ export function getDisplayInterestCar<T extends InterestCarLike>(
     const fullMatch = cars.find((car) => carMatchesSearch(car, search));
     if (fullMatch) return fullMatch;
 
-    const anyTokenMatch = cars.find((car) => {
-        const haystack = carHaystack(car);
-        return tokens.some((token) => haystack.includes(token));
-    });
+    const anyTokenMatch = cars.find((car) =>
+        tokens.some((token) => matchesInventorySearch(token, [car.brand, car.model, car.year]))
+    );
     return anyTokenMatch ?? cars[0];
 }
 
