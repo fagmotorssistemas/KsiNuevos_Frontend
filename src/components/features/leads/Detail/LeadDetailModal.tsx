@@ -13,15 +13,18 @@ import { LeadRecoveryTab } from "./LeadRecoveryTab";
 import { LeadDatosPedidosTab } from "./LeadDatosPedidosTab";
 import { LeadAsesoriaFinanciamientoTab } from "./LeadAsesoriaFinanciamientoTab";
 
+type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos' | 'asesoria_financiamiento';
+
+const ALL_TABS: TabType[] = ['history', 'agenda', 'showroom', 'requests', 'recuperar', 'datos_pedidos', 'asesoria_financiamiento'];
+
 interface LeadDetailModalProps {
     lead: LeadWithDetails;
     onClose: () => void;
     entryMode?: "default" | "asesoria_financiamiento";
+    initialTab?: string | null;
 }
 
-type TabType = 'history' | 'agenda' | 'showroom' | 'requests' | 'recuperar' | 'datos_pedidos' | 'asesoria_financiamiento';
-
-export function LeadDetailModal({ lead, onClose, entryMode = "default" }: LeadDetailModalProps) {
+export function LeadDetailModal({ lead, onClose, entryMode = "default", initialTab }: LeadDetailModalProps) {
     const [activeTab, setActiveTab] = useState<TabType>('history');
 
     const visibleTabs: TabType[] = useMemo(() => {
@@ -32,11 +35,15 @@ export function LeadDetailModal({ lead, onClose, entryMode = "default" }: LeadDe
     }, [entryMode]);
 
     useEffect(() => {
-        // Si entramos desde el módulo de Asesorías, arrancamos directo en esa pestaña
+        const requested = ALL_TABS.includes(initialTab as TabType) ? (initialTab as TabType) : null;
+        if (requested && visibleTabs.includes(requested)) {
+            setActiveTab(requested);
+            return;
+        }
         if (entryMode === "asesoria_financiamiento") {
             setActiveTab("asesoria_financiamiento");
         }
-    }, [entryMode]);
+    }, [entryMode, initialTab, visibleTabs]);
 
     useEffect(() => {
         // Si por alguna razón el activeTab quedó en una pestaña no visible, lo corregimos

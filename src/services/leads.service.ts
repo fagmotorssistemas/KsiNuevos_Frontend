@@ -294,6 +294,21 @@ const mapLeadsPageRows = (
         };
     });
 
+export async function fetchLeadById(
+    supabase: any,
+    leadId: number
+): Promise<LeadWithDetails | null> {
+    const id = Number(leadId);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    const { data, error } = await supabase
+        .from('leads')
+        .select(LEADS_SELECT_WITH_RELATIONS)
+        .eq('id', id)
+        .maybeSingle();
+    if (error || !data) return null;
+    return mapLeadsPageRows([data], new Map(), new Map())[0] ?? null;
+}
+
 type BoardPagePayload = {
     total?: number | string;
     responded?: number | string;

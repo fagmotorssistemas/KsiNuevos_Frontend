@@ -8639,7 +8639,15 @@ export type Database = {
         Args: { p_fecha?: string; p_vendedor_id?: string }
         Returns: Json
       }
+      get_sales_progress_boss_stock: {
+        Args: { p_fecha?: string; p_vendedor_id?: string }
+        Returns: Json
+      }
       get_sales_progress_events: {
+        Args: { p_categoria: string; p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      get_sales_progress_events_core: {
         Args: { p_categoria: string; p_fecha: string; p_vendedor_id: string }
         Returns: Json
       }
@@ -8758,18 +8766,10 @@ export type Database = {
       }
       normalize_text: { Args: { text_input: string }; Returns: string }
       notificar_intereses_similares: {
-        Args: {
-          p_brand: string
-          p_inventory_id: string
-          p_max_notificaciones?: number
-          p_model: string
-        }
+        Args: { p_max_notificaciones?: number }
         Returns: {
-          carro_interes_anio: number
-          carro_interes_marca: string
-          carro_interes_modelo: string
-          carro_nuevo_marca: string
-          carro_nuevo_modelo: string
+          carro_interes: string
+          carro_nuevo: string
           lead_id_kommo: number
           nombre: string
           numero: string
@@ -9064,6 +9064,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      sales_progress_citas_gestion_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          due: number
+          gestionadas: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_citas_gestion_events_json: {
+        Args: { p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
       sales_progress_datos_faltantes_contestada: {
         Args: {
           d: Database["public"]["Tables"]["datos_solicitados_clientes"]["Row"]
@@ -9098,12 +9110,93 @@ export type Database = {
           vendedor_id: string
         }[]
       }
+      sales_progress_estancados_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          asesoria_respondidas: number
+          asesoria_sin_salir: number
+          faltante_contestadas: number
+          faltante_sin_salir: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_estancados_events_json: {
+        Args: { p_fecha: string; p_tipo: string; p_vendedor_id: string }
+        Returns: Json
+      }
       sales_progress_event_counts: {
         Args: { p_fecha: string }
         Returns: {
           cantidad: number
           categoria: string
           vendedor_id: string
+        }[]
+      }
+      sales_progress_ia_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          agendadas: number
+          due: number
+          pendientes: number
+          vencidas: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_ia_events_json: {
+        Args: { p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      sales_progress_ia_ref_date: {
+        Args: { l: Database["public"]["Tables"]["leads"]["Row"] }
+        Returns: string
+      }
+      sales_progress_lead_has_cita: {
+        Args: { p_lead_id: number }
+        Returns: boolean
+      }
+      sales_progress_lead_is_ia: {
+        Args: { l: Database["public"]["Tables"]["leads"]["Row"] }
+        Returns: boolean
+      }
+      sales_progress_pedidos_events_json: {
+        Args: { p_vendedor_id: string }
+        Returns: Json
+      }
+      sales_progress_pedidos_quedados: {
+        Args: never
+        Returns: {
+          pedidos: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_quedados: {
+        Args: never
+        Returns: {
+          asesoria: number
+          faltante: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_quedados_events_json: {
+        Args: { p_tipo: string; p_vendedor_id: string }
+        Returns: Json
+      }
+      sales_progress_rate_history: {
+        Args: { p_days?: number; p_fecha: string }
+        Returns: {
+          hist_cita_pct: number
+          hist_contestados_pct: number
+          hist_ia_pct: number
+          hist_showroom_pct: number
+          vendedor_id: string
+        }[]
+      }
+      sales_progress_showroom_gestion_coverage_day: {
+        Args: { p_fecha: string }
+        Returns: {
+          con_gestion: number
+          vendedor_id: string
+          visitas: number
         }[]
       }
       sales_progress_showroom_gestion_day: {
@@ -9114,6 +9207,10 @@ export type Database = {
           vendedor_id: string
         }[]
       }
+      sales_progress_showroom_sin_events_json: {
+        Args: { p_fecha: string; p_vendedor_id: string }
+        Returns: Json
+      }
       sales_progress_team_trend: {
         Args: { p_fecha: string }
         Returns: {
@@ -9123,6 +9220,15 @@ export type Database = {
           puntos_avance: number
           puntos_total: number
           vendedores: number
+        }[]
+      }
+      sales_progress_week_coverage: {
+        Args: { p_fecha: string }
+        Returns: {
+          contestados: number
+          ingresados: number
+          pct: number
+          vendedor_id: string
         }[]
       }
       sales_stale_lead_counts: {
@@ -9336,6 +9442,7 @@ export type Database = {
         | "contable"
         | "abogado"
         | "taller"
+        | "admin_programacion"
       vehicle_request_type:
         | "sedan"
         | "suv"
@@ -9690,6 +9797,7 @@ export const Constants = {
         "contable",
         "abogado",
         "taller",
+        "admin_programacion",
       ],
       vehicle_request_type: [
         "sedan",
