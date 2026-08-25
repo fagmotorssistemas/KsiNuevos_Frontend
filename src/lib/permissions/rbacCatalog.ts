@@ -73,7 +73,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'ventas', slug: 'solicitudes-web', name: 'Solicitudes web', sortOrder: 4, routePrefixes: ['/requests'] },
   { moduleSlug: 'ventas', slug: 'visitas-showroom', name: 'Visitas showroom', sortOrder: 5, routePrefixes: ['/showroom', '/agenda'] },
   { moduleSlug: 'ventas', slug: 'tareas-ventas', name: 'Tareas', sortOrder: 6, routePrefixes: ['/tareas'] },
-  { moduleSlug: 'ventas', slug: 'reporte-ventas-comercial', name: 'Reporte de ventas', sortOrder: 7, routePrefixes: ['/salesreport'] },
+  { moduleSlug: 'ventas', slug: 'reporte-ventas-comercial', name: 'Reporte de ventas', sortOrder: 7, routePrefixes: ['/salesreport', '/salescompare'] },
   // Taller (acceso por prefijo /taller en moduleRouteDenied; submódulos para permisos granulares)
   { moduleSlug: 'taller', slug: 'ordenes-trabajo', name: 'Órdenes de trabajo', sortOrder: 1 },
   { moduleSlug: 'taller', slug: 'clientes-taller', name: 'Clientes taller', sortOrder: 2 },
@@ -92,7 +92,7 @@ export const RBAC_SUBMODULE_DEFINITIONS: readonly RbacSubmoduleDef[] = [
   { moduleSlug: 'finanzas', slug: 'dashboard-finanzas', name: 'Dashboard', sortOrder: 8, routePrefixes: ['/dashboard'] },
   { moduleSlug: 'finanzas', slug: 'empleados-finanzas', name: 'Personal', sortOrder: 9, routePrefixes: ['/employee', '/marcaciones'] },
   { moduleSlug: 'finanzas', slug: 'tesoreria', name: 'Tesorería', sortOrder: 10, routePrefixes: ['/treasury'] },
-  { moduleSlug: 'finanzas', slug: 'reporte-ventas', name: 'Reporte de ventas', sortOrder: 11, routePrefixes: ['/salesreport'] },
+  { moduleSlug: 'finanzas', slug: 'reporte-ventas', name: 'Reporte de ventas', sortOrder: 11, routePrefixes: ['/salesreport', '/salescompare'] },
   { moduleSlug: 'finanzas', slug: 'movimientos-financiamiento', name: 'Movimientos / financiamiento', sortOrder: 12, routePrefixes: ['/financing'] },
   { moduleSlug: 'finanzas', slug: 'cobros', name: 'Cobros', sortOrder: 13, routePrefixes: ['/cobros'] },
   { moduleSlug: 'finanzas', slug: 'pagos', name: 'Pagos', sortOrder: 14, routePrefixes: ['/pagos'] },

@@ -74,6 +74,7 @@ export default function ShowroomPage() {
         filters, 
         setSearchTerm, 
         setDateFilter, 
+        setCustomDateRange,
         setSelectedSalesperson,
         reload 
     } = useShowroom();
@@ -127,10 +128,15 @@ export default function ShowroomPage() {
                 onSearchChange={setSearchTerm}
                 dateFilter={filters.date}
                 onDateFilterChange={setDateFilter}
+                dateFrom={filters.dateFrom}
+                dateTo={filters.dateTo}
+                onCustomDateChange={setCustomDateRange}
                 currentUserRole={userRole}
                 salespersons={salespersons}
                 selectedSalesperson={filters.salesperson}
                 onSalespersonChange={setSelectedSalesperson}
+                visitCount={visits.length}
+                isLoading={isLoading}
             />
 
             {isLoading ? (

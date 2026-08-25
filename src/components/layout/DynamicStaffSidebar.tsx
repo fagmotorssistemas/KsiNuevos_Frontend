@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { getSidebarShell, type SidebarShell } from '@/lib/sidebar-shell'
 import { AccountingSidebar } from '@/components/layout/accounting-sidebar'
 import { SellerSidebar } from '@/components/layout/seller-sidebar'
@@ -15,13 +16,14 @@ import { SegurosSidebar } from '@/components/layout/seguros-sidebar'
  * compartidas como /finance no pisen Ventas con Contabilidad.
  */
 export function DynamicStaffSidebar() {
+  const pathname = usePathname()
   const [shell, setShell] = useState<SidebarShell | null>(() =>
     typeof window === "undefined" ? null : getSidebarShell()
   )
 
   useEffect(() => {
     setShell(getSidebarShell())
-  }, [])
+  }, [pathname])
 
   if (!shell) return null
 

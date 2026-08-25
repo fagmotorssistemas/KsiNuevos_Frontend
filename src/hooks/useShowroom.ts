@@ -18,6 +18,8 @@ export function useShowroom() {
     const [filters, setFilters] = useState({
         search: "",
         date: "today",
+        dateFrom: "",
+        dateTo: "",
         salesperson: "all"
     });
 
@@ -145,6 +147,14 @@ export function useShowroom() {
                 const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
                 const firstDayDate = new Date(`${firstDayStr}T00:00:00`).toISOString();
                 query = query.gte('visit_start', firstDayDate);
+
+            } else if (filters.date === 'custom' && filters.dateFrom && filters.dateTo) {
+                const from = filters.dateFrom <= filters.dateTo ? filters.dateFrom : filters.dateTo;
+                const to = filters.dateFrom <= filters.dateTo ? filters.dateTo : filters.dateFrom;
+                const startOfDay = new Date(`${from}T00:00:00`).toISOString();
+                const endOfDay = new Date(`${to}T23:59:59.999`).toISOString();
+                query = query.gte('visit_start', startOfDay)
+                             .lte('visit_start', endOfDay);
             }
 
             // C. Responsable (Seguridad RLS simulada en cliente)
@@ -176,8 +186,42 @@ export function useShowroom() {
     }, [fetchVisits]);
 
     // Helpers para actualizar filtros limpiamente
+    const getTodayLocalISO = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
     const setSearchTerm = (val: string) => setFilters(prev => ({ ...prev, search: val }));
-    const setDateFilter = (val: string) => setFilters(prev => ({ ...prev, date: val }));
+    const setDateFilter = (val: string) => {
+        if (val === 'custom') {
+            const today = getTodayLocalISO();
+            setFilters(prev => ({
+                ...prev,
+                date: 'custom',
+                dateFrom: prev.dateFrom || today,
+                dateTo: prev.dateTo || today,
+            }));
+            return;
+        }
+        setFilters(prev => ({ ...prev, date: val, dateFrom: '', dateTo: '' }));
+    };
+    const setCustomDateRange = (from: string, to: string) => {
+        if (!from && !to) return;
+        let dateFrom = from;
+        let dateTo = to;
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            dateTo = dateFrom;
+        }
+        setFilters(prev => ({
+            ...prev,
+            date: 'custom',
+            dateFrom: dateFrom || prev.dateFrom,
+            dateTo: dateTo || prev.dateTo,
+        }));
+    };
     const setSelectedSalesperson = (val: string) => setFilters(prev => ({ ...prev, salesperson: val }));
 
     return {
@@ -194,6 +238,7 @@ export function useShowroom() {
         // Actions
         setSearchTerm,
         setDateFilter,
+        setCustomDateRange,
         setSelectedSalesperson,
         reload: fetchVisits
     };

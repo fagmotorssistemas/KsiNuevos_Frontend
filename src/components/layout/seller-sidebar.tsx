@@ -22,6 +22,7 @@ import {
     LayoutGrid,
     TrendingUp,
     PieChart,
+    GitCompare,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
@@ -46,6 +47,7 @@ const menuItems: MenuItem[] = [
     { name: 'Inventario', href: '/inventory', icon: Package, exact: true },
     { name: 'Reportes Vehiculares', href: '/inventory/reportes-vehiculares', icon: LayoutGrid },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
+    { name: 'Comparativa de Ventas', href: '/salescompare', icon: GitCompare },
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
@@ -73,7 +75,8 @@ export function SellerSidebar() {
             menuItems.filter(
                 (item) =>
                     canSeeVentasSidebarHref(item.href, permCtx) ||
-                    (item.href === '/salesreport' && canSeeAccountingSidebarHref('/salesreport', permCtx))
+                    ((item.href === '/salesreport' || item.href === '/salescompare') &&
+                        canSeeAccountingSidebarHref('/salesreport', permCtx))
             ),
         [permCtx]
     );
