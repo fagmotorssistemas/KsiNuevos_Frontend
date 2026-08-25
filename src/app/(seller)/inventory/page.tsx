@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function InventoryPage() {
-    const { profile } = useAuth();
+    const { profile, isAdminLike } = useAuth();
+    const ventasRole = isAdminLike ? "admin" : profile?.role;
     
     const { 
         cars, 
@@ -153,7 +154,7 @@ export default function InventoryPage() {
                         totalCount={totalCount}
                         rowsPerPage={rowsPerPage}
                         onPageChange={setPage}
-                        currentUserRole={profile?.role}
+                        currentUserRole={ventasRole}
                         currentUserId={profile?.id}
                     />
                 )}
@@ -165,7 +166,7 @@ export default function InventoryPage() {
                     car={selectedCar}
                     onClose={handleCloseDetailModal}
                     onUpdate={handleUpdateSuccess}
-                    currentUserRole={profile?.role}
+                    currentUserRole={ventasRole}
                 />
             )}
 

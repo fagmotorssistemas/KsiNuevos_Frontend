@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
-import { canSeeAccountingSidebarHref, canSeeVentasSidebarHref, type PermissionContext } from '@/lib/permissions';
+import { canSeeAccountingSidebarHref, canSeeVentasSidebarHref } from '@/lib/permissions';
+import { usePermissionContext } from '@/hooks/usePermissionContext';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
@@ -63,12 +64,9 @@ export function SellerSidebar() {
 
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const { supabase, user, profile, permissionMap } = useAuth();
+    const { supabase, user, isAdminLike } = useAuth();
 
-    const permCtx: PermissionContext = useMemo(
-        () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-        [profile?.role, permissionMap]
-    );
+    const permCtx = usePermissionContext();
 
     const displayedMenuItems = useMemo(
         () =>
@@ -131,7 +129,7 @@ export function SellerSidebar() {
         let isCancelled = false;
         const run = async () => {
             if (!user) return;
-            const assignedTo = profile?.role?.toLowerCase() === 'admin' ? 'all' : user.id;
+            const assignedTo = isAdminLike ? 'all' : user.id;
             const stats = await fetchRequestStats(supabase, assignedTo);
             if (isCancelled) return;
             setAsesoriaStats({
@@ -145,7 +143,7 @@ export function SellerSidebar() {
         return () => {
             isCancelled = true;
         };
-    }, [supabase, user, profile?.role]);
+    }, [supabase, user, isAdminLike]);
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);

@@ -9,7 +9,8 @@ import { InventoryDetailModal } from "@/components/features/inventory/InventoryD
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ReportesVehicularesPage() {
-    const { profile } = useAuth();
+    const { profile, isAdminLike } = useAuth();
+    const ventasRole = isAdminLike ? "admin" : profile?.role;
     const { allCars, isLoading, reload, patchCar } = useInventory();
     const [selectedCar, setSelectedCar] = useState<InventoryCar | null>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -59,7 +60,7 @@ export default function ReportesVehicularesPage() {
                 cars={allCars}
                 onEdit={handleEditCar}
                 onReload={() => void reload()}
-                currentUserRole={profile?.role}
+                currentUserRole={ventasRole}
             />
 
             {isDetailModalOpen && selectedCar && (
@@ -67,7 +68,7 @@ export default function ReportesVehicularesPage() {
                     car={selectedCar}
                     onClose={handleCloseDetailModal}
                     onUpdate={handleUpdateSuccess}
-                    currentUserRole={profile?.role}
+                    currentUserRole={ventasRole}
                 />
             )}
         </div>

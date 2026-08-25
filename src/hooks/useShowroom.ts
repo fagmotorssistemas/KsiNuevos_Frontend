@@ -4,15 +4,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { ShowroomVisit } from "@/components/features/showroom/constants";
 
 export function useShowroom() {
-    const { supabase, user } = useAuth();
+    const { supabase, user, profile, isAdminLike, isLoading: isAuthLoading } = useAuth();
 
     // --- ESTADOS DE DATOS ---
     const [visits, setVisits] = useState<ShowroomVisit[]>([]);
     const [salespersons, setSalespersons] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    
-    // --- ESTADO DE PERMISOS ---
-    const [userRole, setUserRole] = useState<string | null>(null);
+
+    const isAdmin = isAdminLike;
+    const userRole = isAdmin ? 'admin' : (profile?.role ?? null);
 
     // --- ESTADOS DE FILTROS ---
     const [filters, setFilters] = useState({
@@ -22,33 +22,6 @@ export function useShowroom() {
         dateTo: "",
         salesperson: "all"
     });
-
-    // Calculamos si es admin basado en el rol real recuperado de la BD
-    const isAdmin = userRole === 'admin';
-
-    // 1. OBTENER ROL DEL USUARIO REAL
-    useEffect(() => {
-        if (!user) return;
-
-        const fetchUserRole = async () => {
-            // Asumiendo que el rol está en la tabla 'profiles'
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-
-            if (data) {
-                setUserRole(data.role);
-            } else if (error) {
-                console.error("Error al obtener rol:", error);
-                // Fallback seguro: si falla, asumimos que NO es admin
-                setUserRole('salesperson');
-            }
-        };
-
-        fetchUserRole();
-    }, [user, supabase]);
 
     // 2. CARGAR LISTA DE VENDEDORES (Solo si es Admin)
     useEffect(() => {
@@ -70,7 +43,7 @@ export function useShowroom() {
     // 3. CARGAR VISITAS (Core Logic)
     const fetchVisits = useCallback(async () => {
         // No cargamos hasta saber quién es el usuario y su rol
-        if (!user || userRole === null) return;
+        if (!user || isAuthLoading) return;
 
         setIsLoading(true);
 
@@ -178,7 +151,7 @@ export function useShowroom() {
         } finally {
             setIsLoading(false);
         }
-    }, [user, userRole, isAdmin, filters, supabase]);
+    }, [user, isAuthLoading, isAdmin, filters, supabase]);
 
     // Recargar cuando cambian filtros o usuario
     useEffect(() => {

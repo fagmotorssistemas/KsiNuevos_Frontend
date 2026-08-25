@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermissionContext } from '@/hooks/usePermissionContext'
 import { Button } from '@/components/ui/Button'
 import { Menu, X } from 'lucide-react'
 import { MainNav } from './MainNav'
@@ -13,18 +14,14 @@ import {
   buildPrimaryNavItems,
   shouldCompactPrimaryNav,
   resolvePrimaryNavItemHref,
-  type PermissionContext,
 } from '@/lib/permissions'
 
 export const Navbar = () => {
   const router = useRouter()
-  const { user, profile, permissionMap } = useAuth()
+  const { user, profile } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [laviletOnly, setLaviletOnly] = useState(false)
-  const permCtx: PermissionContext = useMemo(
-    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-    [profile?.role, permissionMap]
-  )
+  const permCtx = usePermissionContext()
   const allNavItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])
   const canSeeLavilet = useMemo(
     () => allNavItems.some((item) => item.module === 'lavilet'),

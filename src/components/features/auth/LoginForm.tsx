@@ -9,28 +9,26 @@ import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
 import {
   fetchPermissionMapWithTimeout,
-  isAppAdminRole,
+  fetchCatalogBaseRole,
+  createPermissionContext,
   isRouteAllowed,
   resolveDefaultDashboardHref,
-  type PermissionContext,
   type PermissionMap,
 } from '@/lib/permissions'
 
 function resolvePostLoginHref(
   role: string | null,
   permissionMap: PermissionMap,
-  redirectTo: string | null
+  redirectTo: string | null,
+  catalogBaseRole?: string | null
 ): string {
-  const permCtx: PermissionContext = {
-    baseRole: role,
-    map: permissionMap,
-  }
+  const permCtx = createPermissionContext(role, permissionMap, catalogBaseRole)
 
   if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
     const mayUseRedirect =
       role === 'cliente'
         ? redirectTo === '/perfil' || redirectTo.startsWith('/perfil/')
-        : isAppAdminRole(permCtx) || isRouteAllowed(redirectTo, permCtx)
+        : isRouteAllowed(redirectTo, permCtx)
     if (mayUseRedirect) return redirectTo
   }
 
@@ -49,6 +47,7 @@ export const LoginForm = () => {
     user,
     profile,
     permissionMap,
+    catalogBaseRole,
     isLoading: authLoading,
     permissionsLoading,
   } = useAuth()
@@ -63,9 +62,9 @@ export const LoginForm = () => {
     if (authLoading || permissionsLoading || !user || !profile) return
     if (profile.status !== 'activo') return
 
-    const href = resolvePostLoginHref(profile.role, permissionMap, redirectTo)
+    const href = resolvePostLoginHref(profile.role, permissionMap, redirectTo, catalogBaseRole)
     navigateAfterLogin(href)
-  }, [authLoading, permissionsLoading, user, profile, permissionMap, redirectTo])
+  }, [authLoading, permissionsLoading, user, profile, permissionMap, catalogBaseRole, redirectTo])
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -103,8 +102,11 @@ export const LoginForm = () => {
         throw new Error('Tu cuenta está desactivada.')
       }
 
-      const map = await fetchPermissionMapWithTimeout(supabase)
-      const href = resolvePostLoginHref(profileRow.role, map, redirectTo)
+      const [map, catalogRole] = await Promise.all([
+        fetchPermissionMapWithTimeout(supabase),
+        fetchCatalogBaseRole(supabase, data.user.id),
+      ])
+      const href = resolvePostLoginHref(profileRow.role, map, redirectTo, catalogRole)
       navigateAfterLogin(href)
     } catch (err: unknown) {
       console.error(err)

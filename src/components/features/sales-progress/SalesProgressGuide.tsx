@@ -1,7 +1,7 @@
 'use client';
 
-import { FileText, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CircleHelp, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 const ITEMS = [
   {
@@ -60,7 +60,7 @@ const ITEMS = [
   },
 ];
 
-export function SalesProgressGuide() {
+export function SalesProgressGuide({ trigger }: { trigger?: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -77,11 +77,15 @@ export function SalesProgressGuide() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2 shadow-sm"
         title="Cómo se revisa este progreso"
+        aria-label="Cómo se revisa este progreso"
+        className={trigger ? 'rounded-full' : undefined}
       >
-        <FileText className="h-4 w-4" />
-        <span className="hidden sm:inline">Cómo se revisa</span>
+        {trigger ?? (
+          <span className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center">
+            <CircleHelp className="h-4 w-4" />
+          </span>
+        )}
       </button>
 
       {open && (

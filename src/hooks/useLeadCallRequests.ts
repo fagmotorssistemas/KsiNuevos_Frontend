@@ -15,7 +15,7 @@ function isDue(lead: LeadCallRequest, nowMs: number) {
 }
 
 export function useLeadCallRequests() {
-    const { supabase, user, profile, isLoading: isAuthLoading } = useAuth();
+    const { supabase, user, profile, isLoading: isAuthLoading, isAdminLike } = useAuth();
     const [leads, setLeads] = useState<LeadCallRequest[]>([]);
     const [nowMs, setNowMs] = useState(() => Date.now());
     const [submitting, setSubmitting] = useState(false);
@@ -23,9 +23,9 @@ export function useLeadCallRequests() {
 
     const assignedScope = useMemo(() => {
         const role = (profile?.role || "").toLowerCase().trim();
-        if (role === "vendedor" && user?.id) return user.id;
+        if (!isAdminLike && role === "vendedor" && user?.id) return user.id;
         return "all" as const;
-    }, [profile?.role, user?.id]);
+    }, [profile?.role, user?.id, isAdminLike]);
 
     const load = useCallback(async () => {
         if (!user) return;

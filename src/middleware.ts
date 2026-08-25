@@ -3,12 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
 import {
   rowsToPermissionMap,
-  type PermissionContext,
   type EffectivePermissionRow,
   isRouteAllowed,
   isTallerOnlyAccess,
   resolveAccessDeniedRedirect,
   getProtectedRoutePrefixes,
+  fetchCatalogBaseRole,
+  createPermissionContext,
+  isFullSystemAdmin,
 } from '@/lib/permissions'
 
 /** Derivado del catálogo RBAC (`rbacCatalog.ts`); se actualiza al sincronizar permisos */
@@ -54,18 +56,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(urlLogin)
   }
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const [{ data: profile }, catalogBaseRole, { data: permRows }] = await Promise.all([
+    supabase.from('profiles').select('role').eq('id', user.id).single(),
+    fetchCatalogBaseRole(supabase, user.id),
+    supabase.rpc('get_my_effective_permissions'),
+  ])
 
   if (profile?.role === 'cliente') {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  const { data: permRows } = await supabase.rpc('get_my_effective_permissions')
   const map = rowsToPermissionMap((permRows ?? []) as EffectivePermissionRow[])
-  const ctx: PermissionContext = { baseRole: profile?.role ?? null, map }
+  const ctx = createPermissionContext(profile?.role ?? null, map, catalogBaseRole)
 
   if (pathname === '/admin/permisos' || pathname.startsWith('/admin/permisos/')) {
-    if (profile?.role !== 'admin') {
+    if (!isFullSystemAdmin(ctx)) {
       return NextResponse.redirect(new URL('/home', request.url))
     }
     return response
@@ -74,10 +79,10 @@ export async function middleware(request: NextRequest) {
   if (!isRouteAllowed(pathname, ctx)) {
     let target = resolveAccessDeniedRedirect(pathname, ctx)
     if (!isRouteAllowed(target, ctx) && profile?.role) {
-      target = resolveAccessDeniedRedirect(pathname, {
-        baseRole: profile.role,
-        map,
-      })
+      target = resolveAccessDeniedRedirect(
+        pathname,
+        createPermissionContext(profile.role, map, catalogBaseRole)
+      )
     }
     if (!isRouteAllowed(target, ctx)) {
       target = '/home'

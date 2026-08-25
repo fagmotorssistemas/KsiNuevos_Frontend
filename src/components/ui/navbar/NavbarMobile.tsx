@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 import { KsButton } from '@/components/ui/Homeksi/KsButton';
 import { useRouter } from 'next/navigation';
-import { getUserDashboardMenuItem, type PermissionContext, type PermissionMap } from '@/lib/permissions';
+import { usePermissionContext } from '@/hooks/usePermissionContext';
+import { getUserDashboardMenuItem, type PermissionMap } from '@/lib/permissions';
 
 interface NavbarMobileProps {
   isOpen: boolean;
@@ -25,15 +26,10 @@ export const NavbarMobile = ({
   profile,
   isLoading,
   supabase,
-  permissionMap,
   permissionsLoading,
 }: NavbarMobileProps) => {
   const router = useRouter()
-
-  const permCtx: PermissionContext = useMemo(
-    () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
-    [profile?.role, permissionMap]
-  )
+  const permCtx = usePermissionContext()
   const dashboardMenu = useMemo(
     () => getUserDashboardMenuItem(permCtx),
     [permCtx, permissionsLoading]

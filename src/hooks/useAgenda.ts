@@ -125,7 +125,7 @@ function appointmentMatchesDateFilter(
 }
 
 export function useAgenda() {
-    const { supabase, user, profile } = useAuth();
+    const { supabase, user, isAdminLike } = useAuth();
 
     // Estados de Datos
     const [allAppointments, setAllAppointments] = useState<AppointmentWithDetails[]>([]);
@@ -143,7 +143,7 @@ export function useAgenda() {
     // Estados de UI
     const [activeTab, setActiveTab] = useState<AgendaTab>('pending');
 
-    const isAdmin = profile?.role === 'admin';
+    const isAdmin = isAdminLike;
 
     // 1. CARGAR USUARIOS
     const fetchAgents = useCallback(async () => {

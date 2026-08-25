@@ -13,10 +13,11 @@ import {
   Search,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermissionContext } from '@/hooks/usePermissionContext'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
-import { ADMIN_FIXED_ACCESS_LINES } from '@/lib/permissions'
+import { ADMIN_FIXED_ACCESS_LINES, isFullSystemAdmin } from '@/lib/permissions'
 import { BASE_ROLE_LABELS, BASE_ROLE_STYLES, MODULE_ICONS } from './constants'
 
 type SubmoduleRow = {
@@ -77,7 +78,9 @@ function slugify(input: string) {
 
 export function PermisosAdminPanel() {
   const router = useRouter()
-  const { profile, isLoading: authLoading } = useAuth()
+  const { isLoading: authLoading } = useAuth()
+  const permCtx = usePermissionContext()
+  const canManagePermisos = isFullSystemAdmin(permCtx)
   const supabase = useMemo(() => createClient(), [])
 
   const [modules, setModules] = useState<ModuleRow[]>([])
@@ -99,8 +102,8 @@ export function PermisosAdminPanel() {
 
   useEffect(() => {
     if (authLoading) return
-    if (profile?.role !== 'admin') router.replace('/home')
-  }, [authLoading, profile?.role, router])
+    if (!canManagePermisos) router.replace('/home')
+  }, [authLoading, canManagePermisos, router])
 
   const loadClientFallback = useCallback(async () => {
     try {
@@ -189,9 +192,9 @@ export function PermisosAdminPanel() {
   }, [loadClientFallback, syncCatalogFromCode])
 
   useEffect(() => {
-    if (profile?.role !== 'admin') return
+    if (!canManagePermisos) return
     void loadDashboard()
-  }, [profile?.role, loadDashboard])
+  }, [canManagePermisos, loadDashboard])
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase()
@@ -367,7 +370,7 @@ export function PermisosAdminPanel() {
     }
   }
 
-  if (authLoading || profile?.role !== 'admin') {
+  if (authLoading || !canManagePermisos) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center text-slate-500">
         Cargando…

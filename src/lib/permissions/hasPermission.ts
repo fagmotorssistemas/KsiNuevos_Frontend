@@ -1,4 +1,4 @@
-import { hasAccessMap, isAppAdminRole } from './access'
+import { canAccessSubmodule, hasAccessMap, isAppAdminRole } from './access'
 import type { PermissionContext } from './context'
 import type { PermissionAction } from './types'
 
@@ -10,6 +10,7 @@ export function hasPermission(
   submoduleSlug: string,
   _action: PermissionAction = 'read'
 ): boolean {
+  if (!canAccessSubmodule(ctx, submoduleSlug)) return false
   if (isAppAdminRole(ctx)) return true
   return hasAccessMap(ctx.map, submoduleSlug)
 }

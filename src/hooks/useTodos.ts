@@ -21,7 +21,7 @@ export interface Vendedor {
 export type TodoFilter = 'all' | 'pending' | 'completed';
 
 export function useTodos() {
-    const { supabase, user, isLoading: isAuthLoading } = useAuth();
+    const { supabase, user, isLoading: isAuthLoading, isAdminLike } = useAuth();
     
     const [tasks, setTasks] = useState<Task[]>([]);
     const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -53,13 +53,7 @@ export function useTodos() {
     const fetchUserRoleAndVendedores = useCallback(async () => {
         if (!user) return;
 
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-
-        const userIsAdmin = profile?.role === 'admin';
+        const userIsAdmin = isAdminLike;
         setIsAdmin(userIsAdmin);
 
         if (userIsAdmin) {
@@ -71,7 +65,7 @@ export function useTodos() {
             
             if (!error) setVendedores(data as Vendedor[]);
         }
-    }, [supabase, user]);
+    }, [supabase, user, isAdminLike]);
 
     // Efecto para carga inicial
     useEffect(() => {

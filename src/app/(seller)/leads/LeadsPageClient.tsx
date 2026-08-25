@@ -51,8 +51,9 @@ export default function LeadsPageClient() {
     postpone,
   } = useLeadCallRequests();
 
-  const { profile, supabase } = useAuth();
-  const isAdmin = profile?.role?.toLowerCase().trim() === "admin";
+  const { profile, supabase, isAdminLike } = useAuth();
+  const isAdmin = isAdminLike;
+  const ventasRole = isAdminLike ? "admin" : profile?.role;
 
   const [selectedLead, setSelectedLead] = useState<LeadWithDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -112,7 +113,7 @@ export default function LeadsPageClient() {
         callStats={callStats}
         callHistory={callHistory}
         requestStats={requestStats}
-        currentUserRole={profile?.role}
+        currentUserRole={ventasRole}
         sellers={sellers}
       />
 
@@ -126,7 +127,7 @@ export default function LeadsPageClient() {
         totalCount={totalCount}
         rowsPerPage={rowsPerPage}
         onPageChange={setPage}
-        currentUserRole={profile?.role}
+        currentUserRole={ventasRole}
         searchQuery={appliedSearchQuery}
       />
 

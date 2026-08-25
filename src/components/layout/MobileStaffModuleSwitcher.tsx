@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth'
+import { usePermissionContext } from '@/hooks/usePermissionContext'
 import {
   buildPrimaryNavItems,
   getPrimaryNavLinkSizeClasses,
   resolveActivePrimaryNavItem,
   resolvePrimaryNavItemHref,
-  type PermissionContext,
 } from '@/lib/permissions'
 import { usePreferredPrimaryModule } from '@/hooks/useSidebarShell'
 
@@ -23,12 +22,7 @@ export function MobileStaffModuleSwitcher({ icon, fallbackLabel }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
-  const { profile, permissionMap } = useAuth()
-
-  const permCtx: PermissionContext = useMemo(
-    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-    [profile?.role, permissionMap]
-  )
+  const permCtx = usePermissionContext()
   const preferredModule = usePreferredPrimaryModule()
 
   const navItems = useMemo(() => buildPrimaryNavItems(permCtx), [permCtx])

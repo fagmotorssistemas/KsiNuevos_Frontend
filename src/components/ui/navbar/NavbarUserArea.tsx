@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo } from 'react';
 import { KsButton } from '@/components/ui/Homeksi/KsButton';
 import {
   getUserDashboardMenuItem,
   type PermissionContext,
   type PermissionMap,
 } from '@/lib/permissions';
+import { usePermissionContext } from '@/hooks/usePermissionContext';
 
 // --- Sub-componente del Dropdown ---
 const UserDropdown = ({
@@ -124,13 +124,9 @@ export const NavbarUserArea = ({
   profile,
   isLoading,
   supabase,
-  permissionMap,
   permissionsLoading,
 }: NavbarUserAreaProps) => {
-  const permCtx: PermissionContext = useMemo(
-    () => ({ baseRole: profile?.role ?? null, map: permissionMap ?? {} }),
-    [profile?.role, permissionMap]
-  )
+  const permCtx = usePermissionContext()
 
   if (isLoading) {
     return <div className="h-9 w-24 bg-gray-100 rounded animate-pulse"></div>;

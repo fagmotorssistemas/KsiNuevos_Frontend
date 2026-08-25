@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { syncRbacCatalogToSupabase } from '@/lib/permissions/syncCatalog'
+import { isFullSystemAdminUser } from '@/lib/permissions'
 
 export async function POST() {
   const supabase = await createServerSupabaseClient()
@@ -14,7 +15,7 @@ export async function POST() {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
 
-  if (profile?.role !== 'admin') {
+  if (!(await isFullSystemAdminUser(supabase, user.id, profile?.role))) {
     return NextResponse.json({ error: 'Solo administradores' }, { status: 403 })
   }
 

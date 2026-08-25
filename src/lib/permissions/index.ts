@@ -4,8 +4,11 @@ export {
   fetchEffectivePermissionRows,
   fetchPermissionMap,
   fetchPermissionMapWithTimeout,
+  fetchCatalogBaseRole,
+  isFullSystemAdminUser,
 } from './fetch'
 export type { PermissionContext } from './context'
+export { createPermissionContext } from './context'
 export { hasPermission } from './hasPermission'
 export { isAppAdminRole } from './access'
 export {
@@ -13,6 +16,12 @@ export {
   hasAnySubmoduleAccess,
   canAccessModule,
   canAccessSubmodule,
+  isAdminProgramacionRole,
+  isPathBlockedForAdminProgramacion,
+  isFullSystemAdmin,
+  isAdminLikeRole,
+  ADMIN_PROGRAMACION_BLOCKED_PREFIXES,
+  ADMIN_PROGRAMACION_ROLE,
 } from './access'
 export {
   MODULE_SLUGS,

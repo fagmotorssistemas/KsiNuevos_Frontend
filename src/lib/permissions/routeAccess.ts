@@ -6,9 +6,15 @@ import {
   VENTAS_PATH_ACCESS,
   GLOBAL_STAFF_ROUTE_PREFIXES,
 } from './catalog'
-import { canAccessModule, canAccessSubmodule, hasAccessMap, hasAnyReadPermission } from './access'
+import {
+  canAccessModule,
+  canAccessSubmodule,
+  hasAccessMap,
+  hasAnyReadPermission,
+  isAppAdminRole,
+  isPathBlockedForAdminProgramacion,
+} from './access'
 import type { PermissionContext } from './context'
-import { isAppAdminRole } from './access'
 import { resolveDefaultDashboardHref } from './nav'
 
 function firstMatchingPrefix<T extends { prefix: string }>(
@@ -33,6 +39,7 @@ export function ventasRouteDenied(pathname: string, ctx: PermissionContext): str
 }
 
 export function accountingRouteDenied(pathname: string, ctx: PermissionContext): string | null {
+  if (isPathBlockedForAdminProgramacion(pathname, ctx)) return 'admin_programacion'
   if (isAppAdminRole(ctx)) return null
   const rule = firstMatchingPrefix(pathname, ACCOUNTING_PATH_ACCESS)
   if (!rule) return null
@@ -41,6 +48,7 @@ export function accountingRouteDenied(pathname: string, ctx: PermissionContext):
 }
 
 export function canSeeAccountingSidebarHref(href: string, ctx: PermissionContext): boolean {
+  if (isPathBlockedForAdminProgramacion(href, ctx)) return false
   if (isAppAdminRole(ctx)) return true
   const rule = firstMatchingPrefix(href, ACCOUNTING_PATH_ACCESS)
   if (!rule) return true
@@ -119,6 +127,7 @@ export function isMarketingModulePath(pathname: string): boolean {
 
 /** Bloqueo de ruta por módulo del nav (taller, legal, marketing, gps, seguros, admin tools) */
 export function moduleRouteDenied(pathname: string, ctx: PermissionContext): string | null {
+  if (isPathBlockedForAdminProgramacion(pathname, ctx)) return 'admin_programacion'
   if (isAppAdminRole(ctx)) return null
 
   if (pathname === '/taller' || pathname.startsWith('/taller/')) {
@@ -208,6 +217,7 @@ function staffEnumPathAllowed(pathname: string, ctx: PermissionContext): boolean
 }
 
 export function isRouteAllowed(pathname: string, ctx: PermissionContext): boolean {
+  if (isPathBlockedForAdminProgramacion(pathname, ctx)) return false
   if (isAppAdminRole(ctx)) return true
   if (
     GLOBAL_STAFF_ROUTE_PREFIXES.some(

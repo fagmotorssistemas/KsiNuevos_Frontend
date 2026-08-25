@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
-import { TrendingUp, AlertTriangle, Trophy, RefreshCw, X, FileText, Store, MessageSquare, CircleCheck, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { AlertTriangle, RefreshCw, X, FileText, Store, MessageSquare, CircleCheck, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList, CircleHelp } from 'lucide-react';
+import { useEffect } from 'react';
 import { useSalesDailyProgress } from '@/hooks/useSalesDailyProgress';
 import { SalesProgressGuide } from '@/components/features/sales-progress/SalesProgressGuide';
 import type {
@@ -113,10 +113,25 @@ function trendPercent(point: SalesProgressTrendPoint): number {
   return Math.min(100, Math.max(0, raw));
 }
 
+function capitalize(text: string): string {
+  return text.replace(/^\w/, (c) => c.toUpperCase());
+}
+
 function formatDayLong(isoDate: string): string {
   const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, 12));
-  return date.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'short' });
+  return capitalize(
+    date.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'short' }),
+  );
+}
+
+function firstName(full: string): string {
+  return full.trim().split(/\s+/)[0] || full;
+}
+
+function initials(full: string): string {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
 }
 
 function ecuadorYmd(iso: string): string {
@@ -263,6 +278,45 @@ function categorySubtitle(row: SalesProgressCategoryRow): string {
   return `${ptsLine} · ${qty} ${unit}`;
 }
 
+function ScoreRing({ points }: { points: number }) {
+  const pct = Math.min(100, Math.max(0, Math.round(points)));
+  const r = 54;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+
+  return (
+    <div className="relative h-[148px] w-[148px] shrink-0">
+      <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
+        <defs>
+          <linearGradient id="sales-ring-fill" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#e11d48" />
+            <stop offset="100%" stopColor="#9f1239" />
+          </linearGradient>
+        </defs>
+        <circle cx="70" cy="70" r={r} fill="none" stroke="#f1f5f9" strokeWidth="11" />
+        <circle
+          cx="70"
+          cy="70"
+          r={r}
+          fill="none"
+          stroke="url(#sales-ring-fill)"
+          strokeWidth="11"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-700"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[2rem] font-semibold tracking-tight text-slate-900 tabular-nums leading-none">
+          {Math.round(points)}
+        </span>
+        <span className="mt-1 text-[11px] font-medium text-slate-400">pts</span>
+      </div>
+    </div>
+  );
+}
+
 function MetricBar({
   label,
   subtitle,
@@ -290,54 +344,39 @@ function MetricBar({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`w-full text-left rounded-2xl border px-3.5 py-3 transition-all duration-150 ${
-        selected
-          ? 'border-red-200 bg-red-50/70 shadow-sm ring-1 ring-red-100'
-          : empty
-            ? 'border-transparent bg-slate-50/80 hover:border-slate-200 hover:bg-white'
-            : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
+      className={`w-full text-left px-4 py-3.5 flex items-center gap-3.5 transition-colors ${
+        selected ? 'bg-rose-50/80' : 'hover:bg-slate-50/80'
       }`}
     >
-      <div className="flex items-start gap-3">
-        <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-            empty ? 'bg-white text-slate-400 border border-slate-100' : `${tone.wrap} ${tone.icon}`
-          }`}
-        >
-          <Icon className="h-[18px] w-[18px]" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <p className={`text-sm font-semibold leading-5 truncate ${empty ? 'text-slate-500' : 'text-slate-900'}`}>
-              {label}
-            </p>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span
-                className={`rounded-lg px-2 py-0.5 text-xs font-black tabular-nums ${
-                  empty
-                    ? 'bg-white text-slate-300 border border-slate-100'
-                    : `${tone.ptsWrap} ${tone.pts}`
-                }`}
-              >
-                {pct}
-                <span className={`ml-0.5 font-semibold ${empty ? 'text-slate-300' : 'opacity-70'}`}>%</span>
-              </span>
-              <ChevronRight
-                className={`h-4 w-4 transition-transform ${
-                  selected ? 'rotate-90 text-red-400' : 'text-slate-300'
-                }`}
-              />
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>
-          <div className="mt-2.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-[width] duration-300 ${empty ? 'bg-slate-200' : tone.bar}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          empty ? 'bg-slate-100 text-slate-400' : `${tone.wrap} ${tone.icon}`
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <p className={`text-sm font-medium truncate ${empty ? 'text-slate-500' : 'text-slate-900'}`}>
+            {label}
+          </p>
+          <span
+            className={`text-sm font-semibold tabular-nums shrink-0 ${
+              empty ? 'text-slate-300' : 'text-slate-700'
+            }`}
+          >
+            {pct}%
+          </span>
+        </div>
+        <p className="text-xs text-slate-400 mt-0.5 truncate">{subtitle}</p>
+        <div className="mt-2 h-1 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-[width] duration-300 ${empty ? 'bg-transparent' : tone.bar}`}
+            style={{ width: `${empty ? 0 : Math.max(pct, 8)}%` }}
+          />
         </div>
       </div>
+      <ChevronRight className={`h-4 w-4 shrink-0 ${selected ? 'text-rose-400' : 'text-slate-300'}`} />
     </button>
   );
 }
@@ -392,7 +431,7 @@ function EventList({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
       role="presentation"
     >
@@ -401,44 +440,54 @@ function EventList({
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-slate-900/5 animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-slate-900/5 animate-in zoom-in-95 duration-200"
       >
-        <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">{title}</h2>
+        <div className="shrink-0 flex items-center justify-between gap-3 px-6 py-5">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {loading ? 'Cargando…' : `${dayEvents.length} registro${dayEvents.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="h-9 w-9 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 flex items-center justify-center"
             aria-label="Cerrar detalle"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto px-3 pb-4">
           {loading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 px-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 rounded-xl bg-slate-50 animate-pulse" />
+                <div key={i} className="h-16 rounded-2xl bg-slate-50 animate-pulse" />
               ))}
             </div>
           ) : dayEvents.length === 0 ? (
-            <p className="text-sm text-slate-400">No hay acciones de este día en esta categoría.</p>
+            <p className="text-sm text-slate-400 px-3 py-10 text-center">
+              No hay acciones de este día en esta categoría.
+            </p>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="space-y-1">
               {dayEvents.map((event, index) => (
-                <li key={`${event.lead_id ?? 'x'}-${event.occurred_at}-${index}`} className="py-3 first:pt-0 last:pb-0">
+                <li
+                  key={`${event.lead_id ?? 'x'}-${event.occurred_at}-${index}`}
+                  className="rounded-2xl px-3 py-3"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{event.lead_name || 'Sin nombre'}</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{event.lead_name || 'Sin nombre'}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{prettyText(event.titulo)}</p>
                       {event.detalle && (
-                        <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{event.detalle}</p>
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{event.detalle}</p>
                       )}
                       {event.lead_phone && (
                         <p className="text-[11px] text-slate-400 mt-1">{event.lead_phone}</p>
                       )}
                     </div>
-                    <span className="text-[11px] font-medium text-slate-400 tabular-nums shrink-0">
+                    <span className="text-[11px] text-slate-400 tabular-nums shrink-0 pt-0.5">
                       {formatTime(event.occurred_at)}
                     </span>
                   </div>
@@ -490,137 +539,206 @@ export function SalesProgressDashboard() {
           ? 'Info. faltante'
           : categoryRows.find((row) => row.categoria === selectedCategory)?.label ?? 'Detalle';
 
+  const heroLeadsCat = data?.rol === 'estrancado' ? 'lead_status_change' : 'leads_ingresados';
+  const toggleCategory = (categoria: string) => {
+    if (selectedCategory === categoria) closeCategory();
+    else void openCategory(categoria);
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="max-w-5xl mx-auto space-y-7 pb-10">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-red-600" />
+          <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900">
             Progreso del día
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Felipe, Vanessa y Xavier: pipeline del día. Juan: cartera estrancada (no resta por backlog).
-          </p>
+          <p className="text-sm text-slate-500 mt-0.5">{formatDayLong(fecha)}</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <input
             type="date"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm"
+            className="h-10 rounded-full border border-slate-200 bg-white px-3.5 text-sm text-slate-700"
           />
-          {data?.es_admin && sellers.length > 0 && (
-            <select
-              value={vendedorId ?? data.vendedor_id}
-              onChange={(e) => setVendedorId(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 shadow-sm min-w-[180px]"
-            >
-              {sellers.map((seller) => (
-                <option key={seller.id} value={seller.id}>
-                  {seller.rol === 'estrancado' ? `${seller.full_name} (estrancados)` : seller.full_name}
-                </option>
-              ))}
-            </select>
-          )}
           <button
             type="button"
             onClick={() => void reload()}
-            className="h-10 w-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"
+            className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center"
             title="Actualizar"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-          <SalesProgressGuide />
+          <SalesProgressGuide
+            trigger={
+              <span className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center">
+                <CircleHelp className="h-4 w-4" />
+              </span>
+            }
+          />
         </div>
-      </div>
+      </header>
+
+      {data?.es_admin && sellers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {sellers
+            .filter((seller) => seller.rol !== 'excluido')
+            .map((seller) => {
+            const active = (vendedorId ?? data.vendedor_id) === seller.id;
+            return (
+              <button
+                key={seller.id}
+                type="button"
+                onClick={() => setVendedorId(seller.id)}
+                className={`h-9 rounded-full px-3.5 text-sm transition-colors ${
+                  active
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                }`}
+              >
+                {firstName(seller.full_name)}
+                {seller.rol === 'estrancado' && (
+                  <span className={`ml-1.5 text-[10px] font-medium ${active ? 'text-white/70' : 'text-amber-700'}`}>
+                    cartera
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
           No se pudo calcular el progreso: {error}
         </div>
       )}
 
       {isLoading && !data ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 rounded-2xl bg-white border border-slate-100 animate-pulse" />
-          ))}
+        <div className="space-y-4">
+          <div className="h-56 rounded-[28px] bg-white border border-slate-100 animate-pulse" />
+          <div className="h-72 rounded-[28px] bg-white border border-slate-100 animate-pulse" />
         </div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <Kpi
-              label="Puntos del día"
-              value={num(data.puntos_total)}
-              hint={data.vendedor_nombre}
-              accent="text-slate-900"
-            />
+          <section className="rounded-[28px] bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
             <button
               type="button"
-              onClick={() => {
-                const cat = data.rol === 'estrancado' ? 'lead_status_change' : 'leads_ingresados';
-                selectedCategory === cat ? closeCategory() : void openCategory(cat);
-              }}
-              className="text-left w-full"
+              onClick={() => toggleCategory(heroLeadsCat)}
+              aria-pressed={selectedCategory === heroLeadsCat}
+              className={`w-full text-left px-6 py-7 sm:px-8 sm:py-8 transition-colors ${
+                selectedCategory === heroLeadsCat ? 'bg-rose-50/50' : 'hover:bg-slate-50/70'
+              }`}
             >
-              <Kpi
-                label={data.rol === 'estrancado' ? 'Gestionados hoy' : 'Leads del día'}
-                value={
-                  data.rol === 'estrancado'
-                    ? num(data.leads_con_historial)
-                    : num(data.leads_ingresados)
-                }
-                hint={
-                  data.rol === 'estrancado'
-                    ? `${num(data.backlog_abiertos).toLocaleString('es-EC')} en cartera · ver detalle`
-                    : ingresados === 0
-                      ? `${num(data.leads_con_historial)} contestados hoy · ver lista`
-                      : `${conCita} de ${ingresados} a cita (${conversionPct}%) · ${num(data.leads_con_historial)} contestados`
-                }
-                accent="text-slate-900"
-                selected={
-                  selectedCategory ===
-                  (data.rol === 'estrancado' ? 'lead_status_change' : 'leads_ingresados')
-                }
-              />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-8">
+                <ScoreRing points={num(data.puntos_total)} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-rose-700">{data.vendedor_nombre}</p>
+                  <p className="text-2xl sm:text-[1.7rem] font-semibold tracking-tight text-slate-900 mt-1 leading-snug">
+                    {data.rol === 'estrancado'
+                      ? `${num(data.leads_con_historial)} gestionados hoy`
+                      : ingresados === 0
+                        ? 'Sin leads nuevos hoy'
+                        : `${ingresados} llegaron · ${num(data.leads_con_historial)} contestados`}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-2 max-w-md leading-relaxed">
+                    {data.rol === 'estrancado'
+                      ? `${num(data.backlog_abiertos).toLocaleString('es-EC')} abiertos en cartera. El backlog no resta.`
+                      : ingresados === 0
+                        ? 'Cuando entren leads, aquí se ve cuántos se contestaron y cuántos pasaron a cita.'
+                        : `${conCita} de ${ingresados} ya tienen cita (${conversionPct}%).`}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-5">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      {num(data.puntos_total)} pts
+                    </span>
+                    {data.rol !== 'estrancado' && (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                        {conversionPct}% a cita
+                      </span>
+                    )}
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                      {num(data.puntos_avance)} avance
+                    </span>
+                  </div>
+                </div>
+              </div>
             </button>
-            <Kpi
-              label="Avance"
-              value={num(data.puntos_avance)}
-              hint="Resumen, ganado, citas, crédito"
-              accent="text-emerald-700"
-            />
-          </div>
+
+            <div className="px-4 sm:px-6 pb-5">
+              <div className="rounded-2xl bg-slate-50/80 px-2 py-3">
+                <div className="flex items-center justify-between px-2 pb-2">
+                  <p className="text-[11px] font-medium text-slate-400">Equipo · sáb a vie</p>
+                  <p className="text-[11px] font-medium tabular-nums text-slate-500">Media {weekAvg}%</p>
+                </div>
+                <div className="flex items-end gap-1">
+                  {trendDays.map((point) => {
+                    const day = String(point.fecha ?? '').slice(0, 10);
+                    const pct = trendPercent(point);
+                    const isSelected = day === String(data.fecha ?? fecha).slice(0, 10);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => setFecha(day)}
+                        aria-pressed={isSelected}
+                        title={`${formatDayLong(day)} · ${pct}%`}
+                        className={`flex-1 min-w-0 flex flex-col items-center gap-1.5 rounded-xl py-2 transition-colors ${
+                          isSelected ? 'bg-white shadow-sm' : 'hover:bg-white/70'
+                        }`}
+                      >
+                        <span
+                          className={`text-[10px] font-semibold tabular-nums ${
+                            isSelected ? 'text-rose-700' : 'text-slate-400'
+                          }`}
+                        >
+                          {pct}%
+                        </span>
+                        <div className="relative h-12 w-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                          <div
+                            className={`absolute inset-x-0 bottom-0 rounded-full ${
+                              isSelected ? 'bg-rose-600' : pct > 0 ? 'bg-slate-400' : 'bg-slate-200'
+                            }`}
+                            style={{ height: pct === 0 ? '3px' : `${pct}%` }}
+                          />
+                        </div>
+                        <span
+                          className={`text-[10px] font-medium ${
+                            isSelected ? 'text-slate-800' : 'text-slate-400'
+                          }`}
+                        >
+                          {formatWeekday(day)}
+                        </span>
+                        <span className="text-[10px] tabular-nums text-slate-400">{formatDayNum(day)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
 
           {data.rol === 'estrancado' && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex gap-3">
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 flex gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-amber-900">
-                  Encargado de cartera estrancada · {num(data.backlog_abiertos).toLocaleString('es-EC')} abiertos
+                <p className="text-sm font-medium text-amber-900">
+                  Cartera estrancada · {num(data.backlog_abiertos).toLocaleString('es-EC')} abiertos
                 </p>
-                <p className="text-xs text-amber-800 mt-1">
-                  Ese backlog no resta puntos. Suma si les guarda el resumen ejecutivo u otras gestiones del día.
+                <p className="text-xs text-amber-800/80 mt-0.5">
+                  Ese backlog no resta. Suma si guarda el resumen u otras gestiones del día.
                 </p>
               </div>
             </div>
           )}
 
-          <div className="grid lg:grid-cols-5 gap-4">
-            <section className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Categorías</h2>
-                  <p className="text-xs text-slate-400 mt-0.5 capitalize">
-                    Lo hecho el {formatDayLong(fecha)}
-                  </p>
-                </div>
-                <span className="text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-100 rounded-full px-2.5 py-1 shrink-0">
-                  Ver detalle
-                </span>
+          <div className="grid lg:grid-cols-5 gap-6">
+            <section className="lg:col-span-3">
+              <div className="flex items-baseline justify-between px-1 mb-3">
+                <h2 className="text-sm font-semibold text-slate-900">Categorías</h2>
+                <p className="text-xs text-slate-400">Toca una para ver el detalle</p>
               </div>
-              <div className="p-3 space-y-1.5">
+              <div className="rounded-[28px] bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-y divide-slate-100">
                 {data.rol !== 'estrancado' && (
                   <MetricBar
                     label="Llegaron → cita"
@@ -634,11 +752,7 @@ export function SalesProgressDashboard() {
                     muted={ingresados === 0}
                     Icon={CalendarPlus}
                     tone={CATEGORY_TONE.leads_to_cita}
-                    onSelect={() =>
-                      selectedCategory === 'leads_to_cita'
-                        ? closeCategory()
-                        : void openCategory('leads_to_cita')
-                    }
+                    onSelect={() => toggleCategory('leads_to_cita')}
                   />
                 )}
                 {data.rol !== 'estrancado' && (
@@ -654,11 +768,7 @@ export function SalesProgressDashboard() {
                     muted={faltantesHoy === 0}
                     Icon={ClipboardList}
                     tone={CATEGORY_TONE.datos_faltantes}
-                    onSelect={() =>
-                      selectedCategory === 'datos_faltantes'
-                        ? closeCategory()
-                        : void openCategory('datos_faltantes')
-                    }
+                    onSelect={() => toggleCategory('datos_faltantes')}
                   />
                 )}
                 {categoryRows.map((row) => (
@@ -666,24 +776,20 @@ export function SalesProgressDashboard() {
                     key={row.categoria}
                     row={row}
                     selected={selectedCategory === row.categoria}
-                    onSelect={() =>
-                      selectedCategory === row.categoria ? closeCategory() : void openCategory(row.categoria)
-                    }
+                    onSelect={() => toggleCategory(row.categoria)}
                   />
                 ))}
               </div>
             </section>
 
-            <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100">
-                <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-amber-500" />
-                  Ranking del día
-                </h2>
+            <section className="lg:col-span-2">
+              <div className="flex items-baseline justify-between px-1 mb-3">
+                <h2 className="text-sm font-semibold text-slate-900">Ranking</h2>
+                <p className="text-xs text-slate-400">Del día</p>
               </div>
-              <div className="p-3 space-y-1">
+              <div className="rounded-[28px] bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-y divide-slate-100">
                 {data.ranking.length === 0 && (
-                  <p className="text-sm text-slate-400 px-2 py-6 text-center">Sin vendedores activos.</p>
+                  <p className="text-sm text-slate-400 px-4 py-10 text-center">Sin vendedores activos.</p>
                 )}
                 {data.ranking.map((row, index) => {
                   const isMe = row.vendedor_id === data.vendedor_id;
@@ -693,27 +799,31 @@ export function SalesProgressDashboard() {
                       type="button"
                       disabled={!data.es_admin}
                       onClick={() => data.es_admin && setVendedorId(row.vendedor_id)}
-                      className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left ${
-                        isMe ? 'bg-red-50 border border-red-100' : 'hover:bg-slate-50'
-                      }`}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
+                        isMe ? 'bg-rose-50/70' : 'hover:bg-slate-50/80'
+                      } ${data.es_admin ? '' : 'cursor-default'}`}
                     >
-                      <span className="w-6 text-xs font-black text-slate-400 tabular-nums">{index + 1}</span>
+                      <span
+                        className={`h-9 w-9 rounded-full text-[11px] font-semibold flex items-center justify-center shrink-0 ${
+                          isMe ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {initials(row.nombre) || index + 1}
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm flex items-center gap-2 min-w-0 ${isMe ? 'font-bold text-red-800' : 'font-medium text-slate-800'}`}>
-                          <span className="truncate">{row.nombre}</span>
+                        <p className={`text-sm truncate ${isMe ? 'font-semibold text-slate-900' : 'font-medium text-slate-800'}`}>
+                          {row.nombre}
                           {row.rol === 'estrancado' && (
-                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                              Estrancados
-                            </span>
+                            <span className="ml-1.5 text-[10px] font-medium text-amber-700">cartera</span>
                           )}
                         </p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-xs text-slate-400 mt-0.5 truncate">
                           {row.rol === 'estrancado'
-                            ? `${num(row.leads_con_historial)} gestionados hoy · ${num(row.backlog_abiertos).toLocaleString('es-EC')} en cartera`
-                            : `${num(row.leads_ingresados)} llegaron · ${num(row.leads_con_cita)} a cita (${citaPct(num(row.leads_con_cita), num(row.leads_ingresados))}%)`}
+                            ? `${num(row.leads_con_historial)} gestionados`
+                            : `${num(row.leads_ingresados)} llegaron · ${citaPct(num(row.leads_con_cita), num(row.leads_ingresados))}% cita`}
                         </p>
                       </div>
-                      <span className="text-sm font-bold tabular-nums text-slate-900">{num(row.puntos_total)}</span>
+                      <span className="text-sm font-semibold tabular-nums text-slate-800">{num(row.puntos_total)}</span>
                     </button>
                   );
                 })}
@@ -730,94 +840,8 @@ export function SalesProgressDashboard() {
               onClose={closeCategory}
             />
           )}
-
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-end justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Tendencia semanal</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Sábado a viernes · 100% = día perfecto del equipo</p>
-              </div>
-              <span className="text-xs font-semibold tabular-nums text-slate-600 bg-slate-50 border border-slate-100 rounded-full px-2.5 py-1 shrink-0">
-                Media {weekAvg}%
-              </span>
-            </div>
-            <div className="p-5">
-              <div className="flex items-end gap-1.5 sm:gap-2">
-                {trendDays.map((point) => {
-                  const day = String(point.fecha ?? '').slice(0, 10);
-                  const pct = trendPercent(point);
-                  const isSelected = day === String(data.fecha ?? fecha).slice(0, 10);
-                  const fill =
-                    isSelected ? 'bg-red-600' : pct >= 50 ? 'bg-slate-800' : pct > 0 ? 'bg-slate-400' : 'bg-slate-200';
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => setFecha(day)}
-                      aria-pressed={isSelected}
-                      title={`${formatDayLong(day)} · ${pct}%`}
-                      className={`flex-1 min-w-0 flex flex-col items-center gap-2 rounded-2xl px-1 py-2 transition-colors ${
-                        isSelected ? 'bg-red-50' : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <span
-                        className={`text-[11px] font-bold tabular-nums ${
-                          isSelected ? 'text-red-700' : pct === 0 ? 'text-slate-300' : 'text-slate-700'
-                        }`}
-                      >
-                        {pct}%
-                      </span>
-                      <div className="relative h-36 w-8 sm:w-9">
-                        <div className="absolute inset-0 rounded-full bg-slate-100" />
-                        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-200/80 pointer-events-none" />
-                        <div
-                          className={`absolute inset-x-0 bottom-0 rounded-full ${fill}`}
-                          style={{ height: pct === 0 ? '6px' : `${pct}%` }}
-                        />
-                      </div>
-                      <div className="text-center leading-tight">
-                        <p className={`text-[11px] font-semibold ${isSelected ? 'text-red-700' : 'text-slate-600'}`}>
-                          {formatWeekday(day)}
-                        </p>
-                        <p className={`text-[11px] tabular-nums ${isSelected ? 'text-red-600' : 'text-slate-400'}`}>
-                          {formatDayNum(day)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
         </>
       ) : null}
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  hint,
-  accent,
-  icon,
-  selected,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  accent: string;
-  icon?: ReactNode;
-  selected?: boolean;
-}) {
-  return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-4 h-full ${selected ? 'border-red-200 ring-1 ring-red-100' : 'border-slate-200'}`}>
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1">
-        {icon}
-        {label}
-      </p>
-      <p className={`text-3xl font-black tabular-nums mt-1 ${accent}`}>{value}</p>
-      <p className="text-xs text-slate-400 mt-1 truncate">{hint}</p>
     </div>
   );
 }

@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
+import { usePermissionContext } from "@/hooks/usePermissionContext";
 import {
   buildPrimaryNavItems,
   getPrimaryNavLinkSizeClasses,
   shouldCompactPrimaryNav,
   resolvePrimaryNavItemHref,
   resolveActivePrimaryNavItem,
-  type PermissionContext,
 } from "@/lib/permissions";
 import { usePreferredPrimaryModule } from "@/hooks/useSidebarShell";
 
@@ -22,13 +21,8 @@ export function MainNav({
   laviletOnly?: boolean;
 }) {
   const pathname = usePathname();
-  const { profile, permissionMap } = useAuth();
   const preferredModule = usePreferredPrimaryModule();
-
-  const permCtx: PermissionContext = useMemo(
-    () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-    [profile?.role, permissionMap]
-  );
+  const permCtx = usePermissionContext();
 
   const navItems = useMemo(() => {
     const items = buildPrimaryNavItems(permCtx);

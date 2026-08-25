@@ -6,7 +6,10 @@ import { Database } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import {
   fetchPermissionMapWithTimeout,
+  fetchCatalogBaseRole,
   hasPermission as hasPermissionFn,
+  createPermissionContext,
+  isAdminLikeRole,
   type PermissionAction,
   type PermissionMap,
 } from '@/lib/permissions'
@@ -21,6 +24,10 @@ interface AuthContextType {
   /** Mapa de permisos efectivos (RPC); vacío hasta cargar sesión */
   permissionMap: PermissionMap
   permissionsLoading: boolean
+  /** `roles.base_role` del catálogo (p. ej. admin_programacion). */
+  catalogBaseRole: string | null
+  /** Admin o admin_programacion: vista completa en módulos operativos (Ventas, etc.). */
+  isAdminLike: boolean
   refreshPermissions: () => Promise<void>
   hasPermission: (submoduleSlug: string, action: PermissionAction) => boolean
 }
@@ -35,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [permissionMap, setPermissionMap] = useState<PermissionMap>({})
   const [permissionsLoading, setPermissionsLoading] = useState(false)
+  const [catalogBaseRole, setCatalogBaseRole] = useState<string | null>(null)
   const loadedProfileUserIdRef = useRef<string | null>(null)
 
   // useEffect 1: Sesión inicial + cambios de auth
@@ -55,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (event === 'SIGNED_OUT') {
         setProfile(null)
         setPermissionMap({})
+        setCatalogBaseRole(null)
         setIsLoading(false)
       }
     })
@@ -71,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loadedProfileUserIdRef.current = null
       setProfile(null)
       setPermissionMap({})
+      setCatalogBaseRole(null)
       // No poner isLoading=false aquí: getSession puede no haber terminado aún.
       // Eso provocaba redirect a /login → login devolvía a marketing → bucle.
       return
@@ -86,6 +96,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true)
       setProfile(null)
       setPermissionMap({})
+      setCatalogBaseRole(null)
+    }
+
+    const loadPermissionState = async () => {
+      const [map, catalogRole] = await Promise.all([
+        fetchPermissionMapWithTimeout(supabase),
+        fetchCatalogBaseRole(supabase, userId),
+      ])
+      return { map, catalogRole }
     }
 
     supabase
@@ -100,20 +119,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           loadedProfileUserIdRef.current = null
           setProfile(null)
           setPermissionMap({})
+          setCatalogBaseRole(null)
         } else {
           loadedProfileUserIdRef.current = userId
           setProfile(data)
           setPermissionsLoading(true)
           try {
-            setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
+            const { map, catalogRole } = await loadPermissionState()
+            if (cancelled) return
+            setPermissionMap(map)
+            setCatalogBaseRole(catalogRole)
           } catch (e) {
             console.error('Error al cargar permisos:', e)
             setPermissionMap({})
+            setCatalogBaseRole(null)
           } finally {
-            setPermissionsLoading(false)
+            if (!cancelled) setPermissionsLoading(false)
           }
         }
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       })
 
     // Suscripción en tiempo real: si el rol u otro campo del perfil cambia
@@ -121,7 +145,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refreshPerms = async () => {
       setPermissionsLoading(true)
       try {
-        setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
+        const { map, catalogRole } = await loadPermissionState()
+        setPermissionMap(map)
+        setCatalogBaseRole(catalogRole)
       } catch (e) {
         console.error('Error al refrescar permisos:', e)
       } finally {
@@ -179,11 +205,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshPermissions = useCallback(async () => {
     if (!user) {
       setPermissionMap({})
+      setCatalogBaseRole(null)
       return
     }
     setPermissionsLoading(true)
     try {
-      setPermissionMap(await fetchPermissionMapWithTimeout(supabase))
+      const [map, catalogRole] = await Promise.all([
+        fetchPermissionMapWithTimeout(supabase),
+        fetchCatalogBaseRole(supabase, user.id),
+      ])
+      setPermissionMap(map)
+      setCatalogBaseRole(catalogRole)
     } catch (e) {
       console.error('Error al refrescar permisos:', e)
     } finally {
@@ -193,8 +225,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const hasPermission = useCallback(
     (submoduleSlug: string, action: PermissionAction) =>
-      hasPermissionFn({ baseRole: profile?.role ?? null, map: permissionMap }, submoduleSlug, action),
-    [profile?.role, permissionMap]
+      hasPermissionFn(
+        createPermissionContext(profile?.role ?? null, permissionMap, catalogBaseRole),
+        submoduleSlug,
+        action
+      ),
+    [profile?.role, permissionMap, catalogBaseRole]
   )
 
   const value = {
@@ -206,6 +242,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isLoading,
     permissionMap,
     permissionsLoading,
+    catalogBaseRole,
+    isAdminLike: isAdminLikeRole(profile?.role, catalogBaseRole),
     refreshPermissions,
     hasPermission,
   }

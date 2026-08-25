@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
-import { isAppAdminRole, type PermissionContext } from "@/lib/permissions";
 
 type ProformaRow = {
     id: string;
@@ -58,7 +57,7 @@ function openWhatsApp(phoneRaw: string | null) {
 }
 
 export default function CreditProformasPage() {
-    const { user, profile, permissionMap } = useAuth();
+    const { user, profile, isAdminLike } = useAuth();
     const supabase = useMemo(() => createClient(), []);
     const [proformas, setProformas] = useState<ProformaRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -67,11 +66,7 @@ export default function CreditProformasPage() {
     const [pdfFilter, setPdfFilter] = useState<"all" | "with_pdf" | "without_pdf">("all");
     const [isBackfilling, setIsBackfilling] = useState(false);
 
-    const permCtx: PermissionContext = useMemo(
-        () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-        [profile?.role, permissionMap]
-    );
-    const canSeeAll = isAppAdminRole(permCtx);
+    const canSeeAll = isAdminLike;
 
     const fetchProformas = useCallback(async () => {
         if (!user?.id) {

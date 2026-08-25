@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { usePermissionContext } from '@/hooks/usePermissionContext';
 import {
     Wallet,
     Users,
@@ -33,7 +33,6 @@ import {
     canSeeAccountingSidebarHref,
     canAccessModule,
     MODULE_SLUGS,
-    type PermissionContext,
 } from '@/lib/permissions';
 import { setSidebarShell } from '@/lib/sidebar-shell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
@@ -68,7 +67,7 @@ const menuItems: MenuItem[] = [
 ];
 
 export function AccountingSidebar() {
-    const { profile, permissionMap } = useAuth();
+    const permCtx = usePermissionContext();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
@@ -81,11 +80,6 @@ export function AccountingSidebar() {
     useEffect(() => {
         setSidebarShell('accounting');
     }, []);
-
-    const permCtx: PermissionContext = useMemo(
-        () => ({ baseRole: profile?.role ?? null, map: permissionMap }),
-        [profile?.role, permissionMap]
-    );
 
     const toggleMobileSidebar = () => setIsMobileOpen(!isMobileOpen);
     const toggleDesktopSidebar = () => setIsCollapsed(!isCollapsed);

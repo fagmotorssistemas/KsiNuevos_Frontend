@@ -5,7 +5,7 @@ import {
   VENTAS_PATH_ACCESS,
   type PrimaryNavItem,
 } from './catalog'
-import { canAccessModule, canAccessSubmodule, isAppAdminRole } from './access'
+import { canAccessModule, canAccessSubmodule, isAppAdminRole, isPathBlockedForAdminProgramacion } from './access'
 import type { PermissionContext } from './context'
 import { isAccountingModulePath } from './routeAccess'
 
@@ -73,6 +73,12 @@ export function resolveActivePrimaryNavItem(
 }
 
 export function canSeePrimaryNavItem(ctx: PermissionContext, item: PrimaryNavItem): boolean {
+  // Contabilidad usa /wallet como href por defecto, pero el módulo sigue visible
+  // si hay otras rutas de finanzas permitidas (admin_programacion no ve cartera).
+  if (item.module === MODULE_SLUGS.finanzas) {
+    return resolveFirstAccountingHref(ctx) !== null
+  }
+  if (isPathBlockedForAdminProgramacion(item.href, ctx)) return false
   if (isAppAdminRole(ctx)) return true
   if (item.module) return canAccessModule(ctx, item.module)
   if (item.submodule) return canAccessSubmodule(ctx, item.submodule)
@@ -80,7 +86,6 @@ export function canSeePrimaryNavItem(ctx: PermissionContext, item: PrimaryNavIte
 }
 
 export function buildPrimaryNavItems(ctx: PermissionContext): PrimaryNavItem[] {
-  if (isAppAdminRole(ctx)) return [...PRIMARY_NAV_ITEMS]
   return PRIMARY_NAV_ITEMS.filter((item) => canSeePrimaryNavItem(ctx, item))
 }
 
@@ -107,7 +112,7 @@ export function resolveFirstAccountingHref(ctx: PermissionContext): string | nul
   for (const sub of finanzasSubs) {
     if (!canAccessSubmodule(ctx, sub.slug)) continue
     const prefix = sub.routePrefixes?.[0]
-    if (prefix) return prefix
+    if (prefix && !isPathBlockedForAdminProgramacion(prefix, ctx)) return prefix
   }
   return null
 }
