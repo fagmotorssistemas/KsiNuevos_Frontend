@@ -7,7 +7,12 @@ const RATES = [
   {
     label: 'Anillo: oficio del día',
     how: 'X de Y',
-    when: 'Gestiones hechas ÷ gestiones que había que hacer hoy: contestar, IA, citas (vino/no vino), showroom, info. faltante y financiamiento. No es solo contestados. Si contestó el 73% pero dejó 9 citas sin gestión, el anillo baja. El X de Y de contestados de la semana sigue en el chip.',
+    when: 'Gestiones hechas ÷ gestiones que había que hacer hoy: contestar (cuota 35), IA, citas (vino/no vino), showroom, info. faltante y financiamiento. No es 21 de 21 de los que llegaron. Si contestó los de hoy pero no llegó a 35, el anillo de contestados queda corto.',
+  },
+  {
+    label: 'Contestados (cuota)',
+    how: 'X de 35',
+    when: 'Resúmenes ejecutivos guardados hoy. Meta 35 al día (Juan: 50). Si llegaron 21, esos 21 cuentan; hay que completar 35 con leads de otros días que nunca tuvieron resumen. 21 de 21 no es 100%.',
   },
   {
     label: 'Seguimientos IA',
@@ -46,7 +51,7 @@ const POINTS = [
     label: 'Leads contestados',
     pts: '+1',
     cap: '40 leads · 40 pts',
-    when: 'Guardó el resumen ejecutivo hoy. Un lead = 1 punto, una sola vez. Meta: 40 al día (Juan: 50).',
+    when: 'Guardó el resumen ejecutivo hoy. Un lead = 1 punto, una sola vez. Cuota de oficio: 35 al día. Tope de puntos: 40 (Juan: 50).',
   },
   {
     label: 'Visitas showroom',
@@ -233,7 +238,8 @@ export function SalesProgressGuide({ trigger }: { trigger?: ReactNode }) {
                 <ul className="space-y-1.5">
                   <li>
                     <strong className="font-semibold text-slate-900">Felipe, Vanessa y Xavier</strong> — pipeline del día
-                    y de la semana. Se espera que trabajen los leads que llegan. Tope de contestados: 40 al día.
+                    y de la semana. Cuota de resúmenes: 35 al día. Contestar los que llegan no cierra el día: hay que
+                    completar con cartera sin resumen. Tope de puntos de contestados: 40.
                   </li>
                   <li>
                     <strong className="font-semibold text-slate-900">Juan</strong> — cartera estrancada (leads viejos).
