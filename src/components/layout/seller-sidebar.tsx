@@ -17,12 +17,8 @@ import {
     ShoppingCart,   // Pedidos
     ListTodo,       // Tareas
     BadgeDollarSign, // Financiamiento
-    FileText,        // Proformas guardadas
-    Landmark,        // Proforma bancaria
-    LayoutGrid,
     TrendingUp,
     PieChart,
-    GitCompare,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
@@ -46,14 +42,10 @@ const menuItems: MenuItem[] = [
     { name: 'Showroom', href: '/showroom', icon: Store },
     { name: 'Agenda', href: '/agenda', icon: CalendarDays },
     { name: 'Inventario', href: '/inventory', icon: Package, exact: true },
-    { name: 'Reportes Vehiculares', href: '/inventory/reportes-vehiculares', icon: LayoutGrid },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
-    { name: 'Comparativa de Ventas', href: '/salescompare', icon: GitCompare },
     { name: 'Pedidos', href: '/requests', icon: ShoppingCart },
     { name: 'Tareas', href: '/tareas', icon: ListTodo },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
-    { name: 'Proformas', href: '/finance/proformas', icon: FileText },
-    { name: 'Proforma bancaria', href: '/finance/proforma-bancaria', icon: Landmark },
 ];
 
 export function SellerSidebar() {
@@ -73,7 +65,7 @@ export function SellerSidebar() {
             menuItems.filter(
                 (item) =>
                     canSeeVentasSidebarHref(item.href, permCtx) ||
-                    ((item.href === '/salesreport' || item.href === '/salescompare') &&
+                    ((item.href === '/salesreport') &&
                         canSeeAccountingSidebarHref('/salesreport', permCtx))
             ),
         [permCtx]
@@ -242,7 +234,11 @@ export function SellerSidebar() {
                     {displayedMenuItems.map((item) => {
                         const isActive = item.exact
                             ? pathname === item.href
-                            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                              || (item.href === '/finance' && pathname.startsWith('/finance/'))
+                              || (item.href === '/inventory' && pathname.startsWith('/inventory/'))
+                            : pathname === item.href
+                              || pathname.startsWith(`${item.href}/`)
+                              || (item.href === '/salesreport' && pathname.startsWith('/salescompare'));
                         return (
                             <Link
                                 key={item.href}

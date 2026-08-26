@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, Suspense, useRef } from "react";
-import { Calculator, RefreshCcw, Printer, Loader2, AlertTriangle, Save } from "lucide-react";
+import Link from "next/link";
+import { Calculator, RefreshCcw, Printer, Loader2, AlertTriangle, Save, FileText, Landmark, ArrowUpRight } from "lucide-react";
 import { useCreditSimulator } from "@/hooks/useCreditSimulator";
 import { CreditForm } from "@/components/features/financing/CreditForm";
 import { CreditProforma } from "@/components/features/financing/CreditProforma";
@@ -138,6 +139,39 @@ function CreditSimulatorContent() {
                             <p className="text-slate-500 mt-1">
                                 Simulación de crédito automotriz (Inventario en Tiempo Real)
                             </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                                href="/finance/proformas"
+                                className="group relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-white px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-200">
+                                        <FileText className="h-4 w-4" />
+                                    </span>
+                                    <span className="text-left leading-tight">
+                                        <span className="block text-sm font-bold text-slate-900">Proformas</span>
+                                        <span className="block text-[11px] font-medium text-slate-500">Guardadas</span>
+                                    </span>
+                                    <ArrowUpRight className="h-4 w-4 text-blue-400 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                </div>
+                            </Link>
+                            <Link
+                                href="/finance/proforma-bancaria"
+                                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-white px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-white shadow-sm shadow-slate-200">
+                                        <Landmark className="h-4 w-4" />
+                                    </span>
+                                    <span className="text-left leading-tight">
+                                        <span className="block text-sm font-bold text-slate-900">Proforma bancaria</span>
+                                        <span className="block text-[11px] font-medium text-slate-500">Banco</span>
+                                    </span>
+                                    <ArrowUpRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                </div>
+                            </Link>
                         </div>
                     </div>
 

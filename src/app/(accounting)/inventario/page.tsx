@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, ClipboardList, FileCheck2 } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioKpiStats, FilterType } from "@/components/features/inventario/InventarioKpiStats";
 import { InventarioTable } from "@/components/features/inventario/InventarioTable";
@@ -58,13 +59,22 @@ export default function InventarioPage() {
                     </p>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start">
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                        <Link
+                            href="/inventario/reporte-documentacion"
+                            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        >
+                            <FileCheck2 className="h-4 w-4 text-blue-500" />
+                            Documentación
+                        </Link>
+                    </div>
                     <button 
                         onClick={refresh}
-                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
                         title="Actualizar datos"
                     >
-                        <RefreshCw className="h-5 w-5" />
+                        <RefreshCw className="h-4 w-4" />
                     </button>
                 </div>
             </div>

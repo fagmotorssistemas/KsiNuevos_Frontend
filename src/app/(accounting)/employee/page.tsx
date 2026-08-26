@@ -1,6 +1,7 @@
 "use client";
 
-import { RefreshCw, Users } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, Users, Clock } from "lucide-react";
 import { useEmployeesData } from "@/hooks/accounting/useEmployee";
 import { EmployeesKpiStats } from "@/components/features/accounting/employee/EmployeesKpiStats";
 import { EmployeesTable } from "@/components/features/accounting/employee/EmployeesTable";
@@ -23,12 +24,21 @@ export default function EmployeesPage() {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start">
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                        <Link
+                            href="/marcaciones"
+                            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        >
+                            <Clock className="h-4 w-4 text-blue-500" />
+                            Marcaciones
+                        </Link>
+                    </div>
                     <button
                         onClick={refresh}
-                        className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+                        className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900"
                     >
-                        Actualizar Datos
+                        Actualizar
                     </button>
                 </div>
             </div>

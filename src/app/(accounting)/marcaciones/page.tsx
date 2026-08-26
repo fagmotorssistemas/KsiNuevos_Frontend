@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Clock, RefreshCw, Users } from "lucide-react";
 import { useMarcacionesData } from "@/hooks/accounting/useMarcaciones";
 import { MarcacionesKpiStats } from "@/components/features/accounting/marcaciones/MarcacionesKpiStats";
 import { MarcacionesUsersList } from "@/components/features/accounting/marcaciones/MarcacionesUsersList";
@@ -35,6 +36,15 @@ export default function MarcacionesPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm self-stretch sm:self-end">
+                        <Link
+                            href="/employee"
+                            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        >
+                            <Users className="h-4 w-4 text-slate-500" />
+                            Personal
+                        </Link>
+                    </div>
                     <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
                         Desde
                         <input

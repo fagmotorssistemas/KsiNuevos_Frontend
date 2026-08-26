@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, LayoutGrid, FileSpreadsheet } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, LayoutGrid, FileSpreadsheet, GitCompare, ArrowUpRight } from "lucide-react";
 import { useVentasData } from "@/hooks/accounting/useVentasData";
 import { VentasKpiStats } from "@/components/features/accounting/salesreport/VentasKpiStats";
 import { VentasTable } from "@/components/features/accounting/salesreport/VentasTable";
@@ -163,6 +164,21 @@ export default function VentasPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <Link
+                        href="/salescompare"
+                        className="group relative overflow-hidden rounded-2xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-white px-3.5 py-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md"
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-white shadow-sm shadow-red-200">
+                                <GitCompare className="h-4 w-4" />
+                            </span>
+                            <span className="text-left leading-tight">
+                                <span className="block text-sm font-bold text-slate-900">Comparativa</span>
+                                <span className="block text-[11px] font-medium text-slate-500">Mes contra mes</span>
+                            </span>
+                            <ArrowUpRight className="h-4 w-4 text-red-400 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                        </div>
+                    </Link>
                     <button
                         onClick={refresh}
                         className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex items-center gap-2"

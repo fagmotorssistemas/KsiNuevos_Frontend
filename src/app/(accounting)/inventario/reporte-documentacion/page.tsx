@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { RefreshCw, FileCheck2 } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, FileCheck2, Box } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioDocumentReport } from "@/components/features/inventario/InventarioDocumentReportsModal";
 import { VehicleDetailModal, type VehicleDetailTab } from "@/components/features/inventario/VehicleDetailModal";
@@ -28,17 +29,28 @@ export default function ReporteDocumentacionPage() {
                         Mismas columnas que la pestaña Documentos del detalle del vehículo
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => {
-                        refresh();
-                        setChecklistReloadKey((k) => k + 1);
-                    }}
-                    className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors self-start"
-                    title="Actualizar datos"
-                >
-                    <RefreshCw className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-2 self-start">
+                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                        <Link
+                            href="/inventario"
+                            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        >
+                            <Box className="h-4 w-4 text-slate-500" />
+                            Inventario
+                        </Link>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            refresh();
+                            setChecklistReloadKey((k) => k + 1);
+                        }}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
+                        title="Actualizar datos"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    </button>
+                </div>
             </div>
 
             <InventarioDocumentReport
