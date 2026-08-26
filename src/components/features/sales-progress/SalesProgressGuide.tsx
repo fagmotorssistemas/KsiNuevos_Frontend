@@ -5,14 +5,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 const RATES = [
   {
-    label: 'Anillo: contestados',
-    how: 'Hoy y semana',
-    when: 'Cuánto están haciendo con lo que llegó. Contestados ÷ llegados. El número grande es hoy. Debajo, la semana sábado–viernes hasta el día que estás viendo. Arriba puedes ir por mes, por semana (S1–S4; las que aún no llegan salen en gris) o por el calendario del día.',
-  },
-  {
-    label: 'Cumpliendo X de Y',
-    how: 'Oficio del día',
-    when: 'Suma de las gestiones que había que hacer hoy (contestar, IA, citas, showroom, info. faltante, financiamiento) y cuántas se hicieron.',
+    label: 'Anillo: oficio del día',
+    how: 'X de Y',
+    when: 'Gestiones hechas ÷ gestiones que había que hacer hoy: contestar, IA, citas (vino/no vino), showroom, info. faltante y financiamiento. No es solo contestados. Si contestó el 73% pero dejó 9 citas sin gestión, el anillo baja. El X de Y de contestados de la semana sigue en el chip.',
   },
   {
     label: 'Seguimientos IA',
@@ -164,9 +159,9 @@ export function SalesProgressGuide({ trigger }: { trigger?: ReactNode }) {
                     no llegan salen en gris.
                   </li>
                   <li>
-                    El anillo es <strong className="font-semibold text-slate-900">contestados ÷ llegados</strong>. El chip
-                    verde es <strong className="font-semibold text-slate-900">cumpliendo X de Y</strong> del oficio del
-                    día.
+                    El anillo es el <strong className="font-semibold text-slate-900">oficio del día</strong>: gestiones
+                    hechas de las que había que hacer (contestar, IA, citas, showroom, info., financiamiento). Las
+                    barras de abajo son esas mismas cuentas. Contestados de la semana va en el chip, no en el anillo.
                   </li>
                   <li>
                     La frase dice <strong className="font-semibold text-slate-900">cumpliendo</strong> y{' '}

@@ -577,9 +577,16 @@ const CATEGORY_TONE: Record<string, CategoryTone> = {
   },
 };
 
-function CoverageRing({ percent, weekPercent }: { percent: number; weekPercent: number }) {
+function CoverageRing({
+  percent,
+  caption,
+  detail,
+}: {
+  percent: number;
+  caption: string;
+  detail: string;
+}) {
   const pct = Math.min(100, Math.max(0, Math.round(percent)));
-  const weekPct = Math.min(100, Math.max(0, Math.round(weekPercent)));
   const r = 54;
   const c = 2 * Math.PI * r;
   const offset = c - (pct / 100) * c;
@@ -612,10 +619,8 @@ function CoverageRing({ percent, weekPercent }: { percent: number; weekPercent: 
           {pct}
           <span className="text-lg font-medium text-slate-400">%</span>
         </span>
-        <span className="mt-1 text-[11px] font-medium text-slate-400">hoy</span>
-        <span className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">
-          {weekPct}% sem
-        </span>
+        <span className="mt-1 text-[11px] font-medium text-slate-400">{caption}</span>
+        <span className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">{detail}</span>
       </div>
     </div>
   );
@@ -903,7 +908,12 @@ export function SalesProgressDashboard() {
         asesoriaQuedados,
       })
     : { good: null, bad: null };
-  const coveragePct = data?.rol === 'estrancado' ? Math.min(100, contestados) : contestadosPct;
+  const coveragePct =
+    data?.rol === 'estrancado'
+      ? Math.min(100, contestados)
+      : fulfilling.due > 0
+        ? fulfilling.pct
+        : contestadosPct;
   const selectedLabel =
     selectedCategory === 'leads_ingresados'
       ? 'Leads que llegaron hoy'
@@ -1026,7 +1036,17 @@ export function SalesProgressDashboard() {
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center gap-8">
-                <CoverageRing percent={coveragePct} weekPercent={semanaPct} />
+                <CoverageRing
+                  percent={coveragePct}
+                  caption={data.rol === 'estrancado' ? 'hoy' : 'oficio'}
+                  detail={
+                    data.rol === 'estrancado'
+                      ? `${contestados} gest.`
+                      : fulfilling.due > 0
+                        ? `${fulfilling.done} de ${fulfilling.due}`
+                        : `${semanaPct}% sem`
+                  }
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-rose-700">{data.vendedor_nombre}</p>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">
@@ -1055,11 +1075,6 @@ export function SalesProgressDashboard() {
                     )}
                   </p>
                   <div className="flex flex-wrap gap-2 mt-5">
-                    {fulfilling.due > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
-                        Cumpliendo {fulfilling.done} de {fulfilling.due} ({fulfilling.pct}%)
-                      </span>
-                    )}
                     {data.rol !== 'estrancado' && (
                       <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                         {conCita} de {ingresados} a cita
