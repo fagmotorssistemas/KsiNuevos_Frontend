@@ -16,6 +16,7 @@ import type {
   FormalProgressEventRow,
   FormalProgressTrendPoint,
 } from '@/types/formal-progress.types';
+import { formatEcuadorDateTime } from '@/lib/ecuador-datetime';
 
 const STEP_META: Record<
   string,
@@ -60,15 +61,8 @@ function formatDayLong(isoDate: string): string {
 }
 
 function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('es-EC', {
-    timeZone: 'America/Guayaquil',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const text = formatEcuadorDateTime(iso);
+  return text === '—' ? '' : text;
 }
 
 function clientHref(event: FormalProgressEventRow): string | null {

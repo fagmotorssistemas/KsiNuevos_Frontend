@@ -4,6 +4,11 @@ import { useState } from "react";
 import { ArrowLeftRight, Loader2 } from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
 import type { LegalCaseRow } from "@/types/legal.types";
+import {
+  ecuadorDatetimeLocalFromNow,
+  ecuadorDatetimeLocalToIso,
+  toEcuadorDatetimeLocal,
+} from "@/lib/ecuador-datetime";
 
 export function ChangeProcessForm({
   caseData,
@@ -23,11 +28,9 @@ export function ChangeProcessForm({
   const [proximaAccion, setProximaAccion] = useState(caseData.proxima_accion || "");
   const [fechaProxima, setFechaProxima] = useState(() => {
     if (caseData.fecha_proxima_accion) {
-      return new Date(caseData.fecha_proxima_accion).toISOString().slice(0, 16);
+      return toEcuadorDatetimeLocal(caseData.fecha_proxima_accion);
     }
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 16);
+    return ecuadorDatetimeLocalFromNow(1);
   });
   const [justificacion, setJustificacion] = useState("");
 
@@ -52,7 +55,7 @@ export function ChangeProcessForm({
         intencion_pago: intencionPago || null,
         contactabilidad: contactabilidad || null,
         proxima_accion: proximaAccion,
-        fecha_proxima_accion: new Date(fechaProxima).toISOString(),
+        fecha_proxima_accion: ecuadorDatetimeLocalToIso(fechaProxima),
         event_descripcion: `Cambio de tipo de proceso: ${caseData.tipo_proceso || "sin_proceso"} -> ${tipoProceso}. Justificación: ${justificacion.trim()}`,
       });
       onSuccess();

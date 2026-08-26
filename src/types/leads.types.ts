@@ -24,6 +24,7 @@ export type SortDescriptor = {
 };
 
 export type DateFilter = 'all' | 'today' | '7days' | '15days' | 'thisMonth';
+export type AsesoriaGestionFilter = 'all' | 'llenos' | 'vacios' | 'incompletos';
 
 export type LeadsFilters = {
     search: string;
@@ -38,6 +39,8 @@ export type LeadsFilters = {
     dateTo: string;
     assignedTo: string | 'all';
     requestStatus?: string | 'all';
+    /** Asesoría financiamiento: ficha de gestión llena o no. */
+    asesoriaGestion?: AsesoriaGestionFilter;
     hasBudget?: boolean;
     /** Solo leads con al menos un registro en trade_in_cars */
     hasTradeIn?: boolean;

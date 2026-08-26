@@ -72,14 +72,14 @@ export function SellerSidebar() {
     );
 
     const [asesoriaStats, setAsesoriaStats] = useState<{
-        pendiente: number;
-        en_proceso: number;
-        resuelto: number;
+        vacios: number;
+        incompletos: number;
+        llenos: number;
         total: number;
-    }>({ pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 });
+    }>({ vacios: 0, incompletos: 0, llenos: 0, total: 0 });
 
     const asesoriasHref = useMemo(
-        () => '/leads?status=asesoria_financiamiento&requestStatus=pendiente',
+        () => '/leads?status=asesoria_financiamiento&gestion=vacios',
         []
     );
 
@@ -88,28 +88,25 @@ export function SellerSidebar() {
         return searchParams.get('status') === 'asesoria_financiamiento';
     }, [pathname, searchParams]);
 
-    const asesoriasRequestStatus = useMemo(() => {
+    const asesoriasGestion = useMemo(() => {
         if (!isAsesoriasActive) return null;
-        const raw = searchParams.get('requestStatus');
-        if (raw === 'pendiente' || raw === 'en_proceso' || raw === 'resuelto' || raw === 'all') return raw;
-        return 'all';
+        const raw = searchParams.get("gestion");
+        if (raw === "llenos" || raw === "vacios" || raw === "incompletos") return raw;
+        return "all";
     }, [isAsesoriasActive, searchParams]);
 
     const asesoriasBadge = useMemo(() => {
-        // Si estoy parado en Asesorías, muestro el contador del estado activo para que sea obvio qué estoy viendo.
-        if (asesoriasRequestStatus === 'pendiente') return { label: 'pend.', value: asesoriaStats.pendiente };
-        if (asesoriasRequestStatus === 'en_proceso') return { label: 'proc.', value: asesoriaStats.en_proceso };
-        if (asesoriasRequestStatus === 'resuelto') return { label: 'res.', value: asesoriaStats.resuelto };
-        if (asesoriasRequestStatus === 'all') return { label: 'total', value: asesoriaStats.total };
-
-        // Fuera de Asesorías: prioriza pendientes si hay, si no total.
-        if (asesoriaStats.pendiente > 0) return { label: 'pend.', value: asesoriaStats.pendiente };
+        if (asesoriasGestion === 'vacios') return { label: 'sin ficha', value: asesoriaStats.vacios };
+        if (asesoriasGestion === 'incompletos') return { label: 'incomp.', value: asesoriaStats.incompletos };
+        if (asesoriasGestion === 'llenos') return { label: 'llenos', value: asesoriaStats.llenos };
+        if (asesoriasGestion === 'all') return { label: 'total', value: asesoriaStats.total };
+        if (asesoriaStats.vacios > 0) return { label: 'sin ficha', value: asesoriaStats.vacios };
         return { label: 'total', value: asesoriaStats.total };
     }, [
-        asesoriasRequestStatus,
-        asesoriaStats.pendiente,
-        asesoriaStats.en_proceso,
-        asesoriaStats.resuelto,
+        asesoriasGestion,
+        asesoriaStats.vacios,
+        asesoriaStats.incompletos,
+        asesoriaStats.llenos,
         asesoriaStats.total,
     ]);
 
@@ -125,9 +122,9 @@ export function SellerSidebar() {
             const stats = await fetchRequestStats(supabase, assignedTo);
             if (isCancelled) return;
             setAsesoriaStats({
-                pendiente: stats.asesoria.pendiente || 0,
-                en_proceso: stats.asesoria.en_proceso || 0,
-                resuelto: stats.asesoria.resuelto || 0,
+                vacios: stats.asesoria.vacios || 0,
+                incompletos: stats.asesoria.incompletos || 0,
+                llenos: stats.asesoria.llenos || 0,
                 total: stats.asesoria.total || 0,
             });
         };
@@ -283,7 +280,7 @@ export function SellerSidebar() {
                         `}
                         title={
                             isCollapsed
-                                ? `Asesorías Fin. (${asesoriaStats.pendiente} pend. / ${asesoriaStats.en_proceso} proc. / ${asesoriaStats.resuelto} res. / ${asesoriaStats.total} total)`
+                                ? `Asesorías Fin. (${asesoriaStats.vacios} sin ficha / ${asesoriaStats.incompletos} incomp. / ${asesoriaStats.llenos} llenos / ${asesoriaStats.total} total)`
                                 : ''
                         }
                     >
@@ -304,11 +301,11 @@ export function SellerSidebar() {
                                     <span
                                         className={`
                                             px-2.5 py-1 rounded-full text-xs font-bold border transition-colors
-                                            ${asesoriasBadge.label === 'pend.'
-                                                ? 'bg-red-50 text-red-700 border-red-200'
-                                                : asesoriasBadge.label === 'proc.'
-                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                    : asesoriasBadge.label === 'res.'
+                                            ${asesoriasBadge.label === 'sin ficha'
+                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                : asesoriasBadge.label === 'incomp.'
+                                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                                    : asesoriasBadge.label === 'llenos'
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                                         : isAsesoriasActive
                                                             ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
@@ -320,71 +317,71 @@ export function SellerSidebar() {
                                     </span>
                                 </div>
 
-                                {/* Ventanita: detalle por estados */}
+                                {/* Ventanita: ficha de gestión */}
                                 <div className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                                     <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white shadow-xl p-3">
                                         <div className="text-[10px] font-black uppercase tracking-wide text-slate-400 mb-2">
-                                            Asesorías Fin.
+                                            Ficha de gestión
                                         </div>
 
                                         <div className="space-y-1.5 text-xs">
                                             <Link
-                                                href="/leads?status=asesoria_financiamiento&requestStatus=pendiente"
+                                                href="/leads?status=asesoria_financiamiento&gestion=vacios"
                                                 onClick={() => setIsMobileOpen(false)}
                                                 className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
-                                                    asesoriasRequestStatus === 'pendiente'
-                                                        ? 'bg-red-50 border-red-200'
+                                                    asesoriasGestion === 'vacios'
+                                                        ? 'bg-rose-50 border-rose-200'
                                                         : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
                                                 }`}
                                             >
-                                                <span className={`font-medium ${asesoriasRequestStatus === 'pendiente' ? 'text-red-700' : 'text-slate-600'}`}>Pendientes</span>
-                                                <span className="font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                                                    {asesoriaStats.pendiente}
+                                                <span className={`font-medium ${asesoriasGestion === 'vacios' ? 'text-rose-700' : 'text-slate-600'}`}>Sin ficha</span>
+                                                <span className="font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.vacios}
                                                 </span>
                                             </Link>
 
                                             <Link
-                                                href="/leads?status=asesoria_financiamiento&requestStatus=en_proceso"
+                                                href="/leads?status=asesoria_financiamiento&gestion=incompletos"
                                                 onClick={() => setIsMobileOpen(false)}
                                                 className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
-                                                    asesoriasRequestStatus === 'en_proceso'
-                                                        ? 'bg-blue-50 border-blue-200'
+                                                    asesoriasGestion === 'incompletos'
+                                                        ? 'bg-amber-50 border-amber-200'
                                                         : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
                                                 }`}
                                             >
-                                                <span className={`font-medium ${asesoriasRequestStatus === 'en_proceso' ? 'text-blue-700' : 'text-slate-600'}`}>En proceso</span>
-                                                <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                                                    {asesoriaStats.en_proceso}
+                                                <span className={`font-medium ${asesoriasGestion === 'incompletos' ? 'text-amber-800' : 'text-slate-600'}`}>Incompletos</span>
+                                                <span className="font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                                    {asesoriaStats.incompletos}
                                                 </span>
                                             </Link>
 
                                             <Link
-                                                href="/leads?status=asesoria_financiamiento&requestStatus=resuelto"
+                                                href="/leads?status=asesoria_financiamiento&gestion=llenos"
                                                 onClick={() => setIsMobileOpen(false)}
                                                 className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
-                                                    asesoriasRequestStatus === 'resuelto'
+                                                    asesoriasGestion === 'llenos'
                                                         ? 'bg-emerald-50 border-emerald-200'
                                                         : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
                                                 }`}
                                             >
-                                                <span className={`font-medium ${asesoriasRequestStatus === 'resuelto' ? 'text-emerald-700' : 'text-slate-600'}`}>Resueltos</span>
+                                                <span className={`font-medium ${asesoriasGestion === 'llenos' ? 'text-emerald-700' : 'text-slate-600'}`}>Completos</span>
                                                 <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                                                    {asesoriaStats.resuelto}
+                                                    {asesoriaStats.llenos}
                                                 </span>
                                             </Link>
 
                                             <div className="h-px bg-slate-100 my-1.5" />
 
                                             <Link
-                                                href="/leads?status=asesoria_financiamiento&requestStatus=all"
+                                                href="/leads?status=asesoria_financiamiento"
                                                 onClick={() => setIsMobileOpen(false)}
                                                 className={`flex items-center justify-between rounded-lg px-2 py-1.5 border transition-colors ${
-                                                    asesoriasRequestStatus === 'all'
+                                                    asesoriasGestion === 'all'
                                                         ? 'bg-slate-100 border-slate-200'
                                                         : 'border-transparent hover:bg-slate-50 hover:border-slate-200'
                                                 }`}
                                             >
-                                                <span className={`font-semibold ${asesoriasRequestStatus === 'all' ? 'text-slate-900' : 'text-slate-700'}`}>Total</span>
+                                                <span className={`font-semibold ${asesoriasGestion === 'all' ? 'text-slate-900' : 'text-slate-700'}`}>Total</span>
                                                 <span className="font-black text-slate-900 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                                                     {asesoriaStats.total}
                                                 </span>

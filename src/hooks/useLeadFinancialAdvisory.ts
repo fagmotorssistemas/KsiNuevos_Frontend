@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import type {
-  FinancialAdvisoryGestionRow,
-  FinancialAdvisoryGestionType,
-  FinancialAdvisoryRecord,
-  FinancialAdvisoryRow,
-  FinancialAdvisoryStatus,
+import {
+  missingFinancialAdvisoryFields,
+  type FinancialAdvisoryGestionRow,
+  type FinancialAdvisoryGestionType,
+  type FinancialAdvisoryRecord,
+  type FinancialAdvisoryRow,
+  type FinancialAdvisoryStatus,
 } from "@/types/finance-advisory.types";
 
 export function useLeadFinancialAdvisory(leadId: number) {
@@ -103,6 +104,25 @@ export function useLeadFinancialAdvisory(leadId: number) {
   const updateRecord = async (id: number, newStatus: FinancialAdvisoryStatus, notes: string) => {
     try {
       setUpdating(id);
+
+      if (newStatus === "en_proceso" || newStatus === "resuelto") {
+        const { data: gestiones, error: gErr } = await supabase
+          .from("asesoria_financiamiento_gestion")
+          .select(
+            "tipo, gestion_detalle, aplica, motivo_no_aplica, banco_deseado, asesor_contactado_nombre, asesor_contactado_telefono, se_solicito_cedula, cedula, requiere_garante, garante_detalle, monto_aprobable_max, plazo_meses_max"
+          )
+          .eq("asesoria_id", id);
+        if (gErr) throw gErr;
+        const complete = (gestiones ?? []).some(
+          (g) => missingFinancialAdvisoryFields(g).length === 0
+        );
+        if (!complete) {
+          return {
+            success: false,
+            error: "complete_gestion_required" as const,
+          };
+        }
+      }
 
       const updatePayload: {
         estado: FinancialAdvisoryStatus;

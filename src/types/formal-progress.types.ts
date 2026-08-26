@@ -1,3 +1,8 @@
+export {
+  todayEcuadorDate,
+  ecuadorYmd,
+} from '@/lib/ecuador-datetime';
+
 export const FORMAL_PROGRESS_TIPOS = [
   'verificacion',
   'visita_domiciliaria',
@@ -57,20 +62,6 @@ export type FormalProgressEventRow = {
   usuario_nombre: string | null;
   pendiente?: boolean;
 };
-
-export function todayEcuadorDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Guayaquil',
-  }).format(new Date());
-}
-
-export function ecuadorYmd(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Guayaquil',
-  }).format(date);
-}
 
 /** Semana sábado → viernes que contiene `isoDate` (YYYY-MM-DD). */
 export function weekSaturdayToFriday(isoDate: string): string[] {

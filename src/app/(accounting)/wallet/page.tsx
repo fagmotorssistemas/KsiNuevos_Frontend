@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import {
     RefreshCw,
     LayoutList,
     AlertTriangle,
     CalendarClock,
-    HandCoins,
     Columns3,
     Table2,
 } from "lucide-react";
@@ -18,7 +16,7 @@ import { AllDebtorsTable } from "@/components/features/accounting/wallet/AllDebt
 import { DebtorsKanbanBoard } from "@/components/features/accounting/wallet/DebtorsKanbanBoard";
 import { ClientSearch } from "@/components/features/accounting/wallet/ClientSearch";
 import { ClientDetail } from "@/components/features/accounting/wallet/ClientDetail";
-import { FormalProgressEntryButton } from "@/components/features/accounting/wallet/formal-progress/FormalProgressEntryButton";
+import { WalletQuickNav } from "@/components/features/accounting/wallet/formal-progress/FormalProgressEntryButton";
 import { useWalletData } from "@/hooks/accounting/useWalletData";
 import { walletService } from "@/services/wallet.service";
 import { ClienteDeudaSummary } from "@/types/wallet.types";
@@ -119,15 +117,7 @@ export default function WalletPage() {
 
                 {view === 'dashboard' && (
                     <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-                        <FormalProgressEntryButton />
-                        <Link
-                            href="/cartera-manual"
-                            className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border-2 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 font-semibold text-sm shadow-sm whitespace-nowrap shrink-0 transition-colors"
-                            title="Obligaciones registradas a mano (sin Oracle)"
-                        >
-                            <HandCoins className="h-5 w-5 shrink-0" />
-                            Cartera manual
-                        </Link>
+                        <WalletQuickNav />
                         <div className="w-full md:w-80 min-w-0">
                             <ClientSearch onSelectClient={handleSelectClient} />
                         </div>

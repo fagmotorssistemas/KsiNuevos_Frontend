@@ -14,6 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
+import { ecuadorDatetimeLocalFromNow, ecuadorDatetimeLocalToIso } from "@/lib/ecuador-datetime";
 import { createClient } from "@/lib/supabase/client";
 import {
   type LegalPipeline,
@@ -179,11 +180,7 @@ export function AddEventForm({
   const [fechaIngreso, setFechaIngreso] = useState("");
   const [updateAction, setUpdateAction] = useState(false);
   const [proximaAccion, setProximaAccion] = useState("");
-  const [fechaProxima, setFechaProxima] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 16);
-  });
+  const [fechaProxima, setFechaProxima] = useState(() => ecuadorDatetimeLocalFromNow(1));
 
   const [attachmentsTab, setAttachmentsTab] = useState<"documento" | "imagenes">(
     "documento",
@@ -375,7 +372,7 @@ export function AddEventForm({
           updateAction && !isObservation ? proximaAccion : null,
         fecha_proxima_accion:
           updateAction && !isObservation
-            ? new Date(fechaProxima).toISOString()
+            ? ecuadorDatetimeLocalToIso(fechaProxima)
             : null,
         documento_id: documentoUrl,
         imagenes_ids: imagenes.filter((i) => i.url).map((i) => i.url!).length

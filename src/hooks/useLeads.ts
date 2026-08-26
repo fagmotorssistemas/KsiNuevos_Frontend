@@ -46,7 +46,7 @@ export function useLeads() {
     // NOTIFICACIONES PENDIENTES
     const [requestStats, setRequestStats] = useState({
         datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 },
-        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }
+        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 }
     });
 
     // ESTADO UI
@@ -74,6 +74,7 @@ export function useLeads() {
         dateTo: '',
         assignedTo: 'all',
         requestStatus: 'all',
+        asesoriaGestion: 'all',
         hasBudget: false,
         hasTradeIn: false,
         onlyInteractions: false,
@@ -82,7 +83,6 @@ export function useLeads() {
     });
 
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
-    const didInitFromUrlRef = useRef(false);
     const marketingAssigneeDefaultHandledRef = useRef(false);
     const fetchGenRef = useRef(0);
 
@@ -90,27 +90,25 @@ export function useLeads() {
     const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
 
     useEffect(() => {
-        if (didInitFromUrlRef.current) return;
-        // Solo inicializamos cuando ya tenemos URL disponible (en App Router siempre lo está),
-        // y lo hacemos una sola vez para no pelear con el estado del usuario.
         const status = searchParams.get("status");
         const requestStatus = searchParams.get("requestStatus");
         const assignedTo = searchParams.get("assignedTo");
+        const asesoriaGestion = searchParams.get("gestion");
 
-        if (!status && !requestStatus && !assignedTo) {
-            didInitFromUrlRef.current = true;
-            return;
-        }
+        if (!status && !requestStatus && !assignedTo && !asesoriaGestion) return;
 
-        didInitFromUrlRef.current = true;
         setPage(1);
         setFilters((prev) => ({
             ...prev,
             ...(status ? { status } : {}),
-            ...(requestStatus ? { requestStatus } : {}),
+            requestStatus: requestStatus || (status === "asesoria_financiamiento" ? "all" : prev.requestStatus),
             ...(assignedTo ? { assignedTo } : {}),
-            // Cuando venimos desde un acceso directo, aseguramos que no quede “pegado”
-            // un filtro incompatible con el estado.
+            asesoriaGestion:
+                asesoriaGestion === "llenos" || asesoriaGestion === "vacios" || asesoriaGestion === "incompletos"
+                    ? asesoriaGestion
+                    : status === "asesoria_financiamiento"
+                      ? "all"
+                      : prev.asesoriaGestion || "all",
             hasBudget: false,
             hasTradeIn: false,
             onlyInteractions: false,
@@ -187,6 +185,7 @@ export function useLeads() {
             dateTo: filters.dateTo || '',
             assignedTo: filters.assignedTo,
             requestStatus: filters.requestStatus,
+            asesoriaGestion: filters.asesoriaGestion || 'all',
             hasBudget: filters.hasBudget,
             hasTradeIn: filters.hasTradeIn,
             onlyInteractions: filters.onlyInteractions,
@@ -203,6 +202,7 @@ export function useLeads() {
             filters.dateTo,
             filters.assignedTo,
             filters.requestStatus,
+            filters.asesoriaGestion,
             filters.hasBudget,
             filters.hasTradeIn,
             filters.onlyInteractions,
@@ -224,6 +224,7 @@ export function useLeads() {
             dateTo: '',
             assignedTo: 'all',
             requestStatus: 'all',
+            asesoriaGestion: 'all',
             hasBudget: false,
             hasTradeIn: false,
             onlyInteractions: false,
@@ -366,7 +367,7 @@ export function useLeads() {
             } else if (key === 'dateRange') {
                 setFilters(prev => ({ ...prev, dateRange: value, exactDate: '', dateFrom: '', dateTo: '' }));
             } else if (key === 'status') {
-                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false, callFilter: 'all' }));
+                setFilters(prev => ({ ...prev, status: value, requestStatus: 'all', asesoriaGestion: 'all', hasBudget: false, hasTradeIn: false, withoutResume: false, callFilter: 'all' }));
             } else {
                 setFilters(prev => ({ ...prev, [key]: value }));
             }
