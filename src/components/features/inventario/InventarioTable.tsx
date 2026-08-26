@@ -10,6 +10,7 @@ import {
     DollarSign,
     X,
     Gauge,
+    Calendar,
 } from "lucide-react";
 import { VehiculoInventario, MovimientoKardex } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
@@ -71,6 +72,18 @@ function getPrecioVentaFromHistorial(historial: MovimientoKardex[]): number | nu
     const egresos = historial.filter(m => !m.esIngreso);
     return egresos.length ? egresos[egresos.length - 1].total : null;
 }
+
+const formatIngreso = (value: string | null | undefined) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString("es-EC", {
+        timeZone: "America/Guayaquil",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    });
+};
 
 interface InventarioTableProps {
     vehiculos: VehiculoInventario[];
@@ -424,6 +437,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                             <th className="px-4 py-3 font-semibold">Vendido en</th>
                             <th className="px-4 py-3 font-semibold">Kilometraje</th>
                             <th className="px-4 py-3 font-semibold text-center">Estado</th>
+                            <th className="px-4 py-3 font-semibold whitespace-nowrap">Fecha ingreso</th>
                             <th className="px-4 py-3 font-semibold text-right">Acciones</th>
                         </tr>
                     </thead>
@@ -508,6 +522,16 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                                             </span>
                                         )}
                                     </td>
+                                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                                        {formatIngreso(v.createdAt) ? (
+                                            <div className="inline-flex items-center gap-1.5">
+                                                <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                                <span className="font-medium capitalize">{formatIngreso(v.createdAt)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400">—</span>
+                                        )}
+                                    </td>
                                     <td className="px-4 py-3 text-right">
                                         <div className="flex justify-end gap-2">
                                             {isAdmin && (
@@ -534,7 +558,7 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                                <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                                     No se encontraron vehículos.
                                 </td>
                             </tr>
