@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { AlertTriangle, RefreshCw, X, FileText, MessageSquare, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList, CircleHelp, Bot, ShoppingCart, ChevronDown } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X, FileText, MessageSquare, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList, CircleHelp, Bot, ShoppingCart, ChevronDown, Store } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -923,8 +923,10 @@ export function SalesProgressDashboard() {
           ? 'Info. faltante'
           : selectedCategory === 'seguimientos_ia'
             ? 'Seguimientos IA'
-            : selectedCategory === 'citas_sin_gestionar'
+              : selectedCategory === 'citas_sin_gestionar'
               ? 'Citas de agenda'
+              : selectedCategory === 'showroom_followup'
+                ? 'Visitas showroom'
               : selectedCategory === 'showroom_sin_gestion'
                 ? 'Seguimiento showroom'
                 : selectedCategory === 'quedados_faltante'
@@ -1324,11 +1326,25 @@ export function SalesProgressDashboard() {
                   onSelect={() => toggleCategory('citas_sin_gestionar')}
                 />
                 <MetricBar
-                  label="Seguimiento showroom"
+                  label="Visitas showroom"
                   subtitle={
                     showVisitas === 0
                       ? 'Hoy no registraron visitas'
-                      : `${showOk} de ${showVisitas} con seguimiento · hist. ${histShowroom}%`
+                      : `${showVisitas} visita${showVisitas === 1 ? '' : 's'} registrada${showVisitas === 1 ? '' : 's'} hoy`
+                  }
+                  percent={showVisitas > 0 ? 100 : 0}
+                  selected={selectedCategory === 'showroom_followup'}
+                  muted={showVisitas === 0}
+                  Icon={Store}
+                  tone={CATEGORY_TONE.showroom_followup}
+                  onSelect={() => toggleCategory('showroom_followup')}
+                />
+                <MetricBar
+                  label="Seguimiento showroom"
+                  subtitle={
+                    showVisitas === 0
+                      ? 'Sin visitas hoy · el seguimiento es la nota después'
+                      : `${showOk} de ${showVisitas} con nota de seguimiento · hist. ${histShowroom}%`
                   }
                   percent={showPct}
                   selected={selectedCategory === 'showroom_sin_gestion'}

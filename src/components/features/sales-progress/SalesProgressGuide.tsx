@@ -20,6 +20,11 @@ const RATES = [
     when: 'De las citas de hoy, cuántas tienen gestión: vino, o no vino con motivo y llamada/mensaje.',
   },
   {
+    label: 'Visitas showroom',
+    how: 'Cuántas',
+    when: 'Cuántas visitas registraron hoy en Showroom. Eso no es el seguimiento: es anotar que el cliente vino.',
+  },
+  {
     label: 'Seguimiento showroom',
     how: 'X de Y',
     when: 'De las visitas de hoy, cuántas tienen nota de seguimiento. Registrar la visita no basta. Primero la llamada, después la nota.',
