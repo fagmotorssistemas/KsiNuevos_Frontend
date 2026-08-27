@@ -18,7 +18,10 @@ export type FormalProgressCategoryId =
   | FormalProgressTipo
   | 'agenda'
   | 'aperturas'
-  | 'saltos';
+  | 'saltos'
+  | 'quedados_agenda'
+  | 'quedados_sin_paso'
+  | 'quedados_en_proceso';
 
 export type FormalProgressCategoryRow = {
   categoria: FormalProgressCategoryId;
@@ -46,6 +49,9 @@ export type FormalDailyProgressPayload = {
   aperturas: number;
   saltos: number;
   expedientes_abiertos: number;
+  quedados_agenda: number;
+  quedados_sin_paso: number;
+  quedados_en_proceso: number;
   categorias: FormalProgressCategoryRow[];
   tendencia: FormalProgressTrendPoint[];
 };
