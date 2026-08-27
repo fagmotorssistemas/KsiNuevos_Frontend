@@ -147,6 +147,11 @@ export function DocumentAiReportBlock({ fileId, compact = false }: Props) {
                 No coincide con API
               </span>
             ) : null}
+            {(report.payload as { photo_should_not_be_uploaded?: boolean } | null)?.photo_should_not_be_uploaded ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
+                No debió subirse
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-slate-700 leading-relaxed">{report.summary}</p>
           {fields.length > 0 ? (

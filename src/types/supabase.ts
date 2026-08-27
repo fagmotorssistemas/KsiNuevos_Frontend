@@ -2205,6 +2205,48 @@ export type Database = {
           },
         ]
       }
+      inventory_vehicle_ai_informes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          inventoryoracle_id: string | null
+          payload: Json
+          placa: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventoryoracle_id?: string | null
+          payload?: Json
+          placa: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventoryoracle_id?: string | null
+          payload?: Json
+          placa?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_ai_informes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_ai_informes_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_vehicle_contraste_consultas: {
         Row: {
           coinciden: number

@@ -29,6 +29,7 @@ import { MultasDeudasTab } from './legal/tabs/MultasDeudasTab'
 import { HistorialVehiculoTab } from './legal/tabs/HistorialVehiculoTab'
 import { NotasInternasTab } from './legal/tabs/NotasInternasTab'
 import { VehicleCompleteReportButton } from './legal/VehicleCompleteReportModal'
+import { VehicleAiReportButton } from './legal/VehicleAiReportModal'
 
 /** Tipos que van en "Movimientos contables" (stock / kardex). El resto → "Gastos de vehículo". */
 const TIPOS_MOVIMIENTO_INVENTARIO = [
@@ -164,6 +165,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               linked={Boolean(dossier.inventoryoracleId)}
             />
             <VehicleCompleteReportButton vehiculo={vehiculo} dossier={dossier} />
+            <VehicleAiReportButton vehiculo={vehiculo} dossier={dossier} />
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
               <X className="h-5 w-5" />
             </button>

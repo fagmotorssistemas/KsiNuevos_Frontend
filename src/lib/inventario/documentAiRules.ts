@@ -3,7 +3,9 @@ import {
   sriRubros,
   type EcuadorContrastePayload,
 } from '@/lib/inventario/ecuadorContraste'
+import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import type { DocumentAiAnalysis } from '@/lib/inventario/openaiDocumentVision'
+import type { VehicleDocType } from '@/types/vehicleLegal.types'
 
 /** Vigencia de la matrícula física en Ecuador para este flujo. */
 export const MATRICULA_VALIDITY_YEARS = 4
@@ -14,6 +16,9 @@ export type ContrasteAiContext = {
   sriMatriculaPending: number
   sriRevisionPending: number
   sriTotalPending: number
+  citationsPendingCount: number
+  citationsPendingTotal: number
+  matriculaVigente: boolean | null
   lastRegistrationDate: string | null
   lastPaidYear: number | null
   registrationExpiry: string | null
@@ -55,6 +60,9 @@ export function buildContrasteAiContext(
     sriMatriculaPending: rubros.matricula,
     sriRevisionPending: rubros.revision,
     sriTotalPending: rubros.total,
+    citationsPendingCount: pendingCitations,
+    citationsPendingTotal: Number(pendingCitationsTotal) || 0,
+    matriculaVigente: payload.matricula?.vigente ?? null,
     lastRegistrationDate: lookup?.lastRegistrationDate ?? null,
     lastPaidYear: lookup?.lastPaidYear ?? null,
     registrationExpiry: lookup?.registrationExpiry ?? null,
@@ -195,8 +203,130 @@ function stripMatriculaNoise(analysis: DocumentAiAnalysis, docType: string): Doc
     matricula_expired: null,
     vigencia_hasta: null,
     contraste_mismatch: docType === 'revision_tecnica' || docType === 'informe_ant_siat' ? analysis.contraste_mismatch : null,
+    photo_should_not_be_uploaded: analysis.photo_should_not_be_uploaded ?? null,
     matches_expected_type: forcedWrongType ? true : analysis.matches_expected_type,
   }
+}
+
+export function isVagueDiscrepancyText(text: string): boolean {
+  const t = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!t.includes('discrepancia') && !t.includes('inconsistencia') && !t.includes('no coincide con lo esperado')) {
+    return false
+  }
+  return !/(\$\s*\d|vencid|citacion|multa|pendiente|ilegibl|borros|recortad|4 anos|sri|ant)/.test(t)
+}
+
+function qualityInvalidReason(analysis: DocumentAiAnalysis): string | null {
+  if (analysis.quality === 'unreadable') {
+    return 'la foto es ilegible: no se puede leer el documento, así que no demuestra que esté al día'
+  }
+  if (analysis.quality === 'blurry') {
+    return 'la foto está borrosa: no se puede verificar fechas, montos ni estado del documento'
+  }
+  if (analysis.quality === 'cropped') {
+    return 'la foto está recortada y no muestra el documento completo'
+  }
+  if (analysis.quality === 'wrong_document') {
+    const guess = analysis.document_kind_guess?.trim()
+    return guess
+      ? `el archivo no es el documento de esta sección (parece ${guess})`
+      : 'el archivo no es el documento de esta sección'
+  }
+  return null
+}
+
+function invalidUploadReasons(input: {
+  docType: string
+  analysis: DocumentAiAnalysis
+  contraste: ContrasteAiContext | null
+  matriculaExpired: boolean | null
+  vigenciaHasta: string | null
+  sriAmountMismatch: string | null
+}): string[] {
+  const reasons: string[] = []
+  const qualityReason = qualityInvalidReason(input.analysis)
+  if (qualityReason) reasons.push(qualityReason)
+  if (input.analysis.matches_expected_type === false && input.analysis.quality !== 'wrong_document') {
+    const guess = input.analysis.document_kind_guess?.trim()
+    reasons.push(
+      guess
+        ? `el archivo no corresponde a esta sección (parece ${guess})`
+        : 'el archivo no corresponde al documento de esta sección'
+    )
+  }
+  if (input.analysis.matches_plate === false && input.analysis.plate_read) {
+    reasons.push(`la placa leída en la foto (${input.analysis.plate_read}) no coincide con la del inventario`)
+  }
+
+  const contraste = input.contraste
+  if (input.docType === 'matricula') {
+    if (input.matriculaExpired) {
+      reasons.push(
+        input.vigenciaHasta
+          ? `la matrícula está vencida: solo vale ${MATRICULA_VALIDITY_YEARS} años y esa vigencia terminó el ${input.vigenciaHasta}`
+          : `la matrícula está vencida (vigencia de ${MATRICULA_VALIDITY_YEARS} años ya cumplida)`
+      )
+    }
+    if (contraste?.matriculaVigente === false) {
+      reasons.push(
+        contraste.registrationExpiry
+          ? `EcuadorAPI reporta la matrícula no vigente (vencimiento ${contraste.registrationExpiry})`
+          : 'EcuadorAPI reporta la matrícula no vigente'
+      )
+    }
+    if (contraste && contraste.sriMatriculaPending > 0.009) {
+      reasons.push(
+        `SRI tiene matrícula pendiente de $${contraste.sriMatriculaPending.toFixed(2)}; esta sección solo admite matrícula pagada y al día`
+      )
+    }
+    if (contraste && contraste.sriTotalPending > (contraste.sriMatriculaPending || 0) + 0.009) {
+      reasons.push(`SRI reporta otros valores pendientes (total $${contraste.sriTotalPending.toFixed(2)})`)
+    }
+    if (contraste && contraste.citationsPendingCount > 0) {
+      reasons.push(
+        `hay ${contraste.citationsPendingCount} citación(es) ANT pendiente(s)` +
+          (contraste.citationsPendingTotal > 0.009 ? ` por $${contraste.citationsPendingTotal.toFixed(2)}` : '') +
+          '; esta sección no admite vehículo con multas'
+      )
+    }
+    if (input.sriAmountMismatch) reasons.push(input.sriAmountMismatch)
+  }
+
+  if (input.docType === 'revision_tecnica' && contraste && contraste.sriRevisionPending > 0.009) {
+    reasons.push(
+      `SRI tiene revisión técnica pendiente de $${contraste.sriRevisionPending.toFixed(2)}; esta sección solo admite RTV al día`
+    )
+  }
+
+  if (input.docType === 'informe_ant_siat' && contraste && contraste.citationsPendingCount > 0) {
+    reasons.push(
+      `el informe ANT no está al día: ${contraste.citationsPendingCount} citación(es) pendiente(s)` +
+        (contraste.citationsPendingTotal > 0.009 ? ` por $${contraste.citationsPendingTotal.toFixed(2)}` : '')
+    )
+  }
+
+  if (reasons.length === 0) {
+    for (const issue of input.analysis.issues) {
+      const trimmed = issue.trim()
+      if (!trimmed || isVagueDiscrepancyText(trimmed)) continue
+      if (trimmed.toLowerCase().includes('no debió')) continue
+      reasons.push(trimmed)
+    }
+  }
+
+  return uniqueIssues(reasons)
+}
+
+function formatInvalidUploadAlert(sectionLabel: string, reasons: string[]): string {
+  const why = `Esta sección solo se usa cuando el documento está al día y la foto es válida`
+  if (reasons.length === 1) {
+    return `Esta fotografía no debió haberse subido a «${sectionLabel}». ${why}. Lo encontrado: ${reasons[0]}.`
+  }
+  const listed = reasons.map((reason, index) => `${index + 1}) ${reason}`).join(' ')
+  return `Esta fotografía no debió haberse subido a «${sectionLabel}». ${why}. Lo encontrado: ${listed}`
 }
 
 export function applyDocumentAiBusinessRules(
@@ -212,6 +342,7 @@ export function applyDocumentAiBusinessRules(
   let matriculaExpired = input.docType === 'matricula' ? cleaned.matricula_expired ?? null : null
   let vigenciaHasta = input.docType === 'matricula' ? cleaned.vigencia_hasta ?? null : null
   let contrasteMismatch = cleaned.contraste_mismatch ?? null
+  let sriAmountMismatch: string | null = null
 
   const issued =
     firstDateFromAnalysis(cleaned) ||
@@ -260,7 +391,8 @@ export function applyDocumentAiBusinessRules(
       const matchesAmount = photoAmounts.some((n) => Math.abs(n - sriPending) < 0.51)
       if (!matchesAmount) {
         contrasteMismatch = true
-        const alert = `La API (SRI) tiene ${pendingLabel} pendiente de $${sriPending.toFixed(2)} y no coincide con lo que se lee en este documento.`
+        sriAmountMismatch = `en la foto no aparece el valor SRI de ${pendingLabel} pendiente ($${sriPending.toFixed(2)})`
+        const alert = `La API (SRI) tiene ${pendingLabel} pendiente de $${sriPending.toFixed(2)} y ese monto no se lee en este documento.`
         issues.unshift(alert)
         if (!summary.toLowerCase().includes('pendiente')) {
           summary = `${alert} ${summary}`
@@ -277,6 +409,24 @@ export function applyDocumentAiBusinessRules(
     }
   }
 
+  const reasons = invalidUploadReasons({
+    docType: input.docType,
+    analysis: cleaned,
+    contraste: input.contraste,
+    matriculaExpired,
+    vigenciaHasta,
+    sriAmountMismatch,
+  })
+  const photoShouldNotBeUploaded = reasons.length > 0
+  if (photoShouldNotBeUploaded) {
+    const sectionLabel = docCatalogByType(input.docType as VehicleDocType)?.label ?? input.docType
+    const alert = formatInvalidUploadAlert(sectionLabel, reasons)
+    issues.unshift(alert)
+    if (!summary.toLowerCase().includes('no debió')) {
+      summary = `${alert} ${summary}`
+    }
+  }
+
   return {
     ...cleaned,
     summary,
@@ -284,5 +434,6 @@ export function applyDocumentAiBusinessRules(
     matricula_expired: matriculaExpired,
     vigencia_hasta: vigenciaHasta,
     contraste_mismatch: contrasteMismatch,
+    photo_should_not_be_uploaded: photoShouldNotBeUploaded || null,
   }
 }
