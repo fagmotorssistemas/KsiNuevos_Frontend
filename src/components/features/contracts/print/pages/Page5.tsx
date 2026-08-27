@@ -5,9 +5,10 @@ import { ContractPageLayout } from "./ContractPageLayout";
 interface PageProps {
     data: ContratoDetalle;
     fechaImpresion?: string; // Prop añadida para recibir la estampa de tiempo
+    pageNumber?: number;
 }
 
-export function Page5({ data, fechaImpresion }: PageProps) {
+export function Page5({ data, fechaImpresion, pageNumber = 5 }: PageProps) {
     // Helpers para formateo de moneda
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
@@ -56,7 +57,7 @@ export function Page5({ data, fechaImpresion }: PageProps) {
     const fechaDoc = data.fechaVenta ? new Date(data.fechaVenta) : new Date();
 
     return (
-        <ContractPageLayout pageNumber={5}>
+        <ContractPageLayout pageNumber={pageNumber}>
             <div className="font-sans text-[11px] leading-tight text-black max-w-full mx-auto ">
                 
                 {/* --- ENCABEZADO --- */}
