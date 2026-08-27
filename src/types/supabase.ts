@@ -2205,6 +2205,66 @@ export type Database = {
           },
         ]
       }
+      inventory_vehicle_contraste_consultas: {
+        Row: {
+          coinciden: number
+          consulted_by: string | null
+          consulted_by_name: string
+          created_at: string
+          diferencias: number
+          estado_general: string
+          id: string
+          inventoryoracle_id: string | null
+          payload: Json
+          placa: string
+          sin_verificar: number
+          staff_snapshot: Json
+        }
+        Insert: {
+          coinciden?: number
+          consulted_by?: string | null
+          consulted_by_name?: string
+          created_at?: string
+          diferencias?: number
+          estado_general: string
+          id?: string
+          inventoryoracle_id?: string | null
+          payload: Json
+          placa: string
+          sin_verificar?: number
+          staff_snapshot?: Json
+        }
+        Update: {
+          coinciden?: number
+          consulted_by?: string | null
+          consulted_by_name?: string
+          created_at?: string
+          diferencias?: number
+          estado_general?: string
+          id?: string
+          inventoryoracle_id?: string | null
+          payload?: Json
+          placa?: string
+          sin_verificar?: number
+          staff_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_contraste_consultas_consulted_by_fkey"
+            columns: ["consulted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_contraste_consultas_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_vehicle_creatives: {
         Row: {
           created_at: string
@@ -2350,6 +2410,86 @@ export type Database = {
           },
           {
             foreignKeyName: "inventory_vehicle_document_activity_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_vehicle_document_ai_reports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          doc_type: string
+          document_id: string
+          extracted: Json
+          file_id: string
+          id: string
+          inventoryoracle_id: string | null
+          matches_plate: boolean | null
+          model: string
+          payload: Json
+          placa: string | null
+          quality: string
+          summary: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          doc_type: string
+          document_id: string
+          extracted?: Json
+          file_id: string
+          id?: string
+          inventoryoracle_id?: string | null
+          matches_plate?: boolean | null
+          model: string
+          payload?: Json
+          placa?: string | null
+          quality: string
+          summary: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          doc_type?: string
+          document_id?: string
+          extracted?: Json
+          file_id?: string
+          id?: string
+          inventoryoracle_id?: string | null
+          matches_plate?: boolean | null
+          model?: string
+          payload?: Json
+          placa?: string | null
+          quality?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_vehicle_document_ai_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_ai_reports_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_vehicle_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_ai_reports_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_vehicle_document_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_ai_reports_inventoryoracle_id_fkey"
             columns: ["inventoryoracle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"

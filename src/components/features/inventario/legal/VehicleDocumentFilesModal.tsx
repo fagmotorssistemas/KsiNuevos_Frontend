@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { isDocumentImageFile, isDocumentPdfFile } from "@/lib/inventario/vehicleLegalUi";
+import { DocumentAiReportBlock } from "@/components/features/inventario/legal/DocumentAiReportBlock";
 import type { VehicleDocumentFileRow } from "@/types/vehicleLegal.types";
 
 type Props = {
@@ -255,34 +256,37 @@ export function VehicleDocumentFilesModal({ title, subtitle, files, onClose }: P
                 </div>
 
                 {current && (
-                    <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50/50">
-                        <p className="text-sm text-slate-600 truncate min-w-0" title={current.file_name}>
-                            {current.file_name}
-                        </p>
-                        <div className="flex items-center gap-3 shrink-0">
-                            <button
-                                type="button"
-                                disabled={downloading !== null}
-                                onClick={() => void handleDownloadCurrent()}
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                            >
-                                {downloading === "one" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Download className="h-4 w-4" />
-                                )}
-                                Descargar
-                            </button>
-                            <a
-                                href={current.file_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
-                            >
-                                Abrir en pestaña
-                                <ExternalLink className="h-4 w-4" />
-                            </a>
+                    <div className="border-t border-slate-200 bg-white px-5 py-3 space-y-3 max-h-[34vh] overflow-y-auto">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-slate-600 truncate min-w-0" title={current.file_name}>
+                                {current.file_name}
+                            </p>
+                            <div className="flex items-center gap-3 shrink-0">
+                                <button
+                                    type="button"
+                                    disabled={downloading !== null}
+                                    onClick={() => void handleDownloadCurrent()}
+                                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                                >
+                                    {downloading === "one" ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Download className="h-4 w-4" />
+                                    )}
+                                    Descargar
+                                </button>
+                                <a
+                                    href={current.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
+                                >
+                                    Abrir en pestaña
+                                    <ExternalLink className="h-4 w-4" />
+                                </a>
+                            </div>
                         </div>
+                        <DocumentAiReportBlock fileId={current.id} />
                     </div>
                 )}
             </div>

@@ -31,6 +31,11 @@ import {
     loadBulkVehicleLegalChecklist,
     type VehicleLegalChecklistBulk,
 } from "@/services/vehicleLegal.service";
+import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
+import {
+    formatContrasteConsultedPretty,
+    formatContrasteRelative,
+} from "@/lib/inventario/ecuadorContraste";
 import { VehicleDocumentFilesModal } from "@/components/features/inventario/legal/VehicleDocumentFilesModal";
 import type { VehicleDocumentFileRow, VehicleDocumentRow } from "@/types/vehicleLegal.types";
 import type { VehiculoInventario } from "@/types/inventario.types";
@@ -38,7 +43,7 @@ import type { VehicleDetailTab } from "./VehicleDetailModal";
 
 type ReportView = "active" | "baja";
 
-type SortKey = "vehicle" | "plate" | "year" | "progress";
+type SortKey = "vehicle" | "plate" | "year" | "progress" | "contraste";
 
 interface InventarioDocumentReportProps {
     vehiculos: VehiculoInventario[];
@@ -59,6 +64,7 @@ function SortableHeader({
     onSort,
     className = "",
     stickyLeft = false,
+    title,
 }: {
     label: string;
     sortKey: SortKey;
@@ -67,12 +73,14 @@ function SortableHeader({
     onSort: (k: SortKey) => void;
     className?: string;
     stickyLeft?: boolean;
+    title?: string;
 }) {
     const active = current === sortKey;
     return (
         <th
             className={`px-3 py-2 text-left ${stickyLeft ? "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]" : ""} ${className}`}
             rowSpan={2}
+            title={title}
         >
             <button
                 type="button"
@@ -250,6 +258,7 @@ export function InventarioDocumentReport({
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortAsc, setSortAsc] = useState(true);
     const [checklistData, setChecklistData] = useState<VehicleLegalChecklistBulk | null>(null);
+    const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, string>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
 
@@ -261,16 +270,28 @@ export function InventarioDocumentReport({
     useEffect(() => {
         if (vehiculos.length === 0) {
             setChecklistData(null);
+            setContrasteByPlate(new Map());
             return;
         }
         let cancelled = false;
         setLoadingChecklist(true);
-        void loadBulkVehicleLegalChecklist(supabase, vehiculos)
-            .then((data) => {
-                if (!cancelled) setChecklistData(data);
-            })
-            .catch(() => {
-                if (!cancelled) setChecklistData({ byPlate: new Map() });
+        void Promise.allSettled([
+            loadBulkVehicleLegalChecklist(supabase, vehiculos),
+            listLatestContrasteConsultasByPlacas(
+                supabase,
+                vehiculos.map((v) => v.placa)
+            ),
+        ])
+            .then(([checklistResult, contrasteResult]) => {
+                if (cancelled) return;
+                setChecklistData(
+                    checklistResult.status === "fulfilled"
+                        ? checklistResult.value
+                        : { byPlate: new Map() }
+                );
+                setContrasteByPlate(
+                    contrasteResult.status === "fulfilled" ? contrasteResult.value : new Map()
+                );
             })
             .finally(() => {
                 if (!cancelled) setLoadingChecklist(false);
@@ -319,7 +340,7 @@ export function InventarioDocumentReport({
             );
         }
 
-        if (sortKey && checklistData) {
+        if (sortKey) {
             const dir = sortAsc ? 1 : -1;
             list = [...list].sort((a, b) => {
                 switch (sortKey) {
@@ -330,11 +351,20 @@ export function InventarioDocumentReport({
                     case "year":
                         return ((Number(a.anioModelo) || 0) - (Number(b.anioModelo) || 0)) * dir;
                     case "progress": {
+                        if (!checklistData) return 0;
                         const ea = checklistData.byPlate.get(normalizePlate(a.placa));
                         const eb = checklistData.byPlate.get(normalizePlate(b.placa));
                         const pa = ea ? countComplete(ea).done / Math.max(countComplete(ea).total, 1) : 0;
                         const pb = eb ? countComplete(eb).done / Math.max(countComplete(eb).total, 1) : 0;
                         return (pa - pb) * dir;
+                    }
+                    case "contraste": {
+                        const da = contrasteByPlate.get(normalizePlate(a.placa)) ?? "";
+                        const db = contrasteByPlate.get(normalizePlate(b.placa)) ?? "";
+                        if (!da && !db) return 0;
+                        if (!da) return 1;
+                        if (!db) return -1;
+                        return da.localeCompare(db) * dir;
                     }
                     default:
                         return 0;
@@ -342,7 +372,7 @@ export function InventarioDocumentReport({
             });
         }
         return list;
-    }, [vehiculos, activeView, search, sortKey, sortAsc, checklistData]);
+    }, [vehiculos, activeView, search, sortKey, sortAsc, checklistData, contrasteByPlate]);
 
     const handleViewChange = (view: ReportView) => {
         setActiveView(view);
@@ -361,7 +391,7 @@ export function InventarioDocumentReport({
     const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
     const rangeEnd = Math.min(safePage * rowsPerPage, totalCount);
 
-    const totalCols = 4 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + 2;
+    const totalCols = 5 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + 2;
 
     return (
         <>
@@ -457,6 +487,15 @@ export function InventarioDocumentReport({
                                     onSort={handleSort}
                                     className="min-w-[48px]"
                                 />
+                                <SortableHeader
+                                    label="API"
+                                    sortKey="contraste"
+                                    current={sortKey}
+                                    asc={sortAsc}
+                                    onSort={handleSort}
+                                    className="min-w-[92px]"
+                                    title="Si ya se consultó EcuadorAPI (contraste oficial) para esta placa"
+                                />
                                 <th
                                     colSpan={LEGAL_COLUMNS.length}
                                     className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
@@ -515,6 +554,7 @@ export function InventarioDocumentReport({
                                               ? 0
                                               : null;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
+                                    const consultedAt = contrasteByPlate.get(normalizePlate(v.placa));
 
                                     return (
                                         <tr
@@ -544,6 +584,28 @@ export function InventarioDocumentReport({
                                                         }`}
                                                     >
                                                         {pct}%
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-3 text-center whitespace-nowrap">
+                                                {consultedAt ? (
+                                                    <span
+                                                        title={`Última consulta: ${formatContrasteConsultedPretty(consultedAt)}`}
+                                                        className="inline-flex flex-col items-center gap-0.5"
+                                                    >
+                                                        <span className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                            Sí
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 leading-none">
+                                                            {formatContrasteRelative(consultedAt)}
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        title="Aún no hay consulta EcuadorAPI guardada para esta placa"
+                                                        className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-slate-50 text-slate-500 border-slate-200"
+                                                    >
+                                                        No
                                                     </span>
                                                 )}
                                             </td>
@@ -646,6 +708,12 @@ export function InventarioDocumentReport({
                                 No
                             </span>
                             Falta, pendiente o no revisado
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                                No
+                            </span>
+                            Columna API: sin consulta EcuadorAPI
                         </span>
                     </div>
 

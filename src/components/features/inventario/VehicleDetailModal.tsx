@@ -23,10 +23,12 @@ import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossie
 import { inventarioService } from '@/services/inventario.service'
 import { MovimientoKardex, VehiculoInventario } from '@/types/inventario.types'
 import { VehicleLegalSummaryBar } from './legal/VehicleLegalSummaryBar'
+import { ContrasteOficialBlock } from './legal/ContrasteOficialBlock'
 import { DocumentosTab } from './legal/tabs/DocumentosTab'
 import { MultasDeudasTab } from './legal/tabs/MultasDeudasTab'
 import { HistorialVehiculoTab } from './legal/tabs/HistorialVehiculoTab'
 import { NotasInternasTab } from './legal/tabs/NotasInternasTab'
+import { VehicleCompleteReportButton } from './legal/VehicleCompleteReportModal'
 
 /** Tipos que van en "Movimientos contables" (stock / kardex). El resto → "Gastos de vehículo". */
 const TIPOS_MOVIMIENTO_INVENTARIO = [
@@ -153,9 +155,19 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               </div>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <ContrasteOficialBlock
+              placa={vehiculo.placa}
+              inventoryoracleId={dossier.inventoryoracleId}
+              documents={dossier.documents}
+              fines={dossier.fines}
+              linked={Boolean(dossier.inventoryoracleId)}
+            />
+            <VehicleCompleteReportButton vehiculo={vehiculo} dossier={dossier} />
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <VehicleLegalSummaryBar summary={summary} />
@@ -205,14 +217,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
           )}
 
           {activeTab === 'multas' && supabase && (
-            <MultasDeudasTab
-              supabase={supabase}
-              inventoryoracleId={dossier.inventoryoracleId}
-              fines={dossier.fines}
-              profileId={profile?.id ?? null}
-              onRefresh={handleLegalRefresh}
-              loading={loadingLegal}
-            />
+            <MultasDeudasTab placa={vehiculo.placa} />
           )}
 
           {activeTab === 'historial' && supabase && (

@@ -17,11 +17,13 @@ import {
   FolderOpen,
   Trash2,
   Scale,
+  Sparkles,
 } from 'lucide-react'
 import type { ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import { docStatusClass, formatShortDate, statusLabel, listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
 import { VehicleDocumentActivityLog } from './VehicleDocumentActivityLog'
+import { DocumentAiReportBlock } from './DocumentAiReportBlock'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   VehicleDocumentRow,
@@ -83,6 +85,7 @@ export function VehicleDocumentCard({
   const [expires, setExpires] = useState(row.expires_at ?? '')
   const [localUploading, setLocalUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [openAiFileId, setOpenAiFileId] = useState<string | null>(null)
 
   const files = listDocumentFiles(row)
   const isUploading = uploading || localUploading
@@ -173,6 +176,16 @@ export function VehicleDocumentCard({
               >
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
+              {!file.id.startsWith('legacy-') && (
+                <button
+                  type="button"
+                  onClick={() => setOpenAiFileId((current) => (current === file.id ? null : file.id))}
+                  className={`shrink-0 ${openAiFileId === file.id ? 'text-violet-700' : 'text-slate-400 hover:text-violet-700'}`}
+                  title="Reporte IA de esta foto"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                </button>
+              )}
               {onDeleteFile && !file.id.startsWith('legacy-') && (
                 <button
                   type="button"
@@ -195,6 +208,7 @@ export function VehicleDocumentCard({
           ))}
         </ul>
       )}
+      {openAiFileId ? <DocumentAiReportBlock fileId={openAiFileId} compact /> : null}
 
       {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && placaInventario && (
         <Link

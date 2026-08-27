@@ -1,222 +1,194 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, Check, Loader2, Scale } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import {
-  AlertTriangle,
-  ExternalLink,
-  FileText,
-  Loader2,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import { toast } from 'sonner'
-import {
-  ACCEPT_UPLOAD,
-  addVehicleFine,
-  deleteVehicleFine,
-  deleteVehicleFineFile,
-  uploadVehicleFineFile,
-} from '@/services/vehicleLegal.service'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { VehicleFineRow } from '@/types/vehicleLegal.types'
+  citationAmountClass,
+  citationHistorySectionTitle,
+  citationStatusCardClass,
+  citationStatusClass,
+  citationStatusLabel,
+  citationsFromPayload,
+  formatContrasteConsultedAt,
+  formatContrasteRelative,
+  groupItemsByCitationStatus,
+  type EcuadorCitation,
+  type EcuadorContrastePayload,
+} from '@/lib/inventario/ecuadorContraste'
+import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 
 type Props = {
-  supabase: SupabaseClient
-  inventoryoracleId: string | null
-  fines: VehicleFineRow[]
-  profileId: string | null
-  onRefresh: () => void
-  loading?: boolean
+  placa: string
 }
 
-function fileBaseName(name: string) {
-  return name.replace(/\.[^.]+$/, '') || 'Comprobante de multa'
+function usd(n: number): string {
+  return `$${n.toFixed(2)}`
 }
 
-export function MultasDeudasTab({
-  supabase,
-  inventoryoracleId,
-  fines,
-  profileId,
-  onRefresh,
-  loading,
-}: Props) {
-  const [uploading, setUploading] = useState(false)
-  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
-  const [deletingFineId, setDeletingFineId] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const allFiles = fines.flatMap((f) =>
-    (f.files ?? []).map((file) => ({ fine: f, file }))
+function CitationRow({ item }: { item: EcuadorCitation }) {
+  return (
+    <li className={`rounded-xl border px-4 py-3 ${citationStatusCardClass(item.status)}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">{item.infraction || item.article || 'Citación'}</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            {[
+              item.entity,
+              item.citationNumber ? `N.º ${item.citationNumber}` : null,
+              item.issueDate ? `emitida ${item.issueDate}` : null,
+              item.paymentDeadline ? `vence ${item.paymentDeadline}` : null,
+              item.points != null ? `${item.points} pts` : null,
+              item.article,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+        <p className={`text-sm font-bold whitespace-nowrap ${citationAmountClass(item.status)}`}>
+          {usd(item.total ?? item.fine ?? 0)}
+        </p>
+      </div>
+    </li>
   )
-  const pendingCount = fines.filter((f) => f.status === 'pendiente').length
+}
 
-  const handleUpload = async (selected: FileList | null) => {
-    if (!inventoryoracleId || !selected?.length) return
-    setUploading(true)
-    try {
-      for (const file of Array.from(selected)) {
-        const fine = await addVehicleFine(
-          supabase,
-          inventoryoracleId,
-          {
-            title: fileBaseName(file.name),
-            amount: 0,
-          },
-          profileId
-        )
-        await uploadVehicleFineFile(supabase, inventoryoracleId, fine.id, file, profileId)
-      }
-      onRefresh()
-      toast.success(
-        selected.length === 1 ? 'Archivo subido' : `${selected.length} archivos subidos`
-      )
-    } catch (err) {
-      console.error(err)
-      toast.error(err instanceof Error ? err.message : 'No se pudo subir el archivo')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
+export function MultasDeudasTab({ placa }: Props) {
+  const { supabase } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [payload, setPayload] = useState<EcuadorContrastePayload | null>(null)
+  const [consultedAt, setConsultedAt] = useState<string | null>(null)
 
-  const handleDeleteFile = async (fineId: string, fileId: string, filesLeft: number) => {
-    setDeletingFileId(fileId)
-    try {
-      await deleteVehicleFineFile(supabase, fileId)
-      // Si era el único archivo de la multa, eliminar el registro vacío
-      if (filesLeft <= 1) {
-        await deleteVehicleFine(supabase, fineId)
-      }
-      onRefresh()
-      toast.success('Archivo eliminado')
-    } catch (err) {
-      console.error(err)
-      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar')
-    } finally {
-      setDeletingFileId(null)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setPayload(null)
+    setConsultedAt(null)
+    void listContrasteConsultas(supabase, placa)
+      .then((rows) => {
+        if (cancelled) return
+        const latest = rows[0]
+        if (!latest) return
+        const saved = payloadFromConsulta(latest)
+        if (saved) {
+          setPayload(saved)
+          setConsultedAt(latest.created_at)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPayload(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }
-
-  const handleDeleteFine = async (fineId: string) => {
-    setDeletingFineId(fineId)
-    try {
-      await deleteVehicleFine(supabase, fineId)
-      onRefresh()
-      toast.success('Eliminado')
-    } catch (err) {
-      console.error(err)
-      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar')
-    } finally {
-      setDeletingFineId(null)
-    }
-  }
+  }, [placa, supabase])
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
-        <p className="text-sm">Cargando multas…</p>
+        <p className="text-sm">Cargando multas oficiales…</p>
       </div>
     )
   }
 
-  if (!inventoryoracleId) {
+  if (!payload) {
     return (
-      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">
-        Vehículo no vinculado a inventoryoracle.
-      </p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center">
+        <Scale className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+        <p className="text-sm font-semibold text-slate-800">Aún no hay consulta oficial</p>
+        <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+          Pulsa <span className="font-semibold text-slate-700">Consultar</span> en Contraste oficial para
+          traer el historial ANT (pendientes, pagadas e impugnadas).
+        </p>
+      </div>
     )
   }
 
+  const citations = citationsFromPayload(payload)
+  const groups = groupItemsByCitationStatus(citations)
+  const pending = citations.filter((c) => (c.status || '').toLowerCase() === 'pending')
+  const pendingTotal = pending.reduce((sum, c) => sum + (c.total ?? c.fine ?? 0), 0)
+  const ant = payload.ant
+  const antUnavailable = ant?.status === 'unavailable' || ant?.status === 'not_applicable'
+  const hasFullHistory = payload.citations != null
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {pendingCount > 0 && (
+    <div className="space-y-4 animate-in fade-in duration-300">
+      {consultedAt && (
+        <p className="text-[11px] text-slate-500">
+          Datos de la consulta del {formatContrasteConsultedAt(consultedAt)} (
+          {formatContrasteRelative(consultedAt)}). No se volvió a llamar a EcuadorAPI.
+        </p>
+      )}
+
+      {antUnavailable && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-900">
-            Hay <strong>{pendingCount}</strong> multa{pendingCount !== 1 ? 's' : ''} registrada
-            {pendingCount !== 1 ? 's' : ''}. Revisar antes de la venta.
+            {ant?.status === 'not_applicable'
+              ? 'La ANT no tiene registro de citaciones para esta placa.'
+              : 'La ANT no estuvo disponible en esa consulta. Vuelve a Consultar en Contraste oficial si necesitas el listado.'}
           </p>
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100">
-          <p className="text-sm font-bold text-slate-800">Comprobantes de multas</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">PDF, JPG o PNG</p>
+      {!ant && citations.length === 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-900">
+            Esta consulta guardada no incluye el detalle ANT. Pulsa Consultar en Contraste oficial para
+            obtener el historial de citaciones.
+          </p>
         </div>
+      )}
 
-        <div className="p-4 space-y-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPT_UPLOAD}
-            multiple
-            className="hidden"
-            onChange={(e) => void handleUpload(e.target.files)}
-            disabled={uploading}
-          />
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full inline-flex items-center justify-center gap-2 py-3 px-3 rounded-lg border border-dashed border-slate-300 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50/50 disabled:opacity-50"
-          >
-            {uploading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            {uploading ? 'Subiendo…' : allFiles.length > 0 ? 'Agregar documento' : 'Subir PDF o imagen'}
-          </button>
+      {!hasFullHistory && citations.length > 0 ? (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+          Esta consulta solo guardó pendientes. Consulta nuevamente para ver pagadas, impugnadas y anuladas.
+        </p>
+      ) : null}
 
-          {allFiles.length === 0 ? (
-            <p className="py-4 text-sm text-slate-400 text-center">Sin documentos de multas.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {allFiles.map(({ fine, file }) => (
-                <li
-                  key={file.id}
-                  className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
-                >
-                  <FileText className="h-4 w-4 text-slate-400 shrink-0" />
-                  <span
-                    className="text-xs text-slate-700 truncate flex-1 min-w-0"
-                    title={file.file_name}
-                  >
-                    {file.file_name}
-                  </span>
-                  <a
-                    href={file.file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-blue-600 hover:text-blue-800"
-                    title="Ver archivo"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                  <button
-                    type="button"
-                    disabled={deletingFileId === file.id || deletingFineId === fine.id}
-                    onClick={() =>
-                      void handleDeleteFile(fine.id, file.id, fine.files?.length ?? 1)
-                    }
-                    className="shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-50"
-                    title="Eliminar"
-                  >
-                    {deletingFileId === file.id || deletingFineId === fine.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+      {pending.length > 0 ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-700 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-900">
+            Hay <strong>{pending.length}</strong> citación{pending.length === 1 ? '' : 'es'} pendiente
+            {pending.length === 1 ? '' : 's'} · total {usd(pendingTotal)}.
+          </p>
         </div>
-      </div>
+      ) : citations.length > 0 || ant?.status === 'ok' ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex gap-3">
+          <Check className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">Sin citaciones pendientes</p>
+            <p className="text-xs text-emerald-800 mt-0.5">
+              {citations.length > 0
+                ? 'El historial incluye citaciones ya pagadas, impugnadas o anuladas.'
+                : 'La ANT no reporta valores pendientes de pago para esta placa.'}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {groups.map((group) => (
+        <section key={group.status}>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h5 className="text-sm font-bold text-slate-900">{citationHistorySectionTitle(group.status)}</h5>
+            <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-md ${citationStatusClass(group.status)}`}>
+              {citationStatusLabel(group.status)} · {group.items.length}
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {group.items.map((item, i) => (
+              <CitationRow key={`${item.citationNumber || item.id}-${i}`} item={item} />
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   )
 }

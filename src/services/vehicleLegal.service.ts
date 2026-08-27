@@ -459,11 +459,13 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
 
   const matricula = dossier.documents.find((d) => d.doc_type === 'matricula')
   let matriculaDaysUntilExpiry: number | null = null
+  let matriculaExpiryLabel: string | null = null
   if (matricula?.expires_at) {
-    const exp = new Date(matricula.expires_at)
+    const exp = new Date(`${matricula.expires_at}T12:00:00`)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     matriculaDaysUntilExpiry = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    matriculaExpiryLabel = exp.toLocaleDateString('es-EC', { month: 'short', year: 'numeric' })
   }
 
   const criticalMissing = ['poder_contrato', 'matricula'].filter(
@@ -496,6 +498,7 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
     pendingFinesTotal,
     pendingFinesCount: pendingFines.length,
     matriculaDaysUntilExpiry,
+    matriculaExpiryLabel,
     legalStatusLabel,
     legalStatusTone,
   }
