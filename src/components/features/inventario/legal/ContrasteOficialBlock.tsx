@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeftRight,
   Calendar,
   Check,
   ChevronRight,
   ClipboardCheck,
   Clock,
+  FileText,
   HelpCircle,
+  KeyRound,
   LayoutGrid,
   Loader2,
   Pin,
@@ -22,8 +23,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { docCatalogByType } from "@/lib/inventario/vehicleDocumentCatalog";
+import { docCatalogByType, VEHICLE_DOCUMENT_CATALOG } from "@/lib/inventario/vehicleDocumentCatalog";
 import {
+  filterVisibleCatalogItems,
   getCatalogDocumentRow,
   getDocumentCheckStatus,
   statusLabel,
@@ -43,6 +45,7 @@ import {
   citationAmountClass,
   citationHistorySectionTitle,
   groupItemsByCitationStatus,
+  type ContrastStaffByDoc,
   type ContrastResultKind,
   type ContrasteEstadoGeneral,
   type ContrastMatrixRow,
@@ -59,7 +62,6 @@ import type { VehicleDocType, VehicleDocumentRow, VehicleFineRow } from "@/types
 import type { Json } from "@/types/supabase";
 
 type TopicFilter = "all" | "ok" | "missing" | "unverified";
-type ContrastKey = "matricula" | "revision_tecnica" | "ant";
 type ContrasteView = "cards" | "table";
 type StaffTone = ReturnType<typeof getDocumentCheckStatus>;
 type ResultKind = ContrastResultKind;
@@ -75,12 +77,6 @@ function readStoredContrasteView(): ContrasteView {
   }
   return "cards";
 }
-
-const CONTRAST_ROWS: { key: ContrastKey; label: string; docType?: VehicleDocType }[] = [
-  { key: "matricula", label: "Matrícula vigente", docType: "matricula" },
-  { key: "revision_tecnica", label: "Revisión técnica", docType: "revision_tecnica" },
-  { key: "ant", label: "ANT · citaciones", docType: "informe_ant_siat" },
-];
 
 function checklistLabel(status: StaffTone, extra?: string | null): string {
   if (status === "na") return "—";
@@ -118,10 +114,17 @@ function encargadoKind(text: string): ResultKind {
 
 function topicIcon(key: string) {
   if (key === "matricula") return Calendar;
-  if (key === "transferencia") return ArrowLeftRight;
   if (key === "revision_tecnica") return ClipboardCheck;
-  if (key === "ant" || key === "informe_ant_siat" || key === "multas") return Scale;
+  if (key === "informe_ant_siat" || key === "procesos_legales") return Scale;
+  if (key === "prenda_industrial" || key === "levantamiento_prendas") return Pin;
+  if (key === "poder_contrato" || key === "contrato_interno") return FileText;
+  if (key === "accesorios_llaves") return KeyRound;
+  if (key === "documentos_pendientes") return AlertTriangle;
   return ShieldCheck;
+}
+
+function isCatalogDocType(key: string): key is VehicleDocType {
+  return VEHICLE_DOCUMENT_CATALOG.some((item) => item.docType === key);
 }
 
 function topicSources(row: ContrastMatrixRow) {
@@ -249,10 +252,10 @@ function TopicDetailPanel({
   const badge = topicBadge(row);
   const sources = topicSources(row);
   const detail = contrasteTopicDetail(payload, row.key);
-  const docType =
-    row.key === "ant" ? "informe_ant_siat" : CONTRAST_ROWS.find((r) => r.key === row.key)?.docType;
-  const staffDoc = docType ? documents.find((d) => d.doc_type === docType) : undefined;
-  const staffFines = row.key === "ant" ? fines : [];
+  const docType = isCatalogDocType(row.key) ? row.key : undefined;
+  const byType = new Map(documents.map((d) => [d.doc_type, d]));
+  const staffDoc = docType ? getCatalogDocumentRow(byType, docType) : undefined;
+  const staffFines = row.key === "informe_ant_siat" ? fines : [];
   const linesTotal = detail.lines.reduce((sum, line) => sum + line.amount, 0);
 
   return (
@@ -328,7 +331,7 @@ function TopicDetailPanel({
             </section>
           ) : null}
 
-          {row.key === "ant" ? (
+          {row.key === "informe_ant_siat" ? (
             detail.lines.length > 0 ? (
               groupItemsByCitationStatus(detail.lines).map((group) => (
                 <section key={group.status}>
@@ -514,26 +517,19 @@ export function ContrasteOficialBlock({
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]));
   const pendingFines = fines.filter((f) => f.status === "pendiente").length;
+  const visibleDocTypes = filterVisibleCatalogItems(VEHICLE_DOCUMENT_CATALOG, byType).map((item) => item.docType);
 
-  const staffByKey: Record<ContrastKey, { text: string; status: StaffTone }> = {
-    matricula: { text: "—", status: "na" },
-    revision_tecnica: { text: "—", status: "na" },
-    ant: { text: "—", status: "na" },
-  };
-
-  for (const row of CONTRAST_ROWS) {
-    if (!row.docType || row.key === "ant") continue;
-    const catalog = docCatalogByType(row.docType);
-    const doc = getCatalogDocumentRow(byType, row.docType);
-    const status = linked && catalog ? getDocumentCheckStatus(doc, catalog) : "na";
-    const expiry = row.docType === "matricula" ? formatExpiry(doc?.expires_at) : null;
+  const staffByKey: ContrastStaffByDoc = {};
+  for (const catalog of VEHICLE_DOCUMENT_CATALOG) {
+    const doc = getCatalogDocumentRow(byType, catalog.docType);
+    const status = linked ? getDocumentCheckStatus(doc, catalog) : "na";
+    const expiry = catalog.docType === "matricula" ? formatExpiry(doc?.expires_at) : null;
     const statusTxt = doc ? statusLabel(doc.status) : null;
-    staffByKey[row.key] = {
+    staffByKey[catalog.docType] = {
       text: checklistLabel(status, expiry ?? statusTxt),
       status,
     };
   }
-
   {
     const catalog = docCatalogByType("informe_ant_siat");
     const doc = getCatalogDocumentRow(byType, "informe_ant_siat");
@@ -545,9 +541,9 @@ export function ContrasteOficialBlock({
         : fines.length > 0
           ? "internas al día"
           : "sin pendientes internas";
-    staffByKey.ant = {
-      text: `Informe ${informeText} · ${finesText}`,
-      status: !linked ? "na" : pendingFines > 0 ? "missing" : "ok",
+    staffByKey.informe_ant_siat = {
+      text: `${informeText} · ${finesText}`,
+      status: !linked ? "na" : pendingFines > 0 ? "missing" : docStatus,
     };
   }
 
@@ -569,7 +565,7 @@ export function ContrasteOficialBlock({
     setLiveConsulta(false);
     setModalOpen(true);
   };
-  const matrix = buildContrastMatrix(payload, staffByKey);
+  const matrix = buildContrastMatrix(payload, staffByKey, { visibleDocTypes });
   const differenceRows = matrix.filter((row) => row.resultado.kind === "missing");
   const matchRows = matrix.filter((row) => row.resultado.kind === "ok");
   const unverifiedRows = matrix.filter(
@@ -637,7 +633,7 @@ export function ContrasteOficialBlock({
       setModalOpen(true);
       setLiveConsulta(true);
       const counts = summarizeMatrix(
-        buildContrastMatrix(body.data, staffByKey),
+        buildContrastMatrix(body.data, staffByKey, { visibleDocTypes }),
         contrastShowAmt(body.data)
       );
       try {

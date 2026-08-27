@@ -19,11 +19,17 @@ import {
   sriRubros,
   summarizeMatrix,
   type ContrastResultKind,
+  type ContrastStaffByDoc,
   type ContrastStaffTone,
   type EcuadorContrastePayload,
 } from '@/lib/inventario/ecuadorContraste'
-import { docCatalogByType, VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
-import { getCatalogDocumentRow, getDocumentCheckStatus, statusLabel } from '@/lib/inventario/vehicleLegalUi'
+import { VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
+import {
+  filterVisibleCatalogItems,
+  getCatalogDocumentRow,
+  getDocumentCheckStatus,
+  statusLabel,
+} from '@/lib/inventario/vehicleLegalUi'
 import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import type { VehiculoInventario } from '@/types/inventario.types'
 import type { VehicleLegalDossier } from '@/types/vehicleLegal.types'
@@ -140,37 +146,33 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
   const matrix = useMemo(() => {
     const byType = new Map(dossier.documents.map((d) => [d.doc_type, d]))
     const pendingFines = dossier.fines.filter((f) => f.status === 'pendiente').length
-    const staff = {
-      matricula: { text: '—', status: 'na' as ContrastStaffTone },
-      revision_tecnica: { text: '—', status: 'na' as ContrastStaffTone },
-      ant: { text: '—', status: 'na' as ContrastStaffTone },
-    }
-    for (const key of ['matricula', 'revision_tecnica'] as const) {
-      const catalog = docCatalogByType(key)
-      const doc = getCatalogDocumentRow(byType, key)
-      const status = linked && catalog ? getDocumentCheckStatus(doc, catalog) : 'na'
+    const staff: ContrastStaffByDoc = {}
+    for (const catalog of VEHICLE_DOCUMENT_CATALOG) {
+      const doc = getCatalogDocumentRow(byType, catalog.docType)
+      const status = linked ? getDocumentCheckStatus(doc, catalog) : 'na'
       const extra =
-        key === 'matricula' && doc?.expires_at
+        catalog.docType === 'matricula' && doc?.expires_at
           ? doc.expires_at
           : doc
             ? statusLabel(doc.status)
             : null
-      staff[key] = { text: checklistLabel(status, extra), status }
+      staff[catalog.docType] = { text: checklistLabel(status, extra), status }
     }
-    const informeCatalog = docCatalogByType('informe_ant_siat')
     const informeDoc = getCatalogDocumentRow(byType, 'informe_ant_siat')
-    const informeStatus = linked && informeCatalog ? getDocumentCheckStatus(informeDoc, informeCatalog) : 'na'
-    staff.ant = {
-      text: `Informe ${checklistLabel(informeStatus, informeDoc ? statusLabel(informeDoc.status) : null)} · ${
+    const informeStatus = staff.informe_ant_siat?.status ?? 'na'
+    staff.informe_ant_siat = {
+      text: `${checklistLabel(informeStatus, informeDoc ? statusLabel(informeDoc.status) : null)} · ${
         pendingFines > 0
           ? `${pendingFines} multa${pendingFines === 1 ? '' : 's'} interna${pendingFines === 1 ? '' : 's'} por pagar`
           : dossier.fines.length > 0
             ? 'internas al día'
             : 'sin pendientes internas'
       }`,
-      status: !linked ? 'na' : pendingFines > 0 ? 'missing' : 'ok',
+      status: !linked ? 'na' : pendingFines > 0 ? 'missing' : informeStatus,
     }
-    return buildContrastMatrix(payload, staff)
+    return buildContrastMatrix(payload, staff, {
+      visibleDocTypes: filterVisibleCatalogItems(VEHICLE_DOCUMENT_CATALOG, byType).map((item) => item.docType),
+    })
   }, [dossier.documents, dossier.fines, linked, payload])
 
   const showAmt = contrastShowAmt(payload)

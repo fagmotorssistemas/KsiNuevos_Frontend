@@ -1,3 +1,6 @@
+import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
+import type { VehicleDocType } from '@/types/vehicleLegal.types'
+
 export type EcuadorPlateLookup = {
   plate: string
   brand: string | null
@@ -337,16 +340,12 @@ export function contrasteTopicDetail(
     if (lookup?.lastRegistrationDate) facts.push({ label: 'Última matrícula', value: lookup.lastRegistrationDate })
     if (lookup?.registrationExpiry) facts.push({ label: 'Vigente hasta', value: lookup.registrationExpiry })
     lines = linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'matricula')
+    const transferLines = linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'transferencia')
+    lines = [...lines, ...transferLines]
     emptyHint =
-      lines.length === 0 && (sriRubros(sri ?? null).matricula ?? 0) <= 0
-        ? 'SRI no reporta valor pendiente de matrícula.'
-        : 'SRI reporta un saldo de matrícula, pero no envió el desglose de ítems.'
-  } else if (key === 'transferencia') {
-    lines = linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'transferencia')
-    emptyHint =
-      sriRubros(sri ?? null).transferencia <= 0
-        ? 'SRI no reporta pendiente de transferencia.'
-        : 'Hay un saldo de transferencia, pero SRI no envió el desglose.'
+      lines.length === 0 && (sriRubros(sri ?? null).matricula ?? 0) <= 0 && sriRubros(sri ?? null).transferencia <= 0
+        ? 'SRI no reporta valor pendiente de matrícula ni de transferencia.'
+        : 'SRI reporta un saldo, pero no envió el desglose de ítems.'
   } else if (key === 'revision_tecnica') {
     lines = [
       ...linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'revision'),
@@ -394,6 +393,17 @@ export function contrasteTopicDetail(
           ? 'No hay citaciones reportadas por ANT. Vuelve a Consultar para traer pagadas e impugnadas.'
           : 'Sin ítems para mostrar.'
     }
+  } else if (key === 'prenda_industrial') {
+    if (payload.prenda_industrial?.text) {
+      facts.push({ label: 'Fuente oficial', value: payload.prenda_industrial.text })
+    }
+    emptyHint = 'EcuadorAPI no publica prenda industrial. El contraste es con lo cargado por el encargado.'
+  } else if (key === 'documentos_pendientes') {
+    lines = linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'otro')
+    emptyHint =
+      lines.length === 0
+        ? 'SRI no reportó otros rubros pendientes fuera de matrícula, transferencia y revisión.'
+        : 'SRI reporta otros valores pendientes.'
   } else if (key.startsWith('sri-otro-')) {
     const label = key.slice('sri-otro-'.length)
     lines = linesFromBlock(sri, 'SRI', (item) => {
@@ -402,6 +412,8 @@ export function contrasteTopicDetail(
       return itemLabel === label
     })
     emptyHint = 'SRI no envió el desglose de este rubro.'
+  } else if (VEHICLE_DOCUMENT_CATALOG.some((item) => item.docType === key)) {
+    emptyHint = 'Esta sección no tiene consulta en EcuadorAPI. El contraste es con lo cargado por el encargado.'
   }
 
   return { facts, lines, emptyHint }
@@ -721,12 +733,29 @@ function rowResultado(sri: MatrixCell, ant: MatrixCell, amt: MatrixCell): Matrix
   return { text: 'Sin verificar', kind: 'warn' }
 }
 
+export type ContrastStaffByDoc = Partial<
+  Record<VehicleDocType, { text: string; status: ContrastStaffTone }>
+>
+
+export function emptyContrasteStaff(): ContrastStaffByDoc {
+  const staff: ContrastStaffByDoc = {}
+  for (const item of VEHICLE_DOCUMENT_CATALOG) {
+    staff[item.docType] = { text: '—', status: 'na' }
+  }
+  return staff
+}
+
+function staffOf(
+  staff: ContrastStaffByDoc,
+  docType: VehicleDocType
+): { text: string; status: ContrastStaffTone } {
+  return staff[docType] ?? { text: '—', status: 'na' }
+}
+
 export function buildContrastMatrix(
   payload: EcuadorContrastePayload | null,
-  staff: Record<
-    'matricula' | 'revision_tecnica' | 'ant',
-    { text: string; status: ContrastStaffTone }
-  >
+  staff: ContrastStaffByDoc,
+  options?: { visibleDocTypes?: VehicleDocType[] }
 ): ContrastMatrixRow[] {
   const lookup = payload?.lookup
   const sri = payload?.sri ?? null
@@ -734,15 +763,18 @@ export function buildContrastMatrix(
   const amt = payload?.amt ?? null
   const rubros = sriRubros(sri)
   const plateVigente = lookup ? inferMatriculaVigente(lookup, null).vigente : null
-  const antMatText = lookup ? formatLastPago(lookup) : 'Sin consultar'
-  const antMatKind = lookup
-    ? compareContrastRow(staff.matricula.status, plateVigente).kind
-    : ('idle' as ContrastResultKind)
+  const docTypes =
+    options?.visibleDocTypes ?? VEHICLE_DOCUMENT_CATALOG.map((item) => item.docType)
 
-  const sriStatusCell = (kind: ContrastResultKind, text: string): MatrixCell => {
+  const sriMoney = (
+    pending: number,
+    staffTone: ContrastStaffTone,
+    payLabel: string,
+    okText: string
+  ): MatrixCell => {
     if (!sri) return { text: 'Sin consultar', kind: 'idle' }
     if (sri.status === 'unavailable') return { text: 'SRI no disponible', kind: 'warn' }
-    return { kind, text }
+    return moneyCell(pending, staffTone, payLabel, okText)
   }
 
   const antStatus = (okText: string, pendingText: string, staffTone: ContrastStaffTone): MatrixCell => {
@@ -761,7 +793,7 @@ export function buildContrastMatrix(
     return { text: 'Sin dato ANT', kind: 'warn' }
   }
 
-  const amtRev = (): MatrixCell => {
+  const amtRev = (staffTone: ContrastStaffTone): MatrixCell => {
     if (!amt && !payload) return DASH
     if (!amt && !contrastShowAmt(payload)) return DASH
     if (!amt) return { text: 'No se pudo consultar AMT', kind: 'warn' }
@@ -769,78 +801,63 @@ export function buildContrastMatrix(
     if (amt.status === 'not_applicable') return { text: 'AMT no aplica', kind: 'idle' }
     if (amt.status === 'ok') {
       const pending = amt.revision ?? 0
-      return moneyCell(pending, staff.revision_tecnica.status, 'Revisión pendiente', 'Sin pendiente de revisión')
+      return moneyCell(pending, staffTone, 'Revisión pendiente', 'Sin pendiente de revisión')
     }
     return DASH
   }
 
-  return [
-    {
-      key: 'matricula',
-      label: 'Matrícula vigente',
-      encargado: staff.matricula.text,
-      sri: !sri
-        ? { text: 'Sin consultar', kind: 'idle' }
-        : sri.status === 'unavailable'
-          ? { text: 'SRI no disponible', kind: 'warn' }
-          : moneyCell(rubros.matricula, staff.matricula.status, 'Pagar matrícula', 'Sin pendiente de matrícula'),
-      ant: { text: antMatText, kind: antMatKind },
-      amt: DASH,
+  const rowForDocType = (docType: VehicleDocType): ContrastMatrixRow => {
+    const label = docCatalogByType(docType)?.label ?? docType
+    const current = staffOf(staff, docType)
+    let sriCell: MatrixCell = DASH
+    let antCell: MatrixCell = DASH
+    let amtCell: MatrixCell = DASH
+
+    if (docType === 'matricula') {
+      sriCell = sriMoney(rubros.matricula, current.status, 'Pagar matrícula', 'Sin pendiente de matrícula')
+      if (sri && sri.status !== 'unavailable' && rubros.transferencia > 0.009) {
+        sriCell = {
+          kind: 'missing',
+          text: `${sriCell.text} · Pagar transferencia ${usd(rubros.transferencia)}`,
+        }
+      }
+      antCell = {
+        text: lookup ? formatLastPago(lookup) : 'Sin consultar',
+        kind: lookup ? compareContrastRow(current.status, plateVigente).kind : 'idle',
+      }
+    } else if (docType === 'revision_tecnica') {
+      sriCell = sriMoney(rubros.revision, current.status, 'Revisión pendiente', 'Sin pendiente de revisión')
+      amtCell = amtRev(current.status)
+    } else if (docType === 'informe_ant_siat') {
+      antCell = antStatus('Sin citaciones pendientes', '{n} citación(es) · {usd}', current.status)
+    } else if (docType === 'prenda_industrial') {
+      const official = payload?.prenda_industrial
+      antCell = official
+        ? {
+            text: official.text,
+            kind: compareContrastRow(current.status, official.vigente).kind,
+          }
+        : { text: 'Sin consultar', kind: 'idle' }
+    } else if (docType === 'documentos_pendientes' && rubros.otros.length > 0) {
+      sriCell = {
+        kind: 'missing',
+        text: rubros.otros.map((item) => `${item.label} ${usd(item.amount)}`).join(' · '),
+      }
+    }
+
+    const row = {
+      key: docType,
+      label,
+      encargado: current.text,
+      sri: sriCell,
+      ant: antCell,
+      amt: amtCell,
       resultado: DASH,
-    },
-    {
-      key: 'transferencia',
-      label: 'Transferencia',
-      encargado: '—',
-      sri: sriStatusCell(
-        rubros.transferencia > 0 ? 'missing' : 'ok',
-        rubros.transferencia > 0
-          ? `Pagar transferencia ${usd(rubros.transferencia)}`
-          : 'Sin pendiente de transferencia'
-      ),
-      ant: DASH,
-      amt: DASH,
-      resultado: DASH,
-    },
-    {
-      key: 'revision_tecnica',
-      label: 'Revisión técnica',
-      encargado: staff.revision_tecnica.text,
-      sri: !sri
-        ? { text: 'Sin consultar', kind: 'idle' }
-        : sri.status === 'unavailable'
-          ? { text: 'SRI no disponible', kind: 'warn' }
-          : moneyCell(rubros.revision, staff.revision_tecnica.status, 'Revisión pendiente', 'Sin pendiente de revisión'),
-      ant: DASH,
-      amt: amtRev(),
-      resultado: DASH,
-    },
-    {
-      key: 'ant',
-      label: 'ANT · citaciones',
-      encargado: staff.ant.text,
-      sri: DASH,
-      ant: antStatus(
-        'Sin citaciones pendientes',
-        '{n} citación(es) · {usd}',
-        staff.ant.status
-      ),
-      amt: DASH,
-      resultado: DASH,
-    },
-    ...rubros.otros.map((o) => ({
-      key: `sri-otro-${o.label}`,
-      label: o.label,
-      encargado: '—',
-      sri: { text: `Pagar ${usd(o.amount)}`, kind: 'missing' as ContrastResultKind },
-      ant: DASH,
-      amt: DASH,
-      resultado: DASH,
-    })),
-  ].map((row) => ({
-    ...row,
-    resultado: rowResultado(row.sri, row.ant, row.amt),
-  }))
+    }
+    return { ...row, resultado: rowResultado(row.sri, row.ant, row.amt) }
+  }
+
+  return docTypes.map(rowForDocType)
 }
 
 export function summarizeMatrix(rows: ContrastMatrixRow[], showAmt: boolean): ContrasteSummary {

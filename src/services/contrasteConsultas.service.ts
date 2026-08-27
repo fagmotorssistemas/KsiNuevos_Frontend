@@ -91,3 +91,18 @@ export function payloadFromConsulta(row: ContrasteConsultaRow): EcuadorContraste
   if (!payload.matricula && !payload.lookup) return null
   return payload
 }
+
+export async function hasContrasteConsulta(
+  supabase: SupabaseClient<Database>,
+  placa: string
+): Promise<boolean> {
+  const plate = normalizePlate(placa)
+  if (!plate) return false
+  const { data, error } = await supabase
+    .from('inventory_vehicle_contraste_consultas')
+    .select('id')
+    .eq('placa', plate)
+    .limit(1)
+  if (error) throw error
+  return (data ?? []).length > 0
+}
