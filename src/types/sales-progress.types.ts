@@ -42,6 +42,8 @@ export type SalesProgressRankingRow = {
   sin_resumen?: number;
   faltante_quedados?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
+  faltante_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
@@ -85,6 +87,8 @@ export type SalesDailyProgressPayload = {
   hist_showroom_pct: number;
   faltante_quedados: number;
   asesoria_quedados: number;
+  asesoria_total: number;
+  faltante_total: number;
   pedidos_quedados: number;
   faltante_sin_salir: number;
   asesoria_sin_salir: number;

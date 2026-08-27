@@ -40,9 +40,9 @@ const RATES = [
     when: 'De los leads que llegaron hoy, cuántos ya tienen una cita creada hoy.',
   },
   {
-    label: 'Info. faltante / financiamiento (hoy)',
+    label: 'Financiamiento (quedados)',
     how: 'X de Y',
-    when: 'De las que llegaron hoy, cuántas se contestaron o se llenaron. Contestó no es lo mismo que salió de etapa.',
+    when: 'Igual que Leads → Sin ficha. Nunca llenaron la ficha de gestión. X de Y pendientes (Y es el Todos de Leads). No es pendiente/en proceso ni Respondidos con resumen.',
   },
 ];
 

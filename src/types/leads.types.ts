@@ -39,7 +39,7 @@ export type LeadsFilters = {
     dateTo: string;
     assignedTo: string | 'all';
     requestStatus?: string | 'all';
-    /** Asesoría financiamiento: ficha de gestión llena o no. */
+    /** Ficha de gestión (asesoría) o respuesta (info. faltante): llena / vacía / incompleta. */
     asesoriaGestion?: AsesoriaGestionFilter;
     hasBudget?: boolean;
     /** Solo leads con al menos un registro en trade_in_cars */

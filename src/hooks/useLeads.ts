@@ -45,7 +45,7 @@ export function useLeads() {
 
     // NOTIFICACIONES PENDIENTES
     const [requestStats, setRequestStats] = useState({
-        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 },
+        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 },
         asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 }
     });
 

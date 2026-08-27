@@ -14,6 +14,7 @@ import {
 export default function AdminDashboard() {
     const {
         stats,
+        unassignedShowroom,
         isLoading,
         dateFilter,
         setDateFilter,
@@ -29,7 +30,7 @@ export default function AdminDashboard() {
         appointments: acc.appointments + curr.appointments_created,
         requests: acc.requests + curr.requests_created,
         proformas: acc.proformas + curr.proformas_created
-    }), { leads: 0, showroom: 0, appointments: 0, requests: 0, proformas: 0 });
+    }), { leads: 0, showroom: unassignedShowroom, appointments: 0, requests: 0, proformas: 0 });
 
     return (
         <div className="p-6 space-y-6 bg-slate-50 min-h-screen">

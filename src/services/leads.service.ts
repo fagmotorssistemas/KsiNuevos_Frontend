@@ -739,13 +739,16 @@ export const fetchLeadsAPI = async (
 
         // Sub-filtro de estado de requerimiento (datos pedidos o asesoria financiamiento)
         if (filters.status === 'datos_pedidos') {
-            let reqQuery = supabase.from('datos_solicitados_clientes').select('lead_id');
-            if (filters.requestStatus && filters.requestStatus !== 'all') {
-                reqQuery = reqQuery.eq('estado', filters.requestStatus);
+            const buckets = await fetchDatosLeadBuckets(supabase, filters.assignedTo || 'all');
+            let ids: number[] = [...buckets.all];
+            if (filters.requestStatus === 'pendiente') ids = [...buckets.pendiente];
+            else if (filters.requestStatus === 'en_proceso') ids = [...buckets.en_proceso];
+            else if (filters.requestStatus === 'resuelto') ids = [...buckets.resuelto];
+            if (filters.asesoriaGestion && filters.asesoriaGestion !== 'all') {
+                const wanted = new Set(leadIdsForDatosGestion(buckets, filters.asesoriaGestion));
+                ids = ids.filter((id) => wanted.has(id));
             }
-            const { data: reqData } = await reqQuery;
-            const reqIds: number[] = (reqData || []).map((r: any) => r.lead_id as number);
-            idFilters.push(reqIds.length > 0 ? [...new Set<number>(reqIds)] : [-1]);
+            idFilters.push(ids.length > 0 ? ids : [-1]);
         }
 
         if (filters.status === 'asesoria_financiamiento') {
@@ -1138,48 +1141,82 @@ const leadIdsForAsesoriaGestion = (
     return [...buckets.all];
 };
 
+const notesFilled = (value: string | null | undefined) => Boolean(value && String(value).trim());
+
+type DatosLeadBuckets = {
+    all: Set<number>;
+    filled: Set<number>;
+    started: Set<number>;
+    pendiente: Set<number>;
+    en_proceso: Set<number>;
+    resuelto: Set<number>;
+};
+
+const emptyDatosLeadBuckets = (): DatosLeadBuckets => ({
+    all: new Set(),
+    filled: new Set(),
+    started: new Set(),
+    pendiente: new Set(),
+    en_proceso: new Set(),
+    resuelto: new Set(),
+});
+
+const fetchDatosLeadBuckets = async (
+    supabase: any,
+    assignedTo: string
+): Promise<DatosLeadBuckets> => {
+    let q = supabase
+        .from("datos_solicitados_clientes")
+        .select("lead_id, estado, notas_vendedor, leads!inner(assigned_to)");
+    if (assignedTo && assignedTo !== "all") {
+        q = q.eq("leads.assigned_to", assignedTo);
+    }
+    const { data, error } = await q;
+    if (error) {
+        console.warn("fetchDatosLeadBuckets:", error.message || error);
+        return emptyDatosLeadBuckets();
+    }
+
+    const perLead = new Map<number, { total: number; withNotes: number; estados: Set<string> }>();
+    for (const row of data || []) {
+        const leadId = Number(row.lead_id);
+        if (!Number.isFinite(leadId)) continue;
+        if (!perLead.has(leadId)) perLead.set(leadId, { total: 0, withNotes: 0, estados: new Set() });
+        const info = perLead.get(leadId)!;
+        info.total += 1;
+        if (notesFilled(row.notas_vendedor)) info.withNotes += 1;
+        info.estados.add(row.estado || "pendiente");
+    }
+
+    const buckets = emptyDatosLeadBuckets();
+    for (const [leadId, info] of perLead) {
+        buckets.all.add(leadId);
+        if (info.withNotes > 0) buckets.started.add(leadId);
+        if (info.withNotes === info.total && info.withNotes > 0) buckets.filled.add(leadId);
+        if (info.estados.has("pendiente")) buckets.pendiente.add(leadId);
+        if (info.estados.has("en_proceso")) buckets.en_proceso.add(leadId);
+        if (info.estados.has("resuelto")) buckets.resuelto.add(leadId);
+    }
+    return buckets;
+};
+
+const leadIdsForDatosGestion = (
+    buckets: DatosLeadBuckets,
+    gestion: string
+): number[] => {
+    if (gestion === "llenos") return [...buckets.filled];
+    if (gestion === "incompletos") return [...buckets.started].filter((id) => !buckets.filled.has(id));
+    if (gestion === "vacios") return [...buckets.all].filter((id) => !buckets.started.has(id));
+    return [...buckets.all];
+};
+
 // --- ALERTAS DE PENDIENTES ---
 export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
     try {
-        let datosQuery = supabase
-            .from('datos_solicitados_clientes')
-            .select('estado, lead_id, leads!inner(assigned_to)');
-
-        if (assignedTo && assignedTo !== 'all') {
-            datosQuery = datosQuery.eq('leads.assigned_to', assignedTo);
-        }
-
-        const [datosRes, asesoriaBuckets] = await Promise.all([
-            datosQuery,
+        const [datosBuckets, asesoriaBuckets] = await Promise.all([
+            fetchDatosLeadBuckets(supabase, assignedTo),
             fetchAsesoriaLeadBuckets(supabase, assignedTo),
         ]);
-
-        const processStats = (data: any[]) => {
-            const stats = { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 };
-            if (!data) return stats;
-
-            const leadsByState = {
-                pendiente: new Set(),
-                en_proceso: new Set(),
-                resuelto: new Set(),
-                all: new Set()
-            };
-
-            data.forEach(item => {
-                const est = item.estado || 'pendiente';
-                leadsByState.all.add(item.lead_id);
-                if (est === 'pendiente') leadsByState.pendiente.add(item.lead_id);
-                if (est === 'en_proceso') leadsByState.en_proceso.add(item.lead_id);
-                if (est === 'resuelto') leadsByState.resuelto.add(item.lead_id);
-            });
-
-            stats.pendiente = leadsByState.pendiente.size;
-            stats.en_proceso = leadsByState.en_proceso.size;
-            stats.resuelto = leadsByState.resuelto.size;
-            stats.total = leadsByState.all.size;
-
-            return stats;
-        };
 
         const fichaOf = (ids: Set<number>) => {
             let llenos = 0;
@@ -1199,7 +1236,15 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
         const fichaAll = fichaOf(asesoriaBuckets.all);
 
         return {
-            datosPedidos: processStats(datosRes.data),
+            datosPedidos: {
+                pendiente: datosBuckets.pendiente.size,
+                en_proceso: datosBuckets.en_proceso.size,
+                resuelto: datosBuckets.resuelto.size,
+                total: datosBuckets.all.size,
+                llenos: datosBuckets.filled.size,
+                incompletos: Math.max(0, datosBuckets.started.size - datosBuckets.filled.size),
+                vacios: Math.max(0, datosBuckets.all.size - datosBuckets.started.size),
+            },
             asesoria: {
                 pendiente: asesoriaBuckets.pendiente.size,
                 en_proceso: asesoriaBuckets.en_proceso.size,
@@ -1220,7 +1265,7 @@ export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
         console.error("Error fetching request stats:", error);
         const emptyFicha = { llenos: 0, incompletos: 0, vacios: 0, total: 0 };
         return { 
-            datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
+            datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 }, 
             asesoria: {
                 pendiente: 0,
                 en_proceso: 0,

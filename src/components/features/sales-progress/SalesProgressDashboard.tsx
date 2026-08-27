@@ -885,7 +885,9 @@ export function SalesProgressDashboard() {
   const semanaIngresados = num(data?.semana_ingresados);
   const semanaContestados = num(data?.semana_contestados);
   const faltanteQuedados = num(data?.faltante_quedados);
+  const faltanteTotal = num(data?.faltante_total);
   const asesoriaQuedados = num(data?.asesoria_quedados);
+  const asesoriaTotal = num(data?.asesoria_total);
   const pedidosQuedados = num(data?.pedidos_quedados);
   const faltanteSinSalir = num(data?.faltante_sin_salir);
   const asesoriaSinSalir = num(data?.asesoria_sin_salir);
@@ -952,7 +954,7 @@ export function SalesProgressDashboard() {
                 : selectedCategory === 'quedados_faltante'
                   ? 'Quedados · info. faltante'
                   : selectedCategory === 'quedados_asesoria'
-                    ? 'Quedados · financiamiento'
+                    ? 'Quedados · financiamiento sin ficha'
                     : selectedCategory === 'quedados_pedidos'
                       ? 'Quedados · pedidos'
                       : selectedCategory === 'faltante_sin_salir'
@@ -1208,7 +1210,7 @@ export function SalesProgressDashboard() {
           <section className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-4">
             <div className="flex items-baseline justify-between gap-3 px-1">
               <p className="text-sm font-semibold text-slate-900">En qué nos quedamos</p>
-              <p className="text-xs text-slate-400">Montón abierto, no lo de hoy</p>
+              <p className="text-xs text-slate-400">Sin respuesta / sin ficha, como en Leads</p>
             </div>
             <div className="mt-3 grid sm:grid-cols-3 gap-2.5">
               {(
@@ -1217,6 +1219,12 @@ export function SalesProgressDashboard() {
                     key: 'quedados_faltante',
                     label: 'Info. faltante',
                     count: faltanteQuedados,
+                    hint:
+                      faltanteQuedados === 0
+                        ? 'Ninguno sin respuesta'
+                        : faltanteTotal > 0
+                          ? `${faltanteQuedados} de ${faltanteTotal} sin respuesta · ver lista`
+                          : `${faltanteQuedados} sin respuesta · ver lista`,
                     Icon: ClipboardList,
                     tone: CATEGORY_TONE.datos_faltantes,
                   },
@@ -1224,6 +1232,12 @@ export function SalesProgressDashboard() {
                     key: 'quedados_asesoria',
                     label: 'Financiamiento',
                     count: asesoriaQuedados,
+                    hint:
+                      asesoriaQuedados === 0
+                        ? 'Ninguna sin ficha'
+                        : asesoriaTotal > 0
+                          ? `${asesoriaQuedados} de ${asesoriaTotal} pendientes · ver lista`
+                          : `${asesoriaQuedados} pendientes · ver lista`,
                     Icon: Landmark,
                     tone: CATEGORY_TONE.asesoria_advanced,
                   },
@@ -1231,6 +1245,10 @@ export function SalesProgressDashboard() {
                     key: 'quedados_pedidos',
                     label: 'Pedidos',
                     count: pedidosQuedados,
+                    hint:
+                      pedidosQuedados === 0
+                        ? 'Ninguno abierto'
+                        : `${pedidosQuedados} abiertos · ver lista`,
                     Icon: ShoppingCart,
                     tone: CATEGORY_TONE.quedados_pedidos,
                   },
@@ -1256,7 +1274,7 @@ export function SalesProgressDashboard() {
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-slate-900">{cola.label}</span>
                       <span className="block text-xs text-slate-500 mt-0.5">
-                        {cola.count === 0 ? 'Ninguno abierto' : `${cola.count} abiertos · ver lista`}
+                        {cola.hint}
                       </span>
                     </span>
                     <ChevronRight

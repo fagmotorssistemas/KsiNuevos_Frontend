@@ -10,7 +10,9 @@ import {
 type BossStockRow = {
   vendedor_id: string;
   faltante_quedados?: number;
+  faltante_total?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
@@ -24,7 +26,9 @@ type BossStockRow = {
 
 type BossStockPayload = {
   faltante_quedados?: number;
+  faltante_total?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
@@ -48,7 +52,9 @@ function mergeBossStock(
   return {
     ...payload,
     faltante_quedados: Number(stock?.faltante_quedados ?? 0) || 0,
+    faltante_total: Number(stock?.faltante_total ?? 0) || 0,
     asesoria_quedados: Number(stock?.asesoria_quedados ?? 0) || 0,
+    asesoria_total: Number(stock?.asesoria_total ?? 0) || 0,
     pedidos_quedados: Number(stock?.pedidos_quedados ?? 0) || 0,
     faltante_sin_salir: Number(stock?.faltante_sin_salir ?? 0) || 0,
     asesoria_sin_salir: Number(stock?.asesoria_sin_salir ?? 0) || 0,

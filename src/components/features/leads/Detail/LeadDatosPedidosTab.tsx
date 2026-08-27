@@ -1,6 +1,6 @@
 // src/components/LeadDatosPedidosTab.tsx
-import { useState } from 'react';
-import { FileQuestion, Save, MessageSquareText } from "lucide-react";
+import { useRef, useState } from 'react';
+import { CircleAlert, FileQuestion, Save, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 import { useLeadRequests } from '@/hooks/useLeadRequests';
 import { REQUEST_STATUS_CONFIG, RequestStatus, ClientRequestRow } from '@/types/requests.types';
@@ -57,14 +57,36 @@ function RequestCard({
 }) {
   const [status, setStatus] = useState<RequestStatus>(request.estado);
   const [notes, setNotes] = useState(request.notas_vendedor || '');
-  const [dirty, setDirty] = useState(false); // Para saber si hay cambios sin guardar
+  const [dirty, setDirty] = useState(false);
+  const [requireNotes, setRequireNotes] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  const notesFilled = notes.trim().length > 0;
+
+  const blockAdvancedStatus = (s: RequestStatus) => {
+    setRequireNotes(true);
+    requestAnimationFrame(() => {
+      notesRef.current?.focus();
+      notesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    toast.error(`No se puede marcar ${REQUEST_STATUS_CONFIG[s].label}`, {
+      description: 'Escribe la respuesta o las notas internas.',
+      duration: 5000,
+    });
+  };
 
   const handleSave = async () => {
-    if ((status === 'en_proceso' || status === 'resuelto') && !notes.trim()) {
-      toast.error('Escribe la respuesta. Solo cambiar el estado no cuenta como contestada.');
+    if ((status === 'en_proceso' || status === 'resuelto') && !notesFilled) {
+      blockAdvancedStatus(status);
       return;
     }
-    await onSave(request.id, status, notes);
+    const res = await onSave(request.id, status, notes);
+    if (res?.success === false) {
+      if (res.error === 'notes_required') blockAdvancedStatus(status);
+      else toast.error('No se pudo guardar. Completa la respuesta e intenta de nuevo.');
+      return;
+    }
+    setRequireNotes(false);
     setDirty(false);
   };
 
@@ -100,11 +122,23 @@ function RequestCard({
         {/* Selector de Estado */}
         <div>
             <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Estado de la solicitud</label>
+            <p className="text-[10px] text-slate-400 -mt-0.5 mb-1.5">
+              En proceso y Resuelto no se pueden marcar hasta escribir la respuesta.
+            </p>
             <div className="flex gap-2">
                 {(Object.keys(REQUEST_STATUS_CONFIG) as RequestStatus[]).map((s) => (
                     <button
                         key={s}
-                        onClick={() => { setStatus(s); setDirty(true); }}
+                        type="button"
+                        onClick={() => {
+                          if (s === status) return;
+                          if ((s === 'en_proceso' || s === 'resuelto') && !notesFilled) {
+                            blockAdvancedStatus(s);
+                            return;
+                          }
+                          setStatus(s);
+                          setDirty(true);
+                        }}
                         className={`
                             px-3 py-1.5 rounded text-xs font-medium border transition-all
                             ${status === s 
@@ -116,6 +150,21 @@ function RequestCard({
                     </button>
                 ))}
             </div>
+            {requireNotes && !notesFilled && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-white p-3 shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <div className="mt-0.5 shrink-0 rounded-lg bg-red-100 p-1.5 text-red-600">
+                    <CircleAlert className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-red-800">Falta la respuesta</p>
+                    <p className="mt-0.5 text-[11px] text-red-600/90">
+                      Escribe abajo la respuesta dada o las notas internas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
         </div>
 
         {/* Text Area de Notas */}
@@ -125,11 +174,16 @@ function RequestCard({
               Hay que contestar aquí. El estado solo no cuenta.
             </p>
             <textarea
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
+                ref={notesRef}
+                className={`w-full text-xs p-2.5 border rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none resize-none placeholder:text-slate-400 ${
+                  requireNotes && !notesFilled
+                    ? 'border-red-300 bg-red-50/80 ring-1 ring-red-200'
+                    : 'border-slate-200 bg-slate-50'
+                }`}
                 rows={2}
                 placeholder="Escribe aquí la respuesta dada o notas internas..."
                 value={notes}
-                onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
+                onChange={(e) => { setNotes(e.target.value); setDirty(true); if (e.target.value.trim()) setRequireNotes(false); }}
             />
         </div>
 
