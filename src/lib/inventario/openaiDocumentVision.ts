@@ -5,6 +5,7 @@ import {
   applyDocumentAiBusinessRules,
   isVagueDiscrepancyText,
   type ContrasteAiContext,
+  type VehicleRecordContext,
 } from '@/lib/inventario/documentAiRules'
 import type { VehicleDocType } from '@/types/vehicleLegal.types'
 
@@ -13,7 +14,11 @@ export type DocumentAiQuality = 'ok' | 'blurry' | 'cropped' | 'wrong_document' |
 export type DocumentAiExtracted = {
   plate_read?: string | null
   owner?: string | null
+  place?: string | null
+  country?: string | null
+  issue_date?: string | null
   expiry?: string | null
+  registration_year?: string | null
   fields?: { label: string; value: string }[]
 }
 
@@ -22,6 +27,10 @@ export type DocumentAiAnalysis = {
   document_kind_guess: string | null
   matches_expected_type: boolean | null
   matches_plate: boolean | null
+  matches_owner: boolean | null
+  matches_place: boolean | null
+  matches_country: boolean | null
+  matches_dates: boolean | null
   plate_read: string | null
   quality: DocumentAiQuality
   extracted: DocumentAiExtracted
@@ -75,6 +84,7 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
       `REGLA DE VIGENCIA: la matrícula solo tiene ${MATRICULA_VALIDITY_YEARS} años desde su fecha de emisión / última matrícula. Si ya pasó, ESTÁ EXPIRADA (matricula_expired=true y un issue).`,
       'REGLA SRI: si EcuadorAPI tiene matrícula pendiente y en esta foto no aparece ese monto o el papel parece al día, contraste_mismatch=true y un issue claro.',
       'REGLA DE CARGA: subir esta foto a "Matrícula vigente" significa que está al día: no vencida, sin pendientes SRI y sin multas. Si no cumple, photo_should_not_be_uploaded=true y cada issue DEBE nombrar el hecho exacto (fecha de vencimiento, monto SRI $, cantidad de citaciones). PROHIBIDO decir "hay discrepancias".',
+      'También extrae propietario, lugar de matrícula y país si aparecen, y contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA.',
     ]
   }
   if (docType === 'revision_tecnica') {
@@ -92,10 +102,20 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
       'REGLA DE CARGA: si el informe muestra deudas o citaciones pendientes, photo_should_not_be_uploaded=true y nombra cuántas citaciones y el valor. PROHIBIDO decir "hay discrepancias".',
     ]
   }
+  if (docType === 'poder_contrato') {
+    return [
+      `Analiza esta foto como poder / contrato (${docLabel}).`,
+      'Extrae TODAS las partes: poderdante/propietario, apoderado, placa, lugar de otorgamiento, país, fechas (otorgamiento y las de matrícula si aparecen).',
+      'Si hay propietario, lugar, país o fechas de matrícula/registro, contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA. Si el dato aparece en la foto y no coincide, matches_owner/matches_place/matches_country/matches_dates=false y un issue concreto.',
+      'Si un dato no se ve en la foto, el matches_* de ese dato debe ser null (no inventes desajuste).',
+      'REGLA DE CARGA: si la placa, el propietario u otros datos visibles no son de este vehículo, photo_should_not_be_uploaded=true. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
   return [
     `Analiza ÚNICAMENTE este archivo como: ${docLabel} (${docType}).`,
-    'Céntrate en lo que se ve en ESTA foto: texto, fechas, partes, firmas, cláusulas, placas si aparecen.',
-    'REGLA DE CARGA: si se subió una foto a esta sección, se asume que el documento es válido y corresponde. Si no, photo_should_not_be_uploaded=true y explica qué se ve mal (ilegible, recortada, otro tipo de papel). PROHIBIDO decir "hay discrepancias".',
+    'Céntrate en lo que se ve en ESTA foto: texto, fechas, partes, firmas, cláusulas, placas, propietario, lugar y país si aparecen.',
+    'Si el documento muestra propietario, lugar, país o fechas de matrícula/registro, contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA. Si no se ven, matches_owner/place/country/dates=null.',
+    'REGLA DE CARGA: si se subió una foto a esta sección, se asume que el documento es válido y corresponde. Si no, photo_should_not_be_uploaded=true y explica qué se ve mal (ilegible, recortada, otro tipo de papel, otro propietario o placa). PROHIBIDO decir "hay discrepancias".',
     'PROHIBIDO: decir que la foto no es una matrícula, que falta la matrícula, o evaluar vigencia de 4 años / pendientes SRI de matrícula.',
     'quality=wrong_document solo si el archivo está en blanco, borroso total o no es un documento (p. ej. un paisaje). Nunca porque no sea matrícula.',
     'matricula_expired debe ser null. contraste_mismatch debe ser null salvo que esta foto muestre un dato que contradiga claramente el mismo tipo de documento.',
@@ -111,6 +131,7 @@ function buildPrompt(input: {
   docLabel: string
   placa: string | null
   contraste: ContrasteAiContext | null
+  vehicleRecord: VehicleRecordContext | null
 }): string {
   const plate = input.placa ? normalizePlate(input.placa) : null
   const today = new Intl.DateTimeFormat('es-EC', {
@@ -132,9 +153,13 @@ function buildPrompt(input: {
     '  "document_kind_guess": "qué documento parece (del tipo que estás analizando)",',
     '  "matches_expected_type": true | false | null,',
     '  "matches_plate": true | false | null,',
+    '  "matches_owner": true | false | null,',
+    '  "matches_place": true | false | null,',
+    '  "matches_country": true | false | null,',
+    '  "matches_dates": true | false | null,',
     '  "plate_read": "placa leída o null",',
     '  "quality": "ok" | "blurry" | "cropped" | "wrong_document" | "unreadable",',
-    '  "extracted": { "owner": string|null, "expiry": string|null, "fields": [{"label","value"}] },',
+    '  "extracted": { "owner": string|null, "place": string|null, "country": string|null, "issue_date": string|null, "expiry": string|null, "registration_year": string|null, "fields": [{"label","value"}] },',
     '  "issues": ["cada ítem debe nombrar el problema concreto: fecha, monto, cita, calidad de la foto. Nunca digas solo discrepancias"],',
     '  "matricula_expired": true | false | null,',
     '  "vigencia_hasta": "fecha dd/mm/aaaa o null",',
@@ -146,8 +171,13 @@ function buildPrompt(input: {
     plate
       ? `Placa del inventario (contexto): ${plate}. Si en la foto hay placa, indica si coincide. Si no hay placa, matches_plate=null.`
       : 'No hay placa de inventario. matches_plate debe ser null.',
+    'Si en la foto hay propietario, lugar, país o fechas de matrícula/registro, extrae esos campos y marca matches_* (true/false). Si el dato no aparece, matches_*=null. No compares la fecha de firma de un poder con el año del vehículo; sí compara fechas de matrícula, emisión o registro.',
     'No inventes campos ilegibles. No des consejos legales. No menciones que eres un modelo de IA.',
   ]
+
+  if (input.vehicleRecord) {
+    lines.push(input.vehicleRecord.snapshotText)
+  }
 
   if (attachContraste && input.contraste) {
     lines.push('--- DATOS ECUADORAPI SOLO PARA ESTE TIPO DE DOCUMENTO ---', input.contraste.snapshotText)
@@ -165,6 +195,10 @@ function asQuality(value: unknown): DocumentAiQuality {
 function asBool(value: unknown): boolean | null {
   if (value === true || value === false) return value
   return null
+}
+
+function asStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
 function parseAnalysis(raw: string): DocumentAiAnalysis {
@@ -199,11 +233,19 @@ function parseAnalysis(raw: string): DocumentAiAnalysis {
     document_kind_guess: typeof parsed.document_kind_guess === 'string' ? parsed.document_kind_guess : null,
     matches_expected_type: asBool(parsed.matches_expected_type),
     matches_plate: asBool(parsed.matches_plate),
+    matches_owner: asBool(parsed.matches_owner),
+    matches_place: asBool(parsed.matches_place),
+    matches_country: asBool(parsed.matches_country),
+    matches_dates: asBool(parsed.matches_dates),
     plate_read: typeof parsed.plate_read === 'string' ? parsed.plate_read : null,
     quality: asQuality(parsed.quality),
     extracted: {
-      owner: typeof extractedRaw.owner === 'string' ? extractedRaw.owner : null,
-      expiry: typeof extractedRaw.expiry === 'string' ? extractedRaw.expiry : null,
+      owner: asStringOrNull(extractedRaw.owner),
+      place: asStringOrNull(extractedRaw.place),
+      country: asStringOrNull(extractedRaw.country),
+      issue_date: asStringOrNull(extractedRaw.issue_date),
+      expiry: asStringOrNull(extractedRaw.expiry),
+      registration_year: asStringOrNull(extractedRaw.registration_year),
       plate_read: typeof parsed.plate_read === 'string' ? parsed.plate_read : null,
       fields,
     },
@@ -228,6 +270,7 @@ export async function analyzeDocumentFileWithOpenAI(input: {
   docType: string
   placa: string | null
   contraste: ContrasteAiContext | null
+  vehicleRecord?: VehicleRecordContext | null
 }): Promise<{ analysis: DocumentAiAnalysis; model: string; rawText: string }> {
   const mime = mimeFromName(input.fileName, input.mime)
   assertAnalyzableFile(input.bytes, mime)
@@ -238,6 +281,7 @@ export async function analyzeDocumentFileWithOpenAI(input: {
     docLabel: catalog?.label ?? input.docType,
     placa: input.placa,
     contraste: input.contraste,
+    vehicleRecord: input.vehicleRecord ?? null,
   })
 
   const b64 = Buffer.from(input.bytes).toString('base64')
@@ -278,6 +322,7 @@ export async function analyzeDocumentFileWithOpenAI(input: {
   const analysis = applyDocumentAiBusinessRules(parseAnalysis(rawText), {
     docType: input.docType,
     contraste: input.contraste,
+    vehicleRecord: input.vehicleRecord ?? null,
   })
   return { analysis, model, rawText }
 }

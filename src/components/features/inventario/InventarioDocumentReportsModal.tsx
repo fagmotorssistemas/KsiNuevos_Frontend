@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect, type ReactNode } from "react";
 import {
     Search,
     ChevronsUpDown,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Loader2,
     Car,
 } from "lucide-react";
@@ -23,7 +24,6 @@ import {
     getCatalogDocumentRow,
     getFinesCheckStatus,
     listDocumentFiles,
-    DOCUMENT_SECTION_TITLES,
     isDocumentCatalogItemVisible,
     type ChecklistCellStatus,
 } from "@/lib/inventario/vehicleLegalUi";
@@ -43,7 +43,7 @@ import type { VehicleDetailTab } from "./VehicleDetailModal";
 
 type ReportView = "active" | "baja";
 
-type SortKey = "vehicle" | "plate" | "year" | "progress" | "contraste";
+type SortKey = "vehicle" | "plate" | "year" | "progress" | "contraste" | "alerts";
 
 interface InventarioDocumentReportProps {
     vehiculos: VehiculoInventario[];
@@ -78,8 +78,7 @@ function SortableHeader({
     const active = current === sortKey;
     return (
         <th
-            className={`px-3 py-2 text-left ${stickyLeft ? "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]" : ""} ${className}`}
-            rowSpan={2}
+            className={`px-3 py-3 text-left ${stickyLeft ? "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]" : ""} ${className}`}
             title={title}
         >
             <button
@@ -109,8 +108,18 @@ function YesNoCell({
 }) {
     if (status === "na") {
         return (
-            <span className="text-[11px] text-slate-300" title={title}>
+            <span className="text-[11px] text-slate-400" title={title}>
                 —
+            </span>
+        );
+    }
+    if (status === "warn") {
+        return (
+            <span
+                title={title}
+                className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-amber-50 text-amber-800 border-amber-200"
+            >
+                Rev.
             </span>
         );
     }
@@ -245,6 +254,189 @@ function documentCellStatus(
     return getDocumentCheckStatus(doc, catalog);
 }
 
+type ChecklistEntry = VehicleLegalChecklistBulk["byPlate"] extends Map<string, infer V> ? V : never;
+
+function documentaryStatusBadge(pct: number | null) {
+    if (pct == null) {
+        return {
+            text: "Sin información",
+            className: "bg-slate-50 text-slate-500 border-slate-200",
+        };
+    }
+    if (pct >= 100) {
+        return {
+            text: `Completo · ${pct}%`,
+            className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        };
+    }
+    if (pct >= 50) {
+        return {
+            text: `En proceso · ${pct}%`,
+            className: "bg-amber-50 text-amber-800 border-amber-200",
+        };
+    }
+    return {
+        text: `Revisión · ${pct}%`,
+        className: "bg-red-50 text-red-700 border-red-200",
+    };
+}
+
+function DetailFieldCard({
+    label,
+    children,
+}: {
+    label: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 min-w-0">
+            <p className="text-[10px] font-medium text-slate-500 leading-tight mb-1.5">{label}</p>
+            <div className="flex items-center min-h-[22px]">{children}</div>
+        </div>
+    );
+}
+
+function DocumentDetailPanel({
+    vehiculo,
+    entry,
+    linked,
+    pct,
+    pending,
+    consultedAt,
+    vehicleLabel,
+    onPreview,
+    onManage,
+}: {
+    vehiculo: VehiculoInventario;
+    entry: ChecklistEntry | undefined;
+    linked: boolean;
+    pct: number | null;
+    pending: number;
+    consultedAt: string | undefined;
+    vehicleLabel: string;
+    onPreview: (preview: FilePreviewState) => void;
+    onManage?: () => void;
+}) {
+    const title = [vehiculo.marca, vehiculo.modelo].filter(Boolean).join(" ").trim() || "Vehículo";
+    return (
+        <div className="px-4 py-4 md:px-5 md:py-5 bg-slate-50/80 border-t border-blue-100/80">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
+                <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight leading-snug">
+                        {title}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                        Placa {vehiculo.placa} · Revisión documental
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
+                        <span className="tabular-nums font-semibold text-slate-700">
+                            {pct == null ? "—" : `${pct}%`} de la revisión completada
+                        </span>
+                        <span className="text-slate-300">·</span>
+                        <span>
+                            {pending === 0
+                                ? "Sin pendientes por revisar"
+                                : `${pending} pendiente${pending === 1 ? "" : "s"} por revisar`}
+                        </span>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onManage}
+                    disabled={!onManage}
+                    className="inline-flex shrink-0 items-center self-start rounded-md bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                    Gestionar documentación
+                </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                <DetailFieldCard label="Año">
+                    <span className="text-[13px] font-semibold text-slate-700 tabular-nums">
+                        {vehiculo.anioModelo || "—"}
+                    </span>
+                </DetailFieldCard>
+                <DetailFieldCard label="Estado de validación mediante API">
+                    {consultedAt ? (
+                        <span
+                            title={`Última consulta: ${formatContrasteConsultedPretty(consultedAt)}`}
+                            className="inline-flex flex-col items-start gap-0.5"
+                        >
+                            <span className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                                Sí
+                            </span>
+                            <span className="text-[10px] text-slate-400 leading-none">
+                                {formatContrasteRelative(consultedAt)}
+                            </span>
+                        </span>
+                    ) : (
+                        <span
+                            title="Aún no hay consulta EcuadorAPI guardada para esta placa"
+                            className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-500 border-slate-200"
+                        >
+                            No
+                        </span>
+                    )}
+                </DetailFieldCard>
+                {LEGAL_COLUMNS.map((col) => {
+                    const doc = entry ? getCatalogDocumentRow(entry.documents, col.docType) : undefined;
+                    const applies =
+                        linked && entry && isDocumentCatalogItemVisible(col.docType, entry.documents);
+                    const status = documentCellStatus(linked, entry, col);
+                    const catalogLabel =
+                        applies
+                            ? col.label
+                            : col.docType === "levantamiento_prendas"
+                              ? "No aplica — sin prenda industrial"
+                              : col.label;
+                    return (
+                        <DetailFieldCard key={col.docType} label={col.label}>
+                            <DocumentYesNoCell
+                                doc={doc}
+                                catalogLabel={catalogLabel}
+                                status={status}
+                                vehicleLabel={vehicleLabel}
+                                onPreview={onPreview}
+                            />
+                        </DetailFieldCard>
+                    );
+                })}
+                {PHYSICAL_COLUMNS.map((col) => {
+                    const doc = entry ? getCatalogDocumentRow(entry.documents, col.docType) : undefined;
+                    const status = documentCellStatus(linked, entry, col);
+                    return (
+                        <DetailFieldCard key={col.docType} label={col.label}>
+                            <DocumentYesNoCell
+                                doc={doc}
+                                catalogLabel={col.label}
+                                status={status}
+                                vehicleLabel={vehicleLabel}
+                                onPreview={onPreview}
+                            />
+                        </DetailFieldCard>
+                    );
+                })}
+                <DetailFieldCard label="Multas">
+                    <YesNoCell
+                        status={
+                            linked
+                                ? getFinesCheckStatus(entry?.pendingFinesCount ?? 0, entry?.totalFinesCount ?? 0)
+                                : "na"
+                        }
+                        title={
+                            entry?.pendingFinesCount
+                                ? `${entry.pendingFinesCount} multa(s) pendiente(s)`
+                                : entry?.totalFinesCount
+                                  ? "Multas revisadas — sin pendientes"
+                                  : "Multas no revisadas"
+                        }
+                    />
+                </DetailFieldCard>
+            </div>
+        </div>
+    );
+}
+
 export function InventarioDocumentReport({
     vehiculos,
     onOpenVehicle,
@@ -261,6 +453,7 @@ export function InventarioDocumentReport({
     const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, string>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
+    const [expandedProId, setExpandedProId] = useState<string | null>(null);
 
     const plateKey = useMemo(
         () => vehiculos.map((v) => normalizePlate(v.placa)).sort().join("|"),
@@ -358,6 +551,16 @@ export function InventarioDocumentReport({
                         const pb = eb ? countComplete(eb).done / Math.max(countComplete(eb).total, 1) : 0;
                         return (pa - pb) * dir;
                     }
+                    case "alerts": {
+                        if (!checklistData) return 0;
+                        const ea = checklistData.byPlate.get(normalizePlate(a.placa));
+                        const eb = checklistData.byPlate.get(normalizePlate(b.placa));
+                        const ca = ea ? countComplete(ea) : { done: 0, total: 0 };
+                        const cb = eb ? countComplete(eb) : { done: 0, total: 0 };
+                        const pa = Math.max(ca.total - ca.done, 0);
+                        const pb = Math.max(cb.total - cb.done, 0);
+                        return (pa - pb) * dir;
+                    }
                     case "contraste": {
                         const da = contrasteByPlate.get(normalizePlate(a.placa)) ?? "";
                         const db = contrasteByPlate.get(normalizePlate(b.placa)) ?? "";
@@ -377,6 +580,7 @@ export function InventarioDocumentReport({
     const handleViewChange = (view: ReportView) => {
         setActiveView(view);
         setPage(1);
+        setExpandedProId(null);
     };
 
     const totalCount = filteredVehiculos.length;
@@ -391,7 +595,7 @@ export function InventarioDocumentReport({
     const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
     const rangeEnd = Math.min(safePage * rowsPerPage, totalCount);
 
-    const totalCols = 5 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + 2;
+    const totalCols = 5;
 
     return (
         <>
@@ -437,6 +641,7 @@ export function InventarioDocumentReport({
                         onChange={(e) => {
                             setSearch(e.target.value);
                             setPage(1);
+                            setExpandedProId(null);
                         }}
                         className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                     />
@@ -451,7 +656,7 @@ export function InventarioDocumentReport({
             )}
 
             <div className="overflow-x-auto">
-                    <table className="min-w-max w-full text-xs border-separate border-spacing-0">
+                    <table className="w-full text-xs border-separate border-spacing-0">
                         <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <SortableHeader
@@ -460,8 +665,7 @@ export function InventarioDocumentReport({
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    stickyLeft
-                                    className="min-w-[240px]"
+                                    className="min-w-[220px]"
                                 />
                                 <SortableHeader
                                     label="Placa"
@@ -469,79 +673,30 @@ export function InventarioDocumentReport({
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    className="min-w-[88px]"
+                                    className="min-w-[96px]"
                                 />
                                 <SortableHeader
-                                    label="Año"
-                                    sortKey="year"
-                                    current={sortKey}
-                                    asc={sortAsc}
-                                    onSort={handleSort}
-                                    className="min-w-[56px]"
-                                />
-                                <SortableHeader
-                                    label="%"
+                                    label="Estado documental"
                                     sortKey="progress"
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    className="min-w-[48px]"
+                                    className="min-w-[140px]"
                                 />
                                 <SortableHeader
-                                    label="API"
-                                    sortKey="contraste"
+                                    label="Alertas"
+                                    sortKey="alerts"
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    className="min-w-[92px]"
-                                    title="Si ya se consultó EcuadorAPI (contraste oficial) para esta placa"
+                                    className="min-w-[120px]"
                                 />
-                                <th
-                                    colSpan={LEGAL_COLUMNS.length}
-                                    className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
-                                >
-                                    {DOCUMENT_SECTION_TITLES.legal}
-                                </th>
-                                <th
-                                    colSpan={PHYSICAL_COLUMNS.length}
-                                    className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
-                                >
-                                    {DOCUMENT_SECTION_TITLES.physical}
-                                </th>
-                                <th
-                                    rowSpan={2}
-                                    className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase border-l border-slate-200 min-w-[80px] whitespace-normal leading-snug align-bottom"
-                                    title="¿Multas al día? (Sí = revisado sin pendientes)"
-                                >
-                                    Multas
-                                </th>
-                                <th
-                                    rowSpan={2}
-                                    className="px-3 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase border-l border-slate-200 min-w-[88px] whitespace-nowrap"
-                                >
+                                <th className="px-3 py-3 text-right text-[13px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">
                                     Acción
                                 </th>
                             </tr>
-                            <tr className="border-t border-slate-100">
-                                {LEGAL_COLUMNS.map((col) => (
-                                    <th
-                                        key={col.docType}
-                                        className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[120px] whitespace-normal leading-snug align-bottom"
-                                    >
-                                        {col.label}
-                                    </th>
-                                ))}
-                                {PHYSICAL_COLUMNS.map((col) => (
-                                    <th
-                                        key={col.docType}
-                                        className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[120px] whitespace-normal leading-snug align-bottom"
-                                    >
-                                        {col.label}
-                                    </th>
-                                ))}
-                            </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody>
                             {paginated.length > 0 ? (
                                 paginated.map((v) => {
                                     const entry = checklistData?.byPlate.get(normalizePlate(v.placa));
@@ -553,135 +708,86 @@ export function InventarioDocumentReport({
                                             : linked
                                               ? 0
                                               : null;
+                                    const pending =
+                                        progress.total > 0 ? Math.max(progress.total - progress.done, 0) : 0;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
                                     const consultedAt = contrasteByPlate.get(normalizePlate(v.placa));
+                                    const expanded = expandedProId === v.proId;
+                                    const statusBadge = documentaryStatusBadge(pct);
 
                                     return (
-                                        <tr
-                                            key={v.proId}
-                                            className="group hover:bg-blue-50/40 transition-colors border-b border-slate-100 last:border-0"
-                                        >
-                                            <td className="px-3 py-3 min-w-[240px] max-w-[280px] sticky left-0 z-[1] bg-white group-hover:bg-blue-50/40 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                                                <VehicleNameCell vehiculo={v} />
-                                            </td>
-                                            <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
-                                                {v.placa}
-                                            </td>
-                                            <td className="px-3 py-3 text-[13px] text-slate-600 tabular-nums whitespace-nowrap">
-                                                {v.anioModelo || "—"}
-                                            </td>
-                                            <td className="px-3 py-3 text-center whitespace-nowrap">
-                                                {pct == null ? (
-                                                    <span className="text-[11px] text-slate-300">—</span>
-                                                ) : (
+                                        <Fragment key={v.proId}>
+                                            <tr
+                                                className={`group border-b border-slate-100 transition-colors ${
+                                                    expanded
+                                                        ? "bg-blue-50/50 shadow-[inset_3px_0_0_0_rgba(59,130,246,0.35)]"
+                                                        : "hover:bg-blue-50/30 bg-white"
+                                                }`}
+                                            >
+                                                <td className={`px-3 py-3 min-w-[220px] max-w-[320px] ${expanded ? "bg-blue-50/50" : "bg-white group-hover:bg-blue-50/30"}`}>
+                                                    <VehicleNameCell vehiculo={v} />
+                                                </td>
+                                                <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
+                                                    {v.placa}
+                                                </td>
+                                                <td className="px-3 py-3 whitespace-nowrap">
                                                     <span
-                                                        className={`text-[11px] font-bold tabular-nums ${
-                                                            pct >= 80
-                                                                ? "text-emerald-600"
-                                                                : pct >= 50
-                                                                  ? "text-amber-600"
-                                                                  : "text-red-600"
-                                                        }`}
+                                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge.className}`}
                                                     >
-                                                        {pct}%
+                                                        {statusBadge.text}
                                                     </span>
-                                                )}
-                                            </td>
-                                            <td className="px-3 py-3 text-center whitespace-nowrap">
-                                                {consultedAt ? (
-                                                    <span
-                                                        title={`Última consulta: ${formatContrasteConsultedPretty(consultedAt)}`}
-                                                        className="inline-flex flex-col items-center gap-0.5"
-                                                    >
-                                                        <span className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-emerald-50 text-emerald-700 border-emerald-200">
-                                                            Sí
+                                                </td>
+                                                <td className="px-3 py-3 whitespace-nowrap">
+                                                    {!linked || progress.total === 0 ? (
+                                                        <span className="text-[11px] text-slate-400">—</span>
+                                                    ) : pending === 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700">
+                                                            <span aria-hidden>✓</span> Sin alertas
                                                         </span>
-                                                        <span className="text-[10px] text-slate-400 leading-none">
-                                                            {formatContrasteRelative(consultedAt)}
+                                                    ) : pending === 1 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-800">
+                                                            <span aria-hidden>⚠</span> 1 pendiente
                                                         </span>
-                                                    </span>
-                                                ) : (
-                                                    <span
-                                                        title="Aún no hay consulta EcuadorAPI guardada para esta placa"
-                                                        className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-slate-50 text-slate-500 border-slate-200"
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-red-700">
+                                                            <span aria-hidden>●</span> {pending} pendientes
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-3 text-right whitespace-nowrap">
+                                                    <button
+                                                        type="button"
+                                                        aria-expanded={expanded}
+                                                        onClick={() =>
+                                                            setExpandedProId(expanded ? null : v.proId)
+                                                        }
+                                                        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
                                                     >
-                                                        No
-                                                    </span>
-                                                )}
-                                            </td>
-                                            {LEGAL_COLUMNS.map((col) => {
-                                                const doc = entry
-                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
-                                                    : undefined;
-                                                const applies =
-                                                    linked &&
-                                                    entry &&
-                                                    isDocumentCatalogItemVisible(col.docType, entry.documents);
-                                                const status = documentCellStatus(linked, entry, col);
-                                                const title = applies
-                                                    ? col.label
-                                                    : col.docType === "levantamiento_prendas"
-                                                      ? "No aplica — sin prenda industrial"
-                                                      : col.label;
-                                                return (
-                                                    <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
-                                                        <DocumentYesNoCell
-                                                            doc={doc}
-                                                            catalogLabel={title}
-                                                            status={status}
+                                                        Ver detalle
+                                                        <ChevronDown
+                                                            className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                                                        />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {expanded ? (
+                                                <tr className="border-b border-slate-200">
+                                                    <td colSpan={totalCols} className="p-0">
+                                                        <DocumentDetailPanel
+                                                            vehiculo={v}
+                                                            entry={entry}
+                                                            linked={linked}
+                                                            pct={pct}
+                                                            pending={pending}
+                                                            consultedAt={consultedAt}
                                                             vehicleLabel={vehicleLabel}
                                                             onPreview={setFilePreview}
+                                                            onManage={() => onOpenVehicle?.(v, "documentos")}
                                                         />
                                                     </td>
-                                                );
-                                            })}
-                                            {PHYSICAL_COLUMNS.map((col) => {
-                                                const doc = entry
-                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
-                                                    : undefined;
-                                                const status = documentCellStatus(linked, entry, col);
-                                                return (
-                                                    <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
-                                                        <DocumentYesNoCell
-                                                            doc={doc}
-                                                            catalogLabel={col.label}
-                                                            status={status}
-                                                            vehicleLabel={vehicleLabel}
-                                                            onPreview={setFilePreview}
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-2 py-3 text-center border-l border-slate-50">
-                                                <YesNoCell
-                                                    status={
-                                                        linked
-                                                            ? getFinesCheckStatus(
-                                                                  entry?.pendingFinesCount ?? 0,
-                                                                  entry?.totalFinesCount ?? 0
-                                                              )
-                                                            : "na"
-                                                    }
-                                                    title={
-                                                        entry?.pendingFinesCount
-                                                            ? `${entry.pendingFinesCount} multa(s) pendiente(s)`
-                                                            : entry?.totalFinesCount
-                                                              ? "Multas revisadas — sin pendientes"
-                                                              : "Multas no revisadas"
-                                                    }
-                                                />
-                                            </td>
-                                            <td className="px-3 py-3 text-center border-l border-slate-50">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onOpenVehicle?.(v, "documentos")}
-                                                    disabled={!onOpenVehicle}
-                                                    className="inline-flex items-center rounded-md bg-blue-600 px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
-                                                >
-                                                    Gestionar
-                                                </button>
-                                            </td>
-                                        </tr>
+                                                </tr>
+                                            ) : null}
+                                        </Fragment>
                                     );
                                 })
                             ) : (
@@ -704,16 +810,22 @@ export function InventarioDocumentReport({
                             Completo / al día
                         </span>
                         <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                Rev.
+                            </span>
+                            Revisión parcial
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
                             <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
                                 No
                             </span>
-                            Falta, pendiente o no revisado
+                            Falta o requiere atención
                         </span>
                         <span className="inline-flex items-center gap-1.5">
                             <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                                No
+                                —
                             </span>
-                            Columna API: sin consulta EcuadorAPI
+                            Sin información / no aplica
                         </span>
                     </div>
 
@@ -723,6 +835,7 @@ export function InventarioDocumentReport({
                             onChange={(e) => {
                                 setRowsPerPage(Number(e.target.value));
                                 setPage(1);
+                                setExpandedProId(null);
                             }}
                             className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         >
@@ -735,7 +848,10 @@ export function InventarioDocumentReport({
                         <button
                             type="button"
                             disabled={safePage <= 1}
-                            onClick={() => setPage((p) => p - 1)}
+                            onClick={() => {
+                                setPage((p) => p - 1);
+                                setExpandedProId(null);
+                            }}
                             className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                         >
                             <ChevronLeft className="h-4 w-4" />
@@ -743,7 +859,10 @@ export function InventarioDocumentReport({
                         <button
                             type="button"
                             disabled={safePage >= totalPages}
-                            onClick={() => setPage((p) => p + 1)}
+                            onClick={() => {
+                                setPage((p) => p + 1);
+                                setExpandedProId(null);
+                            }}
                             className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                         >
                             <ChevronRight className="h-4 w-4" />

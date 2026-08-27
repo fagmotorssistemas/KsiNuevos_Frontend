@@ -25,7 +25,7 @@ export default function ReporteDocumentacionPage() {
                     </h1>
                     <p className="text-slate-500 text-sm mt-1 flex items-center gap-1.5">
                         <FileCheck2 className="h-3.5 w-3.5 text-blue-500" />
-                        Mismas columnas que la pestaña Documentos del detalle del vehículo
+                        Mismas fuentes de datos que la pestaña Documentos; el detalle se abre en la fila
                     </p>
                 </div>
                 <button

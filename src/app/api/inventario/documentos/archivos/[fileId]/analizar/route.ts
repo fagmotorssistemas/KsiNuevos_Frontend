@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { INVENTORY_VEHICLE_DOCS_BUCKET } from '@/lib/inventario/vehicleDocumentCatalog'
 import { analyzeDocumentFileWithOpenAI } from '@/lib/inventario/openaiDocumentVision'
-import { buildContrasteAiContext } from '@/lib/inventario/documentAiRules'
+import { buildContrasteAiContext, buildVehicleRecordContext } from '@/lib/inventario/documentAiRules'
 import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import { getLatestDocumentAiReport, saveDocumentAiReport } from '@/services/documentAiReports.service'
 
@@ -23,6 +23,8 @@ type FileContext = {
     inventoryoracle_id: string
   }
   placa: string | null
+  vehicleRecord: ReturnType<typeof buildVehicleRecordContext>
+  contraste: ReturnType<typeof buildContrasteAiContext>
 }
 
 async function loadFileContext(
@@ -47,11 +49,47 @@ async function loadFileContext(
 
   const { data: vehicle } = await supabase
     .from('inventoryoracle')
-    .select('plate')
+    .select('plate, country_origin, registration_place, registration_year, purchase_date, year')
     .eq('id', document.inventoryoracle_id)
     .maybeSingle()
 
-  return { file, document, placa: vehicle?.plate ?? null }
+  const { data: owners } = await supabase
+    .from('inventory_vehicle_owners')
+    .select('owner_name, is_current, sort_order')
+    .eq('inventoryoracle_id', document.inventoryoracle_id)
+    .order('is_current', { ascending: false })
+    .order('sort_order', { ascending: true })
+
+  const placa = vehicle?.plate ?? null
+  let latestConsulta: Awaited<ReturnType<typeof listContrasteConsultas>>[number] | null = null
+  try {
+    latestConsulta = placa ? (await listContrasteConsultas(supabase, placa))[0] ?? null : null
+  } catch {
+    latestConsulta = null
+  }
+  const contrastePayload = latestConsulta ? payloadFromConsulta(latestConsulta) : null
+
+  const ownerNames = [
+    ...(owners ?? []).filter((row) => row.is_current).map((row) => row.owner_name),
+    ...(owners ?? []).filter((row) => !row.is_current).map((row) => row.owner_name),
+  ]
+
+  const vehicleRecord = buildVehicleRecordContext({
+    owners: ownerNames,
+    contrasteOwner: contrastePayload?.lookup?.ownerName ?? null,
+    registrationPlace: vehicle?.registration_place ?? null,
+    canton: contrastePayload?.lookup?.canton ?? null,
+    countryOrigin: vehicle?.country_origin ?? null,
+    registrationYear: vehicle?.registration_year ?? null,
+    lastRegistrationDate: contrastePayload?.lookup?.lastRegistrationDate ?? null,
+    lastPaidYear: contrastePayload?.lookup?.lastPaidYear ?? null,
+    vehicleYear: vehicle?.year ?? null,
+    purchaseDate: vehicle?.purchase_date ?? null,
+  })
+
+  const contraste = buildContrasteAiContext(contrastePayload, latestConsulta?.created_at ?? null)
+
+  return { file, document, placa, vehicleRecord, contraste }
 }
 
 export async function GET(
@@ -87,7 +125,7 @@ export async function POST(
 
   const loaded = await loadFileContext(supabase, fileId)
   if (loaded instanceof NextResponse) return loaded
-  const { file, document, placa } = loaded
+  const { file, document, placa, vehicleRecord, contraste } = loaded
 
   try {
     const downloaded = await supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).download(file.file_path)
@@ -100,12 +138,6 @@ export async function POST(
       bytes = new Uint8Array(await fallback.arrayBuffer())
     }
 
-    const latestConsulta = placa ? (await listContrasteConsultas(supabase, placa))[0] ?? null : null
-    const contraste = buildContrasteAiContext(
-      latestConsulta ? payloadFromConsulta(latestConsulta) : null,
-      latestConsulta?.created_at ?? null
-    )
-
     const { analysis, model } = await analyzeDocumentFileWithOpenAI({
       bytes,
       mime: file.mime_type || 'application/octet-stream',
@@ -113,6 +145,7 @@ export async function POST(
       docType: document.doc_type,
       placa,
       contraste,
+      vehicleRecord,
     })
 
     const report = await saveDocumentAiReport(supabase, {

@@ -22,9 +22,11 @@ function qualityClass(quality: string): string {
 function extractedFields(report: DocumentAiReportRow): { label: string; value: string }[] {
   const extracted = report.extracted
   if (!extracted || typeof extracted !== 'object' || Array.isArray(extracted)) return []
-  const row = extracted as { owner?: unknown; expiry?: unknown; fields?: unknown }
+  const row = extracted as { owner?: unknown; place?: unknown; country?: unknown; expiry?: unknown; fields?: unknown }
   const fields: { label: string; value: string }[] = []
   if (typeof row.owner === 'string' && row.owner.trim()) fields.push({ label: 'Propietario', value: row.owner })
+  if (typeof row.place === 'string' && row.place.trim()) fields.push({ label: 'Lugar', value: row.place })
+  if (typeof row.country === 'string' && row.country.trim()) fields.push({ label: 'País', value: row.country })
   if (typeof row.expiry === 'string' && row.expiry.trim()) fields.push({ label: 'Vencimiento', value: row.expiry })
   if (Array.isArray(row.fields)) {
     for (const item of row.fields) {
@@ -135,6 +137,41 @@ export function DocumentAiReportBlock({ fileId, compact = false }: Props) {
             {report.matches_plate === false ? (
               <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
                 Placa no coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_owner?: boolean | null } | null)?.matches_owner === true ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                Propietario coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_owner?: boolean | null } | null)?.matches_owner === false ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
+                Propietario no coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_place?: boolean | null } | null)?.matches_place === true ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                Lugar coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_place?: boolean | null } | null)?.matches_place === false ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
+                Lugar no coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_country?: boolean | null } | null)?.matches_country === true ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                País coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_country?: boolean | null } | null)?.matches_country === false ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
+                País no coincide
+              </span>
+            ) : null}
+            {(report.payload as { matches_dates?: boolean | null } | null)?.matches_dates === false ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
+                Fechas no coinciden
               </span>
             ) : null}
             {(report.payload as { matricula_expired?: boolean } | null)?.matricula_expired ? (

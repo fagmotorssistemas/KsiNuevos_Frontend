@@ -628,7 +628,7 @@ export async function uploadVehicleDocument(
     status?: VehicleDocStatus
     actor_name?: string | null
   }
-): Promise<VehicleDocumentRow> {
+): Promise<VehicleDocumentRow & { lastUploadedFileId?: string | null }> {
   const docRow = await findVehicleDocumentRow(supabase, inventoryoracleId, docType)
   if (!docRow) throw new Error('Documento no encontrado')
 
@@ -645,14 +645,18 @@ export async function uploadVehicleDocument(
 
   const { data: urlData } = supabase.storage.from(INVENTORY_VEHICLE_DOCS_BUCKET).getPublicUrl(filePath)
 
-  const { error: fileErr } = await supabase.from('inventory_vehicle_document_files').insert({
-    document_id: docRow.id,
-    file_path: filePath,
-    file_url: urlData.publicUrl,
-    file_name: file.name,
-    mime_type: file.type || null,
-    uploaded_by: profileId,
-  })
+  const { data: insertedFile, error: fileErr } = await supabase
+    .from('inventory_vehicle_document_files')
+    .insert({
+      document_id: docRow.id,
+      file_path: filePath,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      mime_type: file.type || null,
+      uploaded_by: profileId,
+    })
+    .select('id')
+    .single()
   if (fileErr) throw fileErr
 
   const { data, error } = await supabase
@@ -682,7 +686,7 @@ export async function uploadVehicleDocument(
     actor_name: meta?.actor_name,
     file_name: file.name,
   })
-  return withFiles
+  return { ...withFiles, lastUploadedFileId: insertedFile?.id ?? null }
 }
 
 export async function deleteVehicleDocumentFile(

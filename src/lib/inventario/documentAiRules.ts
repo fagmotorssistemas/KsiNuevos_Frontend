@@ -24,6 +24,50 @@ export type ContrasteAiContext = {
   registrationExpiry: string | null
 }
 
+/** Datos internos (inventario + contraste guardado). No es una llamada nueva a EcuadorAPI. */
+export type VehicleRecordContext = {
+  owners: string[]
+  place: string | null
+  country: string | null
+  years: number[]
+  snapshotText: string
+}
+
+export function buildVehicleRecordContext(input: {
+  owners: string[]
+  contrasteOwner: string | null
+  registrationPlace: string | null
+  canton: string | null
+  countryOrigin: string | null
+  registrationYear: string | null
+  lastRegistrationDate: string | null
+  lastPaidYear: number | null
+  vehicleYear: number | null
+  purchaseDate: string | null
+}): VehicleRecordContext {
+  const owners = uniqueNonEmpty([
+    ...input.owners,
+    input.contrasteOwner,
+  ])
+  const place = firstNonEmpty(input.registrationPlace, input.canton)
+  const country = firstNonEmpty(input.countryOrigin)
+  const years = uniqueYears([
+    yearFromUnknown(input.registrationYear),
+    yearFromUnknown(input.lastRegistrationDate),
+    input.lastPaidYear,
+    input.vehicleYear,
+    yearFromUnknown(input.purchaseDate),
+  ])
+  const lines = [
+    '--- DATOS DEL VEHÍCULO EN EL SISTEMA (inventario / historial / última consulta guardada; no se llama EcuadorAPI otra vez) ---',
+    owners.length ? `Propietario(s) esperado(s): ${owners.join(' | ')}` : 'Propietario esperado: (no hay en el sistema)',
+    place ? `Lugar / cantón / matrícula esperado: ${place}` : 'Lugar esperado: (sin dato)',
+    country ? `País / origen esperado: ${country}` : 'País esperado: (sin dato)',
+    years.length ? `Años de referencia (matrícula / pago / unidad): ${years.join(', ')}` : 'Años de referencia: (sin dato)',
+  ]
+  return { owners, place, country, years, snapshotText: lines.join('\n') }
+}
+
 export function buildContrasteAiContext(
   payload: EcuadorContrastePayload | null,
   consultedAt: string | null
@@ -117,7 +161,7 @@ export function parseLooseDate(value: string | null | undefined): Date | null {
 }
 
 function firstDateFromAnalysis(analysis: DocumentAiAnalysis): Date | null {
-  const fromExpiry = parseLooseDate(analysis.extracted.expiry ?? null)
+  const fromExpiry = parseLooseDate(analysis.extracted.issue_date ?? analysis.extracted.expiry ?? null)
   if (fromExpiry) return fromExpiry
   for (const field of analysis.extracted.fields ?? []) {
     const label = field.label.toLowerCase()
@@ -150,6 +194,215 @@ function amountsFromAnalysis(analysis: DocumentAiAnalysis): number[] {
     }
   }
   return amounts
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return null
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (!trimmed) continue
+    const key = foldText(trimmed)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(trimmed)
+  }
+  return out
+}
+
+function foldText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+const NAME_STOPWORDS = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'e', 'da', 'do', 'van', 'von', 'sa', 'cia'])
+
+function nameTokens(value: string): string[] {
+  return foldText(value).split(' ').filter((token) => token.length > 1 && !NAME_STOPWORDS.has(token))
+}
+
+function namesLikelyMatch(photo: string, expected: string): boolean {
+  const a = nameTokens(photo)
+  const b = nameTokens(expected)
+  if (!a.length || !b.length) return false
+  const hits = a.filter((token) =>
+    b.some((other) => token === other || (token.length >= 4 && other.length >= 4 && (token.includes(other) || other.includes(token))))
+  )
+  return hits.length / Math.min(a.length, b.length) >= 0.5
+}
+
+function placesLikelyMatch(a: string, b: string): boolean {
+  const fa = foldText(a)
+  const fb = foldText(b)
+  if (!fa || !fb) return false
+  if (fa === fb) return true
+  return fa.includes(fb) || fb.includes(fa)
+}
+
+function normalizeCountryKey(value: string): string {
+  const folded = foldText(value)
+  if (!folded) return ''
+  if (/\b(ecuador|ecu|republica del ecuador)\b/.test(folded) || folded === 'ec') return 'ecuador'
+  return folded
+}
+
+function yearFromUnknown(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 1990 && value <= 2100) return value
+  if (typeof value !== 'string' || !value.trim()) return null
+  const parsed = parseLooseDate(value)
+  if (parsed) return parsed.getFullYear()
+  const match = value.match(/\b(19|20)\d{2}\b/)
+  if (!match) return null
+  const year = Number(match[0])
+  return year >= 1990 && year <= 2100 ? year : null
+}
+
+function uniqueYears(values: Array<number | null | undefined>): number[] {
+  return [...new Set(values.filter((year): year is number => typeof year === 'number' && year >= 1990 && year <= 2100))].sort()
+}
+
+function fieldValuesByLabel(analysis: DocumentAiAnalysis, matcher: (label: string) => boolean): string[] {
+  const out: string[] = []
+  for (const field of analysis.extracted.fields ?? []) {
+    if (!matcher(foldText(field.label))) continue
+    if (field.value.trim()) out.push(field.value.trim())
+  }
+  return out
+}
+
+function photoOwnerTexts(analysis: DocumentAiAnalysis): string[] {
+  return uniqueNonEmpty([
+    analysis.extracted.owner,
+    ...fieldValuesByLabel(analysis, (label) =>
+      /propiet|titular|poderdante|comparecient|otorgant|dueno|duenio|vendedor|cedente/.test(label)
+    ),
+  ])
+}
+
+function photoPlaceTexts(analysis: DocumentAiAnalysis): string[] {
+  return uniqueNonEmpty([
+    analysis.extracted.place,
+    ...fieldValuesByLabel(analysis, (label) =>
+      /lugar|canton|ciudad|provincia|matriculad|jurisdicc/.test(label)
+    ),
+  ])
+}
+
+function photoCountryTexts(analysis: DocumentAiAnalysis): string[] {
+  return uniqueNonEmpty([
+    analysis.extracted.country,
+    ...fieldValuesByLabel(analysis, (label) => /pais|origen|nacionalidad/.test(label)),
+  ])
+}
+
+function photoIdentityYears(analysis: DocumentAiAnalysis): number[] {
+  const years: number[] = []
+  years.push(yearFromUnknown(analysis.extracted.issue_date), yearFromUnknown(analysis.extracted.registration_year))
+  for (const field of analysis.extracted.fields ?? []) {
+    const label = foldText(field.label)
+    const skipContractOnly = /poder|otorg|contrato|firma|notari/.test(label) && !/matricul|registro|emisi|expedic|vigenc|venc/.test(label)
+    if (skipContractOnly) continue
+    if (!/matricul|registro|emisi|expedic|vigenc|venc|anio|ano/.test(label)) continue
+    years.push(yearFromUnknown(field.value))
+  }
+  return uniqueYears(years)
+}
+
+function applyVehicleIdentityChecks(
+  analysis: DocumentAiAnalysis,
+  record: VehicleRecordContext | null
+): {
+  analysis: DocumentAiAnalysis
+  identityIssues: string[]
+} {
+  if (!record) {
+    return {
+      analysis: {
+        ...analysis,
+        matches_owner: null,
+        matches_place: null,
+        matches_country: null,
+        matches_dates: null,
+      },
+      identityIssues: [],
+    }
+  }
+
+  const identityIssues: string[] = []
+
+  const ownersPhoto = photoOwnerTexts(analysis)
+  const placesPhoto = photoPlaceTexts(analysis)
+  const countriesPhoto = photoCountryTexts(analysis)
+  const yearsPhoto = photoIdentityYears(analysis)
+
+  let matches_owner: boolean | null = null
+  if (ownersPhoto.length && record.owners.length) {
+    matches_owner = ownersPhoto.some((photo) => record.owners.some((expected) => namesLikelyMatch(photo, expected)))
+    if (!matches_owner) {
+      identityIssues.push(
+        `el propietario leído (${ownersPhoto.join('; ')}) no coincide con el del sistema (${record.owners.join('; ')})`
+      )
+    }
+  }
+
+  let matches_place: boolean | null = null
+  if (placesPhoto.length && record.place) {
+    matches_place = placesPhoto.some((photo) => placesLikelyMatch(photo, record.place as string))
+    if (!matches_place) {
+      identityIssues.push(`el lugar leído (${placesPhoto.join('; ')}) no coincide con el del sistema (${record.place})`)
+    }
+  }
+
+  let matches_country: boolean | null = null
+  if (countriesPhoto.length && record.country) {
+    const expected = normalizeCountryKey(record.country)
+    matches_country = countriesPhoto.some((photo) => {
+      const key = normalizeCountryKey(photo)
+      return Boolean(key) && (key === expected || key.includes(expected) || expected.includes(key))
+    })
+    if (!matches_country) {
+      identityIssues.push(`el país leído (${countriesPhoto.join('; ')}) no coincide con el del sistema (${record.country})`)
+    }
+  }
+
+  let matches_dates: boolean | null = null
+  if (yearsPhoto.length && record.years.length) {
+    matches_dates = yearsPhoto.some((year) => record.years.some((expected) => Math.abs(year - expected) <= 1))
+    if (!matches_dates) {
+      identityIssues.push(
+        `las fechas leídas (${yearsPhoto.join(', ')}) no coinciden con los años del sistema (${record.years.join(', ')})`
+      )
+    }
+  }
+
+  return {
+    analysis: {
+      ...analysis,
+      matches_owner,
+      matches_place,
+      matches_country,
+      matches_dates,
+      extracted: {
+        ...analysis.extracted,
+        owner: analysis.extracted.owner || ownersPhoto[0] || null,
+        place: analysis.extracted.place || placesPhoto[0] || null,
+        country: analysis.extracted.country || countriesPhoto[0] || null,
+      },
+    },
+    identityIssues,
+  }
 }
 
 function uniqueIssues(issues: string[]): string[] {
@@ -260,6 +513,29 @@ function invalidUploadReasons(input: {
   if (input.analysis.matches_plate === false && input.analysis.plate_read) {
     reasons.push(`la placa leída en la foto (${input.analysis.plate_read}) no coincide con la del inventario`)
   }
+  if (input.analysis.matches_owner === false) {
+    const photo = input.analysis.extracted.owner?.trim()
+    reasons.push(
+      photo
+        ? `el propietario leído (${photo}) no coincide con el del sistema`
+        : 'el propietario del documento no coincide con el del sistema'
+    )
+  }
+  if (input.analysis.matches_place === false) {
+    const photo = input.analysis.extracted.place?.trim()
+    reasons.push(
+      photo ? `el lugar leído (${photo}) no coincide con el del sistema` : 'el lugar del documento no coincide con el del sistema'
+    )
+  }
+  if (input.analysis.matches_country === false) {
+    const photo = input.analysis.extracted.country?.trim()
+    reasons.push(
+      photo ? `el país leído (${photo}) no coincide con el del sistema` : 'el país del documento no coincide con el del sistema'
+    )
+  }
+  if (input.analysis.matches_dates === false) {
+    reasons.push('las fechas del documento no coinciden con matrícula / años del sistema')
+  }
 
   const contraste = input.contraste
   if (input.docType === 'matricula') {
@@ -334,10 +610,12 @@ export function applyDocumentAiBusinessRules(
   input: {
     docType: string
     contraste: ContrasteAiContext | null
+    vehicleRecord?: VehicleRecordContext | null
   }
 ): DocumentAiAnalysis {
-  const cleaned = stripMatriculaNoise(analysis, input.docType)
-  const issues = [...cleaned.issues]
+  const stripped = stripMatriculaNoise(analysis, input.docType)
+  const { analysis: cleaned, identityIssues } = applyVehicleIdentityChecks(stripped, input.vehicleRecord ?? null)
+  const issues = [...cleaned.issues, ...identityIssues]
   let summary = cleaned.summary
   let matriculaExpired = input.docType === 'matricula' ? cleaned.matricula_expired ?? null : null
   let vigenciaHasta = input.docType === 'matricula' ? cleaned.vigencia_hasta ?? null : null
@@ -431,6 +709,10 @@ export function applyDocumentAiBusinessRules(
     ...cleaned,
     summary,
     issues: uniqueIssues(issues),
+    matches_owner: cleaned.matches_owner ?? null,
+    matches_place: cleaned.matches_place ?? null,
+    matches_country: cleaned.matches_country ?? null,
+    matches_dates: cleaned.matches_dates ?? null,
     matricula_expired: matriculaExpired,
     vigencia_hasta: vigenciaHasta,
     contraste_mismatch: contrasteMismatch,
