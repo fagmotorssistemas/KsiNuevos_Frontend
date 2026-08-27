@@ -491,11 +491,11 @@ export const formalProgressService = {
       const advanced = new Set(todayEv.map((e) => e.case_id));
       return [...due]
         .filter((id) => !advanced.has(id))
-        .map((id) => {
+        .flatMap((id) => {
           const c = caseById.get(id);
-          if (!c) return null;
+          if (!c) return [];
           const last = latestByCase.get(id);
-          return {
+          const row: FormalProgressEventRow = {
             occurred_at: last?.fecha || c.fecha_proxima_accion || day,
             case_id: c.id,
             id_sistema: c.id_sistema,
@@ -508,9 +508,9 @@ export const formalProgressService = {
             resultado: last?.resultado ?? null,
             usuario_nombre: null,
             pendiente: true,
-          } satisfies FormalProgressEventRow;
-        })
-        .filter((row): row is FormalProgressEventRow => row != null);
+          };
+          return [row];
+        });
     }
 
     if (categoria === 'quedados_sin_paso') {
