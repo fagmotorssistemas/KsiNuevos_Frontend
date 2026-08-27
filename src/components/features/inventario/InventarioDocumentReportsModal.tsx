@@ -9,6 +9,8 @@ import {
     ChevronDown,
     Loader2,
     Car,
+    Check,
+    X,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -32,6 +34,7 @@ import {
     type VehicleLegalChecklistBulk,
 } from "@/services/vehicleLegal.service";
 import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
+import { listAiInformeByPlacas } from "@/services/vehicleAiInformes.service";
 import {
     formatContrasteConsultedPretty,
     formatContrasteRelative,
@@ -193,6 +196,29 @@ function DocumentYesNoCell({
     );
 }
 
+function VerificationStack({ apiOk, iaOk }: { apiOk: boolean; iaOk: boolean }) {
+    return (
+        <div className="flex flex-col gap-0.5 leading-none" title={apiOk ? "API consultada" : "Sin consulta API"}>
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-600">
+                {apiOk ? (
+                    <Check className="h-3 w-3 text-emerald-600 shrink-0" strokeWidth={2.5} aria-label="API ok" />
+                ) : (
+                    <X className="h-3 w-3 text-red-500 shrink-0" strokeWidth={2.5} aria-label="API no" />
+                )}
+                API
+            </span>
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-600" title={iaOk ? "Informe IA generado" : "Sin Informe IA"}>
+                {iaOk ? (
+                    <Check className="h-3 w-3 text-emerald-600 shrink-0" strokeWidth={2.5} aria-label="IA ok" />
+                ) : (
+                    <X className="h-3 w-3 text-red-500 shrink-0" strokeWidth={2.5} aria-label="IA no" />
+                )}
+                IA
+            </span>
+        </div>
+    );
+}
+
 function VehicleNameCell({ vehiculo }: { vehiculo: VehiculoInventario }) {
     const marca = vehiculo.marca?.trim() || "Sin marca";
     const modelo = vehiculo.modelo?.trim() || vehiculo.descripcion?.trim() || "—";
@@ -256,27 +282,29 @@ function documentCellStatus(
 
 type ChecklistEntry = VehicleLegalChecklistBulk["byPlate"] extends Map<string, infer V> ? V : never;
 
-function documentaryStatusBadge(pct: number | null) {
-    if (pct == null) {
+function documentaryStatusBadge(progress: { done: number; total: number }, linked: boolean) {
+    if (!linked || progress.total === 0) {
         return {
             text: "Sin información",
             className: "bg-slate-50 text-slate-500 border-slate-200",
         };
     }
-    if (pct >= 100) {
+    const fraction = `${progress.done} de ${progress.total}`;
+    const ratio = progress.done / progress.total;
+    if (ratio >= 1) {
         return {
-            text: `Completo · ${pct}%`,
+            text: `Completo · ${fraction}`,
             className: "bg-emerald-50 text-emerald-700 border-emerald-200",
         };
     }
-    if (pct >= 50) {
+    if (ratio >= 0.5) {
         return {
-            text: `En proceso · ${pct}%`,
+            text: `En proceso · ${fraction}`,
             className: "bg-amber-50 text-amber-800 border-amber-200",
         };
     }
     return {
-        text: `Revisión · ${pct}%`,
+        text: `Revisión · ${fraction}`,
         className: "bg-red-50 text-red-700 border-red-200",
     };
 }
@@ -300,54 +328,45 @@ function DocumentDetailPanel({
     vehiculo,
     entry,
     linked,
-    pct,
+    progress,
     pending,
     consultedAt,
     vehicleLabel,
     onPreview,
-    onManage,
 }: {
     vehiculo: VehiculoInventario;
     entry: ChecklistEntry | undefined;
     linked: boolean;
-    pct: number | null;
+    progress: { done: number; total: number };
     pending: number;
     consultedAt: string | undefined;
     vehicleLabel: string;
     onPreview: (preview: FilePreviewState) => void;
-    onManage?: () => void;
 }) {
     const title = [vehiculo.marca, vehiculo.modelo].filter(Boolean).join(" ").trim() || "Vehículo";
     return (
         <div className="px-4 py-4 md:px-5 md:py-5 bg-slate-50/80 border-t border-blue-100/80">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between mb-4">
-                <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight leading-snug">
-                        {title}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                        Placa {vehiculo.placa} · Revisión documental
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
-                        <span className="tabular-nums font-semibold text-slate-700">
-                            {pct == null ? "—" : `${pct}%`} de la revisión completada
-                        </span>
-                        <span className="text-slate-300">·</span>
-                        <span>
-                            {pending === 0
-                                ? "Sin pendientes por revisar"
-                                : `${pending} pendiente${pending === 1 ? "" : "s"} por revisar`}
-                        </span>
-                    </div>
+            <div className="mb-4 min-w-0">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight leading-snug">
+                    {title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                    Placa {vehiculo.placa} · Revisión documental
+                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
+                    <span className="tabular-nums font-semibold text-slate-700">
+                        {progress.total === 0
+                            ? "—"
+                            : `${progress.done} de ${progress.total}`}{" "}
+                        de la revisión completada
+                    </span>
+                    <span className="text-slate-300">·</span>
+                    <span>
+                        {pending === 0
+                            ? "Sin pendientes por revisar"
+                            : `${pending} pendiente${pending === 1 ? "" : "s"} por revisar`}
+                    </span>
                 </div>
-                <button
-                    type="button"
-                    onClick={onManage}
-                    disabled={!onManage}
-                    className="inline-flex shrink-0 items-center self-start rounded-md bg-blue-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                    Gestionar documentación
-                </button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
@@ -451,6 +470,7 @@ export function InventarioDocumentReport({
     const [sortAsc, setSortAsc] = useState(true);
     const [checklistData, setChecklistData] = useState<VehicleLegalChecklistBulk | null>(null);
     const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, string>>(new Map());
+    const [aiOkByPlate, setAiOkByPlate] = useState<Map<string, boolean>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
     const [expandedProId, setExpandedProId] = useState<string | null>(null);
@@ -464,6 +484,7 @@ export function InventarioDocumentReport({
         if (vehiculos.length === 0) {
             setChecklistData(null);
             setContrasteByPlate(new Map());
+            setAiOkByPlate(new Map());
             return;
         }
         let cancelled = false;
@@ -474,8 +495,12 @@ export function InventarioDocumentReport({
                 supabase,
                 vehiculos.map((v) => v.placa)
             ),
+            listAiInformeByPlacas(
+                supabase,
+                vehiculos.map((v) => v.placa)
+            ),
         ])
-            .then(([checklistResult, contrasteResult]) => {
+            .then(([checklistResult, contrasteResult, aiResult]) => {
                 if (cancelled) return;
                 setChecklistData(
                     checklistResult.status === "fulfilled"
@@ -485,6 +510,7 @@ export function InventarioDocumentReport({
                 setContrasteByPlate(
                     contrasteResult.status === "fulfilled" ? contrasteResult.value : new Map()
                 );
+                setAiOkByPlate(aiResult.status === "fulfilled" ? aiResult.value : new Map());
             })
             .finally(() => {
                 if (!cancelled) setLoadingChecklist(false);
@@ -595,7 +621,7 @@ export function InventarioDocumentReport({
     const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
     const rangeEnd = Math.min(safePage * rowsPerPage, totalCount);
 
-    const totalCols = 5;
+    const totalCols = 6;
 
     return (
         <>
@@ -667,6 +693,9 @@ export function InventarioDocumentReport({
                                     onSort={handleSort}
                                     className="min-w-[220px]"
                                 />
+                                <th className="px-2 py-3 text-left text-[13px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">
+                                    Verificación
+                                </th>
                                 <SortableHeader
                                     label="Placa"
                                     sortKey="plate"
@@ -684,7 +713,7 @@ export function InventarioDocumentReport({
                                     className="min-w-[140px]"
                                 />
                                 <SortableHeader
-                                    label="Alertas"
+                                    label="Faltantes"
                                     sortKey="alerts"
                                     current={sortKey}
                                     asc={sortAsc}
@@ -702,30 +731,32 @@ export function InventarioDocumentReport({
                                     const entry = checklistData?.byPlate.get(normalizePlate(v.placa));
                                     const linked = Boolean(entry?.inventoryoracleId);
                                     const progress = entry ? countComplete(entry) : { done: 0, total: 0 };
-                                    const pct =
-                                        progress.total > 0
-                                            ? Math.round((progress.done / progress.total) * 100)
-                                            : linked
-                                              ? 0
-                                              : null;
                                     const pending =
                                         progress.total > 0 ? Math.max(progress.total - progress.done, 0) : 0;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
                                     const consultedAt = contrasteByPlate.get(normalizePlate(v.placa));
                                     const expanded = expandedProId === v.proId;
-                                    const statusBadge = documentaryStatusBadge(pct);
+                                    const statusBadge = documentaryStatusBadge(progress, linked);
 
                                     return (
                                         <Fragment key={v.proId}>
                                             <tr
-                                                className={`group border-b border-slate-100 transition-colors ${
+                                                className={`group border-b border-slate-100 transition-colors cursor-pointer ${
                                                     expanded
                                                         ? "bg-blue-50/50 shadow-[inset_3px_0_0_0_rgba(59,130,246,0.35)]"
                                                         : "hover:bg-blue-50/30 bg-white"
                                                 }`}
+                                                onClick={() => onOpenVehicle?.(v, "documentos")}
+                                                title="Gestionar documentación"
                                             >
                                                 <td className={`px-3 py-3 min-w-[220px] max-w-[320px] ${expanded ? "bg-blue-50/50" : "bg-white group-hover:bg-blue-50/30"}`}>
                                                     <VehicleNameCell vehiculo={v} />
+                                                </td>
+                                                <td className="px-2 py-3 whitespace-nowrap">
+                                                    <VerificationStack
+                                                        apiOk={Boolean(consultedAt)}
+                                                        iaOk={aiOkByPlate.get(normalizePlate(v.placa)) === true}
+                                                    />
                                                 </td>
                                                 <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
                                                     {v.placa}
@@ -758,9 +789,10 @@ export function InventarioDocumentReport({
                                                     <button
                                                         type="button"
                                                         aria-expanded={expanded}
-                                                        onClick={() =>
-                                                            setExpandedProId(expanded ? null : v.proId)
-                                                        }
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedProId(expanded ? null : v.proId);
+                                                        }}
                                                         className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
                                                     >
                                                         Ver detalle
@@ -777,12 +809,11 @@ export function InventarioDocumentReport({
                                                             vehiculo={v}
                                                             entry={entry}
                                                             linked={linked}
-                                                            pct={pct}
+                                                            progress={progress}
                                                             pending={pending}
                                                             consultedAt={consultedAt}
                                                             vehicleLabel={vehicleLabel}
                                                             onPreview={setFilePreview}
-                                                            onManage={() => onOpenVehicle?.(v, "documentos")}
                                                         />
                                                     </td>
                                                 </tr>

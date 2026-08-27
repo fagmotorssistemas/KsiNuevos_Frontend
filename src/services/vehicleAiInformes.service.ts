@@ -94,3 +94,29 @@ export async function saveVehicleAiInforme(
   if (error) throw error
   return data
 }
+
+const PLATE_IN_CHUNK = 150
+
+/** true si esa placa ya tiene un Informe IA guardado. */
+export async function listAiInformeByPlacas(
+  supabase: SupabaseClient<Database>,
+  placas: string[]
+): Promise<Map<string, boolean>> {
+  const unique = [...new Set(placas.map((p) => normalizePlate(p)).filter(Boolean))]
+  const result = new Map<string, boolean>()
+  for (const plate of unique) result.set(plate, false)
+
+  for (let i = 0; i < unique.length; i += PLATE_IN_CHUNK) {
+    const chunk = unique.slice(i, i + PLATE_IN_CHUNK)
+    const { data, error } = await supabase
+      .from('inventory_vehicle_ai_informes')
+      .select('placa')
+      .in('placa', chunk)
+    if (error) throw error
+    for (const row of data ?? []) {
+      const plate = normalizePlate(row.placa)
+      if (plate) result.set(plate, true)
+    }
+  }
+  return result
+}

@@ -151,7 +151,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
     )
   }
 
-  if (loading) {
+  if (loading && !wizardOpen) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -178,7 +178,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
     )
   }
 
-  if (!catalogReady) {
+  if (!catalogReady && !wizardOpen) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />

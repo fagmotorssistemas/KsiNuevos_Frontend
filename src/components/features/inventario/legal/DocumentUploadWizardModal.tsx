@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronLeft, Loader2, Upload, X } from 'lucide-react'
+import { ChevronLeft, FileText, Loader2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { VEHICLE_DOCUMENT_CATALOG, type DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
-import { isDocumentCatalogItemVisible } from '@/lib/inventario/vehicleLegalUi'
-import { ACCEPT_UPLOAD, uploadVehicleDocument, updateVehicleDocumentMeta } from '@/services/vehicleLegal.service'
+import { getCatalogDocumentRow, isDocumentCatalogItemVisible, listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
+import { uploadVehicleDocument, updateVehicleDocumentMeta } from '@/services/vehicleLegal.service'
 import type { DocumentAiReportRow } from '@/services/documentAiReports.service'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VehicleDocType, VehicleDocumentRow } from '@/types/vehicleLegal.types'
@@ -24,11 +24,27 @@ const NOTE_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
   procesos_legales: 'Ej. No hay procesos legales abiertos.',
 }
 
-type AiCheck = {
+type PendingAiFile = {
   fileId: string
   fileName: string
-  ok: boolean
-  summary: string
+  docLabel: string
+}
+
+type PickedFile = {
+  file: File
+  preview: string | null
+}
+
+const WIZARD_ACCEPT = 'image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.bmp'
+
+function isPreviewable(file: File) {
+  return file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name)
+}
+
+function revokePreviews(items: PickedFile[]) {
+  for (const item of items) {
+    if (item.preview) URL.revokeObjectURL(item.preview)
+  }
 }
 
 function photoMatchesSection(report: DocumentAiReportRow): boolean {
@@ -73,146 +89,169 @@ export function DocumentUploadWizardModal({
   onClose,
   onRefresh,
 }: Props) {
-  const byType = useMemo(() => new Map(documents.map((row) => [row.doc_type, row])), [documents])
+  const [docs, setDocs] = useState(documents)
+  const byType = useMemo(() => new Map(docs.map((row) => [row.doc_type, row])), [docs])
+  const steps = VEHICLE_DOCUMENT_CATALOG
   const [prendaHasEvidence, setPrendaHasEvidence] = useState(() =>
     isDocumentCatalogItemVisible('levantamiento_prendas', byType)
   )
-  const steps = useMemo(
-    () =>
-      VEHICLE_DOCUMENT_CATALOG.filter((item) =>
-        item.docType === 'levantamiento_prendas' ? prendaHasEvidence : true
-      ),
-    [prendaHasEvidence]
-  )
 
   const [index, setIndex] = useState(0)
-  const [files, setFiles] = useState<File[]>([])
-  const [note, setNote] = useState(() => steps[0] ? byType.get(steps[0].docType)?.detail_text ?? '' : '')
+  const [picked, setPicked] = useState<PickedFile[]>([])
+  const [note, setNote] = useState(() => (steps[0] ? getCatalogDocumentRow(byType, steps[0].docType)?.detail_text ?? '' : ''))
   const [busy, setBusy] = useState(false)
-  const [checks, setChecks] = useState<AiCheck[] | null>(null)
-  const [forceContinue, setForceContinue] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [pendingAi, setPendingAi] = useState<PendingAiFile[]>([])
 
   const step = steps[index]
   const isLast = index >= steps.length - 1
-  const failed = (checks ?? []).filter((item) => !item.ok)
-  const canAdvancePastAi = !checks || failed.length === 0 || forceContinue
+  const stepRow = step ? getCatalogDocumentRow(byType, step.docType) : undefined
+  const existingFiles = stepRow ? listDocumentFiles(stepRow) : []
+  const hasEvidence = picked.length > 0 || existingFiles.length > 0
+
+  const upsertDoc = (row: VehicleDocumentRow) => {
+    setDocs((current) => {
+      const next = current.filter((item) => item.id !== row.id)
+      next.push(row)
+      return next
+    })
+  }
 
   const goToStep = (nextIndex: number) => {
     const next = steps[nextIndex]
+    revokePreviews(picked)
+    setPicked([])
     setIndex(nextIndex)
-    setFiles([])
-    setChecks(null)
-    setForceContinue(false)
-    setNote(next ? byType.get(next.docType)?.detail_text ?? '' : '')
+    const nextRow = next ? getCatalogDocumentRow(byType, next.docType) : undefined
+    const nextNote = nextRow?.detail_text ?? ''
+    const nextExisting = nextRow ? listDocumentFiles(nextRow) : []
+    if (
+      next?.docType === 'levantamiento_prendas' &&
+      !prendaHasEvidence &&
+      nextExisting.length === 0 &&
+      nextNote.trim().length < 8
+    ) {
+      setNote('No aplica: sin prenda industrial.')
+    } else {
+      setNote(nextNote)
+    }
   }
 
-  const addFiles = (list: FileList | null) => {
-    if (!list?.length) return
-    setFiles((current) => [...current, ...Array.from(list)])
-    setChecks(null)
-    setForceContinue(false)
+  const addFiles = (list: FileList | File[] | null) => {
+    if (!list || list.length === 0) return
+    const extras: PickedFile[] = Array.from(list).map((file) => ({
+      file,
+      preview: isPreviewable(file) ? URL.createObjectURL(file) : null,
+    }))
+    setPicked((current) => [...current, ...extras])
   }
 
-  const persistStep = async (catalog: DocCatalogEntry) => {
+  const persistStep = async (catalog: DocCatalogEntry): Promise<PendingAiFile[]> => {
     const noteText = note.trim()
-    const uploadedIds: string[] = []
-    for (const file of files) {
-      const saved = await uploadVehicleDocument(supabase, inventoryoracleId, catalog.docType, file, profileId, {
+    const uploaded: PendingAiFile[] = []
+    let lastSaved: VehicleDocumentRow | null = null
+    for (const item of picked) {
+      const saved = await uploadVehicleDocument(supabase, inventoryoracleId, catalog.docType, item.file, profileId, {
         status: 'cargado',
         detail_text: noteText || undefined,
         actor_name: actorName,
       })
-      if (saved.lastUploadedFileId) uploadedIds.push(saved.lastUploadedFileId)
+      lastSaved = saved
+      if (saved.lastUploadedFileId) {
+        uploaded.push({
+          fileId: saved.lastUploadedFileId,
+          fileName: item.file.name || 'Foto',
+          docLabel: catalog.label,
+        })
+      }
     }
+    if (lastSaved) upsertDoc(lastSaved)
 
-    const row = byType.get(catalog.docType)
-    if (row) {
-      const hasPhotos = files.length > 0 || Boolean(row.file_url)
-      await updateVehicleDocumentMeta(
-        supabase,
-        row.id,
-        {
-          detail_text: noteText || null,
-          status: hasPhotos ? 'cargado' : 'completo',
-        },
-        {
-          actor_id: profileId,
-          actor_name: actorName,
-          inventoryoracle_id: inventoryoracleId,
-          doc_type: catalog.docType,
-          previous_status: row.status,
-        }
-      )
+    const row = lastSaved ?? getCatalogDocumentRow(byType, catalog.docType)
+    if (row && picked.length === 0) {
+      const hasPhotos = listDocumentFiles(row).length > 0 || Boolean(row.file_url)
+      try {
+        await updateVehicleDocumentMeta(
+          supabase,
+          row.id,
+          {
+            detail_text: noteText || row.detail_text,
+            status: hasPhotos ? 'cargado' : 'completo',
+          },
+          {
+            actor_id: profileId,
+            actor_name: actorName,
+            inventoryoracle_id: inventoryoracleId,
+            doc_type: catalog.docType,
+            previous_status: row.status,
+          }
+        )
+      } catch {
+        // Si solo se avanza con archivo ya existente, no bloquear el wizard.
+      }
     }
 
     if (catalog.docType === 'prenda_industrial') {
       const noPrenda = /no (tiene|hay) prenda|sin prenda/i.test(noteText)
-      setPrendaHasEvidence(!noPrenda && (uploadedIds.length > 0 || files.length > 0 || /tiene prenda|\bsí\b|\bsi\b/i.test(noteText)))
+      setPrendaHasEvidence(
+        !noPrenda &&
+          (uploaded.length > 0 ||
+            picked.length > 0 ||
+            existingFiles.length > 0 ||
+            /tiene prenda|\bsí\b|\bsi\b/i.test(noteText))
+      )
     }
 
-    const results: AiCheck[] = []
-    for (let i = 0; i < uploadedIds.length; i++) {
-      const fileId = uploadedIds[i]
-      const fileName = files[i]?.name || 'Foto'
-      const res = await fetch(`/api/inventario/documentos/archivos/${encodeURIComponent(fileId)}/analizar`, {
-        method: 'POST',
-      })
-      const body = (await res.json()) as { report?: DocumentAiReportRow; error?: string }
-      if (!res.ok || !body.report) {
-        results.push({
-          fileId,
-          fileName,
-          ok: false,
-          summary: body.error || 'No se pudo validar esta foto',
+    return uploaded
+  }
+
+  const analyzePendingPhotos = async (queue: PendingAiFile[]) => {
+    if (queue.length === 0) return
+    setValidating(true)
+    let mismatches = 0
+    let errors = 0
+    for (const item of queue) {
+      try {
+        const res = await fetch(`/api/inventario/documentos/archivos/${encodeURIComponent(item.fileId)}/analizar`, {
+          method: 'POST',
         })
-        continue
+        const body = (await res.json()) as { report?: DocumentAiReportRow; error?: string }
+        if (!res.ok || !body.report) {
+          errors += 1
+          continue
+        }
+        if (!photoMatchesSection(body.report)) mismatches += 1
+      } catch {
+        errors += 1
       }
-      results.push({
-        fileId,
-        fileName,
-        ok: photoMatchesSection(body.report),
-        summary: body.report.summary,
-      })
     }
-    return results
+    if (errors > 0) {
+      toast.warning(`IA no pudo revisar ${errors} foto(s). El resto quedó analizado.`)
+    }
+    if (mismatches > 0) {
+      toast.warning(`${mismatches} foto(s) no coinciden con su sección. Revisa el informe IA en el expediente.`)
+    } else if (queue.length > errors) {
+      toast.success(`IA validó ${queue.length - errors} foto(s) del expediente.`)
+    }
   }
 
   const handleNext = async () => {
-    if (!step || busy) return
-    if (files.length === 0 && note.trim().length < 8) {
-      toast.error('Sube al menos una foto o escribe por qué no hace falta en esta sección.')
-      return
-    }
-    if (checks && !canAdvancePastAi) {
-      toast.error('Hay fotos que no corresponden a esta sección. Cámbialas o confirma que continuarás así.')
-      return
-    }
-    if (checks && canAdvancePastAi) {
-      if (isLast) {
-        onRefresh()
-        onClose()
-        toast.success('Documentación cargada')
-        return
-      }
-      goToStep(index + 1)
+    if (!step || busy || validating) return
+    if (!hasEvidence && note.trim().length < 8) {
+      toast.error('Sube al menos una foto, usa la que ya está en el expediente, o escribe por qué no hace falta.')
       return
     }
 
     setBusy(true)
     try {
-    const results = await persistStep(step)
-      onRefresh()
-      if (results.length > 0) {
-        const bad = results.filter((item) => !item.ok)
-        setChecks(results)
-        if (bad.length > 0) {
-          toast.error(`${bad.length} foto(s) no parecen de «${step.label}». Revisa antes de seguir.`)
-          return
-        }
-        toast.success(`IA validó ${results.length} foto(s) de «${step.label}».`)
-      }
+      const uploaded = await persistStep(step)
+      const allPending = [...pendingAi, ...uploaded]
+      setPendingAi(allPending)
+
       const finished = isLast || (step.docType === 'prenda_industrial' && index + 1 >= steps.length)
       if (finished) {
+        await analyzePendingPhotos(allPending)
+        onRefresh()
         onClose()
         toast.success('Documentación cargada')
         return
@@ -222,13 +261,17 @@ export function DocumentUploadWizardModal({
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar esta sección')
     } finally {
       setBusy(false)
+      setValidating(false)
     }
   }
 
   if (!step) return null
 
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={busy || validating ? undefined : onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -245,7 +288,13 @@ export function DocumentUploadWizardModal({
               {placa} · Paso {index + 1} de {steps.length}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 rounded-full text-slate-400 hover:bg-slate-100" aria-label="Cerrar">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy || validating}
+            className="p-2 rounded-full text-slate-400 hover:bg-slate-100 disabled:opacity-40"
+            aria-label="Cerrar"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -261,42 +310,94 @@ export function DocumentUploadWizardModal({
             </p>
             <h3 className="text-base font-bold text-slate-900 mt-1">{step.label}</h3>
             <p className="text-sm text-slate-600 mt-1">
-              Sube una o varias fotos de este documento. Si no aplica, deja constancia del motivo (sin eso no se puede
-              seguir).
+              Sube una o varias fotos, o continúa si esta sección ya tiene archivo. Si no aplica, deja constancia del
+              motivo. La IA revisa las fotos nuevas al terminar el flujo.
             </p>
           </div>
 
-          <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 cursor-pointer hover:border-blue-300 hover:bg-blue-50/40">
-            <Upload className="h-8 w-8 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-700">Elegir fotos o PDF</span>
-            <span className="text-[11px] text-slate-500">Puedes seleccionar varios archivos a la vez</span>
+          <div
+            className="relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 hover:border-blue-300 hover:bg-blue-50/40"
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              addFiles(e.dataTransfer.files)
+            }}
+          >
+            <Upload className="h-8 w-8 text-slate-400 pointer-events-none" />
+            <span className="text-sm font-semibold text-slate-700 pointer-events-none">Elegir fotos o PDF</span>
+            <span className="text-[11px] text-slate-500 pointer-events-none">
+              Toca aquí o arrastra el archivo. Se muestra el nombre al seleccionarlo.
+            </span>
             <input
+              key={step.docType}
               type="file"
-              accept={ACCEPT_UPLOAD}
+              accept={WIZARD_ACCEPT}
               multiple
-              className="sr-only"
+              disabled={busy || validating}
+              className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
               onChange={(e) => {
                 addFiles(e.target.files)
                 e.target.value = ''
               }}
             />
-          </label>
+          </div>
 
-          {files.length > 0 ? (
-            <ul className="space-y-1.5">
-              {files.map((file, fileIndex) => (
-                <li key={`${file.name}-${fileIndex}`} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm">
-                  <span className="truncate flex-1">{file.name}</span>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-red-600"
-                    onClick={() => setFiles((current) => current.filter((_, i) => i !== fileIndex))}
+          {existingFiles.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-1.5">Ya en el expediente</p>
+              <ul className="space-y-1.5">
+                {existingFiles.map((file) => (
+                  <li
+                    key={file.id}
+                    className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-sm"
                   >
-                    Quitar
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <FileText className="h-4 w-4 shrink-0 text-emerald-700" />
+                    <span className="truncate flex-1 text-slate-800" title={file.file_name}>
+                      {file.file_name || 'Archivo'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {picked.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-1.5">Seleccionadas ahora ({picked.length})</p>
+              <ul className="space-y-1.5">
+                {picked.map((item, fileIndex) => (
+                  <li
+                    key={`${item.file.name}-${item.file.size}-${fileIndex}`}
+                    className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-sm"
+                  >
+                    {item.preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.preview} alt="" className="h-10 w-10 rounded object-cover shrink-0 bg-slate-200" />
+                    ) : (
+                      <FileText className="h-4 w-4 shrink-0 text-blue-700" />
+                    )}
+                    <span className="truncate flex-1" title={item.file.name}>
+                      {item.file.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-red-600"
+                      onClick={() => {
+                        const itemToRemove = picked[fileIndex]
+                        if (itemToRemove?.preview) URL.revokeObjectURL(itemToRemove.preview)
+                        setPicked((current) => current.filter((_, i) => i !== fileIndex))
+                      }}
+                    >
+                      Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           <div>
@@ -312,35 +413,12 @@ export function DocumentUploadWizardModal({
               className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
             />
           </div>
-
-          {checks ? (
-            <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-3 space-y-2">
-              <p className="text-xs font-bold text-violet-900">Validación IA de esta sección</p>
-              {checks.map((item) => (
-                <p key={item.fileId} className={`text-xs ${item.ok ? 'text-emerald-800' : 'text-red-700'}`}>
-                  <span className="font-semibold">{item.fileName}:</span>{' '}
-                  {item.ok ? 'corresponde a esta sección' : 'no parece de esta sección'}. {item.summary}
-                </p>
-              ))}
-              {failed.length > 0 ? (
-                <label className="flex items-start gap-2 text-xs text-slate-700 pt-1">
-                  <input
-                    type="checkbox"
-                    checked={forceContinue}
-                    onChange={(e) => setForceContinue(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  Entiendo que alguna foto no parece de {step.label} y igual quiero continuar.
-                </label>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-slate-100">
           <button
             type="button"
-            disabled={index === 0 || busy}
+            disabled={index === 0 || busy || validating}
             onClick={() => goToStep(index - 1)}
             className="inline-flex items-center gap-1 h-10 px-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 disabled:opacity-40"
           >
@@ -349,12 +427,12 @@ export function DocumentUploadWizardModal({
           </button>
           <button
             type="button"
-            disabled={busy || (Boolean(checks) && !canAdvancePastAi)}
+            disabled={busy || validating}
             onClick={() => void handleNext()}
             className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {busy ? 'Guardando y validando…' : isLast ? 'Terminar' : 'Siguiente'}
+            {busy || validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {validating ? 'Validando fotos con IA…' : busy ? 'Guardando…' : isLast ? 'Terminar' : 'Siguiente'}
           </button>
         </div>
       </div>
