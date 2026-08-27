@@ -6,9 +6,10 @@ interface PageProps {
     data: ContratoDetalle;
     fechaImpresion?: string; // Prop añadida para recibir la estampa de tiempo
     pageNumber?: number;
+    hayDeudaAPlazo?: boolean;
 }
 
-export function Page5({ data, fechaImpresion, pageNumber = 5 }: PageProps) {
+export function Page5({ data, fechaImpresion, pageNumber = 5, hayDeudaAPlazo = false }: PageProps) {
     // Helpers para formateo de moneda
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
@@ -121,7 +122,7 @@ export function Page5({ data, fechaImpresion, pageNumber = 5 }: PageProps) {
                         </div>
                         <div className="grid grid-cols-[150px_1fr]">
                             <span className="font-medium">Forma de pago:</span>
-                            <span className="uppercase">CREDITO</span>
+                            <span className="uppercase">{hayDeudaAPlazo ? "CREDITO" : "CONTADO"}</span>
                         </div>
                     </div>
                 </div>

@@ -42,7 +42,12 @@ export function ContractDocument({ data, amortizacion, fechaImpresion }: Contrac
             {hayDeudaAPlazo && <Page3 data={data} />}
             <Page4 data={data} pageNumber={hayDeudaAPlazo ? 4 : 2} />
 
-            <Page5 data={data} fechaImpresion={fechaImpresion} pageNumber={hayDeudaAPlazo ? 5 : 3} />
+            <Page5
+                data={data}
+                fechaImpresion={fechaImpresion}
+                pageNumber={hayDeudaAPlazo ? 5 : 3}
+                hayDeudaAPlazo={hayDeudaAPlazo}
+            />
 
             {hayDeudaAPlazo && (
                 <Page6
