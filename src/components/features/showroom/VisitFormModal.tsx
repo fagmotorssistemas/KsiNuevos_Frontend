@@ -22,12 +22,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { VisitSource, CreditStatus, InventoryItem, ShowroomVisit } from "./constants";
+import type { ShowroomVisitPrefill } from "./visitPrefill";
 
 interface VisitFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
     visitToEdit?: ShowroomVisit | null;
+    prefill?: ShowroomVisitPrefill | null;
 }
 
 // Actualizamos la interfaz para incluir el campo manual
@@ -51,7 +53,7 @@ interface VisitFormData {
 
 type AppointmentInsertStatus = "pendiente" | "confirmada" | "completada" | "cancelada" | "reprogramada" | "no_asistio";
 
-export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit }: VisitFormModalProps) {
+export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit, prefill }: VisitFormModalProps) {
     const { supabase, user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -84,6 +86,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
     });
 
     const isEditing = !!visitToEdit;
+    const fromAppointment = !isEditing && !!prefill?.appointmentId;
 
     // Limpiar errores al abrir/cerrar
     useEffect(() => {
@@ -109,7 +112,18 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                     .in('status', ['disponible'])
                     .order('brand', { ascending: true });
 
-                if (data) setInventory(data as any);
+                let cars = (data || []) as InventoryItem[];
+                const prefId = prefill?.inventoryoracle_id;
+                if (prefId && !cars.some((car) => car.id === prefId)) {
+                    const { data: extra } = await supabase
+                        .from('inventoryoracle')
+                        .select('id, brand, model, year, price, status')
+                        .eq('id', prefId)
+                        .maybeSingle();
+                    if (extra) cars = [extra as InventoryItem, ...cars];
+                }
+
+                setInventory(cars);
                 setIsLoadingInventory(false);
             };
             fetchInventory();
@@ -168,29 +182,31 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 // MODO CREACIÓN
                 const now = new Date();
                 const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                const hasInventory = !!prefill?.inventoryoracle_id;
+                const hasManual = !hasInventory && !!prefill?.manual_vehicle;
 
                 setFormData({
-                    client_name: '',
-                    phone: '',
-                    inventoryoracle_id: '',
-                    manual_vehicle: '',
-                    source: 'showroom',
+                    client_name: prefill?.client_name || '',
+                    phone: prefill?.phone || '',
+                    inventoryoracle_id: prefill?.inventoryoracle_id || '',
+                    manual_vehicle: hasManual ? prefill?.manual_vehicle || '' : '',
+                    source: prefill?.source || 'showroom',
                     visit_start_time: currentTime,
                     visit_end_time: '',
                     test_drive: false,
                     credit_status: 'pendiente',
-                    observation: '',
+                    observation: prefill?.observation || '',
                     appointment_title: '',
                     appointment_start: '',
                     appointment_location: '',
                     appointment_notes: ''
                 });
-                setSearchTerm("");
-                setIsManualVehicle(false);
+                setSearchTerm(prefill?.vehicle_label || '');
+                setIsManualVehicle(hasManual);
                 setScheduleAgendaAppointment(false);
             }
         }
-    }, [isOpen, visitToEdit, supabase]);
+    }, [isOpen, visitToEdit, supabase, prefill]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -432,15 +448,19 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                 <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-white text-xs font-bold px-2 py-0.5 rounded ${isEditing ? 'bg-amber-500' : 'bg-slate-900'}`}>
-                                {isEditing ? 'EDITAR' : 'NUEVO'}
+                            <span className={`text-white text-xs font-bold px-2 py-0.5 rounded ${isEditing ? 'bg-amber-500' : fromAppointment ? 'bg-orange-500' : 'bg-slate-900'}`}>
+                                {isEditing ? 'EDITAR' : fromAppointment ? 'DESDE CITA' : 'NUEVO'}
                             </span>
                             <h3 className="font-bold text-xl text-slate-900">
                                 {isEditing ? 'Editar Visita' : 'Registrar Visita'}
                             </h3>
                         </div>
                         <p className="text-sm text-slate-500">
-                            {isEditing ? 'Modifica los detalles de la visita existente.' : 'Control de tráfico y prospectos en showroom'}
+                            {isEditing
+                                ? 'Modifica los detalles de la visita existente.'
+                                : fromAppointment
+                                  ? 'Datos de la cita cargados. Completa hora de salida y el resto de la visita.'
+                                  : 'Control de tráfico y prospectos en showroom'}
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
@@ -512,6 +532,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                         </div>
 
                         {/* Cita en agenda (misma lógica que AppointmentModal) */}
+                        {!fromAppointment ? (
                         <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 p-6 rounded-2xl border border-indigo-100/80 space-y-5 shadow-sm">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-indigo-100/80">
                                 <div className="flex items-center gap-2.5">
@@ -659,6 +680,7 @@ export default function VisitFormModal({ isOpen, onClose, onSuccess, visitToEdit
                                 </div>
                             )}
                         </div>
+                        ) : null}
 
                         <div className="space-y-6">
                             {/* SECCIÓN VEHÍCULO MEJORADA */}

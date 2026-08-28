@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -79,9 +79,23 @@ function escapeIlike(q: string) {
   return q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
 
+const FOLDERS_FETCH_BATCH = 1000
+const RAW_FULL_VIDEO_EXT = /\.(mp4|mov|avi|webm|mkv|m4v)$/i
+
+function addGeneratedId(agg: Map<string, Set<string>>, vehicleId: string | null | undefined, id: string) {
+  const vid = vehicleId?.trim()
+  if (!vid || !id) return
+  let set = agg.get(vid)
+  if (!set) {
+    set = new Set()
+    agg.set(vid, set)
+  }
+  set.add(id)
+}
+
 /**
  * GET — Inventario + conteos por vehículo:
- * - `uniqueGenerated`: reels completados o fallidos con `video_jobs_v2.inventory_vehicle_id`
+ * - `uniqueGenerated`: reels (`video_jobs_v2`) + videos en bruto (`raw_full_video_folders`)
  * - `uniqueFailed`: jobs con error de pipeline + publicaciones fallidas en cola (sin duplicar IDs)
  * - Publicación: cola unida al job; agrupa por FK del job (fallback `queue.vehicle_id` legacy)
  */
@@ -124,12 +138,7 @@ export async function GET(request: NextRequest) {
       const vid = row.inventory_vehicle_id as string
       const jobId = row.id as string
       if (!vid || !jobId) continue
-      let set = generatedAgg.get(vid)
-      if (!set) {
-        set = new Set()
-        generatedAgg.set(vid, set)
-      }
-      set.add(jobId)
+      addGeneratedId(generatedAgg, vid, jobId)
       if (row.status === 'failed') {
         let failedSet = pipelineFailedAgg.get(vid)
         if (!failedSet) {
@@ -142,6 +151,38 @@ export async function GET(request: NextRequest) {
     if (rows.length < JOBS_FETCH_BATCH) break
     jOffset += JOBS_FETCH_BATCH
     if (jOffset > 50000) break
+  }
+
+  /** 1b) Videos en bruto de la biblioteca (carpeta por vehículo). */
+  try {
+    const service = createServiceRoleClient()
+    let fOffset = 0
+    for (;;) {
+      const { data: folderChunk, error: folderErr } = await service
+        .from('raw_full_video_folders')
+        .select('id, inventory_vehicle_id, inventory_vehicle_id_2, video_paths')
+        .or('inventory_vehicle_id.not.is.null,inventory_vehicle_id_2.not.is.null')
+        .range(fOffset, fOffset + FOLDERS_FETCH_BATCH - 1)
+
+      if (folderErr) {
+        console.error('[inventory-video-dashboard] raw-full folders', folderErr)
+        break
+      }
+      const folderRows = folderChunk ?? []
+      for (const folder of folderRows) {
+        const paths = (folder.video_paths ?? []).filter((p) => RAW_FULL_VIDEO_EXT.test(p))
+        for (const path of paths) {
+          const generatedId = `raw-full:${path}`
+          addGeneratedId(generatedAgg, folder.inventory_vehicle_id, generatedId)
+          addGeneratedId(generatedAgg, folder.inventory_vehicle_id_2, generatedId)
+        }
+      }
+      if (folderRows.length < FOLDERS_FETCH_BATCH) break
+      fOffset += FOLDERS_FETCH_BATCH
+      if (fOffset > 50000) break
+    }
+  } catch (err) {
+    console.error('[inventory-video-dashboard] raw-full folders', err)
   }
 
   /** 2) Cola de publicación → agrupada por inventario del job (FK), no solo queue.vehicle_id. */

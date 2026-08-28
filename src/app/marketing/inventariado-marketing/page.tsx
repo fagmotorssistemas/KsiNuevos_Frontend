@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   FolderOpen,
   Plus,
+  Inbox,
   ListVideo,
   GraduationCap,
   Sparkles,
@@ -28,6 +29,8 @@ import {
 import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
 import { RawFullVideosLibraryDashboard } from '@/components/videos/RawFullVideosLibraryDashboard'
 import { UploadFullVideosModal } from '@/components/videos/UploadFullVideosModal'
+import { UploadInboxVideosModal } from '@/components/videos/UploadInboxVideosModal'
+import { MarketingInboxVideosPanel } from '@/components/videos/MarketingInboxVideosPanel'
 import { VideoJobList } from '@/components/videos/VideoJobList'
 import { VehicleAiCreativesGallery } from '@/components/marketing/VehicleAiCreativesGallery'
 import type { RawFullCaptionFormato } from '@/lib/videos/raw-full-caption-templates'
@@ -78,7 +81,7 @@ function formatVehicleTitle(row: Row) {
   return `${toTitleCase(row.brand)} ${toTitleCase(row.model)} ${row.year}`
 }
 
-type PageTab = 'inventario' | 'educativo' | 'entretenimiento' | 'humanizar' | 'cola' | 'vehiculo'
+type PageTab = 'inventario' | 'educativo' | 'entretenimiento' | 'humanizar' | 'bandeja' | 'cola' | 'vehiculo'
 type VehicleDetailTab = 'reels' | 'raw-clips' | 'raw-full' | 'ai-gallery'
 
 function tabButtonClass(active: boolean) {
@@ -122,7 +125,9 @@ export default function InventariadoMarketingPage() {
   const [vehicleDetailTab, setVehicleDetailTab] = useState<VehicleDetailTab>('reels')
   const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [inboxUploadOpen, setInboxUploadOpen] = useState(false)
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
+  const [inboxRefreshKey, setInboxRefreshKey] = useState(0)
 
   const lastFilterSig = useRef<string | null>(null)
   const pendingFilterReset = useRef(false)
@@ -196,7 +201,7 @@ export default function InventariadoMarketingPage() {
       return
     }
     void fetchPage(page)
-  }, [page, debouncedQ, inventoryStatus, coverage, sort, fetchPage])
+  }, [page, debouncedQ, inventoryStatus, coverage, sort, fetchPage, libraryRefreshKey])
 
   const startIndex = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const endIndex = Math.min(page * PAGE_SIZE, total)
@@ -261,14 +266,24 @@ export default function InventariadoMarketingPage() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setUploadOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold shrink-0 self-start"
-        >
-          <Plus className="w-4 h-4" />
-          Subir videos
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+          <button
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
+          >
+            <Plus className="w-4 h-4" />
+            Subir videos
+          </button>
+          <button
+            type="button"
+            onClick={() => setInboxUploadOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold"
+          >
+            <Inbox className="w-4 h-4" />
+            Subir material
+          </button>
+        </div>
       </div>
 
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -312,6 +327,14 @@ export default function InventariadoMarketingPage() {
         >
           <Heart className="w-4 h-4" />
           Video Humanizar Marca
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('bandeja')}
+          className={tabButtonClass(activeTab === 'bandeja')}
+        >
+          <Inbox className="w-4 h-4" />
+          Bandeja
         </button>
         <button
           type="button"
@@ -438,6 +461,12 @@ export default function InventariadoMarketingPage() {
         <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="library" lockedPilarTab="pilar4" />
       ) : activeTab === 'humanizar' ? (
         <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="library" lockedPilarTab="pilar2" />
+      ) : activeTab === 'bandeja' ? (
+        <MarketingInboxVideosPanel
+          refreshKey={inboxRefreshKey}
+          onRequestUpload={() => setInboxUploadOpen(true)}
+          onAssigned={() => setLibraryRefreshKey((k) => k + 1)}
+        />
       ) : activeTab === 'cola' ? (
         <RawFullVideosLibraryDashboard {...rawFullEmbed} forceMainTab="queue" />
       ) : (
@@ -630,6 +659,14 @@ export default function InventariadoMarketingPage() {
         onScheduled={() => {
           setLibraryRefreshKey((k) => k + 1)
           setActiveTab('cola')
+        }}
+      />
+      <UploadInboxVideosModal
+        isOpen={inboxUploadOpen}
+        onClose={() => setInboxUploadOpen(false)}
+        onSaved={() => {
+          setInboxRefreshKey((k) => k + 1)
+          setActiveTab('bandeja')
         }}
       />
     </div>

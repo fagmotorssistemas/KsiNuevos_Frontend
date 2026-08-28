@@ -169,7 +169,7 @@ export function useAgenda() {
                 *,
                 lead:leads (
                     *,
-                    interested_cars (*, inventoryoracle(brand, model, year))
+                    interested_cars (*, inventoryoracle(id, brand, model, year))
                 ),
                 responsible:profiles!responsible_id (*) 
             `);

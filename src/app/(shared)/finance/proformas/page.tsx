@@ -12,6 +12,8 @@ import {
     Plus,
     Car,
     Calendar,
+    ChevronRight,
+    X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
@@ -69,6 +71,104 @@ function openWhatsApp(phoneRaw: string | null) {
     window.open(`https://wa.me/${phone}`, "_blank");
 }
 
+function normalizeClientName(name: string) {
+    return name
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .replace(/\s+/g, " ");
+}
+
+function normalizeCedula(value: string | null | undefined) {
+    return (value || "").replace(/\D/g, "");
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>) {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const value of values) {
+        const trimmed = value?.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(trimmed);
+    }
+    return out;
+}
+
+type ClientGroup = {
+    key: string;
+    name: string;
+    clientIds: string[];
+    phones: string[];
+    items: ProformaRow[];
+    latestAt: string;
+};
+
+function buildClientGroup(key: string, items: ProformaRow[]): ClientGroup {
+    const sorted = [...items].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return {
+        key,
+        name: sorted[0]?.client_name?.trim() || "Sin nombre",
+        clientIds: uniqueNonEmpty(sorted.map((item) => item.client_id)),
+        phones: uniqueNonEmpty(sorted.map((item) => item.client_phone)),
+        items: sorted,
+        latestAt: sorted[0]?.created_at || "",
+    };
+}
+
+function groupProformasByClient(rows: ProformaRow[]): ClientGroup[] {
+    const withCedula = new Map<string, ProformaRow[]>();
+    const byName = new Map<string, ProformaRow[]>();
+
+    for (const row of rows) {
+        const cedula = normalizeCedula(row.client_id);
+        if (cedula) {
+            const list = withCedula.get(cedula) ?? [];
+            list.push(row);
+            withCedula.set(cedula, list);
+            continue;
+        }
+        const name = normalizeClientName(row.client_name);
+        const list = byName.get(name) ?? [];
+        list.push(row);
+        byName.set(name, list);
+    }
+
+    const groups: ClientGroup[] = [];
+    const cedulasByName = new Map<string, string[]>();
+
+    for (const [cedula, items] of withCedula) {
+        groups.push(buildClientGroup(`id:${cedula}`, items));
+        for (const name of new Set(
+            items.map((item) => normalizeClientName(item.client_name)).filter(Boolean)
+        )) {
+            const list = cedulasByName.get(name) ?? [];
+            list.push(cedula);
+            cedulasByName.set(name, list);
+        }
+    }
+
+    for (const [name, items] of byName) {
+        const matchingCedulas = cedulasByName.get(name) ?? [];
+        if (matchingCedulas.length === 1) {
+            const targetIndex = groups.findIndex((group) => group.key === `id:${matchingCedulas[0]}`);
+            if (targetIndex >= 0) {
+                groups[targetIndex] = buildClientGroup(groups[targetIndex].key, [
+                    ...groups[targetIndex].items,
+                    ...items,
+                ]);
+                continue;
+            }
+        }
+        groups.push(buildClientGroup(`name:${name || "sin-nombre"}`, items));
+    }
+
+    return groups.sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+}
+
 export default function CreditProformasPage() {
     const { user, profile, isAdminLike } = useAuth();
     const supabase = useMemo(() => createClient(), []);
@@ -78,6 +178,7 @@ export default function CreditProformasPage() {
     const [sellerFilter, setSellerFilter] = useState<string>("all");
     const [pdfFilter, setPdfFilter] = useState<"all" | "with_pdf" | "without_pdf">("all");
     const [isBackfilling, setIsBackfilling] = useState(false);
+    const [selectedClientKey, setSelectedClientKey] = useState<string | null>(null);
 
     const canSeeAll = isAdminLike;
 
@@ -221,6 +322,33 @@ export default function CreditProformasPage() {
         });
     }, [sellerScoped, searchTerm, pdfFilter]);
 
+    const clientGroups = useMemo(() => groupProformasByClient(filtered), [filtered]);
+
+    const selectedGroup = useMemo(
+        () => clientGroups.find((group) => group.key === selectedClientKey) ?? null,
+        [clientGroups, selectedClientKey]
+    );
+
+    useEffect(() => {
+        if (selectedClientKey && !selectedGroup) {
+            setSelectedClientKey(null);
+        }
+    }, [selectedClientKey, selectedGroup]);
+
+    useEffect(() => {
+        if (!selectedGroup) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setSelectedClientKey(null);
+        };
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener("keydown", onKeyDown);
+        };
+    }, [selectedGroup]);
+
     const filterLabel =
         pdfFilter === "with_pdf"
             ? "con PDF"
@@ -358,7 +486,8 @@ export default function CreditProformasPage() {
                 {(filterLabel || selectedSellerName) && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                         <p className="text-xs text-slate-500">
-                            {filtered.length} resultado{filtered.length === 1 ? "" : "s"}
+                            {clientGroups.length} cliente{clientGroups.length === 1 ? "" : "s"}
+                            {` · ${filtered.length} consulta${filtered.length === 1 ? "" : "s"}`}
                             {selectedSellerName ? ` · ${selectedSellerName}` : ""}
                             {filterLabel ? ` · ${filterLabel}` : ""}
                         </p>
@@ -414,89 +543,98 @@ export default function CreditProformasPage() {
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-100">
-                        {filtered.map((item) => {
-                            const sellerName = item.profiles?.full_name || "Sin asesor";
+                        {clientGroups.map((group) => {
+                            const vehicles = uniqueNonEmpty(group.items.map((item) => item.vehicle_description));
+                            const advisors = uniqueNonEmpty(group.items.map((item) => item.profiles?.full_name));
+                            const latest = group.items[0];
+                            const vehicleLabel =
+                                vehicles.length === 0
+                                    ? "Vehículo no especificado"
+                                    : vehicles.length === 1
+                                      ? vehicles[0]
+                                      : `${vehicles.length} vehículos consultados`;
+                            const advisorLabel =
+                                advisors.length === 0
+                                    ? "Sin asesor"
+                                    : advisors.length === 1
+                                      ? advisors[0]
+                                      : "Varios asesores";
+                            const phone = group.phones[0] ?? null;
+
                             return (
                                 <div
-                                    key={item.id}
-                                    className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50/80 lg:flex-row lg:items-center lg:gap-5"
+                                    key={group.key}
+                                    onClick={() => setSelectedClientKey(group.key)}
+                                    className={`grid cursor-pointer grid-cols-1 gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50/80 lg:items-center lg:gap-5 ${
+                                        canSeeAll
+                                            ? "lg:grid-cols-[minmax(0,1fr)_6.75rem_9rem_7.5rem_4.5rem]"
+                                            : "lg:grid-cols-[minmax(0,1fr)_6.75rem_7.5rem_4.5rem]"
+                                    } ${selectedClientKey === group.key ? "bg-blue-50/70" : ""}`}
                                 >
-                                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
                                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold tracking-wide text-slate-600">
-                                            {initialsFromName(item.client_name)}
+                                            {initialsFromName(group.name)}
                                         </div>
                                         <div className="min-w-0">
                                             <div className="flex min-w-0 flex-wrap items-center gap-2">
                                                 <h3 className="truncate text-sm font-semibold capitalize text-slate-900">
-                                                    {item.client_name}
+                                                    {group.name}
                                                 </h3>
-                                                {item.client_id ? (
+                                                {group.clientIds[0] ? (
                                                     <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">
-                                                        {item.client_id}
+                                                        {group.clientIds[0]}
                                                     </span>
                                                 ) : null}
+                                                <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700">
+                                                    {group.items.length} consulta{group.items.length === 1 ? "" : "s"}
+                                                </span>
                                             </div>
                                             <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm text-slate-500">
                                                 <Car className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                                <span className="truncate">
-                                                    {item.vehicle_description || "Vehículo no especificado"}
-                                                </span>
+                                                <span className="truncate">{vehicleLabel}</span>
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3 pl-[3.25rem] sm:grid-cols-4 lg:flex lg:w-auto lg:shrink-0 lg:items-center lg:gap-6 lg:pl-0">
-                                        <div className="min-w-[6.5rem]">
-                                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Fecha</p>
+                                    <div className="grid grid-cols-2 gap-3 pl-[3.25rem] sm:grid-cols-3 lg:contents lg:pl-0">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Última</p>
                                             <p className="mt-0.5 inline-flex items-center gap-1 text-sm capitalize text-slate-600">
                                                 <Calendar className="h-3 w-3 text-slate-400" />
-                                                {formatDate(item.created_at)}
+                                                {formatDate(group.latestAt)}
                                             </p>
                                         </div>
                                         {canSeeAll ? (
-                                            <div className="min-w-[7rem] max-w-[9rem]">
+                                            <div className="min-w-0">
                                                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Asesor</p>
-                                                <p className="mt-0.5 truncate text-sm text-slate-600">{sellerName}</p>
+                                                <p className="mt-0.5 truncate text-sm text-slate-600">{advisorLabel}</p>
                                             </div>
                                         ) : null}
                                         <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Plazo</p>
-                                            <p className="mt-0.5 text-sm text-slate-600">{item.term_months ?? "—"} meses</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Cuota</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Última cuota</p>
                                             <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900">
-                                                {formatMoney(item.monthly_payment)}
+                                                {formatMoney(latest?.monthly_payment)}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="flex shrink-0 items-center gap-1 self-end lg:self-center">
-                                        {item.client_phone ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => openWhatsApp(item.client_phone)}
-                                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
-                                                title={item.client_phone}
-                                            >
-                                                <MessageCircle className="h-4 w-4" />
-                                            </button>
-                                        ) : null}
-                                        {item.pdf_url ? (
-                                            <a
-                                                href={item.pdf_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                                            >
-                                                Ver PDF
-                                                <ExternalLink className="h-3.5 w-3.5" />
-                                            </a>
-                                        ) : (
-                                            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
-                                                Sin PDF
-                                            </span>
-                                        )}
+                                    <div className="flex items-center justify-end gap-1 self-end lg:w-full lg:self-center">
+                                        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center">
+                                            {phone ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openWhatsApp(phone);
+                                                    }}
+                                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                                                    title={phone}
+                                                >
+                                                    <MessageCircle className="h-4 w-4" />
+                                                </button>
+                                            ) : null}
+                                        </span>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
                                     </div>
                                 </div>
                             );
@@ -506,11 +644,134 @@ export default function CreditProformasPage() {
 
                 {!isLoading && filtered.length > 0 ? (
                     <div className="border-t border-slate-100 px-4 py-2.5 text-center text-[11px] text-slate-400">
-                        {filtered.length} proforma{filtered.length === 1 ? "" : "s"}
+                        {clientGroups.length} cliente{clientGroups.length === 1 ? "" : "s"}
+                        {` · ${filtered.length} consulta${filtered.length === 1 ? "" : "s"}`}
                         {proformas.length >= 500 ? " · máx. 500 más recientes" : ""}
                     </div>
                 ) : null}
             </div>
+
+            {selectedGroup ? (
+                <div className="fixed inset-0 z-[70] flex justify-end">
+                    <button
+                        type="button"
+                        aria-label="Cerrar panel"
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+                        onClick={() => setSelectedClientKey(null)}
+                    />
+                    <aside className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl">
+                        <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold tracking-wide text-blue-700">
+                                {initialsFromName(selectedGroup.name)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h2 className="truncate text-lg font-semibold capitalize text-slate-900">
+                                    {selectedGroup.name}
+                                </h2>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    {selectedGroup.clientIds.map((id) => (
+                                        <span key={id} className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">
+                                            {id}
+                                        </span>
+                                    ))}
+                                    {selectedGroup.phones.map((phone) => (
+                                        <span key={phone}>{phone}</span>
+                                    ))}
+                                    <span className="font-medium text-blue-700">
+                                        {selectedGroup.items.length} consulta{selectedGroup.items.length === 1 ? "" : "s"}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedClientKey(null)}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                                aria-label="Cerrar"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {selectedGroup.phones[0] ? (
+                            <div className="border-b border-slate-100 px-5 py-3">
+                                <button
+                                    type="button"
+                                    onClick={() => openWhatsApp(selectedGroup.phones[0])}
+                                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                                >
+                                    <MessageCircle className="h-4 w-4" />
+                                    WhatsApp
+                                </button>
+                            </div>
+                        ) : null}
+
+                        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                            {selectedGroup.items.map((item) => {
+                                const sellerName = item.profiles?.full_name || "Sin asesor";
+                                return (
+                                    <article
+                                        key={item.id}
+                                        className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="flex items-center gap-1.5 text-xs font-medium capitalize text-slate-500">
+                                                    <Calendar className="h-3.5 w-3.5" />
+                                                    {formatDate(item.created_at)}
+                                                </p>
+                                                <p className="mt-1 flex items-start gap-1.5 text-sm font-semibold text-slate-900">
+                                                    <Car className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                                                    <span>{item.vehicle_description || "Vehículo no especificado"}</span>
+                                                </p>
+                                            </div>
+                                            {item.pdf_url ? (
+                                                <a
+                                                    href={item.pdf_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                                >
+                                                    Ver PDF
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                </a>
+                                            ) : (
+                                                <span className="shrink-0 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+                                                    Sin PDF
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                            <div>
+                                                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Precio</dt>
+                                                <dd className="mt-0.5 tabular-nums text-slate-700">{formatMoney(item.vehicle_price)}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Entrada</dt>
+                                                <dd className="mt-0.5 tabular-nums text-slate-700">{formatMoney(item.down_payment_amount)}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Plazo</dt>
+                                                <dd className="mt-0.5 text-slate-700">{item.term_months ?? "—"} meses</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Cuota</dt>
+                                                <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">{formatMoney(item.monthly_payment)}</dd>
+                                            </div>
+                                            {canSeeAll ? (
+                                                <div className="col-span-2">
+                                                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Asesor</dt>
+                                                    <dd className="mt-0.5 text-slate-700">{sellerName}</dd>
+                                                </div>
+                                            ) : null}
+                                        </dl>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    </aside>
+                </div>
+            ) : null}
         </div>
     );
 }
