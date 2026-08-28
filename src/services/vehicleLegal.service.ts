@@ -171,6 +171,26 @@ export async function resolveInventoryOracleId(
   return null
 }
 
+export async function resolveOwnerIdentityForContraste(
+  supabase: SupabaseClient,
+  placa: string,
+  inventoryoracleId?: string | null
+): Promise<{ cedula: string | null; ownerName: string | null }> {
+  const oracleId = inventoryoracleId || (await resolveInventoryOracleId(supabase, placa))
+  if (!oracleId) return { cedula: null, ownerName: null }
+  const { data, error } = await supabase
+    .from('inventory_vehicle_owners')
+    .select('id_number, owner_name, is_current, sort_order')
+    .eq('inventoryoracle_id', oracleId)
+    .order('is_current', { ascending: false })
+    .order('sort_order', { ascending: true })
+  if (error) return { cedula: null, ownerName: null }
+  const current = (data ?? []).find((row) => row.is_current) ?? data?.[0] ?? null
+  const digits = (current?.id_number || '').replace(/\D/g, '')
+  const cedula = digits.length === 10 || digits.length === 13 ? digits : null
+  return { cedula, ownerName: current?.owner_name?.trim() || null }
+}
+
 async function seedDocumentSlots(supabase: SupabaseClient, inventoryoracleId: string) {
   const { data: existing, error: readErr } = await supabase
     .from('inventory_vehicle_documents')

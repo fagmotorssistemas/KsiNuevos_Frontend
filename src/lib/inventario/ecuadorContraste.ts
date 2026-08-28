@@ -19,6 +19,23 @@ export type ContrastApiCell = {
   vigente: boolean | null
 }
 
+export type ConsultasJuicio = {
+  causa: string | null
+  accion: string | null
+  fecha: string | null
+  rol: string | null
+  estado: string | null
+}
+
+export type EcuadorJuiciosConsulta = {
+  cedula: string | null
+  titular: string | null
+  queriedAt: string
+  resolvedFrom: 'cedula' | 'nombre' | null
+  procesos: ConsultasJuicio[]
+  error: string | null
+}
+
 export type EcuadorContrastePayload = {
   plate: string
   fetchedAt: string | null
@@ -35,6 +52,8 @@ export type EcuadorContrastePayload = {
   prenda_industrial: ContrastApiCell
   informe_ant_siat: ContrastApiCell
   multas: ContrastApiCell
+  procesos_legales?: ContrastApiCell
+  juicios?: EcuadorJuiciosConsulta | null
 }
 
 export type EcuadorCitationStatus = 'pending' | 'paid' | 'appealed' | 'annulled' | 'agreement'
@@ -398,6 +417,27 @@ export function contrasteTopicDetail(
       facts.push({ label: 'Fuente oficial', value: payload.prenda_industrial.text })
     }
     emptyHint = 'EcuadorAPI no publica prenda industrial. El contraste es con lo cargado por el encargado.'
+  } else if (key === 'procesos_legales') {
+    const juicios = payload.juicios
+    if (juicios?.cedula) facts.push({ label: 'Cédula / RUC consultado', value: juicios.cedula })
+    if (juicios?.titular) facts.push({ label: 'Titular', value: juicios.titular })
+    if (juicios?.resolvedFrom === 'nombre') {
+      facts.push({ label: 'Cédula', value: 'Resuelta por nombre del propietario' })
+    }
+    if (juicios?.error) facts.push({ label: 'Consulta', value: juicios.error })
+    if (juicios?.procesos.length) {
+      for (const proceso of juicios.procesos) {
+        facts.push({
+          label: proceso.causa || 'Causa',
+          value: [proceso.accion, proceso.rol, proceso.estado, proceso.fecha].filter(Boolean).join(' · ') || 'Proceso judicial',
+        })
+      }
+    }
+    emptyHint = juicios?.error
+      ? juicios.error
+      : juicios?.procesos.length
+        ? 'Procesos reportados por Función Judicial (Consultas.ec).'
+        : 'Función Judicial no reporta procesos para esa cédula.'
   } else if (key === 'documentos_pendientes') {
     lines = linesFromBlock(sri, 'SRI', (item) => sriRubroKind(sriItemBlob(item)) === 'otro')
     emptyHint =
@@ -721,6 +761,8 @@ export function buildContrastePayload(input: {
     prenda_industrial: PRENDA_SIN_FUENTE,
     informe_ant_siat: antCells.informe,
     multas: antCells.multas,
+    procesos_legales: { text: 'Sin consultar Función Judicial', vigente: null },
+    juicios: null,
   }
 }
 
@@ -906,6 +948,20 @@ export function buildContrastMatrix(
             kind: compareContrastRow(current.status, official.vigente).kind,
           }
         : { text: 'Sin consultar', kind: 'idle' }
+    } else if (docType === 'procesos_legales') {
+      if (payload?.juicios?.error) {
+        antCell = { text: payload.juicios.error, kind: 'warn' }
+      } else if (payload?.juicios) {
+        const alDia = payload.juicios.procesos.length === 0
+        antCell = {
+          text:
+            payload.procesos_legales?.text ||
+            (alDia ? 'Sin procesos en Función Judicial' : `${payload.juicios.procesos.length} proceso(s)`),
+          kind: compareContrastRow(current.status, alDia).kind,
+        }
+      } else {
+        antCell = { text: 'Sin consultar Función Judicial', kind: 'idle' }
+      }
     } else if (docType === 'documentos_pendientes' && rubros.otros.length > 0) {
       sriCell = {
         kind: 'missing',

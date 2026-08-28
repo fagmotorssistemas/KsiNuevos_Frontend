@@ -124,7 +124,7 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
 }
 
 function shouldAttachContraste(docType: string): boolean {
-  return docType === 'matricula' || docType === 'revision_tecnica' || docType === 'informe_ant_siat'
+  return docType === 'matricula' || docType === 'revision_tecnica' || docType === 'informe_ant_siat' || docType === 'procesos_legales'
 }
 
 function buildPrompt(input: {
@@ -401,7 +401,10 @@ function sourceLabel(input: {
 }): string {
   if (input.kind === 'missing') return `Sin archivo · ${input.docLabel}`
   if (input.kind === 'detail') return `Detalle · ${input.docLabel}`
-  if (input.kind === 'api') return 'EcuadorAPI (contraste)'
+  if (input.kind === 'api') {
+    if (/proceso/i.test(input.docLabel)) return 'Función Judicial (Consultas.ec)'
+    return 'EcuadorAPI (contraste)'
+  }
   if (input.photoIndex) return `Foto ${input.photoIndex} · ${input.docLabel}`
   return input.docLabel
 }

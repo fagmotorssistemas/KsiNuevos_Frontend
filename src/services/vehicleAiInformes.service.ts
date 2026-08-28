@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/types/supabase'
 import { normalizePlate } from '@/lib/inventario/normalizePlate'
 import { normalizeFindings, type DocumentAiAnalysis, type VehicleAiSynthesis } from '@/lib/inventario/openaiDocumentVision'
+import type { EcuadorJuiciosConsulta } from '@/lib/inventario/ecuadorContraste'
 
 export type VehicleAiInformeRow = Database['public']['Tables']['inventory_vehicle_ai_informes']['Row']
 
@@ -20,11 +21,13 @@ export type VehicleAiInformeSection = {
   detailText: string | null
   missing: boolean
   files: VehicleAiInformeSectionFile[]
+  juicios?: EcuadorJuiciosConsulta | null
 }
 
 export type VehicleAiInformePayload = {
   synthesis: VehicleAiSynthesis
   sections: VehicleAiInformeSection[]
+  juicios?: EcuadorJuiciosConsulta | null
 }
 
 export function payloadFromAiInforme(row: VehicleAiInformeRow): VehicleAiInformePayload | null {
@@ -52,6 +55,7 @@ export function parseVehicleAiInformePayload(value: unknown): VehicleAiInformePa
         photoIndex: file.photoIndex ?? index + 1,
       })),
     })),
+    juicios: payload.juicios ?? null,
   }
 }
 

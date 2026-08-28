@@ -128,12 +128,13 @@ function isCatalogDocType(key: string): key is VehicleDocType {
 }
 
 function topicSources(row: ContrastMatrixRow) {
+  const antLabel = row.key === "procesos_legales" ? "Función Judicial" : "ANT"
   return [
     { label: "Encargado", text: row.encargado, kind: encargadoKind(row.encargado) },
     { label: "SRI", text: row.sri.text, kind: row.sri.kind },
-    { label: "ANT", text: row.ant.text, kind: row.ant.kind },
+    { label: antLabel, text: row.ant.text, kind: row.ant.kind },
     { label: "AMT", text: row.amt.text, kind: row.amt.kind },
-  ].filter((s) => s.text && s.text !== "—" && s.kind !== "idle");
+  ].filter((s) => s.text && s.text !== "—" && s.kind !== "idle")
 }
 
 function resultadoBadgeClass(kind: ResultKind): string {

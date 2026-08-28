@@ -145,6 +145,10 @@ function mapPlate(d: PlateApiRow, placa: string): EcuadorPlateLookup {
   }
 }
 
+export async function fetchEcuadorPath<T = unknown>(path: string, timeoutMs = 30_000): Promise<T> {
+  return ecuadorGetJson<T>(path, timeoutMs)
+}
+
 export async function fetchEcuadorPlate(placa: string): Promise<EcuadorPlateLookup> {
   const d = await ecuadorGetJson<PlateApiRow>(`/placas/${encodeURIComponent(placa)}`)
   return mapPlate(d, placa)

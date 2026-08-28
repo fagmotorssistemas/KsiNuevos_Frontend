@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, Sparkles, User, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, Scale, Sparkles, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { listContrasteConsultas, payloadFromConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
@@ -22,6 +22,7 @@ import {
   formatContrasteRelative,
   summarizeMatrix,
   type EcuadorContrastePayload,
+  type EcuadorJuiciosConsulta,
 } from '@/lib/inventario/ecuadorContraste'
 import type { DocumentAiAnalysis, VehicleAiFinding, VehicleAiSource, VehicleAiSynthesis, VehicleAiSynthesisItem } from '@/lib/inventario/openaiDocumentVision'
 import type { Json } from '@/types/supabase'
@@ -90,13 +91,34 @@ type ConclusionResult = {
   reasons: string[]
 }
 
+function formatJuicioLine(proceso: { causa: string | null; accion: string | null; rol: string | null; estado: string | null; fecha: string | null }): string {
+  return [proceso.causa, proceso.accion, proceso.rol, proceso.estado, proceso.fecha].filter(Boolean).join(' · ')
+}
+
+function juiciosForSection(
+  section: VehicleAiInformeSection,
+  payload: VehicleAiInformePayload | null
+): EcuadorJuiciosConsulta | null {
+  if (section.docType !== 'procesos_legales') return null
+  return section.juicios ?? payload?.juicios ?? null
+}
+
 function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionResult[] {
   const results: ConclusionResult[] = []
   for (const section of payload.sections) {
-    if (section.missing) {
+    const juicios = juiciosForSection(section, payload)
+    if (section.docType === 'procesos_legales' && juicios) {
+      const reasons = juicios.error
+        ? [juicios.error]
+        : [
+            juicios.procesos.length === 0
+              ? `Función Judicial: sin procesos${juicios.cedula ? ` para cédula ${juicios.cedula}` : ''}.`
+              : `Función Judicial: ${juicios.procesos.length} proceso${juicios.procesos.length === 1 ? '' : 's'}${juicios.cedula ? ` · cédula ${juicios.cedula}` : ''}.`,
+            ...juicios.procesos.map(formatJuicioLine),
+          ]
       results.push({
-        id: `missing-${section.docType}`,
-        bucket: 'other',
+        id: 'juicios-oficiales',
+        bucket: juicios.error ? 'other' : juicios.procesos.length > 0 ? 'other' : 'ok',
         docLabel: section.docLabel,
         source: {
           docType: section.docType,
@@ -104,12 +126,34 @@ function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionRes
           photoIndex: null,
           fileName: null,
           fileId: null,
-          kind: 'missing',
-          label: section.docLabel,
+          kind: 'api',
+          label: 'Función Judicial',
         },
-        heading: null,
-        reasons: ['No se ha subido documento.'],
+        heading: juicios.procesos.length > 0 ? `${juicios.procesos.length} procesos` : null,
+        reasons,
       })
+    }
+    if (section.missing) {
+      if (section.docType === 'procesos_legales' && juicios) {
+        /* la consulta oficial ya cubre esta sección */
+      } else {
+        results.push({
+          id: `missing-${section.docType}`,
+          bucket: 'other',
+          docLabel: section.docLabel,
+          source: {
+            docType: section.docType,
+            docLabel: section.docLabel,
+            photoIndex: null,
+            fileName: null,
+            fileId: null,
+            kind: 'missing',
+            label: section.docLabel,
+          },
+          heading: null,
+          reasons: ['No se ha subido documento.'],
+        })
+      }
       continue
     }
     for (const file of section.files) {
@@ -201,7 +245,8 @@ function collectJobs(dossier: VehicleLegalDossier): FileJob[] {
 
 function buildSections(
   dossier: VehicleLegalDossier,
-  fileResults: VehicleAiInformeSectionFile[]
+  fileResults: VehicleAiInformeSectionFile[],
+  juicios?: EcuadorJuiciosConsulta | null
 ): VehicleAiInformeSection[] {
   const byType = new Map(dossier.documents.map((row) => [row.doc_type, row]))
   return VEHICLE_DOCUMENT_CATALOG.filter((col) => isDocumentCatalogItemVisible(col.docType, byType)).map((col) => {
@@ -210,13 +255,15 @@ function buildSections(
     const analyzable = fileResults
       .filter((file) => fileIds.has(file.fileId) && !file.fileId.startsWith('legacy-'))
       .map((file, index) => ({ ...file, photoIndex: index + 1 }))
+    const sectionJuicios = col.docType === 'procesos_legales' ? juicios ?? null : null
     return {
       docType: col.docType,
       docLabel: col.label,
       category: col.category,
       detailText: row?.detail_text?.trim() || null,
-      missing: analyzable.length === 0,
+      missing: analyzable.length === 0 && !sectionJuicios,
       files: analyzable,
+      juicios: sectionJuicios,
     }
   })
 }
@@ -362,6 +409,73 @@ function OwnerConclusionsBlock({
   )
 }
 
+function juiciosSynthesisItem(juicios: EcuadorJuiciosConsulta | null): VehicleAiSynthesisItem | null {
+  if (!juicios) return null
+  const issues = juicios.error
+    ? [juicios.error]
+    : juicios.procesos.length === 0
+      ? ['Sin procesos judiciales reportados por Función Judicial.']
+      : juicios.procesos.map(formatJuicioLine)
+  return {
+    docType: 'procesos_legales',
+    docLabel: 'Procesos legales',
+    fileName: '',
+    summary: juicios.error
+      ? `Función Judicial: ${juicios.error}`
+      : juicios.procesos.length === 0
+        ? `Sin procesos judiciales para cédula ${juicios.cedula || 'del propietario'}.`
+        : `${juicios.procesos.length} proceso(s) judiciales para cédula ${juicios.cedula || 'del propietario'}.`,
+    issues,
+    missing: false,
+    photoIndex: null,
+    detailText: null,
+    error: juicios.error,
+    photoShouldNotBeUploaded: false,
+  }
+}
+
+function JuiciosConclusionsBlock({ juicios }: { juicios: EcuadorJuiciosConsulta | null | undefined }) {
+  if (!juicios) return null
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+      <div className="flex items-start gap-2">
+        <div className="h-8 w-8 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+          <Scale className="h-4 w-4 text-slate-700" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Función Judicial</p>
+          <p className="text-sm font-bold text-slate-900 mt-0.5">
+            {juicios.error
+              ? juicios.error
+              : juicios.procesos.length === 0
+                ? 'Sin procesos reportados'
+                : `${juicios.procesos.length} proceso${juicios.procesos.length === 1 ? '' : 's'}`}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {[juicios.titular, juicios.cedula ? `Cédula ${juicios.cedula}` : null].filter(Boolean).join(' · ') ||
+              'Consulta por cédula del propietario'}
+          </p>
+        </div>
+      </div>
+      {juicios.procesos.length > 0 ? (
+        <ul className="mt-3 space-y-1.5">
+          {juicios.procesos.map((proceso, index) => (
+            <li
+              key={`${proceso.causa || 'proceso'}-${index}`}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
+            >
+              <p className="font-semibold">{proceso.causa || 'Causa sin número'}</p>
+              <p className="text-slate-600 mt-0.5">
+                {[proceso.accion, proceso.rol, proceso.estado, proceso.fecha].filter(Boolean).join(' · ')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
 function VehicleAiReportModal({
   vehiculo,
   dossier,
@@ -388,6 +502,7 @@ function VehicleAiReportModal({
   const [conclusionFilter, setConclusionFilter] = useState<'all' | 'invalid' | 'ok'>('all')
   const [apiOwner, setApiOwner] = useState<string | null>(null)
   const [apiCanton, setApiCanton] = useState<string | null>(null)
+  const [contrasteJuicios, setContrasteJuicios] = useState<EcuadorJuiciosConsulta | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -422,14 +537,16 @@ function VehicleAiReportModal({
     void listContrasteConsultas(supabase, vehiculo.placa)
       .then((rows) => {
         if (cancelled) return
-        const payload = rows[0] ? payloadFromConsulta(rows[0]) : null
-        setApiOwner(payload?.lookup?.ownerName?.trim() || null)
-        setApiCanton(payload?.lookup?.canton?.trim() || null)
+        const contrast = rows[0] ? payloadFromConsulta(rows[0]) : null
+        setApiOwner(contrast?.lookup?.ownerName?.trim() || null)
+        setApiCanton(contrast?.lookup?.canton?.trim() || null)
+        setContrasteJuicios(contrast?.juicios ?? null)
       })
       .catch(() => {
         if (!cancelled) {
           setApiOwner(null)
           setApiCanton(null)
+          setContrasteJuicios(null)
         }
       })
     return () => {
@@ -446,6 +563,7 @@ function VehicleAiReportModal({
     try {
       const readyRes = await fetch('/api/inventario/contraste/ready')
       const readyBody = readyRes.ok ? ((await readyRes.json()) as { ready?: boolean }) : { ready: false }
+      let contrastePayload: EcuadorContrastePayload | null = null
       if (readyBody.ready) {
         const contrastRes = await fetch(`/api/inventario/contraste/${encodeURIComponent(vehiculo.placa)}`, {
           method: 'POST',
@@ -454,6 +572,7 @@ function VehicleAiReportModal({
         if (!contrastRes.ok || !contrastBody.data) {
           throw new Error(contrastBody.error || 'No se pudo consultar EcuadorAPI')
         }
+        contrastePayload = contrastBody.data
         const staff = emptyContrasteStaff()
         const counts = summarizeMatrix(
           buildContrastMatrix(contrastBody.data, staff),
@@ -474,6 +593,7 @@ function VehicleAiReportModal({
         setApiOwner(contrastBody.data.lookup?.ownerName?.trim() || null)
         setApiCanton(contrastBody.data.lookup?.canton?.trim() || null)
         onContrasteUpdated?.(contrastBody.data)
+        setContrasteJuicios(contrastBody.data.juicios ?? null)
       } else {
         throw new Error('EcuadorAPI no está configurada. No se puede actualizar el contraste.')
       }
@@ -506,7 +626,8 @@ function VehicleAiReportModal({
               }
             })
 
-      const sections = buildSections(dossier, fileResults)
+      const sections = buildSections(dossier, fileResults, contrastePayload?.juicios ?? null)
+      const juiciosItem = juiciosSynthesisItem(contrastePayload?.juicios ?? null)
       setPhase('synthesis')
       const synRes = await fetch('/api/inventario/documentos/informe-ia/sintesis', {
         method: 'POST',
@@ -514,41 +635,49 @@ function VehicleAiReportModal({
         body: JSON.stringify({
           placa: vehiculo.placa,
           vehicleLabel: `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anioModelo ?? ''}`.trim(),
-          items: sections.flatMap((section): VehicleAiSynthesisItem[] => {
-            if (section.missing) {
-              return [
-                {
-                  docType: section.docType,
-                  docLabel: section.docLabel,
-                  fileName: '',
-                  summary: 'No se ha subido documento.',
-                  issues: ['No se ha subido documento.'],
-                  missing: true,
-                  photoIndex: null,
-                  detailText: section.detailText,
-                  error: null,
-                },
-              ]
-            }
-            return section.files.map((file, index) => ({
-              docType: section.docType,
-              docLabel: section.docLabel,
-              fileName: file.fileName,
-              fileId: file.fileId,
-              photoIndex: file.photoIndex ?? index + 1,
-              summary: file.analysis?.summary || '',
-              issues: file.analysis?.issues ?? [],
-              photoShouldNotBeUploaded: file.analysis?.photo_should_not_be_uploaded ?? false,
-              missing: false,
-              detailText: section.detailText,
-              error: file.error ?? null,
-            }))
-          }),
+          items: [
+            ...sections.flatMap((section): VehicleAiSynthesisItem[] => {
+              if (section.missing) {
+                if (section.docType === 'procesos_legales' && juiciosItem) return []
+                return [
+                  {
+                    docType: section.docType,
+                    docLabel: section.docLabel,
+                    fileName: '',
+                    summary: 'No se ha subido documento.',
+                    issues: ['No se ha subido documento.'],
+                    missing: true,
+                    photoIndex: null,
+                    detailText: section.detailText,
+                    error: null,
+                  },
+                ]
+              }
+              return section.files.map((file, index) => ({
+                docType: section.docType,
+                docLabel: section.docLabel,
+                fileName: file.fileName,
+                fileId: file.fileId,
+                photoIndex: file.photoIndex ?? index + 1,
+                summary: file.analysis?.summary || '',
+                issues: file.analysis?.issues ?? [],
+                photoShouldNotBeUploaded: file.analysis?.photo_should_not_be_uploaded ?? false,
+                missing: false,
+                detailText: section.detailText,
+                error: file.error ?? null,
+              }))
+            }),
+            ...(juiciosItem ? [juiciosItem] : []),
+          ],
         }),
       })
       const synBody = (await synRes.json()) as { synthesis?: VehicleAiSynthesis; error?: string }
       if (!synRes.ok || !synBody.synthesis) throw new Error(synBody.error || 'No se pudo armar el informe')
-      const next: VehicleAiInformePayload = { synthesis: synBody.synthesis, sections }
+      const next: VehicleAiInformePayload = {
+        synthesis: synBody.synthesis,
+        sections,
+        juicios: contrastePayload?.juicios ?? null,
+      }
       const saveRes = await fetch('/api/inventario/documentos/informe-ia', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -572,11 +701,38 @@ function VehicleAiReportModal({
     }
   }
 
-  const legalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'legal')
-  const physicalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'physical')
+  const displayPayload = useMemo(() => {
+    if (!payload) return null
+    const juicios = payload.juicios ?? contrasteJuicios
+    if (!juicios) return payload
+    const catalog = VEHICLE_DOCUMENT_CATALOG.find((col) => col.docType === 'procesos_legales')
+    let sections = payload.sections.map((section) =>
+      section.docType === 'procesos_legales'
+        ? { ...section, juicios: section.juicios ?? juicios, missing: section.files.length === 0 && !juicios }
+        : section
+    )
+    if (!sections.some((section) => section.docType === 'procesos_legales')) {
+      sections = [
+        ...sections,
+        {
+          docType: 'procesos_legales',
+          docLabel: catalog?.label ?? 'Procesos legales',
+          category: 'legal' as const,
+          detailText: null,
+          missing: false,
+          files: [],
+          juicios,
+        },
+      ]
+    }
+    return { ...payload, juicios, sections }
+  }, [payload, contrasteJuicios])
+
+  const legalBlocks = (displayPayload?.sections ?? []).filter((s) => s.category === 'legal')
+  const physicalBlocks = (displayPayload?.sections ?? []).filter((s) => s.category === 'physical')
   const conclusionResults = useMemo(
-    () => (payload ? buildConclusionResults(payload) : []),
-    [payload]
+    () => (displayPayload ? buildConclusionResults(displayPayload) : []),
+    [displayPayload]
   )
   const filteredConclusions = conclusionResults.filter((item) => {
     if (conclusionFilter === 'all') return true
@@ -586,7 +742,7 @@ function VehicleAiReportModal({
   const okCount = conclusionResults.filter((item) => item.bucket === 'ok').length
   const overallSummary = payload?.synthesis ? clarifyAiSystemWording(payload.synthesis.overall_summary) : ''
   const openFindingPhoto = (source: VehicleAiFinding['sources'][number]) => {
-    const preview = resolveFindingPhoto(source, dossier, payload?.sections ?? [])
+    const preview = resolveFindingPhoto(source, dossier, displayPayload?.sections ?? [])
     if (preview) setPhotoPreview(preview)
     else toast.error('No se encontró el archivo de esa foto en el expediente')
   }
@@ -676,10 +832,11 @@ function VehicleAiReportModal({
               <OwnerConclusionsBlock
                 vehiculo={vehiculo}
                 dossier={dossier}
-                payload={payload}
+                payload={displayPayload ?? payload}
                 apiOwner={apiOwner}
                 apiCanton={apiCanton}
               />
+              <JuiciosConclusionsBlock juicios={displayPayload?.juicios ?? payload.juicios} />
               {overallSummary && !/^no debió subirse\.?$/i.test(overallSummary) ? (
                 <p className="text-sm text-slate-700 leading-relaxed">{overallSummary}</p>
               ) : null}
@@ -745,7 +902,7 @@ function VehicleAiReportModal({
                   <AiDocBlock
                     key={block.docType}
                     section={block}
-                    synthesis={payload?.synthesis.blocks.find((b) => b.docType === block.docType)}
+                    synthesis={displayPayload?.synthesis.blocks.find((b) => b.docType === block.docType)}
                     onOpenFindingPhoto={openFindingPhoto}
                     onOpenSectionPhoto={openSectionPhoto}
                   />
@@ -762,7 +919,7 @@ function VehicleAiReportModal({
                   <AiDocBlock
                     key={block.docType}
                     section={block}
-                    synthesis={payload?.synthesis.blocks.find((b) => b.docType === block.docType)}
+                    synthesis={displayPayload?.synthesis.blocks.find((b) => b.docType === block.docType)}
                     onOpenFindingPhoto={openFindingPhoto}
                     onOpenSectionPhoto={openSectionPhoto}
                   />
@@ -777,10 +934,10 @@ function VehicleAiReportModal({
   )
 }
 
-function origenLabel(kind: VehicleAiFinding['sources'][number]['kind']): string {
-  if (kind === 'missing') return 'Sin archivo'
-  if (kind === 'detail') return 'Detalle del encargado'
-  if (kind === 'api') return 'EcuadorAPI (consulta guardada)'
+function origenLabel(source: VehicleAiSource): string {
+  if (source.kind === 'missing') return 'Sin archivo'
+  if (source.kind === 'detail') return 'Detalle del encargado'
+  if (source.kind === 'api') return source.label || 'Consulta oficial'
   return 'Foto del expediente'
 }
 
@@ -796,8 +953,8 @@ function HallazgoCopy({
       {heading ? <p className="font-semibold text-red-800">{heading}</p> : null}
       {reasons.length > 0 ? (
         <ul className={`${heading ? 'mt-1' : ''} list-disc pl-4 space-y-0.5 text-slate-800`}>
-          {reasons.map((reason) => (
-            <li key={reason}>{sentenceCase(clarifyAiSystemWording(reason))}</li>
+          {reasons.map((reason, index) => (
+            <li key={`${index}-${reason}`}>{sentenceCase(clarifyAiSystemWording(reason))}</li>
           ))}
         </ul>
       ) : null}
@@ -874,7 +1031,7 @@ function FindingsTable({
                 <td className="px-3 py-2.5 text-slate-600 align-top">
                   {row.source ? (
                     <span title={row.source.fileName || undefined}>
-                      {origenLabel(row.source.kind)}
+                      {origenLabel(row.source)}
                       {row.source.fileName ? ` · ${row.source.fileName}` : ''}
                     </span>
                   ) : (
@@ -933,7 +1090,7 @@ function ConclusionsTable({
               </td>
               <td className="px-3 py-2.5 text-slate-600 align-top">
                 <span title={row.source.fileName || undefined}>
-                  {origenLabel(row.source.kind)}
+                  {origenLabel(row.source)}
                   {row.source.fileName ? ` · ${row.source.fileName}` : ''}
                 </span>
               </td>
@@ -959,17 +1116,31 @@ function AiDocBlock({
   onOpenSectionPhoto: (file: VehicleAiInformeSectionFile) => void
 }) {
   const missingLabel = 'No se ha subido documento.'
+  const juicios = section.juicios ?? null
+  const hasJuicios = Boolean(juicios)
   const conclusion =
-    synthesis?.conclusion ||
-    (section.missing ? missingLabel : null)
+    synthesis?.conclusion && !(hasJuicios && /no se ha subido documento/i.test(synthesis.conclusion))
+      ? synthesis.conclusion
+      : section.missing && !hasJuicios
+        ? missingLabel
+        : null
   const invalidConclusion = Boolean(conclusion && isInvalidUploadText(conclusion))
   const conclusionReasons = conclusion ? listInvalidUploadReasons(conclusion) : []
+  const juiciosBadge = juicios
+    ? juicios.error
+      ? 'Consulta con error'
+      : `${juicios.procesos.length} proceso${juicios.procesos.length === 1 ? '' : 's'}`
+    : null
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-bold text-slate-900">{section.docLabel}</p>
-        {section.missing ? (
+        {juiciosBadge ? (
+          <span className="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-700 border-slate-200">
+            {juiciosBadge}
+          </span>
+        ) : section.missing ? (
           <span className="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-600 border-slate-200">
             Sin archivo
           </span>
@@ -981,7 +1152,35 @@ function AiDocBlock({
           {section.detailText}
         </p>
       ) : null}
-      {section.missing ? (
+      {juicios ? (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Función Judicial</p>
+          <p className="text-sm font-semibold text-slate-900 mt-0.5">
+            {juicios.error
+              ? juicios.error
+              : juicios.procesos.length === 0
+                ? `Sin procesos${juicios.cedula ? ` para cédula ${juicios.cedula}` : ''}.`
+                : `${juicios.procesos.length} proceso${juicios.procesos.length === 1 ? '' : 's'}${juicios.cedula ? ` · cédula ${juicios.cedula}` : ''}.`}
+          </p>
+          {juicios.titular ? <p className="text-[11px] text-slate-500 mt-0.5">{juicios.titular}</p> : null}
+          {juicios.procesos.length > 0 ? (
+            <ul className="mt-2 space-y-1.5">
+              {juicios.procesos.map((proceso, index) => (
+                <li
+                  key={`${proceso.causa || 'proceso'}-${index}`}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800"
+                >
+                  <p className="font-semibold">{proceso.causa || 'Causa sin número'}</p>
+                  <p className="text-slate-600 mt-0.5">
+                    {[proceso.accion, proceso.rol, proceso.estado, proceso.fecha].filter(Boolean).join(' · ')}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {section.missing && !hasJuicios ? (
         <p className="text-sm text-amber-800 mt-2">{missingLabel}</p>
       ) : null}
       {conclusion && !section.missing ? (

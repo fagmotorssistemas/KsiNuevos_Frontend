@@ -2,10 +2,11 @@
 
 import { use, useState, useMemo } from "react";
 import Link from "next/link";
-import { RefreshCw, FileCheck2, Box } from "lucide-react";
+import { RefreshCw, FileCheck2, Box, Search } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioDocumentReport } from "@/components/features/inventario/InventarioDocumentReportsModal";
 import { VehicleDetailModal, type VehicleDetailTab } from "@/components/features/inventario/VehicleDetailModal";
+import { ConsultaUnificadaDialog } from "@/components/features/inventario/ConsultaUnificadaDialog";
 import type { VehiculoInventario } from "@/types/inventario.types";
 
 export default function ReporteDocumentacionPage({
@@ -22,6 +23,7 @@ export default function ReporteDocumentacionPage({
     const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");
     const [detailOpenUpload, setDetailOpenUpload] = useState(false);
     const [checklistReloadKey, setChecklistReloadKey] = useState(0);
+    const [consultaOpen, setConsultaOpen] = useState(false);
 
     const vehiculos = useMemo(() => data?.listado ?? [], [data?.listado]);
 
@@ -50,6 +52,14 @@ export default function ReporteDocumentacionPage({
                     </div>
                     <button
                         type="button"
+                        onClick={() => setConsultaOpen(true)}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-800 shadow-sm transition-colors hover:bg-blue-100"
+                    >
+                        <Search className="h-4 w-4" />
+                        Consultar placa / cédula
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => {
                             refresh();
                             setChecklistReloadKey((k) => k + 1);
@@ -71,6 +81,8 @@ export default function ReporteDocumentacionPage({
                     setDetailVehicle(v);
                 }}
             />
+
+            {consultaOpen ? <ConsultaUnificadaDialog onClose={() => setConsultaOpen(false)} /> : null}
 
             {detailVehicle && (
                 <VehicleDetailModal

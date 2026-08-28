@@ -364,6 +364,17 @@ export function buildContrasteAiContext(
           .join('; ')}`
       : null,
     `Citaciones ANT pendientes: ${pendingCitations} (total $${Number(pendingCitationsTotal).toFixed(2)})`,
+    payload.juicios
+      ? `Función Judicial (Consultas.ec) cédula ${payload.juicios.cedula ?? '—'}: ${
+          payload.juicios.error
+            ? payload.juicios.error
+            : payload.juicios.procesos.length === 0
+              ? 'sin procesos'
+              : payload.juicios.procesos
+                  .map((item) => [item.causa, item.accion, item.rol, item.estado].filter(Boolean).join(' · '))
+                  .join('; ')
+        }`
+      : 'Función Judicial: no consultada',
   ].filter(Boolean) as string[]
 
   return {

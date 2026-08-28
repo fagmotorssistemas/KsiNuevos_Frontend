@@ -7,7 +7,9 @@ import {
   summarizeMatrix,
 } from '@/lib/inventario/ecuadorContraste'
 import { EcuadorApiError, fetchEcuadorContraste, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
+import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
 import { hasContrasteConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
+import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
 
 export type ContrasteIngresoResult = {
   placa: string
@@ -47,6 +49,13 @@ export async function runAndSaveContrasteIngreso(
       throw error
     }
   }
+
+  const owner = await resolveOwnerIdentityForContraste(supabase, placa, input.inventoryoracleId)
+  const juicios = await loadJuiciosForOwner({
+    cedula: owner.cedula,
+    ownerName: owner.ownerName || payload.lookup?.ownerName,
+  })
+  payload = attachJuiciosToContraste(payload, juicios)
 
   const staff = emptyContrasteStaff()
   const summary = summarizeMatrix(buildContrastMatrix(payload, staff), contrastShowAmt(payload))

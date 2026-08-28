@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
 import { EcuadorApiError, fetchEcuadorContraste, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
+import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
 
 async function handleContraste(rawPlaca: string) {
   const supabase = await createServerSupabaseClient()
@@ -21,7 +23,12 @@ async function handleContraste(rawPlaca: string) {
 
   try {
     const data = await fetchEcuadorContraste(placa)
-    return NextResponse.json({ data })
+    const owner = await resolveOwnerIdentityForContraste(supabase, placa)
+    const juicios = await loadJuiciosForOwner({
+      cedula: owner.cedula,
+      ownerName: owner.ownerName || data.lookup?.ownerName,
+    })
+    return NextResponse.json({ data: attachJuiciosToContraste(data, juicios) })
   } catch (e) {
     if (e instanceof EcuadorApiError) {
       return NextResponse.json(
