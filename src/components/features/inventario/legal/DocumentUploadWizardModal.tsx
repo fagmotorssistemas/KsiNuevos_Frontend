@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronLeft, FileText, Loader2, Plus, Replace, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { VEHICLE_DOCUMENT_CATALOG, type DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
@@ -132,10 +132,11 @@ export function DocumentUploadWizardModal({
   const [docs, setDocs] = useState(documents)
   const byType = useMemo(() => new Map(docs.map((row) => [row.doc_type, row])), [docs])
   const pendingDocs = useMemo(() => listPendingDocumentCatalog(byType), [byType])
-  const reviewGroups = useMemo(
-    () => orderCatalogPendingFirst(byType, focusDocType),
-    [byType, focusDocType]
+  const [reviewGroups] = useState(() =>
+    orderCatalogPendingFirst(new Map(documents.map((row) => [row.doc_type, row])), focusDocType)
   )
+  const pendingAiRef = useRef<PendingAiFile[]>([])
+  const [localPreviews, setLocalPreviews] = useState<Partial<Record<VehicleDocType, PickedFile[]>>>({})
   const [steps] = useState(() => {
     const initial = orderCatalogPendingFirst(
       new Map(documents.map((row) => [row.doc_type, row])),
@@ -152,7 +153,6 @@ export function DocumentUploadWizardModal({
   const [note, setNote] = useState(() => (steps[0] ? getCatalogDocumentRow(byType, steps[0].docType)?.detail_text ?? '' : ''))
   const [busy, setBusy] = useState(false)
   const [validating, setValidating] = useState(false)
-  const [pendingAi, setPendingAi] = useState<PendingAiFile[]>([])
   const [reviewMode] = useState(() => vehicleHasUploadedDocs(documents))
 
   const step = steps[index]
@@ -163,7 +163,7 @@ export function DocumentUploadWizardModal({
 
   const upsertDoc = (row: VehicleDocumentRow) => {
     setDocs((current) => {
-      const next = current.filter((item) => item.id !== row.id)
+      const next = current.filter((item) => item.id !== row.id && item.doc_type !== row.doc_type)
       next.push(row)
       return next
     })
@@ -198,6 +198,11 @@ export function DocumentUploadWizardModal({
     setPicked((current) => [...current, ...extras])
   }
 
+  const enqueueAi = (items: PendingAiFile[]) => {
+    if (items.length === 0) return
+    pendingAiRef.current = [...pendingAiRef.current, ...items]
+  }
+
   const persistStep = async (catalog: DocCatalogEntry): Promise<PendingAiFile[]> => {
     const noteText = note.trim()
     const uploaded: PendingAiFile[] = []
@@ -209,9 +214,12 @@ export function DocumentUploadWizardModal({
         actor_name: actorName,
       })
       lastSaved = saved
-      if (saved.lastUploadedFileId) {
+      const fileId =
+        saved.lastUploadedFileId ||
+        listDocumentFiles(saved).filter((file) => !isLegacyFileId(file.id)).at(-1)?.id
+      if (fileId) {
         uploaded.push({
-          fileId: saved.lastUploadedFileId,
+          fileId,
           fileName: item.file.name || 'Foto',
           docLabel: catalog.label,
         })
@@ -296,16 +304,19 @@ export function DocumentUploadWizardModal({
         actor_name: actorName,
       })
       lastSaved = saved
-      if (saved.lastUploadedFileId) {
+      const fileId =
+        saved.lastUploadedFileId ||
+        listDocumentFiles(saved).filter((item) => !isLegacyFileId(item.id)).at(-1)?.id
+      if (fileId) {
         uploaded.push({
-          fileId: saved.lastUploadedFileId,
+          fileId,
           fileName: file.name || 'Foto',
           docLabel: catalog.label,
         })
       }
     }
     if (lastSaved) upsertDoc(lastSaved)
-    if (uploaded.length > 0) setPendingAi((current) => [...current, ...uploaded])
+    if (uploaded.length > 0) enqueueAi(uploaded)
   }
 
   const dropStoredFile = async (file: VehicleDocumentFileRow) => {
@@ -323,6 +334,14 @@ export function DocumentUploadWizardModal({
   const handleAddToSection = async (catalog: DocCatalogEntry, list: FileList | null) => {
     const files = list ? Array.from(list) : []
     if (files.length === 0 || busy || validating) return
+    const extras: PickedFile[] = files.map((file) => ({
+      file,
+      preview: isPreviewable(file) ? URL.createObjectURL(file) : null,
+    }))
+    setLocalPreviews((current) => ({
+      ...current,
+      [catalog.docType]: [...(current[catalog.docType] ?? []), ...extras],
+    }))
     setBusy(true)
     try {
       await uploadFilesToSection(catalog, files)
@@ -332,6 +351,14 @@ export function DocumentUploadWizardModal({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo agregar el archivo')
     } finally {
+      revokePreviews(extras)
+      setLocalPreviews((current) => {
+        const next = { ...current }
+        const remaining = (current[catalog.docType] ?? []).filter((item) => !extras.includes(item))
+        if (remaining.length > 0) next[catalog.docType] = remaining
+        else delete next[catalog.docType]
+        return next
+      })
       setBusy(false)
     }
   }
@@ -379,7 +406,7 @@ export function DocumentUploadWizardModal({
     if (busy || validating) return
     setBusy(true)
     try {
-      await analyzePendingPhotos(pendingAi)
+      await analyzePendingPhotos(pendingAiRef.current)
       onRefresh()
       onClose()
     } finally {
@@ -404,8 +431,8 @@ export function DocumentUploadWizardModal({
     setBusy(true)
     try {
       const uploaded = await persistStep(step)
-      const allPending = [...pendingAi, ...uploaded]
-      setPendingAi(allPending)
+      enqueueAi(uploaded)
+      const allPending = pendingAiRef.current
 
       const finished = isLast || (step.docType === 'prenda_industrial' && index + 1 >= steps.length)
       if (finished) {
@@ -430,9 +457,11 @@ export function DocumentUploadWizardModal({
     const renderReviewItem = (catalog: DocCatalogEntry) => {
       const row = getCatalogDocumentRow(byType, catalog.docType)
       const files = row ? listDocumentFiles(row) : []
-      const pending = getDocumentCheckStatus(row, catalog) !== 'ok'
+      const staged = localPreviews[catalog.docType] ?? []
+      const pending = getDocumentCheckStatus(row, catalog) !== 'ok' && staged.length === 0
       const addId = `review-add-${catalog.docType}`
       const replaceId = `review-replace-${catalog.docType}`
+      const totalCount = files.length + staged.length
       return (
         <div
           key={catalog.docType}
@@ -444,9 +473,11 @@ export function DocumentUploadWizardModal({
             <div>
               <h4 className="text-sm font-bold text-slate-900">{catalog.label}</h4>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                {files.length === 0
+                {totalCount === 0
                   ? 'Sin archivos. Puedes agregar fotos ahora.'
-                  : `${files.length} archivo${files.length === 1 ? '' : 's'} · cambia una, agrega más o reemplaza todas.`}
+                  : `${files.length} archivo${files.length === 1 ? '' : 's'}${
+                      staged.length > 0 ? ` · subiendo ${staged.length}` : ''
+                    } · cambia una, agrega más o reemplaza todas.`}
               </p>
             </div>
             {pending ? (
@@ -495,6 +526,25 @@ export function DocumentUploadWizardModal({
                   }}
                 />
               </label>
+            ))}
+            {staged.map((item, stagedIndex) => (
+              <div
+                key={`${item.file.name}-${item.file.size}-${stagedIndex}`}
+                title={item.file.name}
+                className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-blue-200 bg-slate-50"
+              >
+                {item.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.preview} alt={item.file.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 px-1">
+                    <FileText className="h-5 w-5 text-slate-500" />
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 bg-blue-700/80 py-0.5 text-center text-[9px] font-semibold text-white">
+                  Subiendo
+                </span>
+              </div>
             ))}
           </div>
 

@@ -74,6 +74,36 @@ export function isInvalidUploadText(text: string): boolean {
   return normalized.includes('no debio')
 }
 
+export function analysisFailsAiApproval(
+  analysis: Pick<
+    DocumentAiAnalysis,
+    | 'photo_should_not_be_uploaded'
+    | 'quality'
+    | 'matches_plate'
+    | 'matches_expected_type'
+    | 'matches_owner'
+    | 'matches_place'
+    | 'matches_country'
+    | 'matches_dates'
+    | 'issues'
+    | 'summary'
+  > | null
+    | undefined
+): boolean {
+  if (!analysis) return false
+  if (analysis.photo_should_not_be_uploaded) return true
+  if (analysis.quality === 'wrong_document' || analysis.quality === 'unreadable') return true
+  if (analysis.matches_plate === false) return true
+  if (analysis.matches_expected_type === false) return true
+  if (analysis.matches_owner === false) return true
+  if (analysis.matches_place === false) return true
+  if (analysis.matches_country === false) return true
+  if (analysis.matches_dates === false) return true
+  if (analysis.issues?.some((issue) => isInvalidUploadText(issue))) return true
+  if (analysis.summary && isInvalidUploadText(analysis.summary)) return true
+  return false
+}
+
 export function sentenceCase(text: string): string {
   const trimmed = text.trim()
   if (!trimmed) return trimmed

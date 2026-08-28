@@ -167,4 +167,5 @@ export interface VehicleLegalSummary {
   matriculaExpiryLabel: string | null
   legalStatusLabel: string
   legalStatusTone: 'ok' | 'warn' | 'danger'
+  legalStatusHint: string | null
 }

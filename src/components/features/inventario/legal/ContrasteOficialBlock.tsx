@@ -437,6 +437,9 @@ type Props = {
   fines: VehicleFineRow[];
   linked: boolean;
   trigger?: "header" | "bar";
+  reloadKey?: number;
+  latestPayload?: EcuadorContrastePayload | null;
+  onConsultaSaved?: (payload: EcuadorContrastePayload) => void;
 };
 
 export function ContrasteOficialBlock({
@@ -446,6 +449,9 @@ export function ContrasteOficialBlock({
   fines,
   linked,
   trigger = "header",
+  reloadKey = 0,
+  latestPayload = null,
+  onConsultaSaved,
 }: Props) {
   const { supabase, user, profile } = useAuth();
   const [ready, setReady] = useState<boolean | null>(null);
@@ -514,6 +520,34 @@ export function ContrasteOficialBlock({
       cancelled = true;
     };
   }, [placa, supabase]);
+
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    if (latestPayload) {
+      setPayload(latestPayload);
+      setLiveConsulta(false);
+      setError(null);
+    }
+    let cancelled = false;
+    void listContrasteConsultas(supabase, placa)
+      .then((rows) => {
+        if (cancelled) return;
+        setHistory(rows);
+        const latest = rows[0];
+        if (!latest) return;
+        const saved = payloadFromConsulta(latest);
+        if (!saved) return;
+        setPayload(saved);
+        setActiveConsultaId(latest.id);
+        setLiveConsulta(false);
+      })
+      .catch(() => {
+        /* se mantiene el snapshot del informe IA */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey, placa, supabase, latestPayload]);
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]));
   const pendingFines = fines.filter((f) => f.status === "pendiente").length;
@@ -651,6 +685,7 @@ export function ContrasteOficialBlock({
         });
         setActiveConsultaId(saved.id);
         setHistory((prev) => [saved, ...prev.filter((row) => row.id !== saved.id)].slice(0, 100));
+        onConsultaSaved?.(body.data);
       } catch (saveErr) {
         console.error(saveErr);
         setError("Consulta OK, pero no se pudo guardar el historial.");

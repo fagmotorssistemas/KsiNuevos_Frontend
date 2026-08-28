@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, Loader2, Sparkles, User, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { listContrasteConsultas, payloadFromConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
 import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
@@ -32,6 +33,7 @@ import {
   type VehicleAiInformeSectionFile,
 } from '@/services/vehicleAiInformes.service'
 import type { VehicleDocType, VehicleDocumentFileRow, VehicleLegalDossier, VehicleOwnerRow } from '@/types/vehicleLegal.types'
+import type { VehiculoInventario } from '@/types/inventario.types'
 
 type PhotoPreview = {
   url: string
@@ -364,10 +366,14 @@ function VehicleAiReportModal({
   vehiculo,
   dossier,
   onClose,
+  onContrasteUpdated,
+  onLegalRefresh,
 }: {
   vehiculo: VehiculoInventario
   dossier: VehicleLegalDossier
   onClose: () => void
+  onContrasteUpdated?: (payload: EcuadorContrastePayload) => void
+  onLegalRefresh?: () => void
 }) {
   const { supabase, profile, user } = useAuth()
   const jobs = useMemo(() => collectJobs(dossier), [dossier])
@@ -467,6 +473,7 @@ function VehicleAiReportModal({
         })
         setApiOwner(contrastBody.data.lookup?.ownerName?.trim() || null)
         setApiCanton(contrastBody.data.lookup?.canton?.trim() || null)
+        onContrasteUpdated?.(contrastBody.data)
       } else {
         throw new Error('EcuadorAPI no está configurada. No se puede actualizar el contraste.')
       }
@@ -556,6 +563,7 @@ function VehicleAiReportModal({
       setPayload(next)
       setSavedAt(saveBody.informe?.created_at ?? new Date().toISOString())
       toast.success('Informe IA guardado')
+      onLegalRefresh?.()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo generar el informe IA')
     } finally {
@@ -1097,9 +1105,13 @@ function AiPhotoLightbox({ preview, onClose }: { preview: PhotoPreview; onClose:
 export function VehicleAiReportButton({
   vehiculo,
   dossier,
+  onContrasteUpdated,
+  onLegalRefresh,
 }: {
   vehiculo: VehiculoInventario
   dossier: VehicleLegalDossier
+  onContrasteUpdated?: (payload: EcuadorContrastePayload) => void
+  onLegalRefresh?: () => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -1112,7 +1124,15 @@ export function VehicleAiReportButton({
         <Sparkles className="h-5 w-5" />
         Informe IA
       </button>
-      {open ? <VehicleAiReportModal vehiculo={vehiculo} dossier={dossier} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <VehicleAiReportModal
+          vehiculo={vehiculo}
+          dossier={dossier}
+          onClose={() => setOpen(false)}
+          onContrasteUpdated={onContrasteUpdated}
+          onLegalRefresh={onLegalRefresh}
+        />
+      ) : null}
     </>
   )
 }

@@ -32,6 +32,7 @@ import { HistorialVehiculoTab } from './legal/tabs/HistorialVehiculoTab'
 import { NotasInternasTab } from './legal/tabs/NotasInternasTab'
 import { VehicleCompleteReportButton } from './legal/VehicleCompleteReportModal'
 import { VehicleAiReportButton } from './legal/VehicleAiReportModal'
+import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
 
 /** Tipos que van en "Movimientos contables" (stock / kardex). El resto → "Gastos de vehículo". */
 const TIPOS_MOVIMIENTO_INVENTARIO = [
@@ -92,6 +93,13 @@ export function VehicleDetailModal({
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [historialError, setHistorialError] = useState<string | null>(null)
+  const [contrasteReloadKey, setContrasteReloadKey] = useState(0)
+  const [contrastePayload, setContrastePayload] = useState<EcuadorContrastePayload | null>(null)
+
+  const handleContrasteUpdated = (payload?: EcuadorContrastePayload) => {
+    if (payload) setContrastePayload(payload)
+    setContrasteReloadKey((k) => k + 1)
+  }
 
   const { dossier, summary, loading: loadingLegal, error: legalError, refresh, supabase } = useVehicleLegalDossier(
     vehiculo.placa,
@@ -176,16 +184,29 @@ export function VehicleDetailModal({
               documents={dossier.documents}
               fines={dossier.fines}
               linked={Boolean(dossier.inventoryoracleId)}
+              reloadKey={contrasteReloadKey}
+              latestPayload={contrastePayload}
+              onConsultaSaved={handleContrasteUpdated}
             />
             <VehicleCompleteReportButton vehiculo={vehiculo} dossier={dossier} />
-            <VehicleAiReportButton vehiculo={vehiculo} dossier={dossier} />
+            <VehicleAiReportButton
+              vehiculo={vehiculo}
+              dossier={dossier}
+              onContrasteUpdated={handleContrasteUpdated}
+              onLegalRefresh={handleLegalRefresh}
+            />
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <VehicleLegalSummaryBar summary={summary} placa={vehiculo.placa} />
+        <VehicleLegalSummaryBar
+          summary={summary}
+          placa={vehiculo.placa}
+          reloadKey={contrasteReloadKey}
+          contrastePayload={contrastePayload}
+        />
 
         <div className="flex border-b border-slate-200 px-4 overflow-x-auto shrink-0">
           {tabs.map((t) => {

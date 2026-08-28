@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Calendar, CircleDollarSign, FileText, Shield } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { officialMatriculaStatus, officialPendingSummary, type OfficialPendingSummary } from '@/lib/inventario/ecuadorContraste'
+import { officialMatriculaStatus, officialPendingSummary, type EcuadorContrastePayload, type OfficialPendingSummary } from '@/lib/inventario/ecuadorContraste'
 import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import type { VehicleLegalSummary } from '@/types/vehicleLegal.types'
 
@@ -28,9 +28,13 @@ function PendingChip({ label, value }: { label: string; value: string }) {
 export function VehicleLegalSummaryBar({
   summary,
   placa,
+  reloadKey = 0,
+  contrastePayload = null,
 }: {
   summary: VehicleLegalSummary
   placa: string
+  reloadKey?: number
+  contrastePayload?: EcuadorContrastePayload | null
 }) {
   const { supabase } = useAuth()
   const [pending, setPending] = useState<OfficialPendingSummary | null>(null)
@@ -45,6 +49,11 @@ export function VehicleLegalSummaryBar({
   const matriculaDate = matriculaApi.expiryLabel || summary.matriculaExpiryLabel
 
   useEffect(() => {
+    if (contrastePayload) {
+      setHasConsulta(true)
+      setPending(officialPendingSummary(contrastePayload))
+      setMatriculaApi(officialMatriculaStatus(contrastePayload))
+    }
     let cancelled = false
     void listContrasteConsultas(supabase, placa)
       .then((rows) => {
@@ -64,7 +73,7 @@ export function VehicleLegalSummaryBar({
     return () => {
       cancelled = true
     }
-  }, [supabase, placa])
+  }, [supabase, placa, reloadKey, contrastePayload])
 
   const hasDebt = Boolean(pending && pending.total > 0.009)
 
@@ -153,6 +162,9 @@ export function VehicleLegalSummaryBar({
           <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${legalBadge(summary.legalStatusTone)}`}>
             {summary.legalStatusLabel}
           </span>
+          {summary.legalStatusHint ? (
+            <p className="mt-1.5 text-[10px] font-medium leading-snug text-slate-500">{summary.legalStatusHint}</p>
+          ) : null}
         </div>
       </div>
     </div>

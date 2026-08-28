@@ -441,7 +441,10 @@ export async function loadVehicleLegalDossier(
   }
 }
 
-export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalSummary {
+export function computeLegalSummary(
+  dossier: VehicleLegalDossier,
+  extras?: { aiRejectedPhotos?: boolean }
+): VehicleLegalSummary {
   const required = VEHICLE_DOCUMENT_CATALOG.filter((d) => d.requiresFile)
   const docsTotal = required.length
   const docsComplete = dossier.documents.filter(
@@ -484,9 +487,17 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
 
   let legalStatusLabel = 'Listo'
   let legalStatusTone: VehicleLegalSummary['legalStatusTone'] = 'ok'
-  if (criticalMissing.length > 0 || pendingFines.length > 0) {
+  let legalStatusHint: string | null = null
+  if (pendingFines.length > 0) {
     legalStatusLabel = 'Revisar'
-    legalStatusTone = pendingFines.length > 0 ? 'danger' : 'warn'
+    legalStatusTone = 'danger'
+  } else if (criticalMissing.length > 0) {
+    legalStatusLabel = 'Revisar'
+    legalStatusTone = 'warn'
+  } else if (extras?.aiRejectedPhotos) {
+    legalStatusLabel = 'Requieren revisión'
+    legalStatusTone = 'warn'
+    legalStatusHint = 'Documentos subidos, pero la IA no los aprueba'
   } else if (matriculaDaysUntilExpiry != null && matriculaDaysUntilExpiry <= 30) {
     legalStatusLabel = 'Matrícula por vencer'
     legalStatusTone = 'warn'
@@ -501,7 +512,20 @@ export function computeLegalSummary(dossier: VehicleLegalDossier): VehicleLegalS
     matriculaExpiryLabel,
     legalStatusLabel,
     legalStatusTone,
+    legalStatusHint,
   }
+}
+
+function mimeFromFileName(fileName: string): string | null {
+  const lower = fileName.toLowerCase()
+  if (lower.endsWith('.pdf')) return 'application/pdf'
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  if (lower.endsWith('.bmp')) return 'image/bmp'
+  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic'
+  if (/\.jpe?g$/.test(lower)) return 'image/jpeg'
+  return null
 }
 
 const PODER_CONTRATO_ALIASES = ['poder_contrato', 'contrato_compra_venta', 'poder'] as const
@@ -629,7 +653,11 @@ export async function uploadVehicleDocument(
     actor_name?: string | null
   }
 ): Promise<VehicleDocumentRow & { lastUploadedFileId?: string | null }> {
-  const docRow = await findVehicleDocumentRow(supabase, inventoryoracleId, docType)
+  const docRow =
+    (await findVehicleDocumentRow(supabase, inventoryoracleId, docType)) ??
+    (await seedDocumentSlots(supabase, inventoryoracleId).then(() =>
+      findVehicleDocumentRow(supabase, inventoryoracleId, docType)
+    ))
   if (!docRow) throw new Error('Documento no encontrado')
 
   const storageType = docType === 'poder_contrato' ? 'poder_contrato' : docType
@@ -637,9 +665,10 @@ export async function uploadVehicleDocument(
   const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`
   const filePath = `${inventoryoracleId}/${storageType}/${safeName}`
 
+  const mimeType = file.type || mimeFromFileName(file.name)
   const { error: upErr } = await supabase.storage
     .from(INVENTORY_VEHICLE_DOCS_BUCKET)
-    .upload(filePath, file, { contentType: file.type || undefined })
+    .upload(filePath, file, { contentType: mimeType || undefined })
 
   if (upErr) throw upErr
 
@@ -652,10 +681,10 @@ export async function uploadVehicleDocument(
       file_path: filePath,
       file_url: urlData.publicUrl,
       file_name: file.name,
-      mime_type: file.type || null,
+      mime_type: mimeType,
       uploaded_by: profileId,
     })
-    .select('id')
+    .select('*')
     .single()
   if (fileErr) throw fileErr
 
@@ -666,7 +695,7 @@ export async function uploadVehicleDocument(
       file_path: filePath,
       file_url: urlData.publicUrl,
       file_name: file.name,
-      mime_type: file.type || null,
+      mime_type: mimeType,
       detail_text: meta?.detail_text ?? docRow.detail_text,
       expires_at: meta?.expires_at ?? docRow.expires_at,
       uploaded_by: profileId,
@@ -677,6 +706,12 @@ export async function uploadVehicleDocument(
 
   if (error) throw error
   const [withFiles] = await attachDocumentFiles(supabase, [data as VehicleDocumentRow])
+  const attached = withFiles.files ?? []
+  const inserted = insertedFile as VehicleDocumentFileRow
+  const files =
+    inserted.id && !attached.some((file) => file.id === inserted.id)
+      ? [...attached, inserted]
+      : attached
   await logDocumentActivity(supabase, {
     document_id: docRow.id,
     inventoryoracle_id: inventoryoracleId,
@@ -686,7 +721,7 @@ export async function uploadVehicleDocument(
     actor_name: meta?.actor_name,
     file_name: file.name,
   })
-  return { ...withFiles, lastUploadedFileId: insertedFile?.id ?? null }
+  return { ...withFiles, files, lastUploadedFileId: inserted.id }
 }
 
 export async function deleteVehicleDocumentFile(
