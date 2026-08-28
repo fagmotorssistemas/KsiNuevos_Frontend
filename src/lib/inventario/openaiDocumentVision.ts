@@ -464,11 +464,7 @@ function specificInvalidUploadText(item: VehicleAiSynthesisItem): string | null 
   if (concrete) return concrete
   const details = item.issues.filter((issue) => !issue.toLowerCase().includes('no debió') && !isVagueDiscrepancyText(issue))
   if (details.length === 0) return null
-  if (details.length === 1) {
-    return `Esta fotografía no debió haberse subido a «${item.docLabel}». Esta sección solo se usa cuando el documento está al día y la foto es válida. Lo encontrado: ${details[0]}`
-  }
-  const listed = details.map((reason, index) => `${index + 1}) ${reason}`).join(' ')
-  return `Esta fotografía no debió haberse subido a «${item.docLabel}». Esta sección solo se usa cuando el documento está al día y la foto es válida. Lo encontrado: ${listed}`
+  return 'No debió subirse'
 }
 
 function findingMentionsInvalidUpload(finding: VehicleAiFinding, item: VehicleAiSynthesisItem): boolean {

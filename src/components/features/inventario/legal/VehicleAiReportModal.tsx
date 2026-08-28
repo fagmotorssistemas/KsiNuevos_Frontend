@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Sparkles, X } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronUp, Loader2, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
@@ -10,12 +10,12 @@ import {
   isDocumentImageFile,
   listDocumentFiles,
 } from '@/lib/inventario/vehicleLegalUi'
-import { clarifyAiSystemWording } from '@/lib/inventario/documentAiRules'
+import { clarifyAiSystemWording, compactFindingReasons, isInvalidUploadText, listInvalidUploadReasons, sentenceCase } from '@/lib/inventario/documentAiRules'
 import {
   formatContrasteConsultedPretty,
   formatContrasteRelative,
 } from '@/lib/inventario/ecuadorContraste'
-import type { DocumentAiAnalysis, VehicleAiFinding, VehicleAiSynthesis, VehicleAiSynthesisItem } from '@/lib/inventario/openaiDocumentVision'
+import type { DocumentAiAnalysis, VehicleAiFinding, VehicleAiSource, VehicleAiSynthesis, VehicleAiSynthesisItem } from '@/lib/inventario/openaiDocumentVision'
 import type { VehiculoInventario } from '@/types/inventario.types'
 import type { DocumentAiReportRow } from '@/services/documentAiReports.service'
 import {
@@ -70,6 +70,75 @@ type FileJob = {
   fileName: string
   docType: VehicleDocType
   docLabel: string
+}
+
+type ConclusionResult = {
+  id: string
+  bucket: 'invalid' | 'ok' | 'other'
+  docLabel: string
+  source: VehicleAiSource
+  heading: string | null
+  reasons: string[]
+}
+
+function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionResult[] {
+  const results: ConclusionResult[] = []
+  for (const section of payload.sections) {
+    if (section.missing) {
+      results.push({
+        id: `missing-${section.docType}`,
+        bucket: 'other',
+        docLabel: section.docLabel,
+        source: {
+          docType: section.docType,
+          docLabel: section.docLabel,
+          photoIndex: null,
+          fileName: null,
+          fileId: null,
+          kind: 'missing',
+          label: section.docLabel,
+        },
+        heading: null,
+        reasons: ['No se ha subido documento.'],
+      })
+      continue
+    }
+    for (const file of section.files) {
+      const invalid =
+        Boolean(file.analysis?.photo_should_not_be_uploaded) ||
+        Boolean(file.analysis?.issues?.some((issue) => isInvalidUploadText(issue))) ||
+        Boolean(file.analysis?.summary && isInvalidUploadText(file.analysis.summary))
+      let reasons: string[] = []
+      if (invalid) {
+        reasons = listInvalidUploadReasons(file.analysis?.summary || '', file.analysis?.issues ?? [])
+      } else if (file.error) {
+        reasons = [file.error]
+      } else {
+        reasons = (file.analysis?.issues ?? [])
+          .map((issue) => clarifyAiSystemWording(issue))
+          .filter((issue) => issue && !isInvalidUploadText(issue))
+        if (reasons.length === 0) reasons = ['Se subió correctamente.']
+        else reasons = compactFindingReasons(reasons)
+      }
+      results.push({
+        id: file.fileId,
+        bucket: invalid ? 'invalid' : file.error ? 'other' : 'ok',
+        docLabel: section.docLabel,
+        source: {
+          docType: section.docType,
+          docLabel: section.docLabel,
+          photoIndex: file.photoIndex ?? null,
+          fileName: file.fileName,
+          fileId: file.fileId,
+          kind: 'photo',
+          label: file.fileName,
+        },
+        heading: invalid ? 'No debió subirse' : null,
+        reasons,
+      })
+    }
+  }
+  return results
 }
 
 function analysisFromReport(report: DocumentAiReportRow): DocumentAiAnalysis {
@@ -174,6 +243,8 @@ function VehicleAiReportModal({
   const [payload, setPayload] = useState<VehicleAiInformePayload | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<PhotoPreview | null>(null)
+  const [showLegalDetails, setShowLegalDetails] = useState(false)
+  const [conclusionFilter, setConclusionFilter] = useState<'all' | 'invalid' | 'ok'>('all')
 
   useEffect(() => {
     let cancelled = false
@@ -304,6 +375,17 @@ function VehicleAiReportModal({
 
   const legalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'legal')
   const physicalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'physical')
+  const conclusionResults = useMemo(
+    () => (payload ? buildConclusionResults(payload) : []),
+    [payload]
+  )
+  const filteredConclusions = conclusionResults.filter((item) => {
+    if (conclusionFilter === 'all') return true
+    return item.bucket === conclusionFilter
+  })
+  const invalidCount = conclusionResults.filter((item) => item.bucket === 'invalid').length
+  const okCount = conclusionResults.filter((item) => item.bucket === 'ok').length
+  const overallSummary = payload?.synthesis ? clarifyAiSystemWording(payload.synthesis.overall_summary) : ''
   const openFindingPhoto = (source: VehicleAiFinding['sources'][number]) => {
     const preview = resolveFindingPhoto(source, dossier, payload?.sections ?? [])
     if (preview) setPhotoPreview(preview)
@@ -335,7 +417,7 @@ function VehicleAiReportModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 bg-white border-b border-slate-100">
@@ -390,16 +472,64 @@ function VehicleAiReportModal({
           {payload?.synthesis ? (
             <section className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm">
               <h4 className="text-sm font-bold text-violet-900 mb-2">Conclusiones</h4>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                {clarifyAiSystemWording(payload.synthesis.overall_summary)}
-              </p>
-              {payload.synthesis.alerts.length > 0 ? (
+              {overallSummary && !/^no debió subirse\.?$/i.test(overallSummary) ? (
+                <p className="text-sm text-slate-700 leading-relaxed">{overallSummary}</p>
+              ) : null}
+              {conclusionResults.length > 0 ? (
+                <>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: 'all' as const, label: 'Todos', count: conclusionResults.length },
+                        { id: 'invalid' as const, label: 'No debieron subirse', count: invalidCount },
+                        { id: 'ok' as const, label: 'Subidos correctamente', count: okCount },
+                      ]
+                    ).map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => setConclusionFilter(chip.id)}
+                        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold border ${
+                          conclusionFilter === chip.id
+                            ? 'bg-violet-700 text-white border-violet-700'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {chip.label}
+                        <span className={conclusionFilter === chip.id ? 'text-violet-100' : 'text-slate-400'}>
+                          {chip.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {filteredConclusions.length > 0 ? (
+                    <ConclusionsTable
+                      rows={filteredConclusions}
+                      onOpenPhoto={openFindingPhoto}
+                    />
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-500">No hay resultados en este filtro.</p>
+                  )}
+                </>
+              ) : payload.synthesis.alerts.length > 0 ? (
                 <FindingsTable findings={payload.synthesis.alerts} onOpenPhoto={openFindingPhoto} />
               ) : null}
             </section>
           ) : null}
 
-          {legalBlocks.length > 0 ? (
+          {legalBlocks.length > 0 || physicalBlocks.length > 0 ? (
+            <button
+              type="button"
+              aria-expanded={showLegalDetails}
+              onClick={() => setShowLegalDetails((open) => !open)}
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl border border-violet-200 bg-violet-50 text-sm font-semibold text-violet-800 hover:bg-violet-100"
+            >
+              {showLegalDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showLegalDetails ? 'Ocultar detalles' : 'Ver más detalles'}
+            </button>
+          ) : null}
+
+          {showLegalDetails && legalBlocks.length > 0 ? (
             <section>
               <h4 className="text-sm font-bold text-slate-900 mb-3">{DOCUMENT_SECTION_TITLES.legal}</h4>
               <div className="space-y-3">
@@ -416,7 +546,7 @@ function VehicleAiReportModal({
             </section>
           ) : null}
 
-          {physicalBlocks.length > 0 ? (
+          {showLegalDetails && physicalBlocks.length > 0 ? (
             <section>
               <h4 className="text-sm font-bold text-slate-900 mb-3">{DOCUMENT_SECTION_TITLES.physical}</h4>
               <div className="space-y-3">
@@ -446,6 +576,48 @@ function origenLabel(kind: VehicleAiFinding['sources'][number]['kind']): string 
   return 'Foto del expediente'
 }
 
+function HallazgoCopy({
+  heading,
+  reasons,
+}: {
+  heading: string | null
+  reasons: string[]
+}) {
+  return (
+    <div>
+      {heading ? <p className="font-semibold text-red-800">{heading}</p> : null}
+      {reasons.length > 0 ? (
+        <ul className={`${heading ? 'mt-1' : ''} list-disc pl-4 space-y-0.5 text-slate-800`}>
+          {reasons.map((reason) => (
+            <li key={reason}>{sentenceCase(clarifyAiSystemWording(reason))}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+function PhotoCell({
+  source,
+  onOpenPhoto,
+}: {
+  source: VehicleAiSource | null
+  onOpenPhoto: (source: VehicleAiFinding['sources'][number]) => void
+}) {
+  if (source?.kind === 'photo' && (source.photoIndex || source.fileId || source.fileName)) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenPhoto(source)}
+        className="inline-flex items-center rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800 hover:bg-violet-100"
+      >
+        {source.photoIndex ? `Foto ${source.photoIndex}` : 'Ver foto'}
+      </button>
+    )
+  }
+  return <span>—</span>
+}
+
 function FindingsTable({
   findings,
   onOpenPhoto,
@@ -462,49 +634,105 @@ function FindingsTable({
 
   return (
     <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-      <table className="w-full min-w-[560px] text-left text-xs">
+      <table className="w-full min-w-[720px] text-left text-xs">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-2.5">Hallazgo</th>
-            <th className="px-3 py-2.5">Sección</th>
-            <th className="px-3 py-2.5">Foto</th>
-            <th className="px-3 py-2.5">Origen</th>
+            <th className="px-3 py-2.5 whitespace-nowrap border-r border-slate-200">Sección</th>
+            <th className="px-3 py-2.5 border-r border-slate-200">Hallazgo</th>
+            <th className="px-3 py-2.5 whitespace-nowrap border-r border-slate-200">Foto</th>
+            <th className="px-3 py-2.5 whitespace-nowrap">Origen</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr key={`${row.finding.text}-${row.source?.label ?? 'na'}-${index}`} className="border-b border-slate-100 last:border-0">
-              <td className="px-3 py-2.5 text-slate-800 align-top">
-                {clarifyAiSystemWording(row.finding.text)}
+          {rows.map((row, index) => {
+            const invalid = isInvalidUploadText(row.finding.text)
+            const reasons = invalid
+              ? listInvalidUploadReasons(row.finding.text)
+              : compactFindingReasons([row.finding.text])
+            return (
+              <tr
+                key={`${row.finding.text}-${row.source?.label ?? 'na'}-${index}`}
+                className="border-b border-slate-100 last:border-0"
+              >
+                <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap border-r border-slate-200">
+                  {row.source?.docLabel || '—'}
+                </td>
+                <td className="px-3 py-2.5 align-top min-w-[280px] border-r border-slate-200">
+                  <HallazgoCopy heading={invalid ? 'No debió subirse' : null} reasons={reasons} />
+                </td>
+                <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap border-r border-slate-200">
+                  <PhotoCell source={row.source} onOpenPhoto={onOpenPhoto} />
+                </td>
+                <td className="px-3 py-2.5 text-slate-600 align-top">
+                  {row.source ? (
+                    <span title={row.source.fileName || undefined}>
+                      {origenLabel(row.source.kind)}
+                      {row.source.fileName ? ` · ${row.source.fileName}` : ''}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ConclusionsTable({
+  rows,
+  onOpenPhoto,
+}: {
+  rows: ConclusionResult[]
+  onOpenPhoto: (source: VehicleAiFinding['sources'][number]) => void
+}) {
+  return (
+    <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+      <table className="w-full min-w-[720px] text-left text-xs">
+        <thead>
+          <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            <th className="px-3 py-2.5 whitespace-nowrap border-r border-slate-200">Sección</th>
+            <th className="px-3 py-2.5 border-r border-slate-200">Hallazgo</th>
+            <th className="px-3 py-2.5 whitespace-nowrap border-r border-slate-200">Foto</th>
+            <th className="px-3 py-2.5 whitespace-nowrap">Origen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const prev = rows[index - 1]
+            const newSection = Boolean(prev && prev.docLabel !== row.docLabel)
+            return (
+              <Fragment key={row.id}>
+                {newSection ? (
+                  <tr aria-hidden>
+                    <td colSpan={4} className="h-2.5 bg-slate-200 p-0 border-y border-slate-300" />
+                  </tr>
+                ) : null}
+                <tr
+                  className={`border-b border-slate-100 ${
+                    row.bucket === 'invalid' ? 'bg-red-50/60' : row.bucket === 'ok' ? 'bg-emerald-50/50' : 'bg-white'
+                  }`}
+                >
+              <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap border-r border-slate-200">{row.docLabel || '—'}</td>
+              <td className="px-3 py-2.5 align-top min-w-[280px] border-r border-slate-200">
+                <HallazgoCopy heading={row.heading} reasons={row.reasons} />
               </td>
-              <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap">
-                {row.source?.docLabel || '—'}
-              </td>
-              <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap">
-                {row.source?.kind === 'photo' && (row.source.photoIndex || row.source.fileId || row.source.fileName) ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenPhoto(row.source!)}
-                    className="inline-flex items-center rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800 hover:bg-violet-100"
-                  >
-                    {row.source.photoIndex ? `Foto ${row.source.photoIndex}` : 'Ver foto'}
-                  </button>
-                ) : (
-                  '—'
-                )}
+              <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap border-r border-slate-200">
+                <PhotoCell source={row.source} onOpenPhoto={onOpenPhoto} />
               </td>
               <td className="px-3 py-2.5 text-slate-600 align-top">
-                {row.source ? (
-                  <span title={row.source.fileName || undefined}>
-                    {origenLabel(row.source.kind)}
-                    {row.source.fileName ? ` · ${row.source.fileName}` : ''}
-                  </span>
-                ) : (
-                  '—'
-                )}
+                <span title={row.source.fileName || undefined}>
+                  {origenLabel(row.source.kind)}
+                  {row.source.fileName ? ` · ${row.source.fileName}` : ''}
+                </span>
               </td>
-            </tr>
-          ))}
+                </tr>
+              </Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -526,6 +754,8 @@ function AiDocBlock({
   const conclusion =
     synthesis?.conclusion ||
     (section.missing ? missingLabel : null)
+  const invalidConclusion = Boolean(conclusion && isInvalidUploadText(conclusion))
+  const conclusionReasons = conclusion ? listInvalidUploadReasons(conclusion) : []
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -547,14 +777,37 @@ function AiDocBlock({
         <p className="text-sm text-amber-800 mt-2">{missingLabel}</p>
       ) : null}
       {conclusion && !section.missing ? (
-        <p className="text-sm text-slate-700 mt-2 leading-relaxed">{clarifyAiSystemWording(conclusion)}</p>
+        invalidConclusion ? (
+          <div className="mt-2">
+            <p className="text-sm font-semibold text-red-800">No debió subirse</p>
+            {conclusionReasons.length > 0 ? (
+              <ul className="mt-1.5 list-disc pl-4 space-y-1 text-sm text-slate-700">
+                {conclusionReasons.map((reason) => (
+                  <li key={reason}>{clarifyAiSystemWording(reason)}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-700 mt-2 leading-relaxed">{clarifyAiSystemWording(conclusion)}</p>
+        )
       ) : null}
       {synthesis?.alerts?.length ? (
         <FindingsTable findings={synthesis.alerts} onOpenPhoto={onOpenFindingPhoto} />
       ) : null}
       {section.files.length > 0 ? (
         <div className="mt-3 space-y-2">
-          {section.files.map((file, index) => (
+          {section.files.map((file, index) => {
+            const invalidFile =
+              Boolean(file.analysis?.photo_should_not_be_uploaded) ||
+              Boolean(file.analysis?.summary && isInvalidUploadText(file.analysis.summary))
+            const invalidReasons = invalidFile
+              ? listInvalidUploadReasons(file.analysis?.summary || '', file.analysis?.issues ?? [])
+              : []
+            const otherIssues = (file.analysis?.issues ?? []).filter(
+              (issue) => !isInvalidUploadText(issue) || clarifyAiSystemWording(issue).length > 40
+            )
+            return (
             <div key={file.fileId} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
               <p className="text-[11px] font-semibold text-violet-800">
                 <button
@@ -565,7 +818,7 @@ function AiDocBlock({
                   Foto {file.photoIndex ?? index + 1}
                 </button>
                 <span className="font-normal text-slate-500"> · {file.fileName}</span>
-                {file.analysis?.photo_should_not_be_uploaded ? (
+                {invalidFile ? (
                   <span className="ml-2 inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
                     No debió subirse
                   </span>
@@ -573,14 +826,25 @@ function AiDocBlock({
               </p>
               {file.error ? (
                 <p className="text-xs text-red-600 mt-1">{file.error}</p>
+              ) : invalidFile ? (
+                <div className="mt-1.5">
+                  <p className="text-sm font-semibold text-red-800">No debió subirse</p>
+                  {invalidReasons.length > 0 ? (
+                    <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-800 space-y-0.5">
+                      {invalidReasons.map((reason) => (
+                        <li key={reason}>{clarifyAiSystemWording(reason)}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
               ) : (
                 <>
                   <p className="text-xs text-slate-700 mt-1 leading-relaxed">
                     {file.analysis?.summary ? clarifyAiSystemWording(file.analysis.summary) : null}
                   </p>
-                  {file.analysis?.issues?.length ? (
+                  {otherIssues.length ? (
                     <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-800 space-y-0.5">
-                      {file.analysis.issues.map((issue) => (
+                      {otherIssues.map((issue) => (
                         <li key={issue}>{clarifyAiSystemWording(issue)}</li>
                       ))}
                     </ul>
@@ -588,7 +852,8 @@ function AiDocBlock({
                 </>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       ) : null}
     </div>

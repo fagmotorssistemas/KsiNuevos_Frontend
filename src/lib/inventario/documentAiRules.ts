@@ -3,9 +3,7 @@ import {
   sriRubros,
   type EcuadorContrastePayload,
 } from '@/lib/inventario/ecuadorContraste'
-import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import type { DocumentAiAnalysis } from '@/lib/inventario/openaiDocumentVision'
-import type { VehicleDocType } from '@/types/vehicleLegal.types'
 
 /** Vigencia de la matrícula física en Ecuador para este flujo. */
 export const MATRICULA_VALIDITY_YEARS = 4
@@ -44,6 +42,11 @@ function joinSourceLabels(labels: string[]): string {
   return `${unique.slice(0, -1).join(', ')} y ${unique[unique.length - 1]}`
 }
 
+const INVALID_UPLOAD_PHOTO_PREFIX =
+  /Esta fotografía no debió haberse subido a «[^»]+»\.?\s*/gi
+const INVALID_UPLOAD_SECTION_BOILERPLATE =
+  /Esta sección solo se usa cuando el documento está al día y la foto es válida\.?\s*/gi
+
 /** Textos viejos del modelo: "sistema 1/2" → nombre real de la fuente. */
 export function clarifyAiSystemWording(text: string): string {
   return text
@@ -53,6 +56,184 @@ export function clarifyAiSystemWording(text: string): string {
     .replace(/\bcon el sistema\b/gi, 'con la ficha de inventario KSI o EcuadorAPI')
     .replace(/\bdel sistema\b/gi, 'de la ficha de inventario KSI / EcuadorAPI')
     .replace(/\bel sistema\b/gi, 'la ficha de inventario KSI o EcuadorAPI')
+    .replace(INVALID_UPLOAD_PHOTO_PREFIX, '')
+    .replace(INVALID_UPLOAD_SECTION_BOILERPLATE, '')
+    .replace(/;?\s*esta sección solo admite matrícula pagada y al día\.?/gi, '')
+    .replace(/;?\s*esta sección no admite vehículo con multas\.?/gi, '')
+    .replace(/;?\s*esta sección solo admite RTV al día\.?/gi, '')
+    .replace(/Lo encontrado:\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+export function isInvalidUploadText(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return normalized.includes('no debio')
+}
+
+export function sentenceCase(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed) return trimmed
+  const first = trimmed.search(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/)
+  if (first < 0) return trimmed
+  return trimmed.slice(0, first) + trimmed.charAt(first).toUpperCase() + trimmed.slice(first + 1)
+}
+
+function foldFinding(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9$]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function moneyInText(text: string): string | null {
+  const match = text.match(/\$\s*([\d]+(?:[.,]\d{1,2})?)/)
+  return match ? match[1].replace(',', '.') : null
+}
+
+function dateInText(text: string): string | null {
+  const match = text.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/)
+  return match ? match[1] : null
+}
+
+function splitFindingParts(text: string): string[] {
+  const cleaned = clarifyAiSystemWording(text)
+    .replace(/^Lo encontrado:\s*/i, '')
+    .replace(/^No debió subirse\.?\s*/i, '')
+    .trim()
+  if (!cleaned || /^no debió subirse\.?$/i.test(cleaned)) return []
+  const numbered = cleaned
+    .split(/\s*\d+\)\s+/)
+    .map((part) => part.replace(/^[.;]\s*/, '').replace(/[.;]\s*$/, '').trim())
+    .filter(Boolean)
+  const base = numbered.length > 1 ? numbered : [cleaned.replace(/[.;]\s*$/, '')]
+  const parts: string[] = []
+  for (const part of base) {
+    if (part.length < 160) {
+      parts.push(part)
+      continue
+    }
+    const sentences = part
+      .split(/(?<=[a-záéíóúñ])\.\s+(?=[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/)
+      .map((s) => s.replace(/[.;]\s*$/, '').trim())
+      .filter(Boolean)
+    if (sentences.length > 1) parts.push(...sentences)
+    else parts.push(part)
+  }
+  return parts
+}
+
+type FindingTopic = 'sri' | 'expired' | 'api' | 'citations' | 'identity' | 'quality' | 'other'
+
+function findingTopic(text: string): FindingTopic {
+  const folded = foldFinding(text)
+  if (/\bsri\b/.test(folded)) return 'sri'
+  if (/citacion|multa|\bant\b/.test(folded)) return 'citations'
+  if (/vencid|vigencia|4 anos/.test(folded)) return 'expired'
+  if (/ecuadorapi/.test(folded) && /no vigente|no al dia/.test(folded)) return 'api'
+  if (/placa leida|propietario|lugar leido|pais leido/.test(folded)) return 'identity'
+  if (/ilegibl|borros|recortad|no es el documento|no corresponde a esta seccion/.test(folded)) return 'quality'
+  return 'other'
+}
+
+function pickShortest(items: string[]): string | null {
+  if (items.length === 0) return null
+  return [...items].sort((a, b) => a.length - b.length)[0]
+}
+
+export function compactFindingReasons(reasons: string[]): string[] {
+  const items = reasons
+    .flatMap(splitFindingParts)
+    .map((item) => sentenceCase(item))
+    .filter((item) => item && (!isInvalidUploadText(item) || item.length >= 48))
+    .filter((item) => !/^No debió subirse\.?$/i.test(item))
+
+  const byTopic: Record<FindingTopic, string[]> = {
+    sri: [],
+    expired: [],
+    api: [],
+    citations: [],
+    identity: [],
+    quality: [],
+    other: [],
+  }
+  for (const item of items) {
+    if (item.length > 160 && findingTopic(item) === 'other') continue
+    byTopic[findingTopic(item)].push(item)
+  }
+
+  const compact: string[] = []
+
+  if (byTopic.expired.length) {
+    const withDate = byTopic.expired.find((item) => dateInText(item))
+    const date = dateInText(withDate || byTopic.expired.join(' '))
+    const api = byTopic.api[0]
+    compact.push(
+      sentenceCase(
+        date
+          ? api
+            ? `Matrícula vencida: vigencia de ${MATRICULA_VALIDITY_YEARS} años hasta ${date}. EcuadorAPI la reporta no vigente.`
+            : `Matrícula vencida: vigencia de ${MATRICULA_VALIDITY_YEARS} años hasta ${date}.`
+          : pickShortest(byTopic.expired) || byTopic.expired[0]
+      )
+    )
+  } else if (byTopic.api.length) {
+    compact.push(sentenceCase(pickShortest(byTopic.api) || byTopic.api[0]))
+  }
+
+  if (byTopic.sri.length) {
+    const amount = moneyInText(byTopic.sri.join(' '))
+    const missingInPhoto = byTopic.sri.some((item) => /no aparece|no se lee|foto/.test(foldFinding(item)))
+    const revision = byTopic.sri.some((item) => /revisi[oó]n/.test(foldFinding(item)))
+    const label = revision ? 'revisión técnica' : 'matrícula'
+    compact.push(
+      sentenceCase(
+        amount
+          ? missingInPhoto
+            ? `SRI tiene ${label} pendiente de $${amount} y ese monto no aparece en la foto.`
+            : `SRI tiene ${label} pendiente de $${amount}.`
+          : pickShortest(byTopic.sri) || byTopic.sri[0]
+      )
+    )
+  }
+
+  if (byTopic.citations.length) {
+    compact.push(sentenceCase(pickShortest(byTopic.citations) || byTopic.citations[0]))
+  }
+
+  const rest = [...byTopic.identity, ...byTopic.quality, ...byTopic.other]
+  for (const item of rest) {
+    const folded = foldFinding(item)
+    if (item.length > 160) continue
+    if (compact.some((kept) => foldFinding(kept).includes(folded) || folded.includes(foldFinding(kept)))) continue
+    compact.push(sentenceCase(item))
+  }
+
+  if (compact.length === 0 && items.length > 0) {
+    const fallback = pickShortest(items.filter((item) => item.length <= 220)) || pickShortest(items)
+    if (fallback) compact.push(sentenceCase(fallback))
+  }
+
+  return compact
+}
+
+export function listInvalidUploadReasons(text: string, extraIssues: string[] = []): string[] {
+  const chunks: string[] = []
+  const pushParts = (raw: string) => {
+    for (const part of splitFindingParts(raw)) {
+      if (isInvalidUploadText(part) && part.length < 48) continue
+      if (!chunks.some((existing) => foldFinding(existing) === foldFinding(part))) chunks.push(part)
+    }
+  }
+  pushParts(text)
+  for (const issue of extraIssues) pushParts(issue)
+  return compactFindingReasons(chunks)
 }
 
 export function buildVehicleRecordContext(input: {
@@ -665,15 +846,6 @@ function invalidUploadReasons(input: {
   return uniqueIssues(reasons)
 }
 
-function formatInvalidUploadAlert(sectionLabel: string, reasons: string[]): string {
-  const why = `Esta sección solo se usa cuando el documento está al día y la foto es válida`
-  if (reasons.length === 1) {
-    return `Esta fotografía no debió haberse subido a «${sectionLabel}». ${why}. Lo encontrado: ${reasons[0]}.`
-  }
-  const listed = reasons.map((reason, index) => `${index + 1}) ${reason}`).join(' ')
-  return `Esta fotografía no debió haberse subido a «${sectionLabel}». ${why}. Lo encontrado: ${listed}`
-}
-
 export function applyDocumentAiBusinessRules(
   analysis: DocumentAiAnalysis,
   input: {
@@ -766,11 +938,16 @@ export function applyDocumentAiBusinessRules(
   })
   const photoShouldNotBeUploaded = reasons.length > 0
   if (photoShouldNotBeUploaded) {
-    const sectionLabel = docCatalogByType(input.docType as VehicleDocType)?.label ?? input.docType
-    const alert = formatInvalidUploadAlert(sectionLabel, reasons)
-    issues.unshift(alert)
+    for (const reason of reasons) {
+      if (!issues.some((issue) => issue.toLowerCase() === reason.toLowerCase())) {
+        issues.push(reason)
+      }
+    }
+    if (!issues.some((issue) => isInvalidUploadText(issue) && issue.length < 48)) {
+      issues.unshift('No debió subirse')
+    }
     if (!summary.toLowerCase().includes('no debió')) {
-      summary = `${alert} ${summary}`
+      summary = `No debió subirse. ${summary}`
     }
   }
 
