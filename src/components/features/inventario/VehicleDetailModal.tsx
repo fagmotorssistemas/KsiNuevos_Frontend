@@ -185,7 +185,7 @@ export function VehicleDetailModal({
           </div>
         </div>
 
-        <VehicleLegalSummaryBar summary={summary} />
+        <VehicleLegalSummaryBar summary={summary} placa={vehiculo.placa} />
 
         <div className="flex border-b border-slate-200 px-4 overflow-x-auto shrink-0">
           {tabs.map((t) => {

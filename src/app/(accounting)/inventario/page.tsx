@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { use, useState, useMemo } from "react";
 import Link from "next/link";
 import { RefreshCw, ClipboardList, FileCheck2 } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioKpiStats, FilterType } from "@/components/features/inventario/InventarioKpiStats";
 import { InventarioTable } from "@/components/features/inventario/InventarioTable";
 
-export default function InventarioPage() {
+export default function InventarioPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<Record<string, string | string[] | undefined>>
+    searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+    use(params)
+    use(searchParams)
     const { data, loading, refresh } = useInventarioData();
     
     // Estado para el filtro (Por defecto 'all')

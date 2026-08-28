@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { use, useState, useMemo } from "react";
 import Link from "next/link";
 import { RefreshCw, FileCheck2, Box } from "lucide-react";
 import { useInventarioData } from "@/hooks/accounting/useInventarioData";
@@ -8,7 +8,15 @@ import { InventarioDocumentReport } from "@/components/features/inventario/Inven
 import { VehicleDetailModal, type VehicleDetailTab } from "@/components/features/inventario/VehicleDetailModal";
 import type { VehiculoInventario } from "@/types/inventario.types";
 
-export default function ReporteDocumentacionPage() {
+export default function ReporteDocumentacionPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<Record<string, string | string[] | undefined>>
+    searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+    use(params)
+    use(searchParams)
     const { data, loading, refresh } = useInventarioData();
     const [detailVehicle, setDetailVehicle] = useState<VehiculoInventario | null>(null);
     const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");

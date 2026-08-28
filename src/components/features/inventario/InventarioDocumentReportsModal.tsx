@@ -24,7 +24,6 @@ import {
 import {
     getDocumentCheckStatus,
     getCatalogDocumentRow,
-    getFinesCheckStatus,
     listDocumentFiles,
     isDocumentCatalogItemVisible,
     listPendingDocumentCatalog,
@@ -34,12 +33,13 @@ import {
     loadBulkVehicleLegalChecklist,
     type VehicleLegalChecklistBulk,
 } from "@/services/vehicleLegal.service";
-import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
-import { listAiInformeByPlacas } from "@/services/vehicleAiInformes.service";
 import {
     formatContrasteConsultedPretty,
     formatContrasteRelative,
+    type OfficialPendingSummary,
 } from "@/lib/inventario/ecuadorContraste";
+import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
+import { listAiInformeByPlacas } from "@/services/vehicleAiInformes.service";
 import { VehicleDocumentFilesModal } from "@/components/features/inventario/legal/VehicleDocumentFilesModal";
 import type { VehicleDocumentFileRow, VehicleDocumentRow } from "@/types/vehicleLegal.types";
 import type { VehiculoInventario } from "@/types/inventario.types";
@@ -202,6 +202,33 @@ function DocumentYesNoCell({
                     : undefined
             }
         />
+    );
+}
+
+function money(n: number) {
+    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | undefined }) {
+    if (!pending) {
+        return <span className="text-[11px] text-slate-400">Sin consulta</span>;
+    }
+    const hasDebt = pending.total > 0.009;
+    return (
+        <div className="flex flex-col gap-0.5 min-w-0">
+            <span className={`text-[12px] font-bold tabular-nums ${hasDebt ? "text-red-700" : "text-emerald-700"}`}>
+                {money(pending.total)}
+            </span>
+            <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-slate-500">
+                <span>SRI {money(pending.sriTotal)}</span>
+                <span>
+                    ANT{" "}
+                    {pending.citationsCount > 0
+                        ? `${pending.citationsCount} · ${money(pending.antTotal)}`
+                        : money(pending.antTotal)}
+                </span>
+            </div>
+        </div>
     );
 }
 
@@ -442,21 +469,17 @@ function DocumentDetailPanel({
                         </DetailFieldCard>
                     );
                 })}
-                <DetailFieldCard label="Multas">
-                    <YesNoCell
-                        status={
-                            linked
-                                ? getFinesCheckStatus(entry?.pendingFinesCount ?? 0, entry?.totalFinesCount ?? 0)
-                                : "na"
-                        }
-                        title={
-                            entry?.pendingFinesCount
-                                ? `${entry.pendingFinesCount} multa(s) pendiente(s)`
-                                : entry?.totalFinesCount
-                                  ? "Multas revisadas — sin pendientes"
-                                  : "Multas no revisadas"
-                        }
-                    />
+                <DetailFieldCard label="Estado de documentación">
+                    {(() => {
+                        const statusBadge = documentaryStatusBadge(progress, linked);
+                        return (
+                            <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge.className}`}
+                            >
+                                {statusBadge.text}
+                            </span>
+                        );
+                    })()}
                 </DetailFieldCard>
             </div>
         </div>
@@ -476,7 +499,7 @@ export function InventarioDocumentReport({
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortAsc, setSortAsc] = useState(true);
     const [checklistData, setChecklistData] = useState<VehicleLegalChecklistBulk | null>(null);
-    const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, string>>(new Map());
+    const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, { consultedAt: string; pending: OfficialPendingSummary }>>(new Map());
     const [aiOkByPlate, setAiOkByPlate] = useState<Map<string, boolean>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
@@ -577,11 +600,8 @@ export function InventarioDocumentReport({
                     case "year":
                         return ((Number(a.anioModelo) || 0) - (Number(b.anioModelo) || 0)) * dir;
                     case "progress": {
-                        if (!checklistData) return 0;
-                        const ea = checklistData.byPlate.get(normalizePlate(a.placa));
-                        const eb = checklistData.byPlate.get(normalizePlate(b.placa));
-                        const pa = ea ? countComplete(ea).done / Math.max(countComplete(ea).total, 1) : 0;
-                        const pb = eb ? countComplete(eb).done / Math.max(countComplete(eb).total, 1) : 0;
+                        const pa = contrasteByPlate.get(normalizePlate(a.placa))?.pending.total ?? -1;
+                        const pb = contrasteByPlate.get(normalizePlate(b.placa))?.pending.total ?? -1;
                         return (pa - pb) * dir;
                     }
                     case "alerts": {
@@ -595,8 +615,8 @@ export function InventarioDocumentReport({
                         return (pa - pb) * dir;
                     }
                     case "contraste": {
-                        const da = contrasteByPlate.get(normalizePlate(a.placa)) ?? "";
-                        const db = contrasteByPlate.get(normalizePlate(b.placa)) ?? "";
+                        const da = contrasteByPlate.get(normalizePlate(a.placa))?.consultedAt ?? "";
+                        const db = contrasteByPlate.get(normalizePlate(b.placa))?.consultedAt ?? "";
                         if (!da && !db) return 0;
                         if (!da) return 1;
                         if (!db) return -1;
@@ -712,7 +732,7 @@ export function InventarioDocumentReport({
                                     className="min-w-[96px]"
                                 />
                                 <SortableHeader
-                                    label="Estado documental"
+                                    label="Valores pendientes"
                                     sortKey="progress"
                                     current={sortKey}
                                     asc={sortAsc}
@@ -743,9 +763,9 @@ export function InventarioDocumentReport({
                                             ? listPendingDocumentCatalog(entry.documents).length
                                             : 0;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
-                                    const consultedAt = contrasteByPlate.get(normalizePlate(v.placa));
+                                    const contraste = contrasteByPlate.get(normalizePlate(v.placa));
+                                    const consultedAt = contraste?.consultedAt;
                                     const expanded = expandedProId === v.proId;
-                                    const statusBadge = documentaryStatusBadge(progress, linked);
 
                                     return (
                                         <Fragment key={v.proId}>
@@ -770,12 +790,8 @@ export function InventarioDocumentReport({
                                                 <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
                                                     {v.placa}
                                                 </td>
-                                                <td className="px-3 py-3 whitespace-nowrap">
-                                                    <span
-                                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge.className}`}
-                                                    >
-                                                        {statusBadge.text}
-                                                    </span>
+                                                <td className="px-3 py-3">
+                                                    <PendingValuesCell pending={contraste?.pending} />
                                                 </td>
                                                 <td
                                                     className="px-3 py-3 whitespace-nowrap"

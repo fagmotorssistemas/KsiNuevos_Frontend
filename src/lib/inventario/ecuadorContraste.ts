@@ -485,6 +485,74 @@ export function sriRubros(sri: EcuadorPendientes | null): SriRubros {
   return acc
 }
 
+export type OfficialPendingSummary = {
+  sriTotal: number
+  sriMatricula: number
+  sriRevision: number
+  antTotal: number
+  amtTotal: number
+  citationsCount: number
+  total: number
+}
+
+export function officialPendingSummary(payload: EcuadorContrastePayload | null): OfficialPendingSummary {
+  const sri = sriRubros(payload?.sri ?? null)
+  const antTotal = Number(payload?.citationsPendingTotal ?? payload?.ant?.total ?? 0) || 0
+  const amtTotal = Number(payload?.amt?.total ?? 0) || 0
+  const citationsCount = Number(payload?.citationsPendingCount ?? 0) || 0
+  return {
+    sriTotal: sri.total,
+    sriMatricula: sri.matricula,
+    sriRevision: sri.revision,
+    antTotal,
+    amtTotal,
+    citationsCount,
+    total: sri.total + antTotal + amtTotal,
+  }
+}
+
+const MATRICULA_YEARS = 4
+
+function toYmd(value: string | null | undefined): string | null {
+  if (!value) return null
+  const text = value.trim()
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+  const dmy = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+  return null
+}
+
+function addYearsYmd(ymd: string, years: number): string {
+  const [year, month, day] = ymd.split('-').map(Number)
+  return `${year + years}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function formatYmdEs(ymd: string): string {
+  const [year, month, day] = ymd.split('-')
+  return `${day}/${month}/${year}`
+}
+
+export type OfficialMatriculaStatus = {
+  expired: boolean | null
+  expiryLabel: string | null
+}
+
+export function officialMatriculaStatus(payload: EcuadorContrastePayload | null): OfficialMatriculaStatus {
+  if (!payload) return { expired: null, expiryLabel: null }
+  const lookup = payload.lookup
+  const issuedYmd = toYmd(lookup?.lastRegistrationDate)
+  const expiryYmd =
+    toYmd(lookup?.registrationExpiry) || (issuedYmd ? addYearsYmd(issuedYmd, MATRICULA_YEARS) : null)
+  let expired: boolean | null = payload.matricula?.vigente == null ? null : !payload.matricula.vigente
+  if (expiryYmd) expired = expiryYmd < ecuadorTodayYmd()
+  if (payload.matricula?.vigente === false) expired = true
+  return {
+    expired,
+    expiryLabel: expiryYmd ? formatYmdEs(expiryYmd) : null,
+  }
+}
+
 function usd(n: number): string {
   return `$${n.toFixed(2)}`
 }

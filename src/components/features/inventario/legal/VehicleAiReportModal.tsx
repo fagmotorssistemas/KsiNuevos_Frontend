@@ -1,22 +1,29 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, Sparkles, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { ChevronDown, ChevronUp, Loader2, Sparkles, User, X } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { listContrasteConsultas, payloadFromConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
 import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
   DOCUMENT_SECTION_TITLES,
+  formatShortDate,
   isDocumentCatalogItemVisible,
   isDocumentImageFile,
   listDocumentFiles,
 } from '@/lib/inventario/vehicleLegalUi'
 import { clarifyAiSystemWording, compactFindingReasons, isInvalidUploadText, listInvalidUploadReasons, sentenceCase } from '@/lib/inventario/documentAiRules'
 import {
+  buildContrastMatrix,
+  contrastShowAmt,
+  emptyContrasteStaff,
   formatContrasteConsultedPretty,
   formatContrasteRelative,
+  summarizeMatrix,
+  type EcuadorContrastePayload,
 } from '@/lib/inventario/ecuadorContraste'
 import type { DocumentAiAnalysis, VehicleAiFinding, VehicleAiSource, VehicleAiSynthesis, VehicleAiSynthesisItem } from '@/lib/inventario/openaiDocumentVision'
-import type { VehiculoInventario } from '@/types/inventario.types'
+import type { Json } from '@/types/supabase'
 import type { DocumentAiReportRow } from '@/services/documentAiReports.service'
 import {
   parseVehicleAiInformePayload,
@@ -24,7 +31,7 @@ import {
   type VehicleAiInformeSection,
   type VehicleAiInformeSectionFile,
 } from '@/services/vehicleAiInformes.service'
-import type { VehicleDocType, VehicleDocumentFileRow, VehicleLegalDossier } from '@/types/vehicleLegal.types'
+import type { VehicleDocType, VehicleDocumentFileRow, VehicleLegalDossier, VehicleOwnerRow } from '@/types/vehicleLegal.types'
 
 type PhotoPreview = {
   url: string
@@ -226,6 +233,133 @@ async function mapPool<T, R>(items: T[], limit: number, mapper: (item: T) => Pro
   return out
 }
 
+type OwnerFact = { label: string; value: string }
+
+function ownerFactsFromRow(owner: VehicleOwnerRow): OwnerFact[] {
+  const facts: OwnerFact[] = [{ label: 'Nombre', value: owner.owner_name }]
+  if (owner.id_number?.trim()) facts.push({ label: 'Cédula / ID', value: owner.id_number.trim() })
+  facts.push({ label: 'Estado', value: owner.is_current ? 'Propietario actual' : 'Propietario anterior' })
+  const from = formatShortDate(owner.from_date)
+  const to = formatShortDate(owner.to_date)
+  if (from) facts.push({ label: 'Desde', value: from })
+  if (to) facts.push({ label: 'Hasta', value: to })
+  else if (owner.is_current && owner.from_date) facts.push({ label: 'Hasta', value: 'Actual' })
+  if (owner.notes?.trim()) facts.push({ label: 'Notas', value: owner.notes.trim() })
+  return facts
+}
+
+function photoOwnerFacts(payload: VehicleAiInformePayload | null): OwnerFact[] {
+  if (!payload) return []
+  const facts: OwnerFact[] = []
+  const seen = new Set<string>()
+  for (const section of payload.sections) {
+    for (const file of section.files) {
+      const extracted = file.analysis?.extracted
+      const photo = file.photoIndex ? `Foto ${file.photoIndex}` : file.fileName
+      const name = extracted?.owner?.trim()
+      if (name) {
+        const key = name.toLowerCase()
+        if (!seen.has(key)) {
+          seen.add(key)
+          facts.push({ label: `Leído en ${section.docLabel} (${photo})`, value: name })
+        }
+      }
+      for (const field of extracted?.fields ?? []) {
+        const label = field.label?.trim() ?? ''
+        const value = field.value?.trim() ?? ''
+        if (!value) continue
+        if (!/propietari|c[eé]dula|identificaci[oó]n|ruc|pasaporte/i.test(label)) continue
+        const key = `${label}|${value}`.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        facts.push({ label: `${label} (${section.docLabel})`, value })
+      }
+    }
+  }
+  return facts
+}
+
+function OwnerConclusionsBlock({
+  vehiculo,
+  dossier,
+  payload,
+  apiOwner,
+  apiCanton,
+}: {
+  vehiculo: VehiculoInventario
+  dossier: VehicleLegalDossier
+  payload: VehicleAiInformePayload | null
+  apiOwner: string | null
+  apiCanton: string | null
+}) {
+  const owners = [...dossier.owners].sort((a, b) => Number(b.is_current) - Number(a.is_current) || a.sort_order - b.sort_order)
+  const current = owners.find((owner) => owner.is_current) ?? owners[0] ?? null
+  const headline =
+    current?.owner_name ||
+    apiOwner?.trim() ||
+    vehiculo.nombreMatricula?.trim() ||
+    null
+  const extraFacts: OwnerFact[] = []
+  if (vehiculo.nombreMatricula?.trim()) {
+    extraFacts.push({ label: 'Nombre en matrícula (ficha KSI)', value: vehiculo.nombreMatricula.trim() })
+  }
+  if (vehiculo.lugarMatricula?.trim()) {
+    extraFacts.push({ label: 'Lugar de matrícula', value: vehiculo.lugarMatricula.trim() })
+  }
+  if (apiOwner?.trim()) extraFacts.push({ label: 'Propietario EcuadorAPI', value: apiOwner.trim() })
+  if (apiCanton?.trim()) extraFacts.push({ label: 'Cantón EcuadorAPI', value: apiCanton.trim() })
+  extraFacts.push(...photoOwnerFacts(payload))
+
+  const hasAny = Boolean(headline || owners.length || extraFacts.length)
+
+  return (
+    <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-3">
+      <div className="flex items-start gap-2">
+        <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+          <User className="h-4 w-4 text-violet-700" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">Propietario</p>
+          {headline ? (
+            <p className="text-sm font-bold text-slate-900 mt-0.5">{headline}</p>
+          ) : (
+            <p className="text-sm text-slate-500 mt-0.5">Sin nombre de propietario registrado</p>
+          )}
+        </div>
+      </div>
+      {!hasAny ? (
+        <p className="mt-2 text-xs text-slate-500">No hay datos de propietario en el expediente, la ficha ni EcuadorAPI.</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {owners.map((owner) => (
+            <dl
+              key={owner.id}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg bg-white/80 border border-violet-100 px-3 py-2"
+            >
+              {ownerFactsFromRow(owner).map((fact) => (
+                <div key={`${owner.id}-${fact.label}`} className="min-w-0">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{fact.label}</dt>
+                  <dd className="text-xs text-slate-800 break-words">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ))}
+          {extraFacts.length > 0 ? (
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg bg-white/80 border border-violet-100 px-3 py-2">
+              {extraFacts.map((fact) => (
+                <div key={`${fact.label}-${fact.value}`} className="min-w-0">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{fact.label}</dt>
+                  <dd className="text-xs text-slate-800 break-words">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function VehicleAiReportModal({
   vehiculo,
   dossier,
@@ -235,16 +369,19 @@ function VehicleAiReportModal({
   dossier: VehicleLegalDossier
   onClose: () => void
 }) {
+  const { supabase, profile, user } = useAuth()
   const jobs = useMemo(() => collectJobs(dossier), [dossier])
   const [running, setRunning] = useState(false)
   const [loadingSaved, setLoadingSaved] = useState(true)
   const [progress, setProgress] = useState(0)
-  const [phase, setPhase] = useState<'idle' | 'files' | 'synthesis'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'contraste' | 'files' | 'synthesis'>('idle')
   const [payload, setPayload] = useState<VehicleAiInformePayload | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [photoPreview, setPhotoPreview] = useState<PhotoPreview | null>(null)
   const [showLegalDetails, setShowLegalDetails] = useState(false)
   const [conclusionFilter, setConclusionFilter] = useState<'all' | 'invalid' | 'ok'>('all')
+  const [apiOwner, setApiOwner] = useState<string | null>(null)
+  const [apiCanton, setApiCanton] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -274,13 +411,67 @@ function VehicleAiReportModal({
     }
   }, [vehiculo.placa])
 
+  useEffect(() => {
+    let cancelled = false
+    void listContrasteConsultas(supabase, vehiculo.placa)
+      .then((rows) => {
+        if (cancelled) return
+        const payload = rows[0] ? payloadFromConsulta(rows[0]) : null
+        setApiOwner(payload?.lookup?.ownerName?.trim() || null)
+        setApiCanton(payload?.lookup?.canton?.trim() || null)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setApiOwner(null)
+          setApiCanton(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [supabase, vehiculo.placa])
+
   const run = async () => {
     if (running) return
     setRunning(true)
-    setPhase(jobs.length > 0 ? 'files' : 'synthesis')
+    setPhase('contraste')
     setProgress(0)
     let done = 0
     try {
+      const readyRes = await fetch('/api/inventario/contraste/ready')
+      const readyBody = readyRes.ok ? ((await readyRes.json()) as { ready?: boolean }) : { ready: false }
+      if (readyBody.ready) {
+        const contrastRes = await fetch(`/api/inventario/contraste/${encodeURIComponent(vehiculo.placa)}`, {
+          method: 'POST',
+        })
+        const contrastBody = (await contrastRes.json()) as { data?: EcuadorContrastePayload; error?: string }
+        if (!contrastRes.ok || !contrastBody.data) {
+          throw new Error(contrastBody.error || 'No se pudo consultar EcuadorAPI')
+        }
+        const staff = emptyContrasteStaff()
+        const counts = summarizeMatrix(
+          buildContrastMatrix(contrastBody.data, staff),
+          contrastShowAmt(contrastBody.data)
+        )
+        await saveContrasteConsulta(supabase, {
+          placa: vehiculo.placa,
+          inventoryoracleId: dossier.inventoryoracleId,
+          payload: contrastBody.data,
+          staffSnapshot: staff as unknown as Json,
+          coinciden: counts.coinciden,
+          diferencias: counts.diferencias,
+          sinVerificar: counts.sinVerificar,
+          estadoGeneral: counts.estadoGeneral,
+          consultedBy: profile?.id ?? null,
+          consultedByName: profile?.full_name?.trim() || user?.email || 'Informe IA',
+        })
+        setApiOwner(contrastBody.data.lookup?.ownerName?.trim() || null)
+        setApiCanton(contrastBody.data.lookup?.canton?.trim() || null)
+      } else {
+        throw new Error('EcuadorAPI no está configurada. No se puede actualizar el contraste.')
+      }
+
+      setPhase(jobs.length > 0 ? 'files' : 'synthesis')
       const fileResults: VehicleAiInformeSectionFile[] =
         jobs.length === 0
           ? []
@@ -456,7 +647,9 @@ function VehicleAiReportModal({
 
           {running ? (
             <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
-              {phase === 'files'
+              {phase === 'contraste'
+                ? 'Consultando EcuadorAPI para actualizar el contraste…'
+                : phase === 'files'
                 ? `Analizando fotos ${progress} de ${jobs.length}…`
                 : 'Redactando conclusiones por sección…'}
             </div>
@@ -472,6 +665,13 @@ function VehicleAiReportModal({
           {payload?.synthesis ? (
             <section className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm">
               <h4 className="text-sm font-bold text-violet-900 mb-2">Conclusiones</h4>
+              <OwnerConclusionsBlock
+                vehiculo={vehiculo}
+                dossier={dossier}
+                payload={payload}
+                apiOwner={apiOwner}
+                apiCanton={apiCanton}
+              />
               {overallSummary && !/^no debió subirse\.?$/i.test(overallSummary) ? (
                 <p className="text-sm text-slate-700 leading-relaxed">{overallSummary}</p>
               ) : null}

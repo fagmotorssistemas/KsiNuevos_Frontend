@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/types/supabase'
-import type { EcuadorContrastePayload, ContrasteEstadoGeneral } from '@/lib/inventario/ecuadorContraste'
+import type { EcuadorContrastePayload, ContrasteEstadoGeneral, OfficialPendingSummary } from '@/lib/inventario/ecuadorContraste'
+import { officialPendingSummary } from '@/lib/inventario/ecuadorContraste'
 import { normalizePlate } from '@/lib/inventario/normalizePlate'
 
 export type ContrasteConsultaRow = Database['public']['Tables']['inventory_vehicle_contraste_consultas']['Row']
@@ -60,27 +61,42 @@ export async function saveContrasteConsulta(
 
 const PLATE_IN_CHUNK = 80
 
+export type LatestContrasteByPlate = {
+  consultedAt: string
+  pending: OfficialPendingSummary
+}
+
 /** Última consulta EcuadorAPI por placa (no llama a la API; solo lee historial guardado). */
 export async function listLatestContrasteConsultasByPlacas(
   supabase: SupabaseClient<Database>,
   placas: string[]
-): Promise<Map<string, string>> {
+): Promise<Map<string, LatestContrasteByPlate>> {
   const unique = [...new Set(placas.map((p) => normalizePlate(p)).filter(Boolean))]
-  const latest = new Map<string, string>()
+  const latest = new Map<string, { created_at: string; payload: Json | null }>()
   for (let i = 0; i < unique.length; i += PLATE_IN_CHUNK) {
     const chunk = unique.slice(i, i + PLATE_IN_CHUNK)
     const { data, error } = await supabase
       .from('inventory_vehicle_contraste_consultas')
-      .select('placa, created_at')
+      .select('placa, created_at, payload')
       .in('placa', chunk)
     if (error) throw error
     for (const row of data ?? []) {
       const plate = normalizePlate(row.placa)
       const prev = latest.get(plate)
-      if (!prev || row.created_at > prev) latest.set(plate, row.created_at)
+      if (!prev || row.created_at > prev.created_at) {
+        latest.set(plate, { created_at: row.created_at, payload: row.payload })
+      }
     }
   }
-  return latest
+  const out = new Map<string, LatestContrasteByPlate>()
+  for (const [plate, row] of latest) {
+    const parsed = payloadFromConsulta({ payload: row.payload } as ContrasteConsultaRow)
+    out.set(plate, {
+      consultedAt: row.created_at,
+      pending: officialPendingSummary(parsed),
+    })
+  }
+  return out
 }
 
 export function payloadFromConsulta(row: ContrasteConsultaRow): EcuadorContrastePayload | null {
