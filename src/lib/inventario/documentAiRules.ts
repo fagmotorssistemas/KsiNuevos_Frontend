@@ -365,8 +365,10 @@ function photoCountryTexts(analysis: DocumentAiAnalysis): string[] {
 }
 
 function photoIdentityYears(analysis: DocumentAiAnalysis): number[] {
-  const years: number[] = []
-  years.push(yearFromUnknown(analysis.extracted.issue_date), yearFromUnknown(analysis.extracted.registration_year))
+  const years: Array<number | null> = [
+    yearFromUnknown(analysis.extracted.issue_date),
+    yearFromUnknown(analysis.extracted.registration_year),
+  ]
   for (const field of analysis.extracted.fields ?? []) {
     const label = foldText(field.label)
     const skipContractOnly = /poder|otorg|contrato|firma|notari/.test(label) && !/matricul|registro|emisi|expedic|vigenc|venc/.test(label)

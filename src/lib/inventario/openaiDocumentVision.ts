@@ -347,7 +347,7 @@ export type VehicleAiSource = {
   docLabel: string
   photoIndex: number | null
   fileName: string | null
-  fileId?: string | null
+  fileId: string | null
   kind: 'photo' | 'missing' | 'detail' | 'api'
   label: string
 }
