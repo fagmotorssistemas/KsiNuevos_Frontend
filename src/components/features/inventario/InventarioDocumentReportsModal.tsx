@@ -27,6 +27,7 @@ import {
     getFinesCheckStatus,
     listDocumentFiles,
     isDocumentCatalogItemVisible,
+    listPendingDocumentCatalog,
     type ChecklistCellStatus,
 } from "@/lib/inventario/vehicleLegalUi";
 import {
@@ -48,9 +49,17 @@ type ReportView = "active" | "baja";
 
 type SortKey = "vehicle" | "plate" | "year" | "progress" | "contraste" | "alerts";
 
+export type OpenVehicleFromReportOptions = {
+    openUpload?: boolean;
+};
+
 interface InventarioDocumentReportProps {
     vehiculos: VehiculoInventario[];
-    onOpenVehicle?: (vehiculo: VehiculoInventario, tab?: VehicleDetailTab) => void;
+    onOpenVehicle?: (
+        vehiculo: VehiculoInventario,
+        tab?: VehicleDetailTab,
+        options?: OpenVehicleFromReportOptions
+    ) => void;
     /** Incrementar para recargar checklist tras editar documentos en el modal */
     reloadKey?: number;
 }
@@ -263,8 +272,6 @@ function countComplete(
         const doc = getCatalogDocumentRow(entry.documents, cat.docType);
         if (getDocumentCheckStatus(doc, cat) === "ok") done += 1;
     }
-    total += 1;
-    if (getFinesCheckStatus(entry.pendingFinesCount, entry.totalFinesCount) === "ok") done += 1;
     return { done, total };
 }
 
@@ -732,7 +739,9 @@ export function InventarioDocumentReport({
                                     const linked = Boolean(entry?.inventoryoracleId);
                                     const progress = entry ? countComplete(entry) : { done: 0, total: 0 };
                                     const pending =
-                                        progress.total > 0 ? Math.max(progress.total - progress.done, 0) : 0;
+                                        linked && entry
+                                            ? listPendingDocumentCatalog(entry.documents).length
+                                            : 0;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
                                     const consultedAt = contrasteByPlate.get(normalizePlate(v.placa));
                                     const expanded = expandedProId === v.proId;
@@ -768,21 +777,30 @@ export function InventarioDocumentReport({
                                                         {statusBadge.text}
                                                     </span>
                                                 </td>
-                                                <td className="px-3 py-3 whitespace-nowrap">
+                                                <td
+                                                    className="px-3 py-3 whitespace-nowrap"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
                                                     {!linked || progress.total === 0 ? (
                                                         <span className="text-[11px] text-slate-400">—</span>
                                                     ) : pending === 0 ? (
                                                         <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700">
                                                             <span aria-hidden>✓</span> Sin alertas
                                                         </span>
-                                                    ) : pending === 1 ? (
-                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-800">
-                                                            <span aria-hidden>⚠</span> 1 pendiente
-                                                        </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-red-700">
-                                                            <span aria-hidden>●</span> {pending} pendientes
-                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            title="Abrir documentos pendientes"
+                                                            onClick={() =>
+                                                                onOpenVehicle?.(v, "documentos", { openUpload: true })
+                                                            }
+                                                            className={`inline-flex items-center gap-1 text-[12px] font-medium hover:underline ${
+                                                                pending === 1 ? "text-amber-800" : "text-red-700"
+                                                            }`}
+                                                        >
+                                                            <span aria-hidden>{pending === 1 ? "⚠" : "●"}</span>
+                                                            {pending} pendiente{pending === 1 ? "" : "s"}
+                                                        </button>
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-3 text-right whitespace-nowrap">

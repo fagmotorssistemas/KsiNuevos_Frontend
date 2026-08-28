@@ -1,4 +1,4 @@
-import type { DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
+import { VEHICLE_DOCUMENT_CATALOG, type DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
 import type {
   VehicleDocStatus,
   VehicleDebtStatus,
@@ -208,6 +208,34 @@ export function hasPoderContratoSlot(byType: Map<string, VehicleDocumentRow>): b
     byType.get('poder_contrato') ||
       LEGACY_PODER_CONTRATO_TYPES.some((t) => byType.has(t))
   )
+}
+
+/** Secciones del catálogo que aún no están en orden (sin archivo o nota válida). */
+export function listPendingDocumentCatalog(byType: Map<string, VehicleDocumentRow>): DocCatalogEntry[] {
+  return VEHICLE_DOCUMENT_CATALOG.filter((catalog) => {
+    if (!isDocumentCatalogItemVisible(catalog.docType, byType)) return false
+    const doc = getCatalogDocumentRow(byType, catalog.docType)
+    return getDocumentCheckStatus(doc, catalog) !== 'ok'
+  })
+}
+
+/** Secciones incompletas primero (el tipo en foco queda al inicio de pendientes). */
+export function orderCatalogPendingFirst(
+  byType: Map<string, VehicleDocumentRow>,
+  focusDocType?: VehicleDocType | null
+): { pending: DocCatalogEntry[]; complete: DocCatalogEntry[] } {
+  const pending = listPendingDocumentCatalog(byType)
+  const pendingSet = new Set(pending.map((item) => item.docType))
+  const complete = VEHICLE_DOCUMENT_CATALOG.filter((item) => !pendingSet.has(item.docType))
+  const pendingOrdered = [...pending]
+  if (focusDocType && pendingSet.has(focusDocType)) {
+    pendingOrdered.sort((a, b) => {
+      if (a.docType === focusDocType) return -1
+      if (b.docType === focusDocType) return 1
+      return 0
+    })
+  }
+  return { pending: pendingOrdered, complete }
 }
 
 /** Misma visibilidad que DocumentosTab (p. ej. levantamiento solo con prenda) */

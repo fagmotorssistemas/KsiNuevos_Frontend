@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
+import { clarifyAiSystemWording } from '@/lib/inventario/documentAiRules'
 import type { DocumentAiReportRow } from '@/services/documentAiReports.service'
 
 const QUALITY_LABEL: Record<string, string> = {
@@ -181,7 +182,7 @@ export function DocumentAiReportBlock({ fileId, compact = false }: Props) {
             ) : null}
             {(report.payload as { contraste_mismatch?: boolean } | null)?.contraste_mismatch ? (
               <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-200">
-                No coincide con API
+                No coincide con EcuadorAPI
               </span>
             ) : null}
             {(report.payload as { photo_should_not_be_uploaded?: boolean } | null)?.photo_should_not_be_uploaded ? (
@@ -190,7 +191,7 @@ export function DocumentAiReportBlock({ fileId, compact = false }: Props) {
               </span>
             ) : null}
           </div>
-          <p className="text-xs text-slate-700 leading-relaxed">{report.summary}</p>
+          <p className="text-xs text-slate-700 leading-relaxed">{clarifyAiSystemWording(report.summary)}</p>
           {fields.length > 0 ? (
             <ul className="text-[11px] text-slate-600 space-y-0.5">
               {fields.slice(0, compact ? 4 : 8).map((field) => (
@@ -203,7 +204,7 @@ export function DocumentAiReportBlock({ fileId, compact = false }: Props) {
           {issues.length > 0 ? (
             <ul className="text-[11px] text-amber-900 space-y-1 list-disc pl-4">
               {issues.map((issue) => (
-                <li key={issue}>{issue}</li>
+                <li key={issue}>{clarifyAiSystemWording(issue)}</li>
               ))}
             </ul>
           ) : null}

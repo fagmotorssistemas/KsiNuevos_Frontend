@@ -7,8 +7,10 @@ import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/veh
 import {
   DOCUMENT_SECTION_TITLES,
   isDocumentCatalogItemVisible,
+  isDocumentImageFile,
   listDocumentFiles,
 } from '@/lib/inventario/vehicleLegalUi'
+import { clarifyAiSystemWording } from '@/lib/inventario/documentAiRules'
 import {
   formatContrasteConsultedPretty,
   formatContrasteRelative,
@@ -22,7 +24,46 @@ import {
   type VehicleAiInformeSection,
   type VehicleAiInformeSectionFile,
 } from '@/services/vehicleAiInformes.service'
-import type { VehicleDocType, VehicleLegalDossier } from '@/types/vehicleLegal.types'
+import type { VehicleDocType, VehicleDocumentFileRow, VehicleLegalDossier } from '@/types/vehicleLegal.types'
+
+type PhotoPreview = {
+  url: string
+  fileName: string
+  isImage: boolean
+}
+
+function dossierFilePreview(file: VehicleDocumentFileRow): PhotoPreview {
+  return {
+    url: file.file_url,
+    fileName: file.file_name || 'Foto',
+    isImage: isDocumentImageFile(file),
+  }
+}
+
+function resolveFindingPhoto(
+  source: VehicleAiFinding['sources'][number],
+  dossier: VehicleLegalDossier,
+  sections: VehicleAiInformeSection[]
+): PhotoPreview | null {
+  const files = dossier.documents.flatMap((row) => listDocumentFiles(row))
+  if (source.fileId) {
+    const match = files.find((file) => file.id === source.fileId)
+    if (match) return dossierFilePreview(match)
+  }
+  const section = sections.find((item) => item.docType === source.docType)
+  const sectionFile =
+    section?.files.find((file) => source.photoIndex != null && file.photoIndex === source.photoIndex) ||
+    section?.files.find((file) => source.fileName && file.fileName === source.fileName)
+  if (sectionFile) {
+    const match = files.find((file) => file.id === sectionFile.fileId)
+    if (match) return dossierFilePreview(match)
+  }
+  if (source.fileName) {
+    const match = files.find((file) => file.file_name === source.fileName)
+    if (match) return dossierFilePreview(match)
+  }
+  return null
+}
 
 type FileJob = {
   fileId: string
@@ -132,6 +173,7 @@ function VehicleAiReportModal({
   const [phase, setPhase] = useState<'idle' | 'files' | 'synthesis'>('idle')
   const [payload, setPayload] = useState<VehicleAiInformePayload | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<PhotoPreview | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -223,6 +265,7 @@ function VehicleAiReportModal({
               docType: section.docType,
               docLabel: section.docLabel,
               fileName: file.fileName,
+              fileId: file.fileId,
               photoIndex: file.photoIndex ?? index + 1,
               summary: file.analysis?.summary || '',
               issues: file.analysis?.issues ?? [],
@@ -261,6 +304,28 @@ function VehicleAiReportModal({
 
   const legalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'legal')
   const physicalBlocks = (payload?.sections ?? []).filter((s) => s.category === 'physical')
+  const openFindingPhoto = (source: VehicleAiFinding['sources'][number]) => {
+    const preview = resolveFindingPhoto(source, dossier, payload?.sections ?? [])
+    if (preview) setPhotoPreview(preview)
+    else toast.error('No se encontró el archivo de esa foto en el expediente')
+  }
+  const openSectionPhoto = (file: VehicleAiInformeSectionFile) => {
+    const preview = resolveFindingPhoto(
+      {
+        docType: '',
+        docLabel: '',
+        photoIndex: file.photoIndex ?? null,
+        fileName: file.fileName,
+        fileId: file.fileId,
+        kind: 'photo',
+        label: file.fileName,
+      },
+      dossier,
+      payload?.sections ?? []
+    )
+    if (preview) setPhotoPreview(preview)
+    else toast.error('No se encontró el archivo de esa foto en el expediente')
+  }
 
   return (
     <div
@@ -325,9 +390,11 @@ function VehicleAiReportModal({
           {payload?.synthesis ? (
             <section className="rounded-2xl border border-violet-200 bg-white p-4 shadow-sm">
               <h4 className="text-sm font-bold text-violet-900 mb-2">Conclusiones</h4>
-              <p className="text-sm text-slate-700 leading-relaxed">{payload.synthesis.overall_summary}</p>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {clarifyAiSystemWording(payload.synthesis.overall_summary)}
+              </p>
               {payload.synthesis.alerts.length > 0 ? (
-                <FindingsTable findings={payload.synthesis.alerts} />
+                <FindingsTable findings={payload.synthesis.alerts} onOpenPhoto={openFindingPhoto} />
               ) : null}
             </section>
           ) : null}
@@ -341,6 +408,8 @@ function VehicleAiReportModal({
                     key={block.docType}
                     section={block}
                     synthesis={payload?.synthesis.blocks.find((b) => b.docType === block.docType)}
+                    onOpenFindingPhoto={openFindingPhoto}
+                    onOpenSectionPhoto={openSectionPhoto}
                   />
                 ))}
               </div>
@@ -356,6 +425,8 @@ function VehicleAiReportModal({
                     key={block.docType}
                     section={block}
                     synthesis={payload?.synthesis.blocks.find((b) => b.docType === block.docType)}
+                    onOpenFindingPhoto={openFindingPhoto}
+                    onOpenSectionPhoto={openSectionPhoto}
                   />
                 ))}
               </div>
@@ -363,6 +434,7 @@ function VehicleAiReportModal({
           ) : null}
         </div>
       </div>
+      {photoPreview ? <AiPhotoLightbox preview={photoPreview} onClose={() => setPhotoPreview(null)} /> : null}
     </div>
   )
 }
@@ -370,11 +442,17 @@ function VehicleAiReportModal({
 function origenLabel(kind: VehicleAiFinding['sources'][number]['kind']): string {
   if (kind === 'missing') return 'Sin archivo'
   if (kind === 'detail') return 'Detalle del encargado'
-  if (kind === 'api') return 'EcuadorAPI (contraste)'
-  return 'Foto'
+  if (kind === 'api') return 'EcuadorAPI (consulta guardada)'
+  return 'Foto del expediente'
 }
 
-function FindingsTable({ findings }: { findings: VehicleAiFinding[] }) {
+function FindingsTable({
+  findings,
+  onOpenPhoto,
+}: {
+  findings: VehicleAiFinding[]
+  onOpenPhoto: (source: VehicleAiFinding['sources'][number]) => void
+}) {
   const rows = findings.flatMap((finding) => {
     if (finding.sources.length === 0) {
       return [{ finding, source: null as VehicleAiFinding['sources'][number] | null }]
@@ -396,14 +474,24 @@ function FindingsTable({ findings }: { findings: VehicleAiFinding[] }) {
         <tbody>
           {rows.map((row, index) => (
             <tr key={`${row.finding.text}-${row.source?.label ?? 'na'}-${index}`} className="border-b border-slate-100 last:border-0">
-              <td className="px-3 py-2.5 text-slate-800 align-top">{row.finding.text}</td>
+              <td className="px-3 py-2.5 text-slate-800 align-top">
+                {clarifyAiSystemWording(row.finding.text)}
+              </td>
               <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap">
                 {row.source?.docLabel || '—'}
               </td>
               <td className="px-3 py-2.5 text-slate-700 align-top whitespace-nowrap">
-                {row.source?.kind === 'photo' && row.source.photoIndex
-                  ? `Foto ${row.source.photoIndex}`
-                  : '—'}
+                {row.source?.kind === 'photo' && (row.source.photoIndex || row.source.fileId || row.source.fileName) ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPhoto(row.source!)}
+                    className="inline-flex items-center rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-800 hover:bg-violet-100"
+                  >
+                    {row.source.photoIndex ? `Foto ${row.source.photoIndex}` : 'Ver foto'}
+                  </button>
+                ) : (
+                  '—'
+                )}
               </td>
               <td className="px-3 py-2.5 text-slate-600 align-top">
                 {row.source ? (
@@ -426,9 +514,13 @@ function FindingsTable({ findings }: { findings: VehicleAiFinding[] }) {
 function AiDocBlock({
   section,
   synthesis,
+  onOpenFindingPhoto,
+  onOpenSectionPhoto,
 }: {
   section: VehicleAiInformeSection
   synthesis?: VehicleAiSynthesis['blocks'][number]
+  onOpenFindingPhoto: (source: VehicleAiFinding['sources'][number]) => void
+  onOpenSectionPhoto: (file: VehicleAiInformeSectionFile) => void
 }) {
   const missingLabel = 'No se ha subido documento.'
   const conclusion =
@@ -455,17 +547,23 @@ function AiDocBlock({
         <p className="text-sm text-amber-800 mt-2">{missingLabel}</p>
       ) : null}
       {conclusion && !section.missing ? (
-        <p className="text-sm text-slate-700 mt-2 leading-relaxed">{conclusion}</p>
+        <p className="text-sm text-slate-700 mt-2 leading-relaxed">{clarifyAiSystemWording(conclusion)}</p>
       ) : null}
       {synthesis?.alerts?.length ? (
-        <FindingsTable findings={synthesis.alerts} />
+        <FindingsTable findings={synthesis.alerts} onOpenPhoto={onOpenFindingPhoto} />
       ) : null}
       {section.files.length > 0 ? (
         <div className="mt-3 space-y-2">
           {section.files.map((file, index) => (
             <div key={file.fileId} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
               <p className="text-[11px] font-semibold text-violet-800">
-                Foto {file.photoIndex ?? index + 1}
+                <button
+                  type="button"
+                  onClick={() => onOpenSectionPhoto(file)}
+                  className="inline-flex items-center rounded-md border border-violet-200 bg-white px-1.5 py-0.5 font-semibold text-violet-800 hover:bg-violet-50"
+                >
+                  Foto {file.photoIndex ?? index + 1}
+                </button>
                 <span className="font-normal text-slate-500"> · {file.fileName}</span>
                 {file.analysis?.photo_should_not_be_uploaded ? (
                   <span className="ml-2 inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-bold border bg-red-50 text-red-700 border-red-200">
@@ -477,11 +575,13 @@ function AiDocBlock({
                 <p className="text-xs text-red-600 mt-1">{file.error}</p>
               ) : (
                 <>
-                  <p className="text-xs text-slate-700 mt-1 leading-relaxed">{file.analysis?.summary}</p>
+                  <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+                    {file.analysis?.summary ? clarifyAiSystemWording(file.analysis.summary) : null}
+                  </p>
                   {file.analysis?.issues?.length ? (
                     <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-800 space-y-0.5">
                       {file.analysis.issues.map((issue) => (
-                        <li key={issue}>{issue}</li>
+                        <li key={issue}>{clarifyAiSystemWording(issue)}</li>
                       ))}
                     </ul>
                   ) : null}
@@ -491,6 +591,40 @@ function AiDocBlock({
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function AiPhotoLightbox({ preview, onClose }: { preview: PhotoPreview; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+          <p className="text-sm font-semibold text-slate-900 truncate">{preview.fileName}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-full text-slate-400 hover:bg-slate-100"
+            aria-label="Cerrar foto"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center min-h-[240px]">
+          {preview.isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview.url} alt={preview.fileName} className="max-h-[75vh] w-auto object-contain" />
+          ) : (
+            <iframe title={preview.fileName} src={preview.url} className="w-full h-[75vh] bg-white" />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

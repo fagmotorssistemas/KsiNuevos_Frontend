@@ -3,6 +3,7 @@ import { normalizePlate } from '@/lib/inventario/normalizePlate'
 import {
   MATRICULA_VALIDITY_YEARS,
   applyDocumentAiBusinessRules,
+  clarifyAiSystemWording,
   isVagueDiscrepancyText,
   type ContrasteAiContext,
   type VehicleRecordContext,
@@ -84,7 +85,7 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
       `REGLA DE VIGENCIA: la matrícula solo tiene ${MATRICULA_VALIDITY_YEARS} años desde su fecha de emisión / última matrícula. Si ya pasó, ESTÁ EXPIRADA (matricula_expired=true y un issue).`,
       'REGLA SRI: si EcuadorAPI tiene matrícula pendiente y en esta foto no aparece ese monto o el papel parece al día, contraste_mismatch=true y un issue claro.',
       'REGLA DE CARGA: subir esta foto a "Matrícula vigente" significa que está al día: no vencida, sin pendientes SRI y sin multas. Si no cumple, photo_should_not_be_uploaded=true y cada issue DEBE nombrar el hecho exacto (fecha de vencimiento, monto SRI $, cantidad de citaciones). PROHIBIDO decir "hay discrepancias".',
-      'También extrae propietario, lugar de matrícula y país si aparecen, y contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA.',
+      'También extrae propietario, lugar de matrícula y país si aparecen, y contrástalos con las fuentes nombradas (ficha de inventario KSI, historial de propietarios, EcuadorAPI). Nunca digas "sistema 1" ni "sistema 2".',
     ]
   }
   if (docType === 'revision_tecnica') {
@@ -106,7 +107,7 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
     return [
       `Analiza esta foto como poder / contrato (${docLabel}).`,
       'Extrae TODAS las partes: poderdante/propietario, apoderado, placa, lugar de otorgamiento, país, fechas (otorgamiento y las de matrícula si aparecen).',
-      'Si hay propietario, lugar, país o fechas de matrícula/registro, contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA. Si el dato aparece en la foto y no coincide, matches_owner/matches_place/matches_country/matches_dates=false y un issue concreto.',
+      'Si hay propietario, lugar, país o fechas de matrícula/registro, contrástalos con las fuentes nombradas (ficha KSI, historial de propietarios, EcuadorAPI). Si el dato aparece en la foto y no coincide, matches_owner/matches_place/matches_country/matches_dates=false y un issue que nombre la fuente (nunca "sistema 1/2").',
       'Si un dato no se ve en la foto, el matches_* de ese dato debe ser null (no inventes desajuste).',
       'REGLA DE CARGA: si la placa, el propietario u otros datos visibles no son de este vehículo, photo_should_not_be_uploaded=true. PROHIBIDO decir "hay discrepancias".',
     ]
@@ -114,7 +115,7 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
   return [
     `Analiza ÚNICAMENTE este archivo como: ${docLabel} (${docType}).`,
     'Céntrate en lo que se ve en ESTA foto: texto, fechas, partes, firmas, cláusulas, placas, propietario, lugar y país si aparecen.',
-    'Si el documento muestra propietario, lugar, país o fechas de matrícula/registro, contrástalos con DATOS DEL VEHÍCULO EN EL SISTEMA. Si no se ven, matches_owner/place/country/dates=null.',
+    'Si el documento muestra propietario, lugar, país o fechas de matrícula/registro, contrástalos con las fuentes nombradas (ficha KSI, historial de propietarios, EcuadorAPI). Si no se ven, matches_owner/place/country/dates=null.',
     'REGLA DE CARGA: si se subió una foto a esta sección, se asume que el documento es válido y corresponde. Si no, photo_should_not_be_uploaded=true y explica qué se ve mal (ilegible, recortada, otro tipo de papel, otro propietario o placa). PROHIBIDO decir "hay discrepancias".',
     'PROHIBIDO: decir que la foto no es una matrícula, que falta la matrícula, o evaluar vigencia de 4 años / pendientes SRI de matrícula.',
     'quality=wrong_document solo si el archivo está en blanco, borroso total o no es un documento (p. ej. un paisaje). Nunca porque no sea matrícula.',
@@ -331,6 +332,7 @@ export type VehicleAiSynthesisItem = {
   docType: string
   docLabel: string
   fileName: string
+  fileId?: string | null
   summary: string
   issues: string[]
   error?: string | null
@@ -345,6 +347,7 @@ export type VehicleAiSource = {
   docLabel: string
   photoIndex: number | null
   fileName: string | null
+  fileId?: string | null
   kind: 'photo' | 'missing' | 'detail' | 'api'
   label: string
 }
@@ -364,7 +367,7 @@ export function normalizeFindings(raw: unknown): VehicleAiFinding[] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((item) => {
-      if (typeof item === 'string' && item.trim()) return { text: item.trim(), sources: [] as VehicleAiSource[] }
+      if (typeof item === 'string' && item.trim()) return { text: clarifyAiSystemWording(item.trim()), sources: [] as VehicleAiSource[] }
       if (!item || typeof item !== 'object') return null
       const row = item as { text?: unknown; sources?: unknown }
       if (typeof row.text !== 'string' || !row.text.trim()) return null
@@ -379,13 +382,14 @@ export function normalizeFindings(raw: unknown): VehicleAiFinding[] {
                 docLabel: s.docLabel || s.docType || '',
                 photoIndex: typeof s.photoIndex === 'number' ? s.photoIndex : null,
                 fileName: s.fileName ?? null,
+                fileId: s.fileId ?? null,
                 kind: s.kind || 'photo',
                 label: s.label || s.docLabel || 'Fuente',
               } satisfies VehicleAiSource
             })
             .filter((s): s is VehicleAiSource => Boolean(s))
         : []
-      return { text: row.text.trim(), sources }
+      return { text: clarifyAiSystemWording(row.text.trim()), sources }
     })
     .filter((item): item is VehicleAiFinding => Boolean(item))
 }
@@ -425,6 +429,7 @@ function parseSource(raw: unknown, items: VehicleAiSynthesisItem[]): VehicleAiSo
     docLabel,
     photoIndex: kind === 'photo' ? photoIndex ?? matched?.photoIndex ?? null : null,
     fileName: kind === 'photo' ? matched?.fileName || (typeof row.fileName === 'string' ? row.fileName : null) : null,
+    fileId: kind === 'photo' ? matched?.fileId || (typeof row.fileId === 'string' ? row.fileId : null) : null,
     kind,
     label: sourceLabel({
       docLabel,
@@ -435,10 +440,10 @@ function parseSource(raw: unknown, items: VehicleAiSynthesisItem[]): VehicleAiSo
 }
 
 function parseFinding(raw: unknown, items: VehicleAiSynthesisItem[]): VehicleAiFinding | null {
-  if (typeof raw === 'string' && raw.trim()) return { text: raw.trim(), sources: [] }
+  if (typeof raw === 'string' && raw.trim()) return { text: clarifyAiSystemWording(raw.trim()), sources: [] }
   if (!raw || typeof raw !== 'object') return null
   const row = raw as Record<string, unknown>
-  const text = typeof row.text === 'string' ? row.text.trim() : ''
+  const text = typeof row.text === 'string' ? clarifyAiSystemWording(row.text.trim()) : ''
   if (!text) return null
   const sourcesRaw = Array.isArray(row.sources) ? row.sources : row.source != null ? [row.source] : []
   return {
@@ -512,6 +517,7 @@ function mergeInvalidUploadFindings(synthesis: VehicleAiSynthesis, items: Vehicl
           fileName: item.fileName || null,
           kind: 'photo',
           label: sourceLabel({ docLabel: item.docLabel, photoIndex, kind: 'photo' }),
+          fileId: item.fileId ?? null,
         },
       ],
     })
@@ -558,6 +564,7 @@ export async function synthesizeVehicleAiReport(input: {
     `Vehículo: ${input.vehicleLabel}. Placa: ${input.placa}.`,
     'Cada ítem tiene seccion, tipo y foto (número de foto DENTRO de esa sección: 1, 2, 3…).',
     'TODA conclusión o alerta DEBE citar de dónde sale: sección + número de foto. Ejemplo: Foto 3 · Poder / Contrato.',
+    'Si un dato no coincide, nombra la fuente: ficha de inventario KSI, historial de propietarios del expediente, EcuadorAPI (consulta guardada), SRI o ANT. PROHIBIDO escribir "sistema", "sistema 1" o "sistema 2".',
     'Subir una foto a una sección (sobre todo Matrícula vigente) significa que el encargado afirma que ESE documento está válido, al día, sin atraso ni pendientes ni multas.',
     'Si no_debio_subirse=true, copia el motivo concreto de alertas: fecha de vencimiento, monto SRI, citaciones, o por qué la foto no es válida. Cita Foto N.',
     'PROHIBIDO escribir "hay discrepancias", "existen inconsistencias" o frases equivalentes sin nombrar el hecho.',
@@ -600,7 +607,7 @@ export async function synthesizeVehicleAiReport(input: {
   const synthesis: VehicleAiSynthesis = {
     overall_summary:
       typeof parsed.overall_summary === 'string' && parsed.overall_summary.trim()
-        ? parsed.overall_summary.trim()
+        ? clarifyAiSystemWording(parsed.overall_summary.trim())
         : 'Sin conclusiones generales.',
     alerts: parseFindings(parsed.alerts, input.items),
     blocks: blocksRaw
@@ -611,7 +618,7 @@ export async function synthesizeVehicleAiReport(input: {
         return {
           docType: row.docType,
           title: typeof row.title === 'string' ? row.title : row.docType,
-          conclusion: row.conclusion,
+          conclusion: clarifyAiSystemWording(row.conclusion),
           alerts: parseFindings(row.alerts, input.items.filter((i) => i.docType === row.docType)),
         }
       })

@@ -11,6 +11,7 @@ export default function ReporteDocumentacionPage() {
     const { data, loading, refresh } = useInventarioData();
     const [detailVehicle, setDetailVehicle] = useState<VehiculoInventario | null>(null);
     const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");
+    const [detailOpenUpload, setDetailOpenUpload] = useState(false);
     const [checklistReloadKey, setChecklistReloadKey] = useState(0);
 
     const vehiculos = useMemo(() => data?.listado ?? [], [data?.listado]);
@@ -44,20 +45,23 @@ export default function ReporteDocumentacionPage() {
             <InventarioDocumentReport
                 vehiculos={vehiculos}
                 reloadKey={checklistReloadKey}
-                onOpenVehicle={(v, tab) => {
+                onOpenVehicle={(v, tab, options) => {
                     setDetailInitialTab(tab ?? "documentos");
+                    setDetailOpenUpload(Boolean(options?.openUpload));
                     setDetailVehicle(v);
                 }}
             />
 
             {detailVehicle && (
                 <VehicleDetailModal
-                    key={detailVehicle.placa}
+                    key={`${detailVehicle.placa}-${detailOpenUpload ? "upload" : "view"}`}
                     vehiculo={detailVehicle}
                     initialTab={detailInitialTab}
+                    autoOpenUploadWizard={detailOpenUpload}
                     onLegalChange={() => setChecklistReloadKey((k) => k + 1)}
                     onClose={() => {
                         setDetailVehicle(null);
+                        setDetailOpenUpload(false);
                         setChecklistReloadKey((k) => k + 1);
                     }}
                 />

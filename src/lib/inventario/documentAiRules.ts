@@ -31,6 +31,28 @@ export type VehicleRecordContext = {
   country: string | null
   years: number[]
   snapshotText: string
+  ownerSourceLabel: string
+  placeSourceLabel: string
+  countrySourceLabel: string
+  yearsSourceLabel: string
+}
+
+function joinSourceLabels(labels: string[]): string {
+  const unique = [...new Set(labels.filter(Boolean))]
+  if (unique.length === 0) return 'ficha de inventario KSI'
+  if (unique.length === 1) return unique[0]
+  return `${unique.slice(0, -1).join(', ')} y ${unique[unique.length - 1]}`
+}
+
+/** Textos viejos del modelo: "sistema 1/2" → nombre real de la fuente. */
+export function clarifyAiSystemWording(text: string): string {
+  return text
+    .replace(/\bsistema\s*2\b/gi, 'EcuadorAPI (consulta guardada)')
+    .replace(/\bsistema\s*1\b/gi, 'ficha de inventario KSI')
+    .replace(/\blas del sistema\b/gi, 'las de la ficha de inventario KSI o EcuadorAPI')
+    .replace(/\bcon el sistema\b/gi, 'con la ficha de inventario KSI o EcuadorAPI')
+    .replace(/\bdel sistema\b/gi, 'de la ficha de inventario KSI / EcuadorAPI')
+    .replace(/\bel sistema\b/gi, 'la ficha de inventario KSI o EcuadorAPI')
 }
 
 export function buildVehicleRecordContext(input: {
@@ -45,27 +67,62 @@ export function buildVehicleRecordContext(input: {
   vehicleYear: number | null
   purchaseDate: string | null
 }): VehicleRecordContext {
-  const owners = uniqueNonEmpty([
-    ...input.owners,
-    input.contrasteOwner,
-  ])
-  const place = firstNonEmpty(input.registrationPlace, input.canton)
+  const expedienteOwners = uniqueNonEmpty(input.owners)
+  const apiOwner = firstNonEmpty(input.contrasteOwner)
+  const owners = uniqueNonEmpty([...expedienteOwners, apiOwner])
+  const inventoryPlace = firstNonEmpty(input.registrationPlace)
+  const apiPlace = firstNonEmpty(input.canton)
+  const place = firstNonEmpty(inventoryPlace, apiPlace)
   const country = firstNonEmpty(input.countryOrigin)
-  const years = uniqueYears([
+  const inventoryYears = uniqueYears([
     yearFromUnknown(input.registrationYear),
-    yearFromUnknown(input.lastRegistrationDate),
-    input.lastPaidYear,
     input.vehicleYear,
     yearFromUnknown(input.purchaseDate),
   ])
+  const apiYears = uniqueYears([
+    yearFromUnknown(input.lastRegistrationDate),
+    input.lastPaidYear,
+  ])
+  const years = uniqueYears([...inventoryYears, ...apiYears])
+
+  const ownerSourceLabel = joinSourceLabels([
+    expedienteOwners.length ? 'historial de propietarios del expediente' : '',
+    apiOwner ? 'EcuadorAPI (consulta guardada)' : '',
+  ])
+  const placeSourceLabel = joinSourceLabels([
+    inventoryPlace ? 'ficha de inventario (lugar de matrícula)' : '',
+    apiPlace ? 'EcuadorAPI (cantón)' : '',
+  ])
+  const countrySourceLabel = 'ficha de inventario (país de origen)'
+  const yearsSourceLabel = joinSourceLabels([
+    inventoryYears.length ? 'ficha de inventario (año / matrícula / compra)' : '',
+    apiYears.length ? 'EcuadorAPI (último pago / última matrícula)' : '',
+  ])
+
   const lines = [
-    '--- DATOS DEL VEHÍCULO EN EL SISTEMA (inventario / historial / última consulta guardada; no se llama EcuadorAPI otra vez) ---',
-    owners.length ? `Propietario(s) esperado(s): ${owners.join(' | ')}` : 'Propietario esperado: (no hay en el sistema)',
-    place ? `Lugar / cantón / matrícula esperado: ${place}` : 'Lugar esperado: (sin dato)',
-    country ? `País / origen esperado: ${country}` : 'País esperado: (sin dato)',
-    years.length ? `Años de referencia (matrícula / pago / unidad): ${years.join(', ')}` : 'Años de referencia: (sin dato)',
+    'Nombra siempre la fuente real. NUNCA digas "sistema", "sistema 1" ni "sistema 2".',
+    '--- FUENTE: Ficha de inventario KSI ---',
+    country ? `País / origen: ${country}` : 'País / origen: (sin dato)',
+    inventoryPlace ? `Lugar de matrícula: ${inventoryPlace}` : 'Lugar de matrícula: (sin dato)',
+    inventoryYears.length ? `Años en ficha: ${inventoryYears.join(', ')}` : 'Años en ficha: (sin dato)',
+    '--- FUENTE: Historial de propietarios del expediente ---',
+    expedienteOwners.length ? `Propietario(s): ${expedienteOwners.join(' | ')}` : 'Propietario(s): (sin dato)',
+    '--- FUENTE: EcuadorAPI (última consulta guardada; no se llama otra vez) ---',
+    apiOwner ? `Propietario API: ${apiOwner}` : 'Propietario API: (sin dato)',
+    apiPlace ? `Cantón API: ${apiPlace}` : 'Cantón API: (sin dato)',
+    apiYears.length ? `Años API: ${apiYears.join(', ')}` : 'Años API: (sin dato)',
   ]
-  return { owners, place, country, years, snapshotText: lines.join('\n') }
+  return {
+    owners,
+    place,
+    country,
+    years,
+    snapshotText: lines.join('\n'),
+    ownerSourceLabel,
+    placeSourceLabel,
+    countrySourceLabel,
+    yearsSourceLabel,
+  }
 }
 
 export function buildContrasteAiContext(
@@ -352,7 +409,7 @@ function applyVehicleIdentityChecks(
     matches_owner = ownersPhoto.some((photo) => record.owners.some((expected) => namesLikelyMatch(photo, expected)))
     if (!matches_owner) {
       identityIssues.push(
-        `el propietario leído (${ownersPhoto.join('; ')}) no coincide con el del sistema (${record.owners.join('; ')})`
+        `el propietario leído (${ownersPhoto.join('; ')}) no coincide con ${record.ownerSourceLabel} (${record.owners.join('; ')})`
       )
     }
   }
@@ -361,7 +418,9 @@ function applyVehicleIdentityChecks(
   if (placesPhoto.length && record.place) {
     matches_place = placesPhoto.some((photo) => placesLikelyMatch(photo, record.place as string))
     if (!matches_place) {
-      identityIssues.push(`el lugar leído (${placesPhoto.join('; ')}) no coincide con el del sistema (${record.place})`)
+      identityIssues.push(
+        `el lugar leído (${placesPhoto.join('; ')}) no coincide con ${record.placeSourceLabel} (${record.place})`
+      )
     }
   }
 
@@ -373,7 +432,9 @@ function applyVehicleIdentityChecks(
       return Boolean(key) && (key === expected || key.includes(expected) || expected.includes(key))
     })
     if (!matches_country) {
-      identityIssues.push(`el país leído (${countriesPhoto.join('; ')}) no coincide con el del sistema (${record.country})`)
+      identityIssues.push(
+        `el país leído (${countriesPhoto.join('; ')}) no coincide con ${record.countrySourceLabel} (${record.country})`
+      )
     }
   }
 
@@ -382,7 +443,7 @@ function applyVehicleIdentityChecks(
     matches_dates = yearsPhoto.some((year) => record.years.some((expected) => Math.abs(year - expected) <= 1))
     if (!matches_dates) {
       identityIssues.push(
-        `las fechas leídas (${yearsPhoto.join(', ')}) no coinciden con los años del sistema (${record.years.join(', ')})`
+        `las fechas leídas (${yearsPhoto.join(', ')}) no coinciden con ${record.yearsSourceLabel} (${record.years.join(', ')})`
       )
     }
   }
@@ -409,7 +470,7 @@ function uniqueIssues(issues: string[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const issue of issues) {
-    const key = issue.trim()
+    const key = clarifyAiSystemWording(issue.trim())
     if (!key || seen.has(key)) continue
     seen.add(key)
     out.push(key)
@@ -511,30 +572,36 @@ function invalidUploadReasons(input: {
     )
   }
   if (input.analysis.matches_plate === false && input.analysis.plate_read) {
-    reasons.push(`la placa leída en la foto (${input.analysis.plate_read}) no coincide con la del inventario`)
+    reasons.push(`la placa leída en la foto (${input.analysis.plate_read}) no coincide con la placa de la ficha de inventario KSI`)
   }
   if (input.analysis.matches_owner === false) {
     const photo = input.analysis.extracted.owner?.trim()
     reasons.push(
       photo
-        ? `el propietario leído (${photo}) no coincide con el del sistema`
-        : 'el propietario del documento no coincide con el del sistema'
+        ? `el propietario leído (${photo}) no coincide con el historial de propietarios del expediente ni con EcuadorAPI`
+        : 'el propietario del documento no coincide con el historial de propietarios del expediente ni con EcuadorAPI'
     )
   }
   if (input.analysis.matches_place === false) {
     const photo = input.analysis.extracted.place?.trim()
     reasons.push(
-      photo ? `el lugar leído (${photo}) no coincide con el del sistema` : 'el lugar del documento no coincide con el del sistema'
+      photo
+        ? `el lugar leído (${photo}) no coincide con la ficha de inventario KSI ni con el cantón de EcuadorAPI`
+        : 'el lugar del documento no coincide con la ficha de inventario KSI ni con EcuadorAPI'
     )
   }
   if (input.analysis.matches_country === false) {
     const photo = input.analysis.extracted.country?.trim()
     reasons.push(
-      photo ? `el país leído (${photo}) no coincide con el del sistema` : 'el país del documento no coincide con el del sistema'
+      photo
+        ? `el país leído (${photo}) no coincide con el país de origen de la ficha de inventario KSI`
+        : 'el país del documento no coincide con la ficha de inventario KSI'
     )
   }
   if (input.analysis.matches_dates === false) {
-    reasons.push('las fechas del documento no coinciden con matrícula / años del sistema')
+    reasons.push(
+      'las fechas del documento no coinciden con los años de la ficha de inventario KSI ni con EcuadorAPI (matrícula / último pago)'
+    )
   }
 
   const contraste = input.contraste

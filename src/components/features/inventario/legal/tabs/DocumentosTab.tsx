@@ -8,14 +8,16 @@ import {
   mergePoderContratoRow,
   hasPoderContratoSlot,
   isDocumentCatalogItemVisible,
+  listPendingDocumentCatalog,
 } from '@/lib/inventario/vehicleLegalUi'
 import { findExpedienteFagByPlate, type ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { uploadVehicleDocument, updateVehicleDocumentMeta, deleteVehicleDocumentFile } from '@/services/vehicleLegal.service'
 import { useAuth } from '@/hooks/useAuth'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { VehicleDocumentRow, VehicleDocType } from '@/types/vehicleLegal.types'
+import type { VehicleDocType, VehicleDocumentRow } from '@/types/vehicleLegal.types'
 import { VehicleDocumentCard } from '../VehicleDocumentCard'
 import { DocumentUploadWizardModal } from '../DocumentUploadWizardModal'
+import { PendingDocumentsNotice } from '../PendingDocumentsNotice'
 
 function DocumentSkeletonGrid({ count }: { count: number }) {
   return (
@@ -45,9 +47,22 @@ type Props = {
   onRefresh: () => void
   loading?: boolean
   disabled?: boolean
+  autoOpenWizard?: boolean
+  focusDocType?: VehicleDocType | null
 }
 
-export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, profileId, onRefresh, loading, disabled }: Props) {
+export function DocumentosTab({
+  supabase,
+  placa,
+  inventoryoracleId,
+  documents,
+  profileId,
+  onRefresh,
+  loading,
+  disabled,
+  autoOpenWizard = false,
+  focusDocType = null,
+}: Props) {
   const { profile, user } = useAuth()
   const isAdmin = (profile?.role ?? '').toLowerCase() === 'admin'
   const actorName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Usuario'
@@ -56,6 +71,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
   const [expedienteVinculo, setExpedienteVinculo] = useState<ExpedienteVinculo | null>(null)
   const [loadingVinculo, setLoadingVinculo] = useState(false)
   const retriedSeed = useRef(false)
+  const autoOpenedWizard = useRef(false)
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]))
   const catalogReady = VEHICLE_DOCUMENT_CATALOG.every((c) =>
@@ -89,6 +105,13 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
       onRefresh()
     }
   }, [loading, inventoryoracleId, catalogReady, onRefresh])
+
+  useEffect(() => {
+    if (!autoOpenWizard || autoOpenedWizard.current) return
+    if (loading || !inventoryoracleId) return
+    autoOpenedWizard.current = true
+    setWizardOpen(true)
+  }, [autoOpenWizard, loading, inventoryoracleId])
 
   const renderSection = (title: string, items: typeof legal) => {
     const visible = visibleItems(items)
@@ -214,6 +237,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
           Subir documentación
         </button>
       </div>
+      <PendingDocumentsNotice labels={listPendingDocumentCatalog(byType).map((item) => item.label)} />
       {renderSection(DOCUMENT_SECTION_TITLES.legal, legal)}
       {renderSection(DOCUMENT_SECTION_TITLES.physical, physical)}
       {wizardOpen && inventoryoracleId ? (
@@ -224,6 +248,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
           documents={documents}
           profileId={profileId}
           actorName={actorName}
+          focusDocType={focusDocType}
           onClose={() => setWizardOpen(false)}
           onRefresh={onRefresh}
         />

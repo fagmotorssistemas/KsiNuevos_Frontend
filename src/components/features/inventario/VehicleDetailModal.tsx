@@ -22,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
 import { inventarioService } from '@/services/inventario.service'
 import { MovimientoKardex, VehiculoInventario } from '@/types/inventario.types'
+import type { VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleLegalSummaryBar } from './legal/VehicleLegalSummaryBar'
 import { ContrasteOficialBlock } from './legal/ContrasteOficialBlock'
 import { DocumentosTab } from './legal/tabs/DocumentosTab'
@@ -71,9 +72,19 @@ type Props = {
   initialTab?: VehicleDetailTab
   /** Llamado tras cambios en documentos o multas (p. ej. recargar reporte) */
   onLegalChange?: () => void
+  autoOpenUploadWizard?: boolean
+  focusDocType?: VehicleDocType | null
 }
 
-export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTab, onLegalChange }: Props) {
+export function VehicleDetailModal({
+  vehiculo,
+  onClose,
+  onPrecioVenta,
+  initialTab,
+  onLegalChange,
+  autoOpenUploadWizard = false,
+  focusDocType = null,
+}: Props) {
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
@@ -215,6 +226,8 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               onRefresh={handleLegalRefresh}
               loading={loadingLegal}
               disabled={loadingLegal}
+              autoOpenWizard={autoOpenUploadWizard}
+              focusDocType={focusDocType}
             />
           )}
 
