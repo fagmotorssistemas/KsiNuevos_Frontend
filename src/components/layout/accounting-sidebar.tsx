@@ -32,6 +32,7 @@ import {
     MODULE_SLUGS,
 } from '@/lib/permissions';
 import { setSidebarShell } from '@/lib/sidebar-shell';
+import { useStaffNavHidden } from '@/hooks/useSidebarShell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
 
@@ -62,6 +63,7 @@ const menuItems: MenuItem[] = [
 
 export function AccountingSidebar() {
     const permCtx = usePermissionContext();
+    const staffNavHidden = useStaffNavHidden();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
@@ -87,6 +89,8 @@ export function AccountingSidebar() {
     if (canAccessModule(permCtx, MODULE_SLUGS.seguros)) {
         extraModuleLinks.push({ name: 'Seguros', href: '/seguros', icon: ShieldCheck });
     }
+
+    if (staffNavHidden) return null;
 
     return (
         <>

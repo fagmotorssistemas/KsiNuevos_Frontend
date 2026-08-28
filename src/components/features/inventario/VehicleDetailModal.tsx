@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Car,
   X,
@@ -19,6 +19,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useHideStaffNav } from '@/hooks/useSidebarShell'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
 import { inventarioService } from '@/services/inventario.service'
 import { MovimientoKardex, VehiculoInventario } from '@/types/inventario.types'
@@ -85,6 +86,7 @@ export function VehicleDetailModal({
   autoOpenUploadWizard = false,
   focusDocType = null,
 }: Props) {
+  useHideStaffNav()
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
@@ -150,7 +152,7 @@ export function VehicleDetailModal({
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
         <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-4">
