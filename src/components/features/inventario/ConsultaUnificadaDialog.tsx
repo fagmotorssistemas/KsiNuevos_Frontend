@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Search, X, Car, User, Building2, Scale, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader2, Search, X, Car } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   UnifiedConsultaResult,
   UnifiedSection,
 } from '@/lib/inventario/consultaUnificada.types'
-import { UNIFIED_API_CATALOG } from '@/lib/inventario/consultaUnificada.catalog'
 
 function statusClass(status: UnifiedSection['status']) {
   if (status === 'ok') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -86,7 +85,6 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UnifiedConsultaResult | null>(null)
-  const [showCatalog, setShowCatalog] = useState(true)
 
   const run = async () => {
     const value = query.trim()
@@ -104,7 +102,6 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
       const body = (await res.json()) as { data?: UnifiedConsultaResult; error?: string }
       if (!res.ok || !body.data) throw new Error(body.error || 'No se pudo consultar')
       setResult(body.data)
-      setShowCatalog(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo consultar')
     } finally {
@@ -114,13 +111,11 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-5xl max-h-[92vh]' : 'max-w-lg'}`}>
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Consulta unificada</h2>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Placa, cédula o RUC. Junta EcuadorAPI y Consultas.ec: vehículo, propietario, SRI, juicios y multas.
-            </p>
+            <p className="text-sm text-slate-500 mt-0.5">Placa, cédula o RUC</p>
           </div>
           <button
             type="button"
@@ -158,43 +153,12 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
           </button>
         </form>
 
+        {(loading || result) ? (
         <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white">
-            <button
-              type="button"
-              onClick={() => setShowCatalog((open) => !open)}
-              className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
-            >
-              <span className="text-sm font-bold text-slate-900">Datos que pueden traer las APIs</span>
-              {showCatalog ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
-            </button>
-            {showCatalog ? (
-              <div className="px-4 pb-4 space-y-4">
-                <p className="text-xs text-slate-500">
-                  Lista completa de campos documentados. En cada consulta solo se muestran una vez los que coinciden entre EcuadorAPI y Consultas.ec. Los juicios salen de Función Judicial (Consultas.ec), que EcuadorAPI no cubre.
-                </p>
-                {UNIFIED_API_CATALOG.map((group) => (
-                  <div key={`${group.source}-${group.title}`}>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{group.source}</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5">{group.title}</p>
-                    {group.note ? <p className="text-[11px] text-slate-600 mt-1">{group.note}</p> : null}
-                    <ul className="mt-2 space-y-2">
-                      {group.items.map((item) => (
-                        <li key={item.endpoint} className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2">
-                          <p className="text-[11px] font-mono text-slate-700">{item.endpoint}</p>
-                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">{item.fields.join(' · ')}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
           {loading ? (
             <p className="text-sm text-slate-500 flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-              Esto puede tomar varios segundos: se consultan vehículo y propietario en paralelo.
+              Consultando vehículo y propietario…
             </p>
           ) : null}
 
@@ -248,24 +212,13 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
                 </section>
               ) : null}
 
-              <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                <span className="inline-flex items-center gap-1"><Car className="h-3.5 w-4" /> Vehículo</span>
-                <span className="inline-flex items-center gap-1"><User className="h-3.5 w-4" /> Persona</span>
-                <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-4" /> Empresa / SRI</span>
-                <span className="inline-flex items-center gap-1"><Scale className="h-3.5 w-4" /> Juicios</span>
-                <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-4" /> Consume créditos de las APIs</span>
-              </div>
-
               {result.sections.map((section) => (
                 <SectionCard key={section.id} section={section} />
               ))}
             </>
-          ) : !loading ? (
-            <p className="text-sm text-slate-500">
-              Si pones una placa, se busca el carro y luego al propietario. Si pones cédula o RUC, se desglosa la persona o empresa (identidad, SRI, juicios y multas) y se cruza con el inventario.
-            </p>
           ) : null}
         </div>
+        ) : null}
       </div>
     </div>
   )
