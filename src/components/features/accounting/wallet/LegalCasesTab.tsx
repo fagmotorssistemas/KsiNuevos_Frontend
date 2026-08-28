@@ -9,6 +9,7 @@ import type {
   LegalCaseRow,
 } from "@/types/legal.types";
 import type { NotaGestion } from "@/types/wallet.types";
+import { formatEcuadorDateTime } from "@/lib/ecuador-datetime";
 import {
   Plus,
   Loader2,
@@ -309,9 +310,7 @@ export function LegalCasesTab({
                     </span>
                     <span className="text-[11px] text-slate-400 flex items-center gap-1 shrink-0">
                       <Calendar className="h-3 w-3" />
-                      {nota.fecha
-                        ? new Date(nota.fecha).toLocaleString("es-EC")
-                        : "—"}
+                      {formatEcuadorDateTime(nota.fecha)}
                     </span>
                   </div>
                   <p className="text-sm text-slate-700 leading-relaxed">

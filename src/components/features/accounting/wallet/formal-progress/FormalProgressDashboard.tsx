@@ -4,8 +4,10 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  CalendarClock,
   ChevronRight,
-  CircleHelp,
+  FileSearch,
+  Flag,
   RefreshCw,
   X,
 } from 'lucide-react';
@@ -16,6 +18,7 @@ import type {
   FormalProgressEventRow,
   FormalProgressTrendPoint,
 } from '@/types/formal-progress.types';
+import { formatEcuadorDateTime } from '@/lib/ecuador-datetime';
 
 const STEP_META: Record<
   string,
@@ -60,15 +63,8 @@ function formatDayLong(isoDate: string): string {
 }
 
 function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('es-EC', {
-    timeZone: 'America/Guayaquil',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const text = formatEcuadorDateTime(iso);
+  return text === '—' ? '' : text;
 }
 
 function clientHref(event: FormalProgressEventRow): string | null {
@@ -77,7 +73,15 @@ function clientHref(event: FormalProgressEventRow): string | null {
   return null;
 }
 
-function CoverageRing({ percent }: { percent: number }) {
+function CoverageRing({
+  percent,
+  caption,
+  detail,
+}: {
+  percent: number;
+  caption?: string;
+  detail?: string;
+}) {
   const pct = Math.min(100, Math.max(0, Math.round(percent)));
   const r = 58;
   const c = 2 * Math.PI * r;
@@ -111,7 +115,10 @@ function CoverageRing({ percent }: { percent: number }) {
           {pct}
           <span className="text-lg font-medium text-slate-400">%</span>
         </span>
-        <span className="mt-1.5 text-[11px] font-medium text-slate-400">hoy</span>
+        <span className="mt-1.5 text-[11px] font-medium text-slate-400">{caption ?? 'hoy'}</span>
+        {detail && (
+          <span className="mt-0.5 text-[10px] font-medium tabular-nums text-slate-400">{detail}</span>
+        )}
       </div>
     </div>
   );
@@ -176,7 +183,7 @@ function EventList({
             </div>
           ) : events.length === 0 ? (
             <p className="text-sm text-slate-400 px-3 py-10 text-center">
-              Nada registrado en este paso hoy.
+              Nada en esta cola.
             </p>
           ) : (
             <ul className="space-y-1">
@@ -256,14 +263,39 @@ export function FormalProgressDashboard() {
   const selectedLabel =
     selectedCategory === 'agenda'
       ? 'Agenda de hoy'
-      : STEP_META[selectedCategory ?? '']?.title ??
-        data?.categorias.find((row) => row.categoria === selectedCategory)?.label ??
-        'Detalle';
+      : selectedCategory === 'quedados_agenda'
+        ? 'Quedados · agenda sin gestionar'
+        : selectedCategory === 'quedados_sin_paso'
+          ? 'Quedados · sin arrancar Formal'
+          : selectedCategory === 'quedados_en_proceso'
+            ? 'Quedados · en un paso'
+            : STEP_META[selectedCategory ?? '']?.title ??
+              data?.categorias.find((row) => row.categoria === selectedCategory)?.label ??
+              'Detalle';
 
   const stepRows = (data?.categorias ?? []).filter((row) => STEP_META[row.categoria]);
   const aperturas = num(data?.aperturas);
   const saltos = num(data?.saltos);
   const maxStep = Math.max(1, ...stepRows.map((row) => row.cantidad));
+  const quedadosAgenda = num(data?.quedados_agenda);
+  const quedadosSinPaso = num(data?.quedados_sin_paso);
+  const quedadosEnProceso = num(data?.quedados_en_proceso);
+  const quedadosTotal = quedadosAgenda + quedadosSinPaso;
+
+  const briefing = data
+    ? {
+        good:
+          avanzados > 0
+            ? `${avanzados} caso${avanzados === 1 ? '' : 's'} avanzaron${num(data.cierres) > 0 ? ` · ${data.cierres} cierre${data.cierres === 1 ? '' : 's'}` : ''}.`
+            : null,
+        bad:
+          pendientes > 0
+            ? `${pendientes.toLocaleString('es-EC')} de la agenda siguen sin paso Formal.`
+            : quedadosSinPaso > 0
+              ? `${quedadosSinPaso} expediente${quedadosSinPaso === 1 ? '' : 's'} sin arrancar el pipeline.`
+              : null,
+      }
+    : { good: null, bad: null };
 
   const toggleCategory = (categoria: FormalProgressCategoryId) => {
     if (selectedCategory === categoria) closeCategory();
@@ -284,7 +316,9 @@ export function FormalProgressDashboard() {
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900">
             Formal
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">{formatDayLong(fecha)}</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {formatDayLong(fecha)} · haciendo, quedados y lo que se cumplió
+          </p>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -302,13 +336,7 @@ export function FormalProgressDashboard() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-          <FormalProgressGuide
-            trigger={
-              <span className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center">
-                <CircleHelp className="h-4 w-4" />
-              </span>
-            }
-          />
+          <FormalProgressGuide />
         </div>
       </header>
 
@@ -333,36 +361,63 @@ export function FormalProgressDashboard() {
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center gap-8">
-                <CoverageRing percent={num(data.cobertura)} />
+                <CoverageRing
+                  percent={num(data.cobertura)}
+                  caption="oficio"
+                  detail={
+                    data.agenda_due > 0 ? `${data.agenda_done} de ${data.agenda_due}` : undefined
+                  }
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-violet-700">Agenda Formal</p>
+                  <p className="text-sm font-medium text-violet-700">Escritorio Formal</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">
+                    Haciendo para recuperar
+                  </p>
                   <p className="text-2xl sm:text-[1.7rem] font-semibold tracking-tight text-slate-900 mt-1 leading-snug">
                     {data.agenda_due === 0
                       ? 'Nada programado hoy'
-                      : `${data.agenda_done} de ${data.agenda_due} con gestión`}
+                      : `${data.agenda_done} de ${data.agenda_due} con gestión (${num(data.cobertura)}%)`}
                   </p>
-                  <p className="text-sm text-slate-500 mt-2 max-w-md leading-relaxed">
-                    {data.agenda_due === 0
-                      ? 'Cuando un expediente tenga próxima acción, aquí se ve si se movió.'
-                      : pendientes === 0
-                        ? 'La cola de hoy está al día.'
-                        : `${pendientes.toLocaleString('es-EC')} todavía esperan un paso Formal.`}
+                  <p className="text-sm text-slate-500 mt-2 max-w-xl leading-relaxed">
+                    {briefing.good && (
+                      <span className="text-emerald-800">Cumpliendo. {briefing.good} </span>
+                    )}
+                    {briefing.bad && (
+                      <span className="text-amber-900">Se quedaron. {briefing.bad}</span>
+                    )}
+                    {!briefing.good && !briefing.bad && (
+                      data.agenda_due === 0
+                        ? 'Cuando un expediente tenga próxima acción, aquí se ve si se movió.'
+                        : 'La cola de hoy está al día.'
+                    )}
                   </p>
-
-                  <div className="flex flex-wrap gap-2 mt-5">
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      {avanzados} avanzados
-                    </span>
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      {num(data.cierres)} cierres
-                    </span>
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      {data.expedientes_abiertos.toLocaleString('es-EC')} abiertos
-                    </span>
-                  </div>
                 </div>
               </div>
             </button>
+            <div className="flex flex-wrap gap-2 px-6 sm:px-8 pb-6">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {avanzados} avanzados
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {num(data.cierres)} cierres
+              </span>
+              {quedadosTotal > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggleCategory('quedados_agenda')}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedCategory === 'quedados_agenda'
+                      ? 'bg-violet-100 text-violet-800'
+                      : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  {quedadosAgenda.toLocaleString('es-EC')} quedados de agenda
+                </button>
+              )}
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                {data.expedientes_abiertos.toLocaleString('es-EC')} abiertos con saldo
+              </span>
+            </div>
 
             <div className="px-4 sm:px-6 pb-5">
               <div className="rounded-2xl bg-slate-50/80 px-2 py-3">
@@ -415,10 +470,78 @@ export function FormalProgressDashboard() {
             </div>
           </section>
 
+          <section className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-4">
+            <div className="flex items-baseline justify-between gap-3 px-1">
+              <p className="text-sm font-semibold text-slate-900">En qué nos quedamos</p>
+              <p className="text-xs text-slate-400">Sin paso hoy / sin arrancar / en un paso</p>
+            </div>
+            <div className="mt-3 grid sm:grid-cols-3 gap-2.5">
+              {(
+                [
+                  {
+                    key: 'quedados_agenda' as const,
+                    label: 'Agenda sin gestionar',
+                    count: quedadosAgenda,
+                    hint:
+                      quedadosAgenda === 0
+                        ? 'Nada vencido sin paso hoy'
+                        : `${quedadosAgenda.toLocaleString('es-EC')} de ${data.agenda_due.toLocaleString('es-EC')} · ver lista`,
+                    Icon: CalendarClock,
+                  },
+                  {
+                    key: 'quedados_sin_paso' as const,
+                    label: 'Sin arrancar Formal',
+                    count: quedadosSinPaso,
+                    hint:
+                      quedadosSinPaso === 0
+                        ? 'Todos ya tienen un paso'
+                        : `${quedadosSinPaso.toLocaleString('es-EC')} sin verificación · ver lista`,
+                    Icon: FileSearch,
+                  },
+                  {
+                    key: 'quedados_en_proceso' as const,
+                    label: 'En un paso',
+                    count: quedadosEnProceso,
+                    hint:
+                      quedadosEnProceso === 0
+                        ? 'Nadie a mitad de pipeline'
+                        : `${quedadosEnProceso.toLocaleString('es-EC')} sin cierre · ver lista`,
+                    Icon: Flag,
+                  },
+                ]
+              ).map((cola) => (
+                <button
+                  key={cola.key}
+                  type="button"
+                  onClick={() => toggleCategory(cola.key)}
+                  aria-pressed={selectedCategory === cola.key}
+                  className={`rounded-2xl border px-4 py-3.5 text-left transition-colors ${
+                    selectedCategory === cola.key
+                      ? 'border-violet-300 bg-violet-50 ring-1 ring-violet-200'
+                      : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                      <cola.Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-slate-900">{cola.label}</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">{cola.hint}</span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-slate-800 shrink-0">
+                      {cola.count}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section>
             <div className="flex items-baseline justify-between px-1 mb-3">
-              <h2 className="text-sm font-semibold text-slate-900">Pasos de hoy</h2>
-              <p className="text-xs text-slate-400">Toca uno para ver los casos</p>
+              <h2 className="text-sm font-semibold text-slate-900">Lo que se cumplió</h2>
+              <p className="text-xs text-slate-400">Pasos Formal de hoy</p>
             </div>
 
             <div className="rounded-[28px] bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-y divide-slate-100">

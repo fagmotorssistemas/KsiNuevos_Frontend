@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FileSpreadsheet } from "lucide-react";
 
 // Features
@@ -15,9 +15,11 @@ import { LeadsToolbar } from "@/components/features/leads/LeadsToolbar";
 import { LeadsExportPrintModal } from "@/components/features/leads/LeadsExportPrintModal";
 import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
+import { fetchLeadById } from "@/services/leads.service";
 
 export default function LeadsPageClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const {
     leads,
     totalCount,
@@ -60,6 +62,22 @@ export default function LeadsPageClient() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const entryMode = searchParams.get("status") === "asesoria_financiamiento" ? "asesoria_financiamiento" : "default";
+  const leadParam = searchParams.get("lead");
+  const tabParam = searchParams.get("tab");
+
+  useEffect(() => {
+    const id = Number(leadParam);
+    if (!leadParam || !Number.isFinite(id) || id <= 0) return;
+    let cancelled = false;
+    void fetchLeadById(supabase, id).then((lead) => {
+      if (cancelled || !lead) return;
+      setSelectedLead(lead);
+      setIsModalOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadParam, supabase]);
 
   const handleOpenModal = (lead: LeadWithDetails) => {
     setSelectedLead(lead);
@@ -70,6 +88,12 @@ export default function LeadsPageClient() {
     setSelectedLead(null);
     setIsModalOpen(false);
     reload();
+    if (!leadParam) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("lead");
+    params.delete("tab");
+    const qs = params.toString();
+    router.replace(qs ? `/leads?${qs}` : "/leads");
   };
 
   return (
@@ -132,7 +156,12 @@ export default function LeadsPageClient() {
       />
 
       {isModalOpen && selectedLead && (
-        <LeadDetailModal lead={selectedLead} onClose={handleCloseModal} entryMode={entryMode} />
+        <LeadDetailModal
+          lead={selectedLead}
+          onClose={handleCloseModal}
+          entryMode={entryMode}
+          initialTab={tabParam}
+        />
       )}
 
       <LeadsExportPrintModal

@@ -13,7 +13,7 @@ export function Page6({ data, hasAmortization, fechaImpresion }: PageProps) {
     // --- LÓGICA DE VISIBILIDAD ---
     const tieneAdicionales = data.listaCuotasAdicionales && data.listaCuotasAdicionales.length > 0;
     const tienePagosCheque = data.listaPagosCheque && data.listaPagosCheque.length > 0;
-    const debeMostrarPagina = hasAmortization || tieneAdicionales || tienePagosCheque;
+    const debeMostrarPagina = hasAmortization || tienePagosCheque;
 
     if (!debeMostrarPagina) return null;
 

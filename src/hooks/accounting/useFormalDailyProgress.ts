@@ -78,6 +78,7 @@ export function useFormalDailyProgress() {
 export function useFormalProgressCoverage() {
   const [cobertura, setCobertura] = useState<number | null>(null);
   const [agendaDue, setAgendaDue] = useState(0);
+  const [agendaDone, setAgendaDone] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,11 +89,13 @@ export function useFormalProgressCoverage() {
         if (cancelled) return;
         setCobertura(payload.cobertura);
         setAgendaDue(payload.agenda_due);
+        setAgendaDone(payload.agenda_done);
       })
       .catch(() => {
         if (!cancelled) {
           setCobertura(null);
           setAgendaDue(0);
+          setAgendaDone(0);
         }
       })
       .finally(() => {
@@ -103,5 +106,5 @@ export function useFormalProgressCoverage() {
     };
   }, []);
 
-  return { cobertura, agendaDue, loading };
+  return { cobertura, agendaDue, agendaDone, loading };
 }

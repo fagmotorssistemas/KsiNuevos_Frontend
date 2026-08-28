@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { legalCasesService } from "@/services/legalCases.service";
+import { formatEcuadorDateTime, formatEcuadorDate, formatEcuadorTime } from "@/lib/ecuador-datetime";
 import type { CaseFullPayload } from "@/types/legal.types";
 import { AddEventForm } from "@/components/features/accounting/wallet/AddEventForm";
 import { labelEstadoVehiculo } from "@/components/features/accounting/wallet/legalGestionCatalogs";
@@ -32,6 +33,18 @@ import {
   Folder,
   Plus
 } from "lucide-react";
+
+function actorLabel(
+  actors: CaseFullPayload["actors"],
+  usuarioId: string | null | undefined,
+) {
+  if (!usuarioId) return "Sistema";
+  const actor = actors?.[usuarioId];
+  const name = (actor?.full_name || "").trim();
+  const role = (actor?.role || "").trim();
+  if (name && role) return `${name} · ${role}`;
+  return name || "Usuario";
+}
 
 const getCanalIcon = (canal: string | null | undefined) => {
   switch (canal) {
@@ -184,7 +197,7 @@ export default function LegalCaseDetailPage() {
   const groupedEventsByDate = useMemo(() => {
     const map = new Map<string, typeof filteredEvents>();
     for (const e of filteredEvents) {
-      const key = e.fecha ? new Date(e.fecha).toLocaleDateString() : "Sin fecha";
+      const key = e.fecha ? formatEcuadorDate(e.fecha) : "Sin fecha";
       const list = map.get(key) ?? [];
       list.push(e);
       map.set(key, list);
@@ -362,7 +375,7 @@ export default function LegalCaseDetailPage() {
                           {c.proxima_accion || "—"}
                         </div>
                         <div className="text-xs text-slate-600 font-mono mt-2 bg-white px-2 py-1 border border-slate-200 rounded inline-block">
-                          {c.fecha_proxima_accion ? new Date(c.fecha_proxima_accion).toLocaleString() : "—"}
+                          {formatEcuadorDateTime(c.fecha_proxima_accion)}
                         </div>
                       </div>
                     )}
@@ -576,7 +589,7 @@ export default function LegalCaseDetailPage() {
                                 </div>
                                 <div className="text-xs font-mono text-slate-500 flex items-center gap-1.5 bg-white/60 px-2 py-1 rounded shadow-sm border border-slate-100">
                                   <Clock className="h-3 w-3" />
-                                  {e.fecha ? new Date(e.fecha).toLocaleTimeString() : "—"}
+                                  {formatEcuadorTime(e.fecha)}
                                 </div>
                               </div>
 
@@ -599,9 +612,12 @@ export default function LegalCaseDetailPage() {
                                     </div>
                                   ) : <div></div>}
 
-                                  <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                    <UserCircle className="h-4 w-4" />
-                                    Usuario ID: {e.usuario_id?.substring(0,8) || "Sistema"}
+                                  <div
+                                    className="text-[10px] text-slate-500 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100"
+                                    title={e.usuario_id ? actorLabel(data.actors, e.usuario_id) : "Sistema"}
+                                  >
+                                    <UserCircle className="h-4 w-4 text-slate-400" />
+                                    {actorLabel(data.actors, e.usuario_id)}
                                   </div>
                                 </div>
                               </div>

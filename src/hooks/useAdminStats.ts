@@ -22,6 +22,7 @@ export function useAdminStats() {
     // Estados
     const [stats, setStats] = useState<SellerStats[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [unassignedShowroom, setUnassignedShowroom] = useState(0);
     const [dateFilter, setDateFilter] = useState<AdminDateFilter>('today');
     
     // Estado para una sola fecha específica (inicializado con hoy)
@@ -155,9 +156,7 @@ export function useAdminStats() {
                     q.not('assigned_to', 'is', null).not('resume', 'is', null).neq('resume', '')
                 ),
                 // B. Showrooms
-                fetchAllData('showroom_visits', 'salesperson_id', 'created_at', startISO, endISO, (q) => 
-                    q.not('salesperson_id', 'is', null)
-                ),
+                fetchAllData('showroom_visits', 'salesperson_id', 'visit_start', startISO, endISO),
                 // C. Citas
                 fetchAllData('appointments', 'responsible_id', 'created_at', startISO, endISO),
                 // D. Pedidos
@@ -175,8 +174,10 @@ export function useAdminStats() {
                 if (l.assigned_to && statsMap[l.assigned_to]) statsMap[l.assigned_to].leads_responded++;
             });
 
+            let unassigned = 0;
             showroomData.forEach((s: any) => {
                 if (s.salesperson_id && statsMap[s.salesperson_id]) statsMap[s.salesperson_id].showroom_created++;
+                else unassigned += 1;
             });
 
             appointmentsData.forEach((a: any) => {
@@ -197,6 +198,7 @@ export function useAdminStats() {
             })).sort((a, b) => b.total_activity - a.total_activity);
 
             setStats(finalStats);
+            setUnassignedShowroom(unassigned);
 
         } catch (error) {
             console.error("Error fetching admin stats:", error);
@@ -211,6 +213,7 @@ export function useAdminStats() {
 
     return {
         stats,
+        unassignedShowroom,
         isLoading,
         dateFilter,
         setDateFilter,

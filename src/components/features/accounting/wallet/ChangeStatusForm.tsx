@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
 import type { LegalCaseRow } from "@/types/legal.types";
+import {
+  ecuadorDatetimeLocalFromNow,
+  ecuadorDatetimeLocalToIso,
+  toEcuadorDatetimeLocal,
+} from "@/lib/ecuador-datetime";
 import { createClient } from "@/lib/supabase/client";
 
 const PRE_JUDICIAL_CHECKLIST = [
@@ -75,17 +80,9 @@ export function ChangeStatusForm({
   );
   const [fechaProxima, setFechaProxima] = useState(() => {
     if (caseData.fecha_proxima_accion) {
-      try {
-        return new Date(caseData.fecha_proxima_accion)
-          .toISOString()
-          .slice(0, 16);
-      } catch {
-        /* ignore */
-      }
+      return toEcuadorDatetimeLocal(caseData.fecha_proxima_accion);
     }
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 16);
+    return ecuadorDatetimeLocalFromNow(1);
   });
 
   // —— Pre-judicial ——
@@ -271,7 +268,7 @@ export function ChangeStatusForm({
                 : null,
         documento_id: evidenciaUrl,
         proxima_accion: proximaAccion,
-        fecha_proxima_accion: new Date(fechaProxima).toISOString(),
+        fecha_proxima_accion: ecuadorDatetimeLocalToIso(fechaProxima),
         event_detalle: detalle,
         event_canal: "sistema",
       });

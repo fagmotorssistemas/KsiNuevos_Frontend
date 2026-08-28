@@ -1,3 +1,8 @@
+export {
+  todayEcuadorDate,
+  ecuadorYmd,
+} from '@/lib/ecuador-datetime';
+
 export const FORMAL_PROGRESS_TIPOS = [
   'verificacion',
   'visita_domiciliaria',
@@ -13,7 +18,10 @@ export type FormalProgressCategoryId =
   | FormalProgressTipo
   | 'agenda'
   | 'aperturas'
-  | 'saltos';
+  | 'saltos'
+  | 'quedados_agenda'
+  | 'quedados_sin_paso'
+  | 'quedados_en_proceso';
 
 export type FormalProgressCategoryRow = {
   categoria: FormalProgressCategoryId;
@@ -41,6 +49,9 @@ export type FormalDailyProgressPayload = {
   aperturas: number;
   saltos: number;
   expedientes_abiertos: number;
+  quedados_agenda: number;
+  quedados_sin_paso: number;
+  quedados_en_proceso: number;
   categorias: FormalProgressCategoryRow[];
   tendencia: FormalProgressTrendPoint[];
 };
@@ -57,20 +68,6 @@ export type FormalProgressEventRow = {
   usuario_nombre: string | null;
   pendiente?: boolean;
 };
-
-export function todayEcuadorDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Guayaquil',
-  }).format(new Date());
-}
-
-export function ecuadorYmd(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Guayaquil',
-  }).format(date);
-}
 
 /** Semana sábado → viernes que contiene `isoDate` (YYYY-MM-DD). */
 export function weekSaturdayToFriday(isoDate: string): string[] {

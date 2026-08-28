@@ -23,6 +23,8 @@ export interface VehiculoInventario {
     mileage?: number;
     /** Precio al que se vendió (cuando stock === 0). Viene del kardex/historial. */
     precioVenta?: number;
+    /** Fecha de alta en inventoryoracle (Supabase). */
+    createdAt?: string | null;
     
     // Ficha Técnica
     motor: string;

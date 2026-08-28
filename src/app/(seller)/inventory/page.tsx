@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { FileSpreadsheet, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { FileSpreadsheet, ClipboardList, LayoutGrid } from "lucide-react";
 
 import { useInventory, type InventoryCar } from "@/hooks/useInventory";
 import {
@@ -13,7 +14,6 @@ import { InventoryTable } from "@/components/features/inventory/InventoryTable";
 import { InventoryDetailModal } from "@/components/features/inventory/InventoryDetailModal";
 import { InventoryCreateModal } from "@/components/features/inventory/InventoryCreateModal";
 import { InventoryExportPrintModal } from "@/components/features/inventory/InventoryExportPrintModal";
-import { Button } from "@/components/ui/buttontable";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function InventoryPage() {
@@ -112,16 +112,23 @@ export default function InventoryPage() {
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
-                    <Button
-                        variant="primary"
-                        size="sm"
-                        className="gap-2"
+                <div className="flex items-center gap-2 self-start rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                    <Link
+                        href="/inventory/reportes-vehiculares"
+                        className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-red-50 hover:text-red-700"
+                    >
+                        <LayoutGrid className="h-4 w-4 text-red-500" />
+                        Reportes
+                    </Link>
+                    <span className="h-6 w-px bg-slate-200" aria-hidden />
+                    <button
+                        type="button"
                         onClick={() => setIsExportPrintModalOpen(true)}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl bg-red-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
                     >
                         <FileSpreadsheet className="h-4 w-4" />
-                        Exportar / Imprimir
-                    </Button>
+                        Exportar
+                    </button>
                 </div>
             </div>
 

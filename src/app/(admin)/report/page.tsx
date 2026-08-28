@@ -236,6 +236,7 @@ export default function AdminDashboardPage() {
 
     const {
         stats: sellerStats,
+        unassignedShowroom,
         isLoading: isSellersLoading,
         dateFilter,
         setDateFilter,
@@ -262,7 +263,7 @@ export default function AdminDashboardPage() {
         appointments: acc.appointments + curr.appointments_created,
         requests: acc.requests + curr.requests_created,
         proformas: acc.proformas + curr.proformas_created
-    }), { leads: 0, showroom: 0, appointments: 0, requests: 0, proformas: 0 }), [sellerStats]);
+    }), { leads: 0, showroom: unassignedShowroom, appointments: 0, requests: 0, proformas: 0 }), [sellerStats, unassignedShowroom]);
 
     const { allowed: canMonitoreo, isLoading: permLoading } = useSubmoduleAccess('monitoreo-reportes');
 
@@ -379,6 +380,23 @@ export default function AdminDashboardPage() {
                                                 <td className="py-4 px-6 text-center bg-slate-50/30 font-bold text-slate-900 border-l border-slate-100 group-hover:bg-slate-100/50">{seller.total_activity}</td>
                                             </tr>
                                         ))}
+                                        {!isSellersLoading && unassignedShowroom > 0 && (
+                                            <tr className="bg-slate-50/70">
+                                                <td className="py-4 px-6">
+                                                    <span className="font-medium text-slate-500">Sin vendedor</span>
+                                                </td>
+                                                <td className="py-4 px-6 text-center text-slate-300">0</td>
+                                                <td className="py-4 px-6 text-center">
+                                                    <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium min-w-[30px] bg-purple-50 text-purple-700">
+                                                        {unassignedShowroom}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-6 text-center text-slate-300">0</td>
+                                                <td className="py-4 px-6 text-center text-slate-300">0</td>
+                                                <td className="py-4 px-6 text-center text-slate-300">0</td>
+                                                <td className="py-4 px-6 text-center bg-slate-50/30 font-bold text-slate-500 border-l border-slate-100">{unassignedShowroom}</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
