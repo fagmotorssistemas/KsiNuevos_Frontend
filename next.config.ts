@@ -12,10 +12,6 @@ const nextConfig: NextConfig = {
     middlewareClientMaxBodySize: '2gb',
   },
 
-  // Límite para proxy (si aplica)
-  // @ts-expect-error — opción válida en runtime
-  proxyClientMaxBodySize: '2gb',
-
   // 1. Configuración de Imágenes
   images: {
     remotePatterns: [
