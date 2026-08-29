@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Users, LayoutGrid, List } from "lucide-react";
 import { useShowroom } from "@/hooks/useShowroom";
 import ShowroomCard from "../../../components/features/showroom/ShowroomCard";
@@ -9,6 +10,11 @@ import ShowroomToolbar from "../../../components/features/showroom/ShowroomToolb
 import VisitFormModal from "../../../components/features/showroom/VisitFormModal";
 import { VisitDetailModal } from "../../../components/features/showroom/Detail/VisitDetailModal";
 import type { ShowroomVisit } from "../../../components/features/showroom/constants";
+import {
+    clearShowroomVisitPrefill,
+    readShowroomVisitPrefill,
+    type ShowroomVisitPrefill,
+} from "../../../components/features/showroom/visitPrefill";
 
 // Subcomponente Header con Toggle de Vista
 const Header = ({ 
@@ -66,6 +72,23 @@ const Header = ({
 );
 
 export default function ShowroomPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="py-20 flex justify-center text-slate-400">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-800"></div>
+                        <span>Cargando showroom...</span>
+                    </div>
+                </div>
+            }
+        >
+            <ShowroomPageInner />
+        </Suspense>
+    );
+}
+
+function ShowroomPageInner() {
     const { 
         visits, 
         salespersons, 
@@ -79,20 +102,34 @@ export default function ShowroomPage() {
         reload 
     } = useShowroom();
 
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isGestionModalOpen, setIsGestionModalOpen] = useState(false);
     const [selectedVisit, setSelectedVisit] = useState<ShowroomVisit | null>(null);
     const [visitToManage, setVisitToManage] = useState<ShowroomVisit | null>(null);
+    const [visitPrefill, setVisitPrefill] = useState<ShowroomVisitPrefill | null>(null);
 
     // NUEVO ESTADO: Control de vista (Por defecto 'table' como pediste)
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
+    useEffect(() => {
+        if (searchParams.get("from") !== "cita") return;
+        const data = readShowroomVisitPrefill();
+        if (!data) return;
+        setSelectedVisit(null);
+        setVisitPrefill((prev) => prev ?? data);
+        setIsFormModalOpen(true);
+    }, [searchParams]);
+
     const handleCreate = () => {
+        setVisitPrefill(null);
         setSelectedVisit(null);
         setIsFormModalOpen(true);
     };
 
     const handleEdit = (visit: ShowroomVisit) => {
+        setVisitPrefill(null);
         setSelectedVisit(visit);
         setIsFormModalOpen(true);
     };
@@ -111,8 +148,19 @@ export default function ShowroomPage() {
     const handleEditFromGestion = (visit: ShowroomVisit) => {
         setIsGestionModalOpen(false);
         setVisitToManage(null);
+        setVisitPrefill(null);
         setSelectedVisit(visit);
         setIsFormModalOpen(true);
+    };
+
+    const handleCloseForm = () => {
+        setIsFormModalOpen(false);
+        setVisitPrefill(null);
+        setSelectedVisit(null);
+        clearShowroomVisitPrefill();
+        if (searchParams.get("from") === "cita") {
+            router.replace("/showroom", { scroll: false });
+        }
     };
 
     return (
@@ -183,9 +231,10 @@ export default function ShowroomPage() {
 
             <VisitFormModal 
                 isOpen={isFormModalOpen} 
-                onClose={() => setIsFormModalOpen(false)} 
+                onClose={handleCloseForm} 
                 onSuccess={reload}
-                visitToEdit={selectedVisit} 
+                visitToEdit={selectedVisit}
+                prefill={visitPrefill}
             />
 
             {isGestionModalOpen && visitToManage && (

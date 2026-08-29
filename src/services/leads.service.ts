@@ -1,6 +1,7 @@
 import { LeadWithDetails, LeadsFilters, TradeInCarRow, LeadCallRequest, LeadCallStats, LeadCallEvent, CALL_REQUEST_MAX_POSTPONES } from "@/types/leads.types";
 import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import { getLeadsCustomYmdRange } from "@/utils/leads.logic";
+import { isFinancialAdvisoryGestionComplete } from "@/types/finance-advisory.types";
 
 export const fetchSellersRequest = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('id, full_name').eq('status', 'activo').eq('role', 'vendedor').order('full_name');
@@ -675,53 +676,59 @@ export const fetchLeadsAPI = async (
         if (filters.search) {
             const tokens = searchTokens(filters.search);
             if (tokens.length > 0) {
-                // Vehículo: misma lógica que inventario (dmax ≈ d-max) sobre inventoryoracle (~250 filas)
-                let vehicleMatchLeadIds: number[] = [];
-                const { data: inventoryRows } = await supabase
-                    .from("inventoryoracle")
-                    .select("id, brand, model");
-                const matchedInventoryIds = (inventoryRows || [])
-                    .filter((car: { brand?: string | null; model?: string | null }) =>
-                        carMatchesInventorySearch(car, filters.search)
-                    )
-                    .map((car: { id: string }) => car.id);
-                if (matchedInventoryIds.length > 0) {
-                    const { data: interestRows } = await supabase
-                        .from("interested_cars")
-                        .select("lead_id")
-                        .in("inventory_id", matchedInventoryIds);
-                    vehicleMatchLeadIds = [
-                        ...new Set(
-                            ((interestRows as { lead_id: number }[] | null) ?? []).map((r) => r.lead_id)
-                        ),
-                    ];
-                }
-
-                // Nombre: leads donde name contiene TODOS los tokens (AND)
-                let nameIds: number[] = [];
-                let qName = supabase.from('leads').select('id');
-                for (const t of tokens) qName = qName.ilike('name', `%${t}%`);
-                const { data: nameData } = await qName;
-                nameIds = ((nameData as { id: number }[] | null) ?? []).map((r) => r.id);
-
-                // Teléfono: leads donde phone contiene TODOS los tokens (AND)
-                let phoneIds: number[] = [];
-                let qPhone = supabase.from('leads').select('id');
-                for (const t of tokens) qPhone = qPhone.ilike('phone', `%${t}%`);
-                const { data: phoneData } = await qPhone;
-                phoneIds = ((phoneData as { id: number }[] | null) ?? []).map((r) => r.id);
-
-                // ID Kommo: leads donde lead_id_kommo coincida exactamente
-                let kommoIds: number[] = [];
+                // ID interno o Kommo: si pegas un número que es un id, no mezclar
+                // con teléfono/nombre (si no, 20022 también pega en +593982200222).
+                let idMatchIds: number[] = [];
                 if (tokens.length === 1 && !isNaN(Number(tokens[0]))) {
-                    const { data: kommoData } = await supabase
+                    const numericId = Number(tokens[0]);
+                    const { data: idData } = await supabase
                         .from('leads')
                         .select('id')
-                        .eq('lead_id_kommo', Number(tokens[0]));
-                    kommoIds = ((kommoData as { id: number }[] | null) ?? []).map((r) => r.id);
+                        .or(`id.eq.${numericId},lead_id_kommo.eq.${numericId}`);
+                    idMatchIds = ((idData as { id: number }[] | null) ?? []).map((r) => r.id);
                 }
 
-                searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds, ...kommoIds])];
+                if (idMatchIds.length > 0) {
+                    searchMatchIds = [...new Set(idMatchIds)];
+                } else {
+                    // Vehículo: misma lógica que inventario (dmax ≈ d-max) sobre inventoryoracle (~250 filas)
+                    let vehicleMatchLeadIds: number[] = [];
+                    const { data: inventoryRows } = await supabase
+                        .from("inventoryoracle")
+                        .select("id, brand, model");
+                    const matchedInventoryIds = (inventoryRows || [])
+                        .filter((car: { brand?: string | null; model?: string | null }) =>
+                            carMatchesInventorySearch(car, filters.search)
+                        )
+                        .map((car: { id: string }) => car.id);
+                    if (matchedInventoryIds.length > 0) {
+                        const { data: interestRows } = await supabase
+                            .from("interested_cars")
+                            .select("lead_id")
+                            .in("inventory_id", matchedInventoryIds);
+                        vehicleMatchLeadIds = [
+                            ...new Set(
+                                ((interestRows as { lead_id: number }[] | null) ?? []).map((r) => r.lead_id)
+                            ),
+                        ];
+                    }
+
+                    // Nombre: leads donde name contiene TODOS los tokens (AND)
+                    let nameIds: number[] = [];
+                    let qName = supabase.from('leads').select('id');
+                    for (const t of tokens) qName = qName.ilike('name', `%${t}%`);
+                    const { data: nameData } = await qName;
+                    nameIds = ((nameData as { id: number }[] | null) ?? []).map((r) => r.id);
+
+                    // Teléfono: leads donde phone contiene TODOS los tokens (AND)
+                    let phoneIds: number[] = [];
+                    let qPhone = supabase.from('leads').select('id');
+                    for (const t of tokens) qPhone = qPhone.ilike('phone', `%${t}%`);
+                    const { data: phoneData } = await qPhone;
+                    phoneIds = ((phoneData as { id: number }[] | null) ?? []).map((r) => r.id);
+
+                    searchMatchIds = [...new Set([...nameIds, ...phoneIds, ...vehicleMatchLeadIds])];
+                }
                 if (searchMatchIds.length > 0) {
                     idFilters.push(searchMatchIds);
                 } else {
@@ -731,22 +738,30 @@ export const fetchLeadsAPI = async (
         }
 
         // Sub-filtro de estado de requerimiento (datos pedidos o asesoria financiamiento)
-        if (filters.status === 'datos_pedidos' || filters.status === 'asesoria_financiamiento') {
-            const table = filters.status === 'datos_pedidos' ? 'datos_solicitados_clientes' : 'asesoria_financiamiento';
-            let reqQuery = supabase.from(table).select('lead_id');
-            
-            if (filters.requestStatus && filters.requestStatus !== 'all') {
-                reqQuery = reqQuery.eq('estado', filters.requestStatus);
+        if (filters.status === 'datos_pedidos') {
+            const buckets = await fetchDatosLeadBuckets(supabase, filters.assignedTo || 'all');
+            let ids: number[] = [...buckets.all];
+            if (filters.requestStatus === 'pendiente') ids = [...buckets.pendiente];
+            else if (filters.requestStatus === 'en_proceso') ids = [...buckets.en_proceso];
+            else if (filters.requestStatus === 'resuelto') ids = [...buckets.resuelto];
+            if (filters.asesoriaGestion && filters.asesoriaGestion !== 'all') {
+                const wanted = new Set(leadIdsForDatosGestion(buckets, filters.asesoriaGestion));
+                ids = ids.filter((id) => wanted.has(id));
             }
+            idFilters.push(ids.length > 0 ? ids : [-1]);
+        }
 
-            const { data: reqData } = await reqQuery;
-            const reqIds: number[] = (reqData || []).map((r: any) => r.lead_id as number);
-            
-            if (reqIds.length > 0) {
-                idFilters.push([...new Set<number>(reqIds)]);
-            } else {
-                idFilters.push([-1]); // No records match this request status
+        if (filters.status === 'asesoria_financiamiento') {
+            const buckets = await fetchAsesoriaLeadBuckets(supabase, filters.assignedTo || 'all');
+            let ids: number[] = [...buckets.all];
+            if (filters.requestStatus === 'pendiente') ids = [...buckets.pendiente];
+            else if (filters.requestStatus === 'en_proceso') ids = [...buckets.en_proceso];
+            else if (filters.requestStatus === 'resuelto') ids = [...buckets.resuelto];
+            if (filters.asesoriaGestion && filters.asesoriaGestion !== 'all') {
+                const wanted = new Set(leadIdsForAsesoriaGestion(buckets, filters.asesoriaGestion));
+                ids = ids.filter((id) => wanted.has(id));
             }
+            idFilters.push(ids.length > 0 ? ids : [-1]);
         }
 
         // Sub-filtro: leads con vehículo en intercambio (trade_in_cars)
@@ -1054,64 +1069,218 @@ export const fetchDailyInteractions = async (
     }
 };
 
+const ASESORIA_GESTION_FIELDS =
+    "tipo, gestion_detalle, aplica, motivo_no_aplica, banco_deseado, asesor_contactado_nombre, asesor_contactado_telefono, se_solicito_cedula, cedula, requiere_garante, garante_detalle, monto_aprobable_max, plazo_meses_max";
+
+type AsesoriaLeadBuckets = {
+    all: Set<number>;
+    filled: Set<number>;
+    started: Set<number>;
+    pendiente: Set<number>;
+    en_proceso: Set<number>;
+    resuelto: Set<number>;
+};
+
+const emptyAsesoriaLeadBuckets = (): AsesoriaLeadBuckets => ({
+    all: new Set(),
+    filled: new Set(),
+    started: new Set(),
+    pendiente: new Set(),
+    en_proceso: new Set(),
+    resuelto: new Set(),
+});
+
+const fetchAsesoriaLeadBuckets = async (
+    supabase: any,
+    assignedTo: string
+): Promise<AsesoriaLeadBuckets> => {
+    let q = supabase
+        .from("asesoria_financiamiento")
+        .select(
+            `id, lead_id, estado, leads!inner(assigned_to), asesoria_financiamiento_gestion (${ASESORIA_GESTION_FIELDS})`
+        );
+    if (assignedTo && assignedTo !== "all") {
+        q = q.eq("leads.assigned_to", assignedTo);
+    }
+    const { data, error } = await q;
+    if (error) {
+        console.warn("fetchAsesoriaLeadBuckets:", error.message || error);
+        return emptyAsesoriaLeadBuckets();
+    }
+
+    const buckets = emptyAsesoriaLeadBuckets();
+    const estadosByLead = new Map<number, Set<string>>();
+    for (const row of data || []) {
+        const leadId = Number(row.lead_id);
+        if (!Number.isFinite(leadId)) continue;
+        buckets.all.add(leadId);
+        const gestiones = (row.asesoria_financiamiento_gestion || []) as any[];
+        if (gestiones.length > 0) buckets.started.add(leadId);
+        if (gestiones.some((g) => isFinancialAdvisoryGestionComplete(g))) {
+            buckets.filled.add(leadId);
+        }
+        const est = row.estado || "pendiente";
+        if (!estadosByLead.has(leadId)) estadosByLead.set(leadId, new Set());
+        estadosByLead.get(leadId)!.add(est);
+    }
+    for (const [leadId, estados] of estadosByLead) {
+        if (estados.has("pendiente")) buckets.pendiente.add(leadId);
+        else if (estados.has("en_proceso")) buckets.en_proceso.add(leadId);
+        else buckets.resuelto.add(leadId);
+    }
+    return buckets;
+};
+
+const leadIdsForAsesoriaGestion = (
+    buckets: AsesoriaLeadBuckets,
+    gestion: string
+): number[] => {
+    if (gestion === "llenos") return [...buckets.filled];
+    if (gestion === "incompletos") return [...buckets.started].filter((id) => !buckets.filled.has(id));
+    if (gestion === "vacios") return [...buckets.all].filter((id) => !buckets.started.has(id));
+    return [...buckets.all];
+};
+
+const notesFilled = (value: string | null | undefined) => Boolean(value && String(value).trim());
+
+type DatosLeadBuckets = {
+    all: Set<number>;
+    filled: Set<number>;
+    started: Set<number>;
+    pendiente: Set<number>;
+    en_proceso: Set<number>;
+    resuelto: Set<number>;
+};
+
+const emptyDatosLeadBuckets = (): DatosLeadBuckets => ({
+    all: new Set(),
+    filled: new Set(),
+    started: new Set(),
+    pendiente: new Set(),
+    en_proceso: new Set(),
+    resuelto: new Set(),
+});
+
+const fetchDatosLeadBuckets = async (
+    supabase: any,
+    assignedTo: string
+): Promise<DatosLeadBuckets> => {
+    let q = supabase
+        .from("datos_solicitados_clientes")
+        .select("lead_id, estado, notas_vendedor, leads!inner(assigned_to)");
+    if (assignedTo && assignedTo !== "all") {
+        q = q.eq("leads.assigned_to", assignedTo);
+    }
+    const { data, error } = await q;
+    if (error) {
+        console.warn("fetchDatosLeadBuckets:", error.message || error);
+        return emptyDatosLeadBuckets();
+    }
+
+    const perLead = new Map<number, { total: number; withNotes: number; estados: Set<string> }>();
+    for (const row of data || []) {
+        const leadId = Number(row.lead_id);
+        if (!Number.isFinite(leadId)) continue;
+        if (!perLead.has(leadId)) perLead.set(leadId, { total: 0, withNotes: 0, estados: new Set() });
+        const info = perLead.get(leadId)!;
+        info.total += 1;
+        if (notesFilled(row.notas_vendedor)) info.withNotes += 1;
+        info.estados.add(row.estado || "pendiente");
+    }
+
+    const buckets = emptyDatosLeadBuckets();
+    for (const [leadId, info] of perLead) {
+        buckets.all.add(leadId);
+        if (info.withNotes > 0) buckets.started.add(leadId);
+        if (info.withNotes === info.total && info.withNotes > 0) buckets.filled.add(leadId);
+        if (info.estados.has("pendiente")) buckets.pendiente.add(leadId);
+        if (info.estados.has("en_proceso")) buckets.en_proceso.add(leadId);
+        if (info.estados.has("resuelto")) buckets.resuelto.add(leadId);
+    }
+    return buckets;
+};
+
+const leadIdsForDatosGestion = (
+    buckets: DatosLeadBuckets,
+    gestion: string
+): number[] => {
+    if (gestion === "llenos") return [...buckets.filled];
+    if (gestion === "incompletos") return [...buckets.started].filter((id) => !buckets.filled.has(id));
+    if (gestion === "vacios") return [...buckets.all].filter((id) => !buckets.started.has(id));
+    return [...buckets.all];
+};
+
 // --- ALERTAS DE PENDIENTES ---
 export const fetchRequestStats = async (supabase: any, assignedTo: string) => {
     try {
-        let datosQuery = supabase
-            .from('datos_solicitados_clientes')
-            .select('estado, lead_id, leads!inner(assigned_to)');
+        const [datosBuckets, asesoriaBuckets] = await Promise.all([
+            fetchDatosLeadBuckets(supabase, assignedTo),
+            fetchAsesoriaLeadBuckets(supabase, assignedTo),
+        ]);
 
-        if (assignedTo && assignedTo !== 'all') {
-            datosQuery = datosQuery.eq('leads.assigned_to', assignedTo);
-        }
-
-        let asesoriaQuery = supabase
-            .from('asesoria_financiamiento')
-            .select('estado, lead_id, leads!inner(assigned_to)');
-
-        if (assignedTo && assignedTo !== 'all') {
-            asesoriaQuery = asesoriaQuery.eq('leads.assigned_to', assignedTo);
-        }
-
-        const [datosRes, asesoriaRes] = await Promise.all([datosQuery, asesoriaQuery]);
-
-        // Función para contar LEADS ÚNICOS por estado
-        const processStats = (data: any[]) => {
-            const stats = { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 };
-            if (!data) return stats;
-
-            const leadsByState = {
-                pendiente: new Set(),
-                en_proceso: new Set(),
-                resuelto: new Set(),
-                all: new Set()
+        const fichaOf = (ids: Set<number>) => {
+            let llenos = 0;
+            let incompletos = 0;
+            for (const id of ids) {
+                if (asesoriaBuckets.filled.has(id)) llenos += 1;
+                else if (asesoriaBuckets.started.has(id)) incompletos += 1;
+            }
+            return {
+                llenos,
+                incompletos,
+                vacios: Math.max(0, ids.size - llenos - incompletos),
+                total: ids.size,
             };
-
-            data.forEach(item => {
-                const est = item.estado || 'pendiente';
-                leadsByState.all.add(item.lead_id);
-                if (est === 'pendiente') leadsByState.pendiente.add(item.lead_id);
-                if (est === 'en_proceso') leadsByState.en_proceso.add(item.lead_id);
-                if (est === 'resuelto') leadsByState.resuelto.add(item.lead_id);
-            });
-
-            stats.pendiente = leadsByState.pendiente.size;
-            stats.en_proceso = leadsByState.en_proceso.size;
-            stats.resuelto = leadsByState.resuelto.size;
-            stats.total = leadsByState.all.size;
-
-            return stats;
         };
 
+        const fichaAll = fichaOf(asesoriaBuckets.all);
+
         return {
-            datosPedidos: processStats(datosRes.data),
-            asesoria: processStats(asesoriaRes.data)
+            datosPedidos: {
+                pendiente: datosBuckets.pendiente.size,
+                en_proceso: datosBuckets.en_proceso.size,
+                resuelto: datosBuckets.resuelto.size,
+                total: datosBuckets.all.size,
+                llenos: datosBuckets.filled.size,
+                incompletos: Math.max(0, datosBuckets.started.size - datosBuckets.filled.size),
+                vacios: Math.max(0, datosBuckets.all.size - datosBuckets.started.size),
+            },
+            asesoria: {
+                pendiente: asesoriaBuckets.pendiente.size,
+                en_proceso: asesoriaBuckets.en_proceso.size,
+                resuelto: asesoriaBuckets.resuelto.size,
+                total: asesoriaBuckets.all.size,
+                llenos: fichaAll.llenos,
+                incompletos: fichaAll.incompletos,
+                vacios: fichaAll.vacios,
+                fichaPorEstado: {
+                    all: fichaAll,
+                    pendiente: fichaOf(asesoriaBuckets.pendiente),
+                    en_proceso: fichaOf(asesoriaBuckets.en_proceso),
+                    resuelto: fichaOf(asesoriaBuckets.resuelto),
+                },
+            },
         };
     } catch (error) {
         console.error("Error fetching request stats:", error);
+        const emptyFicha = { llenos: 0, incompletos: 0, vacios: 0, total: 0 };
         return { 
-            datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
-            asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
+            datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 }, 
+            asesoria: {
+                pendiente: 0,
+                en_proceso: 0,
+                resuelto: 0,
+                total: 0,
+                llenos: 0,
+                incompletos: 0,
+                vacios: 0,
+                fichaPorEstado: {
+                    all: emptyFicha,
+                    pendiente: emptyFicha,
+                    en_proceso: emptyFicha,
+                    resuelto: emptyFicha,
+                },
+            }, 
         };
     }
 };

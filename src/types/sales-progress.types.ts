@@ -35,8 +35,15 @@ export type SalesProgressRankingRow = {
   hist_cita_pct?: number;
   hist_ia_pct?: number;
   hist_showroom_pct?: number;
+  contestados_cuota?: number;
+  contestados_hoy?: number;
+  contestados_cartera?: number;
+  hoy_sin_resumen?: number;
+  sin_resumen?: number;
   faltante_quedados?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
+  faltante_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
@@ -80,6 +87,8 @@ export type SalesDailyProgressPayload = {
   hist_showroom_pct: number;
   faltante_quedados: number;
   asesoria_quedados: number;
+  asesoria_total: number;
+  faltante_total: number;
   pedidos_quedados: number;
   faltante_sin_salir: number;
   asesoria_sin_salir: number;
@@ -87,6 +96,11 @@ export type SalesDailyProgressPayload = {
   semana_contestados_pct: number;
   semana_ingresados: number;
   semana_contestados: number;
+  contestados_cuota: number;
+  contestados_hoy: number;
+  contestados_cartera: number;
+  hoy_sin_resumen: number;
+  sin_resumen: number;
   backlog_abiertos: number;
   categorias: SalesProgressCategoryRow[];
   puntos_actividad: number;

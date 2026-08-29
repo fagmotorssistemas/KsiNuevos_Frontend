@@ -7,7 +7,6 @@ import { usePermissionContext } from '@/hooks/usePermissionContext';
 import {
     Wallet,
     Users,
-    Clock,
     Landmark,
     FileText,
     Menu,
@@ -24,9 +23,7 @@ import {
     Wrench,
     ShieldCheck,
     HandCoins,
-    FileCheck2,
     MessageSquareOff,
-    FileBadge,
 } from 'lucide-react';
 
 import {
@@ -35,6 +32,7 @@ import {
     MODULE_SLUGS,
 } from '@/lib/permissions';
 import { setSidebarShell } from '@/lib/sidebar-shell';
+import { useStaffNavHidden } from '@/hooks/useSidebarShell';
 import { SidebarDevRequestsFooter } from '@/components/layout/SidebarDevRequestsFooter';
 import { MobileStaffModuleSwitcher } from '@/components/layout/MobileStaffModuleSwitcher';
 
@@ -51,7 +49,6 @@ const menuItems: MenuItem[] = [
     { name: 'Cartera manual', href: '/cartera-manual', icon: HandCoins },
     { name: 'Mensajes cartera', href: '/mensajes-cartera', icon: MessageSquareOff },
     { name: 'Personal', href: '/employee', icon: Users },
-    { name: 'Marcaciones', href: '/marcaciones', icon: Clock },
     { name: 'Bancos / Tesorería', href: '/treasury', icon: Landmark },
     { name: 'Reporte de Ventas', href: '/salesreport', icon: PieChart },
     { name: 'Movimientos', href: '/financing', icon: FileText },
@@ -59,15 +56,14 @@ const menuItems: MenuItem[] = [
     { name: 'Pagos', href: '/pagos', icon: BanknoteArrowDown },
     { name: 'Notas de Ventas', href: '/notasdeventas', icon: Wallet },
     { name: 'Inventario', href: '/inventario', icon: Box, exact: true },
-    { name: 'Reporte Documentación', href: '/inventario/reporte-documentacion', icon: FileCheck2 },
     { name: 'Contratos', href: '/contracts', icon: StickyNote },
     { name: 'Comprobantes', href: '/comprobantes', icon: Receipt },
     { name: 'Financiamiento', href: '/finance', icon: BadgeDollarSign, exact: true },
-    { name: 'Proforma bancaria', href: '/finance/proforma-bancaria', icon: FileBadge },
 ];
 
 export function AccountingSidebar() {
     const permCtx = usePermissionContext();
+    const staffNavHidden = useStaffNavHidden();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
@@ -93,6 +89,8 @@ export function AccountingSidebar() {
     if (canAccessModule(permCtx, MODULE_SLUGS.seguros)) {
         extraModuleLinks.push({ name: 'Seguros', href: '/seguros', icon: ShieldCheck });
     }
+
+    if (staffNavHidden) return null;
 
     return (
         <>
@@ -178,7 +176,11 @@ export function AccountingSidebar() {
                         [...displayedItems, ...extraModuleLinks].map((item) => {
                             const isActive = item.exact
                                 ? pathname === item.href
-                                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                                  || (item.href === '/inventario' && pathname.startsWith('/inventario/'))
+                                  || (item.href === '/finance' && pathname.startsWith('/finance/'))
+                                : pathname === item.href
+                                  || pathname.startsWith(`${item.href}/`)
+                                  || (item.href === '/employee' && pathname.startsWith('/marcaciones'));
                             return (
                                 <Link
                                     key={item.href}

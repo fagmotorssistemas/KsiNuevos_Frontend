@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect, type ReactNode } from "react";
 import {
     Search,
     ChevronsUpDown,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Loader2,
     Car,
 } from "lucide-react";
@@ -21,16 +22,21 @@ import {
 import {
     getDocumentCheckStatus,
     getCatalogDocumentRow,
-    getFinesCheckStatus,
     listDocumentFiles,
-    DOCUMENT_SECTION_TITLES,
     isDocumentCatalogItemVisible,
+    listPendingDocumentCatalog,
     type ChecklistCellStatus,
 } from "@/lib/inventario/vehicleLegalUi";
 import {
     loadBulkVehicleLegalChecklist,
     type VehicleLegalChecklistBulk,
 } from "@/services/vehicleLegal.service";
+import {
+    formatContrasteConsultedPretty,
+    formatContrasteRelative,
+    type OfficialPendingSummary,
+} from "@/lib/inventario/ecuadorContraste";
+import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
 import { VehicleDocumentFilesModal } from "@/components/features/inventario/legal/VehicleDocumentFilesModal";
 import type { VehicleDocumentFileRow, VehicleDocumentRow } from "@/types/vehicleLegal.types";
 import type { VehiculoInventario } from "@/types/inventario.types";
@@ -38,11 +44,19 @@ import type { VehicleDetailTab } from "./VehicleDetailModal";
 
 type ReportView = "active" | "baja";
 
-type SortKey = "vehicle" | "plate" | "year" | "progress";
+type SortKey = "vehicle" | "plate" | "year" | "progress" | "contraste" | "alerts";
+
+export type OpenVehicleFromReportOptions = {
+    openUpload?: boolean;
+};
 
 interface InventarioDocumentReportProps {
     vehiculos: VehiculoInventario[];
-    onOpenVehicle?: (vehiculo: VehiculoInventario, tab?: VehicleDetailTab) => void;
+    onOpenVehicle?: (
+        vehiculo: VehiculoInventario,
+        tab?: VehicleDetailTab,
+        options?: OpenVehicleFromReportOptions
+    ) => void;
     /** Incrementar para recargar checklist tras editar documentos en el modal */
     reloadKey?: number;
 }
@@ -59,6 +73,7 @@ function SortableHeader({
     onSort,
     className = "",
     stickyLeft = false,
+    title,
 }: {
     label: string;
     sortKey: SortKey;
@@ -67,12 +82,13 @@ function SortableHeader({
     onSort: (k: SortKey) => void;
     className?: string;
     stickyLeft?: boolean;
+    title?: string;
 }) {
     const active = current === sortKey;
     return (
         <th
-            className={`px-3 py-2 text-left ${stickyLeft ? "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]" : ""} ${className}`}
-            rowSpan={2}
+            className={`px-3 py-3 text-left ${stickyLeft ? "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]" : ""} ${className}`}
+            title={title}
         >
             <button
                 type="button"
@@ -101,8 +117,18 @@ function YesNoCell({
 }) {
     if (status === "na") {
         return (
-            <span className="text-[11px] text-slate-300" title={title}>
+            <span className="text-[11px] text-slate-400" title={title}>
                 —
+            </span>
+        );
+    }
+    if (status === "warn") {
+        return (
+            <span
+                title={title}
+                className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap bg-amber-50 text-amber-800 border-amber-200"
+            >
+                Rev.
             </span>
         );
     }
@@ -176,6 +202,33 @@ function DocumentYesNoCell({
     );
 }
 
+function money(n: number) {
+    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | undefined }) {
+    if (!pending) {
+        return <span className="text-[11px] text-slate-400">Sin consulta</span>;
+    }
+    const hasDebt = pending.total > 0.009;
+    return (
+        <div className="flex flex-col gap-0.5 min-w-0">
+            <span className={`text-[12px] font-bold tabular-nums ${hasDebt ? "text-red-700" : "text-emerald-700"}`}>
+                {money(pending.total)}
+            </span>
+            <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-slate-500">
+                <span>SRI {money(pending.sriTotal)}</span>
+                <span>
+                    ANT{" "}
+                    {pending.citationsCount > 0
+                        ? `${pending.citationsCount} · ${money(pending.antTotal)}`
+                        : money(pending.antTotal)}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 function VehicleNameCell({ vehiculo }: { vehiculo: VehiculoInventario }) {
     const marca = vehiculo.marca?.trim() || "Sin marca";
     const modelo = vehiculo.modelo?.trim() || vehiculo.descripcion?.trim() || "—";
@@ -220,8 +273,6 @@ function countComplete(
         const doc = getCatalogDocumentRow(entry.documents, cat.docType);
         if (getDocumentCheckStatus(doc, cat) === "ok") done += 1;
     }
-    total += 1;
-    if (getFinesCheckStatus(entry.pendingFinesCount, entry.totalFinesCount) === "ok") done += 1;
     return { done, total };
 }
 
@@ -237,6 +288,178 @@ function documentCellStatus(
     return getDocumentCheckStatus(doc, catalog);
 }
 
+type ChecklistEntry = VehicleLegalChecklistBulk["byPlate"] extends Map<string, infer V> ? V : never;
+
+function documentaryStatusBadge(progress: { done: number; total: number }, linked: boolean) {
+    if (!linked || progress.total === 0) {
+        return {
+            text: "Sin información",
+            className: "bg-slate-50 text-slate-500 border-slate-200",
+        };
+    }
+    const fraction = `${progress.done} de ${progress.total}`;
+    const ratio = progress.done / progress.total;
+    if (ratio >= 1) {
+        return {
+            text: `Completo · ${fraction}`,
+            className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        };
+    }
+    if (ratio >= 0.5) {
+        return {
+            text: `En proceso · ${fraction}`,
+            className: "bg-amber-50 text-amber-800 border-amber-200",
+        };
+    }
+    return {
+        text: `Revisión · ${fraction}`,
+        className: "bg-red-50 text-red-700 border-red-200",
+    };
+}
+
+function DetailFieldCard({
+    label,
+    children,
+}: {
+    label: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 min-w-0">
+            <p className="text-[10px] font-medium text-slate-500 leading-tight mb-1.5">{label}</p>
+            <div className="flex items-center min-h-[22px]">{children}</div>
+        </div>
+    );
+}
+
+function DocumentDetailPanel({
+    vehiculo,
+    entry,
+    linked,
+    progress,
+    pending,
+    consultedAt,
+    vehicleLabel,
+    onPreview,
+}: {
+    vehiculo: VehiculoInventario;
+    entry: ChecklistEntry | undefined;
+    linked: boolean;
+    progress: { done: number; total: number };
+    pending: number;
+    consultedAt: string | undefined;
+    vehicleLabel: string;
+    onPreview: (preview: FilePreviewState) => void;
+}) {
+    const title = [vehiculo.marca, vehiculo.modelo].filter(Boolean).join(" ").trim() || "Vehículo";
+    return (
+        <div className="px-4 py-4 md:px-5 md:py-5 bg-slate-50/80 border-t border-blue-100/80">
+            <div className="mb-4 min-w-0">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight leading-snug">
+                    {title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                    Placa {vehiculo.placa} · Revisión documental
+                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-slate-600">
+                    <span className="tabular-nums font-semibold text-slate-700">
+                        {progress.total === 0
+                            ? "—"
+                            : `${progress.done} de ${progress.total}`}{" "}
+                        de la revisión completada
+                    </span>
+                    <span className="text-slate-300">·</span>
+                    <span>
+                        {pending === 0
+                            ? "Sin pendientes por revisar"
+                            : `${pending} pendiente${pending === 1 ? "" : "s"} por revisar`}
+                    </span>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                <DetailFieldCard label="Año">
+                    <span className="text-[13px] font-semibold text-slate-700 tabular-nums">
+                        {vehiculo.anioModelo || "—"}
+                    </span>
+                </DetailFieldCard>
+                <DetailFieldCard label="Estado de validación mediante API">
+                    {consultedAt ? (
+                        <span
+                            title={`Última consulta: ${formatContrasteConsultedPretty(consultedAt)}`}
+                            className="inline-flex flex-col items-start gap-0.5"
+                        >
+                            <span className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                                Sí
+                            </span>
+                            <span className="text-[10px] text-slate-400 leading-none">
+                                {formatContrasteRelative(consultedAt)}
+                            </span>
+                        </span>
+                    ) : (
+                        <span
+                            title="Aún no hay consulta EcuadorAPI guardada para esta placa"
+                            className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-500 border-slate-200"
+                        >
+                            No
+                        </span>
+                    )}
+                </DetailFieldCard>
+                {LEGAL_COLUMNS.map((col) => {
+                    const doc = entry ? getCatalogDocumentRow(entry.documents, col.docType) : undefined;
+                    const applies =
+                        linked && entry && isDocumentCatalogItemVisible(col.docType, entry.documents);
+                    const status = documentCellStatus(linked, entry, col);
+                    const catalogLabel =
+                        applies
+                            ? col.label
+                            : col.docType === "levantamiento_prendas"
+                              ? "No aplica — sin prenda industrial"
+                              : col.label;
+                    return (
+                        <DetailFieldCard key={col.docType} label={col.label}>
+                            <DocumentYesNoCell
+                                doc={doc}
+                                catalogLabel={catalogLabel}
+                                status={status}
+                                vehicleLabel={vehicleLabel}
+                                onPreview={onPreview}
+                            />
+                        </DetailFieldCard>
+                    );
+                })}
+                {PHYSICAL_COLUMNS.map((col) => {
+                    const doc = entry ? getCatalogDocumentRow(entry.documents, col.docType) : undefined;
+                    const status = documentCellStatus(linked, entry, col);
+                    return (
+                        <DetailFieldCard key={col.docType} label={col.label}>
+                            <DocumentYesNoCell
+                                doc={doc}
+                                catalogLabel={col.label}
+                                status={status}
+                                vehicleLabel={vehicleLabel}
+                                onPreview={onPreview}
+                            />
+                        </DetailFieldCard>
+                    );
+                })}
+                <DetailFieldCard label="Estado de documentación">
+                    {(() => {
+                        const statusBadge = documentaryStatusBadge(progress, linked);
+                        return (
+                            <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge.className}`}
+                            >
+                                {statusBadge.text}
+                            </span>
+                        );
+                    })()}
+                </DetailFieldCard>
+            </div>
+        </div>
+    );
+}
+
 export function InventarioDocumentReport({
     vehiculos,
     onOpenVehicle,
@@ -250,8 +473,10 @@ export function InventarioDocumentReport({
     const [sortKey, setSortKey] = useState<SortKey | null>(null);
     const [sortAsc, setSortAsc] = useState(true);
     const [checklistData, setChecklistData] = useState<VehicleLegalChecklistBulk | null>(null);
+    const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, { consultedAt: string; pending: OfficialPendingSummary }>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
+    const [expandedProId, setExpandedProId] = useState<string | null>(null);
 
     const plateKey = useMemo(
         () => vehiculos.map((v) => normalizePlate(v.placa)).sort().join("|"),
@@ -261,16 +486,28 @@ export function InventarioDocumentReport({
     useEffect(() => {
         if (vehiculos.length === 0) {
             setChecklistData(null);
+            setContrasteByPlate(new Map());
             return;
         }
         let cancelled = false;
         setLoadingChecklist(true);
-        void loadBulkVehicleLegalChecklist(supabase, vehiculos)
-            .then((data) => {
-                if (!cancelled) setChecklistData(data);
-            })
-            .catch(() => {
-                if (!cancelled) setChecklistData({ byPlate: new Map() });
+        void Promise.allSettled([
+            loadBulkVehicleLegalChecklist(supabase, vehiculos),
+            listLatestContrasteConsultasByPlacas(
+                supabase,
+                vehiculos.map((v) => v.placa)
+            ),
+        ])
+            .then(([checklistResult, contrasteResult]) => {
+                if (cancelled) return;
+                setChecklistData(
+                    checklistResult.status === "fulfilled"
+                        ? checklistResult.value
+                        : { byPlate: new Map() }
+                );
+                setContrasteByPlate(
+                    contrasteResult.status === "fulfilled" ? contrasteResult.value : new Map()
+                );
             })
             .finally(() => {
                 if (!cancelled) setLoadingChecklist(false);
@@ -319,7 +556,7 @@ export function InventarioDocumentReport({
             );
         }
 
-        if (sortKey && checklistData) {
+        if (sortKey) {
             const dir = sortAsc ? 1 : -1;
             list = [...list].sort((a, b) => {
                 switch (sortKey) {
@@ -330,11 +567,27 @@ export function InventarioDocumentReport({
                     case "year":
                         return ((Number(a.anioModelo) || 0) - (Number(b.anioModelo) || 0)) * dir;
                     case "progress": {
+                        const pa = contrasteByPlate.get(normalizePlate(a.placa))?.pending.total ?? -1;
+                        const pb = contrasteByPlate.get(normalizePlate(b.placa))?.pending.total ?? -1;
+                        return (pa - pb) * dir;
+                    }
+                    case "alerts": {
+                        if (!checklistData) return 0;
                         const ea = checklistData.byPlate.get(normalizePlate(a.placa));
                         const eb = checklistData.byPlate.get(normalizePlate(b.placa));
-                        const pa = ea ? countComplete(ea).done / Math.max(countComplete(ea).total, 1) : 0;
-                        const pb = eb ? countComplete(eb).done / Math.max(countComplete(eb).total, 1) : 0;
+                        const ca = ea ? countComplete(ea) : { done: 0, total: 0 };
+                        const cb = eb ? countComplete(eb) : { done: 0, total: 0 };
+                        const pa = Math.max(ca.total - ca.done, 0);
+                        const pb = Math.max(cb.total - cb.done, 0);
                         return (pa - pb) * dir;
+                    }
+                    case "contraste": {
+                        const da = contrasteByPlate.get(normalizePlate(a.placa))?.consultedAt ?? "";
+                        const db = contrasteByPlate.get(normalizePlate(b.placa))?.consultedAt ?? "";
+                        if (!da && !db) return 0;
+                        if (!da) return 1;
+                        if (!db) return -1;
+                        return da.localeCompare(db) * dir;
                     }
                     default:
                         return 0;
@@ -342,11 +595,12 @@ export function InventarioDocumentReport({
             });
         }
         return list;
-    }, [vehiculos, activeView, search, sortKey, sortAsc, checklistData]);
+    }, [vehiculos, activeView, search, sortKey, sortAsc, checklistData, contrasteByPlate]);
 
     const handleViewChange = (view: ReportView) => {
         setActiveView(view);
         setPage(1);
+        setExpandedProId(null);
     };
 
     const totalCount = filteredVehiculos.length;
@@ -361,7 +615,7 @@ export function InventarioDocumentReport({
     const rangeStart = totalCount === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
     const rangeEnd = Math.min(safePage * rowsPerPage, totalCount);
 
-    const totalCols = 4 + LEGAL_COLUMNS.length + PHYSICAL_COLUMNS.length + 2;
+    const totalCols = 6;
 
     return (
         <>
@@ -407,6 +661,7 @@ export function InventarioDocumentReport({
                         onChange={(e) => {
                             setSearch(e.target.value);
                             setPage(1);
+                            setExpandedProId(null);
                         }}
                         className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                     />
@@ -421,7 +676,7 @@ export function InventarioDocumentReport({
             )}
 
             <div className="overflow-x-auto">
-                    <table className="min-w-max w-full text-xs border-separate border-spacing-0">
+                    <table className="w-full text-xs border-separate border-spacing-0">
                         <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
                             <tr>
                                 <SortableHeader
@@ -430,8 +685,7 @@ export function InventarioDocumentReport({
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    stickyLeft
-                                    className="min-w-[240px]"
+                                    className="min-w-[220px]"
                                 />
                                 <SortableHeader
                                     label="Placa"
@@ -439,187 +693,124 @@ export function InventarioDocumentReport({
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    className="min-w-[88px]"
+                                    className="min-w-[96px]"
                                 />
                                 <SortableHeader
-                                    label="Año"
-                                    sortKey="year"
-                                    current={sortKey}
-                                    asc={sortAsc}
-                                    onSort={handleSort}
-                                    className="min-w-[56px]"
-                                />
-                                <SortableHeader
-                                    label="%"
+                                    label="Valores pendientes"
                                     sortKey="progress"
                                     current={sortKey}
                                     asc={sortAsc}
                                     onSort={handleSort}
-                                    className="min-w-[48px]"
+                                    className="min-w-[140px]"
                                 />
-                                <th
-                                    colSpan={LEGAL_COLUMNS.length}
-                                    className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
-                                >
-                                    {DOCUMENT_SECTION_TITLES.legal}
-                                </th>
-                                <th
-                                    colSpan={PHYSICAL_COLUMNS.length}
-                                    className="px-2 py-2 text-center text-[13px] font-bold text-slate-500 uppercase tracking-wide border-l border-slate-200"
-                                >
-                                    {DOCUMENT_SECTION_TITLES.physical}
-                                </th>
-                                <th
-                                    rowSpan={2}
-                                    className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase border-l border-slate-200 min-w-[80px] whitespace-normal leading-snug align-bottom"
-                                    title="¿Multas al día? (Sí = revisado sin pendientes)"
-                                >
-                                    Multas
-                                </th>
-                                <th
-                                    rowSpan={2}
-                                    className="px-3 py-2.5 text-center text-[13px] font-semibold text-slate-600 uppercase border-l border-slate-200 min-w-[88px] whitespace-nowrap"
-                                >
+                                <SortableHeader
+                                    label="Faltantes"
+                                    sortKey="alerts"
+                                    current={sortKey}
+                                    asc={sortAsc}
+                                    onSort={handleSort}
+                                    className="min-w-[120px]"
+                                />
+                                <th className="px-3 py-3 text-right text-[13px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">
                                     Acción
                                 </th>
                             </tr>
-                            <tr className="border-t border-slate-100">
-                                {LEGAL_COLUMNS.map((col) => (
-                                    <th
-                                        key={col.docType}
-                                        className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[120px] whitespace-normal leading-snug align-bottom"
-                                    >
-                                        {col.label}
-                                    </th>
-                                ))}
-                                {PHYSICAL_COLUMNS.map((col) => (
-                                    <th
-                                        key={col.docType}
-                                        className="px-2 py-2.5 text-center text-[13px] font-semibold text-slate-700 border-l border-slate-100 min-w-[96px] max-w-[120px] whitespace-normal leading-snug align-bottom"
-                                    >
-                                        {col.label}
-                                    </th>
-                                ))}
-                            </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody>
                             {paginated.length > 0 ? (
                                 paginated.map((v) => {
                                     const entry = checklistData?.byPlate.get(normalizePlate(v.placa));
                                     const linked = Boolean(entry?.inventoryoracleId);
                                     const progress = entry ? countComplete(entry) : { done: 0, total: 0 };
-                                    const pct =
-                                        progress.total > 0
-                                            ? Math.round((progress.done / progress.total) * 100)
-                                            : linked
-                                              ? 0
-                                              : null;
+                                    const pending =
+                                        linked && entry
+                                            ? listPendingDocumentCatalog(entry.documents).length
+                                            : 0;
                                     const vehicleLabel = `${v.placa} · ${v.marca ?? ""} ${v.modelo ?? ""}`.trim();
+                                    const contraste = contrasteByPlate.get(normalizePlate(v.placa));
+                                    const consultedAt = contraste?.consultedAt;
+                                    const expanded = expandedProId === v.proId;
 
                                     return (
-                                        <tr
-                                            key={v.proId}
-                                            className="group hover:bg-blue-50/40 transition-colors border-b border-slate-100 last:border-0"
-                                        >
-                                            <td className="px-3 py-3 min-w-[240px] max-w-[280px] sticky left-0 z-[1] bg-white group-hover:bg-blue-50/40 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                                                <VehicleNameCell vehiculo={v} />
-                                            </td>
-                                            <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
-                                                {v.placa}
-                                            </td>
-                                            <td className="px-3 py-3 text-[13px] text-slate-600 tabular-nums whitespace-nowrap">
-                                                {v.anioModelo || "—"}
-                                            </td>
-                                            <td className="px-3 py-3 text-center whitespace-nowrap">
-                                                {pct == null ? (
-                                                    <span className="text-[11px] text-slate-300">—</span>
-                                                ) : (
-                                                    <span
-                                                        className={`text-[11px] font-bold tabular-nums ${
-                                                            pct >= 80
-                                                                ? "text-emerald-600"
-                                                                : pct >= 50
-                                                                  ? "text-amber-600"
-                                                                  : "text-red-600"
-                                                        }`}
-                                                    >
-                                                        {pct}%
-                                                    </span>
-                                                )}
-                                            </td>
-                                            {LEGAL_COLUMNS.map((col) => {
-                                                const doc = entry
-                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
-                                                    : undefined;
-                                                const applies =
-                                                    linked &&
-                                                    entry &&
-                                                    isDocumentCatalogItemVisible(col.docType, entry.documents);
-                                                const status = documentCellStatus(linked, entry, col);
-                                                const title = applies
-                                                    ? col.label
-                                                    : col.docType === "levantamiento_prendas"
-                                                      ? "No aplica — sin prenda industrial"
-                                                      : col.label;
-                                                return (
-                                                    <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
-                                                        <DocumentYesNoCell
-                                                            doc={doc}
-                                                            catalogLabel={title}
-                                                            status={status}
-                                                            vehicleLabel={vehicleLabel}
-                                                            onPreview={setFilePreview}
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            {PHYSICAL_COLUMNS.map((col) => {
-                                                const doc = entry
-                                                    ? getCatalogDocumentRow(entry.documents, col.docType)
-                                                    : undefined;
-                                                const status = documentCellStatus(linked, entry, col);
-                                                return (
-                                                    <td key={col.docType} className="px-2 py-3 text-center border-l border-slate-50">
-                                                        <DocumentYesNoCell
-                                                            doc={doc}
-                                                            catalogLabel={col.label}
-                                                            status={status}
-                                                            vehicleLabel={vehicleLabel}
-                                                            onPreview={setFilePreview}
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-2 py-3 text-center border-l border-slate-50">
-                                                <YesNoCell
-                                                    status={
-                                                        linked
-                                                            ? getFinesCheckStatus(
-                                                                  entry?.pendingFinesCount ?? 0,
-                                                                  entry?.totalFinesCount ?? 0
-                                                              )
-                                                            : "na"
-                                                    }
-                                                    title={
-                                                        entry?.pendingFinesCount
-                                                            ? `${entry.pendingFinesCount} multa(s) pendiente(s)`
-                                                            : entry?.totalFinesCount
-                                                              ? "Multas revisadas — sin pendientes"
-                                                              : "Multas no revisadas"
-                                                    }
-                                                />
-                                            </td>
-                                            <td className="px-3 py-3 text-center border-l border-slate-50">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onOpenVehicle?.(v, "documentos")}
-                                                    disabled={!onOpenVehicle}
-                                                    className="inline-flex items-center rounded-md bg-blue-600 px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                                        <Fragment key={v.proId}>
+                                            <tr
+                                                className={`group border-b border-slate-100 transition-colors cursor-pointer ${
+                                                    expanded
+                                                        ? "bg-blue-50/50 shadow-[inset_3px_0_0_0_rgba(59,130,246,0.35)]"
+                                                        : "hover:bg-blue-50/30 bg-white"
+                                                }`}
+                                                onClick={() => onOpenVehicle?.(v, "documentos")}
+                                                title="Gestionar documentación"
+                                            >
+                                                <td className={`px-3 py-3 min-w-[220px] max-w-[320px] ${expanded ? "bg-blue-50/50" : "bg-white group-hover:bg-blue-50/30"}`}>
+                                                    <VehicleNameCell vehiculo={v} />
+                                                </td>
+                                                <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
+                                                    {v.placa}
+                                                </td>
+                                                <td className="px-3 py-3">
+                                                    <PendingValuesCell pending={contraste?.pending} />
+                                                </td>
+                                                <td
+                                                    className="px-3 py-3 whitespace-nowrap"
+                                                    onClick={(e) => e.stopPropagation()}
                                                 >
-                                                    Gestionar
-                                                </button>
-                                            </td>
-                                        </tr>
+                                                    {!linked || progress.total === 0 ? (
+                                                        <span className="text-[11px] text-slate-400">—</span>
+                                                    ) : pending === 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700">
+                                                            <span aria-hidden>✓</span> Sin alertas
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            title="Abrir documentos pendientes"
+                                                            onClick={() =>
+                                                                onOpenVehicle?.(v, "documentos", { openUpload: true })
+                                                            }
+                                                            className={`inline-flex items-center gap-1 text-[12px] font-medium hover:underline ${
+                                                                pending === 1 ? "text-amber-800" : "text-red-700"
+                                                            }`}
+                                                        >
+                                                            <span aria-hidden>{pending === 1 ? "⚠" : "●"}</span>
+                                                            {pending} pendiente{pending === 1 ? "" : "s"}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-3 text-right whitespace-nowrap">
+                                                    <button
+                                                        type="button"
+                                                        aria-expanded={expanded}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedProId(expanded ? null : v.proId);
+                                                        }}
+                                                        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                                                    >
+                                                        Ver detalle
+                                                        <ChevronDown
+                                                            className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                                                        />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {expanded ? (
+                                                <tr className="border-b border-slate-200">
+                                                    <td colSpan={totalCols} className="p-0">
+                                                        <DocumentDetailPanel
+                                                            vehiculo={v}
+                                                            entry={entry}
+                                                            linked={linked}
+                                                            progress={progress}
+                                                            pending={pending}
+                                                            consultedAt={consultedAt}
+                                                            vehicleLabel={vehicleLabel}
+                                                            onPreview={setFilePreview}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ) : null}
+                                        </Fragment>
                                     );
                                 })
                             ) : (
@@ -633,28 +824,14 @@ export function InventarioDocumentReport({
                     </table>
                 </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50/50">
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Sí
-                            </span>
-                            Completo / al día
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
-                                No
-                            </span>
-                            Falta, pendiente o no revisado
-                        </span>
-                    </div>
-
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50/50">
                     <div className="flex items-center gap-2">
                         <select
                             value={rowsPerPage}
                             onChange={(e) => {
                                 setRowsPerPage(Number(e.target.value));
                                 setPage(1);
+                                setExpandedProId(null);
                             }}
                             className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         >
@@ -667,7 +844,10 @@ export function InventarioDocumentReport({
                         <button
                             type="button"
                             disabled={safePage <= 1}
-                            onClick={() => setPage((p) => p - 1)}
+                            onClick={() => {
+                                setPage((p) => p - 1);
+                                setExpandedProId(null);
+                            }}
                             className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                         >
                             <ChevronLeft className="h-4 w-4" />
@@ -675,7 +855,10 @@ export function InventarioDocumentReport({
                         <button
                             type="button"
                             disabled={safePage >= totalPages}
-                            onClick={() => setPage((p) => p + 1)}
+                            onClick={() => {
+                                setPage((p) => p + 1);
+                                setExpandedProId(null);
+                            }}
                             className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                         >
                             <ChevronRight className="h-4 w-4" />

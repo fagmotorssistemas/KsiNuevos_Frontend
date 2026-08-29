@@ -164,6 +164,8 @@ export interface VehicleLegalSummary {
   pendingFinesTotal: number
   pendingFinesCount: number
   matriculaDaysUntilExpiry: number | null
+  matriculaExpiryLabel: string | null
   legalStatusLabel: string
   legalStatusTone: 'ok' | 'warn' | 'danger'
+  legalStatusHint: string | null
 }

@@ -10,7 +10,7 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 const SUPABASE_PRICE_SELECT =
-    'plate, price, mileage, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, stock, status, id';
+    'plate, price, mileage, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, stock, status, id, created_at';
 
 type SupabasePriceRow = {
     plate: string | null;
@@ -25,6 +25,7 @@ type SupabasePriceRow = {
     stock: number | null;
     status: string | null;
     id: string;
+    created_at: string | null;
 };
 
 async function logPriceHistoryClient(
@@ -120,7 +121,8 @@ export const inventarioService = {
                 publicPriceRevertsAt: supabaseInfo?.public_price_reverts_at ?? null,
                 publicPriceRequestedBy: supabaseInfo?.public_price_requested_by ?? null,
                 mileage: supabaseInfo?.mileage ?? (Number.isFinite(numKm) ? numKm : null),
-                precioVenta: Number.isFinite(numVendidoEn) ? numVendidoEn : null
+                precioVenta: Number.isFinite(numVendidoEn) ? numVendidoEn : null,
+                createdAt: supabaseInfo?.created_at ?? null,
             };
         });
 

@@ -1,28 +1,28 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { FileText, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 
 const ITEMS = [
   {
     label: 'Agenda cumplida',
-    when: 'De los expedientes Formal con próxima acción hoy o vencida, cuántos recibieron un paso formal (verificación → cierre) en el día. Es el % que ves en Cartera.',
+    when: 'De los expedientes con saldo pendiente y próxima acción hoy o vencida, cuántos recibieron un paso Formal. Es el % del anillo. Quien ya no debe no entra.',
   },
   {
-    label: 'Casos avanzados',
-    when: 'Expedientes distintos que registraron al menos un paso Formal hoy. Un caso que hace dos pasos cuenta 1 aquí y 1 en cada categoría.',
+    label: 'Quedados · agenda',
+    when: 'Los de esa agenda que hoy no tuvieron verificación, visita, predemanda, 4A/4B ni cierre. Toca la tarjeta para la lista.',
   },
   {
-    label: 'Pasos 1 a 5',
-    when: 'Verificación, visita domiciliaria, predemanda, 4A recuperación / 4B vía judicial, y cierre. Solo esos tipos. Llamadas o WhatsApp de Temprana/Media no entran.',
+    label: 'Quedados · sin arrancar',
+    when: 'Expedientes abiertos con saldo pendiente que nunca registraron un paso Formal. Si ya pagaron, no aparecen.',
   },
   {
-    label: 'Cierres',
-    when: 'Paso 5 registrado hoy (pago, vehículo, acuerdo o cartera castigada).',
+    label: 'Quedados · en un paso',
+    when: 'Ya arrancaron el pipeline (tienen al menos un paso) y todavía no hay cierre. Ahí se ve en qué paso se quedaron.',
   },
   {
-    label: 'Saltos',
-    when: 'Se ve si alguien avanzó sin completar un paso anterior. No suma a la cobertura; queda para auditoría.',
+    label: 'Lo que se cumplió',
+    when: 'Pasos 1 a 5 registrados hoy. Un caso que hace dos pasos cuenta en cada uno. Llamadas o WhatsApp de Temprana/Media no entran.',
   },
 ];
 
@@ -40,19 +40,27 @@ export function FormalProgressGuide({ trigger }: { trigger?: ReactNode }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="Cómo se lee este progreso"
-        aria-label="Cómo se lee este progreso"
-        className={trigger ? 'rounded-full' : undefined}
-      >
-        {trigger ?? (
-          <span className="h-10 rounded-full border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 inline-flex items-center">
-            Cómo se revisa
-          </span>
-        )}
-      </button>
+      {trigger ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Cómo se revisa este progreso"
+          aria-label="Cómo se revisa este progreso"
+          className="rounded-full"
+        >
+          {trigger}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-2 shadow-sm"
+          title="Cómo se revisa este progreso"
+        >
+          <FileText className="h-4 w-4" />
+          <span className="hidden sm:inline">Cómo se revisa</span>
+        </button>
+      )}
 
       {open && (
         <div
@@ -91,8 +99,8 @@ export function FormalProgressGuide({ trigger }: { trigger?: ReactNode }) {
                 </h3>
                 <p>
                   Un solo número del <strong className="font-semibold text-slate-900">escritorio Formal</strong>{' '}
-                  (mora 3+ meses), no por persona. El % es cobertura de agenda: acciones
-                  programadas/vencidas que sí recibieron un paso Formal hoy (hora Ecuador).
+                  (mora 3+ meses), no por persona. Se lee igual que ventas: qué se está haciendo, en qué se
+                  quedaron y qué se cumplió hoy (hora Ecuador).
                 </p>
               </section>
 

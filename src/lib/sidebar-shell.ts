@@ -31,6 +31,28 @@ export function getSidebarShell(): SidebarShell {
   return 'accounting'
 }
 
+type StaffNavListener = (hidden: boolean) => void
+let staffNavHideCount = 0
+const staffNavListeners = new Set<StaffNavListener>()
+
+/** Oculta el sidebar del personal mientras un modal de gestionar está abierto. */
+export function acquireStaffNavHide() {
+  staffNavHideCount += 1
+  staffNavListeners.forEach((fn) => fn(staffNavHideCount > 0))
+  return () => {
+    staffNavHideCount = Math.max(0, staffNavHideCount - 1)
+    staffNavListeners.forEach((fn) => fn(staffNavHideCount > 0))
+  }
+}
+
+export function subscribeStaffNavHidden(listener: StaffNavListener) {
+  staffNavListeners.add(listener)
+  listener(staffNavHideCount > 0)
+  return () => {
+    staffNavListeners.delete(listener)
+  }
+}
+
 /** Módulo del nav principal asociado al sidebar persistido (rutas compartidas como /finance). */
 export function primaryModuleFromShell(
   shell: SidebarShell | null

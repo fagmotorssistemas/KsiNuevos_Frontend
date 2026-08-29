@@ -4,6 +4,7 @@ import { contratosService } from '@/services/contratos.service';
 export const useFinanciamiento = (contratoId: string) => {
     const [esCredito, setEsCredito] = useState(false);
     const [numeroCuotas, setNumeroCuotas] = useState(0);
+    const [fechasVencimientoCuotas, setFechasVencimientoCuotas] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,9 +20,15 @@ export const useFinanciamiento = (contratoId: string) => {
                 if (cuotas && cuotas.length > 0) {
                     setNumeroCuotas(cuotas.length);
                     setEsCredito(true);
+                    setFechasVencimientoCuotas(
+                        cuotas
+                            .map((c) => c.fechaVencimiento)
+                            .filter((f): f is string => Boolean(f && String(f).trim()))
+                    );
                 } else {
                     setNumeroCuotas(0);
                     setEsCredito(false);
+                    setFechasVencimientoCuotas([]);
                 }
             } catch (error) {
                 console.error("Error validando financiamiento:", error);
@@ -49,6 +56,7 @@ export const useFinanciamiento = (contratoId: string) => {
     return { 
         esCredito, 
         numeroCuotas, 
+        fechasVencimientoCuotas,
         loading,
         obtenerTextoLegal
     };

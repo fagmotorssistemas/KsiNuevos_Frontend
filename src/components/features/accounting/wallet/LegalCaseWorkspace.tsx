@@ -36,6 +36,7 @@ import type {
   CaseEventRow,
   CaseStepSkipRow,
 } from "@/types/legal.types";
+import { formatEcuadorDateTime } from "@/lib/ecuador-datetime";
 import type { NotaGestion } from "@/types/wallet.types";
 import { GestionStepList } from "./GestionStepList";
 import { AddEventForm } from "./AddEventForm";
@@ -174,9 +175,7 @@ function OperativaEventCard({
           </div>
           <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5 shrink-0">
             <Clock className="h-3 w-3" />
-            {e.fecha
-              ? new Date(e.fecha).toLocaleString("es-EC")
-              : "—"}
+            {formatEcuadorDateTime(e.fecha)}
           </span>
         </div>
         <div className="p-4 space-y-2">
@@ -226,9 +225,7 @@ function HistorialExternoCard({ nota }: { nota: NotaGestion }) {
           </div>
           <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5 shrink-0">
             <Clock className="h-3 w-3" />
-            {nota.fecha
-              ? new Date(nota.fecha).toLocaleString("es-EC")
-              : "—"}
+            {formatEcuadorDateTime(nota.fecha)}
           </span>
         </div>
         <div className="p-4 space-y-2">
@@ -755,9 +752,7 @@ export function LegalCaseWorkspace({
                   {c.proxima_accion || "—"}
                 </div>
                 <div className="text-xs text-slate-600 font-mono mt-2 bg-white px-2 py-1 border border-slate-200 rounded inline-block">
-                  {c.fecha_proxima_accion
-                    ? new Date(c.fecha_proxima_accion).toLocaleString()
-                    : "—"}
+                  {formatEcuadorDateTime(c.fecha_proxima_accion)}
                 </div>
               </div>
             </div>
@@ -986,9 +981,7 @@ export function LegalCaseWorkspace({
                           </span>
                           <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5">
                             <Clock className="h-3 w-3" />
-                            {s.created_at
-                              ? new Date(s.created_at).toLocaleString()
-                              : "—"}
+                            {formatEcuadorDateTime(s.created_at)}
                           </span>
                         </div>
                         <div className="p-4 space-y-2">
@@ -1027,7 +1020,7 @@ export function LegalCaseWorkspace({
                         </span>
                         <span className="text-xs font-mono text-slate-500 flex items-center gap-1.5">
                           <Clock className="h-3 w-3" />
-                          {e.fecha ? new Date(e.fecha).toLocaleString() : "—"}
+                          {formatEcuadorDateTime(e.fecha)}
                         </span>
                       </div>
                       <div className="p-4 space-y-2">

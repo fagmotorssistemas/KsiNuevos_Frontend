@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { AlertTriangle, RefreshCw, X, FileText, MessageSquare, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList, CircleHelp, Bot, ShoppingCart, ChevronDown } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X, FileText, MessageSquare, Landmark, CalendarCheck, CalendarPlus, FileSpreadsheet, ChevronRight, ClipboardList, CircleHelp, Bot, ShoppingCart, ChevronDown, Store } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -360,8 +360,11 @@ function dutyCoverage(duties: Duty[]): { due: number; done: number; pct: number 
 
 function rankingDutyPct(row: SalesProgressRankingRow): number | null {
   const duties: Duty[] = [];
-  if (row.rol !== 'estrancado' && num(row.leads_ingresados) > 0) {
-    duties.push({ due: num(row.leads_ingresados), done: num(row.leads_con_historial) });
+  if (row.rol !== 'estrancado') {
+    duties.push({
+      due: num(row.contestados_cuota) || 35,
+      done: num(row.leads_con_historial),
+    });
   }
   if (num(row.ia_due) > 0) duties.push({ due: num(row.ia_due), done: num(row.ia_agendadas) });
   if (num(row.citas_due) > 0) duties.push({ due: num(row.citas_due), done: num(row.citas_gestionadas) });
@@ -382,6 +385,8 @@ function buildBriefing(input: {
   ingresados: number;
   contestados: number;
   contestadosPct: number;
+  cuota: number;
+  faltan: number;
   semanaPct: number;
   semanaIngresados: number;
   semanaContestados: number;
@@ -406,15 +411,14 @@ function buildBriefing(input: {
     bad.push(`arrastra ${input.iaVencidas} IA vencido${input.iaVencidas === 1 ? '' : 's'}`);
   }
 
-  if (input.rol !== 'estrancado' && input.ingresados > 0 && input.contestadosPct >= 70) {
-    good.push(`${input.contestados} de ${input.ingresados} contestados`);
+  if (input.rol !== 'estrancado' && input.contestados >= input.cuota) {
+    good.push(`${input.contestados} de ${input.cuota} contestados`);
   }
-  if (input.rol !== 'estrancado' && input.ingresados > 0 && input.semanaIngresados > 0) {
-    if (input.semanaPct - input.contestadosPct >= 15) {
-      bad.push(
-        `hoy ${input.contestadosPct}%; la semana (sáb–vie) va en ${input.semanaPct}% (${input.semanaContestados} de ${input.semanaIngresados})`
-      );
-    }
+  if (input.rol !== 'estrancado' && input.faltan > 0) {
+    bad.push(
+      `faltan ${input.faltan} resúmenes para la cuota de ${input.cuota}` +
+        (input.ingresados > 0 ? ` (${input.ingresados} de hoy)` : '')
+    );
   }
 
   if (input.faltanteSinSalir > 0) {
@@ -577,9 +581,16 @@ const CATEGORY_TONE: Record<string, CategoryTone> = {
   },
 };
 
-function CoverageRing({ percent, weekPercent }: { percent: number; weekPercent: number }) {
+function CoverageRing({
+  percent,
+  caption,
+  detail,
+}: {
+  percent: number;
+  caption: string;
+  detail: string;
+}) {
   const pct = Math.min(100, Math.max(0, Math.round(percent)));
-  const weekPct = Math.min(100, Math.max(0, Math.round(weekPercent)));
   const r = 54;
   const c = 2 * Math.PI * r;
   const offset = c - (pct / 100) * c;
@@ -612,10 +623,8 @@ function CoverageRing({ percent, weekPercent }: { percent: number; weekPercent: 
           {pct}
           <span className="text-lg font-medium text-slate-400">%</span>
         </span>
-        <span className="mt-1 text-[11px] font-medium text-slate-400">hoy</span>
-        <span className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">
-          {weekPct}% sem
-        </span>
+        <span className="mt-1 text-[11px] font-medium text-slate-400">{caption}</span>
+        <span className="mt-0.5 text-[11px] font-medium tabular-nums text-slate-500">{detail}</span>
       </div>
     </div>
   );
@@ -739,7 +748,9 @@ function EventList({
                       ? ' · hoy y vencidos (14 días)'
                       : category?.startsWith('quedados_')
                         ? ' · montón abierto (toca uno para abrirlo)'
-                        : ' · toca un nombre para abrirlo'
+                        : category === 'sin_resumen' || category === 'contestados_pendientes'
+                          ? ' · los más antiguos, hasta 80 (toca uno para abrirlo)'
+                          : ' · toca un nombre para abrirlo'
                   }`}
             </p>
           </div>
@@ -765,7 +776,9 @@ function EventList({
                 ? 'El bot no mandó seguimientos para este día, ni hay vencidos de 14 días.'
                 : category?.startsWith('quedados_')
                   ? 'No hay quedados en esta cola.'
-                  : 'No hay acciones de este día en esta categoría.'}
+                  : category === 'sin_resumen' || category === 'contestados_pendientes'
+                    ? 'No hay leads abiertos sin resumen.'
+                    : 'No hay acciones de este día en esta categoría.'}
             </p>
           ) : (
             <ul className="space-y-1">
@@ -838,9 +851,15 @@ export function SalesProgressDashboard() {
   );
   const ingresados = num(data?.leads_ingresados);
   const contestados = num(data?.leads_con_historial);
+  const cuota = num(data?.contestados_cuota) || (data?.rol === 'estrancado' ? 50 : 35);
+  const contestadosHoy = num(data?.contestados_hoy);
+  const contestadosCartera = num(data?.contestados_cartera);
+  const hoySinResumen = num(data?.hoy_sin_resumen);
+  const sinResumen = num(data?.sin_resumen);
+  const faltan = Math.max(0, cuota - contestados);
   const conCita = num(data?.leads_con_cita);
   const conversionPct = citaPct(conCita, ingresados);
-  const contestadosPct = citaPct(contestados, ingresados);
+  const contestadosPct = citaPct(contestados, cuota);
   const faltantesHoy = num(data?.datos_faltantes_hoy);
   const faltantesOk = num(data?.datos_faltantes_contestados);
   const faltantesPct = citaPct(faltantesOk, faltantesHoy);
@@ -866,14 +885,16 @@ export function SalesProgressDashboard() {
   const semanaIngresados = num(data?.semana_ingresados);
   const semanaContestados = num(data?.semana_contestados);
   const faltanteQuedados = num(data?.faltante_quedados);
+  const faltanteTotal = num(data?.faltante_total);
   const asesoriaQuedados = num(data?.asesoria_quedados);
+  const asesoriaTotal = num(data?.asesoria_total);
   const pedidosQuedados = num(data?.pedidos_quedados);
   const faltanteSinSalir = num(data?.faltante_sin_salir);
   const asesoriaSinSalir = num(data?.asesoria_sin_salir);
   const asesoriaRespondidas = num(data?.asesoria_respondidas);
   const fulfilling = dutyCoverage(
     [
-      data?.rol !== 'estrancado' && ingresados > 0 ? { due: ingresados, done: contestados } : null,
+      data?.rol !== 'estrancado' ? { due: cuota, done: contestados } : null,
       iaDue > 0 ? { due: iaDue, done: iaDone } : null,
       citasDue > 0 ? { due: citasDue, done: citasOk } : null,
       showVisitas > 0 ? { due: showVisitas, done: showOk } : null,
@@ -892,6 +913,8 @@ export function SalesProgressDashboard() {
         ingresados,
         contestados,
         contestadosPct,
+        cuota,
+        faltan,
         semanaPct,
         semanaIngresados,
         semanaContestados,
@@ -903,24 +926,35 @@ export function SalesProgressDashboard() {
         asesoriaQuedados,
       })
     : { good: null, bad: null };
-  const coveragePct = data?.rol === 'estrancado' ? Math.min(100, contestados) : contestadosPct;
+  const coveragePct =
+    data?.rol === 'estrancado'
+      ? Math.min(100, contestados)
+      : fulfilling.due > 0
+        ? fulfilling.pct
+        : contestadosPct;
   const selectedLabel =
     selectedCategory === 'leads_ingresados'
       ? 'Leads que llegaron hoy'
+      : selectedCategory === 'contestados_pendientes'
+        ? 'Pendientes de resumen'
+        : selectedCategory === 'sin_resumen'
+          ? 'Cartera sin resumen'
       : selectedCategory === 'leads_to_cita'
         ? 'Llegaron → cita'
         : selectedCategory === 'datos_faltantes'
           ? 'Info. faltante'
           : selectedCategory === 'seguimientos_ia'
             ? 'Seguimientos IA'
-            : selectedCategory === 'citas_sin_gestionar'
+              : selectedCategory === 'citas_sin_gestionar'
               ? 'Citas de agenda'
+              : selectedCategory === 'showroom_followup'
+                ? 'Visitas showroom'
               : selectedCategory === 'showroom_sin_gestion'
                 ? 'Seguimiento showroom'
                 : selectedCategory === 'quedados_faltante'
                   ? 'Quedados · info. faltante'
                   : selectedCategory === 'quedados_asesoria'
-                    ? 'Quedados · financiamiento'
+                    ? 'Quedados · financiamiento sin ficha'
                     : selectedCategory === 'quedados_pedidos'
                       ? 'Quedados · pedidos'
                       : selectedCategory === 'faltante_sin_salir'
@@ -929,7 +963,7 @@ export function SalesProgressDashboard() {
                         ? 'Respondió · no salió de financiamiento'
                         : categoryRows.find((row) => row.categoria === selectedCategory)?.label ?? 'Detalle';
 
-  const heroLeadsCat = data?.rol === 'estrancado' ? 'lead_status_change' : 'leads_ingresados';
+  const heroLeadsCat = data?.rol === 'estrancado' ? 'lead_status_change' : 'contestados_pendientes';
   const toggleCategory = (categoria: string) => {
     if (selectedCategory === categoria) closeCategory();
     else void openCategory(categoria);
@@ -1026,7 +1060,17 @@ export function SalesProgressDashboard() {
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center gap-8">
-                <CoverageRing percent={coveragePct} weekPercent={semanaPct} />
+                <CoverageRing
+                  percent={coveragePct}
+                  caption={data.rol === 'estrancado' ? 'hoy' : 'oficio'}
+                  detail={
+                    data.rol === 'estrancado'
+                      ? `${contestados} gest.`
+                      : fulfilling.due > 0
+                        ? `${fulfilling.done} de ${fulfilling.due}`
+                        : `${semanaPct}% sem`
+                  }
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-rose-700">{data.vendedor_nombre}</p>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">
@@ -1034,10 +1078,8 @@ export function SalesProgressDashboard() {
                   </p>
                   <p className="text-2xl sm:text-[1.7rem] font-semibold tracking-tight text-slate-900 mt-1 leading-snug">
                     {data.rol === 'estrancado'
-                      ? `${contestados} gestionados hoy`
-                      : ingresados === 0
-                        ? 'Sin leads nuevos hoy'
-                        : `${contestados} de ${ingresados} contestados (${contestadosPct}%)`}
+                      ? `${contestados} de ${cuota} gestionados hoy (${contestadosPct}%)`
+                      : `${contestados} de ${cuota} contestados (${contestadosPct}%)`}
                   </p>
                   <p className="text-sm text-slate-500 mt-2 max-w-xl leading-relaxed">
                     {briefing.good && (
@@ -1049,34 +1091,68 @@ export function SalesProgressDashboard() {
                     {!briefing.good && !briefing.bad && (
                       data.rol === 'estrancado'
                         ? `${num(data.backlog_abiertos).toLocaleString('es-EC')} abiertos en cartera. El backlog no resta.`
-                        : ingresados === 0
-                          ? 'Cuando entren leads, aquí se ve cuánto se está haciendo para vender.'
+                        : faltan > 0
+                          ? `Cuota ${cuota}: los de hoy cuentan, y hay que completar con cartera sin resumen.`
                           : `Esta semana (sáb–vie): ${semanaContestados} de ${semanaIngresados} contestados (${semanaPct}%).`
                     )}
                   </p>
-                  <div className="flex flex-wrap gap-2 mt-5">
-                    {fulfilling.due > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
-                        Cumpliendo {fulfilling.done} de {fulfilling.due} ({fulfilling.pct}%)
-                      </span>
-                    )}
-                    {data.rol !== 'estrancado' && (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                        {conCita} de {ingresados} a cita
-                      </span>
-                    )}
-                    {data.rol !== 'estrancado' && semanaIngresados > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                        Semana {semanaContestados} de {semanaIngresados} contestados ({semanaPct}%)
-                      </span>
-                    )}
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      IA {iaDone} de {iaDue || 0}
-                    </span>
-                  </div>
                 </div>
               </div>
             </button>
+            <div className="flex flex-wrap gap-2 px-6 sm:px-8 pb-6">
+              {data.rol !== 'estrancado' && (
+                <button
+                  type="button"
+                  onClick={() => toggleCategory('leads_ingresados')}
+                  aria-pressed={selectedCategory === 'leads_ingresados'}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedCategory === 'leads_ingresados'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {contestadosHoy} de {ingresados} de hoy
+                  {contestadosCartera > 0 ? ` · ${contestadosCartera} de cartera` : ''}
+                </button>
+              )}
+              {hoySinResumen > 0 && (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                  {hoySinResumen} de hoy aún sin resumen
+                </span>
+              )}
+              {sinResumen > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggleCategory('sin_resumen')}
+                  aria-pressed={selectedCategory === 'sin_resumen'}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedCategory === 'sin_resumen'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {sinResumen.toLocaleString('es-EC')} sin resumen de otros días
+                </button>
+              )}
+              {faltan > 0 && (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                  faltan {faltan} para {cuota}
+                </span>
+              )}
+              {data.rol !== 'estrancado' && (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  {conCita} de {ingresados} a cita
+                </span>
+              )}
+              {data.rol !== 'estrancado' && semanaIngresados > 0 && (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  Semana {semanaContestados} de {semanaIngresados} contestados ({semanaPct}%)
+                </span>
+              )}
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                IA {iaDone} de {iaDue || 0}
+              </span>
+            </div>
 
             <div className="px-4 sm:px-6 pb-5">
               <div className="rounded-2xl bg-slate-50/80 px-2 py-3">
@@ -1134,7 +1210,7 @@ export function SalesProgressDashboard() {
           <section className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-4">
             <div className="flex items-baseline justify-between gap-3 px-1">
               <p className="text-sm font-semibold text-slate-900">En qué nos quedamos</p>
-              <p className="text-xs text-slate-400">Montón abierto, no lo de hoy</p>
+              <p className="text-xs text-slate-400">Sin respuesta / sin ficha, como en Leads</p>
             </div>
             <div className="mt-3 grid sm:grid-cols-3 gap-2.5">
               {(
@@ -1143,6 +1219,12 @@ export function SalesProgressDashboard() {
                     key: 'quedados_faltante',
                     label: 'Info. faltante',
                     count: faltanteQuedados,
+                    hint:
+                      faltanteQuedados === 0
+                        ? 'Ninguno sin respuesta'
+                        : faltanteTotal > 0
+                          ? `${faltanteQuedados} de ${faltanteTotal} sin respuesta · ver lista`
+                          : `${faltanteQuedados} sin respuesta · ver lista`,
                     Icon: ClipboardList,
                     tone: CATEGORY_TONE.datos_faltantes,
                   },
@@ -1150,6 +1232,12 @@ export function SalesProgressDashboard() {
                     key: 'quedados_asesoria',
                     label: 'Financiamiento',
                     count: asesoriaQuedados,
+                    hint:
+                      asesoriaQuedados === 0
+                        ? 'Ninguna sin ficha'
+                        : asesoriaTotal > 0
+                          ? `${asesoriaQuedados} de ${asesoriaTotal} pendientes · ver lista`
+                          : `${asesoriaQuedados} pendientes · ver lista`,
                     Icon: Landmark,
                     tone: CATEGORY_TONE.asesoria_advanced,
                   },
@@ -1157,6 +1245,10 @@ export function SalesProgressDashboard() {
                     key: 'quedados_pedidos',
                     label: 'Pedidos',
                     count: pedidosQuedados,
+                    hint:
+                      pedidosQuedados === 0
+                        ? 'Ninguno abierto'
+                        : `${pedidosQuedados} abiertos · ver lista`,
                     Icon: ShoppingCart,
                     tone: CATEGORY_TONE.quedados_pedidos,
                   },
@@ -1182,7 +1274,7 @@ export function SalesProgressDashboard() {
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-slate-900">{cola.label}</span>
                       <span className="block text-xs text-slate-500 mt-0.5">
-                        {cola.count === 0 ? 'Ninguno abierto' : `${cola.count} abiertos · ver lista`}
+                        {cola.hint}
                       </span>
                     </span>
                     <ChevronRight
@@ -1309,11 +1401,25 @@ export function SalesProgressDashboard() {
                   onSelect={() => toggleCategory('citas_sin_gestionar')}
                 />
                 <MetricBar
-                  label="Seguimiento showroom"
+                  label="Visitas showroom"
                   subtitle={
                     showVisitas === 0
                       ? 'Hoy no registraron visitas'
-                      : `${showOk} de ${showVisitas} con seguimiento · hist. ${histShowroom}%`
+                      : `${showVisitas} visita${showVisitas === 1 ? '' : 's'} registrada${showVisitas === 1 ? '' : 's'} hoy`
+                  }
+                  percent={showVisitas > 0 ? 100 : 0}
+                  selected={selectedCategory === 'showroom_followup'}
+                  muted={showVisitas === 0}
+                  Icon={Store}
+                  tone={CATEGORY_TONE.showroom_followup}
+                  onSelect={() => toggleCategory('showroom_followup')}
+                />
+                <MetricBar
+                  label="Seguimiento showroom"
+                  subtitle={
+                    showVisitas === 0
+                      ? 'Sin visitas hoy · el seguimiento es la nota después'
+                      : `${showOk} de ${showVisitas} con nota de seguimiento · hist. ${histShowroom}%`
                   }
                   percent={showPct}
                   selected={selectedCategory === 'showroom_sin_gestion'}
@@ -1431,8 +1537,8 @@ export function SalesProgressDashboard() {
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5 truncate">
                           {row.rol === 'estrancado'
-                            ? `${num(row.leads_con_historial)} gestionados · ${quedados} quedados`
-                            : `IA ${num(row.ia_agendadas)}/${num(row.ia_due)}${num(row.ia_vencidas) > 0 ? ` · ${num(row.ia_vencidas)} venc.` : ''} · ${num(row.faltante_quedados)} info · ${num(row.asesoria_quedados)} fin. · ${num(row.pedidos_quedados)} ped.`}
+                            ? `${num(row.leads_con_historial)} de ${num(row.contestados_cuota) || 50} · ${quedados} quedados`
+                            : `${num(row.leads_con_historial)} de ${num(row.contestados_cuota) || 35} contestados · IA ${num(row.ia_agendadas)}/${num(row.ia_due)}${num(row.ia_vencidas) > 0 ? ` · ${num(row.ia_vencidas)} venc.` : ''} · ${quedados} qued.`}
                         </p>
                       </div>
                       <span className="text-right shrink-0">
@@ -1460,7 +1566,9 @@ export function SalesProgressDashboard() {
                 selectedCategory === 'seguimientos_ia' ||
                 selectedCategory === 'quedados_faltante' ||
                 selectedCategory === 'quedados_asesoria' ||
-                selectedCategory === 'quedados_pedidos'
+                selectedCategory === 'quedados_pedidos' ||
+                selectedCategory === 'sin_resumen' ||
+                selectedCategory === 'contestados_pendientes'
               }
             />
           )}

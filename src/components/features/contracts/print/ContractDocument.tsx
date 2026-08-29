@@ -16,9 +16,9 @@ interface ContractDocumentProps {
 
 export function ContractDocument({ data, amortizacion, fechaImpresion }: ContractDocumentProps) {
     const hasAmortization = amortizacion && amortizacion.length > 0;
-    const tieneAdicionales = Boolean(data.listaCuotasAdicionales?.length);
     const tienePagosCheque = Boolean(data.listaPagosCheque?.length);
-    const muestraPaginaAmortizacion = hasAmortization || tieneAdicionales || tienePagosCheque;
+    // Pagaré, resciliación y tablas de crédito: solo si hay cuotas o cheques a fecha (no extras ya pagados)
+    const hayDeudaAPlazo = hasAmortization || tienePagosCheque;
 
     const page7 = (
         <Page7
@@ -38,23 +38,30 @@ export function ContractDocument({ data, amortizacion, fechaImpresion }: Contrac
             }}
         >
             <Page1 data={data} />
-            <Page2 data={data} />
-            <Page3 data={data} />
-            <Page4 data={data} />
+            {hayDeudaAPlazo && <Page2 data={data} />}
+            {hayDeudaAPlazo && <Page3 data={data} />}
+            <Page4 data={data} pageNumber={hayDeudaAPlazo ? 4 : 2} />
 
-            <Page5 data={data} fechaImpresion={fechaImpresion} />
-
-            <Page6
+            <Page5
                 data={data}
-                hasAmortization={hasAmortization}
                 fechaImpresion={fechaImpresion}
+                pageNumber={hayDeudaAPlazo ? 5 : 3}
+                hayDeudaAPlazo={hayDeudaAPlazo}
             />
+
+            {hayDeudaAPlazo && (
+                <Page6
+                    data={data}
+                    hasAmortization={hasAmortization}
+                    fechaImpresion={fechaImpresion}
+                />
+            )}
 
             {/*
               Tras Pág. 6 fragmentada, el motor suele rellenar el hueco bajo las firmas con el inicio de Pág. 7.
               Los hijos de flex ignoran a menudo break-before al imprimir; forzamos flujo en bloque + salto explícito.
             */}
-            {muestraPaginaAmortizacion ? (
+            {hayDeudaAPlazo && (
                 <div
                     data-contract-print-page7=""
                     className="w-full print:block print:w-[210mm] print:mx-auto"
@@ -65,8 +72,6 @@ export function ContractDocument({ data, amortizacion, fechaImpresion }: Contrac
                 >
                     {page7}
                 </div>
-            ) : (
-                page7
             )}
         </div>
     );

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileImage, FileText, Landmark, PhoneCall, Plus, Save, Send, UserRound, WalletCards } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleAlert, FileImage, FileText, Landmark, PhoneCall, Plus, Save, Send, UserRound, WalletCards } from "lucide-react";
 import { useLeadFinancialAdvisory } from "@/hooks/useLeadFinancialAdvisory";
 import { toast } from "sonner";
 import {
@@ -10,7 +10,49 @@ import {
   type FinancialAdvisoryStatus,
 } from "@/types/finance-advisory.types";
 
-/** Nombre corto desde URL de Storage para mostrar en PDFs (sin mostrar toda la URL). */
+function notifyMissingGestion(title: string, missing: string[]) {
+  toast.error(title, {
+    description: (
+      <ul className="mt-1.5 space-y-1">
+        {missing.map((field) => (
+          <li key={field} className="flex items-start gap-1.5 text-[12px] leading-snug">
+            <span className="mt-px opacity-70">•</span>
+            <span>{field}</span>
+          </li>
+        ))}
+      </ul>
+    ),
+    duration: 7000,
+  });
+}
+
+function MissingGestionBanner({ fields }: { fields: string[] }) {
+  return (
+    <div className="mt-3 rounded-xl border border-red-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start gap-2.5">
+        <div className="mt-0.5 shrink-0 rounded-lg bg-red-100 p-1.5 text-red-600">
+          <CircleAlert className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-red-800">Falta completar la gestión</p>
+          <p className="mt-0.5 text-[11px] text-red-600/90">
+            Sin esto no se puede pasar a En proceso ni a Resuelto.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {fields.map((field) => (
+              <li
+                key={field}
+                className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-800"
+              >
+                {field}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
 function shortNameFromStorageUrl(url: string) {
   try {
     const u = new URL(url);
@@ -177,6 +219,44 @@ function FinancialAdvisoryCard({
   }));
 
   const [dirtyGestion, setDirtyGestion] = useState(false);
+  const [requireGestionComplete, setRequireGestionComplete] = useState(false);
+  const gestionBoxRef = useRef<HTMLDivElement>(null);
+
+  const missingDraftFields = useMemo(
+    () => missingFinancialAdvisoryFields(gestionDraft),
+    [gestionDraft]
+  );
+  const hasCompleteSavedGestion = useMemo(
+    () => (record.gestiones ?? []).some((g) => missingFinancialAdvisoryFields(g).length === 0),
+    [record.gestiones]
+  );
+  const canSetAdvancedStatus = hasCompleteSavedGestion || missingDraftFields.length === 0;
+  const showMissing = (label: string) =>
+    requireGestionComplete && missingDraftFields.includes(label);
+  const fieldBox = (label: string) =>
+    `rounded-lg p-3 border ${
+      showMissing(label)
+        ? "border-red-300 bg-red-50/80 ring-1 ring-red-200"
+        : "bg-white border-slate-200"
+    }`;
+
+  const openGestionForm = () => {
+    if (record.gestiones.length === 0) {
+      setSelectedGestionId(null);
+      setDirtyGestion(true);
+    }
+    setRequireGestionComplete(true);
+    requestAnimationFrame(() => {
+      gestionBoxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const blockAdvancedStatus = (s: FinancialAdvisoryStatus) => {
+    const label = FINANCIAL_ADVISORY_STATUS_CONFIG[s].label;
+    const missing = missingDraftFields.length > 0 ? missingDraftFields : ["todos los campos de la gestión"];
+    openGestionForm();
+    notifyMissingGestion(`No se puede marcar ${label}`, missing);
+  };
 
   // Cuando cambia la gestión seleccionada, refrescamos el draft local
   // (mantiene UX simple para un MVP; si quieres edición multi-gestión en paralelo, lo refinamos)
@@ -205,22 +285,44 @@ function FinancialAdvisoryCard({
 
   const handleSave = async () => {
     if (status === "en_proceso" || status === "resuelto") {
-      const completeSaved = (record.gestiones ?? []).some(
-        (g) => missingFinancialAdvisoryFields(g).length === 0
-      );
-      if (!completeSaved) {
-        toast.error("Llena la gestión completa para pasar a En proceso o Resuelto. El estado solo no suma puntos.");
-        return;
+      if (!hasCompleteSavedGestion) {
+        if (missingDraftFields.length > 0) {
+          blockAdvancedStatus(status);
+          return;
+        }
+        let ok = false;
+        if (selectedGestionId == null) {
+          const created = await onCreateGestion(record.id, buildGestionPayload(gestionDraft));
+          ok = Boolean(created?.success);
+          if (created?.data?.id) setSelectedGestionId(created.data.id);
+        } else if (selectedGestion) {
+          const updated = await onUpdateGestion(selectedGestion.id, buildGestionPayload(gestionDraft));
+          ok = Boolean(updated?.success);
+        }
+        if (!ok) {
+          toast.error("No se pudo guardar la gestión. Completa los campos e intenta de nuevo.");
+          return;
+        }
+        setDirtyGestion(false);
       }
     }
-    await onSave(record.id, status, notes);
+    const res = await onSave(record.id, status, notes);
+    if (!res?.success) {
+      toast.error(
+        res?.error === "complete_gestion_required"
+          ? "Llena la gestión completa para pasar a En proceso o Resuelto."
+          : "No se pudo guardar el estado."
+      );
+      return;
+    }
     setDirty(false);
   };
 
   const handleSaveGestion = async () => {
     const missing = missingFinancialAdvisoryFields(gestionDraft);
     if (missing.length > 0) {
-      toast.error(`Completa la gestión: ${missing.join(", ")}.`);
+      setRequireGestionComplete(true);
+      notifyMissingGestion("Completa la gestión", missing);
       return;
     }
     if (selectedGestionId == null) {
@@ -232,7 +334,16 @@ function FinancialAdvisoryCard({
       if (res?.data?.id) setSelectedGestionId(res.data.id);
       if (status === "pendiente") {
         setStatus("en_proceso");
-        await onSave(record.id, "en_proceso", notes);
+        const saved = await onSave(record.id, "en_proceso", notes);
+        if (!saved?.success) {
+          toast.error(
+            saved?.error === "complete_gestion_required"
+              ? "Llena la gestión completa para pasar a En proceso."
+              : "La gestión se guardó, pero no se pudo cambiar el estado."
+          );
+          setDirty(true);
+          return;
+        }
         setDirty(false);
       }
       setDirtyGestion(false);
@@ -248,7 +359,16 @@ function FinancialAdvisoryCard({
     }
     if (status === "pendiente") {
       setStatus("en_proceso");
-      await onSave(record.id, "en_proceso", notes);
+      const saved = await onSave(record.id, "en_proceso", notes);
+      if (!saved?.success) {
+        toast.error(
+          saved?.error === "complete_gestion_required"
+            ? "Llena la gestión completa para pasar a En proceso."
+            : "La gestión se guardó, pero no se pudo cambiar el estado."
+        );
+        setDirty(true);
+        return;
+      }
       setDirty(false);
     }
     setDirtyGestion(false);
@@ -282,8 +402,8 @@ function FinancialAdvisoryCard({
     tipo: d.tipo,
     pdf_urls: d.pdf_urls || [],
     image_urls: d.image_urls || [],
-    se_solicito_cedula: d.se_solicito_cedula,
-    cedula: d.se_solicito_cedula ? (d.cedula || null) : null,
+    se_solicito_cedula: Boolean(d.cedula?.trim()),
+    cedula: d.cedula?.trim() ? d.cedula.trim() : null,
     banco_deseado: d.banco_deseado || null,
     asesor_contactado_nombre: d.asesor_contactado_nombre || null,
     asesor_contactado_telefono: d.asesor_contactado_telefono || null,
@@ -342,13 +462,19 @@ function FinancialAdvisoryCard({
         <div className="grid gap-3">
           <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Estado de la asesoría</label>
           <p className="text-[10px] text-slate-400 -mt-2 mb-1">
-            Cambiar el estado no suma puntos. Hay que guardar la gestión completa.
+            En proceso y Resuelto no se pueden marcar hasta llenar la gestión de abajo.
           </p>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FINANCIAL_ADVISORY_STATUS_CONFIG) as FinancialAdvisoryStatus[]).map((s) => (
               <button
                 key={s}
+                type="button"
                 onClick={() => {
+                  if (s === status) return;
+                  if ((s === "en_proceso" || s === "resuelto") && !canSetAdvancedStatus) {
+                    blockAdvancedStatus(s);
+                    return;
+                  }
                   setStatus(s);
                   setDirty(true);
                 }}
@@ -368,12 +494,19 @@ function FinancialAdvisoryCard({
         </div>
 
         {/* Gestión realizada */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+        <div
+          ref={gestionBoxRef}
+          className={`rounded-xl border p-3 ${
+            requireGestionComplete && missingDraftFields.length > 0
+              ? "border-red-300 bg-red-50/50"
+              : "border-slate-200 bg-slate-50/40"
+          }`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Gestión realizada</div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Llena todo: tipo, detalle, si aplica, banco y asesor. El estado solo no suma puntos.
+                Obligatorio para En proceso y Resuelto: tipo, detalle, si aplica, cédula, banco y asesor.
               </div>
             </div>
             <button
@@ -385,6 +518,10 @@ function FinancialAdvisoryCard({
               + Agregar
             </button>
           </div>
+
+          {requireGestionComplete && missingDraftFields.length > 0 && (
+            <MissingGestionBanner fields={missingDraftFields} />
+          )}
 
           {record.gestiones.length === 0 && !isNewGestion ? (
             <div className="mt-3 text-xs text-slate-500 bg-white border border-dashed border-slate-200 rounded-lg p-3">
@@ -457,36 +594,28 @@ function FinancialAdvisoryCard({
 
               {/* Datos solicitados / banco */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-slate-600">Cédula</label>
-                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-500">
-                      <input
-                        type="checkbox"
-                        checked={gestionDraft.se_solicito_cedula}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setGestionDraft((p) => ({ ...p, se_solicito_cedula: v, cedula: v ? p.cedula : "" }));
-                          setDirtyGestion(true);
-                        }}
-                      />
-                      Se solicitó
-                    </label>
-                  </div>
+                <div className={fieldBox("cédula")}>
+                  <label className="text-[11px] font-semibold text-slate-600">Cédula *</label>
                   <input
-                    className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none disabled:opacity-60"
+                    className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     placeholder="Ej: 1712345678"
                     value={gestionDraft.cedula}
-                    disabled={!gestionDraft.se_solicito_cedula}
                     onChange={(e) => {
-                      setGestionDraft((p) => ({ ...p, cedula: e.target.value }));
+                      const value = e.target.value;
+                      setGestionDraft((p) => ({
+                        ...p,
+                        cedula: value,
+                        se_solicito_cedula: Boolean(value.trim()),
+                      }));
                       setDirtyGestion(true);
                     }}
                   />
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
-                  <label className="text-[11px] font-semibold text-slate-600">Banco deseado</label>
+                <div className={fieldBox("banco deseado")}>
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Banco deseado {showMissing("banco deseado") ? "*" : ""}
+                  </label>
                   <input
                     className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     placeholder="Ej: Pichincha, Produbanco..."
@@ -501,8 +630,10 @@ function FinancialAdvisoryCard({
 
               {/* Asesor contactado */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
-                  <label className="text-[11px] font-semibold text-slate-600">Asesor contactado (nombre)</label>
+                <div className={fieldBox("nombre del asesor")}>
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Asesor contactado (nombre) {showMissing("nombre del asesor") ? "*" : ""}
+                  </label>
                   <input
                     className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     placeholder="Ej: Carlos Pérez"
@@ -513,8 +644,10 @@ function FinancialAdvisoryCard({
                     }}
                   />
                 </div>
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
-                  <label className="text-[11px] font-semibold text-slate-600">Asesor contactado (teléfono)</label>
+                <div className={fieldBox("teléfono del asesor")}>
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Asesor contactado (teléfono) {showMissing("teléfono del asesor") ? "*" : ""}
+                  </label>
                   <input
                     className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     placeholder="Ej: 09xxxxxxx"
@@ -528,8 +661,10 @@ function FinancialAdvisoryCard({
               </div>
 
               {/* Detalle de gestión */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3">
-                <label className="text-[11px] font-semibold text-slate-600">Qué gestión se hizo</label>
+              <div className={fieldBox("qué gestión se hizo")}>
+                <label className="text-[11px] font-semibold text-slate-600">
+                  Qué gestión se hizo {showMissing("qué gestión se hizo") ? "*" : ""}
+                </label>
                 <textarea
                   className="mt-2 w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
                   rows={3}
@@ -544,8 +679,14 @@ function FinancialAdvisoryCard({
 
               {/* Resultado + límites */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
-                  <label className="text-[11px] font-semibold text-slate-600">¿El cliente puede aplicar?</label>
+                <div
+                  className={fieldBox(
+                    showMissing("motivo de no aplica") ? "motivo de no aplica" : "si el cliente puede aplicar"
+                  )}
+                >
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    ¿El cliente puede aplicar? {showMissing("si el cliente puede aplicar") ? "*" : ""}
+                  </label>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
@@ -606,7 +747,11 @@ function FinancialAdvisoryCard({
                   )}
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-lg p-3">
+                <div
+                  className={fieldBox(
+                    showMissing("plazo en meses") ? "plazo en meses" : "monto máximo"
+                  )}
+                >
                   <label className="text-[11px] font-semibold text-slate-600">Hasta dónde puede (referencial)</label>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <div>

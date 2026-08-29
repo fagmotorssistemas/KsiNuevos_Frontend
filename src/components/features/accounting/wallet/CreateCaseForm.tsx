@@ -13,6 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import { legalCasesService } from "@/services/legalCases.service";
+import { ecuadorDatetimeLocalFromNow, ecuadorDatetimeLocalToIso } from "@/lib/ecuador-datetime";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -156,11 +157,7 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
   const [riesgo, setRiesgo] = useState("medio");
   const [monto, setMonto] = useState<string>("");
   const [proximaAccion, setProximaAccion] = useState("Contactar al cliente");
-  const [fechaProxima, setFechaProxima] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 16);
-  });
+  const [fechaProxima, setFechaProxima] = useState(() => ecuadorDatetimeLocalFromNow(1));
 
   // Nuevos campos del caso
   const [tipoProceso, setTipoProceso] = useState("extrajudicial");
@@ -280,7 +277,7 @@ export function CreateCaseForm(props: CreateCaseFormProps) {
         riesgo,
         abogado_id: abogadoId,
         proxima_accion: proximaAccion,
-        fecha_proxima_accion: new Date(fechaProxima).toISOString(),
+        fecha_proxima_accion: ecuadorDatetimeLocalToIso(fechaProxima),
         monto_referencia: Number.isFinite(montoNum) ? montoNum : null,
         tipo_proceso: tipoProceso,
         estado_vehiculo: estadoVehiculo,

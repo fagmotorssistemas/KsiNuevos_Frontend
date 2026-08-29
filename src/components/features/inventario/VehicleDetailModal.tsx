@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Car,
   X,
@@ -19,14 +19,20 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useHideStaffNav } from '@/hooks/useSidebarShell'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
 import { inventarioService } from '@/services/inventario.service'
 import { MovimientoKardex, VehiculoInventario } from '@/types/inventario.types'
+import type { VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleLegalSummaryBar } from './legal/VehicleLegalSummaryBar'
+import { ContrasteOficialBlock } from './legal/ContrasteOficialBlock'
 import { DocumentosTab } from './legal/tabs/DocumentosTab'
 import { MultasDeudasTab } from './legal/tabs/MultasDeudasTab'
 import { HistorialVehiculoTab } from './legal/tabs/HistorialVehiculoTab'
 import { NotasInternasTab } from './legal/tabs/NotasInternasTab'
+import { VehicleCompleteReportButton } from './legal/VehicleCompleteReportModal'
+import { VehicleAiReportButton } from './legal/VehicleAiReportModal'
+import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
 
 /** Tipos que van en "Movimientos contables" (stock / kardex). El resto → "Gastos de vehículo". */
 const TIPOS_MOVIMIENTO_INVENTARIO = [
@@ -68,14 +74,32 @@ type Props = {
   initialTab?: VehicleDetailTab
   /** Llamado tras cambios en documentos o multas (p. ej. recargar reporte) */
   onLegalChange?: () => void
+  autoOpenUploadWizard?: boolean
+  focusDocType?: VehicleDocType | null
 }
 
-export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTab, onLegalChange }: Props) {
+export function VehicleDetailModal({
+  vehiculo,
+  onClose,
+  onPrecioVenta,
+  initialTab,
+  onLegalChange,
+  autoOpenUploadWizard = false,
+  focusDocType = null,
+}: Props) {
+  useHideStaffNav()
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [historialError, setHistorialError] = useState<string | null>(null)
+  const [contrasteReloadKey, setContrasteReloadKey] = useState(0)
+  const [contrastePayload, setContrastePayload] = useState<EcuadorContrastePayload | null>(null)
+
+  const handleContrasteUpdated = (payload?: EcuadorContrastePayload) => {
+    if (payload) setContrastePayload(payload)
+    setContrasteReloadKey((k) => k + 1)
+  }
 
   const { dossier, summary, loading: loadingLegal, error: legalError, refresh, supabase } = useVehicleLegalDossier(
     vehiculo.placa,
@@ -136,7 +160,7 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
         <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-4">
@@ -153,12 +177,37 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               </div>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <ContrasteOficialBlock
+              placa={vehiculo.placa}
+              inventoryoracleId={dossier.inventoryoracleId}
+              documents={dossier.documents}
+              fines={dossier.fines}
+              linked={Boolean(dossier.inventoryoracleId)}
+              reloadKey={contrasteReloadKey}
+              latestPayload={contrastePayload}
+              onConsultaSaved={handleContrasteUpdated}
+            />
+            <VehicleCompleteReportButton vehiculo={vehiculo} dossier={dossier} />
+            <VehicleAiReportButton
+              vehiculo={vehiculo}
+              dossier={dossier}
+              onContrasteUpdated={handleContrasteUpdated}
+              onLegalRefresh={handleLegalRefresh}
+            />
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <VehicleLegalSummaryBar summary={summary} />
+        <VehicleLegalSummaryBar
+          summary={summary}
+          placa={vehiculo.placa}
+          reloadKey={contrasteReloadKey}
+          contrastePayload={contrastePayload}
+          legalStatusReady={!loadingLegal}
+        />
 
         <div className="flex border-b border-slate-200 px-4 overflow-x-auto shrink-0">
           {tabs.map((t) => {
@@ -201,18 +250,13 @@ export function VehicleDetailModal({ vehiculo, onClose, onPrecioVenta, initialTa
               onRefresh={handleLegalRefresh}
               loading={loadingLegal}
               disabled={loadingLegal}
+              autoOpenWizard={autoOpenUploadWizard}
+              focusDocType={focusDocType}
             />
           )}
 
           {activeTab === 'multas' && supabase && (
-            <MultasDeudasTab
-              supabase={supabase}
-              inventoryoracleId={dossier.inventoryoracleId}
-              fines={dossier.fines}
-              profileId={profile?.id ?? null}
-              onRefresh={handleLegalRefresh}
-              loading={loadingLegal}
-            />
+            <MultasDeudasTab placa={vehiculo.placa} />
           )}
 
           {activeTab === 'historial' && supabase && (

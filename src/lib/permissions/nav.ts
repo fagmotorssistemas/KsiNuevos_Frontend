@@ -22,7 +22,6 @@ export function pathnameBelongsToPrimaryNavItem(pathname: string, item: PrimaryN
     return VENTAS_PATH_ACCESS.some(({ prefix }) => pathMatchesPrefix(path, prefix))
   }
   if (item.module === MODULE_SLUGS.finanzas) {
-    if (pathMatchesPrefix(path, '/marcaciones')) return false
     return isAccountingModulePath(path)
   }
   if (item.module === MODULE_SLUGS.taller) {

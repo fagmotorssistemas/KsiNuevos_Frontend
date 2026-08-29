@@ -7,11 +7,56 @@ interface PageProps {
     data: ContratoDetalle;
 }
 
+/** Parsea DD/MM/YYYY o YYYY-MM-DD como fecha local, sin desfase UTC. */
+function parseFechaPago(value?: string | null): Date | null {
+    if (!value) return null;
+    const s = value.trim();
+    if (!s) return null;
+
+    const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+    if (dmy) {
+        const day = Number(dmy[1]);
+        const month = Number(dmy[2]) - 1;
+        const year = Number(dmy[3]);
+        const d = new Date(year, month, day);
+        if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
+        return d;
+    }
+
+    const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (ymd) {
+        const year = Number(ymd[1]);
+        const month = Number(ymd[2]) - 1;
+        const day = Number(ymd[3]);
+        const d = new Date(year, month, day);
+        if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
+        return d;
+    }
+
+    return null;
+}
+
+function rangoDeFechas(valores: Array<string | undefined | null>): { primera: Date; ultima: Date } | null {
+    const fechas = valores
+        .map(parseFechaPago)
+        .filter((d): d is Date => d !== null)
+        .sort((a, b) => a.getTime() - b.getTime());
+    if (fechas.length === 0) return null;
+    return { primera: fechas[0], ultima: fechas[fechas.length - 1] };
+}
+
+function formatDateEsLocal(date: Date) {
+    const day = date.getDate();
+    const year = date.getFullYear();
+    const month = date.toLocaleString('es-ES', { month: 'long' });
+    return `${day}-${month}-${year}`;
+}
+
 export function Page2({ data }: PageProps) {
     
     // 1. OBTENER DATOS REALES DE FINANCIAMIENTO
     // Esto asegura que si son 36, 48 o 12 cuotas, el pagaré se adapte solo.
-    const { numeroCuotas, loading } = useFinanciamiento(data.ccoCodigo);
+    const { numeroCuotas, fechasVencimientoCuotas, loading } = useFinanciamiento(data.ccoCodigo);
 
     // 2. HELPERS DE FORMATO
     const formatCurrency = (val: number | string | undefined) => {
@@ -36,26 +81,48 @@ export function Page2({ data }: PageProps) {
         return `${day}-${month}-${year}`;
     };
 
-    // 3. CÁLCULO DE FECHAS (LÓGICA AUTOMÁTICA)
+    // 3. RANGO DEL PAGARÉ: primera y última fecha real de cuotas y/o extras
     const calcularFechasPagare = () => {
-        // Fecha base: Fecha de venta o fecha actual
-        const fechaBase = data.fechaVenta ? new Date(data.fechaVenta) : new Date();
-        
-        // Inicio de pagos: Generalmente 1 mes después de la venta
-        // OJO: Si tu JSON trae una fecha específica de primer pago, úsala aquí. 
-        // Por defecto sumamos 1 mes.
-        const fechaInicio = new Date(fechaBase);
-        fechaInicio.setMonth(fechaInicio.getMonth());
+        const fallbackPorMeses = () => {
+            const fechaBase = data.fechaVenta ? new Date(data.fechaVenta) : new Date();
+            const fechaInicio = new Date(fechaBase);
+            fechaInicio.setMonth(fechaInicio.getMonth());
+            const fechaFin = new Date(fechaInicio);
+            const mesesASumar = numeroCuotas > 0 ? numeroCuotas : 1;
+            fechaFin.setMonth(fechaFin.getMonth() + mesesASumar);
+            return {
+                inicio: formatDateEs(fechaInicio),
+                fin: formatDateEs(fechaFin)
+            };
+        };
 
-        // Fin de pagos: Fecha Inicio + Numero de Cuotas
-        const fechaFin = new Date(fechaInicio);
-        // Si no hay cuotas cargadas (contado), asumimos 1 mes por defecto para que no rompa
-        const mesesASumar = numeroCuotas > 0 ? numeroCuotas : 1; 
-        fechaFin.setMonth(fechaFin.getMonth() + mesesASumar);
+        const rangoCuotas = rangoDeFechas(fechasVencimientoCuotas);
+        const rangoExtras = rangoDeFechas([
+            ...(data.listaCuotasAdicionales || []).map((c) => c.fechaVencimiento),
+            ...(data.listaPagosCheque || []).map((c) => c.fechaVencimiento),
+        ]);
+
+        if (!rangoCuotas && !rangoExtras) return fallbackPorMeses();
+
+        let inicio: Date;
+        let fin: Date;
+
+        if (rangoCuotas && !rangoExtras) {
+            inicio = rangoCuotas.primera;
+            fin = rangoCuotas.ultima;
+        } else if (!rangoCuotas && rangoExtras) {
+            inicio = rangoExtras.primera;
+            fin = rangoExtras.ultima;
+        } else if (rangoCuotas && rangoExtras) {
+            inicio = rangoCuotas.primera < rangoExtras.primera ? rangoCuotas.primera : rangoExtras.primera;
+            fin = rangoCuotas.ultima > rangoExtras.ultima ? rangoCuotas.ultima : rangoExtras.ultima;
+        } else {
+            return fallbackPorMeses();
+        }
 
         return {
-            inicio: formatDateEs(fechaInicio),
-            fin: formatDateEs(fechaFin)
+            inicio: formatDateEsLocal(inicio),
+            fin: formatDateEsLocal(fin)
         };
     };
 

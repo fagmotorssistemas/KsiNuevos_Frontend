@@ -14,7 +14,7 @@ import { isAppointmentPendingActive, type AppointmentWithDetails } from "@/hooks
 
 interface AppointmentCardProps {
     appointment: AppointmentWithDetails;
-    onComplete: (id: number) => void;
+    onComplete: (appointment: AppointmentWithDetails) => void;
     onNoShow: (appointment: AppointmentWithDetails) => void;
     onEdit?: (appointment: AppointmentWithDetails) => void;
     isAdminView?: boolean;
@@ -144,7 +144,7 @@ export function AppointmentCard({ appointment, onComplete, onNoShow, onEdit, isA
             {isPending ? (
                 <div className="flex flex-col justify-center gap-1 px-1.5 py-2 border-l border-slate-50 bg-slate-50/30 min-w-[64px]">
                     <button 
-                        onClick={() => onComplete(appointment.id)}
+                        onClick={() => onComplete(appointment)}
                         className="flex flex-col items-center gap-0.5 px-1.5 py-1.5 text-slate-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all duration-200"
                         title="Si vino"
                     >

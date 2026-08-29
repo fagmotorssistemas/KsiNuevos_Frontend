@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   Car,
@@ -17,11 +17,14 @@ import {
   FolderOpen,
   Trash2,
   Scale,
+  Sparkles,
 } from 'lucide-react'
 import type { ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import { docStatusClass, formatShortDate, statusLabel, listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
 import { VehicleDocumentActivityLog } from './VehicleDocumentActivityLog'
+import { DocumentAiReportBlock } from './DocumentAiReportBlock'
+import { reportFailsAiApproval, type DocumentAiReportRow } from '@/services/documentAiReports.service'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   VehicleDocumentRow,
@@ -83,8 +86,34 @@ export function VehicleDocumentCard({
   const [expires, setExpires] = useState(row.expires_at ?? '')
   const [localUploading, setLocalUploading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [openAiFileId, setOpenAiFileId] = useState<string | null>(null)
+  const [needsReview, setNeedsReview] = useState(false)
 
   const files = listDocumentFiles(row)
+  const fileIds = files.map((file) => file.id).filter((id) => !id.startsWith('legacy-')).join(',')
+
+  useEffect(() => {
+    const ids = fileIds.split(',').filter(Boolean)
+    if (ids.length === 0) {
+      setNeedsReview(false)
+      return
+    }
+    let cancelled = false
+    void Promise.all(
+      ids.map((id) =>
+        fetch(`/api/inventario/documentos/archivos/${encodeURIComponent(id)}/analizar`).then(async (res) => {
+          const body = (await res.json()) as { report?: DocumentAiReportRow | null }
+          return res.ok ? body.report ?? null : null
+        }).catch(() => null)
+      )
+    ).then((reports) => {
+      if (cancelled) return
+      setNeedsReview(reports.some((report) => report != null && reportFailsAiApproval(report)))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fileIds])
   const isUploading = uploading || localUploading
   const allowsFile = Boolean(catalog?.requiresFile || catalog?.allowsFile)
 
@@ -119,8 +148,13 @@ export function VehicleDocumentCard({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 hover:shadow-sm transition-shadow">
-      <div className="flex items-start gap-3">
+    <div className="relative rounded-xl border border-slate-200 bg-white p-4 hover:shadow-sm transition-shadow">
+      {needsReview ? (
+        <span className="absolute top-3 right-3 text-[11px] font-semibold text-red-700">
+          Revisar
+        </span>
+      ) : null}
+      <div className="flex items-start gap-3 pr-14">
         <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
           <Icon className="h-5 w-5 text-slate-600" />
         </div>
@@ -173,6 +207,16 @@ export function VehicleDocumentCard({
               >
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
+              {!file.id.startsWith('legacy-') && (
+                <button
+                  type="button"
+                  onClick={() => setOpenAiFileId((current) => (current === file.id ? null : file.id))}
+                  className={`shrink-0 ${openAiFileId === file.id ? 'text-violet-700' : 'text-slate-400 hover:text-violet-700'}`}
+                  title="Reporte IA de esta foto"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                </button>
+              )}
               {onDeleteFile && !file.id.startsWith('legacy-') && (
                 <button
                   type="button"
@@ -195,6 +239,7 @@ export function VehicleDocumentCard({
           ))}
         </ul>
       )}
+      {openAiFileId ? <DocumentAiReportBlock fileId={openAiFileId} compact /> : null}
 
       {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && placaInventario && (
         <Link

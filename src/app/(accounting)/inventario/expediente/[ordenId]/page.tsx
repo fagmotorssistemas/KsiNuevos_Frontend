@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useExpedientes } from '@/hooks/taller/useExpedientes'
@@ -13,11 +13,14 @@ import type { OrdenTrabajo } from '@/types/taller'
 import { OrderPrintView } from '@/components/features/taller/OrderPrintView'
 import { useReactToPrint } from 'react-to-print'
 
-export default function InventarioExpedientePage() {
-  const params = useParams()
+export default function InventarioExpedientePage({
+  params,
+}: {
+  params: Promise<{ ordenId: string }>
+}) {
+  const { ordenId } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const ordenId = typeof params.ordenId === 'string' ? params.ordenId : ''
   const placaRef = searchParams.get('placa')
 
   const { supabase } = useAuth()

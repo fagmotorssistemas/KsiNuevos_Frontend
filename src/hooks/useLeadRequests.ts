@@ -35,6 +35,10 @@ export function useLeadRequests(leadId: number) {
   // 2. Función para actualizar (Estado y Notas)
   const updateRequest = async (id: number, newStatus: RequestStatus, notes: string) => {
     try {
+      if ((newStatus === 'en_proceso' || newStatus === 'resuelto') && !notes.trim()) {
+        return { success: false, error: 'notes_required' as const };
+      }
+
       setUpdating(id);
       
       const updatePayload: any = {
@@ -56,7 +60,13 @@ export function useLeadRequests(leadId: number) {
         .update(updatePayload)
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        const msg = String(error.message || '');
+        if (error.code === '23514' || msg.toLowerCase().includes('respuesta')) {
+          return { success: false, error: 'notes_required' as const };
+        }
+        throw error;
+      }
 
       // Actualizamos el estado local para que se refleje inmediato en pantalla
       setRequests(prev => prev.map(req => 

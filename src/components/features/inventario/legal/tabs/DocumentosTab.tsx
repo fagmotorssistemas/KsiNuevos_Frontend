@@ -1,20 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Upload } from 'lucide-react'
 import { VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
   DOCUMENT_SECTION_TITLES,
   mergePoderContratoRow,
   hasPoderContratoSlot,
   isDocumentCatalogItemVisible,
+  listPendingDocumentCatalog,
 } from '@/lib/inventario/vehicleLegalUi'
 import { findExpedienteFagByPlate, type ExpedienteVinculo } from '@/services/expedienteVinculo.service'
 import { uploadVehicleDocument, updateVehicleDocumentMeta, deleteVehicleDocumentFile } from '@/services/vehicleLegal.service'
 import { useAuth } from '@/hooks/useAuth'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { VehicleDocumentRow, VehicleDocType } from '@/types/vehicleLegal.types'
+import type { VehicleDocType, VehicleDocumentRow } from '@/types/vehicleLegal.types'
 import { VehicleDocumentCard } from '../VehicleDocumentCard'
+import { DocumentUploadWizardModal } from '../DocumentUploadWizardModal'
+import { PendingDocumentsNotice } from '../PendingDocumentsNotice'
 
 function DocumentSkeletonGrid({ count }: { count: number }) {
   return (
@@ -44,16 +47,31 @@ type Props = {
   onRefresh: () => void
   loading?: boolean
   disabled?: boolean
+  autoOpenWizard?: boolean
+  focusDocType?: VehicleDocType | null
 }
 
-export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, profileId, onRefresh, loading, disabled }: Props) {
+export function DocumentosTab({
+  supabase,
+  placa,
+  inventoryoracleId,
+  documents,
+  profileId,
+  onRefresh,
+  loading,
+  disabled,
+  autoOpenWizard = false,
+  focusDocType = null,
+}: Props) {
   const { profile, user } = useAuth()
   const isAdmin = (profile?.role ?? '').toLowerCase() === 'admin'
   const actorName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Usuario'
   const [uploadingType, setUploadingType] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [expedienteVinculo, setExpedienteVinculo] = useState<ExpedienteVinculo | null>(null)
   const [loadingVinculo, setLoadingVinculo] = useState(false)
   const retriedSeed = useRef(false)
+  const autoOpenedWizard = useRef(false)
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]))
   const catalogReady = VEHICLE_DOCUMENT_CATALOG.every((c) =>
@@ -87,6 +105,13 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
       onRefresh()
     }
   }, [loading, inventoryoracleId, catalogReady, onRefresh])
+
+  useEffect(() => {
+    if (!autoOpenWizard || autoOpenedWizard.current) return
+    if (loading || !inventoryoracleId) return
+    autoOpenedWizard.current = true
+    setWizardOpen(true)
+  }, [autoOpenWizard, loading, inventoryoracleId])
 
   const renderSection = (title: string, items: typeof legal) => {
     const visible = visibleItems(items)
@@ -149,7 +174,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
     )
   }
 
-  if (loading) {
+  if (loading && !wizardOpen) {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -176,7 +201,7 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
     )
   }
 
-  if (!catalogReady) {
+  if (!catalogReady && !wizardOpen) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-2" />
@@ -198,8 +223,36 @@ export function DocumentosTab({ supabase, placa, inventoryoracleId, documents, p
           No hay expediente de Fabian Aguirre en taller con la placa <strong>{placa}</strong>. Puedes subir el historial de mantenimiento manualmente.
         </p>
       )}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-slate-600">
+          Completa cada sección con fotos o una nota si el documento no aplica.
+        </p>
+        <button
+          type="button"
+          disabled={disabled || !inventoryoracleId}
+          onClick={() => setWizardOpen(true)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-700 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50 shrink-0"
+        >
+          <Upload className="h-4 w-4" />
+          Subir documentación
+        </button>
+      </div>
+      <PendingDocumentsNotice labels={listPendingDocumentCatalog(byType).map((item) => item.label)} />
       {renderSection(DOCUMENT_SECTION_TITLES.legal, legal)}
       {renderSection(DOCUMENT_SECTION_TITLES.physical, physical)}
+      {wizardOpen && inventoryoracleId ? (
+        <DocumentUploadWizardModal
+          supabase={supabase}
+          placa={placa}
+          inventoryoracleId={inventoryoracleId}
+          documents={documents}
+          profileId={profileId}
+          actorName={actorName}
+          focusDocType={focusDocType}
+          onClose={() => setWizardOpen(false)}
+          onRefresh={onRefresh}
+        />
+      ) : null}
       {uploadingType && (
         <div className="fixed bottom-4 right-4 bg-slate-900 text-white text-xs px-3 py-2 rounded-lg flex items-center gap-2 shadow-lg z-[70]">
           <Loader2 className="h-3 w-3 animate-spin" /> Subiendo…

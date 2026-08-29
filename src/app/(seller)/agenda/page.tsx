@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { 
     CalendarCheck, 
     History, 
@@ -35,12 +36,17 @@ import {
 } from "@/components/features/agenda/AppointmentModal";
 import { AppointmentOutcomeModal } from "@/components/features/agenda/AppointmentOutcomeModal";
 import { BotSuggestionCard } from "@/components/features/agenda/BotSuggestionCard";
+import {
+    buildShowroomPrefillFromAppointment,
+    writeShowroomVisitPrefill,
+} from "@/components/features/showroom/visitPrefill";
 
 import { Button } from "@/components/ui/buttontable"; 
 import { useAuth } from "@/hooks/useAuth";
 
 export default function AgendaPage() {
     const { profile } = useAuth();
+    const router = useRouter();
     
     // -- ESTADOS PARA MODALES --
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -131,6 +137,12 @@ export default function AgendaPage() {
         setIsModalOpen(true);
     };
 
+    const handleClientCame = (appointment: AppointmentWithDetails) => {
+        void markAsCompleted(appointment.id);
+        writeShowroomVisitPrefill(buildShowroomPrefillFromAppointment(appointment));
+        router.push("/showroom?from=cita");
+    };
+
     const handleEdit = (appointment: AppointmentWithDetails) => {
         setEditingAppointment(appointment);
         setSuggestionData(null);
@@ -191,7 +203,7 @@ export default function AgendaPage() {
                         key={appt.id} 
                         appointment={appt} 
                         isAdminView={isAdmin} 
-                        onComplete={markAsCompleted}
+                        onComplete={handleClientCame}
                         onNoShow={setNoShowAppointment}
                         onEdit={handleEdit}
                     />

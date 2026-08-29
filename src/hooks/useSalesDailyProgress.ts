@@ -10,16 +10,25 @@ import {
 type BossStockRow = {
   vendedor_id: string;
   faltante_quedados?: number;
+  faltante_total?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
   semana_contestados_pct?: number;
+  contestados_cuota?: number;
+  contestados_hoy?: number;
+  contestados_cartera?: number;
+  hoy_sin_resumen?: number;
+  sin_resumen?: number;
 };
 
 type BossStockPayload = {
   faltante_quedados?: number;
+  faltante_total?: number;
   asesoria_quedados?: number;
+  asesoria_total?: number;
   pedidos_quedados?: number;
   faltante_sin_salir?: number;
   asesoria_sin_salir?: number;
@@ -27,6 +36,11 @@ type BossStockPayload = {
   semana_contestados_pct?: number;
   semana_ingresados?: number;
   semana_contestados?: number;
+  contestados_cuota?: number;
+  contestados_hoy?: number;
+  contestados_cartera?: number;
+  hoy_sin_resumen?: number;
+  sin_resumen?: number;
   ranking?: BossStockRow[];
 };
 
@@ -38,7 +52,9 @@ function mergeBossStock(
   return {
     ...payload,
     faltante_quedados: Number(stock?.faltante_quedados ?? 0) || 0,
+    faltante_total: Number(stock?.faltante_total ?? 0) || 0,
     asesoria_quedados: Number(stock?.asesoria_quedados ?? 0) || 0,
+    asesoria_total: Number(stock?.asesoria_total ?? 0) || 0,
     pedidos_quedados: Number(stock?.pedidos_quedados ?? 0) || 0,
     faltante_sin_salir: Number(stock?.faltante_sin_salir ?? 0) || 0,
     asesoria_sin_salir: Number(stock?.asesoria_sin_salir ?? 0) || 0,
@@ -46,9 +62,21 @@ function mergeBossStock(
     semana_contestados_pct: Number(stock?.semana_contestados_pct ?? 0) || 0,
     semana_ingresados: Number(stock?.semana_ingresados ?? 0) || 0,
     semana_contestados: Number(stock?.semana_contestados ?? 0) || 0,
+    contestados_cuota: Number(stock?.contestados_cuota ?? (payload.rol === 'estrancado' ? 50 : 35)) || 35,
+    contestados_hoy: Number(stock?.contestados_hoy ?? 0) || 0,
+    contestados_cartera: Number(stock?.contestados_cartera ?? 0) || 0,
+    hoy_sin_resumen: Number(stock?.hoy_sin_resumen ?? 0) || 0,
+    sin_resumen: Number(stock?.sin_resumen ?? 0) || 0,
     ranking: payload.ranking.map((row) => {
       const extra = rankingStock.get(row.vendedor_id);
-      return extra ? { ...row, ...extra } : { ...row, pedidos_quedados: row.pedidos_quedados ?? 0 };
+      const cuotaFallback = row.rol === 'estrancado' ? 50 : 35;
+      return extra
+        ? { ...row, ...extra }
+        : {
+            ...row,
+            pedidos_quedados: row.pedidos_quedados ?? 0,
+            contestados_cuota: row.contestados_cuota ?? cuotaFallback,
+          };
     }),
   };
 }

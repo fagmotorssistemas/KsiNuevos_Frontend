@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { listDocumentFiles } from '@/lib/inventario/vehicleLegalUi'
+import { vehicleDocsFailAiApproval } from '@/services/documentAiReports.service'
 import {
   computeLegalSummary,
   loadVehicleLegalDossier,
@@ -25,7 +27,8 @@ export function useVehicleLegalDossier(
 ) {
   const { supabase } = useAuth()
   const [dossier, setDossier] = useState<VehicleLegalDossier>(EMPTY)
-  const [loading, setLoading] = useState(false)
+  const [aiRejectedPhotos, setAiRejectedPhotos] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -40,9 +43,22 @@ export function useVehicleLegalDossier(
           'Este vehículo no está en inventario web (inventoryoracle). Ejecute la sincronización Oracle o regístrelo en el catálogo con la misma placa.'
         )
       }
+      const fileIds = data.documents.flatMap((row) => listDocumentFiles(row).map((file) => file.id))
+      try {
+        setAiRejectedPhotos(
+          await vehicleDocsFailAiApproval(supabase, {
+            placa,
+            inventoryoracleId: data.inventoryoracleId,
+            fileIds,
+          })
+        )
+      } catch {
+        setAiRejectedPhotos(false)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error cargando expediente')
       setDossier(EMPTY)
+      setAiRejectedPhotos(false)
     } finally {
       setLoading(false)
     }
@@ -51,6 +67,7 @@ export function useVehicleLegalDossier(
   useEffect(() => {
     if (!enabled || !placa) {
       setDossier(EMPTY)
+      setAiRejectedPhotos(false)
       setLoading(false)
       return
     }
@@ -61,7 +78,10 @@ export function useVehicleLegalDossier(
     void refresh()
   }, [enabled, placa, oracleId, supabase, refresh])
 
-  const summary = useMemo(() => computeLegalSummary(dossier), [dossier])
+  const summary = useMemo(
+    () => computeLegalSummary(dossier, { aiRejectedPhotos }),
+    [dossier, aiRejectedPhotos]
+  )
 
   return { dossier, summary, loading, error, refresh, supabase }
 }

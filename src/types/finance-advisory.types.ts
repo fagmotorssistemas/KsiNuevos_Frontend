@@ -106,7 +106,7 @@ export function missingFinancialAdvisoryFields(input: GestionCompletenessInput):
   if (!filled(input.banco_deseado)) missing.push("banco deseado");
   if (!filled(input.asesor_contactado_nombre)) missing.push("nombre del asesor");
   if (!filled(input.asesor_contactado_telefono)) missing.push("teléfono del asesor");
-  if (input.se_solicito_cedula && !filled(input.cedula)) missing.push("cédula");
+  if (!filled(input.cedula)) missing.push("cédula");
   if (input.requiere_garante && !filled(input.garante_detalle)) missing.push("detalle del garante");
   return missing;
 }

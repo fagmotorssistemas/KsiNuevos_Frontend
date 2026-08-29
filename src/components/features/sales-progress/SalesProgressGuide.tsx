@@ -5,14 +5,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 const RATES = [
   {
-    label: 'Anillo: contestados',
-    how: 'Hoy y semana',
-    when: 'Cuánto están haciendo con lo que llegó. Contestados ÷ llegados. El número grande es hoy. Debajo, la semana sábado–viernes hasta el día que estás viendo. Arriba puedes ir por mes, por semana (S1–S4; las que aún no llegan salen en gris) o por el calendario del día.',
+    label: 'Anillo: oficio del día',
+    how: 'X de Y',
+    when: 'Gestiones hechas ÷ gestiones que había que hacer hoy: contestar (cuota 35), IA, citas (vino/no vino), showroom, info. faltante y financiamiento. No es 21 de 21 de los que llegaron. Si contestó los de hoy pero no llegó a 35, el anillo de contestados queda corto.',
   },
   {
-    label: 'Cumpliendo X de Y',
-    how: 'Oficio del día',
-    when: 'Suma de las gestiones que había que hacer hoy (contestar, IA, citas, showroom, info. faltante, financiamiento) y cuántas se hicieron.',
+    label: 'Contestados (cuota)',
+    how: 'X de 35',
+    when: 'Resúmenes ejecutivos guardados hoy. Meta 35 al día (Juan: 50). Si llegaron 21, esos 21 cuentan; hay que completar 35 con leads de otros días que nunca tuvieron resumen. 21 de 21 no es 100%.',
   },
   {
     label: 'Seguimientos IA',
@@ -25,6 +25,11 @@ const RATES = [
     when: 'De las citas de hoy, cuántas tienen gestión: vino, o no vino con motivo y llamada/mensaje.',
   },
   {
+    label: 'Visitas showroom',
+    how: 'Cuántas',
+    when: 'Cuántas visitas registraron hoy en Showroom. Eso no es el seguimiento: es anotar que el cliente vino.',
+  },
+  {
     label: 'Seguimiento showroom',
     how: 'X de Y',
     when: 'De las visitas de hoy, cuántas tienen nota de seguimiento. Registrar la visita no basta. Primero la llamada, después la nota.',
@@ -35,9 +40,9 @@ const RATES = [
     when: 'De los leads que llegaron hoy, cuántos ya tienen una cita creada hoy.',
   },
   {
-    label: 'Info. faltante / financiamiento (hoy)',
+    label: 'Financiamiento (quedados)',
     how: 'X de Y',
-    when: 'De las que llegaron hoy, cuántas se contestaron o se llenaron. Contestó no es lo mismo que salió de etapa.',
+    when: 'Igual que Leads → Sin ficha. Nunca llenaron la ficha de gestión. X de Y pendientes (Y es el Todos de Leads). No es pendiente/en proceso ni Respondidos con resumen.',
   },
 ];
 
@@ -46,7 +51,7 @@ const POINTS = [
     label: 'Leads contestados',
     pts: '+1',
     cap: '40 leads · 40 pts',
-    when: 'Guardó el resumen ejecutivo hoy. Un lead = 1 punto, una sola vez. Meta: 40 al día (Juan: 50).',
+    when: 'Guardó el resumen ejecutivo hoy. Un lead = 1 punto, una sola vez. Cuota de oficio: 35 al día. Tope de puntos: 40 (Juan: 50).',
   },
   {
     label: 'Visitas showroom',
@@ -164,9 +169,9 @@ export function SalesProgressGuide({ trigger }: { trigger?: ReactNode }) {
                     no llegan salen en gris.
                   </li>
                   <li>
-                    El anillo es <strong className="font-semibold text-slate-900">contestados ÷ llegados</strong>. El chip
-                    verde es <strong className="font-semibold text-slate-900">cumpliendo X de Y</strong> del oficio del
-                    día.
+                    El anillo es el <strong className="font-semibold text-slate-900">oficio del día</strong>: gestiones
+                    hechas de las que había que hacer (contestar, IA, citas, showroom, info., financiamiento). Las
+                    barras de abajo son esas mismas cuentas. Contestados de la semana va en el chip, no en el anillo.
                   </li>
                   <li>
                     La frase dice <strong className="font-semibold text-slate-900">cumpliendo</strong> y{' '}
@@ -233,7 +238,8 @@ export function SalesProgressGuide({ trigger }: { trigger?: ReactNode }) {
                 <ul className="space-y-1.5">
                   <li>
                     <strong className="font-semibold text-slate-900">Felipe, Vanessa y Xavier</strong> — pipeline del día
-                    y de la semana. Se espera que trabajen los leads que llegan. Tope de contestados: 40 al día.
+                    y de la semana. Cuota de resúmenes: 35 al día. Contestar los que llegan no cierra el día: hay que
+                    completar con cartera sin resumen. Tope de puntos de contestados: 40.
                   </li>
                   <li>
                     <strong className="font-semibold text-slate-900">Juan</strong> — cartera estrancada (leads viejos).

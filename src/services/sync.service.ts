@@ -120,6 +120,24 @@ export const syncService = {
     }
 
     try {
+      const incomingVins = finalPayload.map((item) => item.vin).filter(Boolean) as string[];
+      const existingVins = new Set<string>();
+      for (let i = 0; i < incomingVins.length; i += 150) {
+        const chunk = incomingVins.slice(i, i + 150);
+        const { data: existingRows, error: existingErr } = await supabase
+          .from('inventoryoracle')
+          .select('vin')
+          .in('vin', chunk);
+        if (existingErr) {
+          console.warn('⚠️ No se pudieron leer VINs existentes para contraste:', existingErr.message);
+          break;
+        }
+        for (const row of existingRows ?? []) {
+          if (row.vin) existingVins.add(row.vin);
+        }
+      }
+      const newVins = incomingVins.filter((vin) => !existingVins.has(vin));
+
       // --- 5. ENVÍO SEGURO (Upsert) ---
       const { error } = await supabase
         .from('inventoryoracle')
@@ -130,8 +148,56 @@ export const syncService = {
 
       if (error) {
         console.error("❌ Error Supabase Sync:", error.message);
-      } else {
-        console.log(`✅ Sincronización OK: ${finalPayload.length} autos guardados.`);
+        return;
+      }
+      console.log(`✅ Sincronización OK: ${finalPayload.length} autos guardados.`);
+
+      if (newVins.length === 0) return;
+
+      const newItems: { placa: string; inventoryoracleId: string }[] = [];
+      for (let i = 0; i < newVins.length; i += 150) {
+        const chunk = newVins.slice(i, i + 150);
+        const { data: inserted, error: insertedErr } = await supabase
+          .from('inventoryoracle')
+          .select('id, plate, vin')
+          .in('vin', chunk);
+        if (insertedErr) {
+          console.warn('⚠️ No se pudieron leer los vehículos nuevos para contraste:', insertedErr.message);
+          break;
+        }
+        for (const row of inserted ?? []) {
+          const placa = String(row.plate || '').trim();
+          if (!placa || !row.id) continue;
+          newItems.push({ placa, inventoryoracleId: row.id });
+        }
+      }
+
+      if (newItems.length === 0) return;
+      console.log(`🔎 Contraste oficial automático para ${newItems.length} vehículo(s) nuevo(s).`);
+
+      for (let i = 0; i < newItems.length; i += 8) {
+        const chunk = newItems.slice(i, i + 8);
+        try {
+          const res = await fetch('/api/inventario/contraste/ingreso', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: chunk }),
+          });
+          const body = (await res.json().catch(() => null)) as {
+            results?: { placa: string; status: string; error?: string }[];
+            error?: string;
+          } | null;
+          if (!res.ok) {
+            console.warn('⚠️ Contraste de ingreso:', body?.error || `HTTP ${res.status}`);
+            if (res.status === 402 || res.status === 401) break;
+            continue;
+          }
+          const saved = body?.results?.filter((row) => row.status === 'saved').length ?? 0;
+          const skipped = body?.results?.filter((row) => row.status === 'skipped').length ?? 0;
+          console.log(`⚡ Contraste ingreso lote ${Math.floor(i / 8) + 1}: ${saved} guardado(s), ${skipped} omitido(s).`);
+        } catch (contrasteErr) {
+          console.warn('⚠️ Error contrastando vehículos nuevos:', contrasteErr);
+        }
       }
     } catch (err) {
       console.error("❌ Error crítico sync:", err);

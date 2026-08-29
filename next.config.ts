@@ -8,13 +8,9 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2gb',
     },
-    // Si el middleware toca rutas con body grande, evita buffer por defecto ~10MB
-    middlewareClientMaxBodySize: '2gb',
+    // Si el proxy/middleware toca rutas con body grande, evita buffer por defecto ~10MB
+    proxyClientMaxBodySize: '2gb',
   },
-
-  // Límite para proxy (si aplica)
-  // @ts-expect-error — opción válida en runtime
-  proxyClientMaxBodySize: '2gb',
 
   // 1. Configuración de Imágenes
   images: {

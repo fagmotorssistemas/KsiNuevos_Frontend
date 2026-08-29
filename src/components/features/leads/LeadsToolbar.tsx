@@ -38,8 +38,30 @@ interface LeadsToolbarProps {
     callStats?: LeadCallStats;
     callHistory?: LeadCallEvent[];
     requestStats?: {
-        datosPedidos: { pendiente: number; en_proceso: number; resuelto: number; total: number };
-        asesoria: { pendiente: number; en_proceso: number; resuelto: number; total: number };
+        datosPedidos: {
+            pendiente: number;
+            en_proceso: number;
+            resuelto: number;
+            total: number;
+            llenos?: number;
+            incompletos?: number;
+            vacios?: number;
+        };
+        asesoria: {
+            pendiente: number;
+            en_proceso: number;
+            resuelto: number;
+            total: number;
+            llenos?: number;
+            incompletos?: number;
+            vacios?: number;
+            fichaPorEstado?: {
+                all: { llenos: number; incompletos: number; vacios: number; total: number };
+                pendiente: { llenos: number; incompletos: number; vacios: number; total: number };
+                en_proceso: { llenos: number; incompletos: number; vacios: number; total: number };
+                resuelto: { llenos: number; incompletos: number; vacios: number; total: number };
+            };
+        };
     };
     currentUserRole?: string | null;
     sellers?: { id: string; full_name: string }[];
@@ -258,8 +280,8 @@ export function LeadsToolbar({
     callStats = { pendiente: 0, aplazada: 0, llamado: 0 },
     callHistory = [],
     requestStats = { 
-        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 }, 
-        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0 } 
+        datosPedidos: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 }, 
+        asesoria: { pendiente: 0, en_proceso: 0, resuelto: 0, total: 0, llenos: 0, incompletos: 0, vacios: 0 } 
     },
     currentUserRole,
     sellers = []
@@ -322,6 +344,7 @@ export function LeadsToolbar({
         filters.withoutResume ||
         (filters.callFilter && filters.callFilter !== 'all') ||
         (filters.requestStatus && filters.requestStatus !== 'all') ||
+        (filters.asesoriaGestion && filters.asesoriaGestion !== 'all') ||
         (canFilterByAssignee && assignedToValue !== 'all');
 
     // Porcentaje para la métrica vieja
@@ -896,7 +919,7 @@ export function LeadsToolbar({
                                         {requestStats.datosPedidos.total > 0 && (
                                             <div className="flex flex-col gap-1">
                                                 <button 
-                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false })}
+                                                    onClick={() => onFilterChange({ status: filters.status === 'datos_pedidos' ? 'all' : 'datos_pedidos', requestStatus: 'all', asesoriaGestion: 'all', hasBudget: false, hasTradeIn: false, onlyInteractions: false, withoutResume: false })}
                                                     className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg border transition-all duration-200 cursor-pointer text-left ${
                                                         filters.status === 'datos_pedidos'
                                                         ? 'bg-purple-50 text-purple-800 border-purple-200 shadow-sm'
@@ -991,6 +1014,79 @@ export function LeadsToolbar({
                     </button>
                 )}
             </div>
+
+            {(filters.status === "asesoria_financiamiento" || filters.status === "datos_pedidos") && (() => {
+                const isDatos = filters.status === "datos_pedidos";
+                const stats = isDatos ? requestStats.datosPedidos : requestStats.asesoria;
+                return (
+                <div className="flex flex-wrap items-center gap-2 px-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                        {isDatos ? "Respuesta" : "Ficha de gestión"}
+                    </span>
+                    <div className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm">
+                        {(
+                            [
+                                {
+                                    value: "vacios" as const,
+                                    label: isDatos ? "Sin respuesta" : "Sin ficha",
+                                    count: stats.vacios ?? 0,
+                                    active: "bg-rose-500 text-white shadow-sm",
+                                    idle: "text-rose-700 hover:bg-rose-50",
+                                },
+                                {
+                                    value: "incompletos" as const,
+                                    label: "Incompletos",
+                                    count: stats.incompletos ?? 0,
+                                    active: "bg-amber-500 text-white shadow-sm",
+                                    idle: "text-amber-800 hover:bg-amber-50",
+                                },
+                                {
+                                    value: "llenos" as const,
+                                    label: "Completos",
+                                    count: stats.llenos ?? 0,
+                                    active: "bg-emerald-600 text-white shadow-sm",
+                                    idle: "text-emerald-700 hover:bg-emerald-50",
+                                },
+                                {
+                                    value: "all" as const,
+                                    label: "Todos",
+                                    count: stats.total,
+                                    active: "bg-slate-800 text-white shadow-sm",
+                                    idle: "text-slate-600 hover:bg-slate-50",
+                                },
+                            ]
+                        ).map((option) => {
+                            const current = filters.asesoriaGestion || "all";
+                            const active = current === option.value;
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() =>
+                                        onFilterChange({
+                                            asesoriaGestion: option.value,
+                                            requestStatus: "all",
+                                        })
+                                    }
+                                    className={`flex items-center gap-1.5 rounded-[0.65rem] px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                                        active ? option.active : option.idle
+                                    }`}
+                                >
+                                    {option.label}
+                                    <span
+                                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                            active ? "bg-white/20" : "bg-slate-100 text-slate-600"
+                                        }`}
+                                    >
+                                        {option.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+                );
+            })()}
         </div>
     );
 }

@@ -3,9 +3,10 @@ import { ContractPageLayout } from "./ContractPageLayout";
 
 interface PageProps {
     data: ContratoDetalle;
+    pageNumber?: number;
 }
 
-export function Page4({ data }: PageProps) {
+export function Page4({ data, pageNumber = 4 }: PageProps) {
     // Helper para formatear moneda
     const formatCurrency = (val: number | string | undefined) => {
         if (val === undefined || val === null) return "$ 0.00";
@@ -14,7 +15,7 @@ export function Page4({ data }: PageProps) {
     };
 
     return (
-        <ContractPageLayout pageNumber={4}>
+        <ContractPageLayout pageNumber={pageNumber}>
             <div className="font-sans text-[11px] leading-tight text-black max-w-full mx-auto">
                 
                 {/* --- ENCABEZADO --- */}
