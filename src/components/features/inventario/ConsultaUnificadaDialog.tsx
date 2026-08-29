@@ -219,9 +219,9 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
         </p>
         {report.judicial.other.length > 0 ? (
           <ul className="mt-2 space-y-1 text-sm text-slate-800">
-            {report.judicial.other.map((row) => (
-              <li key={row.id}>
-                {row.plainAction}
+            {report.judicial.other.map((row, index) => (
+              <li key={`${row.id}-${row.role}-${index}`}>
+                {row.plainAction || row.action || 'Proceso'}
                 {row.date ? ` (${row.date})` : ''}
                 {row.role ? `, con rol de ${row.role.toLowerCase()}` : ''}.
               </li>
@@ -284,8 +284,14 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}>
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Consulta unificada</h2>

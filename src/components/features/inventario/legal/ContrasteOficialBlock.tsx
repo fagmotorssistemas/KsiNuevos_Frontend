@@ -53,6 +53,7 @@ import {
   type ContrastMatrixRow,
   type ContrastePendienteLine,
   type EcuadorContrastePayload,
+  type EcuadorJuiciosConsulta,
 } from "@/lib/inventario/ecuadorContraste";
 import {
   listContrasteConsultas,
@@ -173,6 +174,58 @@ function matrixCellClass(kind: ResultKind): string {
   return "text-slate-400";
 }
 
+function ProcesosLegalesOwnerTable({ juicios }: { juicios: EcuadorJuiciosConsulta | null | undefined }) {
+  const procesos = juicios?.procesos ?? []
+  return (
+    <section>
+      <h4 className="text-sm font-bold text-slate-900 mb-1">Procesos legales del propietario</h4>
+      {juicios?.titular || juicios?.cedula ? (
+        <p className="text-[11px] text-slate-500 mb-3">
+          {[juicios.titular, juicios.cedula].filter(Boolean).join(" · ")}
+        </p>
+      ) : (
+        <p className="text-[11px] text-slate-500 mb-3">Función Judicial (Consultas.ec), según el titular del vehículo.</p>
+      )}
+      {juicios?.error ? (
+        <p className="text-sm text-amber-800 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">{juicios.error}</p>
+      ) : !juicios ? (
+        <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 px-3 py-4">
+          Aún no hay consulta de procesos. Pulsa Consultar nuevamente.
+        </p>
+      ) : procesos.length === 0 ? (
+        <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 px-3 py-4">
+          Función Judicial no reporta procesos para este propietario.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2.5">Causa</th>
+                <th className="px-3 py-2.5">Acción</th>
+                <th className="px-3 py-2.5">Rol</th>
+                <th className="px-3 py-2.5">Estado</th>
+                <th className="px-3 py-2.5">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {procesos.map((proceso, index) => (
+                <tr key={`${proceso.causa || "proceso"}-${index}`} className="border-b border-slate-100 last:border-0">
+                  <td className="px-3 py-2.5 font-semibold text-slate-800">{proceso.causa || "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{proceso.accion || "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{proceso.rol || "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{proceso.estado || "—"}</td>
+                  <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{proceso.fecha || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function TopicCard({
   row,
   doc,
@@ -284,7 +337,10 @@ function TopicDetailPanel({
   return (
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 p-4"
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
     >
       <div
         role="dialog"
@@ -774,8 +830,9 @@ export function ContrasteOficialBlock({
 
       {modalOpen ? (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-          onClick={() => {
+          className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+          onClick={(e) => {
+            e.stopPropagation()
             setPhotoPreview(null)
             setOpenTopicKey(null)
             setModalOpen(false)
@@ -959,6 +1016,8 @@ export function ContrasteOficialBlock({
                 </section>
               ) : null}
 
+              {payload ? <ProcesosLegalesOwnerTable juicios={payload.juicios} /> : null}
+
               {!payload ? (
                 <p className="text-sm text-slate-500">
                   Pulsa Consultar nuevamente para traer SRI, historial de multas ANT y matrícula (~$0.03).
@@ -1032,7 +1091,10 @@ export function ContrasteOficialBlock({
       {photoPreview ? (
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/70 p-4"
-          onClick={() => setPhotoPreview(null)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setPhotoPreview(null)
+          }}
         >
           <div
             className="relative max-h-[90vh] max-w-4xl w-full flex flex-col items-center"

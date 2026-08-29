@@ -46,6 +46,96 @@ function pickString(obj: Record<string, unknown> | null, keys: string[]): string
   return null
 }
 
+function roleFromKeyName(key: string): string | null {
+  const k = key
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+  if (k === 'actor' || k === 'actores' || k === 'comoactor' || k === 'parteactora') return 'Actor'
+  if (k === 'demandado' || k === 'demandados' || k === 'comodemandado' || k === 'partedemandada') return 'Demandado'
+  if (k === 'ofendido' || k === 'ofendidos' || k === 'victima' || k === 'victimas') return 'Ofendido'
+  if (k === 'tercero' || k === 'terceros') return 'Tercero'
+  if (k.includes('demand')) return 'Demandado'
+  if (k.includes('actor') && !k.includes('factor')) return 'Actor'
+  return null
+}
+
+const PROCESO_FIELD_KEYS = [
+  'causa',
+  'numeroCausa',
+  'numero_causa',
+  'nroCausa',
+  'n_causa',
+  'idJuicio',
+  'idjuicio',
+  'id_juicio',
+  'juicio',
+  'proceso',
+  'accion',
+  'tipoAccion',
+  'tipo_accion',
+  'materia',
+  'estado',
+  'estadoProceso',
+  'estado_proceso',
+]
+
+function looksLikeProceso(rec: Record<string, unknown>): boolean {
+  return Boolean(pickString(rec, PROCESO_FIELD_KEYS))
+}
+
+function stampRol(row: unknown, rol: string | null): unknown {
+  const rec = asRecord(row)
+  if (!rec || !rol) return row
+  if (pickString(rec, ['rol', 'calidad', 'parte', 'actorDemandado'])) return row
+  return { ...rec, rol }
+}
+
+/** Consultas.ec agrupa juicios en actor / demandado (y a veces en procesos). Hay que unir todos. */
+export function collectJuicioRecords(body: unknown, inheritedRol: string | null = null, depth = 0): unknown[] {
+  if (depth > 8 || body == null) return []
+  if (Array.isArray(body)) {
+    const out: unknown[] = []
+    for (const item of body) {
+      const rec = asRecord(item)
+      if (!rec) continue
+      if (looksLikeProceso(rec)) {
+        out.push(stampRol(item, inheritedRol))
+        continue
+      }
+      out.push(...collectJuicioRecords(item, inheritedRol, depth + 1))
+    }
+    return out
+  }
+  const rec = asRecord(body)
+  if (!rec) return []
+  if (looksLikeProceso(rec) && inheritedRol) {
+    return [stampRol(rec, inheritedRol)]
+  }
+
+  const out: unknown[] = []
+  for (const [key, value] of Object.entries(rec)) {
+    const rol = roleFromKeyName(key) || inheritedRol
+    if (Array.isArray(value) || asRecord(value)) {
+      out.push(...collectJuicioRecords(value, rol, depth + 1))
+    }
+  }
+  return out
+}
+
+function dedupeJuicios(procesos: ConsultasJuicio[]): ConsultasJuicio[] {
+  const seen = new Set<string>()
+  const out: ConsultasJuicio[] = []
+  for (const row of procesos) {
+    const key = [row.causa, row.accion, row.rol, row.fecha, row.estado].join('|').toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(row)
+  }
+  return out
+}
+
 function listFromBody(body: unknown): unknown[] {
   if (Array.isArray(body)) return body
   const rec = asRecord(body)
@@ -60,7 +150,19 @@ function listFromBody(body: unknown): unknown[] {
 function mapJuicio(row: unknown): ConsultasJuicio | null {
   const rec = asRecord(row)
   if (!rec) return null
-  const causa = pickString(rec, ['causa', 'numeroCausa', 'numero_causa', 'nroCausa', 'n_causa', 'idJuicio', 'id'])
+  const causa = pickString(rec, [
+    'causa',
+    'numeroCausa',
+    'numero_causa',
+    'nroCausa',
+    'n_causa',
+    'idJuicio',
+    'idjuicio',
+    'id_juicio',
+    'juicio',
+    'proceso',
+    'id',
+  ])
   const accion = pickString(rec, ['accion', 'tipoAccion', 'tipo_accion', 'tipo', 'materia', 'infraccion'])
   const fecha = pickString(rec, ['fecha', 'fechaIngreso', 'fecha_ingreso', 'anio', 'year'])
   const rol = pickString(rec, ['rol', 'calidad', 'parte', 'actorDemandado'])
@@ -72,9 +174,11 @@ function mapJuicio(row: unknown): ConsultasJuicio | null {
 function parseJuiciosBody(body: unknown): { titular: string | null; procesos: ConsultasJuicio[] } {
   const rec = asRecord(body)
   const titular = pickString(rec, ['nombre', 'titular', 'nombres', 'razonSocial', 'razon_social'])
-  const procesos = listFromBody(body)
-    .map(mapJuicio)
-    .filter((row): row is ConsultasJuicio => Boolean(row))
+  const procesos = dedupeJuicios(
+    collectJuicioRecords(body)
+      .map(mapJuicio)
+      .filter((row): row is ConsultasJuicio => Boolean(row))
+  )
   return { titular, procesos }
 }
 
@@ -247,7 +351,7 @@ export async function fetchJuiciosRaw(cedula: string): Promise<{
     error: null,
     titular: parsed.titular,
     body: result.data,
-    procesos: listFromBody(result.data),
+    procesos: collectJuicioRecords(result.data),
   }
 }
 

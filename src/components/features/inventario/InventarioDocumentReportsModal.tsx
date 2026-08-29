@@ -751,10 +751,7 @@ export function InventarioDocumentReport({
                                                 <td className="px-3 py-3">
                                                     <PendingValuesCell pending={contraste?.pending} />
                                                 </td>
-                                                <td
-                                                    className="px-3 py-3 whitespace-nowrap"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
+                                                <td className="px-3 py-3 whitespace-nowrap">
                                                     {!linked || progress.total === 0 ? (
                                                         <span className="text-[11px] text-slate-400">—</span>
                                                     ) : pending === 0 ? (
@@ -765,9 +762,10 @@ export function InventarioDocumentReport({
                                                         <button
                                                             type="button"
                                                             title="Abrir documentos pendientes"
-                                                            onClick={() =>
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
                                                                 onOpenVehicle?.(v, "documentos", { openUpload: true })
-                                                            }
+                                                            }}
                                                             className={`inline-flex items-center gap-1 text-[12px] font-medium hover:underline ${
                                                                 pending === 1 ? "text-amber-800" : "text-red-700"
                                                             }`}

@@ -603,7 +603,14 @@ export function DocumentUploadWizardModal({
     return (
       <div
         className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4"
-        onClick={blocked ? undefined : dismissReview}
+        onClick={
+          blocked
+            ? undefined
+            : (e) => {
+                e.stopPropagation()
+                dismissReview()
+              }
+        }
       >
         <div
           role="dialog"
@@ -673,7 +680,14 @@ export function DocumentUploadWizardModal({
   return (
     <div
       className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 p-4"
-      onClick={busy || validating ? undefined : onClose}
+      onClick={
+        busy || validating
+          ? undefined
+          : (e) => {
+              e.stopPropagation()
+              onClose()
+            }
+      }
     >
       <div
         role="dialog"

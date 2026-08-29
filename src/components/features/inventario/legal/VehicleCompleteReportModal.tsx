@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { FileText, Loader2, Printer, X } from 'lucide-react'
+import { Download, FileText, Loader2, X } from 'lucide-react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   buildContrastMatrix,
@@ -44,8 +46,18 @@ function usd(n: number | null | undefined): string {
   return `$${(n ?? 0).toFixed(2)}`
 }
 
+function pdfLastY(pdf: jsPDF, fallback: number): number {
+  const table = (pdf as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+  return table?.finalY ?? fallback
+}
+
+function factText(value: string | number | null | undefined): string {
+  if (value == null || String(value).trim() === '') return '—'
+  return String(value)
+}
+
 function Fact({ label, value }: { label: string; value: string | number | null | undefined }) {
-  const text = value == null || String(value).trim() === '' ? '—' : String(value)
+  const text = factText(value)
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
       <p className="text-[11px] text-slate-500">{label}</p>
@@ -93,6 +105,7 @@ function estadoBadgeClass(estado: string): string {
 export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props) {
   const { supabase } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
   const [payload, setPayload] = useState<EcuadorContrastePayload | null>(null)
   const [consultedAt, setConsultedAt] = useState<string | null>(null)
 
@@ -179,8 +192,179 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
   const contrastSummary = useMemo(() => summarizeMatrix(matrix, showAmt), [matrix, showAmt])
   const differenceLabels = matrix.filter((row) => row.resultado.kind === 'missing').map((row) => row.label)
 
+  const handleDownload = () => {
+    if (downloading || loading) return
+    setDownloading(true)
+    try {
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
+      const tableOpts = {
+        styles: { fontSize: 8, cellPadding: 1.5 },
+        headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
+        margin: { left: 14, right: 14 },
+      }
+
+      pdf.setFontSize(16)
+      pdf.text('Informe completo', 14, 16)
+      pdf.setFontSize(10)
+      pdf.setTextColor(80)
+      pdf.text(
+        `${vehiculo.marca} ${vehiculo.modelo} · ${vehiculo.placa}${
+          consultedAt ? ` · ${formatContrasteConsultedPretty(consultedAt)}` : ''
+        }`,
+        14,
+        23
+      )
+      pdf.setTextColor(0)
+
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: 28,
+        head: [['Ficha del vehículo', '']],
+        body: [
+          ['Marca', factText(vehiculo.marca)],
+          ['Modelo', factText(vehiculo.modelo)],
+          ['Año', factText(vehiculo.anioModelo)],
+          ['Placa', factText(vehiculo.placa)],
+          ['Color', factText(vehiculo.color)],
+          ['Tipo', factText(vehiculo.tipo)],
+          ['Motor', factText(vehiculo.motor)],
+          ['Chasis', factText(vehiculo.chasis)],
+          ['Cilindraje', factText(vehiculo.cilindraje)],
+          ['Combustible', factText(vehiculo.combustible)],
+          ['País origen', factText(vehiculo.paisOrigen)],
+          ['Año matrícula', factText(vehiculo.anioMatricula)],
+          ['Lugar matrícula', factText(vehiculo.lugarMatricula)],
+          ['Proveedor', factText(vehiculo.proveedor)],
+          ['Kilometraje', factText(vehiculo.mileage)],
+        ],
+      })
+
+      let y = pdfLastY(pdf, 28) + 8
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: y,
+        head: [['Consulta oficial', '']],
+        body: payload
+          ? [
+              ['Propietario SRI/ANT', factText(lookup?.ownerName)],
+              ['Cantón', factText(lookup?.canton)],
+              ['Último año pagado', factText(lookup?.lastPaidYear)],
+              ['Última matrícula', factText(lookup?.lastRegistrationDate)],
+              ['Vigente hasta', factText(lookup?.registrationExpiry)],
+              ['Marca/modelo oficial', factText(payload.vehicleLabel)],
+            ]
+          : [['Estado', 'Aún no hay consulta oficial']],
+      })
+
+      y = pdfLastY(pdf, y) + 8
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: y,
+        head: [['Valores SRI', 'Monto']],
+        body: sri
+          ? [
+              ['Matrícula', usd(sri.matricula)],
+              ['Transferencia', factText(usd(sri.transferencia))],
+              ['Revisión', usd(sri.revision)],
+              ['Total', usd(sri.total)],
+              ...sri.otros.map((item) => [item.label, usd(item.amount)]),
+            ]
+          : [['Estado', 'Sin datos SRI']],
+      })
+
+      y = pdfLastY(pdf, y) + 8
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: y,
+        head: [['Multas ANT', 'N.º', 'Estado', 'Monto']],
+        body:
+          citations.length === 0
+            ? [['Sin citaciones', '', '', '']]
+            : citations.map((c) => [
+                factText(c.infraction || c.article || 'Citación'),
+                factText(c.citationNumber),
+                citationStatusLabel(c.status),
+                usd(c.total ?? c.fine),
+              ]),
+      })
+
+      if (dossier.fines.length > 0) {
+        y = pdfLastY(pdf, y) + 8
+        autoTable(pdf, {
+          ...tableOpts,
+          startY: y,
+          head: [['Multas internas', 'Estado', 'Monto']],
+          body: dossier.fines.map((fine) => [fine.title, statusLabel(fine.status), usd(fine.amount)]),
+        })
+      }
+
+      if (dossier.owners.length > 0) {
+        y = pdfLastY(pdf, y) + 8
+        autoTable(pdf, {
+          ...tableOpts,
+          startY: y,
+          head: [['Propietarios internos', 'Cédula', '']],
+          body: dossier.owners.map((owner) => [
+            owner.owner_name,
+            factText(owner.id_number),
+            owner.is_current ? 'actual' : '',
+          ]),
+        })
+      }
+
+      if (dossier.notes.length > 0) {
+        y = pdfLastY(pdf, y) + 8
+        autoTable(pdf, {
+          ...tableOpts,
+          startY: y,
+          head: [['Notas internas', '']],
+          body: dossier.notes.map((note) => [`${note.author_name}: ${note.note_text}`, '']),
+        })
+      }
+
+      y = pdfLastY(pdf, y) + 8
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: y,
+        head: [showAmt ? ['Dato', 'SRI', 'ANT', 'AMT', 'Resultado'] : ['Dato', 'SRI', 'ANT', 'Resultado']],
+        body: matrix.map((row) =>
+          showAmt
+            ? [row.label, row.sri.text, row.ant.text, row.amt.text, row.resultado.text]
+            : [row.label, row.sri.text, row.ant.text, row.resultado.text]
+        ),
+      })
+
+      y = pdfLastY(pdf, y) + 8
+      autoTable(pdf, {
+        ...tableOpts,
+        startY: y,
+        head: [['Resumen del contraste', '']],
+        body: payload
+          ? [
+              ['Coinciden', String(contrastSummary.coinciden)],
+              ['Diferencias', String(contrastSummary.diferencias)],
+              ['Sin verificar', String(contrastSummary.sinVerificar)],
+              ['Estado', contrasteEstadoLabel(contrastSummary.estadoGeneral)],
+              ['Detalle', contrasteEstadoMessage(contrastSummary.estadoGeneral)],
+              ...(sri && sri.total > 0 ? [['SRI pendiente', usd(sri.total)]] : []),
+            ]
+          : [['Estado', 'Aún no hay datos oficiales']],
+      })
+
+      pdf.save(`informe-completo-${vehiculo.placa}.pdf`)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 print:static print:bg-white print:p-0" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 print:static print:bg-white print:p-0"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -198,14 +382,15 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
               {consultedAt ? ` · consulta oficial ${formatContrasteConsultedPretty(consultedAt)}` : ''}
             </p>
           </div>
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={handleDownload}
+              disabled={loading || downloading}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" />
-              Imprimir
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Descargar
             </button>
             <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full" aria-label="Cerrar informe">
               <X className="h-5 w-5" />
@@ -357,24 +542,6 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                 </Section>
               ) : null}
 
-              <Section title="Documentos del encargado">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {VEHICLE_DOCUMENT_CATALOG.map((item) => {
-                    const doc = dossier.documents.find((d) => d.doc_type === item.docType)
-                    return (
-                      <div key={item.docType} className="rounded-xl border border-slate-200 px-3 py-2">
-                        <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {doc ? statusLabel(doc.status) : 'Sin registro'}
-                          {doc?.expires_at ? ` · vence ${doc.expires_at}` : ''}
-                          {doc?.file_name ? ` · ${doc.file_name}` : ''}
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Section>
-
               {dossier.owners.length > 0 ? (
                 <Section title="Propietarios internos">
                   <ul className="space-y-1 text-sm">
@@ -409,11 +576,10 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[720px] text-left text-xs">
+                    <table className="w-full min-w-[640px] text-left text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                           <th className="px-3 py-2.5">Dato</th>
-                          <th className="px-3 py-2.5">Encargado</th>
                           <th className="px-3 py-2.5">SRI</th>
                           <th className="px-3 py-2.5">ANT</th>
                           {showAmt ? <th className="px-3 py-2.5">AMT</th> : null}
@@ -424,7 +590,6 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                         {matrix.map((row) => (
                           <tr key={row.key} className="border-b border-slate-100 last:border-0">
                             <td className="px-3 py-2.5 font-semibold text-slate-800">{row.label}</td>
-                            <td className="px-3 py-2.5 text-slate-600">{row.encargado}</td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.sri.kind)}`}>{row.sri.text}</td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.ant.kind)}`}>{row.ant.text}</td>
                             {showAmt ? (

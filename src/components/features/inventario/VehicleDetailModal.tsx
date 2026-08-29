@@ -160,8 +160,14 @@ export function VehicleDetailModal({
   ]
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between p-6 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-blue-200 shadow-lg">

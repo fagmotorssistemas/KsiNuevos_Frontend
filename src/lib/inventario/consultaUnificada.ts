@@ -171,6 +171,22 @@ function collectRecordArrays(value: unknown): unknown[] {
   if (Array.isArray(value) && value.some((item) => asRecord(item))) return value
   const rec = asRecord(value)
   if (!rec) return []
+  const fromRoles: unknown[] = []
+  for (const [key, nested] of Object.entries(rec)) {
+    const k = key.toLowerCase()
+    if ((k.includes('actor') || k.includes('demand')) && Array.isArray(nested) && nested.some((item) => asRecord(item))) {
+      fromRoles.push(
+        ...nested.map((item) => {
+          const itemRec = asRecord(item)
+          if (!itemRec) return item
+          const hasRol = stringifyValue(itemRec.rol) || stringifyValue(itemRec.calidad) || stringifyValue(itemRec.parte)
+          if (hasRol) return item
+          return { ...itemRec, rol: k.includes('demand') ? 'Demandado' : 'Actor' }
+        })
+      )
+    }
+  }
+  if (fromRoles.length > 0) return fromRoles
   for (const key of ['procesos', 'juicios', 'causas', 'actuaciones', 'resoluciones', 'citations', 'items', 'data', 'results', 'multas']) {
     const nested = rec[key]
     if (Array.isArray(nested) && nested.some((item) => asRecord(item))) return nested

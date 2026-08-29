@@ -777,8 +777,11 @@ function VehicleAiReportModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[92] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
     >
       <div
         role="dialog"
@@ -1282,7 +1285,10 @@ function AiPhotoLightbox({ preview, onClose }: { preview: PhotoPreview; onClose:
   return (
     <div
       className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/70 p-4"
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
     >
       <div
         className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col"

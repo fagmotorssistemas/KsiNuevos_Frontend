@@ -324,7 +324,7 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
           ? 'La fuente indica el tipo de proceso y el rol (p. ej. actor). Eso no permite concluir que la persona haya cometido la infracción.'
           : 'Sin procesos en Función Judicial.',
       transit,
-      other: judicialRows.filter((row) => !/transito|velocidad|senal|traspaso|contravencion/i.test(norm(row.action + row.plainAction))),
+      other: judicialRows,
       years: [...new Set(judicialRows.map((row) => yearOf(row.date)).filter(Boolean))].join(', '),
     },
     alerts,
