@@ -29,6 +29,13 @@ type EcuadorEnvelope<T> = {
   code?: string | null
 }
 
+type ApiPerson = {
+  full_name?: string | null
+  id?: string | null
+  sri?: { full_name?: string | null; id?: string | null } | null
+  ant?: { full_name?: string | null; id?: string | null } | null
+}
+
 type PlateApiRow = {
   plate?: string
   brand?: string | null
@@ -39,7 +46,21 @@ type PlateApiRow = {
   last_registration_date?: string | null
   registration_expiry_date?: string | null
   fetched_at?: string | null
-  owner?: { full_name?: string | null } | null
+  owner?: ApiPerson | null
+  owner_sri?: ApiPerson | null
+  owner_ant?: ApiPerson | null
+  sri_owner?: ApiPerson | null
+  ant_owner?: ApiPerson | null
+}
+
+function personName(person: ApiPerson | null | undefined): string | null {
+  const name = person?.full_name?.trim()
+  return name || null
+}
+
+function personId(person: ApiPerson | null | undefined): string | null {
+  const id = person?.id?.trim()
+  return id || null
 }
 
 export class EcuadorApiError extends Error {
@@ -131,12 +152,21 @@ async function ecuadorGetJsonUncached<T>(path: string, timeoutMs: number): Promi
 }
 
 function mapPlate(d: PlateApiRow, placa: string): EcuadorPlateLookup {
+  const ownerNameSri =
+    personName(d.sri_owner) || personName(d.owner_sri) || personName(d.owner?.sri) || personName(d.owner)
+  const ownerNameAnt = personName(d.ant_owner) || personName(d.owner_ant) || personName(d.owner?.ant)
+  const ownerIdSri = personId(d.sri_owner) || personId(d.owner_sri) || personId(d.owner?.sri) || personId(d.owner)
+  const ownerIdAnt = personId(d.ant_owner) || personId(d.owner_ant) || personId(d.owner?.ant)
   return {
     plate: d.plate || placa,
     brand: d.brand ?? null,
     model: d.model ?? null,
     year: d.year ?? null,
-    ownerName: d.owner?.full_name ?? null,
+    ownerName: ownerNameSri,
+    ownerNameSri,
+    ownerNameAnt,
+    ownerIdSri,
+    ownerIdAnt,
     canton: d.canton ?? null,
     lastPaidYear: d.last_paid_year ?? null,
     lastRegistrationDate: d.last_registration_date ?? null,
@@ -177,6 +207,9 @@ type MultasApiRow = {
   total_pending?: number | null
   pending_count?: number | null
   fetched_at?: string | null
+  owner_id?: string | null
+  owner_name?: string | null
+  owner?: ApiPerson | null
   citations?: Array<{
     id?: string | null
     entity?: string | null
@@ -214,6 +247,8 @@ async function fetchMultasSafe(placa: string): Promise<{
   citations: EcuadorCitation[]
   pendingCount: number
   pendingTotal: number
+  ownerName: string | null
+  ownerId: string | null
 } | null> {
   try {
     const row = await ecuadorGetJson<MultasApiRow>(`/multas/${encodeURIComponent(placa)}`)
@@ -221,6 +256,8 @@ async function fetchMultasSafe(placa: string): Promise<{
       citations: mapCitations(row),
       pendingCount: row.pending_count ?? 0,
       pendingTotal: row.total_pending ?? 0,
+      ownerName: personName(row.owner) || row.owner_name?.trim() || null,
+      ownerId: personId(row.owner) || row.owner_id?.trim() || null,
     }
   } catch (e) {
     if (e instanceof EcuadorApiError && (e.httpStatus === 402 || e.httpStatus === 401 || e.httpStatus === 429)) {
@@ -244,6 +281,10 @@ export async function fetchEcuadorContraste(placa: string): Promise<EcuadorContr
     fetchMultasSafe(placa),
     amtPromise,
   ])
+  if (multas) {
+    lookup.ownerNameAnt = lookup.ownerNameAnt || multas.ownerName
+    lookup.ownerIdAnt = lookup.ownerIdAnt || multas.ownerId
+  }
   return buildContrastePayload({
     lookup,
     sri,

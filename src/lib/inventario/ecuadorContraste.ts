@@ -7,11 +7,35 @@ export type EcuadorPlateLookup = {
   model: string | null
   year: number | null
   ownerName: string | null
+  ownerNameSri?: string | null
+  ownerNameAnt?: string | null
+  ownerIdSri?: string | null
+  ownerIdAnt?: string | null
   canton: string | null
   lastPaidYear: number | null
   lastRegistrationDate?: string | null
   registrationExpiry: string | null
   fetchedAt: string | null
+}
+
+function trimOwner(value: string | null | undefined): string | null {
+  const text = (value || '').trim()
+  return text || null
+}
+
+/** SRI y ANT pueden reportar titulares distintos; no se mezclan en un solo campo. */
+export function contrasteOfficialOwners(lookup?: EcuadorPlateLookup | null): {
+  sri: string | null
+  ant: string | null
+} {
+  if (!lookup) return { sri: null, ant: null }
+  const sri = trimOwner(lookup.ownerNameSri) || trimOwner(lookup.ownerName)
+  const antName = trimOwner(lookup.ownerNameAnt)
+  const antId = trimOwner(lookup.ownerIdAnt)
+  return {
+    sri,
+    ant: antName || (antId ? `Cédula ${antId}` : null),
+  }
 }
 
 export type ContrastApiCell = {

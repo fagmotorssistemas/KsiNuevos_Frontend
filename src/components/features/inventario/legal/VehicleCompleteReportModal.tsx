@@ -16,6 +16,7 @@ import {
   citationStatusClass,
   citationStatusLabel,
   citationsFromPayload,
+  contrasteOfficialOwners,
   formatContrasteConsultedPretty,
   groupItemsByCitationStatus,
   sriRubros,
@@ -143,6 +144,7 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
   const citationGroups = useMemo(() => groupItemsByCitationStatus(citations), [citations])
   const sri = payload?.sri ? sriRubros(payload.sri) : null
   const lookup = payload?.lookup
+  const officialOwners = contrasteOfficialOwners(lookup)
   const hasFullHistory = payload?.citations != null
 
   const staffFinesByStatus = useMemo(() => {
@@ -246,7 +248,8 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
         head: [['Consulta oficial', '']],
         body: payload
           ? [
-              ['Propietario SRI/ANT', factText(lookup?.ownerName)],
+              ['Propietario SRI', factText(officialOwners.sri)],
+              ['Propietario ANT', factText(officialOwners.ant)],
               ['Cantón', factText(lookup?.canton)],
               ['Último año pagado', factText(lookup?.lastPaidYear)],
               ['Última matrícula', factText(lookup?.lastRegistrationDate)],
@@ -430,7 +433,8 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
               <Section title="Consulta oficial">
                 {payload ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <Fact label="Propietario SRI/ANT" value={lookup?.ownerName} />
+                    <Fact label="Propietario SRI" value={officialOwners.sri} />
+                    <Fact label="Propietario ANT" value={officialOwners.ant} />
                     <Fact label="Cantón" value={lookup?.canton} />
                     <Fact label="Último año pagado" value={lookup?.lastPaidYear} />
                     <Fact label="Última matrícula" value={lookup?.lastRegistrationDate} />
