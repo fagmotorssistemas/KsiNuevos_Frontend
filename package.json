@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev-turbopack": "next dev --turbopack",
-    "build": "node scripts/copy-ffmpeg-core.mjs && cross-env NODE_OPTIONS=--max-old-space-size=4096 next build --webpack",
+    "build": "node scripts/copy-ffmpeg-core.mjs && cross-env NODE_OPTIONS=--max-old-space-size=4096 BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node scripts/copy-ffmpeg-core.mjs",
@@ -52,7 +52,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "baseline-browser-mapping": "^2.9.19",
+    "baseline-browser-mapping": "^2.11.20",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "eslint": "^9",
