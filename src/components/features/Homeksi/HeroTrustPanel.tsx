@@ -11,7 +11,6 @@ const TRUST_ITEMS = [
     photo: "/home/garantia-documentos.png",
     photoAlt: "Entrega de certificado de garantía K-si Nuevos",
     photoPosition: "object-cover object-[54%_center]",
-    photoSide: "right" as const,
   },
   {
     icon: Timer,
@@ -21,7 +20,6 @@ const TRUST_ITEMS = [
     photoAlt: "Entrega inmediata de vehículo en K-si Nuevos",
     photoPosition: "object-contain object-right",
     photoFlush: true as const,
-    photoSide: "right" as const,
   },
   {
     icon: Landmark,
@@ -30,7 +28,6 @@ const TRUST_ITEMS = [
     photo: "/home/credito-a-tu-medida.jpg",
     photoAlt: "Crédito K-si Nuevos a tu medida",
     photoPosition: "object-cover object-[74%_center]",
-    photoSide: "right" as const,
     photoEdge: "straight" as const,
   },
 ] as const;
@@ -61,7 +58,6 @@ export function HeroTrustPanel() {
           {TRUST_ITEMS.map((item) => {
             const Icon = item.icon;
             const hasPhoto = "photo" in item && item.photo;
-            const photoLeft = hasPhoto && item.photoSide === "left";
             const photoFlush = hasPhoto && "photoFlush" in item && item.photoFlush;
             const photoStraight = hasPhoto && "photoEdge" in item && item.photoEdge === "straight";
             return (
@@ -72,27 +68,17 @@ export function HeroTrustPanel() {
               >
                 {hasPhoto ? (
                   <>
-                    <div
-                      className={`relative z-10 w-[40%] shrink-0 px-5 py-5 ${
-                        photoLeft ? "ml-auto text-right" : ""
-                      }`}
-                    >
+                    <div className="relative z-10 w-[40%] shrink-0 px-5 py-5">
                       <h3 className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.14em] text-neutral-800 leading-snug">
                         {item.title}
                       </h3>
                     </div>
-                    <div
-                      className={`absolute inset-y-0 w-[68%] ${
-                        photoLeft ? "left-0" : "right-0"
-                      }`}
-                    >
+                    <div className="absolute inset-y-0 right-0 w-[68%]">
                       <div
                         className={`absolute inset-0 ${
                           photoStraight
                             ? ""
-                            : photoLeft
-                              ? "[clip-path:polygon(0_0,90%_0,100%_100%,0_100%)]"
-                              : "[clip-path:polygon(10%_0,100%_0,100%_100%,0_100%)]"
+                            : "[clip-path:polygon(10%_0,100%_0,100%_100%,0_100%)]"
                         }`}
                       >
                         {photoFlush ? (
@@ -115,10 +101,8 @@ export function HeroTrustPanel() {
                       </div>
                       <div
                         className={
-                          photoLeft
-                            ? "absolute inset-y-0 right-0 w-[22%] bg-gradient-to-l from-white via-white/55 to-transparent"
-                            : photoFlush
-                              ? "absolute inset-y-0 left-0 w-[32%] bg-gradient-to-r from-white via-white/50 to-transparent"
+                          photoFlush
+                            ? "absolute inset-y-0 left-0 w-[32%] bg-gradient-to-r from-white via-white/50 to-transparent"
                             : photoStraight
                               ? "absolute inset-y-0 left-0 w-[14%] bg-gradient-to-r from-white via-white/40 to-transparent"
                               : "absolute inset-y-0 left-0 w-[22%] bg-gradient-to-r from-white via-white/55 to-transparent"
