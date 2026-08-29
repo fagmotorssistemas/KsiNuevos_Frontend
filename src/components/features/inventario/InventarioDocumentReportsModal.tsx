@@ -9,8 +9,6 @@ import {
     ChevronDown,
     Loader2,
     Car,
-    Check,
-    X,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -39,7 +37,6 @@ import {
     type OfficialPendingSummary,
 } from "@/lib/inventario/ecuadorContraste";
 import { listLatestContrasteConsultasByPlacas } from "@/services/contrasteConsultas.service";
-import { listAiInformeByPlacas } from "@/services/vehicleAiInformes.service";
 import { VehicleDocumentFilesModal } from "@/components/features/inventario/legal/VehicleDocumentFilesModal";
 import type { VehicleDocumentFileRow, VehicleDocumentRow } from "@/types/vehicleLegal.types";
 import type { VehiculoInventario } from "@/types/inventario.types";
@@ -228,29 +225,6 @@ function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | unde
                         : money(pending.antTotal)}
                 </span>
             </div>
-        </div>
-    );
-}
-
-function VerificationStack({ apiOk, iaOk }: { apiOk: boolean; iaOk: boolean }) {
-    return (
-        <div className="flex flex-col gap-0.5 leading-none" title={apiOk ? "API consultada" : "Sin consulta API"}>
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-600">
-                {apiOk ? (
-                    <Check className="h-3 w-3 text-emerald-600 shrink-0" strokeWidth={2.5} aria-label="API ok" />
-                ) : (
-                    <X className="h-3 w-3 text-red-500 shrink-0" strokeWidth={2.5} aria-label="API no" />
-                )}
-                API
-            </span>
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-600" title={iaOk ? "Informe IA generado" : "Sin Informe IA"}>
-                {iaOk ? (
-                    <Check className="h-3 w-3 text-emerald-600 shrink-0" strokeWidth={2.5} aria-label="IA ok" />
-                ) : (
-                    <X className="h-3 w-3 text-red-500 shrink-0" strokeWidth={2.5} aria-label="IA no" />
-                )}
-                IA
-            </span>
         </div>
     );
 }
@@ -500,7 +474,6 @@ export function InventarioDocumentReport({
     const [sortAsc, setSortAsc] = useState(true);
     const [checklistData, setChecklistData] = useState<VehicleLegalChecklistBulk | null>(null);
     const [contrasteByPlate, setContrasteByPlate] = useState<Map<string, { consultedAt: string; pending: OfficialPendingSummary }>>(new Map());
-    const [aiOkByPlate, setAiOkByPlate] = useState<Map<string, boolean>>(new Map());
     const [loadingChecklist, setLoadingChecklist] = useState(false);
     const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
     const [expandedProId, setExpandedProId] = useState<string | null>(null);
@@ -514,7 +487,6 @@ export function InventarioDocumentReport({
         if (vehiculos.length === 0) {
             setChecklistData(null);
             setContrasteByPlate(new Map());
-            setAiOkByPlate(new Map());
             return;
         }
         let cancelled = false;
@@ -525,12 +497,8 @@ export function InventarioDocumentReport({
                 supabase,
                 vehiculos.map((v) => v.placa)
             ),
-            listAiInformeByPlacas(
-                supabase,
-                vehiculos.map((v) => v.placa)
-            ),
         ])
-            .then(([checklistResult, contrasteResult, aiResult]) => {
+            .then(([checklistResult, contrasteResult]) => {
                 if (cancelled) return;
                 setChecklistData(
                     checklistResult.status === "fulfilled"
@@ -540,7 +508,6 @@ export function InventarioDocumentReport({
                 setContrasteByPlate(
                     contrasteResult.status === "fulfilled" ? contrasteResult.value : new Map()
                 );
-                setAiOkByPlate(aiResult.status === "fulfilled" ? aiResult.value : new Map());
             })
             .finally(() => {
                 if (!cancelled) setLoadingChecklist(false);
@@ -720,9 +687,6 @@ export function InventarioDocumentReport({
                                     onSort={handleSort}
                                     className="min-w-[220px]"
                                 />
-                                <th className="px-2 py-3 text-left text-[13px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">
-                                    Verificación
-                                </th>
                                 <SortableHeader
                                     label="Placa"
                                     sortKey="plate"
@@ -780,12 +744,6 @@ export function InventarioDocumentReport({
                                             >
                                                 <td className={`px-3 py-3 min-w-[220px] max-w-[320px] ${expanded ? "bg-blue-50/50" : "bg-white group-hover:bg-blue-50/30"}`}>
                                                     <VehicleNameCell vehiculo={v} />
-                                                </td>
-                                                <td className="px-2 py-3 whitespace-nowrap">
-                                                    <VerificationStack
-                                                        apiOk={Boolean(consultedAt)}
-                                                        iaOk={aiOkByPlate.get(normalizePlate(v.placa)) === true}
-                                                    />
                                                 </td>
                                                 <td className="px-3 py-3 font-mono text-[13px] font-semibold text-slate-700 whitespace-nowrap">
                                                     {v.placa}
