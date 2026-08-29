@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { PUBLIC_PATHS } from "@/lib/nav/publicPaths";
+import { CUENCA_SEO } from "@/lib/seo/cuenca-landing";
 
 const TRUST_ITEMS = [
   {
@@ -29,13 +30,13 @@ const TRUST_ITEMS = [
 ] as const;
 
 const CTA_CLASS =
-  "relative z-0 inline-flex w-full items-center justify-center bg-white py-5 text-xl font-bold uppercase tracking-tight text-neutral-950 shadow-[0_1px_1px_rgba(15,15,15,0.04),0_10px_24px_-14px_rgba(15,15,15,0.28)] transition-[transform,box-shadow] duration-300 [-webkit-text-stroke:0.45px_currentColor] hover:z-10 hover:-translate-y-1 hover:scale-110 hover:shadow-[0_2px_2px_rgba(15,15,15,0.05),0_16px_32px_-14px_rgba(15,15,15,0.32)] md:text-2xl";
+  "relative z-0 inline-flex h-full min-h-[4.75rem] w-full items-center justify-center bg-white px-4 text-center text-sm font-bold uppercase leading-tight tracking-tight text-neutral-950 shadow-[0_1px_1px_rgba(15,15,15,0.04),0_10px_24px_-14px_rgba(15,15,15,0.28)] transition-[transform,box-shadow] duration-300 [-webkit-text-stroke:0.45px_currentColor] hover:z-10 hover:-translate-y-1 hover:scale-[1.04] hover:shadow-[0_2px_2px_rgba(15,15,15,0.05),0_16px_32px_-14px_rgba(15,15,15,0.32)] sm:px-6 sm:text-base md:text-xl md:leading-none";
 
 export function HeroTrustPanel() {
   return (
-    <section className="relative z-10 -mt-10 bg-gradient-to-b from-transparent via-white via-[18%] to-white px-6 pb-8 pt-16 md:px-10 lg:px-14 md:pb-10 md:pt-20">
+    <section className="relative z-10 -mt-10 overflow-x-clip bg-gradient-to-b from-transparent via-white via-[18%] to-white px-6 pb-8 pt-16 md:px-10 lg:px-14 md:pb-10 md:pt-20">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-12 grid grid-cols-1 gap-3 px-[2cm] sm:grid-cols-2 sm:gap-4">
+        <div className="mb-16 grid grid-cols-1 gap-3 px-2 sm:grid-cols-2 sm:gap-5 sm:px-6 md:px-10 lg:px-14">
           <Link href={PUBLIC_PATHS.comprar} className={CTA_CLASS}>
             Comprar auto
           </Link>
@@ -44,12 +45,18 @@ export function HeroTrustPanel() {
           </Link>
         </div>
 
-        <p className="mb-2 text-sm md:text-base font-semibold uppercase tracking-[0.2em] text-red-700">
-          K-si Nuevos
-        </p>
-        <h2 className="mb-7 text-2xl md:text-3xl font-semibold tracking-tight text-neutral-900">
-          ¿Por qué K-si Nuevos es tu mejor opción?
-        </h2>
+        <header className="mb-14 max-w-3xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-red-700">
+            K-si Nuevos · Cuenca, Azuay
+          </p>
+          <span className="mt-4 mb-6 block h-px w-8 bg-red-700/50" aria-hidden />
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 leading-snug md:text-[1.85rem] md:leading-tight">
+            {CUENCA_SEO.h1}
+          </h1>
+          <p className="mt-6 text-sm leading-7 text-neutral-500 md:text-[15px] md:leading-8">
+            {CUENCA_SEO.intro}
+          </p>
+        </header>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 pb-4">
           {TRUST_ITEMS.map((item) => {
             const photoFlush = "photoFlush" in item && item.photoFlush;

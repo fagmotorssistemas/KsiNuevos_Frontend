@@ -22,11 +22,11 @@ export const CreditHero = () => {
         {/* 1. Títulos y Subtítulos */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-6xl font-extrabold text-[#333333] mb-4 leading-tight">
-            Tu auto soñado <br className="hidden md:block" />
-            financiado a tu medida
+            Crédito para tu auto usado <br className="hidden md:block" />
+            en Cuenca, a tu medida
           </h1>
           <p className="text-lg text-gray-600">
-            Solo necesitás tu identificación para simular. Elegí la opción que prefieras:
+            Financia carros y seminuevos en sala. Solo necesitas tu identificación para simular.
           </p>
         </div>
 

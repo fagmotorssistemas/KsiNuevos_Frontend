@@ -7,6 +7,11 @@ import { BlogSection } from '@/components/features/aboutUs/BlogSection';
 import { ContactSection } from '@/components/features/aboutUs/ContactSection';
 import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
 import { MainFooter } from '@/components/layout/Homeksi/MainFooter';
+import { nosotrosMetadata } from '@/lib/seo/public-copy';
+
+export function generateMetadata() {
+  return nosotrosMetadata();
+}
 
 export default function NosotrosCuencaPage() {
   return (

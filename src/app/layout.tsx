@@ -28,8 +28,12 @@ const satoshi = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'KSI-NUEVOS',
-  description: 'Concesionaria Cuenca.',
+  metadataBase: new URL('https://www.ksinuevos.com'),
+  title: {
+    default: 'K-si Nuevos | Seminuevos en Cuenca',
+  },
+  description:
+    'Autos usados y seminuevos en Cuenca. Compra, venta, parte de pago y crédito en K-si Nuevos.',
   icons: {
     icon: '/logo.png',
   },

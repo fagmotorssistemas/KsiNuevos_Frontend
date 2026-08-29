@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { InventorySearch } from "@/components/features/financing/InventorySearch";
 import type { InventoryCarRow } from "@/components/features/financing/FinancingUtils";
-import { getVehiclePublicPath } from "@/lib/inventario/vehicle-public-slug";
+import { getVehicleBrandPath, getVehiclePublicPath } from "@/lib/inventario/vehicle-public-slug";
 
 export function NavbarVehicleSearch({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -41,6 +41,14 @@ export function NavbarVehicleSearch({ className = "" }: { className?: string }) 
     };
   }, [supabase]);
 
+  const handleBrowseBrand = useCallback(
+    (brand: string) => {
+      setSelectedCar(null);
+      router.push(getVehicleBrandPath(brand));
+    },
+    [router]
+  );
+
   const handleSelect = useCallback(
     (car: InventoryCarRow) => {
       setSelectedCar(car);
@@ -57,6 +65,7 @@ export function NavbarVehicleSearch({ className = "" }: { className?: string }) 
         inventory={inventory}
         selectedVehicle={selectedCar}
         onSelect={handleSelect}
+        onBrowseBrand={handleBrowseBrand}
         onClear={() => setSelectedCar(null)}
         isLoading={isLoading}
         compact

@@ -15,16 +15,16 @@ export const HeroSection = () => {
 
       <div className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-10">
         <span className="inline-block py-1 px-3 rounded-full bg-red-600/10 text-red-500 text-sm font-bold tracking-widest uppercase mb-4 border border-red-600/20 backdrop-blur-sm">
-          Concesionaria Premium
+          Patio de seminuevos en Cuenca
         </span>
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 tracking-tight leading-tight">
-          Tu próximo auto, <br/>
+          Autos usados en Cuenca, <br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-700">
             con confianza total.
           </span>
         </h1>
         <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto font-light leading-relaxed">
-          En <strong>K-si Nuevos</strong> redefinimos la experiencia de compra. Calidad certificada, transparencia absoluta y el respaldo que mereces.
+          En <strong>K-si Nuevos</strong> redefinimos la compra de carros y seminuevos. Calidad certificada, atención en sala y el respaldo que mereces.
         </p>
       </div>
     </section>

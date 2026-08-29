@@ -112,13 +112,13 @@ export const HeroSell = () => {
             {/* Texto Izquierdo (Sin cambios) */}
             <div className="space-y-6">
                  <h1 className="text-4xl lg:text-6xl font-extrabold tracking-tight text-black">
-                  Vende tu auto <br/>
+                  Vende tu auto usado <br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-800">
-                    sin complicaciones.
+                    en Cuenca, sin complicaciones.
                   </span>
                 </h1>
                 <p className="text-lg text-neutral-600 max-w-lg">
-                 Sin citas con extraños, sin trámites burocráticos y con pago 100% seguro.
+                 Tasación en sala, parte de pago o consignación. Sin citas con extraños y con trámite en orden.
                 </p>
                 <div className="space-y-4 pt-4">
                     {["Cotización gratuita", "Pago vía transferencia", "Trámite notarial"].map((item, i) => (

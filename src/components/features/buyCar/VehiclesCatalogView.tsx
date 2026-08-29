@@ -10,7 +10,15 @@ import { CarCard } from "@/components/features/buyCar/CarCard";
 import { MainNavbar } from "@/components/layout/Homeksi/MainNavbar";
 import { MainFooter } from "@/components/layout/Homeksi/MainFooter";
 
-function VehiclesCatalogContent({ brandSlug }: { brandSlug?: string }) {
+function VehiclesCatalogContent({
+  brandSlug,
+  heading,
+  intro,
+}: {
+  brandSlug?: string;
+  heading?: string;
+  intro?: string;
+}) {
   const {
     cars,
     totalCount,
@@ -58,7 +66,7 @@ function VehiclesCatalogContent({ brandSlug }: { brandSlug?: string }) {
 
   return (
     <>
-      <HeroSection />
+      <HeroSection title={heading} intro={intro} />
 
       <div className="max-w-7xl mx-auto px-4 py-12 flex items-start gap-10">
         <SidebarFilters
@@ -119,7 +127,15 @@ function VehiclesCatalogContent({ brandSlug }: { brandSlug?: string }) {
   );
 }
 
-export function VehiclesCatalogView({ brandSlug }: { brandSlug?: string }) {
+export function VehiclesCatalogView({
+  brandSlug,
+  heading,
+  intro,
+}: {
+  brandSlug?: string;
+  heading?: string;
+  intro?: string;
+}) {
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col font-sans">
       <MainNavbar />
@@ -132,7 +148,11 @@ export function VehiclesCatalogView({ brandSlug }: { brandSlug?: string }) {
             </div>
           }
         >
-          <VehiclesCatalogContent brandSlug={brandSlug} />
+          <VehiclesCatalogContent
+            brandSlug={brandSlug}
+            heading={heading}
+            intro={intro}
+          />
         </Suspense>
       </main>
 

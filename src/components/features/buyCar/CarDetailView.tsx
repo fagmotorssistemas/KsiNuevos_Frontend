@@ -74,6 +74,7 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
         year={car.year}
         price={car.price || 0}
         mileage={car.mileage}
+        city={car.registration_place || "Cuenca"}
       />
 
       <div className="mt-8 space-y-3">

@@ -1,17 +1,10 @@
-"use client";
+import CreditosCuencaView from "./CreditosCuencaView";
+import { creditosMetadata } from "@/lib/seo/public-copy";
 
-import { MainNavbar } from '@/components/layout/Homeksi/MainNavbar';
-import { MainFooter } from '@/components/layout/Homeksi/MainFooter';
-import { CreditHero } from '@/components/features/creditCar/CreditHero';
+export function generateMetadata() {
+  return creditosMetadata();
+}
 
 export default function CreditosCuencaPage() {
-  return (
-    <div className="min-h-screen bg-white">
-      <MainNavbar />
-      <main>
-        <CreditHero />
-      </main>
-      <MainFooter />
-    </div>
-  );
+  return <CreditosCuencaView />;
 }

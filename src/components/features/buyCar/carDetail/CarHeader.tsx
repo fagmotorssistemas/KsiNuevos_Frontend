@@ -15,6 +15,9 @@ export const CarHeader = ({ brand, model, version, year, price, mileage, city }:
     <div className="mb-6 border-b border-neutral-200 pb-6">
       {/* Marca y Modelo */}
       <div className="flex flex-wrap items-baseline gap-3 mb-3">
+        <p className="w-full text-[11px] font-semibold uppercase tracking-[0.22em] text-red-700">
+          Usado / seminuevo en Cuenca
+        </p>
         <h1 className="text-3xl md:text-5xl font-black text-black uppercase tracking-tighter">
           {brand} {model}
         </h1>

@@ -34,33 +34,39 @@ function TikTokIcon() {
   );
 }
 
-export const MainFooter = () => {
+export function NuestraHistoriaSection() {
   return (
-    <>
-      <section className="bg-neutral-50 px-6 py-14 md:py-16">
-        <div className="max-w-7xl mx-auto">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-700">
-            Nuestra historia
-          </p>
-          <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-neutral-950 md:text-[2.5rem] md:leading-tight lg:col-span-4">
-              Nacimos en Cuenca.
-              <span className="mt-2 block text-neutral-500">Seguimos vendiéndote de frente.</span>
-            </h2>
-            <div className="space-y-5 text-sm leading-relaxed text-neutral-500 md:text-base md:leading-7 lg:col-span-6 lg:col-start-6">
-              <p>
-                Miles de autos han salido de esta sala. Cada uno con un cliente que preguntó, revisó y se fue rodando. Esa es la historia: trato claro, papeles en orden y un equipo que está cuando lo necesitas.
-              </p>
-              <p>
-                Empezamos aquí, en Azuay, atendiendo en persona. No cambiamos eso por un chat anónimo: te mostramos el auto, te explicamos el estado y te acompañamos hasta la entrega. Si hay crédito, se arma a tu medida. Si vienes a vender o a dejar el tuyo de parte de pago, te damos una respuesta concreta.
-              </p>
-              <p>
-                Lo que nos importa es que salgas seguro de lo que firmaste. Por eso la garantía está en los documentos, no en un eslogan. Así hemos crecido: de cliente en cliente, sin perder el trato de sala.
-              </p>
-            </div>
+    <section className="bg-neutral-50 px-6 py-14 md:py-16">
+      <div className="max-w-7xl mx-auto">
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-700">
+          Nuestra historia
+        </p>
+        <div className="grid gap-8 lg:grid-cols-12 lg:items-center">
+          <h2 className="text-3xl font-semibold tracking-tight text-neutral-950 md:text-[2.5rem] md:leading-tight lg:col-span-4">
+            Nacimos en Cuenca.
+            <span className="mt-2 block text-neutral-500">Seguimos vendiéndote de frente.</span>
+          </h2>
+          <div className="space-y-5 text-sm leading-relaxed text-neutral-500 md:text-base md:leading-7 lg:col-span-6 lg:col-start-6">
+            <p>
+              Miles de autos han salido de esta sala. Cada uno con un cliente que preguntó, revisó y se fue rodando. Esa es la historia: trato claro, papeles en orden y un equipo que está cuando lo necesitas.
+            </p>
+            <p>
+              Empezamos aquí, en Azuay, atendiendo en persona. No cambiamos eso por un chat anónimo: te mostramos el auto, te explicamos el estado y te acompañamos hasta la entrega. Si hay crédito, se arma a tu medida. Si vienes a vender o a dejar el tuyo de parte de pago, te damos una respuesta concreta.
+            </p>
+            <p>
+              Lo que nos importa es que salgas seguro de lo que firmaste. Por eso la garantía está en los documentos, no en un eslogan. Así hemos crecido: de cliente en cliente, sin perder el trato de sala.
+            </p>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
+
+export const MainFooter = ({ showHistoria = true }: { showHistoria?: boolean } = {}) => {
+  return (
+    <>
+      {showHistoria ? <NuestraHistoriaSection /> : null}
 
       <footer className="relative overflow-hidden text-white">
       <Image
