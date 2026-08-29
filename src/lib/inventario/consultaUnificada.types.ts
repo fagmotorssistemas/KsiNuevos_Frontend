@@ -42,4 +42,55 @@ export type UnifiedConsultaResult = {
   }
   ksi: UnifiedKsiMatch[]
   sections: UnifiedSection[]
+  report?: UnifiedReadableReport | null
+}
+
+export type ReportOwner = {
+  name: string
+  cedula: string | null
+  source: string
+}
+
+export type UnifiedReadableReport = {
+  title: string
+  vehicle: { label: string; value: string }[]
+  owners: {
+    conflict: boolean
+    ecuador: ReportOwner | null
+    consultas: ReportOwner | null
+    note: string | null
+  }
+  debts: {
+    sri: string
+    pendingFinesCount: number
+    pendingAmount: string
+    totalCitations: number
+  }
+  pendingCitations: {
+    number: string
+    date: string | null
+    entity: string
+    amount: string | null
+    points: string | null
+    motive: string
+    status: string
+    pending: boolean
+  }[]
+  infractionHistory: { label: string; years: string[]; statuses: string[] }[]
+  person: { label: string; value: string }[]
+  activity: string | null
+  judicial: {
+    total: number
+    roleNote: string
+    transit: number
+    other: { id: string; action: string; date: string | null; status: string; role: string; plainAction: string }[]
+    years: string
+  }
+  alerts: string[]
+  ksi: UnifiedKsiMatch[]
+  ai: {
+    conclusions: string[]
+    investigationSummary: string
+    error: string | null
+  } | null
 }

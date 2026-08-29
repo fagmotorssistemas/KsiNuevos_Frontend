@@ -28,7 +28,7 @@ export function useVehicleLegalDossier(
   const { supabase } = useAuth()
   const [dossier, setDossier] = useState<VehicleLegalDossier>(EMPTY)
   const [aiRejectedPhotos, setAiRejectedPhotos] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {

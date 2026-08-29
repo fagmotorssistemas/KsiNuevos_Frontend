@@ -206,6 +206,7 @@ export function VehicleDetailModal({
           placa={vehiculo.placa}
           reloadKey={contrasteReloadKey}
           contrastePayload={contrastePayload}
+          legalStatusReady={!loadingLegal}
         />
 
         <div className="flex border-b border-slate-200 px-4 overflow-x-auto shrink-0">

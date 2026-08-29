@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { classifyConsultaQuery, runUnifiedConsulta } from '@/lib/inventario/consultaUnificada'
+import { synthesizeConsultaInvestigation } from '@/lib/inventario/consultaUnificada.ai'
+
+export const maxDuration = 90
 
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient()
@@ -23,7 +26,25 @@ export async function POST(req: Request) {
 
   try {
     const data = await runUnifiedConsulta(supabase, body.query ?? '')
-    return NextResponse.json({ data })
+    const report = data.report
+    if (report) {
+      try {
+        report.ai = await synthesizeConsultaInvestigation(report)
+      } catch (error) {
+        report.ai = {
+          conclusions: [],
+          investigationSummary: '',
+          error: error instanceof Error ? error.message : 'No se pudo generar el análisis IA',
+        }
+      }
+    }
+    return NextResponse.json({
+      data: {
+        ...data,
+        sections: [],
+        report,
+      },
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'No se pudo completar la consulta'
     return NextResponse.json({ error: message }, { status: 502 })

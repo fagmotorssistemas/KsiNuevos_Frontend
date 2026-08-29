@@ -30,11 +30,13 @@ export function VehicleLegalSummaryBar({
   placa,
   reloadKey = 0,
   contrastePayload = null,
+  legalStatusReady = true,
 }: {
   summary: VehicleLegalSummary
   placa: string
   reloadKey?: number
   contrastePayload?: EcuadorContrastePayload | null
+  legalStatusReady?: boolean
 }) {
   const { supabase } = useAuth()
   const [pending, setPending] = useState<OfficialPendingSummary | null>(null)
@@ -159,12 +161,18 @@ export function VehicleLegalSummaryBar({
           <p className="text-xs text-slate-500">Estado legal</p>
         </div>
         <div className="mt-2">
-          <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${legalBadge(summary.legalStatusTone)}`}>
-            {summary.legalStatusLabel}
-          </span>
-          {summary.legalStatusHint ? (
-            <p className="mt-1.5 text-[10px] font-medium leading-snug text-slate-500">{summary.legalStatusHint}</p>
-          ) : null}
+          {legalStatusReady ? (
+            <>
+              <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${legalBadge(summary.legalStatusTone)}`}>
+                {summary.legalStatusLabel}
+              </span>
+              {summary.legalStatusHint ? (
+                <p className="mt-1.5 text-[10px] font-medium leading-snug text-slate-500">{summary.legalStatusHint}</p>
+              ) : null}
+            </>
+          ) : (
+            <span className="inline-flex text-xl font-bold text-slate-300">—</span>
+          )}
         </div>
       </div>
     </div>

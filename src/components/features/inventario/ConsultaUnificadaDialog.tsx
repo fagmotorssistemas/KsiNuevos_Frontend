@@ -1,83 +1,204 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Search, X, Car } from 'lucide-react'
+import { AlertTriangle, Loader2, Search, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type {
-  UnifiedConsultaResult,
-  UnifiedSection,
-} from '@/lib/inventario/consultaUnificada.types'
+import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
 
-function statusClass(status: UnifiedSection['status']) {
-  if (status === 'ok') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  if (status === 'empty') return 'bg-slate-50 text-slate-600 border-slate-200'
-  if (status === 'skipped') return 'bg-amber-50 text-amber-800 border-amber-200'
-  return 'bg-red-50 text-red-700 border-red-200'
-}
-
-function statusLabel(status: UnifiedSection['status']) {
-  if (status === 'ok') return 'Con datos'
-  if (status === 'empty') return 'Sin registros'
-  if (status === 'skipped') return 'No consultado'
-  return 'Error'
-}
-
-function SectionCard({ section }: { section: UnifiedSection }) {
+function Dl({ items }: { items: { label: string; value: string }[] }) {
+  if (items.length === 0) return null
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-900">{section.title}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{section.source}</p>
+    <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+      {items.map((item) => (
+        <div key={`${item.label}-${item.value}`}>
+          <dt className="text-[11px] font-semibold text-slate-500">{item.label}</dt>
+          <dd className="text-sm text-slate-900">{item.value}</dd>
         </div>
-        <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusClass(section.status)}`}>
-          {statusLabel(section.status)}
-        </span>
-      </div>
-      {section.error ? <p className="mt-2 text-sm text-red-700">{section.error}</p> : null}
-      {section.summary ? <p className="mt-2 text-sm text-slate-700">{section.summary}</p> : null}
-      {section.facts.length > 0 ? (
-        <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-          {section.facts.map((fact, index) => (
-            <div key={`${section.id}-${index}-${fact.label}`} className="min-w-0">
-              <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                {fact.label}
-                {fact.origin ? <span className="normal-case font-medium text-slate-400"> · {fact.origin}</span> : null}
-              </dt>
-              <dd className="text-sm text-slate-900 break-words">{fact.value}</dd>
-            </div>
-          ))}
-        </dl>
+      ))}
+    </dl>
+  )
+}
+
+function ReportView({ report }: { report: UnifiedReadableReport }) {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-bold text-slate-900">{report.title}</h3>
+
+      {report.alerts.length > 0 ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">Alertas</p>
+          <ul className="mt-2 space-y-1.5">
+            {report.alerts.map((alert) => (
+              <li key={alert} className="flex items-start gap-2 text-sm text-amber-950">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                {alert}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
-      {section.rows.length > 0 ? (
-        <ul className="mt-3 space-y-2">
-          {section.rows.map((row, index) => (
-            <li key={`${row.title}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-              <p className="text-xs font-semibold text-slate-900">{row.title}</p>
-              {row.subtitle ? <p className="text-[11px] text-slate-500 mt-0.5">{row.subtitle}</p> : null}
-              {row.facts.length > 0 ? (
-                <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5">
-                  {row.facts.map((fact, factIndex) => (
-                    <div key={`${fact.label}-${factIndex}`}>
-                      <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{fact.label}</dt>
-                      <dd className="text-xs text-slate-800 break-words">{fact.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-              {row.rawJson ? (
-                <details className="mt-2">
-                  <summary className="text-[11px] font-semibold text-violet-800 cursor-pointer">JSON completo del proceso</summary>
-                  <pre className="mt-1 overflow-x-auto rounded-lg bg-slate-900 text-slate-100 text-[10px] leading-relaxed p-2 max-h-56">
-                    {row.rawJson}
-                  </pre>
-                </details>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+
+      {report.ai?.conclusions.length ? (
+        <section className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <p className="text-sm font-bold text-violet-900 inline-flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            Conclusiones IA
+          </p>
+          <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-slate-800">
+            {report.ai.conclusions.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
       ) : null}
-    </section>
+
+      {report.ai?.error ? (
+        <p className="text-sm text-amber-800">El análisis IA no se pudo generar: {report.ai.error}</p>
+      ) : null}
+
+      {report.vehicle.length > 0 ? (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-slate-900">Datos del vehículo</h4>
+        <Dl items={report.vehicle} />
+      </section>
+      ) : null}
+
+      {report.owners.ecuador || report.owners.consultas ? (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-slate-900">Propietario</h4>
+        {report.owners.conflict ? (
+          <div className="mt-2 space-y-3 text-sm text-slate-800 leading-relaxed">
+            <p>Las fuentes consultadas no coinciden en el titular actual.</p>
+            {report.owners.ecuador ? (
+              <p>
+                EcuadorAPI identifica a <span className="font-semibold">{report.owners.ecuador.name}</span>
+                {report.owners.ecuador.cedula ? `, cédula ${report.owners.ecuador.cedula}` : ''}.
+              </p>
+            ) : null}
+            {report.owners.consultas ? (
+              <p>
+                Consultas.ec muestra a <span className="font-semibold">{report.owners.consultas.name}</span>
+                {report.owners.consultas.cedula ? `, cédula ${report.owners.consultas.cedula}` : ''}.
+              </p>
+            ) : null}
+            {report.owners.note ? <p className="font-semibold text-amber-900">{report.owners.note}</p> : null}
+          </div>
+        ) : (
+          <div className="mt-2 text-sm text-slate-800">
+            <p className="font-semibold">{report.owners.ecuador?.name || report.owners.consultas?.name || '—'}</p>
+            {(report.owners.ecuador?.cedula || report.owners.consultas?.cedula) ? (
+              <p className="text-slate-600 mt-1">
+                Cédula: {report.owners.ecuador?.cedula || report.owners.consultas?.cedula}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </section>
+      ) : null}
+
+      {report.vehicle.length > 0 || report.pendingCitations.length > 0 || report.debts.totalCitations > 0 ? (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-slate-900">
+          {report.vehicle.length > 0 ? 'Deudas y multas del vehículo' : 'Multas de tránsito'}
+        </h4>
+        <p className="mt-2 text-sm text-slate-800 leading-relaxed">
+          Deuda pendiente con el SRI: {report.debts.sri}. Multas de tránsito pendientes:{' '}
+          {report.debts.pendingFinesCount}. Valor pendiente: {report.debts.pendingAmount}. En total se encontraron{' '}
+          {report.debts.totalCitations} citación{report.debts.totalCitations === 1 ? '' : 'es'} de tránsito.
+        </p>
+        {report.pendingCitations.length > 0 ? (
+          <ul className="mt-3 space-y-2">
+            {report.pendingCitations.map((row) => (
+              <li key={row.number} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-slate-800">
+                <p>
+                  <span className="font-semibold">Citación {row.number}</span>
+                  {row.date ? ` · ${row.date}` : ''}
+                </p>
+                <p className="mt-1">{row.entity}</p>
+                <p className="mt-1">{row.motive}</p>
+                <p className="mt-1">
+                  {row.amount ? `Valor pendiente: ${row.amount}. ` : ''}
+                  {row.points ? `Puntos: ${row.points}. ` : ''}
+                  Estado: {row.status}.
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+      ) : null}
+
+      {report.infractionHistory.length > 0 ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h4 className="text-sm font-bold text-slate-900">Historial de citaciones</h4>
+          <ul className="mt-2 space-y-2 text-sm text-slate-800">
+            {report.infractionHistory.map((row) => (
+              <li key={row.label}>
+                {row.label}
+                {row.years.length ? `, registrado en ${row.years.join(', ')}` : ''}.
+                {row.statuses.length ? ` Estado: ${row.statuses.join(', ')}.` : ''}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {report.person.length > 0 ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h4 className="text-sm font-bold text-slate-900">Información de la persona consultada</h4>
+          <Dl items={report.person} />
+          {report.activity ? (
+            <p className="mt-3 text-sm text-slate-800 leading-relaxed">
+              <span className="font-semibold">Actividad económica: </span>
+              {report.activity}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-slate-900">Procesos judiciales</h4>
+        <p className="mt-2 text-sm text-slate-800 leading-relaxed">
+          {report.judicial.total === 0
+            ? 'No se encontraron procesos en Función Judicial.'
+            : `La Función Judicial registra ${report.judicial.total} proceso${report.judicial.total === 1 ? '' : 's'}${
+                report.judicial.transit
+                  ? `, de los cuales ${report.judicial.transit} se relacionan con materia de tránsito`
+                  : ''
+              }${report.judicial.years ? ` (${report.judicial.years})` : ''}.`}
+        </p>
+        {report.judicial.other.length > 0 ? (
+          <ul className="mt-2 space-y-1 text-sm text-slate-800">
+            {report.judicial.other.map((row) => (
+              <li key={row.id}>
+                {row.plainAction}
+                {row.date ? ` (${row.date})` : ''}
+                {row.role ? `, con rol de ${row.role.toLowerCase()}` : ''}.
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-2 text-xs text-slate-500">{report.judicial.roleNote}</p>
+      </section>
+
+      {report.ai?.investigationSummary ? (
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 className="text-sm font-bold text-slate-900">Resumen de la investigación</h4>
+          {report.ai.investigationSummary.split(/\n+/).map((paragraph) => (
+            <p key={paragraph.slice(0, 40)} className="mt-2 text-sm text-slate-800 leading-relaxed">
+              {paragraph}
+            </p>
+          ))}
+        </section>
+      ) : null}
+
+      {report.ksi.length > 0 ? (
+        <p className="text-xs text-slate-500">
+          En inventario KSI:{' '}
+          {report.ksi.map((row) => `${row.placa} · ${row.brand} ${row.model}`).join('; ')}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -111,7 +232,7 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-5xl max-h-[92vh]' : 'max-w-lg'}`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}>
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Consulta unificada</h2>
@@ -149,75 +270,20 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            {loading ? 'Consultando fuentes…' : 'Consultar'}
+            {loading ? 'Consultando y analizando…' : 'Consultar'}
           </button>
         </form>
 
         {(loading || result) ? (
-        <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
-          {loading ? (
-            <p className="text-sm text-slate-500 flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-              Consultando vehículo y propietario…
-            </p>
-          ) : null}
-
-          {result ? (
-            <>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Consulta</p>
-                <p className="text-sm font-bold text-slate-900 mt-1">
-                  {result.kind === 'placa' ? 'Placa' : result.kind === 'cedula' ? 'Cédula' : 'RUC'} · {result.query}
-                </p>
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-slate-500">Propietario</p>
-                    <p className="text-sm text-slate-900">{result.identity.nombre || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-slate-500">Cédula</p>
-                    <p className="text-sm text-slate-900">{result.identity.cedula || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-slate-500">RUC</p>
-                    <p className="text-sm text-slate-900">{result.identity.ruc || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-slate-500">Placa</p>
-                    <p className="text-sm text-slate-900">{result.identity.placa || '—'}</p>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  Fuentes listas: EcuadorAPI {result.sourcesReady.ecuador ? 'sí' : 'no'} · Consultas.ec{' '}
-                  {result.sourcesReady.consultas ? 'sí' : 'no'}
-                </p>
-              </div>
-
-              {result.ksi.length > 0 ? (
-                <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-                  <p className="text-sm font-bold text-blue-900 flex items-center gap-1.5">
-                    <Car className="h-4 w-4" />
-                    En inventario KSI
-                  </p>
-                  <ul className="mt-2 space-y-1.5">
-                    {result.ksi.map((row) => (
-                      <li key={`${row.placa}-${row.idNumber}`} className="text-sm text-slate-800">
-                        <span className="font-semibold">{row.placa || 'Sin placa'}</span>
-                        {` · ${row.brand} ${row.model}`}
-                        {row.year ? ` · ${row.year}` : ''}
-                        {row.ownerName ? ` · ${row.ownerName}` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              {result.sections.map((section) => (
-                <SectionCard key={section.id} section={section} />
-              ))}
-            </>
-          ) : null}
-        </div>
+          <div className="overflow-y-auto flex-1 min-h-0 p-4">
+            {loading ? (
+              <p className="text-sm text-slate-500 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                Consultando fuentes y armando el informe…
+              </p>
+            ) : null}
+            {result?.report ? <ReportView report={result.report} /> : null}
+          </div>
         ) : null}
       </div>
     </div>

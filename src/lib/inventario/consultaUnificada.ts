@@ -10,14 +10,7 @@ import {
 import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
 import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
 import type { Database } from '@/types/supabase'
-import type {
-  UnifiedConsultaResult,
-  UnifiedFact,
-  UnifiedKsiMatch,
-  UnifiedQueryKind,
-  UnifiedRow,
-  UnifiedSection,
-} from '@/lib/inventario/consultaUnificada.types'
+import { buildReadableReport } from '@/lib/inventario/consultaUnificada.report'
 
 export type {
   UnifiedConsultaResult,
@@ -796,6 +789,8 @@ export async function runUnifiedConsulta(
     }
   }
 
+  const merged = mergeOverlappingSections(sections)
+
   return {
     query: classified.value,
     kind: classified.kind,
@@ -806,6 +801,18 @@ export async function runUnifiedConsulta(
     },
     identity,
     ksi,
-    sections: mergeOverlappingSections(sections),
+    sections: merged,
+    report: buildReadableReport({
+      query: classified.value,
+      kind: classified.kind,
+      queriedAt,
+      sourcesReady: {
+        ecuador: isEcuadorApiConfigured(),
+        consultas: isConsultasEcConfigured(),
+      },
+      identity,
+      ksi,
+      sections: merged,
+    }),
   }
 }
