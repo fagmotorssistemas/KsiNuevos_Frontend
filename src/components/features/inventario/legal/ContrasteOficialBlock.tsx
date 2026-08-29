@@ -926,16 +926,20 @@ export function ContrasteOficialBlock({
                       </thead>
                       <tbody>
                         {tableRows.map((row) => (
-                          <tr key={row.key} className="border-b border-slate-100 last:border-0">
-                            <td className="px-3 py-2.5">
-                              <button
-                                type="button"
-                                onClick={() => setOpenTopicKey(row.key)}
-                                className="font-semibold text-slate-800 hover:text-blue-700 text-left"
-                              >
-                                {row.label}
-                              </button>
-                            </td>
+                          <tr
+                            key={row.key}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setOpenTopicKey(row.key)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                setOpenTopicKey(row.key)
+                              }
+                            }}
+                            className="border-b border-slate-100 last:border-0 cursor-pointer hover:bg-blue-50/70 transition-colors focus:outline-none focus-visible:bg-blue-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                          >
+                            <td className="px-3 py-2.5 font-semibold text-slate-800">{row.label}</td>
                             <td className="px-3 py-2.5">
                               <EncargadoFotoCell
                                 doc={isCatalogDocType(row.key) ? getCatalogDocumentRow(byType, row.key) : undefined}
