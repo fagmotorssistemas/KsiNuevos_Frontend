@@ -1,11 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FileCheck2, Landmark, Timer } from "lucide-react";
 import { PUBLIC_PATHS } from "@/lib/nav/publicPaths";
 
 const TRUST_ITEMS = [
   {
-    icon: FileCheck2,
     title: "Garantía en documentos",
     href: PUBLIC_PATHS.comprar,
     photo: "/home/garantia-documentos.png",
@@ -13,7 +11,6 @@ const TRUST_ITEMS = [
     photoPosition: "object-cover object-[54%_center]",
   },
   {
-    icon: Timer,
     title: "Venta promedio en 24 horas",
     href: PUBLIC_PATHS.comprar,
     photo: "/home/venta-entrega-inmediata.jpg",
@@ -22,7 +19,6 @@ const TRUST_ITEMS = [
     photoFlush: true as const,
   },
   {
-    icon: Landmark,
     title: "Crédito a tu medida",
     href: PUBLIC_PATHS.creditos,
     photo: "/home/credito-a-tu-medida.jpg",
@@ -56,71 +52,56 @@ export function HeroTrustPanel() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 pb-4">
           {TRUST_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const hasPhoto = "photo" in item && item.photo;
-            const photoFlush = hasPhoto && "photoFlush" in item && item.photoFlush;
-            const photoStraight = hasPhoto && "photoEdge" in item && item.photoEdge === "straight";
+            const photoFlush = "photoFlush" in item && item.photoFlush;
+            const photoStraight = "photoEdge" in item && item.photoEdge === "straight";
             return (
               <Link
                 key={item.title}
                 href={item.href}
                 className="relative z-0 flex min-h-[188px] items-center overflow-hidden bg-white transition-transform duration-300 hover:z-10 hover:scale-[1.04]"
               >
-                {hasPhoto ? (
-                  <>
-                    <div className="relative z-10 w-[40%] shrink-0 px-5 py-5">
-                      <h3 className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.14em] text-neutral-800 leading-snug">
-                        {item.title}
-                      </h3>
-                    </div>
-                    <div className="absolute inset-y-0 right-0 w-[68%]">
-                      <div
-                        className={`absolute inset-0 ${
-                          photoStraight
-                            ? ""
-                            : "[clip-path:polygon(10%_0,100%_0,100%_100%,0_100%)]"
-                        }`}
-                      >
-                        {photoFlush ? (
-                          <Image
-                            src={item.photo}
-                            alt={item.photoAlt}
-                            width={960}
-                            height={540}
-                            className="absolute right-0 top-0 h-full w-auto max-w-none [mask-image:linear-gradient(to_right,transparent,black_22%)]"
-                          />
-                        ) : (
-                          <Image
-                            src={item.photo}
-                            alt={item.photoAlt}
-                            fill
-                            sizes="(max-width: 768px) 80vw, 320px"
-                            className={item.photoPosition}
-                          />
-                        )}
-                      </div>
-                      <div
-                        className={
-                          photoFlush
-                            ? "absolute inset-y-0 left-0 w-[32%] bg-gradient-to-r from-white via-white/50 to-transparent"
-                            : photoStraight
-                              ? "absolute inset-y-0 left-0 w-[14%] bg-gradient-to-r from-white via-white/40 to-transparent"
-                              : "absolute inset-y-0 left-0 w-[22%] bg-gradient-to-r from-white via-white/55 to-transparent"
-                        }
-                        aria-hidden
+                <div className="relative z-10 w-[40%] shrink-0 px-5 py-5">
+                  <h3 className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.14em] text-neutral-800 leading-snug">
+                    {item.title}
+                  </h3>
+                </div>
+                <div className="absolute inset-y-0 right-0 w-[68%]">
+                  <div
+                    className={`absolute inset-0 ${
+                      photoStraight
+                        ? ""
+                        : "[clip-path:polygon(10%_0,100%_0,100%_100%,0_100%)]"
+                    }`}
+                  >
+                    {photoFlush ? (
+                      <Image
+                        src={item.photo}
+                        alt={item.photoAlt}
+                        width={960}
+                        height={540}
+                        className="absolute right-0 top-0 h-full w-auto max-w-none [mask-image:linear-gradient(to_right,transparent,black_22%)]"
                       />
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-4 px-5 py-5">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-neutral-200 text-neutral-800">
-                      <Icon className="h-5 w-5" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-[13px] md:text-sm font-semibold uppercase tracking-[0.14em] text-neutral-800 leading-snug">
-                      {item.title}
-                    </h3>
+                    ) : (
+                      <Image
+                        src={item.photo}
+                        alt={item.photoAlt}
+                        fill
+                        sizes="(max-width: 768px) 80vw, 320px"
+                        className={item.photoPosition}
+                      />
+                    )}
                   </div>
-                )}
+                  <div
+                    className={
+                      photoFlush
+                        ? "absolute inset-y-0 left-0 w-[32%] bg-gradient-to-r from-white via-white/50 to-transparent"
+                        : photoStraight
+                          ? "absolute inset-y-0 left-0 w-[14%] bg-gradient-to-r from-white via-white/40 to-transparent"
+                          : "absolute inset-y-0 left-0 w-[22%] bg-gradient-to-r from-white via-white/55 to-transparent"
+                    }
+                    aria-hidden
+                  />
+                </div>
               </Link>
             );
           })}
