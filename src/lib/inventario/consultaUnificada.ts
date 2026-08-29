@@ -11,6 +11,14 @@ import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.servic
 import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
 import type { Database } from '@/types/supabase'
 import { buildReadableReport } from '@/lib/inventario/consultaUnificada.report'
+import type {
+  UnifiedConsultaResult,
+  UnifiedFact,
+  UnifiedKsiMatch,
+  UnifiedQueryKind,
+  UnifiedRow,
+  UnifiedSection,
+} from '@/lib/inventario/consultaUnificada.types'
 
 export type {
   UnifiedConsultaResult,
@@ -19,7 +27,7 @@ export type {
   UnifiedQueryKind,
   UnifiedRow,
   UnifiedSection,
-} from '@/lib/inventario/consultaUnificada.types'
+}
 
 const LABEL_KEYS: Record<string, string> = {
   nombre: 'Nombre',

@@ -167,9 +167,12 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
           ? { name: titleCaseEs(consultasName), cedula: consultasId, source: 'Consultas.ec' }
           : null
 
-  const conflict =
-    Boolean(ownerEcuador && ownerConsultas) &&
-    (!samePerson(ownerEcuador.name, ownerConsultas.name) || (ownerEcuador.cedula && ownerConsultas.cedula && ownerEcuador.cedula !== ownerConsultas.cedula))
+  const conflict = Boolean(
+    ownerEcuador &&
+      ownerConsultas &&
+      (!samePerson(ownerEcuador.name, ownerConsultas.name) ||
+        Boolean(ownerEcuador.cedula && ownerConsultas.cedula && ownerEcuador.cedula !== ownerConsultas.cedula))
+  )
 
   const sri = formatMoney(pick(vehicleFacts, ['sripendiente']) || (result.kind === 'placa' ? '0' : null))
   const pendingCount = Number(pick(multaFacts, ['citacionespendientes', 'multaspendientes']) || 0)
@@ -186,7 +189,7 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
       const status = citationStatusEs(row.subtitle || pick(facts, ['estado', 'status', 'pagada']))
       const amount = pick(facts, ['valor', 'total', 'multa'])
       const motive = simplifyInfraction(pick(facts, ['articulo', 'infraccion', 'motivo']) || row.title)
-      const pending = isPendingCitation(row.subtitle, amount)
+      const pending = isPendingCitation(row.subtitle ?? null, amount)
       const current = citationMap.get(number)
       if (!current) {
         citationMap.set(number, {
