@@ -331,8 +331,7 @@ export function DocumentUploadWizardModal({
     return true
   }
 
-  const handleAddToSection = async (catalog: DocCatalogEntry, list: FileList | null) => {
-    const files = list ? Array.from(list) : []
+  const handleAddToSection = async (catalog: DocCatalogEntry, files: File[]) => {
     if (files.length === 0 || busy || validating) return
     const extras: PickedFile[] = files.map((file) => ({
       file,
@@ -377,8 +376,7 @@ export function DocumentUploadWizardModal({
     }
   }
 
-  const handleReplaceAll = async (catalog: DocCatalogEntry, list: FileList | null) => {
-    const files = list ? Array.from(list) : []
+  const handleReplaceAll = async (catalog: DocCatalogEntry, files: File[]) => {
     if (files.length === 0 || busy || validating) return
     const row = getCatalogDocumentRow(byType, catalog.docType)
     const existing = row ? listDocumentFiles(row) : []
@@ -566,9 +564,9 @@ export function DocumentUploadWizardModal({
               disabled={blocked}
               className="sr-only"
               onChange={(e) => {
-                const list = e.target.files
+                const files = Array.from(e.target.files ?? [])
                 e.target.value = ''
-                void handleAddToSection(catalog, list)
+                void handleAddToSection(catalog, files)
               }}
             />
             {files.length > 0 ? (
@@ -590,9 +588,9 @@ export function DocumentUploadWizardModal({
                   disabled={blocked}
                   className="sr-only"
                   onChange={(e) => {
-                    const list = e.target.files
+                    const files = Array.from(e.target.files ?? [])
                     e.target.value = ''
-                    void handleReplaceAll(catalog, list)
+                    void handleReplaceAll(catalog, files)
                   }}
                 />
               </>
@@ -746,7 +744,8 @@ export function DocumentUploadWizardModal({
               disabled={busy || validating}
               className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
               onChange={(e) => {
-                addFiles(e.target.files)
+                const files = Array.from(e.target.files ?? [])
+                addFiles(files)
                 e.target.value = ''
               }}
             />
