@@ -83,8 +83,47 @@ export interface MovimientoKardex {
     usuario: string;        
 }
 
+export interface PagoCompraAdjunto {
+    url: string;
+}
+
+export interface PagoCompraDetalle {
+    documento: string;
+    tipo?: string;
+    ccoCodigo?: string;
+    monto: number;
+    fecha?: string;
+    banco?: string;
+    concepto?: string;
+    parte?: number;
+    totalPartes?: number;
+    tieneAdjunto: boolean;
+    adjuntos: PagoCompraAdjunto[];
+}
+
+export interface PagoCompraResumen {
+    placa?: string;
+    compra?: {
+        ing?: string;
+        aev?: string;
+    };
+    resumenPagos?: {
+        cantidad: number;
+        montoTotal: number;
+        porTipo?: { tipo: string; n: number; total: number }[];
+        conAdjunto?: number;
+        sinAdjunto?: number;
+    };
+    resumen?: {
+        cantidad: number;
+        montoTotal: number;
+    };
+    pagos: PagoCompraDetalle[];
+}
+
 export interface DetalleVehiculoResponse {
     fichaTecnica: VehiculoInventario | null;
     resumenFinanciero: any; // Lo ignoramos en el frontend por ahora si no se usa
     historialMovimientos: MovimientoKardex[];
+    pagosCompra?: PagoCompraResumen;
 }

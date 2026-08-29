@@ -9481,7 +9481,7 @@ export type Database = {
         | "ACTIVO"
         | "SUSPENDIDO"
         | "RETIRADO"
-      estado_financiamiento: "pendiente" | "en_proceso" | "resuelto"
+      estado_financiamiento: "pendiente" | "en_proceso" | "resuelto" | "resuelto_no_aplica"
       estado_vehiculo_enum:
         | "poder_cliente"
         | "retenido"
@@ -9818,7 +9818,7 @@ export const Constants = {
         "SUSPENDIDO",
         "RETIRADO",
       ],
-      estado_financiamiento: ["pendiente", "en_proceso", "resuelto"],
+      estado_financiamiento: ["pendiente", "en_proceso", "resuelto", "resuelto_no_aplica"],
       estado_vehiculo_enum: [
         "poder_cliente",
         "retenido",

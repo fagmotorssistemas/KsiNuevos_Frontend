@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   perdido: 'Perdido',
   pendiente: 'Pendiente',
   resuelto: 'Resuelto',
+  resuelto_no_aplica: 'Resuelto · no aplica',
   llamada: 'Llamada',
   whatsapp: 'WhatsApp',
   visita: 'Visita',

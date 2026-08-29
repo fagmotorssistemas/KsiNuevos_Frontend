@@ -17,12 +17,13 @@ import {
   Tag,
   MapPin,
   Wallet,
+  Calendar,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useHideStaffNav } from '@/hooks/useSidebarShell'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
 import { inventarioService } from '@/services/inventario.service'
-import { MovimientoKardex, VehiculoInventario } from '@/types/inventario.types'
+import { MovimientoKardex, VehiculoInventario, PagoCompraResumen } from '@/types/inventario.types'
 import type { VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleLegalSummaryBar } from './legal/VehicleLegalSummaryBar'
 import { ContrasteOficialBlock } from './legal/ContrasteOficialBlock'
@@ -91,6 +92,7 @@ export function VehicleDetailModal({
   const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState<VehicleDetailTab>(initialTab ?? 'ficha')
   const [historial, setHistorial] = useState<MovimientoKardex[]>([])
+  const [pagosCompra, setPagosCompra] = useState<PagoCompraResumen | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [historialError, setHistorialError] = useState<string | null>(null)
   const [contrasteReloadKey, setContrasteReloadKey] = useState(0)
@@ -130,8 +132,17 @@ export function VehicleDetailModal({
       setLoadingHistorial(true)
       setHistorialError(null)
       const data = await inventarioService.getDetalleVehiculo(vehiculo.placa)
+      console.log('Datos del vehículo recibidos:', data)
       const movimientos = data.historialMovimientos || []
       setHistorial(movimientos)
+      
+      // Intentamos buscar pagosCompra, o si el backend lo mandó con otro nombre (ej. pagos, resumenPagos)
+      let pagosData = data.pagosCompra || (data as any).pagos || (data as any).resumenPagos || null
+      if (typeof pagosData === 'string') {
+        try { pagosData = JSON.parse(pagosData) } catch (e) { console.error(e) }
+      }
+      setPagosCompra(pagosData)
+      
       const precioVenta = getPrecioVentaFromHistorial(movimientos)
       if (precioVenta != null && onPrecioVenta) onPrecioVenta(vehiculo.placa, precioVenta)
     } catch (error) {
@@ -332,13 +343,23 @@ export function VehicleDetailModal({
                   <Loader2 className="h-8 w-8 animate-spin mb-2 text-blue-500" />
                   <p className="text-sm">Cargando movimientos contables…</p>
                 </div>
-              ) : movimientosInventario.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <History className="h-8 w-8 mb-2 opacity-50" />
-                  <p>No hay ingresos, ajustes ni notas de entrega para este vehículo.</p>
-                </div>
               ) : (
-                <MovimientosTimeline historial={movimientosInventario} />
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-base mb-4 flex items-center gap-2">
+                      <History className="h-5 w-5 text-slate-400" />
+                      Línea de tiempo de movimientos
+                    </h3>
+                    {movimientosInventario.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-48 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                        <History className="h-8 w-8 mb-2 opacity-50" />
+                        <p>No hay ingresos, ajustes ni notas de entrega para este vehículo.</p>
+                      </div>
+                    ) : (
+                      <MovimientosTimeline historial={movimientosInventario} pagosCompra={pagosCompra} />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -391,10 +412,14 @@ function FichaSection({
 function MovimientosTimeline({
   historial,
   variant = 'inventario',
+  pagosCompra,
 }: {
   historial: MovimientoKardex[]
   variant?: 'inventario' | 'gastos'
+  pagosCompra?: PagoCompraResumen | null
 }) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+
   return (
     <div className="relative">
       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200" />
@@ -402,7 +427,11 @@ function MovimientosTimeline({
         {historial.map((mov, idx) => {
           const tipo = normalizeTipoTransaccion(mov.tipoTransaccion)
           const isNotaEntrega = tipo.includes('NOTA DE ENTREGA')
+          const isIngresoBodega = tipo.includes('INGRESO DE BODEGA EN CANTIDADES')
           const isGasto = variant === 'gastos'
+          const hasPagos = isIngresoBodega && pagosCompra
+          const isExpanded = expandedIdx === idx
+
           const badgeClass = isNotaEntrega
             ? 'bg-orange-50 text-orange-700 border-orange-100'
             : isGasto
@@ -423,7 +452,14 @@ function MovimientosTimeline({
               <div
                 className={`absolute left-[10px] top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 z-10 ${dotClass}`}
               />
-              <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+              <div 
+                className={`bg-white p-4 rounded-xl border shadow-sm transition-all ${hasPagos ? 'cursor-pointer hover:shadow-md hover:border-blue-300' : ''} ${isExpanded ? 'ring-2 ring-blue-100 border-blue-400' : 'border-slate-200'}`}
+                onClick={() => {
+                  if (hasPagos) {
+                    setExpandedIdx(isExpanded ? null : idx)
+                  }
+                }}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <div className="flex items-center gap-2">
@@ -454,6 +490,19 @@ function MovimientosTimeline({
                     </div>
                   </div>
                 </div>
+
+                {hasPagos && !isExpanded && (
+                  <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+                    <Wallet className="h-3.5 w-3.5" />
+                    Ver detalle de pagos
+                  </div>
+                )}
+
+                {isExpanded && hasPagos && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 cursor-default" onClick={e => e.stopPropagation()}>
+                    <PagosCompraBlock resumen={pagosCompra} />
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -478,6 +527,154 @@ function ItemDetail({ label, value, highlight = false }: { label: string; value:
         }`}
       >
         {isEmpty ? 'No especificado' : value}
+      </div>
+    </div>
+  )
+}
+
+function PagosCompraBlock({ resumen }: { resumen: any }) {
+  if (!resumen) return null;
+  
+  // Si viene como array o le falta resumenPagos, intentamos adaptarlo
+  const pagos = Array.isArray(resumen) ? resumen : (resumen.pagos || []);
+  const montoTotal = resumen.resumenPagos?.montoTotal ?? resumen.resumen?.montoTotal ?? pagos.reduce((acc: number, p: any) => acc + (Number(p.monto) || 0), 0);
+  const compraIng = resumen.compra?.ing || '';
+  const compraAev = resumen.compra?.aev || '';
+
+  if (pagos.length === 0 && !compraIng && !compraAev && !montoTotal) return null;
+
+  return (
+    <div className="bg-slate-50/50 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+            <Wallet className="h-4 w-4" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-base">Pagos de la Compra</h3>
+        </div>
+        <div className="text-sm text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+          Total Pagado: <span className="font-bold text-slate-900 ml-1">${(montoTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+      
+      <div className="p-5">
+        {(compraIng || compraAev) && (
+          <div className="flex flex-wrap gap-3 mb-5 text-sm">
+            {compraIng && (
+              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ingreso</span>
+                <span className="font-mono font-bold text-slate-700">{compraIng}</span>
+              </div>
+            )}
+            {compraAev && (
+              <div className="bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Acta</span>
+                <span className="font-mono font-bold text-slate-700">{compraAev}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {pagos.map((pago: any, idx: number) => {
+            const fechaFormateada = pago.fecha ? new Date(pago.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : '';
+            return (
+              <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-200 hover:shadow-sm transition-all gap-4">
+                <div className="flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                      {pago.tipo || 'PAGO'}
+                    </span>
+                    <span className="text-sm font-mono font-bold text-slate-800">{pago.documento}</span>
+                    {fechaFormateada && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">
+                        <Calendar className="h-3 w-3 text-slate-400" />
+                        {fechaFormateada}
+                      </span>
+                    )}
+                    {pago.parte && pago.totalPartes && (
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                        Pago {pago.parte} de {pago.totalPartes}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {pago.banco && (() => {
+                      let bancoNombre = pago.banco;
+                      let bancoDoc = '';
+                      if (pago.banco.includes('Doc->')) {
+                        const parts = pago.banco.split('Doc->');
+                        bancoNombre = parts[0].trim();
+                        bancoDoc = parts[1].trim();
+                      }
+                      return (
+                        <div className="text-sm text-slate-600 flex items-start gap-1.5">
+                          <span className="font-semibold text-slate-700 min-w-[100px]">Transferencia:</span> 
+                          <div className="flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>{bancoNombre}</span>
+                            {bancoDoc && (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="text-slate-300 text-xs">|</span>
+                                <span className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider">Comprobante:</span>
+                                <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 text-xs">{bancoDoc}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                    
+                    {pago.concepto && (
+                      <div className="text-sm text-slate-600 flex items-start gap-1.5">
+                        <span className="font-semibold text-slate-700 min-w-[100px]">Concepto:</span> 
+                        <span className="flex-1 italic">"{pago.concepto}"</span>
+                      </div>
+                    )}
+                    
+                    {pago.ccoCodigo && !pago.banco && (
+                      <div className="text-sm text-slate-600 flex items-start gap-1.5">
+                        <span className="font-semibold text-slate-700 min-w-[100px]">Referencia:</span> 
+                        <span className="flex-1 font-mono text-xs mt-0.5">{pago.ccoCodigo}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-6 shrink-0 pl-4 sm:border-l border-slate-100">
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400 font-medium mb-0.5 uppercase tracking-wider">Monto</div>
+                    <div className="text-xl font-black text-slate-900">
+                      ${(pago.monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  
+                  {pago.tieneAdjunto && pago.adjuntos && pago.adjuntos.length > 0 ? (
+                    <a 
+                      href={pago.adjuntos[0].url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="group flex flex-col items-center gap-1 p-2 text-blue-600 hover:text-blue-700 transition-colors"
+                      title="Ver comprobante PDF"
+                    >
+                      <div className="h-10 w-10 bg-blue-50 group-hover:bg-blue-100 rounded-full flex items-center justify-center shadow-sm border border-blue-100 transition-all">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <span className="text-[10px] font-bold">Ver PDF</span>
+                    </a>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 p-2 text-slate-400" title="Sin comprobante adjunto">
+                      <div className="h-10 w-10 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
+                        <FileText className="h-5 w-5 opacity-50" />
+                      </div>
+                      <span className="text-[10px] font-medium">Sin PDF</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

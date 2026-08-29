@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  isAdvisoryAdvancedStatus,
+  isAdvisoryClosedStatus,
   missingFinancialAdvisoryFields,
   type FinancialAdvisoryGestionRow,
   type FinancialAdvisoryGestionType,
@@ -105,7 +107,7 @@ export function useLeadFinancialAdvisory(leadId: number) {
     try {
       setUpdating(id);
 
-      if (newStatus === "en_proceso" || newStatus === "resuelto") {
+      if (isAdvisoryAdvancedStatus(newStatus)) {
         const { data: gestiones, error: gErr } = await supabase
           .from("asesoria_financiamiento_gestion")
           .select(
@@ -113,9 +115,10 @@ export function useLeadFinancialAdvisory(leadId: number) {
           )
           .eq("asesoria_id", id);
         if (gErr) throw gErr;
-        const complete = (gestiones ?? []).some(
-          (g) => missingFinancialAdvisoryFields(g).length === 0
-        );
+        const complete = (gestiones ?? []).some((g) => {
+          if (newStatus === "resuelto_no_aplica" && g.aplica !== false) return false;
+          return missingFinancialAdvisoryFields(g).length === 0;
+        });
         if (!complete) {
           return {
             success: false,
@@ -133,7 +136,7 @@ export function useLeadFinancialAdvisory(leadId: number) {
         notas_vendedor: notes,
       };
 
-      if (newStatus === "resuelto") {
+      if (isAdvisoryClosedStatus(newStatus)) {
         updatePayload.fecha_resolucion = new Date()
           .toLocaleString("sv-SE", { timeZone: "America/Guayaquil" })
           .replace(" ", "T");

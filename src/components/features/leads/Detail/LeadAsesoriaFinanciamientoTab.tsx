@@ -4,6 +4,7 @@ import { useLeadFinancialAdvisory } from "@/hooks/useLeadFinancialAdvisory";
 import { toast } from "sonner";
 import {
   FINANCIAL_ADVISORY_STATUS_CONFIG,
+  isAdvisoryAdvancedStatus,
   missingFinancialAdvisoryFields,
   type FinancialAdvisoryGestionType,
   type FinancialAdvisoryRecord,
@@ -283,9 +284,18 @@ function FinancialAdvisoryCard({
     setDirtyGestion(false);
   }, [selectedGestionId, selectedGestion]);
 
+  const savedGestionMatchesStatus = (s: FinancialAdvisoryStatus) => {
+    if (s === "resuelto_no_aplica") {
+      return (record.gestiones ?? []).some(
+        (g) => g.aplica === false && missingFinancialAdvisoryFields(g).length === 0
+      );
+    }
+    return hasCompleteSavedGestion;
+  };
+
   const handleSave = async () => {
-    if (status === "en_proceso" || status === "resuelto") {
-      if (!hasCompleteSavedGestion) {
+    if (isAdvisoryAdvancedStatus(status)) {
+      if (!savedGestionMatchesStatus(status)) {
         if (missingDraftFields.length > 0) {
           blockAdvancedStatus(status);
           return;
@@ -310,7 +320,7 @@ function FinancialAdvisoryCard({
     if (!res?.success) {
       toast.error(
         res?.error === "complete_gestion_required"
-          ? "Llena la gestión completa para pasar a En proceso o Resuelto."
+          ? "Llena la gestión completa para pasar a En proceso, Resuelto o Resuelto · no aplica."
           : "No se pudo guardar el estado."
       );
       return;
@@ -462,7 +472,7 @@ function FinancialAdvisoryCard({
         <div className="grid gap-3">
           <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Estado de la asesoría</label>
           <p className="text-[10px] text-slate-400 -mt-2 mb-1">
-            En proceso y Resuelto no se pueden marcar hasta llenar la gestión de abajo.
+            En proceso, Resuelto y Resuelto · no aplica no se pueden marcar hasta llenar la gestión de abajo.
           </p>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FINANCIAL_ADVISORY_STATUS_CONFIG) as FinancialAdvisoryStatus[]).map((s) => (
@@ -471,7 +481,23 @@ function FinancialAdvisoryCard({
                 type="button"
                 onClick={() => {
                   if (s === status) return;
-                  if ((s === "en_proceso" || s === "resuelto") && !canSetAdvancedStatus) {
+                  if (s === "resuelto_no_aplica") {
+                    const nextDraft = { ...gestionDraft, aplica: false as boolean | null };
+                    setGestionDraft(nextDraft);
+                    setDirtyGestion(true);
+                    const savedNoAplica = (record.gestiones ?? []).some(
+                      (g) => g.aplica === false && missingFinancialAdvisoryFields(g).length === 0
+                    );
+                    const draftOk = missingFinancialAdvisoryFields(nextDraft).length === 0;
+                    if (!savedNoAplica && !draftOk) {
+                      blockAdvancedStatus(s);
+                      return;
+                    }
+                    setStatus(s);
+                    setDirty(true);
+                    return;
+                  }
+                  if (isAdvisoryAdvancedStatus(s) && !canSetAdvancedStatus) {
                     blockAdvancedStatus(s);
                     return;
                   }
@@ -506,7 +532,7 @@ function FinancialAdvisoryCard({
             <div>
               <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Gestión realizada</div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Obligatorio para En proceso y Resuelto: tipo, detalle, si aplica, cédula, banco y asesor.
+                Obligatorio para En proceso, Resuelto y Resuelto · no aplica: tipo, si aplica, cédula y banco si aplica.
               </div>
             </div>
             <button
@@ -628,162 +654,72 @@ function FinancialAdvisoryCard({
                 </div>
               </div>
 
-              {/* Asesor contactado */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className={fieldBox("nombre del asesor")}>
-                  <label className="text-[11px] font-semibold text-slate-600">
-                    Asesor contactado (nombre) {showMissing("nombre del asesor") ? "*" : ""}
-                  </label>
-                  <input
-                    className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    placeholder="Ej: Carlos Pérez"
-                    value={gestionDraft.asesor_contactado_nombre}
-                    onChange={(e) => {
-                      setGestionDraft((p) => ({ ...p, asesor_contactado_nombre: e.target.value }));
-                      setDirtyGestion(true);
-                    }}
-                  />
-                </div>
-                <div className={fieldBox("teléfono del asesor")}>
-                  <label className="text-[11px] font-semibold text-slate-600">
-                    Asesor contactado (teléfono) {showMissing("teléfono del asesor") ? "*" : ""}
-                  </label>
-                  <input
-                    className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    placeholder="Ej: 09xxxxxxx"
-                    value={gestionDraft.asesor_contactado_telefono}
-                    onChange={(e) => {
-                      setGestionDraft((p) => ({ ...p, asesor_contactado_telefono: e.target.value }));
-                      setDirtyGestion(true);
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Detalle de gestión */}
-              <div className={fieldBox("qué gestión se hizo")}>
+              <div
+                className={fieldBox(
+                  showMissing("motivo de no aplica") ? "motivo de no aplica" : "si el cliente puede aplicar"
+                )}
+              >
                 <label className="text-[11px] font-semibold text-slate-600">
-                  Qué gestión se hizo {showMissing("qué gestión se hizo") ? "*" : ""}
+                  ¿El cliente puede aplicar? {showMissing("si el cliente puede aplicar") ? "*" : ""}
                 </label>
-                <textarea
-                  className="mt-2 w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
-                  rows={3}
-                  placeholder="Ej: Se llamó al cliente, se solicitó cédula y rol de pagos. Se contactó al asesor del banco y se envió documentación..."
-                  value={gestionDraft.gestion_detalle}
-                  onChange={(e) => {
-                    setGestionDraft((p) => ({ ...p, gestion_detalle: e.target.value }));
-                    setDirtyGestion(true);
-                  }}
-                />
-              </div>
-
-              {/* Resultado + límites */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div
-                  className={fieldBox(
-                    showMissing("motivo de no aplica") ? "motivo de no aplica" : "si el cliente puede aplicar"
-                  )}
-                >
-                  <label className="text-[11px] font-semibold text-slate-600">
-                    ¿El cliente puede aplicar? {showMissing("si el cliente puede aplicar") ? "*" : ""}
-                  </label>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGestionDraft((p) => ({ ...p, aplica: true, motivo_no_aplica: "" }));
-                        setDirtyGestion(true);
-                      }}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
-                        gestionDraft.aplica === true
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      Sí aplica
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGestionDraft((p) => ({ ...p, aplica: false }));
-                        setDirtyGestion(true);
-                      }}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
-                        gestionDraft.aplica === false
-                          ? "bg-red-50 text-red-800 border-red-200"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      No aplica
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGestionDraft((p) => ({ ...p, aplica: null, motivo_no_aplica: "" }));
-                        setDirtyGestion(true);
-                      }}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
-                        gestionDraft.aplica === null
-                          ? "bg-slate-100 text-slate-800 border-slate-200"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                      }`}
-                      title="Sin definir"
-                    >
-                      N/D
-                    </button>
-                  </div>
-
-                  {gestionDraft.aplica === false && (
-                    <textarea
-                      className="mt-2 w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
-                      rows={2}
-                      placeholder="Motivo (ej: score, ingresos insuficientes, falta de documentación...)"
-                      value={gestionDraft.motivo_no_aplica}
-                      onChange={(e) => {
-                        setGestionDraft((p) => ({ ...p, motivo_no_aplica: e.target.value }));
-                        setDirtyGestion(true);
-                      }}
-                    />
-                  )}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGestionDraft((p) => ({ ...p, aplica: true, motivo_no_aplica: "" }));
+                      setDirtyGestion(true);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                      gestionDraft.aplica === true
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    Sí aplica
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGestionDraft((p) => ({ ...p, aplica: false }));
+                      setDirtyGestion(true);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                      gestionDraft.aplica === false
+                        ? "bg-red-50 text-red-800 border-red-200"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    No aplica
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGestionDraft((p) => ({ ...p, aplica: null, motivo_no_aplica: "" }));
+                      setDirtyGestion(true);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors ${
+                      gestionDraft.aplica === null
+                        ? "bg-slate-100 text-slate-800 border-slate-200"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                    title="Sin definir"
+                  >
+                    N/D
+                  </button>
                 </div>
 
-                <div
-                  className={fieldBox(
-                    showMissing("plazo en meses") ? "plazo en meses" : "monto máximo"
-                  )}
-                >
-                  <label className="text-[11px] font-semibold text-slate-600">Hasta dónde puede (referencial)</label>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Monto máx.</div>
-                      <input
-                        type="number"
-                        className="mt-1 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                        placeholder="Ej: 12000"
-                        value={gestionDraft.monto_aprobable_max ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value === "" ? null : Number(e.target.value);
-                          setGestionDraft((p) => ({ ...p, monto_aprobable_max: v }));
-                          setDirtyGestion(true);
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Plazo (meses)</div>
-                      <input
-                        type="number"
-                        className="mt-1 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                        placeholder="Ej: 60"
-                        value={gestionDraft.plazo_meses_max ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value === "" ? null : Number(e.target.value);
-                          setGestionDraft((p) => ({ ...p, plazo_meses_max: v }));
-                          setDirtyGestion(true);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                {gestionDraft.aplica === false && (
+                  <textarea
+                    className="mt-2 w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
+                    rows={2}
+                    placeholder="Motivo (ej: score, ingresos insuficientes, falta de documentación...)"
+                    value={gestionDraft.motivo_no_aplica}
+                    onChange={(e) => {
+                      setGestionDraft((p) => ({ ...p, motivo_no_aplica: e.target.value }));
+                      setDirtyGestion(true);
+                    }}
+                  />
+                )}
               </div>
 
               {/* Garantes */}

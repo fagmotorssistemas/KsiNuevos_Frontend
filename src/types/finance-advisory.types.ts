@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Landmark, Loader2 } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Landmark, Loader2 } from "lucide-react";
 import type { Database } from "@/types/supabase";
 
 export type FinancialAdvisoryStatus = Database["public"]["Enums"]["estado_financiamiento"];
@@ -68,6 +68,11 @@ export const FINANCIAL_ADVISORY_STATUS_CONFIG: Record<
     color: "bg-emerald-100 text-emerald-700 border-emerald-200",
     icon: CheckCircle2,
   },
+  resuelto_no_aplica: {
+    label: "Resuelto · no aplica",
+    color: "bg-slate-100 text-slate-700 border-slate-300",
+    icon: Ban,
+  },
 };
 
 export const FINANCIAL_ADVISORY_ICON = Landmark;
@@ -92,20 +97,22 @@ function filled(value: string | null | undefined): boolean {
   return Boolean(value && value.trim());
 }
 
+/** En proceso / Resuelto / No aplica: hay que llenar la ficha. */
+export function isAdvisoryAdvancedStatus(status: string | null | undefined): boolean {
+  return status === "en_proceso" || status === "resuelto" || status === "resuelto_no_aplica";
+}
+
+export function isAdvisoryClosedStatus(status: string | null | undefined): boolean {
+  return status === "resuelto" || status === "resuelto_no_aplica";
+}
+
 /** Campos que faltan para considerar la gestión completa (suma puntos). */
 export function missingFinancialAdvisoryFields(input: GestionCompletenessInput): string[] {
   const missing: string[] = [];
   if (!filled(input.tipo)) missing.push("tipo de gestión");
-  if (!filled(input.gestion_detalle)) missing.push("qué gestión se hizo");
   if (input.aplica == null) missing.push("si el cliente puede aplicar");
   if (input.aplica === false && !filled(input.motivo_no_aplica)) missing.push("motivo de no aplica");
-  if (input.aplica === true) {
-    if (input.monto_aprobable_max == null) missing.push("monto máximo");
-    if (input.plazo_meses_max == null) missing.push("plazo en meses");
-  }
-  if (!filled(input.banco_deseado)) missing.push("banco deseado");
-  if (!filled(input.asesor_contactado_nombre)) missing.push("nombre del asesor");
-  if (!filled(input.asesor_contactado_telefono)) missing.push("teléfono del asesor");
+  if (input.aplica === true && !filled(input.banco_deseado)) missing.push("banco deseado");
   if (!filled(input.cedula)) missing.push("cédula");
   if (input.requiere_garante && !filled(input.garante_detalle)) missing.push("detalle del garante");
   return missing;
