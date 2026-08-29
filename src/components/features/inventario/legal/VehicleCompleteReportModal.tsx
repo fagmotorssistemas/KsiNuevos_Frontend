@@ -199,7 +199,7 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
       const pdf = new jsPDF({ unit: 'mm', format: 'a4' })
       const tableOpts = {
         styles: { fontSize: 8, cellPadding: 1.5 },
-        headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
+        headStyles: { fillColor: [30, 41, 59] as [number, number, number], fontSize: 8 },
         margin: { left: 14, right: 14 },
       }
 
