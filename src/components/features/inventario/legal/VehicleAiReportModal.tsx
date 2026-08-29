@@ -95,12 +95,21 @@ function formatJuicioLine(proceso: { causa: string | null; accion: string | null
   return [proceso.causa, proceso.accion, proceso.rol, proceso.estado, proceso.fecha].filter(Boolean).join(' · ')
 }
 
+function isConsultasEcUnconfigured(juicios: EcuadorJuiciosConsulta | null | undefined): boolean {
+  return Boolean(juicios?.error && /no está configurada/i.test(juicios.error))
+}
+
+function usableJuicios(juicios: EcuadorJuiciosConsulta | null | undefined): EcuadorJuiciosConsulta | null {
+  if (!juicios || isConsultasEcUnconfigured(juicios)) return null
+  return juicios
+}
+
 function juiciosForSection(
   section: VehicleAiInformeSection,
   payload: VehicleAiInformePayload | null
 ): EcuadorJuiciosConsulta | null {
   if (section.docType !== 'procesos_legales') return null
-  return section.juicios ?? payload?.juicios ?? null
+  return usableJuicios(section.juicios ?? payload?.juicios ?? null)
 }
 
 function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionResult[] {
@@ -410,32 +419,34 @@ function OwnerConclusionsBlock({
 }
 
 function juiciosSynthesisItem(juicios: EcuadorJuiciosConsulta | null): VehicleAiSynthesisItem | null {
-  if (!juicios) return null
-  const issues = juicios.error
-    ? [juicios.error]
-    : juicios.procesos.length === 0
+  const usable = usableJuicios(juicios)
+  if (!usable) return null
+  const issues = usable.error
+    ? [usable.error]
+    : usable.procesos.length === 0
       ? ['Sin procesos judiciales reportados por Función Judicial.']
-      : juicios.procesos.map(formatJuicioLine)
+      : usable.procesos.map(formatJuicioLine)
   return {
     docType: 'procesos_legales',
     docLabel: 'Procesos legales',
     fileName: '',
-    summary: juicios.error
-      ? `Función Judicial: ${juicios.error}`
-      : juicios.procesos.length === 0
-        ? `Sin procesos judiciales para cédula ${juicios.cedula || 'del propietario'}.`
-        : `${juicios.procesos.length} proceso(s) judiciales para cédula ${juicios.cedula || 'del propietario'}.`,
+    summary: usable.error
+      ? `Función Judicial: ${usable.error}`
+      : usable.procesos.length === 0
+        ? `Sin procesos judiciales para cédula ${usable.cedula || 'del propietario'}.`
+        : `${usable.procesos.length} proceso(s) judiciales para cédula ${usable.cedula || 'del propietario'}.`,
     issues,
     missing: false,
     photoIndex: null,
     detailText: null,
-    error: juicios.error,
+    error: usable.error,
     photoShouldNotBeUploaded: false,
   }
 }
 
 function JuiciosConclusionsBlock({ juicios }: { juicios: EcuadorJuiciosConsulta | null | undefined }) {
-  if (!juicios) return null
+  const usable = usableJuicios(juicios)
+  if (!usable) return null
   return (
     <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
       <div className="flex items-start gap-2">
@@ -445,21 +456,21 @@ function JuiciosConclusionsBlock({ juicios }: { juicios: EcuadorJuiciosConsulta 
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Función Judicial</p>
           <p className="text-sm font-bold text-slate-900 mt-0.5">
-            {juicios.error
-              ? juicios.error
-              : juicios.procesos.length === 0
+            {usable.error
+              ? usable.error
+              : usable.procesos.length === 0
                 ? 'Sin procesos reportados'
-                : `${juicios.procesos.length} proceso${juicios.procesos.length === 1 ? '' : 's'}`}
+                : `${usable.procesos.length} proceso${usable.procesos.length === 1 ? '' : 's'}`}
           </p>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            {[juicios.titular, juicios.cedula ? `Cédula ${juicios.cedula}` : null].filter(Boolean).join(' · ') ||
+            {[usable.titular, usable.cedula ? `Cédula ${usable.cedula}` : null].filter(Boolean).join(' · ') ||
               'Consulta por cédula del propietario'}
           </p>
         </div>
       </div>
-      {juicios.procesos.length > 0 ? (
+      {usable.procesos.length > 0 ? (
         <ul className="mt-3 space-y-1.5">
-          {juicios.procesos.map((proceso, index) => (
+          {usable.procesos.map((proceso, index) => (
             <li
               key={`${proceso.causa || 'proceso'}-${index}`}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800"
@@ -1116,7 +1127,7 @@ function AiDocBlock({
   onOpenSectionPhoto: (file: VehicleAiInformeSectionFile) => void
 }) {
   const missingLabel = 'No se ha subido documento.'
-  const juicios = section.juicios ?? null
+  const juicios = usableJuicios(section.juicios)
   const hasJuicios = Boolean(juicios)
   const conclusion =
     synthesis?.conclusion && !(hasJuicios && /no se ha subido documento/i.test(synthesis.conclusion))
@@ -1318,9 +1329,9 @@ export function VehicleAiReportButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-violet-700 text-sm font-semibold text-white hover:bg-violet-800"
+        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-violet-700 text-xs font-semibold text-white hover:bg-violet-800"
       >
-        <Sparkles className="h-5 w-5" />
+        <Sparkles className="h-3.5 w-3.5" />
         Informe IA
       </button>
       {open ? (

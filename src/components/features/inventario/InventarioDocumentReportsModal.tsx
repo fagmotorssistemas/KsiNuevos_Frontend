@@ -824,34 +824,7 @@ export function InventarioDocumentReport({
                     </table>
                 </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50/50">
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Sí
-                            </span>
-                            Completo / al día
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                Rev.
-                            </span>
-                            Revisión parcial
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
-                                No
-                            </span>
-                            Falta o requiere atención
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-flex min-w-[34px] justify-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                                —
-                            </span>
-                            Sin información / no aplica
-                        </span>
-                    </div>
-
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50/50">
                     <div className="flex items-center gap-2">
                         <select
                             value={rowsPerPage}

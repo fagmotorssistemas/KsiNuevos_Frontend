@@ -197,6 +197,66 @@ function ecuadorTodayYmd(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(new Date())
 }
 
+function ecuadorMonth(): number {
+  return Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Guayaquil', month: 'numeric' }).format(new Date())
+  )
+}
+
+/** Último dígito de la placa (ANT: 1=febrero … 9=octubre, 0=noviembre). */
+export function plateLastDigit(plate: string | null | undefined): string | null {
+  const match = (plate || '').toUpperCase().match(/(\d)(?!.*\d)/)
+  return match ? match[1] : null
+}
+
+const MATRICULA_MONTH_BY_LAST_DIGIT: Record<string, number> = {
+  '1': 2,
+  '2': 3,
+  '3': 4,
+  '4': 5,
+  '5': 6,
+  '6': 7,
+  '7': 8,
+  '8': 9,
+  '9': 10,
+  '0': 11,
+}
+
+const MONTH_NAME_ES = [
+  '',
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+export function matriculaCalendarPending(
+  plate: string | null | undefined,
+  lastPaidYear: number | null
+): { pendingThisYear: boolean; beforeWindow: boolean; monthName: string; year: number } {
+  const year = ecuadorYear()
+  const digit = plateLastDigit(plate)
+  const month = digit ? MATRICULA_MONTH_BY_LAST_DIGIT[digit] ?? 11 : 11
+  const monthName = MONTH_NAME_ES[month] || 'noviembre'
+  const paidThisYear = lastPaidYear != null && lastPaidYear >= year
+  const beforeWindow = !paidThisYear && ecuadorMonth() < month
+  return { pendingThisYear: !paidThisYear, beforeWindow, monthName, year }
+}
+
+export const CONTRASTE_OFICIAL_DOC_TYPES: VehicleDocType[] = [
+  'matricula',
+  'revision_tecnica',
+  'informe_ant_siat',
+]
+
 export type EcuadorPendientes = {
   source?: string | null
   entity?: string | null
@@ -587,6 +647,8 @@ export function officialMatriculaStatus(payload: EcuadorContrastePayload | null)
   let expired: boolean | null = payload.matricula?.vigente == null ? null : !payload.matricula.vigente
   if (expiryYmd) expired = expiryYmd < ecuadorTodayYmd()
   if (payload.matricula?.vigente === false) expired = true
+  const cal = matriculaCalendarPending(lookup?.plate, lookup?.lastPaidYear ?? null)
+  if (cal.pendingThisYear && cal.beforeWindow) expired = false
   return {
     expired,
     expiryLabel: expiryYmd ? formatYmdEs(expiryYmd) : null,
@@ -605,9 +667,22 @@ function typeAmount(data: EcuadorPendientes | null, key: string): number {
 }
 
 export function inferMatriculaVigente(lookup: {
+  plate?: string | null
   lastPaidYear: number | null
   registrationExpiry: string | null
 }, sri?: EcuadorPendientes | null): ContrastApiCell {
+  const cal = matriculaCalendarPending(lookup.plate, lookup.lastPaidYear)
+  if (cal.pendingThisYear && cal.beforeWindow) {
+    const pending = sri?.status === 'ok' ? (sri.matricula ?? typeAmount(sri, 'MATRICULA')) || 0 : 0
+    return {
+      vigente: null,
+      text:
+        pending > 0
+          ? `Pendiente la matrícula de este año · toca en ${cal.monthName} · SRI ${usd(pending)}`
+          : `Pendiente la matrícula de este año · toca en ${cal.monthName}`,
+    }
+  }
+
   let cell: ContrastApiCell
   if (lookup.registrationExpiry) {
     const vigente = lookup.registrationExpiry >= ecuadorTodayYmd()
@@ -815,20 +890,6 @@ function moneyCell(pending: number, staff: ContrastStaffTone, payLabel: string, 
   }
 }
 
-function formatLastPago(lookup: EcuadorPlateLookup): string {
-  const parts: string[] = []
-  if (lookup.lastRegistrationDate) {
-    parts.push(`Última matrícula ${lookup.lastRegistrationDate}`)
-  }
-  if (lookup.lastPaidYear != null) {
-    parts.push(`Último pago ${lookup.lastPaidYear}`)
-  }
-  if (lookup.registrationExpiry) {
-    parts.push(`Vigente hasta ${lookup.registrationExpiry}`)
-  }
-  return parts.join(' · ') || 'Sin fecha de matrícula'
-}
-
 export function contrastShowAmt(payload: EcuadorContrastePayload | null): boolean {
   if (!payload) return false
   if (payload.amt) return true
@@ -925,15 +986,28 @@ export function buildContrastMatrix(
 
     if (docType === 'matricula') {
       sriCell = sriMoney(rubros.matricula, current.status, 'Pagar matrícula', 'Sin pendiente de matrícula')
+      const cal = matriculaCalendarPending(lookup?.plate, lookup?.lastPaidYear ?? null)
+      if (cal.pendingThisYear && cal.beforeWindow) {
+        const sriAmt = sri?.status === 'ok' && rubros.matricula > 0.009 ? ` · SRI ${usd(rubros.matricula)}` : ''
+        sriCell = {
+          kind: 'warn',
+          text: `Pendiente la matrícula de este año · toca en ${cal.monthName}${sriAmt}`,
+        }
+      }
       if (sri && sri.status !== 'unavailable' && rubros.transferencia > 0.009) {
         sriCell = {
           kind: 'missing',
           text: `${sriCell.text} · Pagar transferencia ${usd(rubros.transferencia)}`,
         }
       }
+      const matCell = lookup ? inferMatriculaVigente(lookup, sri) : null
       antCell = {
-        text: lookup ? formatLastPago(lookup) : 'Sin consultar',
-        kind: lookup ? compareContrastRow(current.status, plateVigente).kind : 'idle',
+        text: matCell?.text ?? 'Sin consultar',
+        kind: lookup
+          ? cal.pendingThisYear && cal.beforeWindow
+            ? 'warn'
+            : compareContrastRow(current.status, plateVigente).kind
+          : 'idle',
       }
     } else if (docType === 'revision_tecnica') {
       sriCell = sriMoney(rubros.revision, current.status, 'Revisión pendiente', 'Sin pendiente de revisión')

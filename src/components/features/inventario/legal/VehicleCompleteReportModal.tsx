@@ -502,9 +502,9 @@ export function VehicleCompleteReportButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-slate-800 text-sm font-semibold text-white hover:bg-slate-900"
+        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-800 text-xs font-semibold text-white hover:bg-slate-900"
       >
-        <FileText className="h-5 w-5" />
+        <FileText className="h-3.5 w-3.5" />
         Informe completo
       </button>
       {open ? <VehicleCompleteReportModal vehiculo={vehiculo} dossier={dossier} onClose={() => setOpen(false)} /> : null}

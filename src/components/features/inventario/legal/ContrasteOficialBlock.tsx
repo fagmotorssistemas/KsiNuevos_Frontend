@@ -9,7 +9,6 @@ import {
   ClipboardCheck,
   Clock,
   FileText,
-  HelpCircle,
   KeyRound,
   LayoutGrid,
   Loader2,
@@ -25,13 +24,16 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { docCatalogByType, VEHICLE_DOCUMENT_CATALOG } from "@/lib/inventario/vehicleDocumentCatalog";
 import {
-  filterVisibleCatalogItems,
   getCatalogDocumentRow,
   getDocumentCheckStatus,
+  isDocumentImageFile,
+  isDocumentPdfFile,
+  listDocumentFiles,
   statusLabel,
 } from "@/lib/inventario/vehicleLegalUi";
 import {
   buildContrastMatrix,
+  CONTRASTE_OFICIAL_DOC_TYPES,
   contrastShowAmt,
   contrasteTopicDetail,
   formatContrasteConsultedAt,
@@ -58,10 +60,14 @@ import {
   saveContrasteConsulta,
   type ContrasteConsultaRow,
 } from "@/services/contrasteConsultas.service";
-import type { VehicleDocType, VehicleDocumentRow, VehicleFineRow } from "@/types/vehicleLegal.types";
+import type {
+  VehicleDocType,
+  VehicleDocumentFileRow,
+  VehicleDocumentRow,
+  VehicleFineRow,
+} from "@/types/vehicleLegal.types";
 import type { Json } from "@/types/supabase";
 
-type TopicFilter = "all" | "ok" | "missing" | "unverified";
 type ContrasteView = "cards" | "table";
 type StaffTone = ReturnType<typeof getDocumentCheckStatus>;
 type ResultKind = ContrastResultKind;
@@ -105,13 +111,6 @@ function sourceTextClass(kind: ResultKind): string {
   return "text-slate-400";
 }
 
-function encargadoKind(text: string): ResultKind {
-  if (!text || text === "—") return "idle";
-  if (/^Sí/i.test(text) || /al día/i.test(text) || /sin pendientes/i.test(text)) return "ok";
-  if (/Pendiente|No \/|No ·/i.test(text)) return "missing";
-  return "warn";
-}
-
 function topicIcon(key: string) {
   if (key === "matricula") return Calendar;
   if (key === "revision_tecnica") return ClipboardCheck;
@@ -130,18 +129,41 @@ function isCatalogDocType(key: string): key is VehicleDocType {
 function topicSources(row: ContrastMatrixRow) {
   const antLabel = row.key === "procesos_legales" ? "Función Judicial" : "ANT"
   return [
-    { label: "Encargado", text: row.encargado, kind: encargadoKind(row.encargado) },
     { label: "SRI", text: row.sri.text, kind: row.sri.kind },
     { label: antLabel, text: row.ant.text, kind: row.ant.kind },
     { label: "AMT", text: row.amt.text, kind: row.amt.kind },
   ].filter((s) => s.text && s.text !== "—" && s.kind !== "idle")
 }
 
-function resultadoBadgeClass(kind: ResultKind): string {
-  if (kind === "ok") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (kind === "missing") return "bg-red-50 text-red-700 border-red-200";
-  if (kind === "warn") return "bg-amber-50 text-amber-800 border-amber-200";
-  return "bg-slate-50 text-slate-500 border-slate-200";
+function EncargadoFotoCell({
+  doc,
+  onOpenPhoto,
+}: {
+  doc?: VehicleDocumentRow
+  onOpenPhoto: (files: VehicleDocumentFileRow[], title: string) => void
+}) {
+  const files = doc ? listDocumentFiles(doc) : []
+  const detail = doc?.detail_text?.trim()
+  if (files.length > 0) {
+    return (
+      <button
+        type="button"
+        className="text-blue-700 font-semibold hover:underline text-left"
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenPhoto(files, doc?.file_name || files[0]?.file_name || "Foto")
+        }}
+      >
+        Foto subida
+      </button>
+    )
+  }
+  return (
+    <span className="text-slate-600">
+      Sin foto
+      {detail ? <span className="block text-[11px] font-normal text-slate-500 mt-0.5">{detail}</span> : null}
+    </span>
+  )
 }
 
 function matrixCellClass(kind: ResultKind): string {
@@ -151,43 +173,42 @@ function matrixCellClass(kind: ResultKind): string {
   return "text-slate-400";
 }
 
-function topicBadge(row: ContrastMatrixRow) {
-  const isDiff = row.resultado.kind === "missing";
-  const isOk = row.resultado.kind === "ok";
-  if (isOk) return { label: "Coincide", className: "bg-emerald-50 text-emerald-700" };
-  if (isDiff) return { label: "Revisar", className: "bg-orange-500 text-white" };
-  return { label: "Sin verificar", className: "bg-slate-100 text-slate-600" };
-}
-
-function TopicCard({ row, onOpen }: { row: ContrastMatrixRow; onOpen: () => void }) {
+function TopicCard({
+  row,
+  doc,
+  onOpen,
+  onOpenPhoto,
+}: {
+  row: ContrastMatrixRow
+  doc?: VehicleDocumentRow
+  onOpen: () => void
+  onOpenPhoto: (files: VehicleDocumentFileRow[], title: string) => void
+}) {
   const Icon = topicIcon(row.key);
-  const isDiff = row.resultado.kind === "missing";
-  const isOk = row.resultado.kind === "ok";
-  const badge = topicBadge(row);
-  const iconWrap = isDiff ? "bg-red-50 text-red-600" : isOk ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500";
   const sources = topicSources(row);
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-left w-full hover:border-blue-300 hover:shadow-md transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-    >
-      <div className="flex items-start justify-between gap-2 mb-3">
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm text-left w-full hover:border-blue-300 hover:shadow-md transition-all">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex items-start justify-between gap-2 mb-3 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+      >
         <div className="flex items-center gap-2 min-w-0">
-          <span className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${iconWrap}`}>
+          <span className="h-9 w-9 rounded-full flex items-center justify-center shrink-0 bg-blue-50 text-blue-700">
             <Icon className="h-4 w-4" />
           </span>
           <p className="text-sm font-bold text-slate-900">{row.label}</p>
         </div>
-        <span className="inline-flex items-center gap-1 shrink-0">
-          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${badge.className}`}>
-            {badge.label}
-          </span>
-          <ChevronRight className="h-4 w-4 text-slate-400" />
-        </span>
-      </div>
+        <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-2" />
+      </button>
       <dl className="space-y-2">
+        <div className="flex items-start justify-between gap-3 text-xs">
+          <dt className="text-slate-400 shrink-0">Encargado</dt>
+          <dd className="text-right">
+            <EncargadoFotoCell doc={doc} onOpenPhoto={onOpenPhoto} />
+          </dd>
+        </div>
         {sources.map((s) => (
           <div key={s.label} className="flex items-start justify-between gap-3 text-xs">
             <dt className="text-slate-400 shrink-0">{s.label}</dt>
@@ -195,7 +216,7 @@ function TopicCard({ row, onOpen }: { row: ContrastMatrixRow; onOpen: () => void
           </div>
         ))}
       </dl>
-    </button>
+    </article>
   );
 }
 
@@ -242,15 +263,16 @@ function TopicDetailPanel({
   documents,
   fines,
   onClose,
+  onOpenPhoto,
 }: {
   row: ContrastMatrixRow;
   payload: EcuadorContrastePayload | null;
   documents: VehicleDocumentRow[];
   fines: VehicleFineRow[];
   onClose: () => void;
+  onOpenPhoto: (files: VehicleDocumentFileRow[], title: string) => void;
 }) {
   const Icon = topicIcon(row.key);
-  const badge = topicBadge(row);
   const sources = topicSources(row);
   const detail = contrasteTopicDetail(payload, row.key);
   const docType = isCatalogDocType(row.key) ? row.key : undefined;
@@ -281,9 +303,6 @@ function TopicDetailPanel({
               <p id="contraste-topic-title" className="text-base font-bold text-slate-900">
                 {row.label}
               </p>
-              <span className={`inline-flex mt-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${badge.className}`}>
-                {badge.label}
-              </span>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -309,6 +328,12 @@ function TopicDetailPanel({
           <section>
             <h5 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">Resumen</h5>
             <dl className="rounded-xl border border-slate-200 divide-y divide-slate-100">
+              <div className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+                <dt className="text-slate-500">Encargado</dt>
+                <dd className="text-right">
+                  <EncargadoFotoCell doc={staffDoc} onOpenPhoto={onOpenPhoto} />
+                </dd>
+              </div>
               {sources.map((s) => (
                 <div key={s.label} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
                   <dt className="text-slate-500">{s.label}</dt>
@@ -464,7 +489,7 @@ export function ContrasteOficialBlock({
   const [liveConsulta, setLiveConsulta] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [openTopicKey, setOpenTopicKey] = useState<string | null>(null);
-  const [topicFilter, setTopicFilter] = useState<TopicFilter>("all");
+  const [photoPreview, setPhotoPreview] = useState<{ files: VehicleDocumentFileRow[]; title: string; index: number } | null>(null);
   const [viewMode, setViewMode] = useState<ContrasteView>("cards");
   const [defaultView, setDefaultView] = useState<ContrasteView>("cards");
   const inFlight = useRef(false);
@@ -490,7 +515,7 @@ export function ContrasteOficialBlock({
     setLiveConsulta(false);
     setModalOpen(false);
     setOpenTopicKey(null);
-    setTopicFilter("all");
+    setPhotoPreview(null);
     inFlight.current = false;
     let cancelled = false;
 
@@ -552,7 +577,7 @@ export function ContrasteOficialBlock({
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]));
   const pendingFines = fines.filter((f) => f.status === "pendiente").length;
-  const visibleDocTypes = filterVisibleCatalogItems(VEHICLE_DOCUMENT_CATALOG, byType).map((item) => item.docType);
+  const visibleDocTypes = CONTRASTE_OFICIAL_DOC_TYPES;
 
   const staffByKey: ContrastStaffByDoc = {};
   for (const catalog of VEHICLE_DOCUMENT_CATALOG) {
@@ -601,26 +626,9 @@ export function ContrasteOficialBlock({
     setModalOpen(true);
   };
   const matrix = buildContrastMatrix(payload, staffByKey, { visibleDocTypes });
-  const differenceRows = matrix.filter((row) => row.resultado.kind === "missing");
-  const matchRows = matrix.filter((row) => row.resultado.kind === "ok");
-  const unverifiedRows = matrix.filter(
-    (row) => row.resultado.kind === "warn" || row.resultado.kind === "idle"
-  );
 
-  const toggleTopicFilter = (next: TopicFilter) => {
-    setTopicFilter((current) => (current === next ? "all" : next));
-  };
-
-  const showDifferences = topicFilter === "all" || topicFilter === "missing";
-  const showMatches = topicFilter === "all" || topicFilter === "ok";
-  const showUnverified = topicFilter === "all" || topicFilter === "unverified";
   const showAmt = contrastShowAmt(payload);
-  const tableRows = matrix.filter((row) => {
-    if (topicFilter === "all") return true;
-    if (topicFilter === "ok") return row.resultado.kind === "ok";
-    if (topicFilter === "missing") return row.resultado.kind === "missing";
-    return row.resultado.kind === "warn" || row.resultado.kind === "idle";
-  });
+  const tableRows = matrix;
 
   const saveViewAsDefault = () => {
     try {
@@ -706,6 +714,10 @@ export function ContrasteOficialBlock({
     if (!modalOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      if (photoPreview) {
+        setPhotoPreview(null)
+        return
+      }
       if (openTopicKey) {
         setOpenTopicKey(null)
         return
@@ -714,7 +726,7 @@ export function ContrasteOficialBlock({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [modalOpen, openTopicKey])
+  }, [modalOpen, openTopicKey, photoPreview])
 
   return (
     <>
@@ -722,9 +734,9 @@ export function ContrasteOficialBlock({
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-blue-600 text-xs font-semibold text-white hover:bg-blue-700"
         >
-          <ShieldCheck className="h-5 w-5" />
+          <ShieldCheck className="h-3.5 w-3.5" />
           Contraste oficial
         </button>
       ) : (
@@ -742,14 +754,7 @@ export function ContrasteOficialBlock({
                 <p className="text-sm font-semibold text-slate-900">Contraste oficial</p>
                 {summary ? (
                   <p className="text-[11px] text-slate-500 truncate">
-                    <span className="text-emerald-700">{summary.coinciden} coinciden</span>
-                    {" · "}
-                    <span className="text-amber-700">
-                      {summary.diferencias} diferencia{summary.diferencias === 1 ? "" : "s"}
-                    </span>
-                    {" · "}
-                    {summary.sinVerificar} sin verificar
-                    {latest ? ` · última ${formatContrasteConsultedAt(latest.created_at)}` : ""}
+                    {latest ? `Última consulta ${formatContrasteConsultedAt(latest.created_at)}` : "Abrir para ver detalle e historial"}
                   </p>
                 ) : (
                   <p className="text-[11px] text-slate-500 truncate">Abrir para ver detalle e historial</p>
@@ -770,7 +775,11 @@ export function ContrasteOficialBlock({
       {modalOpen ? (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-          onClick={() => setModalOpen(false)}
+          onClick={() => {
+            setPhotoPreview(null)
+            setOpenTopicKey(null)
+            setModalOpen(false)
+          }}
         >
           <div
             role="dialog"
@@ -845,6 +854,7 @@ export function ContrasteOficialBlock({
                   type="button"
                   onClick={() => {
                     setOpenTopicKey(null)
+                    setPhotoPreview(null)
                     setModalOpen(false)
                   }}
                   className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
@@ -856,50 +866,6 @@ export function ContrasteOficialBlock({
             </div>
 
             <div className="overflow-y-auto flex-1 min-h-0 p-5 space-y-5">
-              {summary ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleTopicFilter("ok")}
-                    aria-pressed={topicFilter === "ok"}
-                    className={`rounded-full border px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-shadow ${
-                      topicFilter === "ok"
-                        ? "border-emerald-400 bg-emerald-100 text-emerald-800 ring-2 ring-emerald-400 ring-offset-2"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                    }`}
-                  >
-                    <Check className="h-4 w-4" />
-                    {summary.coinciden} coincide{summary.coinciden === 1 ? "" : "n"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleTopicFilter("missing")}
-                    aria-pressed={topicFilter === "missing"}
-                    className={`rounded-full border px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-shadow ${
-                      topicFilter === "missing"
-                        ? "border-red-400 bg-red-100 text-red-800 ring-2 ring-red-400 ring-offset-2"
-                        : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                    }`}
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                    {summary.diferencias} diferencia{summary.diferencias === 1 ? "" : "s"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toggleTopicFilter("unverified")}
-                    aria-pressed={topicFilter === "unverified"}
-                    className={`rounded-full border px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold transition-shadow ${
-                      topicFilter === "unverified"
-                        ? "border-slate-400 bg-slate-100 text-slate-800 ring-2 ring-slate-400 ring-offset-2"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                    }`}
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    {summary.sinVerificar} sin verificar
-                  </button>
-                </div>
-              ) : null}
-
               {payload && activeConsulta ? (
                 <div
                   className={`text-xs rounded-xl px-3 py-2 border ${
@@ -928,105 +894,65 @@ export function ContrasteOficialBlock({
                 <p className="text-xs text-red-700 font-medium">SRI · total a pagar ${sriTotal.toFixed(2)}</p>
               ) : null}
 
-              {payload && topicFilter !== "all" ? (
-                <p className="text-[11px] text-slate-500">
-                  Filtro activo. Vuelve a pulsar el mismo recuento para ver todo.
-                </p>
-              ) : null}
-
               {viewMode === "cards" ? (
-                <>
-                  {showDifferences && differenceRows.length > 0 ? (
-                    <section>
-                      <h4 className="text-sm font-bold text-slate-900 mb-3">Diferencias encontradas</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {differenceRows.map((row) => (
-                          <TopicCard key={row.key} row={row} onOpen={() => setOpenTopicKey(row.key)} />
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  {showMatches && matchRows.length > 0 ? (
-                    <section>
-                      <h4 className="text-sm font-bold text-slate-900 mb-3">Coincidencias</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {matchRows.map((row) => (
-                          <TopicCard key={row.key} row={row} onOpen={() => setOpenTopicKey(row.key)} />
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  {showUnverified && unverifiedRows.length > 0 ? (
-                    <section>
-                      <h4 className="text-sm font-bold text-slate-900 mb-3">Sin verificar</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {unverifiedRows.map((row) => (
-                          <TopicCard key={row.key} row={row} onOpen={() => setOpenTopicKey(row.key)} />
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-                </>
+                payload ? (
+                  <section>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {matrix.map((row) => (
+                        <TopicCard
+                          key={row.key}
+                          row={row}
+                          doc={isCatalogDocType(row.key) ? getCatalogDocumentRow(byType, row.key) : undefined}
+                          onOpen={() => setOpenTopicKey(row.key)}
+                          onOpenPhoto={(files, title) => setPhotoPreview({ files, title, index: 0 })}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ) : null
               ) : payload ? (
                 <section>
                   <h4 className="text-sm font-bold text-slate-900 mb-3">Fuentes consultadas</h4>
-                  {tableRows.length === 0 ? (
-                    <p className="text-sm text-slate-500">No hay filas en este filtro.</p>
-                  ) : (
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full min-w-[720px] text-left text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                            <th className="px-3 py-2.5">Dato</th>
-                            <th className="px-3 py-2.5">Encargado</th>
-                            <th className="px-3 py-2.5">SRI</th>
-                            <th className="px-3 py-2.5">ANT</th>
-                            {showAmt ? <th className="px-3 py-2.5">AMT</th> : null}
-                            <th className="px-3 py-2.5">Resultado</th>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <table className="w-full min-w-[640px] text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          <th className="px-3 py-2.5">Dato</th>
+                          <th className="px-3 py-2.5">Encargado</th>
+                          <th className="px-3 py-2.5">SRI</th>
+                          <th className="px-3 py-2.5">ANT</th>
+                          {showAmt ? <th className="px-3 py-2.5">AMT</th> : null}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableRows.map((row) => (
+                          <tr key={row.key} className="border-b border-slate-100 last:border-0">
+                            <td className="px-3 py-2.5">
+                              <button
+                                type="button"
+                                onClick={() => setOpenTopicKey(row.key)}
+                                className="font-semibold text-slate-800 hover:text-blue-700 text-left"
+                              >
+                                {row.label}
+                              </button>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <EncargadoFotoCell
+                                doc={isCatalogDocType(row.key) ? getCatalogDocumentRow(byType, row.key) : undefined}
+                                onOpenPhoto={(files, title) => setPhotoPreview({ files, title, index: 0 })}
+                              />
+                            </td>
+                            <td className={`px-3 py-2.5 ${matrixCellClass(row.sri.kind)}`}>{row.sri.text}</td>
+                            <td className={`px-3 py-2.5 ${matrixCellClass(row.ant.kind)}`}>{row.ant.text}</td>
+                            {showAmt ? (
+                              <td className={`px-3 py-2.5 ${matrixCellClass(row.amt.kind)}`}>{row.amt.text}</td>
+                            ) : null}
                           </tr>
-                        </thead>
-                        <tbody>
-                          {tableRows.map((row) => (
-                            <tr key={row.key} className="border-b border-slate-100 last:border-0">
-                              <td className="px-3 py-2.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenTopicKey(row.key)}
-                                  className="font-semibold text-slate-800 hover:text-blue-700 text-left"
-                                >
-                                  {row.label}
-                                </button>
-                              </td>
-                              <td className="px-3 py-2.5 text-slate-600">{row.encargado}</td>
-                              <td className={`px-3 py-2.5 ${matrixCellClass(row.sri.kind)}`}>{row.sri.text}</td>
-                              <td className={`px-3 py-2.5 ${matrixCellClass(row.ant.kind)}`}>{row.ant.text}</td>
-                              {showAmt ? (
-                                <td className={`px-3 py-2.5 ${matrixCellClass(row.amt.kind)}`}>{row.amt.text}</td>
-                              ) : null}
-                              <td className="px-3 py-2.5">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full border text-[11px] font-semibold ${resultadoBadgeClass(row.resultado.kind)}`}>
-                                  {row.resultado.text}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
-              ) : null}
-
-              {payload && topicFilter === "missing" && differenceRows.length === 0 ? (
-                <p className="text-sm text-emerald-700 font-medium">No hay diferencias en esta consulta.</p>
-              ) : null}
-              {payload && topicFilter === "ok" && matchRows.length === 0 ? (
-                <p className="text-sm text-slate-500">No hay coincidencias en esta consulta.</p>
-              ) : null}
-              {payload && topicFilter === "unverified" && unverifiedRows.length === 0 ? (
-                <p className="text-sm text-slate-500">No hay rubros sin verificar en esta consulta.</p>
               ) : null}
 
               {!payload ? (
@@ -1092,7 +1018,69 @@ export function ContrasteOficialBlock({
                 documents={documents}
                 fines={fines}
                 onClose={() => setOpenTopicKey(null)}
+                onOpenPhoto={(files, title) => setPhotoPreview({ files, title, index: 0 })}
               />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {photoPreview ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/70 p-4"
+          onClick={() => setPhotoPreview(null)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-4xl w-full flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPhotoPreview(null)}
+              className="absolute -top-2 right-0 text-white hover:text-slate-200 p-2"
+              aria-label="Cerrar foto"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            {(() => {
+              const current = photoPreview.files[photoPreview.index]
+              if (!current) return null
+              if (isDocumentImageFile(current)) {
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={current.file_url} alt={current.file_name} className="max-h-[85vh] max-w-full object-contain rounded-lg" />
+                )
+              }
+              if (isDocumentPdfFile(current)) {
+                return (
+                  <iframe
+                    src={current.file_url}
+                    title={current.file_name}
+                    className="w-full h-[80vh] rounded-lg bg-white"
+                  />
+                )
+              }
+              return (
+                <a href={current.file_url} target="_blank" rel="noreferrer" className="text-white underline">
+                  Abrir {current.file_name}
+                </a>
+              )
+            })()}
+            {photoPreview.files.length > 1 ? (
+              <div className="mt-3 flex gap-2">
+                {photoPreview.files.map((file, i) => (
+                  <button
+                    key={file.id ?? `${file.file_url}-${i}`}
+                    type="button"
+                    onClick={() => setPhotoPreview((prev) => (prev ? { ...prev, index: i } : prev))}
+                    className={`text-xs px-2 py-1 rounded ${
+                      i === photoPreview.index ? "bg-white text-slate-900" : "bg-white/20 text-white"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
             ) : null}
           </div>
         </div>
