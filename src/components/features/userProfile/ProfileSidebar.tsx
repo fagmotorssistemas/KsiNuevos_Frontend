@@ -26,7 +26,7 @@ export const ProfileSidebar = ({ stats }: ProfileSidebarProps) => {
       <div className="bg-neutral-900 rounded-xl p-6 text-white shadow-lg">
         <h4 className="font-bold mb-2">¿Quieres vender tu auto?</h4>
         <p className="text-neutral-400 text-sm mb-4">Recibe una oferta inmediata.</p>
-        <Link href="/sellCar">
+        <Link href="/vender/cuenca">
           <button className="w-full py-2 bg-white text-black hover:bg-gray-200 rounded-lg text-sm font-bold uppercase tracking-wide transition-colors">
             Avaluar mi auto
           </button>

@@ -1,5 +1,7 @@
+"use client";
+
 import React, { useState } from 'react';
-import { Play, ExternalLink, X, Volume2, ChevronRight } from 'lucide-react';
+import { Play, ExternalLink, X } from 'lucide-react';
 
 interface VideoTip {
   id: number;
@@ -61,12 +63,13 @@ export const SocialMediaSection = () => {
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {videoTips.map((tip) => (
-          <div 
+          <button
             key={tip.id}
+            type="button"
             onClick={() => setSelectedVideo(tip)}
-            className="group relative h-[480px] rounded-[1rem] overflow-hidden bg-black shadow-lg cursor-pointer transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 border border-neutral-800"
+            className="group relative h-[440px] overflow-hidden border border-neutral-200 bg-neutral-950 text-left transition-colors duration-300 hover:border-neutral-400"
           >
             <video
               src={tip.videoUrl}
@@ -75,95 +78,79 @@ export const SocialMediaSection = () => {
               muted
               loop
               playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700"
+              className="absolute inset-0 h-full w-full object-cover opacity-80 transition-opacity duration-700 group-hover:opacity-100"
             />
-            
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
 
-            <div className="absolute inset-0 p-6 flex flex-col justify-between z-20 pointer-events-none">
-              <div className="flex justify-between items-start">
-                <span className="inline-block px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white bg-red-600 rounded-md">
-                  {tip.category}
-                </span>
-                <Volume2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              </div>
-
+            <div className="absolute inset-0 z-20 flex flex-col justify-between p-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80">
+                {tip.category}
+              </p>
               <div>
-                <h3 className="text-xl md:text-2xl font-bold leading-tight text-white mb-2">
-                  {tip.title} 
-                  <span className="text-white ml-1 font-black">{tip.highlight}</span>
+                <h3 className="mb-2 text-lg font-semibold uppercase tracking-[0.08em] leading-snug text-white">
+                  {tip.title}
+                  <span className="text-red-500"> {tip.highlight}</span>
                 </h3>
-                <p className="text-neutral-300 text-xs font-medium leading-relaxed line-clamp-2">
+                <p className="line-clamp-2 text-xs leading-relaxed text-neutral-300">
                   {tip.description}
                 </p>
               </div>
             </div>
 
             <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-              <div className="w-14 h-14 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm border border-white/50 transition-all duration-300 group-hover:bg-red-600 group-hover:border-red-600 group-hover:scale-110">
-                <Play className="w-6 h-6 text-white ml-1" />
+              <div className="flex h-11 w-11 items-center justify-center border border-white/50 bg-black/30 text-white transition-colors duration-300 group-hover:border-red-600 group-hover:bg-red-600">
+                <Play className="ml-0.5 h-4 w-4" strokeWidth={1.5} />
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {selectedVideo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
-          
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4">
           <div className="absolute inset-0" onClick={() => setSelectedVideo(null)} />
 
-          <div className="relative w-full max-w-5xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]">
-            
-            <button 
+          <div className="relative flex w-full max-w-5xl max-h-[90vh] flex-col overflow-hidden border border-neutral-200 bg-white md:flex-row">
+            <button
+              type="button"
               onClick={() => setSelectedVideo(null)}
-              className="absolute top-4 right-4 z-50 p-2 bg-neutral-100 text-neutral-500 rounded-full hover:bg-red-50 hover:text-red-600 transition-colors"
+              className="absolute right-3 top-3 z-50 border border-neutral-200 bg-white p-2 text-neutral-600 transition-colors hover:border-neutral-400 hover:text-neutral-950"
             >
-              <X className="w-6 h-6" />
+              <X className="h-5 w-5" strokeWidth={1.5} />
             </button>
 
-            <div className="w-full md:w-[55%] bg-black flex items-center justify-center relative">
+            <div className="relative flex w-full items-center justify-center bg-black md:w-[55%]">
               <video
                 src={selectedVideo.videoUrl}
-                className="w-full h-full max-h-[80vh] object-contain"
+                className="h-full max-h-[80vh] w-full object-contain"
                 controls
                 autoPlay
                 playsInline
               />
             </div>
 
-            <div className="w-full md:w-[45%] p-8 md:p-10 flex flex-col justify-center bg-white">
-              <div className="mb-auto">
-                 <span className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-widest text-red-600 bg-red-50 rounded-full uppercase">
-                  {selectedVideo.category}
-                </span>
-                
-                <h2 className="text-3xl md:text-4xl font-bold text-black leading-tight mb-2">
-                  {selectedVideo.title}
-                </h2>
-                <h3 className="text-2xl md:text-3xl font-black text-red-600 mb-6">
-                  {selectedVideo.highlight}
-                </h3>
-                
-                <div className="w-12 h-1 bg-neutral-200 mb-6" />
-
-                <p className="text-neutral-600 text-lg leading-relaxed">
-                  {selectedVideo.description}
-                </p>
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-neutral-100">
-                <a 
-                  href={selectedVideo.instagramLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex items-center justify-center gap-3 w-full py-4 bg-black hover:bg-red-600 text-white rounded-xl font-bold transition-all duration-300 shadow-lg hover:shadow-red-600/20"
-                >
-                  <ExternalLink className="w-5 h-5" />
-                  Ver en Instagram
-                  <ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 transition-transform" />
-                </a>
-              </div>
+            <div className="flex w-full flex-col justify-center bg-white p-8 md:w-[45%] md:p-10">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-red-700">
+                {selectedVideo.category}
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight text-neutral-950 md:text-3xl">
+                {selectedVideo.title}
+              </h2>
+              <p className="mb-5 text-xl font-semibold tracking-tight text-red-600">
+                {selectedVideo.highlight}
+              </p>
+              <p className="text-sm leading-relaxed text-neutral-600">
+                {selectedVideo.description}
+              </p>
+              <a
+                href={selectedVideo.instagramLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-8 inline-flex items-center justify-center gap-2 border border-neutral-900 bg-neutral-950 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white transition-colors hover:border-red-600 hover:bg-red-600"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Ver en Instagram
+              </a>
             </div>
           </div>
         </div>

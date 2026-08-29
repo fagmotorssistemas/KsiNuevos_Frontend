@@ -10,6 +10,7 @@ import {
   type PermissionMap,
 } from '@/lib/permissions';
 import { usePermissionContext } from '@/hooks/usePermissionContext';
+import { PUBLIC_PATHS } from '@/lib/nav/publicPaths';
 
 // --- Sub-componente del Dropdown ---
 const UserDropdown = ({
@@ -51,7 +52,7 @@ const UserDropdown = ({
             router.refresh();
             
             // 4. Redirigimos a la página de inicio (src/app/(home)/home/page.tsx)
-            router.push('/home');
+            router.push(PUBLIC_PATHS.home);
         } catch (error) {
             console.error("Error al cerrar sesión:", error);
         }

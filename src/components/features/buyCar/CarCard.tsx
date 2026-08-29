@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Car } from "lucide-react";
 import type { InventoryCar } from "@/hooks/Homeksi/useInventoryData";
 import { KsBadge } from "@/components/ui/Homeksi/KsBadge";
-import { OptimizedImage } from "@/components/ui/OptimizedImage"; 
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { getVehiclePublicPath } from "@/lib/inventario/vehicle-public-slug"; 
 
 interface CarCardProps {
   car: InventoryCar;
@@ -16,7 +17,7 @@ export const CarCard = ({ car }: CarCardProps) => {
 
   return (
     <Link 
-      href={`/autos/${car.id}`}
+      href={getVehiclePublicPath(car)}
       className="group bg-white rounded-2xl border border-neutral-200 overflow-hidden hover:shadow-xl hover:shadow-neutral-200/40 transition-all duration-300 cursor-pointer flex flex-col h-full hover:-translate-y-1 min-w-0"
     >
       

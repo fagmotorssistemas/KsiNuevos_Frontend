@@ -21,27 +21,26 @@ export const LifestyleSection = () => {
   const handleCategoryClick = (categoryValue: string) => {
     const params = new URLSearchParams();
     params.set('category', categoryValue);
-    router.push(`/buyCar?${params.toString()}`);
+    router.push(`/usados/cuenca?${params.toString()}`);
   };
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-12">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-neutral-200 border border-neutral-200">
       {CAR_TYPES.map((type) => (
-        <button 
+        <button
           key={type.label}
+          type="button"
           onClick={() => handleCategoryClick(type.value)}
-          // Borde neutral-100, hover rojo
-          className="p-6 bg-white border border-neutral-200 rounded-2xl flex flex-col items-center justify-center hover:border-red-600 hover:shadow-lg hover:shadow-red-600/10 transition-all duration-300 group"
+          className="bg-white px-4 py-8 flex flex-col items-center justify-center transition-colors duration-300 hover:bg-neutral-50 group"
         >
-          <div className="h-16 w-full mb-3 flex items-center justify-center">
-            <img 
-              src={type.img} 
-              alt={type.label} 
-              className="h-full w-auto object-contain grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300" 
+          <div className="h-14 w-full mb-4 flex items-center justify-center">
+            <img
+              src={type.img}
+              alt=""
+              className="h-full w-auto object-contain opacity-70 group-hover:opacity-100 transition-opacity duration-300"
             />
           </div>
-          
-          <span className="font-bold text-sm text-neutral-600 group-hover:text-red-600 transition-colors uppercase tracking-wider">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-700 group-hover:text-red-700">
             {type.label}
           </span>
         </button>

@@ -1,28 +1,31 @@
-import { Car, MapPin } from "lucide-react";
+import { Car, Flame, MapPin } from "lucide-react";
 import Link from "next/link";
-import type { Database } from "@/types/supabase";
+import type { InventoryCar } from "@/hooks/Homeksi/useInventoryData";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
-
-type InventoryCar = Database['public']['Tables']['inventory']['Row'];
+import { getVehiclePublicPath } from "@/lib/inventario/vehicle-public-slug";
 
 interface VehicleCardProps {
   car: InventoryCar;
+  featured?: boolean;
 }
 
-export const VehicleCard = ({ car }: VehicleCardProps) => {
-  const formatPrice = (price: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(price);
+export const VehicleCard = ({ car, featured = false }: VehicleCardProps) => {
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 
-  // Ya no asignamos una URL por defecto aquí para poder manejar el renderizado condicional del icono
   const imageUrl = car.img_main_url;
+  const place = car.registration_place || "Cuenca";
 
   return (
-    <Link 
-      href={`/autos/${car.id}`}
-      className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:shadow-neutral-200/50 transition-all duration-300 border border-neutral-200 group flex flex-col h-full cursor-pointer"
+    <Link
+      href={getVehiclePublicPath(car)}
+      className={`bg-white overflow-hidden group flex flex-col h-full cursor-pointer transition-all duration-300 ${
+        featured
+          ? "rounded-3xl border border-neutral-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.28)] hover:-translate-y-1 hover:shadow-[0_24px_48px_-24px_rgba(15,23,42,0.32)]"
+          : "rounded-2xl border border-neutral-200 shadow-sm hover:shadow-xl hover:shadow-neutral-200/50"
+      }`}
     >
-      {/* Contenedor de Imagen con fondo gris neutro y centrado para el icono */}
-      <div className="h-48 bg-neutral-100 overflow-hidden relative flex items-center justify-center">
+      <div className={`${featured ? "h-52" : "h-48"} bg-neutral-100 overflow-hidden relative flex items-center justify-center`}>
         {imageUrl ? (
           <OptimizedImage
             src={imageUrl}
@@ -36,39 +39,31 @@ export const VehicleCard = ({ car }: VehicleCardProps) => {
             <span className="text-[10px] mt-2 font-bold uppercase tracking-widest">Sin imagen</span>
           </div>
         )}
-        
-        {/* Badge: Negro Puro */}
-        {car.status !== 'disponible' && (
-          <div className="absolute top-2 right-2 bg-black text-white text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">
-            {car.status}
+        {featured ? (
+          <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+            <Flame className="h-3 w-3" strokeWidth={2.2} />
+            Hot
           </div>
-        )}
+        ) : null}
       </div>
 
-      <div className="p-5 flex flex-col flex-grow">
-        <div className="flex justify-between items-start mb-2">
-          <h4 className="font-bold text-lg text-black line-clamp-1 group-hover:text-red-600 transition-colors uppercase tracking-tight">
-            {car.brand} {car.model}
-          </h4>
-        </div>
-        
+      <div className={`${featured ? "p-6" : "p-5"} flex flex-col flex-grow`}>
+        <h4 className="font-bold text-lg text-black line-clamp-1 group-hover:text-red-600 transition-colors uppercase tracking-tight mb-2">
+          {car.brand} {car.model}
+        </h4>
+
         <p className="text-neutral-500 text-sm mb-4 flex items-center gap-2">
-           <span className="bg-neutral-100 px-2 py-0.5 rounded text-neutral-600 font-medium text-xs">
-             {car.year}
-           </span>
-           <span className="text-neutral-300">•</span>
-           <span>{car.mileage?.toLocaleString() || 0} km</span>
+          <span className="bg-neutral-100 px-2 py-0.5 rounded text-neutral-600 font-medium text-xs">{car.year}</span>
+          <span className="text-neutral-300">•</span>
+          <span>{car.mileage?.toLocaleString() || 0} km</span>
         </p>
 
         <div className="mt-auto flex items-center justify-between">
-           <span className="text-xl font-black text-black tracking-tight">
-             {formatPrice(car.price)}
-           </span>
-           
-           <div className="flex items-center text-xs text-neutral-400 gap-1">
-              <MapPin className="w-3 h-3" />
-              <span className="capitalize">{car.location || 'Patio'}</span>
-           </div>
+          <span className="text-xl font-black text-black tracking-tight">{formatPrice(car.price)}</span>
+          <div className="flex items-center text-xs text-neutral-400 gap-1">
+            <MapPin className="w-3 h-3" />
+            <span className="capitalize">{place}</span>
+          </div>
         </div>
       </div>
     </Link>

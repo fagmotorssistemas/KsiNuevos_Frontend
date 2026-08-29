@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
 
   // 1. Configuración de Imágenes
   images: {
+    qualities: [75, 90, 100],
     remotePatterns: [
       {
         // Tu dominio de Supabase
@@ -25,9 +26,12 @@ const nextConfig: NextConfig = {
         hostname: '**.supabase.co',
       },
       {
-        // Temporal para desarrollo (eliminar en producción)
         protocol: 'https',
-        hostname: 'placehold.co',
+        hostname: '**.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fbcdn.net',
       },
     ],
   },
@@ -58,7 +62,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/",
-        destination: "/home",
+        destination: "/cuenca-azuay",
+        permanent: false,
+      },
+      {
+        source: "/home",
+        destination: "/cuenca-azuay",
         permanent: false,
       },
       {
@@ -70,6 +79,41 @@ const nextConfig: NextConfig = {
         source: "/marketing/video-automation",
         destination: "/marketing/videos",
         permanent: false,
+      },
+      {
+        source: "/buyCar",
+        destination: "/usados/cuenca",
+        permanent: true,
+      },
+      {
+        source: "/autos",
+        destination: "/usados/cuenca",
+        permanent: true,
+      },
+      {
+        source: "/vehiculos",
+        destination: "/usados/cuenca",
+        permanent: true,
+      },
+      {
+        source: "/vehiculos/:path*",
+        destination: "/usados/cuenca/:path*",
+        permanent: true,
+      },
+      {
+        source: "/sellCar",
+        destination: "/vender/cuenca",
+        permanent: true,
+      },
+      {
+        source: "/creditCar",
+        destination: "/creditos/cuenca",
+        permanent: true,
+      },
+      {
+        source: "/aboutUs",
+        destination: "/nosotros/cuenca",
+        permanent: true,
       },
     ];
   },

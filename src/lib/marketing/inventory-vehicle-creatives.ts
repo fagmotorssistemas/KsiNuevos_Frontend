@@ -147,6 +147,68 @@ export async function fetchVehicleCreativeById(creativeId: string): Promise<Vehi
   return data ? mapCreativeRow(data) : null
 }
 
+const HERO_CREATIVE_LIMIT = 80
+const HERO_CREATIVE_MAX_BLOCKS = 20
+
+const VARIANT_ORDER: Record<string, number> = {
+  s1: 1,
+  s2: 2,
+  s3: 3,
+}
+
+export type HeroCreativeBlock = {
+  id: string
+  kind: string
+  images: string[]
+}
+
+export async function fetchReadyCreativeBlocks(): Promise<HeroCreativeBlock[]> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await supabase
+    .from('inventory_vehicle_creatives')
+    .select('id, vehicle_id, creative_kind, variant, image_url, image_urls, status, created_at')
+    .eq('status', 'ready')
+    .order('created_at', { ascending: false })
+    .limit(HERO_CREATIVE_LIMIT)
+
+  if (error) throw new Error(error.message)
+
+  const grouped = new Map<
+    string,
+    { kind: string; createdAt: string; parts: Array<{ order: number; urls: string[] }> }
+  >()
+
+  for (const row of data ?? []) {
+    const urls = uniqueUrls(row.image_url, asUrlList(row.image_urls))
+    if (urls.length === 0) continue
+
+    const key = `${row.vehicle_id}:${row.creative_kind}`
+    const order = VARIANT_ORDER[row.variant.toLowerCase()] ?? 50
+    const current = grouped.get(key)
+
+    if (!current) {
+      grouped.set(key, {
+        kind: row.creative_kind,
+        createdAt: row.created_at,
+        parts: [{ order, urls }],
+      })
+    } else {
+      current.parts.push({ order, urls })
+    }
+  }
+
+  const blocks: HeroCreativeBlock[] = [...grouped.entries()].map(([id, group]) => {
+    const images = uniqueUrls(
+      ...group.parts
+        .sort((a, b) => a.order - b.order)
+        .map((part) => part.urls)
+    )
+    return { id, kind: group.kind, images }
+  })
+
+  return blocks.filter((block) => block.images.length > 0).slice(0, HERO_CREATIVE_MAX_BLOCKS)
+}
+
 export function creativeDownloadFilename(creative: VehicleCreativeItem, imageIndex = 0): string {
   const kind = creative.kindLabel.replace(/\s+/g, '-').toLowerCase()
   const variant = creative.variantLabel.replace(/\s+/g, '-').toLowerCase()

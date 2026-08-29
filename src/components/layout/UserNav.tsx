@@ -9,6 +9,7 @@ import {
     LogOut, User, Bell, Clock, Check, Calendar, Sparkles, AlertTriangle, Building2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PUBLIC_PATHS } from "@/lib/nav/publicPaths";
 
 // --- FUNCIÓN MAESTRA DE FORMATO (SIN CAMBIAR ZONA HORARIA) ---
 const formatFriendlyDate = (dateString: string) => {
@@ -85,7 +86,7 @@ export function UserNav({
         await supabase.auth.signOut();
         setIsOpen(false);
         router.refresh();
-        router.push('/home');
+        router.push(PUBLIC_PATHS.home);
     };
 
     useEffect(() => {

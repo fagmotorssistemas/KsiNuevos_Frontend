@@ -8,9 +8,10 @@ interface InventorySearchProps {
     onSelect: (car: InventoryCarRow) => void;
     onClear: () => void;
     isLoading: boolean;
+    compact?: boolean;
 }
 
-export const InventorySearch = ({ inventory, selectedVehicle, onSelect, onClear, isLoading }: InventorySearchProps) => {
+export const InventorySearch = ({ inventory, selectedVehicle, onSelect, onClear, isLoading, compact = false }: InventorySearchProps) => {
     const [searchTerm, setSearchTerm] = useState(selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : "");
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -46,7 +47,31 @@ export const InventorySearch = ({ inventory, selectedVehicle, onSelect, onClear,
     }, []);
 
     return (
-        <div ref={dropdownRef} className="relative z-30">
+        <div ref={dropdownRef} className={`relative ${compact ? 'z-50' : 'z-30'}`}>
+            {compact ? (
+                <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    </div>
+                    <input
+                        type="text"
+                        className="w-full h-10 pl-9 pr-10 bg-neutral-50 border border-neutral-200 rounded-full outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-neutral-900"
+                        placeholder={isLoading ? "Cargando..." : "Buscar auto..."}
+                        value={searchTerm}
+                        onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+                        onFocus={() => setIsOpen(true)}
+                        disabled={isLoading}
+                        aria-label="Buscar vehículo"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {searchTerm ? (
+                            <X className="h-4 w-4 text-neutral-400 cursor-pointer hover:text-red-500" onClick={() => { setSearchTerm(""); onClear(); }} />
+                        ) : (
+                            <ChevronDown className="h-4 w-4 text-neutral-400" />
+                        )}
+                    </div>
+                </div>
+            ) : (
             <InputGroup label="Vehículo del Inventario" icon={Car}>
                 <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -70,13 +95,16 @@ export const InventorySearch = ({ inventory, selectedVehicle, onSelect, onClear,
                     </div>
                 </div>
             </InputGroup>
+            )}
 
             {isOpen && !isLoading && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-50">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 max-h-60 overflow-y-auto z-[60]">
                     <ul className="py-2">
+                        {!compact && (
                         <li className="px-4 py-2 hover:bg-slate-50 cursor-pointer text-slate-400 text-xs border-b border-slate-50" onClick={() => { onClear(); setSearchTerm(""); setIsOpen(false); }}>
                             -- No asignar vehículo específico --
                         </li>
+                        )}
                         {filtered.length > 0 ? (
                             filtered.map(car => (
                                 <li key={car.id} onClick={() => { onSelect(car); setIsOpen(false); }} className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center group border-b border-slate-50 last:border-0">

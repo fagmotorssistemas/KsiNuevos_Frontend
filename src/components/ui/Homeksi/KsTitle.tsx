@@ -18,7 +18,7 @@ export const KsTitle = ({
   size = 'normal' 
 }: KsTitleProps) => {
   return (
-    <div className={`mb-8 ${centered ? 'text-center' : 'text-left'}`}>
+    <div className={`mb-5 ${centered ? 'text-center' : 'text-left'}`}>
       <h2 className={`font-black uppercase tracking-tighter leading-tight
         ${light ? 'text-white' : 'text-black'} 
         ${size === 'large' ? 'text-4xl md:text-5xl lg:text-6xl' : 'text-2xl md:text-3xl'}

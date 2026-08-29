@@ -8,6 +8,7 @@ import {
 import { canAccessModule, canAccessSubmodule, isAppAdminRole, isPathBlockedForAdminProgramacion } from './access'
 import type { PermissionContext } from './context'
 import { isAccountingModulePath } from './routeAccess'
+import { PUBLIC_PATHS } from '@/lib/nav/publicPaths'
 
 function pathMatchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -159,7 +160,7 @@ export function resolveDefaultDashboardHref(ctx: PermissionContext): string {
     if (href) return href
   }
 
-  return resolveStaffRoleFallback(role, ctx) ?? '/home'
+  return resolveStaffRoleFallback(role, ctx) ?? PUBLIC_PATHS.home
 }
 
 export function getUserDashboardMenuItem(ctx: PermissionContext): { href: string; label: string } {

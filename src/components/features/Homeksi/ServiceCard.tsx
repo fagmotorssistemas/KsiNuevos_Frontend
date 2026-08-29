@@ -1,35 +1,43 @@
 import React from 'react';
-import { Wallet, CarFront, Tag, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeftRight, Handshake, Trophy } from 'lucide-react';
 
 interface ServiceCardProps {
   title: string;
   description: string;
-  type: 'credit' | 'loan' | 'offer';
+  kicker: string;
+  type: 'sales' | 'consign' | 'tradein';
+  href?: string;
 }
 
 const iconMap = {
-  credit: Wallet,
-  loan: CarFront,
-  offer: Tag,
+  sales: Trophy,
+  consign: Handshake,
+  tradein: ArrowLeftRight,
 };
 
-export const ServiceCard = ({ title, description, type }: ServiceCardProps) => {
+export const ServiceCard = ({ title, description, kicker, type, href }: ServiceCardProps) => {
   const Icon = iconMap[type];
-
-  return (
-    // Fondo blanco, borde neutral
-    <div className="group relative p-8 bg-white border border-neutral-100 rounded-[2rem] transition-all duration-500 hover:shadow-xl hover:shadow-neutral-200/50 hover:-translate-y-1 overflow-hidden">
-      
-      <div className="absolute -right-4 -top-4 w-24 h-24 bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
-
-      <div className="w-14 h-14 bg-neutral-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-red-600 transition-colors duration-500">
-        <Icon className="w-7 h-7 text-red-600 group-hover:text-white transition-colors duration-500" />
+  const className =
+    "group relative z-0 block overflow-hidden bg-white p-7 transition-transform duration-300 hover:z-10 hover:scale-[1.04]";
+  const content = (
+    <>
+      <div className="mb-5 flex h-11 w-11 items-center justify-center bg-neutral-50 text-neutral-800">
+        <Icon className="h-5 w-5" strokeWidth={1.5} />
       </div>
-
-      <h3 className="text-xl font-black text-black mb-3 uppercase tracking-tight">{title}</h3>
-      <p className="text-neutral-500 text-sm leading-relaxed mb-6 italic">{description}</p>
-
-      <div className="absolute bottom-0 left-0 h-1 bg-red-600 w-0 group-hover:w-full transition-all duration-500" />
-    </div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-red-700">{kicker}</p>
+      <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-neutral-800">{title}</h3>
+      <p className="text-sm leading-relaxed text-neutral-500">{description}</p>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 };

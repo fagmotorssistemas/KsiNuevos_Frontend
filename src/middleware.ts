@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
+import { PUBLIC_PATHS } from '@/lib/nav/publicPaths'
 import {
   rowsToPermissionMap,
   type EffectivePermissionRow,
@@ -63,7 +64,7 @@ export async function middleware(request: NextRequest) {
   ])
 
   if (profile?.role === 'cliente') {
-    return NextResponse.redirect(new URL('/home', request.url))
+    return NextResponse.redirect(new URL(PUBLIC_PATHS.home, request.url))
   }
 
   const map = rowsToPermissionMap((permRows ?? []) as EffectivePermissionRow[])
@@ -71,7 +72,7 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === '/admin/permisos' || pathname.startsWith('/admin/permisos/')) {
     if (!isFullSystemAdmin(ctx)) {
-      return NextResponse.redirect(new URL('/home', request.url))
+      return NextResponse.redirect(new URL(PUBLIC_PATHS.home, request.url))
     }
     return response
   }
@@ -85,9 +86,9 @@ export async function middleware(request: NextRequest) {
       )
     }
     if (!isRouteAllowed(target, ctx)) {
-      target = '/home'
+      target = PUBLIC_PATHS.home
     }
-    if (isTallerOnlyAccess(ctx) && target === '/home') {
+    if (isTallerOnlyAccess(ctx) && (target === PUBLIC_PATHS.home || target === '/home')) {
       target = '/taller/dashboard'
     }
     return NextResponse.redirect(new URL(target, request.url))

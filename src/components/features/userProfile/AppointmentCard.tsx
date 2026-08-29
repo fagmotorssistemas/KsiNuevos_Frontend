@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Car } from 'lucide-react'; // Importamos el icono para mantener la consistencia
+import { getVehiclePublicPath } from '@/lib/inventario/vehicle-public-slug';
 
 // Mantenemos tus interfaces y utilidades intactas
 interface CarItem {
@@ -104,7 +105,11 @@ export const AppointmentCard = ({ appointment, onEdit, onCancel }: AppointmentCa
 
         {inventory && (
           <Link 
-            href={`/autos/${inventory.id}`} 
+            href={getVehiclePublicPath({
+              brand: inventory.brand,
+              model: inventory.model,
+              year: inventory.year,
+            })} 
             className="text-[10px] font-bold text-gray-400 hover:text-gray-600 text-center uppercase tracking-tighter"
           >
             Detalles

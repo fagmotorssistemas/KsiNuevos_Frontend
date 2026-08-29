@@ -152,7 +152,7 @@ export default function ProfilePage() {
           
           {/* BOTÓN NUEVA CITA REDISEÑADO */}
           <Link 
-            href="/buyCar" 
+            href="/usados/cuenca" 
             className="group relative inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-red-200 active:scale-95 overflow-hidden"
           >
             <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />

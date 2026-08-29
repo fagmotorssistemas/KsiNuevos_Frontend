@@ -13,6 +13,7 @@ import { filterByPrice } from "./modules/filterByPrice";
 import { filterByCategory } from "./modules/filterByCategory";
 import { filterByLocation } from "./modules/filterByLocation";
 import { filterBySpecs, type SpecsFilter } from "./modules/filterBySpecs";
+import { slugifyVehicleText } from "@/lib/inventario/vehicle-public-slug";
 
 // 2. DEFINICIÓN DE TIPOS
 export interface InventoryFiltersState {
@@ -43,7 +44,8 @@ const INITIAL_FILTERS: InventoryFiltersState = {
 
 export type SortOption = 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'newest';
 
-export function useInventoryMaster() {
+export function useInventoryMaster(options?: { brandSlug?: string }) {
+  const brandSlug = options?.brandSlug ? slugifyVehicleText(options.brandSlug) : ''
   // 3. OBTENER DATOS Y PARÁMETROS URL
   const { rawCars, isLoading, error, refetch } = useInventoryData();
   const searchParams = useSearchParams(); // <--- ESTO DEBE IR ADENTRO DEL HOOK
@@ -77,6 +79,10 @@ export function useInventoryMaster() {
     // Solo vehículos que se muestran en el catálogo (precio + imagen)
     let result = rawCars.filter(isCatalogCar);
 
+    if (brandSlug) {
+      result = result.filter((car) => slugifyVehicleText(car.brand) === brandSlug)
+    }
+
     // A. Aplicar Filtros
     result = filterBySearch(result, filters.searchQuery);
     result = filterByPrice(result, filters.minPrice, filters.maxPrice);
@@ -100,7 +106,7 @@ export function useInventoryMaster() {
     });
 
     return result;
-  }, [rawCars, filters, sortBy]);
+  }, [rawCars, filters, sortBy, brandSlug]);
 
   // 6. PAGINACIÓN
   const paginatedCars = useMemo(() => {
