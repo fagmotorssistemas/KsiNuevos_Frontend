@@ -2,10 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { EcuadorApiError, fetchEcuadorContraste, fetchEcuadorPath, isEcuadorApiConfigured, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
 import {
   extractIdentityHints,
-  fetchConsultasPath,
   fetchJuiciosRaw,
   isConsultasEcConfigured,
-  resolveCedulaByOwnerName,
+  normalizeCedulaOrRuc,
 } from '@/lib/inventario/consultas-ec'
 import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
 import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
@@ -292,19 +291,116 @@ function mergeOverlappingSections(sections: UnifiedSection[]): UnifiedSection[] 
   return out.filter((section) => section.id !== 'consultas-multas-placa')
 }
 
+async function ecuadorPathSafe(path: string): Promise<unknown | null> {
+  try {
+    return await fetchEcuadorPath(path)
+  } catch {
+    return null
+  }
+}
+
+function sectionFromDump(input: {
+  id: string
+  title: string
+  source: string
+  data: unknown
+  emptySummary: string
+}): UnifiedSection {
+  if (input.data == null) {
+    return {
+      id: input.id,
+      title: input.title,
+      source: input.source,
+      status: 'empty',
+      error: null,
+      summary: input.emptySummary,
+      facts: [],
+      rows: [],
+    }
+  }
+  const dumped = dumpConsultasBody(input.data, input.source)
+  return {
+    id: input.id,
+    title: input.title,
+    source: input.source,
+    status: dumped.facts.length || dumped.rows.length ? 'ok' : 'empty',
+    error: null,
+    summary: dumped.rows.length ? `${dumped.rows.length} registro(s)` : null,
+    facts: dumped.facts,
+    rows: dumped.rows,
+  }
+}
+
+function ownerIdFromEcuadorPlate(raw: unknown): string | null {
+  const rec = asRecord(raw)
+  const owner = asRecord(rec?.owner)
+  if (!owner) return null
+  const id =
+    stringifyValue(owner.id) ||
+    stringifyValue(owner.cedula) ||
+    stringifyValue(owner.ruc) ||
+    stringifyValue(owner.identificacion)
+  return normalizeCedulaOrRuc(id)
+}
+
+function parseCedulaNameHits(body: unknown): { id: string; name: string }[] {
+  const rows = collectRecordArrays(body)
+  const list = rows.length ? rows : asRecord(body) ? [body] : []
+  const out: { id: string; name: string }[] = []
+  const seen = new Set<string>()
+  for (const item of list) {
+    const rec = asRecord(item)
+    const id = normalizeCedulaOrRuc(
+      stringifyValue(rec?.id) || stringifyValue(rec?.cedula) || stringifyValue(rec?.identificacion)
+    )
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push({
+      id,
+      name: stringifyValue(rec?.full_name) || stringifyValue(rec?.nombre) || stringifyValue(rec?.nombreCompleto) || '',
+    })
+  }
+  return out
+}
+
+async function enrichVehicleSection(placa: string, section: UnifiedSection): Promise<UnifiedSection> {
+  const extras = await Promise.all(
+    [
+      `/placas/${encodeURIComponent(placa)}/propietario`,
+      `/placas/${encodeURIComponent(placa)}/matriculacion`,
+      `/placas/${encodeURIComponent(placa)}/pagos`,
+      `/placas/${encodeURIComponent(placa)}/duenos`,
+    ].map((path) => ecuadorPathSafe(path))
+  )
+  for (const data of extras) {
+    if (data == null) continue
+    const dumped = dumpConsultasBody(data, 'EcuadorAPI')
+    section.facts = mergeFacts(section.facts, dumped.facts, 'EcuadorAPI')
+    section.rows = mergeRows(section.rows, dumped.rows, 'EcuadorAPI')
+  }
+  return section
+}
+
 export function classifyConsultaQuery(raw: string): { kind: UnifiedQueryKind; value: string } | { error: string } {
   const trimmed = raw.trim()
-  if (!trimmed) return { error: 'Escribe una placa, cédula o RUC.' }
+  if (!trimmed) return { error: 'Escribe una placa, cédula, RUC o nombre.' }
   const digits = trimmed.replace(/\D/g, '')
-  const hasLetters = /[A-Za-z]/.test(trimmed)
+  const hasLetters = /[A-Za-zÁÉÍÓÚÜÑáéíóúñ]/.test(trimmed)
+  const hasSpace = /\s/.test(trimmed)
   if (!hasLetters && digits.length === 10) return { kind: 'cedula', value: digits }
   if (!hasLetters && digits.length === 13) return { kind: 'ruc', value: digits }
+  if (hasLetters && hasSpace) {
+    const nombre = trimmed.replace(/\s+/g, ' ')
+    if (nombre.length < 5) return { error: 'El nombre es demasiado corto.' }
+    return { kind: 'nombre', value: nombre }
+  }
   const placa = normalizeConsultaPlaca(trimmed)
   if (placa) return { kind: 'placa', value: placa }
+  if (hasLetters && trimmed.length >= 5) return { kind: 'nombre', value: trimmed }
   if (!hasLetters && digits.length > 0) {
     return { error: 'La cédula debe tener 10 dígitos y el RUC 13. Si es placa, incluye letras.' }
   }
-  return { error: 'No se reconoció el dato. Usa placa (ej. GSD6473), cédula (10 dígitos) o RUC (13 dígitos).' }
+  return { error: 'No se reconoció el dato. Usa placa, cédula (10 dígitos), RUC (13 dígitos) o nombre completo.' }
 }
 
 function sectionFromConsultas(input: {
@@ -596,52 +692,65 @@ async function findKsiMatches(
 }
 
 async function loadPersonDossier(id: string, isRuc: boolean): Promise<UnifiedSection[]> {
-  if (!isConsultasEcConfigured()) {
-    return [skipped(isRuc ? 'informe-empresa' : 'informe-persona', 'Informe 360', 'Consultas.ec', 'Consultas.ec no está configurada')]
-  }
-  const path = isRuc ? `/informe/empresa/${encodeURIComponent(id)}` : `/informe/${encodeURIComponent(id)}`
-  const informe = await fetchConsultasPath(path, 60_000)
-  if (informe.error || informe.data == null) {
-    const fallback: UnifiedSection[] = []
+  const out: UnifiedSection[] = []
+  if (isEcuadorApiConfigured()) {
     if (isRuc) {
-      fallback.push(sectionFromConsultas({
+      const empresa = await ecuadorPathSafe(`/rucs/${encodeURIComponent(id)}`)
+      out.push(sectionFromDump({
         id: 'empresa',
         title: 'Empresa (SRI)',
-        result: await fetchConsultasPath(`/empresa/${encodeURIComponent(id)}`),
+        source: 'EcuadorAPI',
+        data: empresa,
         emptySummary: 'No hay datos de empresa para ese RUC.',
       }))
     } else {
-      fallback.push(sectionFromConsultas({
+      const persona = await ecuadorPathSafe(`/cedulas/${encodeURIComponent(id)}`)
+      out.push(sectionFromDump({
         id: 'persona',
         title: 'Persona (Registro Civil)',
-        result: await fetchConsultasPath(`/persona/${encodeURIComponent(id)}`),
+        source: 'EcuadorAPI',
+        data: persona,
         emptySummary: 'No hay datos de persona para esa cédula.',
       }))
+      const licencia = await ecuadorPathSafe(`/licencias/${encodeURIComponent(id)}`)
+      if (licencia) {
+        out.push(sectionFromDump({
+          id: 'licencia',
+          title: 'Licencia',
+          source: 'EcuadorAPI',
+          data: licencia,
+          emptySummary: 'Sin datos de licencia.',
+        }))
+      }
+      const puntos = await ecuadorPathSafe(`/cedulas/${encodeURIComponent(id)}/puntos`)
+      if (puntos) {
+        out.push(sectionFromDump({
+          id: 'puntos',
+          title: 'Puntos de licencia',
+          source: 'EcuadorAPI',
+          data: puntos,
+          emptySummary: 'Sin puntos de licencia.',
+        }))
+      }
     }
-    fallback.push(sectionFromConsultas({
+    const multas = await ecuadorPathSafe(`/multas/${encodeURIComponent(id)}`)
+    out.push(sectionFromDump({
       id: 'multas-persona',
-      title: 'Multas de tránsito (cédula / RUC)',
-      result: await fetchConsultasPath(`/multas/${encodeURIComponent(id)}`),
+      title: 'Multas de tránsito (persona)',
+      source: 'EcuadorAPI',
+      data: multas,
       emptySummary: 'Sin multas para esa identificación.',
     }))
-    if (informe.error) {
-      fallback.unshift({
-        id: 'informe-error',
-        title: isRuc ? 'Informe 360 de empresa' : 'Informe 360 de persona',
-        source: 'Consultas.ec',
-        status: 'error',
-        error: informe.error,
-        summary: 'Se consultaron las fuentes individuales como respaldo.',
-        facts: [],
-        rows: [],
-      })
-    }
-    fallback.push(juiciosSection(await fetchJuiciosRaw(id)))
-    return fallback
+  } else {
+    out.push(skipped(isRuc ? 'empresa' : 'persona', isRuc ? 'Empresa (SRI)' : 'Persona', 'EcuadorAPI', 'EcuadorAPI no está configurada'))
   }
-  const sections = informeSections(informe.data, isRuc ? 'empresa' : 'persona')
-  sections.push(juiciosSection(await fetchJuiciosRaw(id)))
-  return sections
+
+  if (isConsultasEcConfigured()) {
+    out.push(juiciosSection(await fetchJuiciosRaw(id)))
+  } else {
+    out.push(skipped('juicios', 'Procesos judiciales', 'Consultas.ec', 'Consultas.ec no está configurada'))
+  }
+  return out
 }
 
 export async function runUnifiedConsulta(
@@ -658,7 +767,7 @@ export async function runUnifiedConsulta(
     placa: classified.kind === 'placa' ? classified.value : null,
     cedula: classified.kind === 'cedula' ? classified.value : null,
     ruc: classified.kind === 'ruc' ? classified.value : null,
-    nombre: null as string | null,
+    nombre: classified.kind === 'nombre' ? classified.value : null,
   }
   const sections: UnifiedSection[] = []
 
@@ -667,11 +776,13 @@ export async function runUnifiedConsulta(
       try {
         const plateRaw = await fetchEcuadorPath(`/placas/${encodeURIComponent(classified.value)}`).catch(() => null)
         const contraste = await fetchEcuadorContraste(classified.value)
-        sections.push(ecuadorSection(contraste, plateRaw))
+        const vehicle = await enrichVehicleSection(classified.value, ecuadorSection(contraste, plateRaw))
+        sections.push(vehicle)
         const hints = extractIdentityHints(plateRaw)
+        const ownerId = ownerIdFromEcuadorPlate(plateRaw)
         identity.nombre = contraste.lookup?.ownerName ?? hints.nombre ?? identity.nombre
-        identity.cedula = identity.cedula || hints.cedula
-        identity.ruc = identity.ruc || hints.ruc
+        identity.cedula = identity.cedula || (ownerId && ownerId.length === 10 ? ownerId : hints.cedula)
+        identity.ruc = identity.ruc || (ownerId && ownerId.length === 13 ? ownerId : hints.ruc)
         const owner = await resolveOwnerIdentityForContraste(supabase, classified.value)
         identity.cedula = identity.cedula || owner.cedula
         identity.nombre = identity.nombre || owner.ownerName
@@ -698,46 +809,56 @@ export async function runUnifiedConsulta(
       sections.push(skipped('ecuador-vehiculo', 'Vehículo y deudas (EcuadorAPI)', 'EcuadorAPI', 'EcuadorAPI no está configurada'))
     }
 
-    if (isConsultasEcConfigured()) {
-      const vehiculo = await fetchConsultasPath(`/vehiculo/${encodeURIComponent(classified.value)}`)
-      sections.push(sectionFromConsultas({
-        id: 'consultas-vehiculo',
-        title: 'Vehículo (Consultas.ec)',
-        result: vehiculo,
-        emptySummary: 'No hay ficha de vehículo en Consultas.ec para esa placa.',
-      }))
-      const hints = extractIdentityHints(vehiculo.data)
-      identity.cedula = identity.cedula || hints.cedula
-      identity.ruc = identity.ruc || hints.ruc
-      identity.nombre = identity.nombre || hints.nombre
-
-      sections.push(sectionFromConsultas({
-        id: 'consultas-multas-placa',
-        title: 'Multas ANT por placa',
-        result: await fetchConsultasPath(`/multas/${encodeURIComponent(classified.value)}`),
-        emptySummary: 'Sin multas ANT para esa placa en Consultas.ec.',
-      }))
-    } else {
-      sections.push(skipped('consultas-vehiculo', 'Vehículo (Consultas.ec)', 'Consultas.ec', 'Consultas.ec no está configurada'))
+    if (!identity.cedula && !identity.ruc && identity.nombre && isEcuadorApiConfigured()) {
+      const search = await ecuadorPathSafe(`/cedulas/search?name=${encodeURIComponent(identity.nombre)}`)
+      const hits = parseCedulaNameHits(search)
+      if (hits.length === 1) {
+        if (hits[0].id.length === 13) identity.ruc = hits[0].id
+        else identity.cedula = hits[0].id
+      }
     }
+  }
 
-    if (!identity.cedula && !identity.ruc && identity.nombre) {
-      const resolved = await resolveCedulaByOwnerName(identity.nombre)
-      if (resolved.cedula) {
-        if (resolved.cedula.length === 13) identity.ruc = resolved.cedula
-        else identity.cedula = resolved.cedula
-      } else if (resolved.error) {
+  if (classified.kind === 'nombre') {
+    if (isEcuadorApiConfigured()) {
+      const search = await ecuadorPathSafe(`/cedulas/search?name=${encodeURIComponent(classified.value)}`)
+      const hits = parseCedulaNameHits(search)
+      if (hits.length === 1) {
+        identity.cedula = hits[0].id
+        identity.nombre = hits[0].name || classified.value
+      } else if (hits.length > 1) {
         sections.push({
-          id: 'cedula-nombre',
-          title: 'Cédula del propietario',
-          source: 'Consultas.ec',
-          status: 'error',
-          error: resolved.error,
-          summary: `Se buscó por nombre: ${identity.nombre}`,
+          id: 'persona',
+          title: 'Coincidencias por nombre',
+          source: 'EcuadorAPI',
+          status: 'ok',
+          error: null,
+          summary: 'Hay varias personas con ese nombre. Consulta la cédula exacta para ver procesos y multas.',
+          facts: [],
+          rows: hits.map((hit) => ({
+            title: hit.name || hit.id,
+            subtitle: hit.id,
+            facts: [
+              { label: 'Nombre', value: hit.name || '—' },
+              { label: 'Cédula', value: hit.id },
+            ],
+            rawJson: null,
+          })),
+        })
+      } else {
+        sections.push({
+          id: 'persona',
+          title: 'Persona',
+          source: 'EcuadorAPI',
+          status: 'empty',
+          error: null,
+          summary: 'No se encontró una cédula para ese nombre.',
           facts: [],
           rows: [],
         })
       }
+    } else {
+      sections.push(skipped('persona', 'Persona', 'EcuadorAPI', 'EcuadorAPI no está configurada'))
     }
   }
 
@@ -746,56 +867,9 @@ export async function runUnifiedConsulta(
     if (personId.length === 13) identity.ruc = identity.ruc || personId
     if (personId.length === 10) identity.cedula = identity.cedula || personId
     sections.push(...(await loadPersonDossier(personId, personId.length === 13)))
-  } else if (classified.kind !== 'placa') {
-    sections.push({
-      id: 'persona',
-      title: 'Persona / empresa',
-      source: 'Consultas.ec',
-      status: 'error',
-      error: 'No hay cédula ni RUC para consultar al propietario.',
-      summary: null,
-      facts: [],
-      rows: [],
-    })
   }
 
-  const ksi = await findKsiMatches(supabase, identity)
-
-  if (classified.kind !== 'placa') {
-    const extraPlates = [...new Set(ksi.map((row) => row.placa).filter(Boolean))].slice(0, 3)
-    identity.placa = identity.placa || extraPlates[0] || null
-    for (const plate of extraPlates) {
-      if (isEcuadorApiConfigured()) {
-        try {
-          const plateRaw = await fetchEcuadorPath(`/placas/${encodeURIComponent(plate)}`).catch(() => null)
-          sections.push({
-            ...ecuadorSection(await fetchEcuadorContraste(plate), plateRaw),
-            id: `ecuador-vehiculo-${plate}`,
-            title: `Vehículo ${plate}`,
-          })
-        } catch (error) {
-          sections.push({
-            id: `ecuador-vehiculo-${plate}`,
-            title: `Vehículo ${plate} (EcuadorAPI)`,
-            source: 'EcuadorAPI',
-            status: 'error',
-            error: error instanceof Error ? error.message : 'No se pudo consultar EcuadorAPI',
-            summary: null,
-            facts: [],
-            rows: [],
-          })
-        }
-      }
-      if (isConsultasEcConfigured()) {
-        sections.push(sectionFromConsultas({
-          id: `consultas-vehiculo-${plate}`,
-          title: `Vehículo ${plate} (Consultas.ec)`,
-          result: await fetchConsultasPath(`/vehiculo/${encodeURIComponent(plate)}`),
-          emptySummary: `No hay ficha de vehículo en Consultas.ec para ${plate}.`,
-        }))
-      }
-    }
-  }
+  const ksi = classified.kind === 'placa' ? await findKsiMatches(supabase, { placa: identity.placa, cedula: null, ruc: null }) : []
 
   const merged = mergeOverlappingSections(sections)
 

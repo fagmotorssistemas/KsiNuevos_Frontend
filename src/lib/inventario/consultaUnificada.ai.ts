@@ -13,28 +13,32 @@ export async function synthesizeConsultaInvestigation(report: UnifiedReadableRep
   error: string | null
 }> {
   const compact = {
+    tipo: report.kind,
     titulo: report.title,
-    vehiculo: report.vehicle,
-    propietarios: report.owners,
+    vehiculo: report.kind === 'placa' ? report.vehicle : [],
+    propietarios: report.kind === 'placa' ? report.owners : null,
     deudas: report.debts,
     citaciones_pendientes: report.pendingCitations,
     historial: report.infractionHistory,
     persona: report.person,
     actividad: report.activity,
     judiciales: {
+      consultado: report.judicial.consulted,
       total: report.judicial.total,
       transito: report.judicial.transit,
       otros: report.judicial.other.map((row) => ({ tipo: row.plainAction, rol: row.role, fecha: row.date })),
       nota_rol: report.judicial.roleNote,
     },
     alertas: report.alerts,
+    revision_manual: report.manualReview,
   }
 
   const prompt = [
     'Eres un analista de due diligence vehicular en un concesionario de Ecuador.',
     'Redacta en español claro, para una persona no técnica.',
     'No uses nombres de campos en inglés, ni JSON, ni "fetched at", ni certificados, ni cache.',
-    'Si hay dos propietarios distintos, dilo como inconsistencia a verificar. No elijas uno como verdad.',
+    'Si el tipo no es placa, no hables de vehículos registrados a su nombre ni digas que no tiene vehículos.',
+    'Si hay dos propietarios distintos: advertencia. Di solo que hay que verificar el nombre del titular del vehículo. No indiques ANT, portales, notaría ni dónde hacerlo. No hables de compra bloqueada y no elijas un titular como verdadero.',
     'En juicios, el rol "actor" NO significa que la persona sea culpable. No escribas que "tiene una demanda por" un delito.',
     'No inventes datos que no estén en el JSON.',
     'Responde SOLO JSON: { "conclusions": ["frase corta 1", "frase corta 2"], "investigation_summary": "2 a 4 párrafos con el cierre de la investigación" }',

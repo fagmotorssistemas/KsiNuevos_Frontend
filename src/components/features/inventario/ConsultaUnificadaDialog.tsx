@@ -5,6 +5,31 @@ import { AlertTriangle, Loader2, Search, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
 
+const LAST_CONSULTA_KEY = 'ksi.consultaUnificada.last'
+
+function readLastConsulta(): { query: string; result: UnifiedConsultaResult | null } {
+  if (typeof window === 'undefined') return { query: '', result: null }
+  try {
+    const raw = sessionStorage.getItem(LAST_CONSULTA_KEY)
+    if (!raw) return { query: '', result: null }
+    const parsed = JSON.parse(raw) as { query?: string; result?: UnifiedConsultaResult | null }
+    if (typeof parsed.query === 'string') {
+      return { query: parsed.query, result: parsed.result ?? null }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { query: '', result: null }
+}
+
+function saveLastConsulta(query: string, result: UnifiedConsultaResult) {
+  try {
+    sessionStorage.setItem(LAST_CONSULTA_KEY, JSON.stringify({ query, result }))
+  } catch {
+    /* ignore */
+  }
+}
+
 function Dl({ items }: { items: { label: string; value: string }[] }) {
   if (items.length === 0) return null
   return (
@@ -20,15 +45,31 @@ function Dl({ items }: { items: { label: string; value: string }[] }) {
 }
 
 function ReportView({ report }: { report: UnifiedReadableReport }) {
+  const otherAlerts = report.manualReview
+    ? report.alerts.filter((alert) => !alert.startsWith('Advertencia:'))
+    : report.alerts
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-slate-900">{report.title}</h3>
 
-      {report.alerts.length > 0 ? (
+      {report.manualReview?.required ? (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900 inline-flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {report.manualReview.title}
+          </p>
+          <p className="mt-2 text-sm text-amber-950 leading-relaxed">
+            Las fuentes no coinciden en el dueño. Verificar el nombre del titular del vehículo.
+          </p>
+        </section>
+      ) : null}
+
+      {otherAlerts.length > 0 ? (
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-bold text-amber-900">Alertas</p>
           <ul className="mt-2 space-y-1.5">
-            {report.alerts.map((alert) => (
+            {otherAlerts.map((alert) => (
               <li key={alert} className="flex items-start gap-2 text-sm text-amber-950">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 {alert}
@@ -63,7 +104,7 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
       </section>
       ) : null}
 
-      {report.owners.ecuador || report.owners.consultas ? (
+      {report.kind !== 'nombre' && report.kind !== 'cedula' && report.kind !== 'ruc' && (report.owners.ecuador || report.owners.consultas) ? (
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h4 className="text-sm font-bold text-slate-900">Propietario</h4>
         {report.owners.conflict ? (
@@ -96,15 +137,23 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
       </section>
       ) : null}
 
-      {report.vehicle.length > 0 || report.pendingCitations.length > 0 || report.debts.totalCitations > 0 ? (
+      {report.vehicle.length > 0 || report.pendingCitations.length > 0 ? (
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h4 className="text-sm font-bold text-slate-900">
           {report.vehicle.length > 0 ? 'Deudas y multas del vehículo' : 'Multas de tránsito'}
         </h4>
         <p className="mt-2 text-sm text-slate-800 leading-relaxed">
-          Deuda pendiente con el SRI: {report.debts.sri}. Multas de tránsito pendientes:{' '}
-          {report.debts.pendingFinesCount}. Valor pendiente: {report.debts.pendingAmount}. En total se encontraron{' '}
-          {report.debts.totalCitations} citación{report.debts.totalCitations === 1 ? '' : 'es'} de tránsito.
+          {report.vehicle.length > 0 ? (
+            <>
+              Deuda pendiente con el SRI: {report.debts.sri}. Multas de tránsito pendientes:{' '}
+              {report.debts.pendingFinesCount}. Valor pendiente: {report.debts.pendingAmount}.
+            </>
+          ) : (
+            <>
+              Multas de tránsito pendientes: {report.debts.pendingFinesCount}. Valor pendiente:{' '}
+              {report.debts.pendingAmount}.
+            </>
+          )}
         </p>
         {report.pendingCitations.length > 0 ? (
           <ul className="mt-3 space-y-2">
@@ -156,6 +205,7 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
         </section>
       ) : null}
 
+      {report.judicial.consulted !== false ? (
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h4 className="text-sm font-bold text-slate-900">Procesos judiciales</h4>
         <p className="mt-2 text-sm text-slate-800 leading-relaxed">
@@ -180,6 +230,7 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
         ) : null}
         <p className="mt-2 text-xs text-slate-500">{report.judicial.roleNote}</p>
       </section>
+      ) : null}
 
       {report.ai?.investigationSummary ? (
         <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -192,7 +243,7 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
         </section>
       ) : null}
 
-      {report.ksi.length > 0 ? (
+      {report.kind !== 'nombre' && report.kind !== 'cedula' && report.kind !== 'ruc' && report.ksi.length > 0 ? (
         <p className="text-xs text-slate-500">
           En inventario KSI:{' '}
           {report.ksi.map((row) => `${row.placa} · ${row.brand} ${row.model}`).join('; ')}
@@ -203,14 +254,15 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
 }
 
 export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
-  const [query, setQuery] = useState('')
+  const last = readLastConsulta()
+  const [query, setQuery] = useState(last.query)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<UnifiedConsultaResult | null>(null)
+  const [result, setResult] = useState<UnifiedConsultaResult | null>(last.result)
 
   const run = async () => {
     const value = query.trim()
     if (!value) {
-      toast.error('Escribe una placa, cédula o RUC')
+      toast.error('Escribe una placa, cédula, RUC o nombre')
       return
     }
     setLoading(true)
@@ -223,6 +275,7 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
       const body = (await res.json()) as { data?: UnifiedConsultaResult; error?: string }
       if (!res.ok || !body.data) throw new Error(body.error || 'No se pudo consultar')
       setResult(body.data)
+      saveLastConsulta(value, body.data)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo consultar')
     } finally {
@@ -236,7 +289,6 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Consulta unificada</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Placa, cédula o RUC</p>
           </div>
           <button
             type="button"
@@ -259,8 +311,11 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value.toUpperCase())}
-              placeholder="GSD6473 · 1710034065 · 0990480923001"
+              onChange={(event) => {
+                const value = event.target.value
+                setQuery(/\s/.test(value) ? value : value.toUpperCase())
+              }}
+              placeholder="Placa, número de cédula o RUC"
               className="w-full h-11 pl-9 pr-3 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
             />
           </div>

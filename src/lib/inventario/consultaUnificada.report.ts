@@ -124,14 +124,22 @@ function samePerson(a: string | null, b: string | null): boolean {
 export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReadableReport {
   const vehicleFacts = allFacts(result.sections, (id) => id.includes('vehiculo') || id === 'ecuador-vehiculo')
   const multaFacts = allFacts(result.sections, (id) => id.includes('multa') || id.includes('vehiculo'))
-  const personFacts = allFacts(result.sections, (id) => id.includes('identidad') || id.includes('persona') || id.includes('actividad') || id.includes('empresa') || id.includes('tributario'))
+  const personFacts = allFacts(result.sections, (id) =>
+    id.includes('identidad') ||
+    id.includes('persona') ||
+    id.includes('actividad') ||
+    id.includes('empresa') ||
+    id.includes('tributario') ||
+    id.includes('licencia') ||
+    id.includes('puntos')
+  )
   const juicios = result.sections.find((section) => section.id === 'juicios')
 
   const placaFromVehicle = pick(vehicleFacts, ['placa', 'plate'])
   const placa =
     result.kind === 'placa'
       ? placaFromVehicle || result.identity.placa || result.query
-      : placaFromVehicle || result.identity.placa
+      : null
   const marca = titleCaseEs(pick(vehicleFacts, ['marca', 'brand']) || '')
   const modelo = pick(vehicleFacts, ['modelo', 'model']) || ''
   const anio = pick(vehicleFacts, ['año', 'anio', 'year'])
@@ -234,7 +242,9 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
   const transit = judicialRows.filter((row) => /transito|velocidad|senal|traspaso|contravencion/i.test(norm(row.action + row.plainAction))).length
 
   const alerts: string[] = []
-  if (conflict) alerts.push('Propietario no coincide entre fuentes')
+  if (conflict) {
+    alerts.push('Advertencia: las fuentes no coinciden en el titular. Verificar el nombre del titular del vehículo.')
+  }
   if (pendingCitations.length > 0) {
     const total = pendingCitations.reduce((sum, row) => sum + Number(String(row.amount || '').replace(/[^0-9,-]/g, '').replace(',', '.')), 0)
     alerts.push(`Citación pendiente: ${pendingAmount !== '$0,00' ? pendingAmount : pendingCitations[0]?.amount || formatMoney(total)}`)
@@ -279,18 +289,18 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
     pick(personFacts, ['contribuyentefantasma']) ? { label: 'Contribuyente fantasma', value: titleCaseEs(pick(personFacts, ['contribuyentefantasma']) || '') } : null,
   ].filter((row): row is { label: string; value: string } => Boolean(row && row.value))
 
-  const kindLabel = result.kind === 'placa' ? 'Placa' : result.kind === 'cedula' ? 'Cédula' : 'RUC'
+  const kindLabel =
+    result.kind === 'placa' ? 'Placa' : result.kind === 'cedula' ? 'Cédula' : result.kind === 'ruc' ? 'RUC' : 'Nombre'
 
   return {
     title: `Resumen de consulta — ${kindLabel} ${result.query}`,
+    kind: result.kind,
     vehicle,
     owners: {
       conflict,
       ecuador: ownerEcuador,
       consultas: conflict ? ownerConsultas : ownerConsultas && !ownerEcuador ? ownerConsultas : null,
-      note: conflict
-        ? 'Propiedad pendiente de verificación: las fuentes consultadas presentan propietarios diferentes.'
-        : null,
+      note: conflict ? 'Verificar el nombre del titular del vehículo.' : null,
     },
     debts: {
       sri,
@@ -307,6 +317,7 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
     person,
     activity: activity ? activity.replace(/\s+/g, ' ').trim() : null,
     judicial: {
+      consulted: Boolean(juicios),
       total: judicialRows.length,
       roleNote:
         judicialRows.length > 0
@@ -317,7 +328,14 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
       years: [...new Set(judicialRows.map((row) => yearOf(row.date)).filter(Boolean))].join(', '),
     },
     alerts,
-    ksi: result.ksi,
+    ksi: result.kind === 'placa' ? result.ksi : [],
+    manualReview: conflict
+      ? {
+          required: true,
+          title: 'Advertencia',
+          steps: ['Verificar el nombre del titular del vehículo.'],
+        }
+      : null,
     ai: null,
   }
 }

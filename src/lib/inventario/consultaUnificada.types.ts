@@ -1,4 +1,4 @@
-export type UnifiedQueryKind = 'placa' | 'cedula' | 'ruc'
+export type UnifiedQueryKind = 'placa' | 'cedula' | 'ruc' | 'nombre'
 
 export type UnifiedFact = { label: string; value: string; origin?: string }
 
@@ -53,6 +53,7 @@ export type ReportOwner = {
 
 export type UnifiedReadableReport = {
   title: string
+  kind: UnifiedQueryKind
   vehicle: { label: string; value: string }[]
   owners: {
     conflict: boolean
@@ -80,6 +81,7 @@ export type UnifiedReadableReport = {
   person: { label: string; value: string }[]
   activity: string | null
   judicial: {
+    consulted: boolean
     total: number
     roleNote: string
     transit: number
@@ -88,6 +90,11 @@ export type UnifiedReadableReport = {
   }
   alerts: string[]
   ksi: UnifiedKsiMatch[]
+  manualReview: {
+    required: boolean
+    title: string
+    steps: string[]
+  } | null
   ai: {
     conclusions: string[]
     investigationSummary: string
