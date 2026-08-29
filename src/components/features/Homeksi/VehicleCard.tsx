@@ -10,8 +10,10 @@ interface VehicleCardProps {
 }
 
 export const VehicleCard = ({ car, featured = false }: VehicleCardProps) => {
-  const formatPrice = (price: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
+  const formatPrice = (price: number | null) =>
+    price == null
+      ? "Consultar"
+      : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 
   const imageUrl = car.img_main_url;
   const place = car.registration_place || "Cuenca";
