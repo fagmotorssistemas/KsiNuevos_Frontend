@@ -56,7 +56,7 @@ export async function saveDocumentAiReport(
   return data
 }
 
-function reportFailsAiApproval(report: DocumentAiReportRow): boolean {
+export function reportFailsAiApproval(report: DocumentAiReportRow): boolean {
   if (report.quality === 'wrong_document' || report.quality === 'unreadable') return true
   if (report.matches_plate === false) return true
   const payload = report.payload
