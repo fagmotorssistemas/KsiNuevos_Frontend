@@ -1,10 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, Loader2, Search, Sparkles, UserSearch, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
 import { SatjeOwnerConsulta } from '@/components/features/inventario/SatjeOwnerConsulta'
+import {
+  readConsultaDialogSession,
+  readSatjeOwnerSession,
+  writeConsultaDialogSession,
+} from '@/lib/inventario/consultaDialogSession'
 
 const LAST_CONSULTA_KEY = 'ksi.consultaUnificada.last'
 
@@ -256,10 +261,14 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
 
 export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
   const last = readLastConsulta()
+  const dialogSession = readConsultaDialogSession()
+  const satjeSession = readSatjeOwnerSession()
   const [query, setQuery] = useState(last.query)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UnifiedConsultaResult | null>(last.result)
-  const [panel, setPanel] = useState<'unificada' | 'propietario'>('unificada')
+  const [panel, setPanel] = useState<'unificada' | 'propietario'>(
+    satjeSession?.consultaId ? 'propietario' : dialogSession.panel
+  )
 
   const run = async () => {
     const value = query.trim()
@@ -285,11 +294,12 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  useEffect(() => {
+    writeConsultaDialogSession({ open: true, panel })
+  }, [panel])
+
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div
         className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading || panel === 'propietario' ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}
         onClick={(e) => e.stopPropagation()}
@@ -333,11 +343,9 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {panel === 'propietario' ? (
-          <div className="overflow-y-auto flex-1 min-h-0">
-            <SatjeOwnerConsulta />
-          </div>
-        ) : null}
+        <div className={panel === 'propietario' ? 'overflow-y-auto flex-1 min-h-0' : 'hidden'}>
+          <SatjeOwnerConsulta />
+        </div>
 
         {panel === 'unificada' ? (
           <>

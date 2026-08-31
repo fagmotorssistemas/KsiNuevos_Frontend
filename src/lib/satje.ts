@@ -158,6 +158,29 @@ function normalizeEstado(body: unknown, fallbackId: string): SatjeConsultaEstado
   }
 }
 
+/** Estado para el navegador: nunca incluye captchaUrl. */
+export function satjeClientFacingStatus(status: SatjeConsultaEstado) {
+  return {
+    id: status.id,
+    estado: status.estado,
+    mensaje: status.mensaje,
+    captchaActual: status.captchaActual ?? null,
+    captchasTotal: status.captchasTotal,
+    etapa: status.etapa ?? null,
+    captchaListo: Boolean(status.captchaUrl),
+  }
+}
+
+export function satjeSafeCaptchaRedirect(raw: string): URL | null {
+  try {
+    const url = new URL(raw, getBaseUrl())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url
+  } catch {
+    return null
+  }
+}
+
 async function satjeFetch(path: string, init?: RequestInit): Promise<{ status: number; data: unknown }> {
   const url = `${getBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`
   const res = await fetch(url, {
@@ -215,6 +238,22 @@ export async function satjeGetConsulta(id: string): Promise<SatjeConsultaEstado>
 export async function satjeConsultaMissing(id: string): Promise<boolean> {
   const { status } = await satjeFetch(`/consultas/${encodeURIComponent(id)}`)
   return status === 404
+}
+
+export async function satjeContinuarCaptcha(id: string): Promise<'ok' | 'pendiente' | 'ausente'> {
+  const paths = [
+    `/consultas/${encodeURIComponent(id)}/continuar`,
+    `/consultas/${encodeURIComponent(id)}/continuar-captcha`,
+    `/consultas/${encodeURIComponent(id)}/captcha/continuar`,
+  ]
+  let sawConflict = false
+  for (const path of paths) {
+    const { status } = await satjeFetch(path, { method: 'POST', body: '{}' })
+    if (status === 404 || status === 405) continue
+    if (status >= 200 && status < 300) return 'ok'
+    if (status === 409) sawConflict = true
+  }
+  return sawConflict ? 'pendiente' : 'ausente'
 }
 
 export async function satjeGetResultado(id: string): Promise<unknown> {

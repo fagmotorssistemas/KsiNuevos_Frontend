@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { SATJE_ACTIVE_STATUSES, requireSatjeAccess } from '@/lib/satje-access'
 import {
   SatjeApiError,
+  satjeClientFacingStatus,
   satjeConsultaMissing,
   satjeCreateConsulta,
   satjeStoredStatus,
@@ -131,15 +132,7 @@ export async function POST(req: Request) {
             status: satjeStoredStatus(String(created.estado)),
           })
           if (!retry.error) {
-            return NextResponse.json({
-              id: created.id,
-              estado: created.estado,
-              mensaje: created.mensaje,
-              captchaUrl: created.captchaUrl,
-              captchaActual: created.captchaActual,
-              captchasTotal: created.captchasTotal,
-              etapa: created.etapa,
-            })
+            return NextResponse.json(satjeClientFacingStatus(created))
           }
         }
         if (again) {
@@ -152,15 +145,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudo registrar la consulta' }, { status: 500 })
     }
 
-    return NextResponse.json({
-      id: created.id,
-      estado: created.estado,
-      mensaje: created.mensaje,
-      captchaUrl: created.captchaUrl,
-      captchaActual: created.captchaActual,
-      captchasTotal: created.captchasTotal,
-      etapa: created.etapa,
-    })
+    return NextResponse.json(satjeClientFacingStatus(created))
   } catch (error) {
     if (error instanceof SatjeApiError) {
       return NextResponse.json({ error: error.message }, { status: error.httpStatus >= 400 ? error.httpStatus : 502 })

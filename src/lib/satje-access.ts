@@ -38,3 +38,25 @@ export async function requireSatjeAccess(): Promise<
 
   return { supabase, user }
 }
+
+export async function requireOwnedSatjeConsulta(id: string): Promise<
+  | { supabase: SupabaseClient<Database>; user: User; owned: { id: string; status: string } }
+  | { response: NextResponse }
+> {
+  const access = await requireSatjeAccess()
+  if ('response' in access) return access
+  const trimmed = id.trim()
+  if (!trimmed) {
+    return { response: NextResponse.json({ error: 'Consulta inválida' }, { status: 400 }) }
+  }
+  const { data: owned } = await access.supabase
+    .from('satje_consultas')
+    .select('id, status')
+    .eq('id', trimmed)
+    .eq('user_id', access.user.id)
+    .maybeSingle()
+  if (!owned) {
+    return { response: NextResponse.json({ error: 'Consulta no encontrada' }, { status: 404 }) }
+  }
+  return { supabase: access.supabase, user: access.user, owned }
+}

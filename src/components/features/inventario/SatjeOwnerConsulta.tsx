@@ -9,6 +9,7 @@ import {
   satjeProcesosUnicos,
   satjeResumenConsultas,
 } from '@/lib/inventario/satjeResult'
+import { readSatjeOwnerSession, writeSatjeOwnerSession } from '@/lib/inventario/consultaDialogSession'
 
 type SatjeEstado = 'pendiente' | 'en_proceso' | 'esperando_captcha' | 'completada' | 'error' | string
 
@@ -16,7 +17,7 @@ type SatjeStatusResponse = {
   id?: string
   estado?: SatjeEstado
   mensaje?: string | null
-  captchaUrl?: string | null
+  captchaListo?: boolean
   captchaActual?: number | null
   captchasTotal?: number
   etapa?: string | null
@@ -25,7 +26,6 @@ type SatjeStatusResponse = {
 
 const CAPTCHA_STEPS = ['Función Judicial (SATJE)', 'Fiscalía'] as const
 const DEFAULT_CAPTCHA_TOTAL = 2
-const CAPTCHA_WINDOW_NAME = 'satje-captcha'
 
 type SatjeResultResponse = {
   resultado?: unknown
@@ -177,25 +177,26 @@ function ResultView({ data }: { data: unknown }) {
 }
 
 export function SatjeOwnerConsulta() {
-  const [nombre, setNombre] = useState('')
-  const [cedula, setCedula] = useState('')
-  const [placa, setPlaca] = useState('')
-  const [ruc, setRuc] = useState('')
-  const [consultaId, setConsultaId] = useState<string | null>(null)
+  const saved = readSatjeOwnerSession()
+  const [nombre, setNombre] = useState(saved?.nombre ?? '')
+  const [cedula, setCedula] = useState(saved?.cedula ?? '')
+  const [placa, setPlaca] = useState(saved?.placa ?? '')
+  const [ruc, setRuc] = useState(saved?.ruc ?? '')
+  const [consultaId, setConsultaId] = useState<string | null>(saved?.consultaId ?? null)
   const [estado, setEstado] = useState<SatjeEstado | null>(null)
-  const [captchaUrl, setCaptchaUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<unknown>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [progressOpen, setProgressOpen] = useState(false)
+  const [progressOpen, setProgressOpen] = useState(() => Boolean(saved?.consultaId && saved.progressOpen))
   const [captchasDone, setCaptchasDone] = useState(0)
   const [captchasTotal, setCaptchasTotal] = useState(DEFAULT_CAPTCHA_TOTAL)
   const [etapa, setEtapa] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<string | null>(null)
+  const [captchaListo, setCaptchaListo] = useState(false)
+  const [captchaPopupBlocked, setCaptchaPopupBlocked] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevEstadoRef = useRef<SatjeEstado | null>(null)
   const captchasDoneRef = useRef(0)
-  const captchaWinRef = useRef<Window | null>(null)
 
   const stopPoll = () => {
     if (pollRef.current) {
@@ -204,20 +205,19 @@ export function SatjeOwnerConsulta() {
     }
   }
 
-  const closeCaptchaTab = () => {
-    const win = captchaWinRef.current
-    captchaWinRef.current = null
-    if (!win || win.closed) return
-    try {
-      win.close()
-    } catch {
-      /* el navegador puede bloquear close si no abrimos nosotros la pestaña */
-    }
-  }
+  useEffect(() => {
+    writeSatjeOwnerSession({
+      nombre,
+      cedula,
+      placa,
+      ruc,
+      consultaId,
+      progressOpen,
+    })
+  }, [nombre, cedula, placa, ruc, consultaId, progressOpen])
 
   useEffect(() => () => {
     stopPoll()
-    closeCaptchaTab()
   }, [])
 
   useEffect(() => {
@@ -233,7 +233,6 @@ export function SatjeOwnerConsulta() {
 
       const prev = prevEstadoRef.current
       if (prev === 'esperando_captcha' && next !== 'esperando_captcha') {
-        closeCaptchaTab()
         captchasDoneRef.current = Math.min(total, captchasDoneRef.current + 1)
       }
 
@@ -247,7 +246,6 @@ export function SatjeOwnerConsulta() {
 
       if (next === 'completada') {
         captchasDoneRef.current = total
-        closeCaptchaTab()
       }
 
       setCaptchasDone(captchasDoneRef.current)
@@ -262,23 +260,25 @@ export function SatjeOwnerConsulta() {
         if (!res.ok) {
           setError(body.error || 'No se pudo consultar el estado')
           setEstado('error')
-          closeCaptchaTab()
           stopPoll()
           return
         }
         const next = body.estado || 'pendiente'
         applyProgress(body, next)
         setEstado(next)
-        setCaptchaUrl(body.captchaUrl ?? null)
+        setCaptchaListo(Boolean(body.captchaListo))
         if (next === 'error') {
-          setError(body.mensaje || body.error || 'La consulta SATJE falló')
-          closeCaptchaTab()
+          setError(
+            body.mensaje ||
+              body.error ||
+              'El scraper marcó esta consulta como error. KSI sí recibió respuesta (HTTP 200).'
+          )
           stopPoll()
           return
         }
+        setError(null)
         if (next === 'completada') {
           stopPoll()
-          closeCaptchaTab()
           const out = await fetch(`/api/satje/${encodeURIComponent(consultaId)}/resultado`)
           const payload = (await out.json()) as SatjeResultResponse
           if (cancelled) return
@@ -298,7 +298,6 @@ export function SatjeOwnerConsulta() {
         if (cancelled) return
         setError('No se pudo consultar el estado')
         setEstado('error')
-        closeCaptchaTab()
         stopPoll()
       }
     }
@@ -323,15 +322,16 @@ export function SatjeOwnerConsulta() {
     if (ruc.trim() !== '' && ruc.trim().length !== 13) return
     setSubmitting(true)
     setError(null)
+    setEstado('pendiente')
     setResultado(null)
-    setCaptchaUrl(null)
     setCaptchasDone(0)
     captchasDoneRef.current = 0
     prevEstadoRef.current = null
     setCaptchasTotal(DEFAULT_CAPTCHA_TOTAL)
     setEtapa(null)
     setMensaje(null)
-    closeCaptchaTab()
+    setCaptchaListo(false)
+    setCaptchaPopupBlocked(false)
     try {
       const res = await fetch('/api/satje', {
         method: 'POST',
@@ -355,7 +355,6 @@ export function SatjeOwnerConsulta() {
       }
       setConsultaId(body.id)
       setEstado(body.estado || 'pendiente')
-      setCaptchaUrl(body.captchaUrl ?? null)
       setProgressOpen(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo crear la consulta')
@@ -366,21 +365,17 @@ export function SatjeOwnerConsulta() {
 
   const retry = () => {
     stopPoll()
-    closeCaptchaTab()
     setConsultaId(null)
     setEstado(null)
-    setCaptchaUrl(null)
     setProgressOpen(false)
     setCaptchasDone(0)
     captchasDoneRef.current = 0
-    prevEstadoRef.current = null
     void startConsulta()
   }
 
-  const openCaptcha = () => {
-    if (!captchaUrl) return
-    const win = window.open(captchaUrl, CAPTCHA_WINDOW_NAME)
-    captchaWinRef.current = win
+  const dismissProgress = () => {
+    stopPoll()
+    setProgressOpen(false)
   }
 
   return (
@@ -499,19 +494,37 @@ export function SatjeOwnerConsulta() {
               <div className="mt-3 space-y-2">
                 <button
                   type="button"
-                  onClick={openCaptcha}
-                  disabled={!captchaUrl}
+                  onClick={() => {
+                    if (!consultaId) return
+                    const popup = window.open(
+                      `/api/satje/${encodeURIComponent(consultaId)}/captcha`,
+                      '_blank',
+                      'noopener,noreferrer'
+                    )
+                    setCaptchaPopupBlocked(!popup)
+                  }}
+                  disabled={!consultaId || !captchaListo}
                   className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Resolver CAPTCHA {Math.min(captchasDone + 1, captchasTotal)} de {captchasTotal}
                 </button>
+                {captchaPopupBlocked && consultaId ? (
+                  <a
+                    href={`/api/satje/${encodeURIComponent(consultaId)}/captcha`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-sm font-semibold text-blue-700 underline"
+                  >
+                    El navegador bloqueó la ventana. Abrir CAPTCHA
+                  </a>
+                ) : null}
                 <p className="text-xs text-slate-500">
-                  Cuando lo completes, esta pestaña se cierra sola. Luego puede pedir un segundo CAPTCHA (Fiscalía).
+                  Resuelve el CAPTCHA en la pestaña que se abre. Cuando termines, vuelve a Inventario.
                 </p>
-                {!captchaUrl ? (
+                {!captchaListo ? (
                   <p className="text-xs text-slate-500">
-                    El enlace temporal aparecerá aquí cuando el scraper lo envíe.
+                    El CAPTCHA se mostrará en esa pestaña cuando el scraper lo pida.
                   </p>
                 ) : null}
               </div>
@@ -523,17 +536,33 @@ export function SatjeOwnerConsulta() {
             ) : null}
             {estado === 'error' ? (
               <div className="mt-3">
-                <p className="text-sm text-red-700">{error || 'Error en la consulta'}</p>
+                <p className="text-sm text-red-700">
+                  {error || mensaje || 'El scraper marcó la consulta como error'}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Esto no es un fallo de red de KSI. El job en satje-api quedó en estado error (CAPTCHA, Chrome remoto o timeout).
+                </p>
+              </div>
+            ) : null}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {estado === 'error' ? (
                 <button
                   type="button"
                   onClick={retry}
-                  className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-800"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Reintentar
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+              <button
+                type="button"
+                onClick={dismissProgress}
+                className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
