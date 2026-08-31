@@ -7,7 +7,7 @@ import { useInventarioData } from "@/hooks/accounting/useInventarioData";
 import { InventarioDocumentReport } from "@/components/features/inventario/InventarioDocumentReportsModal";
 import { VehicleDetailModal, type VehicleDetailTab } from "@/components/features/inventario/VehicleDetailModal";
 import { ConsultaUnificadaDialog } from "@/components/features/inventario/ConsultaUnificadaDialog";
-import { readConsultaDialogSession, readSatjeOwnerSession, writeConsultaDialogSession } from "@/lib/inventario/consultaDialogSession";
+import { resetConsultaDialog, writeConsultaDialogSession } from "@/lib/inventario/consultaDialogSession";
 import type { VehiculoInventario } from "@/types/inventario.types";
 
 export default function ReporteDocumentacionPage({
@@ -24,11 +24,7 @@ export default function ReporteDocumentacionPage({
     const [detailInitialTab, setDetailInitialTab] = useState<VehicleDetailTab>("documentos");
     const [detailOpenUpload, setDetailOpenUpload] = useState(false);
     const [checklistReloadKey, setChecklistReloadKey] = useState(0);
-    const [consultaOpen, setConsultaOpen] = useState(() => {
-        const dialog = readConsultaDialogSession()
-        const satje = readSatjeOwnerSession()
-        return dialog.open || Boolean(satje?.consultaId && satje.progressOpen)
-    })
+    const [consultaOpen, setConsultaOpen] = useState(false)
 
     const vehiculos = useMemo(() => data?.listado ?? [], [data?.listado]);
 
@@ -58,7 +54,7 @@ export default function ReporteDocumentacionPage({
                     <button
                         type="button"
                         onClick={() => {
-                            writeConsultaDialogSession({ ...readConsultaDialogSession(), open: true })
+                            writeConsultaDialogSession({ open: true, panel: 'unificada' })
                             setConsultaOpen(true)
                         }}
                         className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-800 shadow-sm transition-colors hover:bg-blue-100"
@@ -93,7 +89,7 @@ export default function ReporteDocumentacionPage({
             {consultaOpen ? (
                 <ConsultaUnificadaDialog
                     onClose={() => {
-                        writeConsultaDialogSession({ ...readConsultaDialogSession(), open: false })
+                        resetConsultaDialog()
                         setConsultaOpen(false)
                     }}
                 />

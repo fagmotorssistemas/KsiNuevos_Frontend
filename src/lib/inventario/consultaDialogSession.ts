@@ -65,3 +65,16 @@ export function writeSatjeOwnerSession(value: SatjeOwnerSession): void {
     /* ignore */
   }
 }
+
+export function clearSatjeOwnerSession(): void {
+  try {
+    sessionStorage.removeItem(SATJE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function resetConsultaDialog(): void {
+  writeConsultaDialogSession({ open: false, panel: 'unificada' })
+  clearSatjeOwnerSession()
+}

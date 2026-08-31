@@ -5,11 +5,7 @@ import { AlertTriangle, Loader2, Search, Sparkles, UserSearch, X } from 'lucide-
 import { toast } from 'sonner'
 import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
 import { SatjeOwnerConsulta } from '@/components/features/inventario/SatjeOwnerConsulta'
-import {
-  readConsultaDialogSession,
-  readSatjeOwnerSession,
-  writeConsultaDialogSession,
-} from '@/lib/inventario/consultaDialogSession'
+import { writeConsultaDialogSession } from '@/lib/inventario/consultaDialogSession'
 
 const LAST_CONSULTA_KEY = 'ksi.consultaUnificada.last'
 
@@ -261,14 +257,10 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
 
 export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
   const last = readLastConsulta()
-  const dialogSession = readConsultaDialogSession()
-  const satjeSession = readSatjeOwnerSession()
   const [query, setQuery] = useState(last.query)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UnifiedConsultaResult | null>(last.result)
-  const [panel, setPanel] = useState<'unificada' | 'propietario'>(
-    satjeSession?.consultaId ? 'propietario' : dialogSession.panel
-  )
+  const [panel, setPanel] = useState<'unificada' | 'propietario'>('unificada')
 
   const run = async () => {
     const value = query.trim()
