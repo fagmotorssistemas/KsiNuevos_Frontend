@@ -32,6 +32,30 @@ function saveLastConsulta(query: string, result: UnifiedConsultaResult) {
   }
 }
 
+function CitationHistoryList({ rows }: { rows: UnifiedReadableReport['pendingCitations'] }) {
+  if (rows.length === 0) return null
+  return (
+    <ul className="mt-3 space-y-3">
+      {rows.map((row) => (
+        <li key={row.number} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800">
+          <p className="font-semibold leading-snug">{row.motive}</p>
+          <p className="mt-2 text-slate-700">
+            {row.date ? `Fecha: ${row.date}. ` : ''}
+            {row.entity !== '—' ? `Entidad: ${row.entity}. ` : ''}
+            Estado: {row.status}.
+          </p>
+          <p className="mt-1 text-slate-600">
+            Citación {row.number}
+            {row.amount ? `. Valor: ${row.amount}` : ''}
+            {row.points ? `. Puntos: ${row.points}` : ''}
+            {row.plate ? `. Placa: ${row.plate}` : ''}
+          </p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function CitationList({ rows }: { rows: UnifiedReadableReport['pendingCitations'] }) {
   if (rows.length === 0) return null
   return (
@@ -79,7 +103,8 @@ function Dl({ items }: { items: { label: string; value: string }[] }) {
 function ReportView({ report }: { report: UnifiedReadableReport }) {
   const ownerPending = report.ownerPendingCitations ?? []
   const ownerDebts = report.ownerDebts ?? { pendingFinesCount: 0, pendingAmount: '—', totalCitations: 0 }
-  const ownerHistory = report.ownerInfractionHistory ?? []
+  const ownerHistory = report.ownerCitationHistory ?? []
+  const plateHistory = report.vehicleCitationHistory ?? []
   const otherAlerts = report.manualReview
     ? report.alerts.filter((alert) => !alert.startsWith('Advertencia:'))
     : report.alerts
@@ -206,7 +231,12 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
       </section>
       ) : null}
 
-      {report.infractionHistory.length > 0 ? (
+      {plateHistory.length > 0 ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h4 className="text-sm font-bold text-slate-900">Historial de citaciones de esta placa</h4>
+          <CitationHistoryList rows={plateHistory} />
+        </section>
+      ) : report.infractionHistory.length > 0 ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <h4 className="text-sm font-bold text-slate-900">Historial de citaciones de esta placa</h4>
           <ul className="mt-2 space-y-2 text-sm text-slate-800">
@@ -225,15 +255,7 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
         <section className="rounded-xl border border-slate-200 bg-white p-4">
           <h4 className="text-sm font-bold text-slate-900">Historial de citaciones del propietario</h4>
           <p className="mt-2 text-xs text-slate-500">Incluye infracciones de otros vehículos a nombre de esta cédula.</p>
-          <ul className="mt-2 space-y-2 text-sm text-slate-800">
-            {ownerHistory.map((row) => (
-              <li key={`owner-${row.label}`}>
-                {row.label}
-                {row.years.length ? `, registrado en ${row.years.join(', ')}` : ''}.
-                {row.statuses.length ? ` Estado: ${row.statuses.join(', ')}.` : ''}
-              </li>
-            ))}
-          </ul>
+          <CitationHistoryList rows={ownerHistory} />
         </section>
       ) : null}
 

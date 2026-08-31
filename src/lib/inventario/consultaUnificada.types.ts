@@ -90,6 +90,8 @@ export type UnifiedReadableReport = {
   ownerPendingCitations: ReportCitation[]
   infractionHistory: { label: string; years: string[]; statuses: string[] }[]
   ownerInfractionHistory: { label: string; years: string[]; statuses: string[] }[]
+  vehicleCitationHistory: ReportCitation[]
+  ownerCitationHistory: ReportCitation[]
   person: { label: string; value: string }[]
   activity: string | null
   judicial: {

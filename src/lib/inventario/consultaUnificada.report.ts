@@ -81,26 +81,59 @@ function simplifyInfraction(text: string | null): string {
   if (n.includes('trasp') && n.includes('dominio')) {
     return 'No registrar el traspaso de dominio del vehículo dentro de los 30 días establecidos'
   }
-  if (n.includes('exceda') || n.includes('velocidad') || n.includes('lit06') || n.includes('num6')) {
+  if (n.includes('cint') && (n.includes('seg') || n.includes('exija') || n.includes('exigi'))) {
+    return 'Conducir sin cinturón de seguridad o no exigir su uso a pasajeros y acompañantes'
+  }
+  if (n.includes('estacione') && n.includes('prohibid')) {
+    return 'Estacionar en sitios prohibidos por la ley y el reglamento'
+  }
+  if (n.includes('exceda') || n.includes('velocidad') || ((n.includes('lit06') || n.includes('lit6')) && n.includes('391'))) {
     return 'Exceso de velocidad dentro del rango moderado permitido'
   }
-  if (n.includes('desobedezca') || n.includes('senal') || n.includes('ord') || n.includes('lit01') || n.includes('num1')) {
-    return 'Incumplimiento de órdenes o señales de tránsito'
+  if ((n.includes('desobedezca') || n.includes('senal') || n.includes('senal')) && (n.includes('ord') || n.includes('transito'))) {
+    return 'Incumplir órdenes o señales de los agentes o de la señalización de tránsito'
   }
   if (n.includes('maltrato') || n.includes('mascota') || n.includes('animal')) {
     return 'Maltrato o muerte de mascotas o animales de compañía'
   }
   if (n.includes('contravencion') && n.includes('transito')) return 'Contravención de tránsito'
-  return titleCaseEs(raw.replace(/^art\.?\s*\d+\s*-?\s*lit\.?\s*\d+\.?\s*/i, ''))
+  return expandInfractionAbbreviations(raw)
+}
+
+function expandInfractionAbbreviations(text: string): string {
+  const cleaned = text.replace(/^art\.?\s*\d+\s*-?\s*lit\.?\s*\d+\.?\s*/i, '').trim()
+  const expanded = cleaned
+    .replace(/\bCINT\.?\s*DE\.?\s*SEG\.?/gi, 'cinturón de seguridad')
+    .replace(/\bNO EXIJA EL USO\b/gi, 'no exigir el uso')
+    .replace(/\bUSUARIOS\/ACOMPAÑA\w*/gi, 'usuarios o acompañantes')
+    .replace(/\bESTACIONE\b/gi, 'estacionar')
+    .replace(/\bREGLAM\.?\b/gi, 'reglamento')
+    .replace(/\bCOND\.?\s*SIN\b/gi, 'conducir sin')
+    .replace(/\bCOND\.?\s+/gi, 'conductor: ')
+    .replace(/\bArt\.?\s*/gi, 'Artículo ')
+    .replace(/\bLit\.?\s*/gi, 'literal ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return titleCaseEs(expanded)
 }
 
 function cleanEntity(value: string | null): string {
   if (!value) return '—'
+  const raw = value.trim()
+  const key = norm(raw)
+  if (key === 'gadcte' || key.startsWith('gadcte')) return 'Comisión de Tránsito del Ecuador'
+  if (key.includes('emov') || key.includes('misicata')) return 'EMOV EP (Cuenca)'
+  if (key.includes('loj') && key.includes('loja')) return 'GAD Municipal de Loja'
+  if (key.includes('dur') && key.includes('duran')) return 'GAD Municipal de Durán'
+  if (key.includes('amt') && key.includes('quito')) return 'AMT Quito'
+  if (key.includes('policianacional') || key.startsWith('polpol')) return 'Policía Nacional del Ecuador'
   return titleCaseEs(
-    value
+    raw
       .replace(/^MIS-MISICATA\s+/i, '')
-      .replace(/^GAD-CTE$/i, 'GAD CTE')
-      .replace(/^ATM-/, 'ATM ')
+      .replace(/^GAD-CTE$/i, 'Comisión de Tránsito del Ecuador')
+      .replace(/^ATM-/, 'AMT ')
+      .replace(/^LOJ-GAD\s*/i, 'GAD Municipal de ')
+      .replace(/^GAD-/, 'GAD ')
   )
 }
 
@@ -386,6 +419,8 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
     ownerPendingCitations,
     infractionHistory: historyFromCitations(vehicleCitations),
     ownerInfractionHistory: historyFromCitations(ownerCitations),
+    vehicleCitationHistory: vehicleCitations,
+    ownerCitationHistory: ownerCitations,
     person,
     activity: activity ? activity.replace(/\s+/g, ' ').trim() : null,
     judicial: {

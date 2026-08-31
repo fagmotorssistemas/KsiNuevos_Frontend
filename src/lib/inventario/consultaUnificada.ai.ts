@@ -21,7 +21,7 @@ export async function synthesizeConsultaInvestigation(report: UnifiedReadableRep
     citaciones_pendientes_de_esta_placa: report.pendingCitations,
     deudas_del_propietario: report.ownerDebts,
     citaciones_pendientes_del_propietario: report.ownerPendingCitations,
-    historial_de_esta_placa: report.infractionHistory,
+    historial_de_esta_placa: report.vehicleCitationHistory ?? report.infractionHistory,
     historial_del_propietario: report.ownerInfractionHistory,
     persona: report.person,
     actividad: report.activity,
