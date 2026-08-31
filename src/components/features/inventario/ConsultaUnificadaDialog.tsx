@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, Loader2, Search, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Search, Sparkles, UserSearch, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
+import { SatjeOwnerConsulta } from '@/components/features/inventario/SatjeOwnerConsulta'
 
 const LAST_CONSULTA_KEY = 'ksi.consultaUnificada.last'
 
@@ -258,6 +259,7 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState(last.query)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<UnifiedConsultaResult | null>(last.result)
+  const [panel, setPanel] = useState<'unificada' | 'propietario'>('unificada')
 
   const run = async () => {
     const value = query.trim()
@@ -289,62 +291,97 @@ export function ConsultaUnificadaDialog({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}
+        className={`bg-white rounded-2xl shadow-2xl w-full overflow-hidden flex flex-col ${result || loading || panel === 'propietario' ? 'max-w-3xl max-h-[92vh]' : 'max-w-lg'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100 bg-slate-50/70 shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Consulta unificada</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              {panel === 'propietario' ? 'Consultar a propietario' : 'Consulta unificada'}
+            </h2>
+            {panel === 'propietario' ? (
+              <p className="text-xs text-slate-500 mt-1">SATJE · demandado / procesado</p>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-white"
-            aria-label="Cerrar"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {panel === 'unificada' ? (
+              <button
+                type="button"
+                onClick={() => setPanel('propietario')}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <UserSearch className="h-3.5 w-3.5" />
+                Consultar a propietario
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPanel('unificada')}
+                className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Volver
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-white"
+              aria-label="Cerrar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <form
-          className="shrink-0 flex flex-col sm:flex-row gap-2 p-4 border-b border-slate-100"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void run()
-          }}
-        >
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => {
-                const value = event.target.value
-                setQuery(/\s/.test(value) ? value : value.toUpperCase())
-              }}
-              placeholder="Placa, número de cédula o RUC"
-              className="w-full h-11 pl-9 pr-3 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-            />
+        {panel === 'propietario' ? (
+          <div className="overflow-y-auto flex-1 min-h-0">
+            <SatjeOwnerConsulta />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            {loading ? 'Consultando y analizando…' : 'Consultar'}
-          </button>
-        </form>
+        ) : null}
 
-        {(loading || result) ? (
-          <div className="overflow-y-auto flex-1 min-h-0 p-4">
-            {loading ? (
-              <p className="text-sm text-slate-500 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                Consultando fuentes y armando el informe…
-              </p>
+        {panel === 'unificada' ? (
+          <>
+            <form
+              className="shrink-0 flex flex-col sm:flex-row gap-2 p-4 border-b border-slate-100"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void run()
+              }}
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  value={query}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setQuery(/\s/.test(value) ? value : value.toUpperCase())
+                  }}
+                  placeholder="Placa, número de cédula o RUC"
+                  className="w-full h-11 pl-9 pr-3 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {loading ? 'Consultando y analizando…' : 'Consultar'}
+              </button>
+            </form>
+
+            {loading || result ? (
+              <div className="overflow-y-auto flex-1 min-h-0 p-4">
+                {loading ? (
+                  <p className="text-sm text-slate-500 flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    Consultando fuentes y armando el informe…
+                  </p>
+                ) : null}
+                {result?.report ? <ReportView report={result.report} /> : null}
+              </div>
             ) : null}
-            {result?.report ? <ReportView report={result.report} /> : null}
-          </div>
+          </>
         ) : null}
       </div>
     </div>

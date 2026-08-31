@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { DashboardInventarioResponse, DetalleVehiculoResponse } from "@/types/inventario.types";
+import { DashboardInventarioResponse, DetalleVehiculoResponse, VehiculoInventario } from "@/types/inventario.types";
 import {
     computePublicPriceRevertAt,
     getEffectivePublicPrice,
@@ -7,7 +7,135 @@ import {
     isVehicleAvailableForPriceRules,
 } from "@/lib/inventario/inventory-pricing";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || ''
+const LOCAL_API_URL = 'http://127.0.0.1:3005/api'
+
+function dashboardApiBases(): string[] {
+    const bases: string[] = []
+    if (API_URL) bases.push(API_URL)
+    if (LOCAL_API_URL !== API_URL && !/localhost|127\.0\.0\.1/i.test(API_URL)) {
+        bases.push(LOCAL_API_URL)
+    }
+    return bases
+}
+
+function emptyVehiculo(partial: Partial<VehiculoInventario> & Pick<VehiculoInventario, 'placa' | 'marca' | 'modelo'>): VehiculoInventario {
+    return {
+        codEmpresa: 0,
+        empresa: '',
+        proCodigo: 0,
+        proId: '',
+        marca: '',
+        modelo: '',
+        anioModelo: '',
+        descripcion: '',
+        tipo: '',
+        color: '',
+        motor: '',
+        chasis: '',
+        cilindraje: '',
+        combustible: '',
+        tonelaje: '',
+        capacidad: '',
+        nroLlantas: '',
+        nroEjes: '',
+        paisOrigen: '',
+        subclase: '',
+        ram: '',
+        version: '',
+        anioMatricula: '',
+        nombreMatricula: '',
+        lugarMatricula: '',
+        placaCaracteristica: '',
+        marcaCaracteristica: '',
+        proveedor: '',
+        fechaCompra: '',
+        formaPago: '',
+        stock: 0,
+        ...partial,
+    }
+}
+
+async function fetchOracleDashboard(): Promise<DashboardInventarioResponse | null> {
+    for (const base of dashboardApiBases()) {
+        try {
+            const res = await fetch(`${base}/inventario/dashboard`, {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(8000),
+            })
+            if (!res.ok) continue
+            const response = await res.json()
+            const oracleData = response.data as DashboardInventarioResponse | undefined
+            if (oracleData?.listado) return oracleData
+        } catch {
+            /* red local o backend apagado */
+        }
+    }
+    return null
+}
+
+async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
+    const supabase = createClient()
+    const { data, error } = await supabase
+        .from('inventoryoracle')
+        .select(
+            'id, oracle_id, plate, brand, model, year, color, description, type, engine_number, vin, engine_displacement, fuel_type, country_origin, tonnage, passenger_capacity, wheels_count, axles_count, registration_year, registration_place, supplier, purchase_date, stock, status, mileage, price, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, created_at, version'
+        )
+        .order('created_at', { ascending: false })
+        .limit(2000)
+
+    if (error) throw new Error(error.message)
+
+    const listado = (data ?? []).map((row) => {
+        const stock = Number(row.stock ?? (row.status === 'disponible' ? 1 : 0))
+        const effectivePublicPrice = getEffectivePublicPrice(row)
+        return emptyVehiculo({
+            proId: row.oracle_id || row.id,
+            marca: row.brand || '',
+            modelo: row.model || '',
+            anioModelo: row.year != null ? String(row.year) : '',
+            descripcion: row.description || '',
+            placa: row.plate || '',
+            tipo: row.type || '',
+            color: row.color || '',
+            motor: row.engine_number || '',
+            chasis: row.vin || '',
+            cilindraje: row.engine_displacement || '',
+            combustible: row.fuel_type || '',
+            tonelaje: row.tonnage || '',
+            capacidad: row.passenger_capacity || '',
+            nroLlantas: row.wheels_count || '',
+            nroEjes: row.axles_count || '',
+            paisOrigen: row.country_origin || '',
+            version: row.version || '',
+            anioMatricula: row.registration_year || '',
+            lugarMatricula: row.registration_place || '',
+            proveedor: row.supplier || '',
+            fechaCompra: row.purchase_date || '',
+            stock,
+            price: effectivePublicPrice,
+            internalFixedPrice: row.internal_fixed_price ?? null,
+            internalFixedPriceSetAt: row.internal_fixed_price_set_at ?? null,
+            publicPriceChangedAt: row.public_price_changed_at ?? null,
+            publicPriceChangeReason: row.public_price_change_reason ?? null,
+            publicPriceRevertsAt: row.public_price_reverts_at ?? null,
+            publicPriceRequestedBy: row.public_price_requested_by ?? null,
+            mileage: row.mileage ?? undefined,
+            createdAt: row.created_at ?? null,
+        })
+    })
+
+    const totalActivos = listado.filter((v) => v.stock > 0).length
+    return {
+        resumen: {
+            totalVehiculosRegistrados: listado.length,
+            totalActivos,
+            totalBaja: listado.length - totalActivos,
+            fechaActualizacion: new Date().toISOString(),
+        },
+        listado,
+    }
+}
 
 const SUPABASE_PRICE_SELECT =
     'plate, price, mileage, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, stock, status, id, created_at';
@@ -73,10 +201,11 @@ export const inventarioService = {
     
     // Método existente para el Dashboard general
     async getDashboard(): Promise<DashboardInventarioResponse> {
-        const res = await fetch(`${API_URL}/inventario/dashboard`);
-        if (!res.ok) throw new Error('Error fetching inventory dashboard');
-        const response = await res.json();
-        const oracleData = response.data;
+        const oracleData = await fetchOracleDashboard()
+        if (!oracleData) {
+            console.warn('Inventario: API Oracle no disponible. Cargando desde Supabase.')
+            return dashboardFromSupabase()
+        }
 
         // --- NUEVO: Traer price y mileage de Supabase ---
         const supabase = createClient();

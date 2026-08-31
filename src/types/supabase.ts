@@ -6124,6 +6124,50 @@ export type Database = {
         }
         Relationships: []
       }
+      satje_consultas: {
+        Row: {
+          cedula: string | null
+          created_at: string
+          id: string
+          nombre: string
+          placa: string | null
+          ruc: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cedula?: string | null
+          created_at?: string
+          id: string
+          nombre: string
+          placa?: string | null
+          ruc?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cedula?: string | null
+          created_at?: string
+          id?: string
+          nombre?: string
+          placa?: string | null
+          ruc?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satje_consultas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scraper_sellers: {
         Row: {
           badges: string | null
