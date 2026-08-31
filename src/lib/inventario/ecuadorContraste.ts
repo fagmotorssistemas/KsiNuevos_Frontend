@@ -95,6 +95,7 @@ export type EcuadorCitation = {
   article: string | null
   infraction: string | null
   status: EcuadorCitationStatus | string
+  plate?: string | null
 }
 
 export function citationStatusLabel(status: string | null | undefined): string {

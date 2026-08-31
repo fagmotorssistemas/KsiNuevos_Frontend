@@ -17,9 +17,12 @@ export async function synthesizeConsultaInvestigation(report: UnifiedReadableRep
     titulo: report.title,
     vehiculo: report.kind === 'placa' ? report.vehicle : [],
     propietarios: report.kind === 'placa' ? report.owners : null,
-    deudas: report.debts,
-    citaciones_pendientes: report.pendingCitations,
-    historial: report.infractionHistory,
+    deudas_de_esta_placa: report.debts,
+    citaciones_pendientes_de_esta_placa: report.pendingCitations,
+    deudas_del_propietario: report.ownerDebts,
+    citaciones_pendientes_del_propietario: report.ownerPendingCitations,
+    historial_de_esta_placa: report.infractionHistory,
+    historial_del_propietario: report.ownerInfractionHistory,
     persona: report.person,
     actividad: report.activity,
     judiciales: {
@@ -29,7 +32,7 @@ export async function synthesizeConsultaInvestigation(report: UnifiedReadableRep
       otros: report.judicial.other.map((row) => ({ tipo: row.plainAction, rol: row.role, fecha: row.date })),
       nota_rol: report.judicial.roleNote,
     },
-    alertas: report.alerts,
+    fuentes: report.sourcesNote,
     revision_manual: report.manualReview,
   }
 
@@ -40,6 +43,7 @@ export async function synthesizeConsultaInvestigation(report: UnifiedReadableRep
     'Si el tipo no es placa, no hables de vehículos registrados a su nombre ni digas que no tiene vehículos.',
     'Si hay dos propietarios distintos: advertencia. Di solo que hay que verificar el nombre del titular del vehículo. No indiques ANT, portales, notaría ni dónde hacerlo. No hables de compra bloqueada y no elijas un titular como verdadero.',
     'En juicios, el rol "actor" NO significa que la persona sea culpable. No escribas que "tiene una demanda por" un delito.',
+    'Si el tipo es placa: habla solo de deudas de ESA placa (SRI, ANT y AMT Quito si aplica). No menciones EMOV, CTE ni otros GADs como fuentes de esta consulta. No atribuyas al auto multas de la cédula.',
     'No inventes datos que no estén en el JSON.',
     'Responde SOLO JSON: { "conclusions": ["frase corta 1", "frase corta 2"], "investigation_summary": "2 a 4 párrafos con el cierre de la investigación" }',
     JSON.stringify(compact),

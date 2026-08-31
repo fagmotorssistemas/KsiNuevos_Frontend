@@ -223,6 +223,8 @@ type MultasApiRow = {
     article?: string | null
     infraction?: string | null
     status?: string | null
+    plate?: string | null
+    placa?: string | null
   }> | null
 }
 
@@ -240,6 +242,7 @@ function mapCitations(row: MultasApiRow): EcuadorCitation[] {
     article: c.article ?? null,
     infraction: c.infraction ?? null,
     status: c.status || 'pending',
+    plate: (c.plate || c.placa || '').replace(/[\s-]/g, '').toUpperCase() || null,
   }))
 }
 

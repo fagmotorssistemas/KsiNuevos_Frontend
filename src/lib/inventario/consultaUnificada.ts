@@ -515,6 +515,9 @@ function ecuadorSection(payload: EcuadorContrastePayload, plateRaw?: unknown): U
       citation.points != null ? { label: 'Puntos', value: String(citation.points) } : null,
       citation.paymentDeadline ? { label: 'Límite de pago', value: citation.paymentDeadline } : null,
       citation.article ? { label: 'Artículo', value: citation.article } : null,
+      (citation.plate || payload.lookup?.plate || payload.plate)
+        ? { label: 'Placa', value: citation.plate || payload.lookup?.plate || payload.plate }
+        : null,
     ].filter((row): row is UnifiedFact => Boolean(row)),
     rawJson: JSON.stringify(citation, null, 2),
   }))
@@ -707,7 +710,12 @@ async function findKsiMatches(
   return matches
 }
 
-async function loadPersonDossier(id: string, isRuc: boolean): Promise<UnifiedSection[]> {
+async function loadPersonDossier(
+  id: string,
+  isRuc: boolean,
+  options?: { includeTrafficFines?: boolean }
+): Promise<UnifiedSection[]> {
+  const includeTrafficFines = options?.includeTrafficFines !== false
   const out: UnifiedSection[] = []
   if (isEcuadorApiConfigured()) {
     if (isRuc) {
@@ -749,14 +757,16 @@ async function loadPersonDossier(id: string, isRuc: boolean): Promise<UnifiedSec
         }))
       }
     }
-    const multas = await ecuadorPathSafe(`/multas/${encodeURIComponent(id)}`)
-    out.push(sectionFromDump({
-      id: 'multas-persona',
-      title: 'Multas de tránsito (persona)',
-      source: 'EcuadorAPI',
-      data: multas,
-      emptySummary: 'Sin multas para esa identificación.',
-    }))
+    if (includeTrafficFines) {
+      const multas = await ecuadorPathSafe(`/multas/${encodeURIComponent(id)}`)
+      out.push(sectionFromDump({
+        id: 'multas-persona',
+        title: 'Multas de tránsito (persona)',
+        source: 'EcuadorAPI',
+        data: multas,
+        emptySummary: 'Sin multas para esa identificación.',
+      }))
+    }
   } else {
     out.push(skipped(isRuc ? 'empresa' : 'persona', isRuc ? 'Empresa (SRI)' : 'Persona', 'EcuadorAPI', 'EcuadorAPI no está configurada'))
   }
@@ -882,7 +892,11 @@ export async function runUnifiedConsulta(
   if (personId) {
     if (personId.length === 13) identity.ruc = identity.ruc || personId
     if (personId.length === 10) identity.cedula = identity.cedula || personId
-    sections.push(...(await loadPersonDossier(personId, personId.length === 13)))
+    sections.push(
+      ...(await loadPersonDossier(personId, personId.length === 13, {
+        includeTrafficFines: classified.kind !== 'placa',
+      }))
+    )
   }
 
   const ksi = classified.kind === 'placa' ? await findKsiMatches(supabase, { placa: identity.placa, cedula: null, ruc: null }) : []

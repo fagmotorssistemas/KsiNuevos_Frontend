@@ -51,6 +51,20 @@ export type ReportOwner = {
   source: string
 }
 
+export type ReportCitation = {
+  number: string
+  date: string | null
+  entity: string
+  amount: string | null
+  points: string | null
+  motive: string
+  status: string
+  pending: boolean
+  plate: string | null
+  scope: 'vehicle' | 'owner'
+  otherVehicle: boolean
+}
+
 export type UnifiedReadableReport = {
   title: string
   kind: UnifiedQueryKind
@@ -67,17 +81,15 @@ export type UnifiedReadableReport = {
     pendingAmount: string
     totalCitations: number
   }
-  pendingCitations: {
-    number: string
-    date: string | null
-    entity: string
-    amount: string | null
-    points: string | null
-    motive: string
-    status: string
-    pending: boolean
-  }[]
+  ownerDebts: {
+    pendingFinesCount: number
+    pendingAmount: string
+    totalCitations: number
+  }
+  pendingCitations: ReportCitation[]
+  ownerPendingCitations: ReportCitation[]
   infractionHistory: { label: string; years: string[]; statuses: string[] }[]
+  ownerInfractionHistory: { label: string; years: string[]; statuses: string[] }[]
   person: { label: string; value: string }[]
   activity: string | null
   judicial: {
@@ -89,6 +101,10 @@ export type UnifiedReadableReport = {
     years: string
   }
   alerts: string[]
+  sourcesNote: {
+    title: string
+    body: string
+  } | null
   ksi: UnifiedKsiMatch[]
   manualReview: {
     required: boolean

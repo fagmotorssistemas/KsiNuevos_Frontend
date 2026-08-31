@@ -1,4 +1,5 @@
 import type {
+  ReportCitation,
   UnifiedConsultaResult,
   UnifiedFact,
   UnifiedReadableReport,
@@ -109,11 +110,64 @@ function yearOf(value: string | null): string | null {
   return match ? match[0] : null
 }
 
+function isClosedCitationStatus(status: string | null): boolean {
+  const key = (status || '').toLowerCase()
+  return (
+    key === 'paid' ||
+    key === 'pagada' ||
+    key === 'sí' ||
+    key === 'si' ||
+    key === 'appealed' ||
+    key === 'impugnada' ||
+    key === 'annulled' ||
+    key === 'anulada' ||
+    key === 'agreement' ||
+    key === 'convenio'
+  )
+}
+
 function isPendingCitation(status: string | null, amount: string | null): boolean {
+  if (isClosedCitationStatus(status)) return false
   const key = (status || '').toLowerCase()
   if (key === 'pending' || key === 'pendiente' || key.includes('pendiente de pago')) return true
   const num = Number(String(amount || '').replace(/[^0-9.-]/g, ''))
-  return key !== 'paid' && key !== 'pagada' && Number.isFinite(num) && num > 0.009
+  return Number.isFinite(num) && num > 0.009
+}
+
+function normPlate(value: string | null | undefined): string | null {
+  const n = (value || '').replace(/[\s-]/g, '').toUpperCase()
+  return n || null
+}
+
+function sectionCitationScope(id: string): 'vehicle' | 'owner' | null {
+  if (id.includes('multas-persona') || id.includes('persona') || id.includes('licencia') || id.includes('puntos')) {
+    return 'owner'
+  }
+  if (id.includes('vehiculo') || id.includes('multa')) return 'vehicle'
+  return null
+}
+
+function moneySum(rows: ReportCitation[]): number {
+  return rows.reduce((sum, row) => {
+    const num = Number(String(row.amount || '').replace(/[^0-9,-]/g, '').replace(',', '.'))
+    return sum + (Number.isFinite(num) ? num : 0)
+  }, 0)
+}
+
+function historyFromCitations(rows: ReportCitation[]) {
+  const groups = new Map<string, { years: Set<string>; statuses: Set<string> }>()
+  for (const row of rows) {
+    const group = groups.get(row.motive) || { years: new Set<string>(), statuses: new Set<string>() }
+    const year = yearOf(row.date)
+    if (year) group.years.add(year)
+    group.statuses.add(row.status)
+    groups.set(row.motive, group)
+  }
+  return [...groups.entries()].map(([label, group]) => ({
+    label,
+    years: [...group.years].sort(),
+    statuses: [...group.statuses],
+  }))
 }
 
 function samePerson(a: string | null, b: string | null): boolean {
@@ -123,7 +177,6 @@ function samePerson(a: string | null, b: string | null): boolean {
 
 export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReadableReport {
   const vehicleFacts = allFacts(result.sections, (id) => id.includes('vehiculo') || id === 'ecuador-vehiculo')
-  const multaFacts = allFacts(result.sections, (id) => id.includes('multa') || id.includes('vehiculo'))
   const personFacts = allFacts(result.sections, (id) =>
     id.includes('identidad') ||
     id.includes('persona') ||
@@ -183,47 +236,51 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
   )
 
   const sri = formatMoney(pick(vehicleFacts, ['sripendiente']) || (result.kind === 'placa' ? '0' : null))
-  const pendingCount = Number(pick(multaFacts, ['citacionespendientes', 'multaspendientes']) || 0)
-  const pendingAmount = formatMoney(pick(multaFacts, ['multasantvehiculo', 'totalpendienteusd', 'valorpendiente']) || '0')
-  const totalCitations = Number(pick(multaFacts, ['totalcitaciones', 'multastotal']) || 0)
+  const queriedPlate = normPlate(placa)
 
-  const citationMap = new Map<string, UnifiedReadableReport['pendingCitations'][number]>()
+  const vehicleCitationMap = new Map<string, ReportCitation>()
+  const ownerCitationMap = new Map<string, ReportCitation>()
   for (const section of result.sections) {
-    if (!section.id.includes('vehiculo') && !section.id.includes('multa')) continue
+    const scope = sectionCitationScope(section.id)
+    if (!scope) continue
     for (const row of section.rows) {
       const facts = row.facts
       const number = pick(facts, ['ncitacion', 'citacion', 'citationnumber']) || ''
       if (!number || number.length < 4) continue
-      const status = citationStatusEs(row.subtitle || pick(facts, ['estado', 'status', 'pagada']))
+      const statusRaw = row.subtitle || pick(facts, ['estado', 'status', 'pagada'])
+      const status = citationStatusEs(statusRaw)
       const amount = pick(facts, ['valor', 'total', 'multa'])
       const motive = simplifyInfraction(pick(facts, ['articulo', 'infraccion', 'motivo']) || row.title)
-      const pending = isPendingCitation(row.subtitle ?? null, amount)
-      const current = citationMap.get(number)
-      if (!current) {
-        citationMap.set(number, {
-          number,
-          date: formatDate(pick(facts, ['fecha', 'issuedate'])),
-          entity: cleanEntity(pick(facts, ['entidad', 'entity'])),
-          amount: amount ? formatMoney(amount) : null,
-          points: pick(facts, ['puntos', 'points']),
-          motive,
-          status,
-          pending,
-        })
+      const citationPlate = normPlate(pick(facts, ['placa', 'plate', 'placadelvehiculo']))
+      const otherVehicle = Boolean(
+        scope === 'owner' && queriedPlate && (!citationPlate || citationPlate !== queriedPlate)
+      )
+      const item: ReportCitation = {
+        number,
+        date: formatDate(pick(facts, ['fecha', 'issuedate'])),
+        entity: cleanEntity(pick(facts, ['entidad', 'entity'])),
+        amount: amount ? formatMoney(amount) : null,
+        points: pick(facts, ['puntos', 'points']),
+        motive,
+        status,
+        pending: isPendingCitation(statusRaw, amount),
+        plate: citationPlate,
+        scope,
+        otherVehicle,
+      }
+      if (scope === 'vehicle') {
+        if (!vehicleCitationMap.has(number)) vehicleCitationMap.set(number, item)
+      } else if (!vehicleCitationMap.has(number) && !ownerCitationMap.has(number)) {
+        ownerCitationMap.set(number, item)
       }
     }
   }
-  const citations = [...citationMap.values()]
-  const pendingCitations = citations.filter((row) => row.pending)
-  const groups = new Map<string, { years: Set<string>; statuses: Set<string> }>()
-  for (const row of citations) {
-    const key = row.motive
-    const group = groups.get(key) || { years: new Set<string>(), statuses: new Set<string>() }
-    const year = yearOf(row.date)
-    if (year) group.years.add(year)
-    group.statuses.add(row.status)
-    groups.set(key, group)
-  }
+  const vehicleCitations = [...vehicleCitationMap.values()]
+  const ownerCitations = [...ownerCitationMap.values()]
+  const pendingCitations = vehicleCitations.filter((row) => row.pending)
+  const ownerPendingCitations = ownerCitations.filter((row) => row.pending)
+  const vehiclePendingAmount = pendingCitations.length ? formatMoney(moneySum(pendingCitations)) : formatMoney(pick(vehicleFacts, ['multasantvehiculo', 'totalpendienteusd', 'valorpendiente']) || '0')
+  const ownerPendingAmount = ownerPendingCitations.length ? formatMoney(moneySum(ownerPendingCitations)) : '$0,00'
 
   const personName = titleCaseEs(pick(personFacts, ['nombres', 'nombre', 'razonsocial']) || ownerEcuador?.name || result.identity.nombre || '')
   const activity = pick(personFacts, ['actividad', 'actividadeconomica'])
@@ -246,8 +303,20 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
     alerts.push('Advertencia: las fuentes no coinciden en el titular. Verificar el nombre del titular del vehículo.')
   }
   if (pendingCitations.length > 0) {
-    const total = pendingCitations.reduce((sum, row) => sum + Number(String(row.amount || '').replace(/[^0-9,-]/g, '').replace(',', '.')), 0)
-    alerts.push(`Citación pendiente: ${pendingAmount !== '$0,00' ? pendingAmount : pendingCitations[0]?.amount || formatMoney(total)}`)
+    alerts.push(
+      `Esta placa tiene ${pendingCitations.length} citación${pendingCitations.length === 1 ? '' : 'es'} pendiente${pendingCitations.length === 1 ? '' : 's'}: ${vehiclePendingAmount}.`
+    )
+  }
+  if (ownerPendingCitations.length > 0) {
+    const otherPlates = [...new Set(ownerPendingCitations.map((row) => row.plate).filter(Boolean))]
+    const plateNote = otherPlates.length
+      ? ` Placa${otherPlates.length === 1 ? '' : 's'}: ${otherPlates.join(', ')}.`
+      : queriedPlate
+        ? ' No corresponde a esta placa.'
+        : ''
+    alerts.push(
+      `El propietario tiene ${ownerPendingCitations.length} citación${ownerPendingCitations.length === 1 ? '' : 'es'} pendiente${ownerPendingCitations.length === 1 ? '' : 's'} de otro vehículo (${ownerPendingAmount}).${plateNote}`
+    )
   }
 
   const vehicle: UnifiedReadableReport['vehicle'] = [
@@ -304,16 +373,19 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
     },
     debts: {
       sri,
-      pendingFinesCount: pendingCitations.length || pendingCount,
-      pendingAmount,
-      totalCitations: citations.length || totalCitations,
+      pendingFinesCount: pendingCitations.length,
+      pendingAmount: vehiclePendingAmount,
+      totalCitations: vehicleCitations.length,
+    },
+    ownerDebts: {
+      pendingFinesCount: ownerPendingCitations.length,
+      pendingAmount: ownerPendingAmount,
+      totalCitations: ownerCitations.length,
     },
     pendingCitations,
-    infractionHistory: [...groups.entries()].map(([label, group]) => ({
-      label,
-      years: [...group.years].sort(),
-      statuses: [...group.statuses],
-    })),
+    ownerPendingCitations,
+    infractionHistory: historyFromCitations(vehicleCitations),
+    ownerInfractionHistory: historyFromCitations(ownerCitations),
     person,
     activity: activity ? activity.replace(/\s+/g, ' ').trim() : null,
     judicial: {
@@ -328,6 +400,13 @@ export function buildReadableReport(result: UnifiedConsultaResult): UnifiedReada
       years: [...new Set(judicialRows.map((row) => yearOf(row.date)).filter(Boolean))].join(', '),
     },
     alerts,
+    sourcesNote:
+      result.kind === 'placa'
+        ? {
+            title: 'Aviso importante sobre las fuentes',
+            body: 'Esta consulta de placa usa únicamente SRI y ANT. Si el vehículo está matriculado en Quito, también AMT Quito. No se consulta EMOV, CTE ni otros GADs de tránsito; esas deudas no aparecen aquí.',
+          }
+        : null,
     ksi: result.kind === 'placa' ? result.ksi : [],
     manualReview: conflict
       ? {

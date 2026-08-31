@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Loader2, Search, Sparkles, UserSearch, X } from 'lucide-react'
+import { AlertTriangle, Info, Loader2, Search, Sparkles, UserSearch, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { UnifiedConsultaResult, UnifiedReadableReport } from '@/lib/inventario/consultaUnificada.types'
 import { SatjeOwnerConsulta } from '@/components/features/inventario/SatjeOwnerConsulta'
@@ -32,6 +32,36 @@ function saveLastConsulta(query: string, result: UnifiedConsultaResult) {
   }
 }
 
+function CitationList({ rows }: { rows: UnifiedReadableReport['pendingCitations'] }) {
+  if (rows.length === 0) return null
+  return (
+    <ul className="mt-3 space-y-2">
+      {rows.map((row) => (
+        <li key={row.number} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-slate-800">
+          <p>
+            <span className="font-semibold">Citación {row.number}</span>
+            {row.date ? ` · ${row.date}` : ''}
+          </p>
+          {row.otherVehicle || row.plate ? (
+            <p className="mt-1 font-semibold text-amber-900">
+              {row.plate
+                ? `De la placa ${row.plate}${row.otherVehicle ? ' (no es este vehículo)' : ''}.`
+                : 'Citación del propietario, no de esta placa.'}
+            </p>
+          ) : null}
+          <p className="mt-1">{row.entity}</p>
+          <p className="mt-1">{row.motive}</p>
+          <p className="mt-1">
+            {row.amount ? `Valor pendiente: ${row.amount}. ` : ''}
+            {row.points ? `Puntos: ${row.points}. ` : ''}
+            Estado: {row.status}.
+          </p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Dl({ items }: { items: { label: string; value: string }[] }) {
   if (items.length === 0) return null
   return (
@@ -47,6 +77,9 @@ function Dl({ items }: { items: { label: string; value: string }[] }) {
 }
 
 function ReportView({ report }: { report: UnifiedReadableReport }) {
+  const ownerPending = report.ownerPendingCitations ?? []
+  const ownerDebts = report.ownerDebts ?? { pendingFinesCount: 0, pendingAmount: '—', totalCitations: 0 }
+  const ownerHistory = report.ownerInfractionHistory ?? []
   const otherAlerts = report.manualReview
     ? report.alerts.filter((alert) => !alert.startsWith('Advertencia:'))
     : report.alerts
@@ -54,6 +87,16 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-bold text-slate-900">{report.title}</h3>
+
+      {report.sourcesNote ? (
+        <section className="rounded-xl border border-blue-300 bg-blue-50 p-4">
+          <p className="text-sm font-bold text-blue-950 inline-flex items-center gap-2">
+            <Info className="h-4 w-4 shrink-0" />
+            {report.sourcesNote.title}
+          </p>
+          <p className="mt-2 text-sm text-blue-950 leading-relaxed">{report.sourcesNote.body}</p>
+        </section>
+      ) : null}
 
       {report.manualReview?.required ? (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -141,50 +184,50 @@ function ReportView({ report }: { report: UnifiedReadableReport }) {
 
       {report.vehicle.length > 0 || report.pendingCitations.length > 0 ? (
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h4 className="text-sm font-bold text-slate-900">
-          {report.vehicle.length > 0 ? 'Deudas y multas del vehículo' : 'Multas de tránsito'}
-        </h4>
+        <h4 className="text-sm font-bold text-slate-900">Deudas y multas de esta placa</h4>
         <p className="mt-2 text-sm text-slate-800 leading-relaxed">
-          {report.vehicle.length > 0 ? (
-            <>
-              Deuda pendiente con el SRI: {report.debts.sri}. Multas de tránsito pendientes:{' '}
-              {report.debts.pendingFinesCount}. Valor pendiente: {report.debts.pendingAmount}.
-            </>
-          ) : (
-            <>
-              Multas de tránsito pendientes: {report.debts.pendingFinesCount}. Valor pendiente:{' '}
-              {report.debts.pendingAmount}.
-            </>
-          )}
+          Deuda pendiente con el SRI: {report.debts.sri}. Citaciones pendientes de esta placa:{' '}
+          {report.debts.pendingFinesCount}. Valor pendiente: {report.debts.pendingAmount}.
         </p>
-        {report.pendingCitations.length > 0 ? (
-          <ul className="mt-3 space-y-2">
-            {report.pendingCitations.map((row) => (
-              <li key={row.number} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-slate-800">
-                <p>
-                  <span className="font-semibold">Citación {row.number}</span>
-                  {row.date ? ` · ${row.date}` : ''}
-                </p>
-                <p className="mt-1">{row.entity}</p>
-                <p className="mt-1">{row.motive}</p>
-                <p className="mt-1">
-                  {row.amount ? `Valor pendiente: ${row.amount}. ` : ''}
-                  {row.points ? `Puntos: ${row.points}. ` : ''}
-                  Estado: {row.status}.
-                </p>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <CitationList rows={report.pendingCitations} />
+      </section>
+      ) : null}
+
+      {report.kind !== 'placa' && (ownerPending.length > 0 || ownerDebts.totalCitations > 0) ? (
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-slate-900">Multas del propietario (cédula)</h4>
+        <p className="mt-2 text-sm text-slate-800 leading-relaxed">
+          Estas citaciones están a nombre del titular, no de la placa consultada. Si son de otro auto, se indica la placa.
+        </p>
+        <p className="mt-2 text-sm text-slate-800">
+          Pendientes del propietario: {ownerDebts.pendingFinesCount}. Valor: {ownerDebts.pendingAmount}.
+        </p>
+        <CitationList rows={ownerPending} />
       </section>
       ) : null}
 
       {report.infractionHistory.length > 0 ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h4 className="text-sm font-bold text-slate-900">Historial de citaciones</h4>
+          <h4 className="text-sm font-bold text-slate-900">Historial de citaciones de esta placa</h4>
           <ul className="mt-2 space-y-2 text-sm text-slate-800">
             {report.infractionHistory.map((row) => (
               <li key={row.label}>
+                {row.label}
+                {row.years.length ? `, registrado en ${row.years.join(', ')}` : ''}.
+                {row.statuses.length ? ` Estado: ${row.statuses.join(', ')}.` : ''}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {report.kind !== 'placa' && ownerHistory.length > 0 ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <h4 className="text-sm font-bold text-slate-900">Historial de citaciones del propietario</h4>
+          <p className="mt-2 text-xs text-slate-500">Incluye infracciones de otros vehículos a nombre de esta cédula.</p>
+          <ul className="mt-2 space-y-2 text-sm text-slate-800">
+            {ownerHistory.map((row) => (
+              <li key={`owner-${row.label}`}>
                 {row.label}
                 {row.years.length ? `, registrado en ${row.years.join(', ')}` : ''}.
                 {row.statuses.length ? ` Estado: ${row.statuses.join(', ')}.` : ''}
