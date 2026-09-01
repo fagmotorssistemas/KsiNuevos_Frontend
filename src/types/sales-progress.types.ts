@@ -60,8 +60,26 @@ export type SalesProgressTrendPoint = {
   puntos_avance: number;
 };
 
+export type SalesProgressPeriodMode = 'day' | 'week' | 'month';
+
+export type SalesProgressPeriod = {
+  mode: SalesProgressPeriodMode;
+  desde: string;
+  hasta: string;
+  /** YYYY-MM del mes que muestran el popover y las semanas */
+  viewMonth: string;
+};
+
+export type MonthWeek = {
+  n: number;
+  start: string;
+  end: string;
+};
+
 export type SalesDailyProgressPayload = {
   fecha: string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
   vendedor_id: string;
   vendedor_nombre: string;
   rol: SalesProgressRol;
@@ -132,4 +150,89 @@ export type SalesProgressEventRow = {
 
 export function todayEcuadorDate(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(new Date());
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+export function toYmdUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function clampYmd(iso: string, today: string): string {
+  return iso > today ? today : iso;
+}
+
+export function monthKeyFromYmd(iso: string): string {
+  return iso.slice(0, 7);
+}
+
+export function addUtcDaysYmd(iso: string, days: number): string {
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  date.setUTCDate(date.getUTCDate() + days);
+  return toYmdUtc(date);
+}
+
+export function saturdayOnOrBeforeYmd(iso: string): string {
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 1) % 7));
+  return toYmdUtc(date);
+}
+
+export function lastDayOfMonthYmd(year: number, month: number): string {
+  return toYmdUtc(new Date(Date.UTC(year, month, 0, 12)));
+}
+
+export function weeksOfMonth(year: number, month: number): MonthWeek[] {
+  const first = `${year}-${pad2(month)}-01`;
+  const last = lastDayOfMonthYmd(year, month);
+  let cursor = saturdayOnOrBeforeYmd(first);
+  const weeks: MonthWeek[] = [];
+  let n = 1;
+  while (cursor <= last) {
+    weeks.push({ n, start: cursor, end: addUtcDaysYmd(cursor, 6) });
+    n += 1;
+    cursor = addUtcDaysYmd(cursor, 7);
+  }
+  return weeks;
+}
+
+export function dayPeriod(iso: string, today = todayEcuadorDate()): SalesProgressPeriod {
+  const day = clampYmd(iso.slice(0, 10), today);
+  return { mode: 'day', desde: day, hasta: day, viewMonth: monthKeyFromYmd(day) };
+}
+
+export function weekPeriod(
+  start: string,
+  end: string,
+  viewMonth: string,
+  today = todayEcuadorDate()
+): SalesProgressPeriod {
+  return {
+    mode: 'week',
+    desde: start,
+    hasta: clampYmd(end, today),
+    viewMonth,
+  };
+}
+
+export function monthPeriod(
+  year: number,
+  month: number,
+  today = todayEcuadorDate()
+): SalesProgressPeriod {
+  const desde = `${year}-${pad2(month)}-01`;
+  return {
+    mode: 'month',
+    desde,
+    hasta: clampYmd(lastDayOfMonthYmd(year, month), today),
+    viewMonth: `${year}-${pad2(month)}`,
+  };
+}
+
+export function todayPeriod(): SalesProgressPeriod {
+  return dayPeriod(todayEcuadorDate());
 }

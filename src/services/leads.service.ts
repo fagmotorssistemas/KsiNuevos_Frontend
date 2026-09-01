@@ -1,7 +1,7 @@
 import { LeadWithDetails, LeadsFilters, TradeInCarRow, LeadCallRequest, LeadCallStats, LeadCallEvent, CALL_REQUEST_MAX_POSTPONES } from "@/types/leads.types";
 import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
 import { getLeadsCustomYmdRange } from "@/utils/leads.logic";
-import { isFinancialAdvisoryGestionComplete } from "@/types/finance-advisory.types";
+import { isAdvisoryClosedStatus, isFinancialAdvisoryGestionComplete } from "@/types/finance-advisory.types";
 
 export const fetchSellersRequest = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('id, full_name').eq('status', 'activo').eq('role', 'vendedor').order('full_name');
@@ -1097,7 +1097,7 @@ const fetchAsesoriaLeadBuckets = async (
     let q = supabase
         .from("asesoria_financiamiento")
         .select(
-            `id, lead_id, estado, leads!inner(assigned_to), asesoria_financiamiento_gestion (${ASESORIA_GESTION_FIELDS})`
+            `id, lead_id, estado, notas_vendedor, leads!inner(assigned_to), asesoria_financiamiento_gestion (${ASESORIA_GESTION_FIELDS})`
         );
     if (assignedTo && assignedTo !== "all") {
         q = q.eq("leads.assigned_to", assignedTo);
@@ -1115,8 +1115,11 @@ const fetchAsesoriaLeadBuckets = async (
         if (!Number.isFinite(leadId)) continue;
         buckets.all.add(leadId);
         const gestiones = (row.asesoria_financiamiento_gestion || []) as any[];
-        if (gestiones.length > 0) buckets.started.add(leadId);
-        if (gestiones.some((g) => isFinancialAdvisoryGestionComplete(g))) {
+        if (gestiones.length > 0 || notesFilled(row.notas_vendedor)) buckets.started.add(leadId);
+        if (
+          gestiones.some((g) => isFinancialAdvisoryGestionComplete(g)) ||
+          (isAdvisoryClosedStatus(row.estado) && notesFilled(row.notas_vendedor))
+        ) {
             buckets.filled.add(leadId);
         }
         const est = row.estado || "pendiente";

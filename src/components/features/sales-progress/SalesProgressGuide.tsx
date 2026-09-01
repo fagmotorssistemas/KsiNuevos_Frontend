@@ -75,7 +75,7 @@ const POINTS = [
     label: 'Asesoría avanzada',
     pts: '+5',
     cap: 'sin tope',
-    when: 'Llena la gestión completa (no basta el estado). De las que llegaron hoy, cuántas se enviaron llenas.',
+    when: 'Llena la gestión o marca Resuelto con notas si no contestó / no dio cédula. De las que llegaron, cuántas quedaron atendidas.',
   },
   {
     label: 'Cita completada',

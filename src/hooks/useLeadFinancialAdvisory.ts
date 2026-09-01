@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  isAdvisoryAdvancedStatus,
+  advisoryInternalNotesFilled,
   isAdvisoryClosedStatus,
   missingFinancialAdvisoryFields,
   type FinancialAdvisoryGestionRow,
@@ -107,7 +107,11 @@ export function useLeadFinancialAdvisory(leadId: number) {
     try {
       setUpdating(id);
 
-      if (isAdvisoryAdvancedStatus(newStatus)) {
+      if (isAdvisoryClosedStatus(newStatus) && !advisoryInternalNotesFilled(notes)) {
+        return { success: false, error: "notes_required" as const };
+      }
+
+      if (newStatus === "en_proceso" || newStatus === "resuelto_no_aplica") {
         const { data: gestiones, error: gErr } = await supabase
           .from("asesoria_financiamiento_gestion")
           .select(

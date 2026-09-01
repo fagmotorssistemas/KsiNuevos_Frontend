@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1071,6 +1071,215 @@ export type Database = {
           nombre_completo?: string
           observaciones_legales?: string | null
           telefono?: string | null
+        }
+        Relationships: []
+      }
+      competitive_analysis_snapshots: {
+        Row: {
+          brand: string | null
+          captured_at: string
+          competition_level: string | null
+          competitor_count: number
+          competitor_inventory_id: string | null
+          competitor_price_avg: number | null
+          competitor_price_max: number | null
+          competitor_price_min: number | null
+          competitor_units: number
+          created_at: string
+          id: string
+          ksi_price: number | null
+          model: string | null
+          opportunity_level: string | null
+          price_difference: number | null
+          price_difference_percent: number | null
+          price_position: string | null
+          recommendation: string | null
+          vehicle_id: string | null
+          year: number | null
+        }
+        Insert: {
+          brand?: string | null
+          captured_at?: string
+          competition_level?: string | null
+          competitor_count?: number
+          competitor_inventory_id?: string | null
+          competitor_price_avg?: number | null
+          competitor_price_max?: number | null
+          competitor_price_min?: number | null
+          competitor_units?: number
+          created_at?: string
+          id?: string
+          ksi_price?: number | null
+          model?: string | null
+          opportunity_level?: string | null
+          price_difference?: number | null
+          price_difference_percent?: number | null
+          price_position?: string | null
+          recommendation?: string | null
+          vehicle_id?: string | null
+          year?: number | null
+        }
+        Update: {
+          brand?: string | null
+          captured_at?: string
+          competition_level?: string | null
+          competitor_count?: number
+          competitor_inventory_id?: string | null
+          competitor_price_avg?: number | null
+          competitor_price_max?: number | null
+          competitor_price_min?: number | null
+          competitor_units?: number
+          created_at?: string
+          id?: string
+          ksi_price?: number | null
+          model?: string | null
+          opportunity_level?: string | null
+          price_difference?: number | null
+          price_difference_percent?: number | null
+          price_position?: string | null
+          recommendation?: string | null
+          vehicle_id?: string | null
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_competitive_competitor"
+            columns: ["competitor_inventory_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_competitive_vehicle"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitive_positioning: {
+        Row: {
+          analysis_date: string
+          brand: string | null
+          competition_level: string | null
+          competitor_count: number | null
+          competitor_vehicle_count: number | null
+          created_at: string
+          id: string
+          inventory_vehicle_id: string
+          ksi_price: number | null
+          market_average_price: number | null
+          market_max_price: number | null
+          market_min_price: number | null
+          model: string | null
+          opportunity: string | null
+          price_difference: number | null
+          price_difference_percentage: number | null
+          year: number | null
+        }
+        Insert: {
+          analysis_date?: string
+          brand?: string | null
+          competition_level?: string | null
+          competitor_count?: number | null
+          competitor_vehicle_count?: number | null
+          created_at?: string
+          id?: string
+          inventory_vehicle_id: string
+          ksi_price?: number | null
+          market_average_price?: number | null
+          market_max_price?: number | null
+          market_min_price?: number | null
+          model?: string | null
+          opportunity?: string | null
+          price_difference?: number | null
+          price_difference_percentage?: number | null
+          year?: number | null
+        }
+        Update: {
+          analysis_date?: string
+          brand?: string | null
+          competition_level?: string | null
+          competitor_count?: number | null
+          competitor_vehicle_count?: number | null
+          created_at?: string
+          id?: string
+          inventory_vehicle_id?: string
+          ksi_price?: number | null
+          market_average_price?: number | null
+          market_max_price?: number | null
+          market_min_price?: number | null
+          model?: string | null
+          opportunity?: string | null
+          price_difference?: number | null
+          price_difference_percentage?: number | null
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_positioning_inventory_vehicle"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_inventory: {
+        Row: {
+          brand: string | null
+          brand_normalized: string | null
+          captured_at: string
+          competitor: string
+          created_at: string
+          currency: string | null
+          extraction_method: string | null
+          id: string
+          model: string | null
+          model_normalized: string | null
+          price: number | null
+          price_type: string | null
+          source: string | null
+          source_url: string | null
+          vehicle_url: string | null
+          year: number | null
+        }
+        Insert: {
+          brand?: string | null
+          brand_normalized?: string | null
+          captured_at?: string
+          competitor: string
+          created_at?: string
+          currency?: string | null
+          extraction_method?: string | null
+          id?: string
+          model?: string | null
+          model_normalized?: string | null
+          price?: number | null
+          price_type?: string | null
+          source?: string | null
+          source_url?: string | null
+          vehicle_url?: string | null
+          year?: number | null
+        }
+        Update: {
+          brand?: string | null
+          brand_normalized?: string | null
+          captured_at?: string
+          competitor?: string
+          created_at?: string
+          currency?: string | null
+          extraction_method?: string | null
+          id?: string
+          model?: string | null
+          model_normalized?: string | null
+          price?: number | null
+          price_type?: string | null
+          source?: string | null
+          source_url?: string | null
+          vehicle_url?: string | null
+          year?: number | null
         }
         Relationships: []
       }
@@ -3804,6 +4013,47 @@ export type Database = {
           {
             foreignKeyName: "marketing_dev_requests_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_inbox_videos: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string | null
+          original_filename: string
+          size_bytes: number | null
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          original_filename: string
+          size_bytes?: number | null
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          original_filename?: string
+          size_bytes?: number | null
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_inbox_videos_uploaded_by_fkey"
+            columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -6669,6 +6919,7 @@ export type Database = {
           inventory_id: string | null
           inventoryoracle_id: string | null
           manual_vehicle_description: string | null
+          mensaje_confirmado: boolean | null
           observation: string | null
           phone: string | null
           recordatorio_1h_enviado: boolean | null
@@ -6687,6 +6938,7 @@ export type Database = {
           inventory_id?: string | null
           inventoryoracle_id?: string | null
           manual_vehicle_description?: string | null
+          mensaje_confirmado?: boolean | null
           observation?: string | null
           phone?: string | null
           recordatorio_1h_enviado?: boolean | null
@@ -6705,6 +6957,7 @@ export type Database = {
           inventory_id?: string | null
           inventoryoracle_id?: string | null
           manual_vehicle_description?: string | null
+          mensaje_confirmado?: boolean | null
           observation?: string | null
           phone?: string | null
           recordatorio_1h_enviado?: boolean | null
@@ -8862,19 +9115,29 @@ export type Database = {
         }[]
       }
       get_sales_daily_progress: {
-        Args: { p_fecha?: string; p_vendedor_id?: string }
+        Args: { p_fecha?: string; p_hasta?: string; p_vendedor_id?: string }
         Returns: Json
       }
       get_sales_progress_boss_stock: {
-        Args: { p_fecha?: string; p_vendedor_id?: string }
+        Args: { p_fecha?: string; p_hasta?: string; p_vendedor_id?: string }
         Returns: Json
       }
       get_sales_progress_events: {
-        Args: { p_categoria: string; p_fecha: string; p_vendedor_id: string }
+        Args: {
+          p_categoria: string
+          p_fecha: string
+          p_hasta?: string
+          p_vendedor_id: string
+        }
         Returns: Json
       }
       get_sales_progress_events_core: {
-        Args: { p_categoria: string; p_fecha: string; p_vendedor_id: string }
+        Args: {
+          p_categoria: string
+          p_fecha: string
+          p_hasta?: string
+          p_vendedor_id: string
+        }
         Returns: Json
       }
       get_sales_progress_sellers: { Args: never; Returns: Json }
@@ -9254,34 +9517,62 @@ export type Database = {
             }
             Returns: string
           }
-      sales_progress_apply_weights: {
-        Args: { p_fecha: string; p_include_stale?: boolean }
-        Returns: {
-          axis: string
-          cantidad: number
-          cap: number
-          categoria: string
-          label: string
-          puntos: number
-          puntos_brutos: number
-          sort_order: number
-          vendedor_id: string
-        }[]
-      }
+      sales_progress_apply_weights:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              axis: string
+              cantidad: number
+              cap: number
+              categoria: string
+              label: string
+              puntos: number
+              puntos_brutos: number
+              sort_order: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string; p_include_stale?: boolean }
+            Returns: {
+              axis: string
+              cantidad: number
+              cap: number
+              categoria: string
+              label: string
+              puntos: number
+              puntos_brutos: number
+              sort_order: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_appointment_managed: {
         Args: { ap: Database["public"]["Tables"]["appointments"]["Row"] }
         Returns: boolean
       }
-      sales_progress_asesoria_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          ingresadas: number
-          llenadas: number
-          vendedor_id: string
-        }[]
+      sales_progress_asesoria_atendida: {
+        Args: { p_asesoria_id: number; p_estado: string; p_notas: string }
+        Returns: boolean
       }
+      sales_progress_asesoria_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              ingresadas: number
+              llenadas: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              ingresadas: number
+              llenadas: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_asesoria_events_json: {
-        Args: { p_fecha: string; p_vendedor_id: string }
+        Args: { p_fecha: string; p_hasta?: string; p_vendedor_id: string }
         Returns: Json
       }
       sales_progress_asesoria_gestion_completa: {
@@ -9290,64 +9581,152 @@ export type Database = {
         }
         Returns: boolean
       }
-      sales_progress_citas_gestion_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          due: number
-          gestionadas: number
-          vendedor_id: string
-        }[]
-      }
+      sales_progress_citas_gestion_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              due: number
+              gestionadas: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              due: number
+              gestionadas: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_citas_gestion_events_json: {
-        Args: { p_fecha: string; p_vendedor_id: string }
+        Args: { p_fecha: string; p_hasta?: string; p_vendedor_id: string }
         Returns: Json
       }
+      sales_progress_clamp_dates: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          desde: string
+          end_at: string
+          hasta: string
+          start_at: string
+        }[]
+      }
+      sales_progress_contestados_cuota:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              contestados: number
+              contestados_cartera: number
+              contestados_hoy: number
+              cuota: number
+              hoy_sin_resumen: number
+              ingresados: number
+              sin_resumen: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              contestados: number
+              contestados_cartera: number
+              contestados_hoy: number
+              cuota: number
+              hoy_sin_resumen: number
+              ingresados: number
+              sin_resumen: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_datos_faltantes_contestada: {
         Args: {
           d: Database["public"]["Tables"]["datos_solicitados_clientes"]["Row"]
         }
         Returns: boolean
       }
-      sales_progress_datos_faltantes_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          contestadas: number
-          ingresadas: number
-          vendedor_id: string
-        }[]
-      }
+      sales_progress_datos_faltantes_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              contestadas: number
+              ingresadas: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              contestadas: number
+              ingresadas: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_datos_faltantes_events_json: {
-        Args: { p_fecha: string; p_vendedor_id: string }
+        Args: { p_fecha: string; p_hasta?: string; p_vendedor_id: string }
         Returns: Json
       }
-      sales_progress_day_lead_citas: {
-        Args: { p_fecha: string }
-        Returns: {
-          con_cita: number
-          vendedor_id: string
-        }[]
-      }
-      sales_progress_day_pipeline_stats: {
-        Args: { p_fecha: string }
-        Returns: {
-          backlog_abiertos: number
-          con_historial: number
-          ingresados: number
-          vendedor_id: string
-        }[]
-      }
-      sales_progress_estancados_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          asesoria_respondidas: number
-          asesoria_sin_salir: number
-          faltante_contestadas: number
-          faltante_sin_salir: number
-          vendedor_id: string
-        }[]
-      }
+      sales_progress_day_lead_citas:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              con_cita: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              con_cita: number
+              vendedor_id: string
+            }[]
+          }
+      sales_progress_day_pipeline_stats:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              backlog_abiertos: number
+              con_historial: number
+              ingresados: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              backlog_abiertos: number
+              con_historial: number
+              ingresados: number
+              vendedor_id: string
+            }[]
+          }
+      sales_progress_estancados_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              asesoria_respondidas: number
+              asesoria_sin_salir: number
+              faltante_contestadas: number
+              faltante_sin_salir: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              asesoria_respondidas: number
+              asesoria_sin_salir: number
+              faltante_contestadas: number
+              faltante_sin_salir: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_estancados_events_json: {
-        Args: { p_fecha: string; p_tipo: string; p_vendedor_id: string }
+        Args: {
+          p_fecha: string
+          p_hasta?: string
+          p_tipo: string
+          p_vendedor_id: string
+        }
         Returns: Json
       }
       sales_progress_event_counts: {
@@ -9358,18 +9737,29 @@ export type Database = {
           vendedor_id: string
         }[]
       }
-      sales_progress_ia_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          agendadas: number
-          due: number
-          pendientes: number
-          vencidas: number
-          vendedor_id: string
-        }[]
-      }
+      sales_progress_ia_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              agendadas: number
+              due: number
+              pendientes: number
+              vencidas: number
+              vendedor_id: string
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              agendadas: number
+              due: number
+              pendientes: number
+              vencidas: number
+              vendedor_id: string
+            }[]
+          }
       sales_progress_ia_events_json: {
-        Args: { p_fecha: string; p_vendedor_id: string }
+        Args: { p_fecha: string; p_hasta?: string; p_vendedor_id: string }
         Returns: Json
       }
       sales_progress_ia_ref_date: {
@@ -9399,7 +9789,9 @@ export type Database = {
         Args: never
         Returns: {
           asesoria: number
+          asesoria_total: number
           faltante: number
+          faltante_total: number
           vendedor_id: string
         }[]
       }
@@ -9417,14 +9809,23 @@ export type Database = {
           vendedor_id: string
         }[]
       }
-      sales_progress_showroom_gestion_coverage_day: {
-        Args: { p_fecha: string }
-        Returns: {
-          con_gestion: number
-          vendedor_id: string
-          visitas: number
-        }[]
-      }
+      sales_progress_showroom_gestion_coverage_day:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              con_gestion: number
+              vendedor_id: string
+              visitas: number
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              con_gestion: number
+              vendedor_id: string
+              visitas: number
+            }[]
+          }
       sales_progress_showroom_gestion_day: {
         Args: { p_fecha: string }
         Returns: {
@@ -9434,20 +9835,41 @@ export type Database = {
         }[]
       }
       sales_progress_showroom_sin_events_json: {
-        Args: { p_fecha: string; p_vendedor_id: string }
+        Args: { p_fecha: string; p_hasta?: string; p_vendedor_id: string }
         Returns: Json
       }
-      sales_progress_team_trend: {
-        Args: { p_fecha: string }
-        Returns: {
-          fecha: string
-          porcentaje: number
-          puntos_actividad: number
-          puntos_avance: number
-          puntos_total: number
-          vendedores: number
-        }[]
+      sales_progress_sin_resumen_events_json: {
+        Args: {
+          p_fecha: string
+          p_hasta?: string
+          p_incluir_hoy?: boolean
+          p_vendedor_id: string
+        }
+        Returns: Json
       }
+      sales_progress_team_trend:
+        | {
+            Args: { p_desde: string; p_hasta: string }
+            Returns: {
+              fecha: string
+              porcentaje: number
+              puntos_actividad: number
+              puntos_avance: number
+              puntos_total: number
+              vendedores: number
+            }[]
+          }
+        | {
+            Args: { p_fecha: string }
+            Returns: {
+              fecha: string
+              porcentaje: number
+              puntos_actividad: number
+              puntos_avance: number
+              puntos_total: number
+              vendedores: number
+            }[]
+          }
       sales_progress_week_coverage: {
         Args: { p_fecha: string }
         Returns: {
@@ -9525,7 +9947,11 @@ export type Database = {
         | "ACTIVO"
         | "SUSPENDIDO"
         | "RETIRADO"
-      estado_financiamiento: "pendiente" | "en_proceso" | "resuelto" | "resuelto_no_aplica"
+      estado_financiamiento:
+        | "pendiente"
+        | "en_proceso"
+        | "resuelto"
+        | "resuelto_no_aplica"
       estado_vehiculo_enum:
         | "poder_cliente"
         | "retenido"
@@ -9862,7 +10288,12 @@ export const Constants = {
         "SUSPENDIDO",
         "RETIRADO",
       ],
-      estado_financiamiento: ["pendiente", "en_proceso", "resuelto", "resuelto_no_aplica"],
+      estado_financiamiento: [
+        "pendiente",
+        "en_proceso",
+        "resuelto",
+        "resuelto_no_aplica",
+      ],
       estado_vehiculo_enum: [
         "poder_cliente",
         "retenido",

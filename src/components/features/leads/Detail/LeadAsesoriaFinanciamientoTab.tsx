@@ -4,7 +4,7 @@ import { useLeadFinancialAdvisory } from "@/hooks/useLeadFinancialAdvisory";
 import { toast } from "sonner";
 import {
   FINANCIAL_ADVISORY_STATUS_CONFIG,
-  isAdvisoryAdvancedStatus,
+  advisoryInternalNotesFilled,
   missingFinancialAdvisoryFields,
   type FinancialAdvisoryGestionType,
   type FinancialAdvisoryRecord,
@@ -37,7 +37,8 @@ function MissingGestionBanner({ fields }: { fields: string[] }) {
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold text-red-800">Falta completar la gestión</p>
           <p className="mt-0.5 text-[11px] text-red-600/90">
-            Sin esto no se puede pasar a En proceso ni a Resuelto.
+            Sin esto no se puede pasar a En proceso ni a Resuelto · no aplica.
+            Si no contestó o no dio cédula, marca Resuelto y escribe las notas.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5">
             {fields.map((field) => (
@@ -221,7 +222,10 @@ function FinancialAdvisoryCard({
 
   const [dirtyGestion, setDirtyGestion] = useState(false);
   const [requireGestionComplete, setRequireGestionComplete] = useState(false);
+  const [requireNotes, setRequireNotes] = useState(false);
   const gestionBoxRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const notesFilled = advisoryInternalNotesFilled(notes);
 
   const missingDraftFields = useMemo(
     () => missingFinancialAdvisoryFields(gestionDraft),
@@ -249,6 +253,19 @@ function FinancialAdvisoryCard({
     setRequireGestionComplete(true);
     requestAnimationFrame(() => {
       gestionBoxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const blockNotesRequired = (s: FinancialAdvisoryStatus) => {
+    const label = FINANCIAL_ADVISORY_STATUS_CONFIG[s].label;
+    setRequireNotes(true);
+    requestAnimationFrame(() => {
+      notesRef.current?.focus();
+      notesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    toast.error(`No se puede marcar ${label}`, {
+      description: "Escribe las notas: no contestó, no dio cédula, u otra constancia.",
+      duration: 6000,
     });
   };
 
@@ -294,7 +311,15 @@ function FinancialAdvisoryCard({
   };
 
   const handleSave = async () => {
-    if (isAdvisoryAdvancedStatus(status)) {
+    if (status === "resuelto" && !notesFilled) {
+      blockNotesRequired(status);
+      return;
+    }
+    if (status === "resuelto_no_aplica" && !notesFilled) {
+      blockNotesRequired(status);
+      return;
+    }
+    if (status === "en_proceso" || status === "resuelto_no_aplica") {
       if (!savedGestionMatchesStatus(status)) {
         if (missingDraftFields.length > 0) {
           blockAdvancedStatus(status);
@@ -319,12 +344,15 @@ function FinancialAdvisoryCard({
     const res = await onSave(record.id, status, notes);
     if (!res?.success) {
       toast.error(
-        res?.error === "complete_gestion_required"
-          ? "Llena la gestión completa para pasar a En proceso, Resuelto o Resuelto · no aplica."
-          : "No se pudo guardar el estado."
+        res?.error === "notes_required"
+          ? "Escribe las notas para marcar Resuelto (no contestó o no dio cédula)."
+          : res?.error === "complete_gestion_required"
+            ? "Llena la gestión para En proceso o Resuelto · no aplica. Si no hay cédula, marca Resuelto y escribe las notas."
+            : "No se pudo guardar el estado."
       );
       return;
     }
+    setRequireNotes(false);
     setDirty(false);
   };
 
@@ -472,7 +500,8 @@ function FinancialAdvisoryCard({
         <div className="grid gap-3">
           <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Estado de la asesoría</label>
           <p className="text-[10px] text-slate-400 -mt-2 mb-1">
-            En proceso, Resuelto y Resuelto · no aplica no se pueden marcar hasta llenar la gestión de abajo.
+            Resuelto: si no contestó o no dio cédula, escribe las notas y márcalo — queda resuelto. En proceso y
+            Resuelto · no aplica piden la gestión de abajo (sin cédula).
           </p>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(FINANCIAL_ADVISORY_STATUS_CONFIG) as FinancialAdvisoryStatus[]).map((s) => (
@@ -481,7 +510,20 @@ function FinancialAdvisoryCard({
                 type="button"
                 onClick={() => {
                   if (s === status) return;
+                  if (s === "resuelto") {
+                    if (!advisoryInternalNotesFilled(notes)) {
+                      blockNotesRequired(s);
+                      return;
+                    }
+                    setRequireGestionComplete(false);
+                    setStatus(s);
+                    setDirty(true);
+                    return;
+                  }
                   if (s === "resuelto_no_aplica") {
+                    if (!advisoryInternalNotesFilled(notes)) {
+                      blockNotesRequired(s);
+                    }
                     const nextDraft = { ...gestionDraft, aplica: false as boolean | null };
                     setGestionDraft(nextDraft);
                     setDirtyGestion(true);
@@ -493,11 +535,12 @@ function FinancialAdvisoryCard({
                       blockAdvancedStatus(s);
                       return;
                     }
+                    if (!advisoryInternalNotesFilled(notes)) return;
                     setStatus(s);
                     setDirty(true);
                     return;
                   }
-                  if (isAdvisoryAdvancedStatus(s) && !canSetAdvancedStatus) {
+                  if (s === "en_proceso" && !canSetAdvancedStatus) {
                     blockAdvancedStatus(s);
                     return;
                   }
@@ -532,7 +575,8 @@ function FinancialAdvisoryCard({
             <div>
               <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Gestión realizada</div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Obligatorio para En proceso, Resuelto y Resuelto · no aplica: tipo, si aplica, cédula y banco si aplica.
+                En proceso y Resuelto · no aplica: tipo, si aplica y banco si aplica. Cédula no es obligatoria. Si el
+                cliente no contestó o no la dio, usa Resuelto y las notas.
               </div>
             </div>
             <button
@@ -620,8 +664,9 @@ function FinancialAdvisoryCard({
 
               {/* Datos solicitados / banco */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className={fieldBox("cédula")}>
-                  <label className="text-[11px] font-semibold text-slate-600">Cédula *</label>
+                <div className="rounded-lg p-3 border bg-white border-slate-200">
+                  <label className="text-[11px] font-semibold text-slate-600">Cédula</label>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Opcional. Si no la da, no bloquea Resuelto.</p>
                   <input
                     className="mt-2 w-full text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                     placeholder="Ej: 1712345678"
@@ -662,6 +707,9 @@ function FinancialAdvisoryCard({
                 <label className="text-[11px] font-semibold text-slate-600">
                   ¿El cliente puede aplicar? {showMissing("si el cliente puede aplicar") ? "*" : ""}
                 </label>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Solo si hay con qué evaluar. Si no contestó o no dio cédula, deja N/D y marca Resuelto.
+                </p>
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
@@ -970,13 +1018,18 @@ function FinancialAdvisoryCard({
           )}
         </div>
 
-        {/* Notas internas (se mantienen como complemento rápido) */}
-        <div>
-          <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Notas internas (opcional)</label>
+        <div className={requireNotes && !notesFilled ? "rounded-lg p-3 border border-red-300 bg-red-50/80 ring-1 ring-red-200" : ""}>
+          <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">
+            Notas internas *
+          </label>
+          <p className="text-[10px] text-slate-400 -mt-1 mb-1.5">
+            Obligatorias para Resuelto: no contestó, no dio cédula, u otra constancia. Con eso queda resuelto.
+          </p>
           <textarea
+            ref={notesRef}
             className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-none bg-slate-50 placeholder:text-slate-400"
             rows={2}
-            placeholder="Notas rápidas para el equipo (no reemplaza la gestión)."
+            placeholder="Ej: no contestó, no quiso dar cédula, quedó pendiente de documentos…"
             value={notes}
             onChange={(e) => {
               setNotes(e.target.value);

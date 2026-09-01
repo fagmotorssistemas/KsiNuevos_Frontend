@@ -7,8 +7,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSalesDailyProgress } from '@/hooks/useSalesDailyProgress';
 import { SalesProgressGuide } from '@/components/features/sales-progress/SalesProgressGuide';
 import {
+  dayPeriod,
+  monthPeriod,
   todayEcuadorDate,
+  weekPeriod,
+  weeksOfMonth,
   type SalesProgressEventRow,
+  type SalesProgressPeriod,
   type SalesProgressRankingRow,
   type SalesProgressTrendPoint,
 } from '@/types/sales-progress.types';
@@ -85,70 +90,65 @@ function formatDayLong(isoDate: string): string {
   );
 }
 
-function toYmd(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addUtcDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
-function saturdayOnOrBefore(date: Date): Date {
-  return addUtcDays(date, -((date.getUTCDay() + 1) % 7));
-}
-
-type MonthWeek = {
-  n: number;
-  start: string;
-  end: string;
-};
-
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sept', 'Oct', 'Nov', 'Dic'];
+const MONTH_LONG = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
 
-function weeksOfMonth(year: number, month: number): MonthWeek[] {
-  const first = new Date(Date.UTC(year, month - 1, 1, 12));
-  const last = new Date(Date.UTC(year, month, 0, 12));
-  let cursor = saturdayOnOrBefore(first);
-  const weeks: MonthWeek[] = [];
-  let n = 1;
-  while (cursor <= last) {
-    const friday = addUtcDays(cursor, 6);
-    const start = cursor < first ? first : cursor;
-    const end = friday > last ? last : friday;
-    weeks.push({ n, start: toYmd(start), end: toYmd(end) });
-    n += 1;
-    cursor = addUtcDays(cursor, 7);
+function formatShortDay(isoDate: string): string {
+  const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return date.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' }).replace('.', '');
+}
+
+function formatPeriodLabel(period: SalesProgressPeriod): string {
+  if (period.mode === 'month') {
+    const [year, month] = period.viewMonth.split('-').map(Number);
+    return `${MONTH_LONG[month - 1]} ${year}`;
   }
-  return weeks;
+  if (period.mode === 'week') {
+    return `${formatShortDay(period.desde)} – ${formatShortDay(period.hasta)}`;
+  }
+  return formatDayLong(period.desde);
 }
 
-function dateForMonth(year: number, month: number, today: string): string {
-  const key = `${year}-${String(month).padStart(2, '0')}`;
-  if (today.slice(0, 7) === key) return today;
-  return toYmd(new Date(Date.UTC(year, month, 0, 12)));
+function periodTitle(mode: SalesProgressPeriod['mode']): string {
+  if (mode === 'month') return 'Progreso del mes';
+  if (mode === 'week') return 'Progreso de la semana';
+  return 'Progreso del día';
 }
 
-function dateForWeek(week: MonthWeek, today: string): string {
-  if (today >= week.start && today <= week.end) return today;
-  return week.end;
+function periodScope(mode: SalesProgressPeriod['mode']): string {
+  if (mode === 'month') return 'este mes';
+  if (mode === 'week') return 'esta semana';
+  return 'hoy';
 }
 
 function PeriodFilter({
-  fecha,
+  period,
   onChange,
 }: {
-  fecha: string;
-  onChange: (next: string) => void;
+  period: SalesProgressPeriod;
+  onChange: (next: SalesProgressPeriod) => void;
 }) {
   const { supabase } = useAuth();
   const today = todayEcuadorDate();
   const todayYear = Number(today.slice(0, 4));
-  const day = fecha.slice(0, 10);
-  const [year, month] = day.split('-').map(Number);
+  const [year, month] = period.viewMonth.split('-').map(Number);
   const weeks = weeksOfMonth(year, month);
-  const activeWeek = weeks.find((week) => day >= week.start && day <= week.end)?.n ?? null;
+  const activeWeek =
+    period.mode === 'week' ? (weeks.find((week) => week.start === period.desde)?.n ?? null) : null;
   const [open, setOpen] = useState(false);
   const [panelYear, setPanelYear] = useState(year);
   const [years, setYears] = useState<number[]>([todayYear]);
@@ -205,11 +205,19 @@ function PeriodFilter({
           aria-expanded={open}
           aria-haspopup="dialog"
           onClick={() => setOpen((value) => !value)}
-          className="h-10 rounded-full border border-slate-200 bg-white pl-3.5 pr-3 text-sm text-slate-700 inline-flex items-center gap-1.5 hover:border-slate-300"
+          className={`h-10 rounded-full border pl-3.5 pr-3 text-sm inline-flex items-center gap-1.5 ${
+            period.mode === 'month'
+              ? 'border-slate-900 bg-slate-900 text-white'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+          }`}
         >
           <span className="font-medium">{MONTH_LABELS[month - 1]}</span>
-          <span className="text-slate-400">{year}</span>
-          <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <span className={period.mode === 'month' ? 'text-white/70' : 'text-slate-400'}>{year}</span>
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${
+              period.mode === 'month' ? 'text-white/70' : 'text-slate-400'
+            } ${open ? 'rotate-180' : ''}`}
+          />
         </button>
         {open && (
           <div
@@ -240,14 +248,14 @@ function PeriodFilter({
                 const nextMonth = index + 1;
                 const key = `${panelYear}-${String(nextMonth).padStart(2, '0')}`;
                 const reachable = key <= today.slice(0, 7);
-                const active = panelYear === year && nextMonth === month;
+                const active = period.mode === 'month' && panelYear === year && nextMonth === month;
                 return (
                   <button
                     key={label}
                     type="button"
                     disabled={!reachable}
                     onClick={() => {
-                      onChange(dateForMonth(panelYear, nextMonth, today));
+                      onChange(monthPeriod(panelYear, nextMonth, today));
                       setOpen(false);
                     }}
                     className={`h-9 rounded-xl text-sm font-medium ${
@@ -266,13 +274,18 @@ function PeriodFilter({
           </div>
         )}
       </div>
-      <div className="flex h-10 items-center rounded-full border border-slate-200 bg-white p-0.5">
+      <div
+        className={`flex h-10 items-center rounded-full border bg-white p-0.5 ${
+          period.mode === 'week' ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-200'
+        }`}
+      >
         <span className="pl-2.5 pr-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
           Sem
         </span>
         {weeks.map((week) => {
           const reachable = week.start <= today;
           const active = week.n === activeWeek;
+          const viewMonth = `${year}-${String(month).padStart(2, '0')}`;
           return (
             <button
               key={week.n}
@@ -280,10 +293,10 @@ function PeriodFilter({
               disabled={!reachable}
               title={
                 reachable
-                  ? `Semana ${week.n} · ${week.start.slice(8)}–${week.end.slice(8)}`
+                  ? `Semana ${week.n} · ${formatShortDay(week.start)} – ${formatShortDay(week.end)}`
                   : `Semana ${week.n} · aún no llega`
               }
-              onClick={() => onChange(dateForWeek(week, today))}
+              onClick={() => onChange(weekPeriod(week.start, week.end, viewMonth, today))}
               className={`h-9 min-w-9 rounded-full px-2.5 text-sm font-medium tabular-nums transition-colors ${
                 !reachable
                   ? 'cursor-not-allowed text-slate-300'
@@ -397,16 +410,20 @@ function buildBriefing(input: {
   asesoriaRespondidas: number;
   faltanteQuedados: number;
   asesoriaQuedados: number;
+  scope: string;
 }): { good: string | null; bad: string | null } {
   const name = input.name;
   const good: string[] = [];
   const bad: string[] = [];
+  const ofPeriod = `de ${input.scope}`;
 
   if (input.iaDue > 0 && input.iaPend === 0) {
     good.push(`${input.iaDone} de ${input.iaDue} seguimientos IA agendados`);
   }
   if (input.iaPend > 0) {
-    bad.push(`no agendó ${input.iaPend} seguimiento${input.iaPend === 1 ? '' : 's'} IA de hoy`);
+    bad.push(
+      `no agendó ${input.iaPend} seguimiento${input.iaPend === 1 ? '' : 's'} IA ${ofPeriod}`,
+    );
   }
   if (input.iaVencidas > 0) {
     bad.push(`arrastra ${input.iaVencidas} IA vencido${input.iaVencidas === 1 ? '' : 's'}`);
@@ -418,7 +435,7 @@ function buildBriefing(input: {
   if (input.rol !== 'estrancado' && input.faltan > 0) {
     bad.push(
       `faltan ${input.faltan} resúmenes para la cuota de ${input.cuota}` +
-        (input.ingresados > 0 ? ` (${input.ingresados} de hoy)` : '')
+        (input.ingresados > 0 ? ` (${input.ingresados} ${ofPeriod})` : '')
     );
   }
 
@@ -700,7 +717,8 @@ function EventList({
   events,
   loading,
   onClose,
-  fecha,
+  desde,
+  hasta,
   showAll,
   category,
 }: {
@@ -708,14 +726,19 @@ function EventList({
   events: SalesProgressEventRow[];
   loading: boolean;
   onClose: () => void;
-  fecha: string;
+  desde: string;
+  hasta: string;
   showAll?: boolean;
   category: string | null;
 }) {
-  const dayKey = fecha.slice(0, 10);
+  const from = desde.slice(0, 10);
+  const to = hasta.slice(0, 10);
   const dayEvents = showAll
     ? events
-    : events.filter((event) => ecuadorYmd(event.occurred_at) === dayKey);
+    : events.filter((event) => {
+        const day = ecuadorYmd(event.occurred_at);
+        return day >= from && day <= to;
+      });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -829,8 +852,9 @@ function EventList({
 
 export function SalesProgressDashboard() {
   const {
+    period,
+    setPeriod,
     fecha,
-    setFecha,
     vendedorId,
     setVendedorId,
     data,
@@ -903,6 +927,7 @@ export function SalesProgressDashboard() {
       asesoriaHoy > 0 ? { due: asesoriaHoy, done: asesoriaOk } : null,
     ].filter(Boolean) as Duty[]
   );
+  const scope = periodScope(period.mode);
   const briefing = data
     ? buildBriefing({
         name: firstName(data.vendedor_nombre),
@@ -925,6 +950,7 @@ export function SalesProgressDashboard() {
         asesoriaRespondidas,
         faltanteQuedados,
         asesoriaQuedados,
+        scope,
       })
     : { good: null, bad: null };
   const coveragePct =
@@ -935,7 +961,7 @@ export function SalesProgressDashboard() {
         : contestadosPct;
   const selectedLabel =
     selectedCategory === 'leads_ingresados'
-      ? 'Leads que llegaron hoy'
+      ? `Leads que llegaron ${scope}`
       : selectedCategory === 'contestados_pendientes'
         ? 'Pendientes de resumen'
         : selectedCategory === 'sin_resumen'
@@ -975,20 +1001,26 @@ export function SalesProgressDashboard() {
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900">
-            Progreso del día
+            {periodTitle(period.mode)}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {formatDayLong(fecha)} · haciendo, quedados y lo que se cumplió
+            {formatPeriodLabel(period)} · haciendo, quedados y lo que se cumplió
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <PeriodFilter fecha={fecha} onChange={setFecha} />
+          <PeriodFilter period={period} onChange={setPeriod} />
           <input
             type="date"
-            value={fecha}
+            value={period.mode === 'day' ? period.desde : period.hasta}
             max={todayEcuadorDate()}
-            onChange={(e) => setFecha(e.target.value)}
-            className="h-10 rounded-full border border-slate-200 bg-white px-3.5 text-sm text-slate-700"
+            onChange={(e) => {
+              if (e.target.value) setPeriod(dayPeriod(e.target.value));
+            }}
+            className={`h-10 rounded-full border px-3.5 text-sm text-slate-700 ${
+              period.mode === 'day'
+                ? 'border-slate-900 bg-white ring-1 ring-slate-900'
+                : 'border-slate-200 bg-white'
+            }`}
             aria-label="Día"
           />
           <button
@@ -1069,7 +1101,9 @@ export function SalesProgressDashboard() {
                       ? `${contestados} gest.`
                       : fulfilling.due > 0
                         ? `${fulfilling.done} de ${fulfilling.due}`
-                        : `${semanaPct}% sem`
+                        : period.mode === 'day'
+                          ? `${semanaPct}% sem`
+                          : `${contestadosPct}%`
                   }
                 />
                 <div className="min-w-0 flex-1">
@@ -1079,7 +1113,7 @@ export function SalesProgressDashboard() {
                   </p>
                   <p className="text-2xl sm:text-[1.7rem] font-semibold tracking-tight text-slate-900 mt-1 leading-snug">
                     {data.rol === 'estrancado'
-                      ? `${contestados} de ${cuota} gestionados hoy (${contestadosPct}%)`
+                      ? `${contestados} de ${cuota} gestionados ${scope} (${contestadosPct}%)`
                       : `${contestados} de ${cuota} contestados (${contestadosPct}%)`}
                   </p>
                   <p className="text-sm text-slate-500 mt-2 max-w-xl leading-relaxed">
@@ -1093,8 +1127,10 @@ export function SalesProgressDashboard() {
                       data.rol === 'estrancado'
                         ? `${num(data.backlog_abiertos).toLocaleString('es-EC')} abiertos en cartera. El backlog no resta.`
                         : faltan > 0
-                          ? `Cuota ${cuota}: los de hoy cuentan, y hay que completar con cartera sin resumen.`
-                          : `Esta semana (sáb–vie): ${semanaContestados} de ${semanaIngresados} contestados (${semanaPct}%).`
+                          ? `Cuota ${cuota}: los del periodo cuentan, y hay que completar con cartera sin resumen.`
+                          : period.mode === 'day'
+                            ? `Esta semana (sáb–vie): ${semanaContestados} de ${semanaIngresados} contestados (${semanaPct}%).`
+                            : `En ${scope}: ${contestados} contestados de la cuota ${cuota}.`
                     )}
                   </p>
                 </div>
@@ -1112,13 +1148,13 @@ export function SalesProgressDashboard() {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {contestadosHoy} de {ingresados} de hoy
+                  {contestadosHoy} de {ingresados} de {scope}
                   {contestadosCartera > 0 ? ` · ${contestadosCartera} de cartera` : ''}
                 </button>
               )}
               {hoySinResumen > 0 && (
                 <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
-                  {hoySinResumen} de hoy aún sin resumen
+                  {hoySinResumen} de {scope} aún sin resumen
                 </span>
               )}
               {sinResumen > 0 && (
@@ -1145,7 +1181,7 @@ export function SalesProgressDashboard() {
                   {conCita} de {ingresados} a cita
                 </span>
               )}
-              {data.rol !== 'estrancado' && semanaIngresados > 0 && (
+              {period.mode === 'day' && data.rol !== 'estrancado' && semanaIngresados > 0 && (
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                   Semana {semanaContestados} de {semanaIngresados} contestados ({semanaPct}%)
                 </span>
@@ -1158,19 +1194,21 @@ export function SalesProgressDashboard() {
             <div className="px-4 sm:px-6 pb-5">
               <div className="rounded-2xl bg-slate-50/80 px-2 py-3">
                 <div className="flex items-center justify-between px-2 pb-2">
-                  <p className="text-[11px] font-medium text-slate-400">Equipo · sáb a vie</p>
+                  <p className="text-[11px] font-medium text-slate-400">
+                    {period.mode === 'month' ? 'Equipo · días del mes' : 'Equipo · sáb a vie'}
+                  </p>
                   <p className="text-[11px] font-medium tabular-nums text-slate-500">Media {weekAvg}%</p>
                 </div>
                 <div className="flex items-end gap-1">
                   {trendDays.map((point) => {
                     const day = String(point.fecha ?? '').slice(0, 10);
                     const pct = trendPercent(point);
-                    const isSelected = day === String(data.fecha ?? fecha).slice(0, 10);
+                    const isSelected = period.mode === 'day' && day === String(data.fecha ?? fecha).slice(0, 10);
                     return (
                       <button
                         key={day}
                         type="button"
-                        onClick={() => setFecha(day)}
+                        onClick={() => setPeriod(dayPeriod(day))}
                         aria-pressed={isSelected}
                         title={`${formatDayLong(day)} · ${pct}%`}
                         className={`flex-1 min-w-0 flex flex-col items-center gap-1.5 rounded-xl py-2 transition-colors ${
@@ -1294,7 +1332,7 @@ export function SalesProgressDashboard() {
               iaPend + iaVencidas > 0 && {
                 key: 'seguimientos_ia',
                 label: 'Seguimientos IA sin agendar',
-                detail: [iaPend > 0 ? `${iaPend} de hoy` : null, iaVencidas > 0 ? `${iaVencidas} vencidos` : null]
+                detail: [iaPend > 0 ? `${iaPend} ${scope}` : null, iaVencidas > 0 ? `${iaVencidas} vencidos` : null]
                   .filter(Boolean)
                   .join(' · '),
               },
@@ -1377,8 +1415,8 @@ export function SalesProgressDashboard() {
                   label="Seguimientos IA"
                   subtitle={
                     iaDue === 0 && iaVencidas === 0
-                      ? 'El bot no mandó seguimientos para hoy'
-                      : `${iaDone} de ${iaDue} agendados hoy · ${iaVencidas} vencidos · hist. ${histIa}%`
+                      ? 'El bot no mandó seguimientos para este periodo'
+                      : `${iaDone} de ${iaDue} agendados ${scope} · ${iaVencidas} vencidos · hist. ${histIa}%`
                   }
                   percent={iaDue === 0 ? (iaVencidas > 0 ? 0 : 0) : iaPct}
                   selected={selectedCategory === 'seguimientos_ia'}
@@ -1391,7 +1429,7 @@ export function SalesProgressDashboard() {
                   label="Citas de agenda"
                   subtitle={
                     citasDue === 0
-                      ? 'Hoy no hay citas en agenda'
+                      ? `No hay citas en agenda ${scope}`
                       : `${citasOk} de ${citasDue} con vino / no vino`
                   }
                   percent={citasPct}
@@ -1405,8 +1443,8 @@ export function SalesProgressDashboard() {
                   label="Visitas showroom"
                   subtitle={
                     showVisitas === 0
-                      ? 'Hoy no registraron visitas'
-                      : `${showVisitas} visita${showVisitas === 1 ? '' : 's'} registrada${showVisitas === 1 ? '' : 's'} hoy`
+                      ? `No registraron visitas ${scope}`
+                      : `${showVisitas} visita${showVisitas === 1 ? '' : 's'} registrada${showVisitas === 1 ? '' : 's'} ${scope}`
                   }
                   percent={showVisitas > 0 ? 100 : 0}
                   selected={selectedCategory === 'showroom_followup'}
@@ -1419,7 +1457,7 @@ export function SalesProgressDashboard() {
                   label="Seguimiento showroom"
                   subtitle={
                     showVisitas === 0
-                      ? 'Sin visitas hoy · el seguimiento es la nota después'
+                      ? `Sin visitas ${scope} · el seguimiento es la nota después`
                       : `${showOk} de ${showVisitas} con nota de seguimiento · hist. ${histShowroom}%`
                   }
                   percent={showPct}
@@ -1434,8 +1472,8 @@ export function SalesProgressDashboard() {
                     label="Llegaron → cita"
                     subtitle={
                       ingresados === 0
-                        ? 'Hoy no llegaron leads nuevos'
-                        : `${conCita} de ${ingresados} leads de hoy se volvieron cita · hist. ${histCita}%`
+                        ? `No llegaron leads nuevos ${scope}`
+                        : `${conCita} de ${ingresados} leads ${scope} se volvieron cita · hist. ${histCita}%`
                     }
                     percent={conversionPct}
                     selected={selectedCategory === 'leads_to_cita'}
@@ -1451,9 +1489,9 @@ export function SalesProgressDashboard() {
                     subtitle={
                       faltantesHoy === 0
                         ? faltanteQuedados > 0
-                          ? `Hoy no llegaron nuevas · ${faltanteQuedados} quedados abiertos`
-                          : 'Hoy no llegaron solicitudes de info. faltante'
-                        : `${faltantesOk} de ${faltantesHoy} de hoy contestadas${
+                          ? `No llegaron nuevas ${scope} · ${faltanteQuedados} quedados abiertos`
+                          : `No llegaron solicitudes de info. faltante ${scope}`
+                        : `${faltantesOk} de ${faltantesHoy} ${scope} contestadas${
                             faltanteSinSalir > 0 ? ` · ${faltanteSinSalir} no salieron de etapa` : ''
                           }`
                     }
@@ -1470,8 +1508,8 @@ export function SalesProgressDashboard() {
                   subtitle={
                     asesoriaHoy === 0
                       ? asesoriaQuedados > 0
-                        ? `Hoy no llegaron nuevas · ${asesoriaQuedados} quedados abiertos`
-                        : 'Hoy no llegaron asesorías'
+                        ? `No llegaron nuevas ${scope} · ${asesoriaQuedados} quedados abiertos`
+                        : `No llegaron asesorías ${scope}`
                       : `${asesoriaOk} de ${asesoriaHoy} fichas llenas${
                           asesoriaSinSalir > 0 ? ` · ${asesoriaSinSalir} no salieron de etapa` : ''
                         }`
@@ -1485,7 +1523,7 @@ export function SalesProgressDashboard() {
                 />
                 <MetricBar
                   label="Proforma PDF"
-                  subtitle={proformaQty > 0 ? `${proformaQty} generada${proformaQty === 1 ? '' : 's'} hoy` : 'Hoy no generaron PDF'}
+                  subtitle={proformaQty > 0 ? `${proformaQty} generada${proformaQty === 1 ? '' : 's'} ${scope}` : `No generaron PDF ${scope}`}
                   percent={proformaQty > 0 ? 100 : 0}
                   selected={selectedCategory === 'proforma_generated'}
                   muted={proformaQty === 0}
@@ -1557,9 +1595,10 @@ export function SalesProgressDashboard() {
 
           {selectedCategory && (
             <EventList
-              title={`${selectedLabel} · ${formatDayLong(fecha)}`}
+              title={`${selectedLabel} · ${formatPeriodLabel(period)}`}
               events={events}
-              fecha={fecha}
+              desde={period.desde}
+              hasta={period.hasta}
               loading={eventsLoading}
               onClose={closeCategory}
               category={selectedCategory}

@@ -97,7 +97,11 @@ function filled(value: string | null | undefined): boolean {
   return Boolean(value && value.trim());
 }
 
-/** En proceso / Resuelto / No aplica: hay que llenar la ficha. */
+export function advisoryInternalNotesFilled(notes: string | null | undefined): boolean {
+  return filled(notes);
+}
+
+/** En proceso / Resuelto / No aplica: hay que llenar la ficha o, en Resuelto, las notas. */
 export function isAdvisoryAdvancedStatus(status: string | null | undefined): boolean {
   return status === "en_proceso" || status === "resuelto" || status === "resuelto_no_aplica";
 }
@@ -106,14 +110,16 @@ export function isAdvisoryClosedStatus(status: string | null | undefined): boole
   return status === "resuelto" || status === "resuelto_no_aplica";
 }
 
-/** Campos que faltan para considerar la gestión completa (suma puntos). */
+/**
+ * Campos de la ficha para En proceso / Resuelto · no aplica.
+ * Cédula no entra: a veces el cliente no la da. Eso se cierra con Resuelto + notas.
+ */
 export function missingFinancialAdvisoryFields(input: GestionCompletenessInput): string[] {
   const missing: string[] = [];
   if (!filled(input.tipo)) missing.push("tipo de gestión");
   if (input.aplica == null) missing.push("si el cliente puede aplicar");
   if (input.aplica === false && !filled(input.motivo_no_aplica)) missing.push("motivo de no aplica");
   if (input.aplica === true && !filled(input.banco_deseado)) missing.push("banco deseado");
-  if (!filled(input.cedula)) missing.push("cédula");
   if (input.requiere_garante && !filled(input.garante_detalle)) missing.push("detalle del garante");
   return missing;
 }
