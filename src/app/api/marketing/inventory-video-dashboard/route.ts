@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { fetchAiGalleryImageCounts } from '@/lib/marketing/inventory-vehicle-creatives'
 import type { Database } from '@/types/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -112,6 +113,7 @@ export async function GET(request: NextRequest) {
   const qRaw = (url.searchParams.get('q') ?? '').trim()
   const inventoryStatus = url.searchParams.get('inventoryStatus') ?? 'all'
   const coverage = url.searchParams.get('coverage') ?? 'all'
+  const galleryCoverage = url.searchParams.get('galleryCoverage') ?? 'all'
   const sort = url.searchParams.get('sort') ?? 'generated_desc'
 
   const supabase = await createServerSupabaseClient()
@@ -217,6 +219,8 @@ export async function GET(request: NextRequest) {
     if (qOffset > 50000) break
   }
 
+  const galleryPromise = fetchAiGalleryImageCounts()
+
   /** 3) Inventario filtrado (campos mínimos), por lotes. */
   const statusFilter = parseInventoryStatusGroup(inventoryStatus)
   const searchEscaped = qRaw ? escapeIlike(qRaw) : ''
@@ -264,6 +268,18 @@ export async function GET(request: NextRequest) {
     if (inventoryRows.length >= MAX_INVENTORY_ROWS) break
   }
 
+  /** 3b) Imágenes de Galería IA por vehículo. */
+  let aiImageCounts = new Map<string, number>()
+  try {
+    aiImageCounts = await galleryPromise
+  } catch (err) {
+    console.error('[inventory-video-dashboard] ai gallery', err)
+    if (galleryCoverage === 'with_ai_images' || galleryCoverage === 'without_ai_images') {
+      const message = err instanceof Error ? err.message : 'No se pudo cargar la cobertura de Galería IA'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
+
   /** 4) Enriquecer + filtro cobertura. */
   type Enriched = (typeof inventoryRows)[number] & {
     uniqueGenerated: number
@@ -271,6 +287,7 @@ export async function GET(request: NextRequest) {
     uniquePending: number
     uniqueFailed: number
     uniqueCancelled: number
+    aiImageCount: number
   }
 
   let enriched: Enriched[] = inventoryRows.map((row) => {
@@ -287,6 +304,7 @@ export async function GET(request: NextRequest) {
       uniquePending: agg.pending.size,
       uniqueFailed: failedIds.size,
       uniqueCancelled: agg.cancelled.size,
+      aiImageCount: aiImageCounts.get(row.id) ?? 0,
     }
   })
 
@@ -298,6 +316,12 @@ export async function GET(request: NextRequest) {
     enriched = enriched.filter((r) => r.uniqueGenerated > 0)
   } else if (coverage === 'without_generated') {
     enriched = enriched.filter((r) => r.uniqueGenerated === 0)
+  }
+
+  if (galleryCoverage === 'with_ai_images') {
+    enriched = enriched.filter((r) => r.aiImageCount > 0)
+  } else if (galleryCoverage === 'without_ai_images') {
+    enriched = enriched.filter((r) => r.aiImageCount === 0)
   }
 
   /** 5) Ordenamiento. */
@@ -316,6 +340,10 @@ export async function GET(request: NextRequest) {
         return b.uniquePending - a.uniquePending || cmpStr(a.brand, b.brand)
       case 'failed_desc':
         return b.uniqueFailed - a.uniqueFailed || cmpStr(a.brand, b.brand)
+      case 'ai_images_desc':
+        return b.aiImageCount - a.aiImageCount || cmpStr(a.brand, b.brand)
+      case 'ai_images_asc':
+        return a.aiImageCount - b.aiImageCount || cmpStr(a.brand, b.brand)
       case 'brand_asc':
         return cmpStr(a.brand, b.brand) || cmpStr(a.model, b.model) || a.year - b.year
       case 'updated_desc': {

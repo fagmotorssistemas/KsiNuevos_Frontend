@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ClipboardList,
   Loader2,
@@ -19,6 +19,8 @@ import {
   Heart,
   PlayCircle,
   Image as ImageIcon,
+  ChevronDown,
+  Check,
 } from 'lucide-react'
 import { Pagination } from '@/shared/components/Pagination'
 import {
@@ -49,6 +51,212 @@ type Row = {
   uniquePending: number
   uniqueFailed: number
   uniqueCancelled: number
+  aiImageCount: number
+}
+
+type CoverageFilter =
+  | 'all'
+  | 'with_generated'
+  | 'without_generated'
+  | 'with_published'
+  | 'without_published'
+
+type GalleryCoverageFilter = 'all' | 'with_ai_images' | 'without_ai_images'
+
+type SortFilter =
+  | 'generated_desc'
+  | 'generated_asc'
+  | 'published_desc'
+  | 'published_asc'
+  | 'pending_desc'
+  | 'failed_desc'
+  | 'brand_asc'
+  | 'updated_desc'
+  | 'ai_images_desc'
+  | 'ai_images_asc'
+
+type FilterOption<T extends string> = {
+  value: T
+  label: string
+}
+
+type FilterGroup<T extends string> = {
+  heading?: string
+  options: FilterOption<T>[]
+}
+
+const COVERAGE_GROUPS: FilterGroup<CoverageFilter>[] = [
+  { options: [{ value: 'all', label: 'Todos' }] },
+  {
+    heading: 'Reels',
+    options: [
+      { value: 'with_generated', label: 'Con reels generados' },
+      { value: 'without_generated', label: 'Sin reels generados' },
+    ],
+  },
+  {
+    heading: 'Publicación',
+    options: [
+      { value: 'with_published', label: 'Con al menos 1 publicado' },
+      { value: 'without_published', label: 'Sin publicados' },
+    ],
+  },
+]
+
+const GALLERY_GROUPS: FilterGroup<GalleryCoverageFilter>[] = [
+  {
+    options: [
+      { value: 'all', label: 'Todas' },
+      { value: 'with_ai_images', label: 'Con imágenes' },
+      { value: 'without_ai_images', label: 'Sin imágenes' },
+    ],
+  },
+]
+
+const SORT_GROUPS: FilterGroup<SortFilter>[] = [
+  {
+    heading: 'Reels',
+    options: [
+      { value: 'generated_desc', label: 'Más generados primero' },
+      { value: 'generated_asc', label: 'Menos generados primero' },
+    ],
+  },
+  {
+    heading: 'Publicación',
+    options: [
+      { value: 'published_desc', label: 'Más publicados primero' },
+      { value: 'published_asc', label: 'Menos publicados primero' },
+      { value: 'pending_desc', label: 'Más en cola primero' },
+      { value: 'failed_desc', label: 'Más fallidos primero' },
+    ],
+  },
+  {
+    heading: 'Galería IA',
+    options: [
+      { value: 'ai_images_desc', label: 'Más imágenes primero' },
+      { value: 'ai_images_asc', label: 'Menos imágenes primero' },
+    ],
+  },
+  {
+    heading: 'Inventario',
+    options: [
+      { value: 'brand_asc', label: 'Marca A → Z' },
+      { value: 'updated_desc', label: 'Actualización reciente' },
+    ],
+  },
+]
+
+type OpenFilter = 'coverage' | 'gallery' | 'sort' | null
+
+function FilterSelect<T extends string>({
+  label,
+  icon,
+  value,
+  groups,
+  open,
+  onOpenChange,
+  onChange,
+  align = 'start',
+}: {
+  label: string
+  icon: ReactNode
+  value: T
+  groups: FilterGroup<T>[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onChange: (value: T) => void
+  align?: 'start' | 'end'
+}) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selected = groups.flatMap((g) => g.options).find((o) => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: PointerEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) onOpenChange(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onOpenChange])
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+        {icon}
+        {label}
+      </p>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => onOpenChange(!open)}
+        className={`flex w-full h-10 items-center gap-2 rounded-xl border px-3 text-sm bg-white text-left transition-colors ${
+          open
+            ? 'border-violet-400 ring-2 ring-violet-500/20'
+            : 'border-gray-200 hover:border-gray-300'
+        }`}
+      >
+        <span className="min-w-0 flex-1 truncate font-medium text-gray-800">
+          {selected?.label ?? '—'}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open ? (
+        <ul
+          role="listbox"
+          aria-label={label}
+          className={`absolute z-40 mt-1.5 max-h-80 min-w-full w-max max-w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-gray-200 bg-white py-1.5 shadow-lg shadow-gray-900/10 ${
+            align === 'end' ? 'right-0' : 'left-0'
+          }`}
+        >
+          {groups.map((group, gi) => (
+            <li key={group.heading ?? `group-${gi}`} role="presentation">
+              {group.heading ? (
+                <div className="px-3 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {group.heading}
+                </div>
+              ) : gi > 0 ? (
+                <div className="my-1 border-t border-gray-100" />
+              ) : null}
+              {group.options.map((opt) => {
+                const active = opt.value === value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => {
+                      onChange(opt.value)
+                      onOpenChange(false)
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left ${
+                      active
+                        ? 'bg-violet-50 text-violet-800 font-semibold'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="flex-1 leading-snug">{opt.label}</span>
+                    {active ? <Check className="w-4 h-4 text-violet-600 shrink-0" /> : null}
+                  </button>
+                )
+              })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
 }
 
 const PAGE_SIZE = 25
@@ -106,20 +314,10 @@ export default function InventariadoMarketingPage() {
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [inventoryStatus, setInventoryStatus] = useState('all')
-  const [coverage, setCoverage] = useState<
-    'all' | 'with_generated' | 'without_generated' | 'with_published' | 'without_published'
-  >('all')
-  const [sort, setSort] = useState(
-    'generated_desc' as
-      | 'generated_desc'
-      | 'generated_asc'
-      | 'published_desc'
-      | 'published_asc'
-      | 'pending_desc'
-      | 'failed_desc'
-      | 'brand_asc'
-      | 'updated_desc'
-  )
+  const [coverage, setCoverage] = useState<CoverageFilter>('all')
+  const [galleryCoverage, setGalleryCoverage] = useState<GalleryCoverageFilter>('all')
+  const [sort, setSort] = useState<SortFilter>('generated_desc')
+  const [openFilter, setOpenFilter] = useState<OpenFilter>(null)
 
   const [activeTab, setActiveTab] = useState<PageTab>('inventario')
   const [vehicleDetailTab, setVehicleDetailTab] = useState<VehicleDetailTab>('reels')
@@ -147,6 +345,7 @@ export default function InventariadoMarketingPage() {
           pageSize: String(PAGE_SIZE),
           inventoryStatus,
           coverage,
+          galleryCoverage,
           sort,
         })
         if (debouncedQ) params.set('q', debouncedQ)
@@ -182,11 +381,11 @@ export default function InventariadoMarketingPage() {
         setLoading(false)
       }
     },
-    [debouncedQ, inventoryStatus, coverage, sort]
+    [debouncedQ, inventoryStatus, coverage, galleryCoverage, sort]
   )
 
   useEffect(() => {
-    const sig = `${debouncedQ}|${inventoryStatus}|${coverage}|${sort}`
+    const sig = `${debouncedQ}|${inventoryStatus}|${coverage}|${galleryCoverage}|${sort}`
     if (lastFilterSig.current !== sig) {
       lastFilterSig.current = sig
       void fetchPage(1)
@@ -201,7 +400,7 @@ export default function InventariadoMarketingPage() {
       return
     }
     void fetchPage(page)
-  }, [page, debouncedQ, inventoryStatus, coverage, sort, fetchPage, libraryRefreshKey])
+  }, [page, debouncedQ, inventoryStatus, coverage, galleryCoverage, sort, fetchPage, libraryRefreshKey])
 
   const startIndex = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const endIndex = Math.min(page * PAGE_SIZE, total)
@@ -218,7 +417,7 @@ export default function InventariadoMarketingPage() {
 
   function handleVehicleSelect(row: Row) {
     setSelectedVehicle(row)
-    setVehicleDetailTab('reels')
+    setVehicleDetailTab(galleryCoverage === 'all' ? 'reels' : 'ai-gallery')
     setActiveTab('vehiculo')
   }
 
@@ -450,6 +649,7 @@ export default function InventariadoMarketingPage() {
               <VehicleAiCreativesGallery
                 vehicleId={selectedVehicle.id}
                 vehicleTitle={selectedVehicleTitle ?? undefined}
+                onUploaded={() => setLibraryRefreshKey((k) => k + 1)}
               />
             </section>
           )}
@@ -481,76 +681,52 @@ export default function InventariadoMarketingPage() {
         </div>
       ) : null}
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5 space-y-4 overflow-visible">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <Filter className="w-4 h-4 text-violet-600" />
           Filtros
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          <div className="lg:col-span-5 relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Marca, modelo o placa..."
-              className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
-            />
-          </div>
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Marca, modelo o placa..."
+            className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
+          />
+        </div>
 
-          <div className="lg:col-span-4">
-            <select
-              value={coverage}
-              onChange={(e) =>
-                setCoverage(
-                  e.target.value as
-                    | 'all'
-                    | 'with_generated'
-                    | 'without_generated'
-                    | 'with_published'
-                    | 'without_published'
-                )
-              }
-              className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white"
-            >
-              <option value="all">Cobertura: todos</option>
-              <option value="with_generated">Con reels generados</option>
-              <option value="without_generated">Sin reels generados</option>
-              <option value="with_published">Con al menos 1 publicado</option>
-              <option value="without_published">Sin publicados</option>
-            </select>
-          </div>
-
-          <div className="lg:col-span-3 flex items-center gap-2">
-            <ArrowDownWideNarrow className="w-4 h-4 text-gray-400 shrink-0 hidden sm:block" />
-            <select
-              value={sort}
-              onChange={(e) =>
-                setSort(
-                  e.target.value as
-                    | 'generated_desc'
-                    | 'generated_asc'
-                    | 'published_desc'
-                    | 'published_asc'
-                    | 'pending_desc'
-                    | 'failed_desc'
-                    | 'brand_asc'
-                    | 'updated_desc'
-                )
-              }
-              className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white"
-            >
-              <option value="generated_desc">Más reels generados primero</option>
-              <option value="generated_asc">Menos reels generados primero</option>
-              <option value="published_desc">Más publicados primero</option>
-              <option value="published_asc">Menos publicados primero</option>
-              <option value="pending_desc">Más en cola primero</option>
-              <option value="failed_desc">Más fallidos primero</option>
-              <option value="brand_asc">Marca A → Z</option>
-              <option value="updated_desc">Actualización inventario (reciente)</option>
-            </select>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <FilterSelect
+            label="Cobertura"
+            icon={<Film className="w-3.5 h-3.5 text-violet-600" />}
+            value={coverage}
+            groups={COVERAGE_GROUPS}
+            open={openFilter === 'coverage'}
+            onOpenChange={(next) => setOpenFilter(next ? 'coverage' : null)}
+            onChange={setCoverage}
+          />
+          <FilterSelect
+            label="Galería IA"
+            icon={<ImageIcon className="w-3.5 h-3.5 text-violet-600" />}
+            value={galleryCoverage}
+            groups={GALLERY_GROUPS}
+            open={openFilter === 'gallery'}
+            onOpenChange={(next) => setOpenFilter(next ? 'gallery' : null)}
+            onChange={setGalleryCoverage}
+          />
+          <FilterSelect
+            label="Ordenar"
+            icon={<ArrowDownWideNarrow className="w-3.5 h-3.5 text-violet-600" />}
+            value={sort}
+            groups={SORT_GROUPS}
+            open={openFilter === 'sort'}
+            onOpenChange={(next) => setOpenFilter(next ? 'sort' : null)}
+            onChange={setSort}
+            align="end"
+          />
         </div>
       </div>
 
@@ -565,6 +741,7 @@ export default function InventariadoMarketingPage() {
               <tr>
                 <th className="px-5 sm:px-6 py-4 min-w-[220px]">Vehículo</th>
                 <th className="px-4 sm:px-5 py-4 whitespace-nowrap">Estado</th>
+                <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Galería IA</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Generados</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">Publicados</th>
                 <th className="px-4 sm:px-5 py-4 text-center whitespace-nowrap w-[1%]">En cola</th>
@@ -575,14 +752,14 @@ export default function InventariadoMarketingPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 sm:px-6 py-16 text-center text-gray-500">
+                  <td colSpan={8} className="px-5 sm:px-6 py-16 text-center text-gray-500">
                     <Loader2 className="w-8 h-8 animate-spin text-violet-600 mx-auto mb-2" />
                     Cargando inventario…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 sm:px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-5 sm:px-6 py-12 text-center text-gray-500">
                     No hay vehículos que coincidan con los filtros.
                   </td>
                 </tr>
@@ -606,6 +783,18 @@ export default function InventariadoMarketingPage() {
                       <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
                         {formatStatus(r.status)}
                       </span>
+                    </td>
+                    <td className="px-4 sm:px-5 py-4 text-center whitespace-nowrap align-middle">
+                      {(r.aiImageCount ?? 0) > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
+                          <ImageIcon className="w-3 h-3" />
+                          {r.aiImageCount}
+                        </span>
+                      ) : (
+                        <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                          Sin imágenes
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 sm:px-5 py-4 text-center font-semibold text-violet-700 tabular-nums align-middle">
                       {r.uniqueGenerated}

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import type { Json } from '@/types/supabase'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
@@ -22,6 +23,7 @@ const KIND_LABELS: Record<string, string> = {
   thematic: 'Poster temático',
   low_leads: 'Carrusel menos leads',
   'low-leads': 'Carrusel menos leads',
+  upload: 'Imagen cargada',
 }
 
 const VARIANT_LABELS: Record<string, string> = {
@@ -79,7 +81,10 @@ export function labelCreativeKind(kind: string): string {
 }
 
 export function labelCreativeVariant(variant: string): string {
-  return VARIANT_LABELS[variant.toLowerCase()] ?? variant
+  const key = variant.toLowerCase()
+  if (VARIANT_LABELS[key]) return VARIANT_LABELS[key]
+  if (key.startsWith('upload-')) return 'Manual'
+  return variant
 }
 
 type CreativeRow = {
@@ -145,6 +150,37 @@ export async function fetchVehicleCreativeById(creativeId: string): Promise<Vehi
 
   if (error) throw new Error(error.message)
   return data ? mapCreativeRow(data) : null
+}
+
+const CREATIVES_FETCH_BATCH = 1000
+
+/** Conteo de imágenes reales de Galería IA por vehículo (ignora creativos sin URL). */
+export async function fetchAiGalleryImageCounts(): Promise<Map<string, number>> {
+  const supabase = createServiceRoleClient()
+  const counts = new Map<string, number>()
+  let offset = 0
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from('inventory_vehicle_creatives')
+      .select('vehicle_id, image_url, image_urls')
+      .range(offset, offset + CREATIVES_FETCH_BATCH - 1)
+
+    if (error) throw new Error(error.message)
+
+    const rows = data ?? []
+    for (const row of rows) {
+      const n = uniqueUrls(row.image_url, asUrlList(row.image_urls)).length
+      if (n === 0) continue
+      counts.set(row.vehicle_id, (counts.get(row.vehicle_id) ?? 0) + n)
+    }
+
+    if (rows.length < CREATIVES_FETCH_BATCH) break
+    offset += CREATIVES_FETCH_BATCH
+    if (offset > 50000) break
+  }
+
+  return counts
 }
 
 const HERO_CREATIVE_LIMIT = 80
@@ -215,4 +251,110 @@ export function creativeDownloadFilename(creative: VehicleCreativeItem, imageInd
   const suffix = creative.images.length > 1 ? `-${imageIndex + 1}` : ''
   const ext = (creative.images[imageIndex] ?? creative.imageUrl ?? '').split('?')[0]?.match(/\.(png|jpe?g|webp)$/i)?.[1] ?? 'png'
   return `${kind}-${variant}${suffix}.${ext.toLowerCase() === 'jpeg' ? 'jpg' : ext.toLowerCase()}`
+}
+
+export const CREATIVE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024
+export const CREATIVE_UPLOAD_MAX_FILES = 12
+export const CREATIVE_UPLOAD_KIND = 'upload'
+
+const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+const EXT_TO_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+}
+
+function creativesStorageBucket(): string {
+  return process.env.SUPABASE_STORAGE_BUCKET?.trim() || 'plantillas-campaigns'
+}
+
+function extensionFromFilename(name: string): string {
+  const i = name.lastIndexOf('.')
+  return i >= 0 ? name.slice(i).toLowerCase() : ''
+}
+
+export function resolveCreativeUploadMimeType(file: File): string | null {
+  const t = (file.type || '').trim().toLowerCase()
+  if (ALLOWED_UPLOAD_TYPES.has(t)) return t === 'image/jpg' ? 'image/jpeg' : t
+  if (t === 'application/octet-stream' || t === '') {
+    return EXT_TO_MIME[extensionFromFilename(file.name)] ?? null
+  }
+  return null
+}
+
+function extFromMime(mimeType: string): string {
+  if (mimeType === 'image/png') return '.png'
+  if (mimeType === 'image/webp') return '.webp'
+  return '.jpg'
+}
+
+export type ManualCreativeUploadFile = {
+  buffer: Buffer
+  filename: string
+  mimeType: string
+}
+
+export async function uploadManualVehicleCreatives(
+  vehicleId: string,
+  files: ManualCreativeUploadFile[]
+): Promise<VehicleCreativeItem[]> {
+  const id = vehicleId.trim()
+  if (!id) throw new Error('Falta vehicleId')
+  if (files.length === 0) throw new Error('No hay archivos para subir')
+  if (files.length > CREATIVE_UPLOAD_MAX_FILES) {
+    throw new Error(`Puedes subir hasta ${CREATIVE_UPLOAD_MAX_FILES} imágenes a la vez`)
+  }
+
+  const supabase = createServiceRoleClient()
+  const { data: vehicle, error: vehicleErr } = await supabase
+    .from('inventoryoracle')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (vehicleErr) throw new Error(vehicleErr.message)
+  if (!vehicle) throw new Error('Vehículo no encontrado')
+
+  const bucket = creativesStorageBucket()
+  const created: VehicleCreativeItem[] = []
+
+  for (const file of files) {
+    if (file.buffer.byteLength === 0) throw new Error(`El archivo ${file.filename || 'imagen'} está vacío`)
+    if (file.buffer.byteLength > CREATIVE_UPLOAD_MAX_BYTES) {
+      throw new Error(
+        `${file.filename || 'Una imagen'} supera el límite de ${Math.round(CREATIVE_UPLOAD_MAX_BYTES / (1024 * 1024))} MB`
+      )
+    }
+
+    const token = randomBytes(6).toString('hex')
+    const path = `inventory-creatives/${id}/${Date.now()}-${token}${extFromMime(file.mimeType)}`
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file.buffer, {
+      contentType: file.mimeType,
+      upsert: false,
+    })
+    if (upErr) throw new Error(upErr.message)
+
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path)
+    const url = pub.publicUrl
+
+    const { data: row, error: insErr } = await supabase
+      .from('inventory_vehicle_creatives')
+      .insert({
+        vehicle_id: id,
+        creative_kind: CREATIVE_UPLOAD_KIND,
+        variant: `upload-${token}`,
+        status: 'ready',
+        image_url: url,
+        image_urls: [url],
+        error_message: null,
+      })
+      .select(CREATIVE_SELECT)
+      .single()
+
+    if (insErr) throw new Error(insErr.message)
+    if (row) created.push(mapCreativeRow(row))
+  }
+
+  return created
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,9 +8,12 @@ import {
   Expand,
   Image as ImageIcon,
   Loader2,
+  Plus,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 type VehicleCreativeItem = {
   id: string
@@ -75,18 +78,25 @@ function formatCreatedAt(iso: string) {
 export function VehicleAiCreativesGallery({
   vehicleId,
   vehicleTitle,
+  onUploaded,
 }: {
   vehicleId: string
   vehicleTitle?: string
+  onUploaded?: () => void
 }) {
   const [creatives, setCreatives] = useState<VehicleCreativeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true)
+      setError(null)
+    }
     try {
       const res = await fetch(
         `/api/marketing/inventory-creatives?vehicleId=${encodeURIComponent(vehicleId)}`,
@@ -95,17 +105,89 @@ export function VehicleAiCreativesGallery({
       const data = (await res.json()) as { creatives?: VehicleCreativeItem[]; error?: string }
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       setCreatives(data.creatives ?? [])
+      setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo cargar la galería IA')
-      setCreatives([])
+      if (!opts?.silent) {
+        setError(e instanceof Error ? e.message : 'No se pudo cargar la galería IA')
+        setCreatives([])
+      } else {
+        toast.error(e instanceof Error ? e.message : 'No se pudo actualizar la galería')
+      }
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [vehicleId])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  const uploadFiles = useCallback(
+    async (list: FileList | File[] | null) => {
+      if (!list || uploading) return
+      const files = Array.from(list).filter(
+        (file) => file.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(file.name)
+      )
+      if (files.length === 0) {
+        toast.error('Usa imágenes JPG, PNG o WebP')
+        return
+      }
+      if (files.length > 12) {
+        toast.error('Puedes subir hasta 12 imágenes a la vez')
+        return
+      }
+
+      setUploading(true)
+      try {
+        const formData = new FormData()
+        formData.set('vehicleId', vehicleId)
+        for (const file of files) formData.append('files', file)
+
+        const res = await fetch('/api/marketing/inventory-creatives', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        })
+        const data = (await res.json()) as { creatives?: VehicleCreativeItem[]; error?: string }
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+
+        toast.success(files.length === 1 ? 'Imagen cargada' : `${files.length} imágenes cargadas`)
+        await load({ silent: true })
+        onUploaded?.()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudieron cargar las imágenes')
+      } finally {
+        setUploading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    },
+    [vehicleId, uploading, load, onUploaded]
+  )
+
+  function openFilePicker() {
+    if (uploading) return
+    fileInputRef.current?.click()
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!uploading) setDragOver(true)
+  }
+
+  function onDragLeave(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragOver(false)
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    void uploadFiles(e.dataTransfer.files)
+  }
 
   const images = useMemo<GalleryImage[]>(() => {
     const items: GalleryImage[] = []
@@ -174,6 +256,19 @@ export function VehicleAiCreativesGallery({
     return () => window.removeEventListener('keydown', onKey)
   }, [previewIndex, goPreview])
 
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+      multiple
+      className="sr-only"
+      onChange={(e) => {
+        void uploadFiles(e.target.files)
+      }}
+    />
+  )
+
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -195,23 +290,61 @@ export function VehicleAiCreativesGallery({
 
   if (creatives.length === 0) {
     return (
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-slate-50 px-6 py-16 text-center">
+      <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`relative overflow-hidden rounded-[1.75rem] border px-6 py-16 text-center transition-colors ${
+          dragOver
+            ? 'border-violet-400 bg-violet-50'
+            : 'border-violet-100 bg-gradient-to-br from-violet-50 via-white to-slate-50'
+        }`}
+      >
+        {fileInput}
         <div className="absolute -top-10 -right-8 w-40 h-40 rounded-full bg-violet-200/40 blur-3xl" />
         <div className="relative mx-auto w-14 h-14 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg shadow-violet-500/30">
-          <Sparkles className="w-7 h-7" />
+          {uploading ? <Loader2 className="w-7 h-7 animate-spin" /> : <Sparkles className="w-7 h-7" />}
         </div>
-        <p className="relative mt-4 text-lg font-extrabold text-gray-900">Sin imágenes IA todavía</p>
-        <p className="relative text-sm text-gray-500 mt-1 max-w-md mx-auto">
-          {vehicleTitle
-            ? `Cuando se genere un poster temático o un carrusel, aparecerá aquí para ${vehicleTitle}.`
-            : 'Cuando se genere un poster temático o un carrusel, aparecerá aquí.'}
+        <p className="relative mt-4 text-lg font-extrabold text-gray-900">
+          {uploading ? 'Cargando imágenes…' : 'Sin imágenes IA todavía'}
         </p>
+        <p className="relative text-sm text-gray-500 mt-1 max-w-md mx-auto">
+          {uploading
+            ? 'Espera un momento mientras se suben al vehículo.'
+            : vehicleTitle
+              ? `Arrastra JPG, PNG o WebP, o cárgalas desde tu equipo para ${vehicleTitle}.`
+              : 'Arrastra JPG, PNG o WebP, o cárgalas desde tu equipo. También aparecerán aquí posters y carruseles generados.'}
+        </p>
+        <button
+          type="button"
+          onClick={openFilePicker}
+          disabled={uploading}
+          className="relative mt-6 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-bold"
+        >
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          Cargar imágenes
+        </button>
       </div>
     )
   }
 
   return (
     <>
+    {fileInput}
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <p className="text-sm text-gray-500">
+        {uploading ? 'Subiendo imágenes…' : 'Posters, carruseles e imágenes cargadas de este vehículo.'}
+      </p>
+      <button
+        type="button"
+        onClick={openFilePicker}
+        disabled={uploading}
+        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-sm font-bold"
+      >
+        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+        Cargar imágenes
+      </button>
+    </div>
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
       {creatives.map((creative) => {
         const urls =
@@ -279,6 +412,27 @@ export function VehicleAiCreativesGallery({
           </button>
         ))
       })}
+      <button
+        type="button"
+        onClick={openFilePicker}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        disabled={uploading}
+        className={`aspect-[4/5] rounded-[1.6rem] border-2 border-dashed flex flex-col items-center justify-center gap-2 px-4 text-center transition-colors ${
+          dragOver
+            ? 'border-violet-500 bg-violet-50 text-violet-800'
+            : 'border-violet-200 bg-violet-50/40 text-violet-700 hover:border-violet-400 hover:bg-violet-50'
+        } disabled:opacity-60`}
+      >
+        {uploading ? (
+          <Loader2 className="w-7 h-7 animate-spin" />
+        ) : (
+          <Plus className="w-7 h-7" />
+        )}
+        <span className="text-sm font-bold">{uploading ? 'Subiendo…' : 'Agregar imágenes'}</span>
+        <span className="text-[11px] text-violet-500/80">JPG, PNG o WebP</span>
+      </button>
     </div>
 
       {preview ? (
