@@ -1,12 +1,15 @@
- "use client";
+"use client";
 
+import { useState } from "react";
 import { 
     DollarSign, 
     AlertTriangle, 
     CheckCircle2, 
     TrendingDown,
     ArrowRight,
-    Filter
+    Filter,
+    Eye,
+    EyeOff,
 } from "lucide-react";
 import { KpiCartera } from "@/types/wallet.types";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,10 +22,14 @@ interface KpiDashboardProps {
     onFilterChange: (mode: 'all' | 'vencidos' | 'aldia') => void;
 }
 
+const MASKED_MONEY = "$ ******";
+const MASKED_PERCENT = "**%";
+
 export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: KpiDashboardProps) {
     const { profile, isLoading: authLoading } = useAuth();
     const role = (profile?.role || "").toLowerCase().trim();
     const isAbogadoRole = role === "abogado" || role === "abogada";
+    const [valuesVisible, setValuesVisible] = useState(false);
 
     if (authLoading) return null;
     if (profile?.role !== "admin") return null;
@@ -51,7 +58,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
         {
             id: 'all',
             label: "Total en Cartera",
-            value: formatMoney(data.totalCartera),
+            value: valuesVisible ? formatMoney(data.totalCartera) : MASKED_MONEY,
             subtext: `${data.cantidadClientesConDeuda} clientes con saldo`,
             icon: DollarSign,
             color: "text-slate-900",
@@ -63,7 +70,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
         {
             id: 'vencidos',
             label: "Cartera Vencida",
-            value: formatMoney(data.carteraVencida),
+            value: valuesVisible ? formatMoney(data.carteraVencida) : MASKED_MONEY,
             subtext: "Requiere gestión inmediata",
             icon: AlertTriangle,
             color: "text-red-600",
@@ -75,7 +82,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
         {
             id: 'aldia',
             label: "Cartera Vigente",
-            value: formatMoney(data.carteraVigente),
+            value: valuesVisible ? formatMoney(data.carteraVigente) : MASKED_MONEY,
             subtext: "Dentro del plazo",
             icon: CheckCircle2,
             color: "text-emerald-600",
@@ -87,7 +94,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
         {
             id: 'stats', // Este no filtra, es informativo
             label: "Índice de Morosidad",
-            value: `${data.porcentajeMorosidad}%`,
+            value: valuesVisible ? `${data.porcentajeMorosidad}%` : MASKED_PERCENT,
             subtext: "Del total prestado",
             icon: TrendingDown,
             color: data.porcentajeMorosidad > 10 ? "text-red-600" : "text-slate-600",
@@ -99,7 +106,18 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
     ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="relative mb-8">
+            <button
+                type="button"
+                onClick={() => setValuesVisible((visible) => !visible)}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-white/90 border border-slate-200 text-slate-500 shadow-sm hover:text-slate-800 hover:bg-white hover:border-slate-300 transition-colors cursor-pointer"
+                aria-label={valuesVisible ? "Ocultar montos" : "Mostrar montos"}
+                title={valuesVisible ? "Ocultar montos" : "Mostrar montos"}
+            >
+                {valuesVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {(isAbogadoRole ? cards.filter(c => c.id !== 'all' && c.id !== 'aldia') : cards).map((card, idx) => {
                 // Verificamos si esta tarjeta es la que está activa actualmente
                 // Nota: card.id debe coincidir con los valores de filterMode ('all', 'vencidos', 'aldia')
@@ -134,7 +152,10 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
                         
                         <div>
                             <p className="text-sm font-medium text-slate-500 mb-1">{card.label}</p>
-                            <h3 className={`text-2xl font-bold tracking-tight ${card.color}`}>
+                            <h3
+                                className={`text-2xl font-bold ${valuesVisible ? "tracking-tight" : "tracking-widest select-none"} ${card.color}`}
+                                aria-label={valuesVisible ? undefined : "Monto oculto"}
+                            >
                                 {card.value}
                             </h3>
                             <p className="text-xs text-slate-400 mt-2 font-medium">
@@ -162,6 +183,7 @@ export function KpiDashboard({ data, loading, currentFilter, onFilterChange }: K
                     </div>
                 );
             })}
+            </div>
         </div>
     );
 }
