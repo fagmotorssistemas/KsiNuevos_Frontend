@@ -151,6 +151,86 @@ export async function fetchVehicleCreativeById(creativeId: string): Promise<Vehi
   return data ? mapCreativeRow(data) : null
 }
 
+function parsePublicStorageUrl(raw: string): { bucket: string; path: string } | null {
+  try {
+    const url = new URL(raw)
+    const marker = '/storage/v1/object/public/'
+    const idx = url.pathname.indexOf(marker)
+    if (idx < 0) return null
+    const rest = decodeURIComponent(url.pathname.slice(idx + marker.length))
+    const [bucket, ...pathParts] = rest.split('/').filter(Boolean)
+    if (!bucket || pathParts.length === 0) return null
+    return { bucket, path: pathParts.join('/') }
+  } catch {
+    return null
+  }
+}
+
+async function removeCreativeStorageObject(fileUrl: string) {
+  const parsed = parsePublicStorageUrl(fileUrl)
+  if (!parsed) return
+  const allowed = new Set(
+    ['plantillas-campaigns', process.env.SUPABASE_STORAGE_BUCKET?.trim()].filter(
+      (b): b is string => !!b
+    )
+  )
+  if (!allowed.has(parsed.bucket)) return
+  const supabase = createServiceRoleClient()
+  await supabase.storage.from(parsed.bucket).remove([parsed.path])
+}
+
+export async function deleteVehicleCreativeImage(
+  creativeId: string,
+  imageIndex = 0
+): Promise<{ deleted: 'image' | 'creative' }> {
+  const id = creativeId.trim()
+  if (!id) throw new Error('Falta creativeId')
+
+  const supabase = createServiceRoleClient()
+  const { data: row, error } = await supabase
+    .from('inventory_vehicle_creatives')
+    .select(CREATIVE_SELECT)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!row) throw new Error('Imagen no encontrada')
+
+  const mapped = mapCreativeRow(row)
+  const urls = mapped.images
+  const index = Math.max(0, imageIndex)
+
+  if (urls.length === 0) {
+    const { error: delErr } = await supabase.from('inventory_vehicle_creatives').delete().eq('id', id)
+    if (delErr) throw new Error(delErr.message)
+    return { deleted: 'creative' }
+  }
+
+  const urlToRemove = urls[index]
+  if (!urlToRemove) throw new Error('Imagen no encontrada')
+
+  await removeCreativeStorageObject(urlToRemove).catch(() => undefined)
+
+  const remaining = urls.filter((_, i) => i !== index)
+  if (remaining.length === 0) {
+    const { error: delErr } = await supabase.from('inventory_vehicle_creatives').delete().eq('id', id)
+    if (delErr) throw new Error(delErr.message)
+    return { deleted: 'creative' }
+  }
+
+  const { error: updErr } = await supabase
+    .from('inventory_vehicle_creatives')
+    .update({
+      image_url: remaining[0],
+      image_urls: remaining,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (updErr) throw new Error(updErr.message)
+  return { deleted: 'image' }
+}
+
 const CREATIVES_FETCH_BATCH = 1000
 
 /** Conteo de imágenes reales de Galería IA por vehículo (ignora creativos sin URL). */

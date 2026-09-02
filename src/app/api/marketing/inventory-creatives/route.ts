@@ -3,6 +3,7 @@ import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import {
   CREATIVE_UPLOAD_MAX_BYTES,
   CREATIVE_UPLOAD_MAX_FILES,
+  deleteVehicleCreativeImage,
   fetchVehicleCreatives,
   resolveCreativeUploadMimeType,
   uploadManualVehicleCreatives,
@@ -87,5 +88,26 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[inventory-creatives POST]', message)
     return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
+  const creativeId = request.nextUrl.searchParams.get('creativeId')?.trim() ?? ''
+  const imageIndex = Math.max(0, Number(request.nextUrl.searchParams.get('index') ?? '0') || 0)
+  if (!creativeId) {
+    return NextResponse.json({ error: 'Falta creativeId' }, { status: 400 })
+  }
+
+  try {
+    const result = await deleteVehicleCreativeImage(creativeId, imageIndex)
+    return NextResponse.json(result)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno'
+    console.error('[inventory-creatives DELETE]', message)
+    const status = message === 'Imagen no encontrada' ? 404 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

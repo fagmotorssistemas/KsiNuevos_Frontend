@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   Sparkles,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react'
@@ -89,6 +90,7 @@ export function VehicleAiCreativesGallery({
   const [error, setError] = useState<string | null>(null)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [deletingKey, setDeletingKey] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -162,6 +164,38 @@ export function VehicleAiCreativesGallery({
       }
     },
     [vehicleId, uploading, load, onUploaded]
+  )
+
+  const deleteImage = useCallback(
+    async (creativeId: string, imageIndex: number) => {
+      const key = `${creativeId}:${imageIndex}`
+      if (deletingKey || uploading) return
+      if (!window.confirm('¿Eliminar esta imagen? Esta acción no se puede deshacer.')) return
+
+      setDeletingKey(key)
+      try {
+        const params = new URLSearchParams({
+          creativeId,
+          index: String(imageIndex),
+        })
+        const res = await fetch(`/api/marketing/inventory-creatives?${params.toString()}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        })
+        const data = (await res.json()) as { error?: string }
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+
+        setPreviewIndex(null)
+        toast.success('Imagen eliminada')
+        await load({ silent: true })
+        onUploaded?.()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo eliminar la imagen')
+      } finally {
+        setDeletingKey(null)
+      }
+    },
+    [deletingKey, uploading, load, onUploaded]
   )
 
   function openFilePicker() {
@@ -350,11 +384,24 @@ export function VehicleAiCreativesGallery({
         const urls =
           creative.images.length > 0 ? creative.images : creative.imageUrl ? [creative.imageUrl] : []
         if (urls.length === 0) {
+          const emptyKey = `${creative.id}:0`
+          const deletingEmpty = deletingKey === emptyKey
           return (
             <div
               key={creative.id}
-              className="aspect-[4/5] rounded-[1.6rem] border border-dashed border-violet-200 bg-gradient-to-br from-slate-50 to-violet-50 p-5 flex flex-col justify-between"
+              className="relative aspect-[4/5] rounded-[1.6rem] border border-dashed border-violet-200 bg-gradient-to-br from-slate-50 to-violet-50 p-5 flex flex-col justify-between"
             >
+              {creative.status !== 'generating' && creative.status !== 'pending' ? (
+                <button
+                  type="button"
+                  onClick={() => void deleteImage(creative.id, 0)}
+                  disabled={Boolean(deletingKey)}
+                  className="absolute top-3 left-3 z-10 inline-flex items-center justify-center w-8 h-8 rounded-full bg-white text-red-600 shadow-sm hover:bg-red-600 hover:text-white disabled:opacity-50"
+                  aria-label="Eliminar"
+                >
+                  {deletingEmpty ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              ) : null}
               <div className="flex-1 flex items-center justify-center">
                 {creative.status === 'generating' || creative.status === 'pending' ? (
                   <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
@@ -373,33 +420,49 @@ export function VehicleAiCreativesGallery({
           )
         }
 
-        return urls.map((url, index) => (
-          <button
-            key={`${creative.id}-${index}`}
-            type="button"
-            onClick={() => openPreview(url)}
+        return urls.map((url, index) => {
+          const itemKey = `${creative.id}:${index}`
+          const deleting = deletingKey === itemKey
+          return (
+          <div
+            key={itemKey}
             className="group relative aspect-[4/5] rounded-[1.6rem] overflow-hidden text-left shadow-[0_18px_40px_-24px_rgba(76,29,149,0.55)] ring-1 ring-black/5 hover:-translate-y-1 hover:shadow-[0_24px_50px_-20px_rgba(76,29,149,0.6)] transition-all duration-300"
           >
+            <button
+              type="button"
+              onClick={() => openPreview(url)}
+              className="absolute inset-0 z-10"
+              aria-label={`Ver ${creative.variantLabel}`}
+            />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_#1e1b4b,_#020617)]" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={url}
               alt={creative.variantLabel}
-              className="relative z-10 w-full h-full object-contain p-3 transition-transform duration-500 group-hover:scale-[1.04]"
+              className="relative z-[1] w-full h-full object-contain p-3 transition-transform duration-500 group-hover:scale-[1.04]"
             />
-            <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-90" />
-            <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 z-20 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-90 pointer-events-none" />
+            <button
+              type="button"
+              onClick={() => void deleteImage(creative.id, index)}
+              disabled={Boolean(deletingKey)}
+              className="absolute top-3 left-3 z-30 inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/95 text-red-600 shadow-sm hover:bg-red-600 hover:text-white disabled:opacity-50"
+              aria-label="Eliminar imagen"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+            <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-900 shadow-sm">
                 <Expand className="w-3 h-3" />
                 Ver
               </span>
             </div>
             {urls.length > 1 ? (
-              <span className="absolute top-3 left-3 z-30 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+              <span className="absolute top-3 left-12 z-30 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm pointer-events-none">
                 {index + 1}/{urls.length}
               </span>
             ) : null}
-            <div className="absolute inset-x-0 bottom-0 z-30 p-4">
+            <div className="absolute inset-x-0 bottom-0 z-30 p-4 pointer-events-none">
               <span
                 className={`inline-flex rounded-full bg-gradient-to-r ${variantAccent(creative.variantLabel)} px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm`}
               >
@@ -409,8 +472,9 @@ export function VehicleAiCreativesGallery({
                 <p className="text-[11px] text-white/70 mt-1.5">{formatCreatedAt(creative.createdAt)}</p>
               ) : null}
             </div>
-          </button>
-        ))
+          </div>
+          )
+        })
       })}
       <button
         type="button"
@@ -462,6 +526,19 @@ export function VehicleAiCreativesGallery({
                     Descargar
                   </a>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => void deleteImage(preview.creativeId, preview.imageIndex)}
+                  disabled={Boolean(deletingKey)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600 disabled:opacity-50"
+                >
+                  {deletingKey === `${preview.creativeId}:${preview.imageIndex}` ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  Eliminar
+                </button>
                 <button
                   type="button"
                   onClick={() => setPreviewIndex(null)}
