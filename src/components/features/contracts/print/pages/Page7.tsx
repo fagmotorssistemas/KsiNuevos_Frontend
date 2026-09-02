@@ -66,10 +66,14 @@ export function Page7({ data, hasAmortization = true, fechaImpresion }: PageProp
         return match ? match[0] : "36";
     };
 
-    // --- CÁLCULOS ---
+    // Pagaré = total con interés − abonos ya aplicados (carro usado + anticipos/extras).
+    // Los cheques no se restan: siguen siendo deuda.
     const totalFinalNum = parseCurrencyString(data.totalFinal);
-    const abonoVehiculos = data.montoVehiculoUsado || 0; 
-    const saldoPagaré = totalFinalNum - abonoVehiculos;
+    const abonoVehiculos = data.montoVehiculoUsado || 0;
+    const anticiposPagados = data.listaCuotasAdicionales?.length
+        ? data.listaCuotasAdicionales.reduce((acc, item) => acc + (Number(item.monto) || 0), 0)
+        : (data.montoCuotaAdicional || 0);
+    const saldoPagaré = Math.max(0, totalFinalNum - abonoVehiculos - anticiposPagados);
 
     return (
         <ContractPageLayout pageNumber={7}>
