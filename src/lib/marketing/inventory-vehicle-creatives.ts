@@ -23,7 +23,6 @@ const KIND_LABELS: Record<string, string> = {
   thematic: 'Poster temático',
   low_leads: 'Carrusel menos leads',
   'low-leads': 'Carrusel menos leads',
-  upload: 'Imagen cargada',
 }
 
 const VARIANT_LABELS: Record<string, string> = {
@@ -83,7 +82,7 @@ export function labelCreativeKind(kind: string): string {
 export function labelCreativeVariant(variant: string): string {
   const key = variant.toLowerCase()
   if (VARIANT_LABELS[key]) return VARIANT_LABELS[key]
-  if (key.startsWith('upload-')) return 'Manual'
+  if (key.startsWith('upload-') || key.startsWith('tema-')) return 'Temático'
   return variant
 }
 
@@ -255,7 +254,7 @@ export function creativeDownloadFilename(creative: VehicleCreativeItem, imageInd
 
 export const CREATIVE_UPLOAD_MAX_BYTES = 8 * 1024 * 1024
 export const CREATIVE_UPLOAD_MAX_FILES = 12
-export const CREATIVE_UPLOAD_KIND = 'upload'
+export const CREATIVE_UPLOAD_KIND = 'thematic'
 
 const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 const EXT_TO_MIME: Record<string, string> = {
@@ -343,7 +342,7 @@ export async function uploadManualVehicleCreatives(
       .insert({
         vehicle_id: id,
         creative_kind: CREATIVE_UPLOAD_KIND,
-        variant: `upload-${token}`,
+        variant: `tema-${token}`,
         status: 'ready',
         image_url: url,
         image_urls: [url],
