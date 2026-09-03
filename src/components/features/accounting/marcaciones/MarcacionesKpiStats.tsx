@@ -1,5 +1,6 @@
 import { Clock, Users, UserCheck, CalendarRange } from "lucide-react";
 import { ResumenMarcaciones } from "@/types/marcaciones.types";
+import { formatSyncTime } from "@/components/features/accounting/marcaciones/marcaciones-display";
 
 interface MarcacionesKpiStatsProps {
     data: ResumenMarcaciones | null;
@@ -108,7 +109,8 @@ export function MarcacionesKpiStats({ data, loading }: MarcacionesKpiStatsProps)
                         {formatPeriodo(data.desde, data.hasta)}
                     </h3>
                     <p className="text-sm text-amber-700 font-medium mt-2">
-                        Rango consultado en el backend
+                        {data.fuente === "supabase" ? "Datos en caché (Supabase)" : "Rango consultado en el backend"}
+                        {data.ultimaSync ? ` · sync ${formatSyncTime(data.ultimaSync)}` : ""}
                     </p>
                 </div>
             </div>
