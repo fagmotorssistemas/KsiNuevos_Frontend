@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
+import { toast } from "sonner";
 import { Clock, Phone, MessageCircle, User, FileText, Loader2, Send, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Input, Button } from "./ui-components";
@@ -54,7 +55,7 @@ export function LeadHistoryTab({ lead }: { lead: LeadWithDetails }) {
             setInteractionResult(null);
         } else {
             console.error("Error guardando interacción:", error);
-            // Tip: Si falla aquí, suele ser porque falta agregar 'kommo' al ENUM en la base de datos
+            toast.error("No se pudo guardar la interacción. Verifica tus permisos o intenta de nuevo.");
         }
         setIsSubmittingInteraction(false);
     };
