@@ -7,6 +7,7 @@ import {
     ChevronDown,
     Check,
     Users,
+    MessageCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -24,6 +25,8 @@ interface ShowroomToolbarProps {
     onSalespersonChange: (val: string) => void;
     visitCount: number;
     isLoading?: boolean;
+    kommoChatFilter: string;
+    onKommoChatFilterChange: (val: "all" | "with_chat" | "without_chat") => void;
 }
 
 type FilterOption = {
@@ -31,7 +34,13 @@ type FilterOption = {
     label: string;
 };
 
-type OpenFilter = "date" | "seller" | null;
+type OpenFilter = "date" | "seller" | "kommo" | null;
+
+const KOMMO_OPTIONS: FilterOption[] = [
+    { value: "with_chat", label: "Con chat Kommo" },
+    { value: "without_chat", label: "Sin chat Kommo" },
+    { value: "all", label: "Todos" },
+];
 
 const DATE_OPTIONS: FilterOption[] = [
     { value: "today", label: "Hoy" },
@@ -158,6 +167,8 @@ export default function ShowroomToolbar({
     onSalespersonChange,
     visitCount,
     isLoading = false,
+    kommoChatFilter,
+    onKommoChatFilterChange,
 }: ShowroomToolbarProps) {
     const isAdmin = currentUserRole?.toLowerCase() === "admin";
     const isCustomRange = dateFilter === "custom";
@@ -290,6 +301,22 @@ export default function ShowroomToolbar({
                             />
                         </FilterField>
                     ) : null}
+
+                    <FilterField label="Chat Kommo" className="min-w-[180px]">
+                        <FilterDropdown
+                            icon={MessageCircle}
+                            value={kommoChatFilter}
+                            options={KOMMO_OPTIONS}
+                            open={openFilter === "kommo"}
+                            onToggle={() => setOpenFilter((current) => (current === "kommo" ? null : "kommo"))}
+                            onChange={(value) => {
+                                onKommoChatFilterChange(value as "all" | "with_chat" | "without_chat");
+                                setOpenFilter(null);
+                            }}
+                            highlighted={kommoChatFilter !== "all"}
+                            menuClassName="w-56"
+                        />
+                    </FilterField>
 
                     <div className="flex h-10 min-w-[88px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3">
                         <Users className="h-4 w-4 shrink-0 text-slate-400" />

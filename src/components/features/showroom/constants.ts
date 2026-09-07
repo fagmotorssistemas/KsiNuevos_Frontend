@@ -40,7 +40,8 @@ export interface ShowroomVisit {
     // Relaciones (Joins)
     inventoryoracle?: InventoryItem; // Cambiado de inventory a inventoryoracle
     profiles?: { full_name: string, email?: string };
-    /** Última gestión (join limit 1) */
+    /** Si hay match por teléfono con un lead de CRM */
+    lead_id_kommo?: number | null;
     showroom_visit_gestiones?: ShowroomVisitGestion[];
 }
 

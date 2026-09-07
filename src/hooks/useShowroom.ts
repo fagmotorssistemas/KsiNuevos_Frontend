@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-// Ajusta esta importación según donde tengas tus tipos
 import { ShowroomVisit } from "@/components/features/showroom/constants";
+import { mapKommoIdsByPhone, phoneLast9 } from "@/lib/leads/openKommoChat";
+
+export type KommoChatFilter = "all" | "with_chat" | "without_chat";
 
 export function useShowroom() {
     const { supabase, user, profile, isAdminLike, isLoading: isAuthLoading } = useAuth();
@@ -20,7 +22,8 @@ export function useShowroom() {
         date: "today",
         dateFrom: "",
         dateTo: "",
-        salesperson: "all"
+        salesperson: "all",
+        kommoChat: "with_chat" as KommoChatFilter,
     });
 
     // 2. CARGAR LISTA DE VENDEDORES (Solo si es Admin)
@@ -144,7 +147,27 @@ export function useShowroom() {
             const { data, error } = await query;
 
             if (error) throw error;
-            setVisits(data as any || []);
+
+            const rows = (data as ShowroomVisit[] | null) ?? [];
+            const kommoByPhone = await mapKommoIdsByPhone(
+                supabase,
+                rows.map((row) => row.phone)
+            );
+
+            const withKommo = rows.map((row) => ({
+                ...row,
+                lead_id_kommo: kommoByPhone.get(phoneLast9(row.phone)) ?? null,
+            }));
+
+            const kommoChat = filters.kommoChat;
+            const visible =
+                kommoChat === "with_chat"
+                    ? withKommo.filter((row) => row.lead_id_kommo)
+                    : kommoChat === "without_chat"
+                      ? withKommo.filter((row) => !row.lead_id_kommo)
+                      : withKommo;
+
+            setVisits(visible);
 
         } catch (error) {
             console.error("Error cargando showroom:", error);
@@ -196,6 +219,7 @@ export function useShowroom() {
         }));
     };
     const setSelectedSalesperson = (val: string) => setFilters(prev => ({ ...prev, salesperson: val }));
+    const setKommoChatFilter = (val: KommoChatFilter) => setFilters(prev => ({ ...prev, kommoChat: val }));
 
     return {
         // Data
@@ -213,6 +237,7 @@ export function useShowroom() {
         setDateFilter,
         setCustomDateRange,
         setSelectedSalesperson,
+        setKommoChatFilter,
         reload: fetchVisits
     };
 }

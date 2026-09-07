@@ -65,7 +65,7 @@ export function VisitDetailModal({
   const handleOpenKommoChat = async () => {
     setOpeningKommo(true);
     try {
-      await openKommoChatByPhone(supabase, visit.phone);
+      await openKommoChatByPhone(supabase, visit.phone, visit.lead_id_kommo);
     } finally {
       setOpeningKommo(false);
     }
