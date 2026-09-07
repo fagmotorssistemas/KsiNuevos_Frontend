@@ -1,10 +1,11 @@
+"use client";
+
 import { 
     Clock, 
     Car,
     CreditCard,
     Pencil,
     User,
-    ClipboardCheck
 } from "lucide-react";
 
 import { Table, TableCard } from "@/components/ui/table";
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/buttontable";
 
 // Importamos los tipos y helpers que ya definiste en la Card para no duplicar lógica
 import { ShowroomVisit, getSourceLabel, getCreditLabel } from "./ShowroomCard";
-import { getLastGestionAuthor } from "./constants";
+import { getLastGestionAuthor, getGestionColumn } from "./constants";
 
 interface ShowroomTableProps {
     visits: ShowroomVisit[];
@@ -22,7 +23,6 @@ interface ShowroomTableProps {
 }
 
 export function ShowroomTable({ visits, onEdit, onManage }: ShowroomTableProps) {
-
     // Helper para formatear horas en la tabla
     const formatTime = (dateStr: string) => {
         if (!dateStr) return '';
@@ -58,6 +58,7 @@ export function ShowroomTable({ visits, onEdit, onManage }: ShowroomTableProps) 
             <Table aria-label="Tabla de Visitas Showroom">
                 <Table.Header>
                     <Table.Head id="client" label="Cliente" />
+                    <Table.Head id="gestion" label="Gestión" />
                     <Table.Head id="schedule" label="Horario / Duración" />
                     <Table.Head id="vehicle" label="Interés" className="hidden md:table-cell" />
                     <Table.Head id="source" label="Origen" />
@@ -70,6 +71,7 @@ export function ShowroomTable({ visits, onEdit, onManage }: ShowroomTableProps) 
                         const sourceInfo = getSourceLabel(visit.source);
                         const creditInfo = getCreditLabel(visit.credit_status);
                         const gestionAuthor = getLastGestionAuthor(visit);
+                        const gestionCol = getGestionColumn(visit);
                         
                         return (
                             <Table.Row id={visit.id}>
@@ -89,14 +91,30 @@ export function ShowroomTable({ visits, onEdit, onManage }: ShowroomTableProps) 
                                                     {visit.profiles.full_name.split(' ')[0]} (Asesor)
                                                 </span>
                                             )}
+                                        </div>
+                                    </div>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                    {gestionCol.managed ? (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="inline-flex w-fit items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                                {gestionCol.statusLabel}
+                                            </span>
+                                            <span className="text-xs font-medium text-slate-700">
+                                                {gestionCol.dateLabel}
+                                            </span>
                                             {gestionAuthor && (
-                                                <span className="text-[10px] text-emerald-700 flex items-center gap-1 mt-0.5">
-                                                    <ClipboardCheck className="h-3 w-3" />
-                                                    Gestionado por {gestionAuthor.split(' ')[0]}
+                                                <span className="text-[10px] text-slate-500">
+                                                    {gestionAuthor.split(' ')[0]}
                                                 </span>
                                             )}
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <span className="inline-flex w-fit items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                                            {gestionCol.statusLabel}
+                                        </span>
+                                    )}
                                 </Table.Cell>
 
                                 {/* Columna Horario */}
