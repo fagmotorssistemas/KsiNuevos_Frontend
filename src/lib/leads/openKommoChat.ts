@@ -17,6 +17,11 @@ export function openKommoLeadChat(leadIdKommo: number | string) {
 
 type LeadPhoneRow = { phone: string | null; lead_id_kommo: number | null };
 
+/** Formatos habituales en Ecuador para un mismo celular (últimos 9 dígitos). */
+function ecuadorPhoneCandidates(last9: string): string[] {
+    return [`0${last9}`, `+593${last9}`, `593${last9}`, last9];
+}
+
 /** Cruza teléfonos de visitas con leads que sí tienen ID de Kommo. */
 export async function mapKommoIdsByPhone(
     supabase: SupabaseClient,
@@ -24,28 +29,44 @@ export async function mapKommoIdsByPhone(
 ): Promise<Map<string, number>> {
     const unique = [...new Set(phones.map(phoneLast9).filter((d) => d.length >= 9))];
     const matched = new Map<string, number>();
-    const chunkSize = 20;
+    if (unique.length === 0) return matched;
 
-    for (let i = 0; i < unique.length; i += chunkSize) {
-        const chunk = unique.slice(i, i + chunkSize);
-        const orFilter = chunk.map((d) => `phone.ilike.%${d}%`).join(",");
-        const { data, error } = await supabase
-            .from("leads")
-            .select("phone, lead_id_kommo")
-            .or(orFilter)
-            .not("lead_id_kommo", "is", null);
+    const lookupValues = [...new Set(unique.flatMap(ecuadorPhoneCandidates))];
+    const chunkSize = 80;
+    const chunks: string[][] = [];
+    for (let i = 0; i < lookupValues.length; i += chunkSize) {
+        chunks.push(lookupValues.slice(i, i + chunkSize));
+    }
 
-        if (error) {
-            console.error("Error cruzando teléfonos con Kommo:", error);
-            continue;
-        }
+    const concurrency = 6;
+    for (let i = 0; i < chunks.length; i += concurrency) {
+        const batch = chunks.slice(i, i + concurrency);
+        const results = await Promise.all(
+            batch.map(async (chunk) => {
+                const { data, error } = await supabase
+                    .from("leads")
+                    .select("phone, lead_id_kommo")
+                    .in("phone", chunk)
+                    .not("lead_id_kommo", "is", null);
 
-        for (const row of (data ?? []) as LeadPhoneRow[]) {
-            const key = phoneLast9(row.phone);
-            if (key.length >= 9 && row.lead_id_kommo) {
-                matched.set(key, row.lead_id_kommo);
+                if (error) {
+                    console.error("Error cruzando teléfonos con Kommo:", error);
+                    return [] as LeadPhoneRow[];
+                }
+                return (data ?? []) as LeadPhoneRow[];
+            })
+        );
+
+        for (const rows of results) {
+            for (const row of rows) {
+                const key = phoneLast9(row.phone);
+                if (key.length >= 9 && row.lead_id_kommo && !matched.has(key)) {
+                    matched.set(key, row.lead_id_kommo);
+                }
             }
         }
+
+        if (matched.size >= unique.length) break;
     }
 
     return matched;
