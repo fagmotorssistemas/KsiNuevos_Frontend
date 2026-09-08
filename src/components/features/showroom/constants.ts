@@ -40,7 +40,8 @@ export interface ShowroomVisit {
     // Relaciones (Joins)
     inventoryoracle?: InventoryItem; // Cambiado de inventory a inventoryoracle
     profiles?: { full_name: string, email?: string };
-    /** Última gestión (join limit 1) */
+    /** Si hay match por teléfono con un lead de CRM */
+    lead_id_kommo?: number | null;
     showroom_visit_gestiones?: ShowroomVisitGestion[];
 }
 
@@ -55,14 +56,59 @@ export const getSourceLabel = (source: VisitSource) => {
     }
 };
 
-/** Nombre de quien registró la última gestión (para listados). */
-export function getLastGestionAuthor(visit: ShowroomVisit): string | null {
+/** Última gestión registrada (la query ya trae 1, ordenada desc). */
+export function getLastGestion(visit: ShowroomVisit): ShowroomVisitGestion | null {
     const gestiones = visit.showroom_visit_gestiones;
     if (!gestiones?.length) return null;
     const sorted = [...gestiones].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-    return sorted[0]?.profiles?.full_name ?? null;
+    return sorted[0] ?? null;
+}
+
+/** Nombre de quien registró la última gestión (para listados). */
+export function getLastGestionAuthor(visit: ShowroomVisit): string | null {
+    return getLastGestion(visit)?.profiles?.full_name ?? null;
+}
+
+function isSameLocalDay(a: Date, b: Date) {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+/** Vista rápida: gestionado o no, y fecha (Hoy si es hoy). */
+export function getGestionColumn(visit: ShowroomVisit): {
+    managed: boolean;
+    statusLabel: string;
+    dateLabel: string | null;
+} {
+    const last = getLastGestion(visit);
+    if (!last?.created_at) {
+        return { managed: false, statusLabel: "No gestionado", dateLabel: null };
+    }
+
+    const when = new Date(last.created_at);
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    let dateLabel: string;
+    if (isSameLocalDay(when, now)) {
+        dateLabel = "Hoy";
+    } else if (isSameLocalDay(when, yesterday)) {
+        dateLabel = "Ayer";
+    } else {
+        dateLabel = when.toLocaleDateString("es-EC", {
+            day: "numeric",
+            month: "short",
+            year: when.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+        });
+    }
+
+    return { managed: true, statusLabel: "Gestionado", dateLabel };
 }
 
 export const getCreditLabel = (status: CreditStatus | null) => {

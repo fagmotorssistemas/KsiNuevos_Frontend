@@ -99,6 +99,7 @@ function ShowroomPageInner() {
         setDateFilter, 
         setCustomDateRange,
         setSelectedSalesperson,
+        setKommoChatFilter,
         reload 
     } = useShowroom();
 
@@ -183,6 +184,8 @@ function ShowroomPageInner() {
                 salespersons={salespersons}
                 selectedSalesperson={filters.salesperson}
                 onSalespersonChange={setSelectedSalesperson}
+                kommoChatFilter={filters.kommoChat}
+                onKommoChatFilterChange={setKommoChatFilter}
                 visitCount={visits.length}
                 isLoading={isLoading}
             />

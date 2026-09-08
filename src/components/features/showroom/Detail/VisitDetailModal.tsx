@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, ClipboardList, User } from "lucide-react";
+import { X, MapPin, ClipboardList, User, MessageCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { openKommoChatByPhone } from "@/lib/leads/openKommoChat";
 import type { ShowroomVisit, ShowroomVisitGestion } from "../constants";
 import { getCreditLabel } from "../constants";
 import { VisitResumenTab } from "./VisitResumenTab";
@@ -56,7 +58,18 @@ export function VisitDetailModal({
     visit.showroom_visit_gestiones?.[0]
   );
 
+  const { supabase } = useAuth();
+  const [openingKommo, setOpeningKommo] = useState(false);
   const creditInfo = getCreditLabel(visit.credit_status);
+
+  const handleOpenKommoChat = async () => {
+    setOpeningKommo(true);
+    try {
+      await openKommoChatByPhone(supabase, visit.phone, visit.lead_id_kommo);
+    } finally {
+      setOpeningKommo(false);
+    }
+  };
 
   const handleGestionAdded = (g: ShowroomVisitGestion) => {
     setLastGestion(g);
@@ -95,14 +108,30 @@ export function VisitDetailModal({
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors shrink-0"
-            aria-label="Cerrar"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenKommoChat}
+              disabled={openingKommo}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              title="Abrir chat de Kommo"
+            >
+              {openingKommo ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="h-4 w-4 text-[#2c86fe]" />
+              )}
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="shrink-0 flex border-b border-slate-100">

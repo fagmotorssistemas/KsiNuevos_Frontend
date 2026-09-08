@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
-// Ajusta esta importación según donde tengas tus tipos
 import { ShowroomVisit } from "@/components/features/showroom/constants";
+import { mapKommoIdsByPhone, phoneLast9 } from "@/lib/leads/openKommoChat";
+
+const VISIT_PAGE_SIZE = 800;
+
+export type KommoChatFilter = "all" | "with_chat" | "without_chat";
 
 export function useShowroom() {
     const { supabase, user, profile, isAdminLike, isLoading: isAuthLoading } = useAuth();
@@ -20,7 +24,8 @@ export function useShowroom() {
         date: "today",
         dateFrom: "",
         dateTo: "",
-        salesperson: "all"
+        salesperson: "all",
+        kommoChat: "with_chat" as KommoChatFilter,
     });
 
     // 2. CARGAR LISTA DE VENDEDORES (Solo si es Admin)
@@ -48,115 +53,144 @@ export function useShowroom() {
         setIsLoading(true);
 
         try {
-            let query = supabase
-                .from('showroom_visits')
-                .select(`
-                    *,
-                    inventoryoracle (id, brand, model, year, price),
-                    profiles (full_name),
-                    showroom_visit_gestiones (
+            const buildQuery = () => {
+                let query = supabase
+                    .from('showroom_visits')
+                    .select(`
                         id,
+                        salesperson_id,
+                        inventoryoracle_id,
+                        client_name,
+                        phone,
+                        visit_start,
+                        visit_end,
+                        source,
+                        test_drive,
+                        credit_status,
+                        observation,
                         created_at,
-                        type,
-                        content,
-                        author_id,
-                        profiles:author_id (full_name)
-                    )
-                `)
-                .order('visit_start', { ascending: false })
-                .order('created_at', {
-                    ascending: false,
-                    foreignTable: 'showroom_visit_gestiones',
-                })
-                .limit(1, { foreignTable: 'showroom_visit_gestiones' });
+                        manual_vehicle_description,
+                        inventoryoracle (id, brand, model, year, price),
+                        profiles (full_name),
+                        showroom_visit_gestiones (
+                            id,
+                            created_at,
+                            type,
+                            content,
+                            author_id,
+                            profiles:author_id (full_name)
+                        )
+                    `)
+                    .order('visit_start', { ascending: false })
+                    .order('created_at', {
+                        ascending: false,
+                        foreignTable: 'showroom_visit_gestiones',
+                    })
+                    .limit(1, { foreignTable: 'showroom_visit_gestiones' });
 
-            // --- APLICAR FILTROS ---
+                if (filters.search) {
+                    query = query.ilike('client_name', `%${filters.search}%`);
+                }
 
-            // A. Buscador (Cliente)
-            if (filters.search) {
-                query = query.ilike('client_name', `%${filters.search}%`);
-            }
+                const now = new Date();
+                const getLocalDateISO = (d: Date) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
 
-            // B. Fechas - CORRECCIÓN DE ZONA HORARIA
-            const now = new Date(); // Fecha local del navegador
+                if (filters.date === 'today') {
+                    const todayStr = getLocalDateISO(now);
+                    const startOfDay = new Date(`${todayStr}T00:00:00`).toISOString();
+                    const endOfDay = new Date(`${todayStr}T23:59:59.999`).toISOString();
+                    query = query.gte('visit_start', startOfDay).lte('visit_start', endOfDay);
+                } else if (filters.date === 'yesterday') {
+                    const yesterday = new Date(now);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = getLocalDateISO(yesterday);
+                    const startOfDay = new Date(`${yesterdayStr}T00:00:00`).toISOString();
+                    const endOfDay = new Date(`${yesterdayStr}T23:59:59.999`).toISOString();
+                    query = query.gte('visit_start', startOfDay).lte('visit_start', endOfDay);
+                } else if (filters.date === 'week') {
+                    const weekAgo = new Date(now);
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    query = query.gte('visit_start', weekAgo.toISOString());
+                } else if (filters.date === 'month') {
+                    const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                    query = query.gte('visit_start', new Date(`${firstDayStr}T00:00:00`).toISOString());
+                } else if (filters.date === 'custom' && filters.dateFrom && filters.dateTo) {
+                    const from = filters.dateFrom <= filters.dateTo ? filters.dateFrom : filters.dateTo;
+                    const to = filters.dateFrom <= filters.dateTo ? filters.dateTo : filters.dateFrom;
+                    query = query
+                        .gte('visit_start', new Date(`${from}T00:00:00`).toISOString())
+                        .lte('visit_start', new Date(`${to}T23:59:59.999`).toISOString());
+                }
 
-            // Helper para obtener YYYY-MM-DD local
-            const getLocalDateISO = (d: Date) => {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${day}`;
+                if (isAdmin) {
+                    if (filters.salesperson !== 'all') {
+                        query = query.eq('salesperson_id', filters.salesperson);
+                    }
+                } else {
+                    query = query.eq('salesperson_id', user.id);
+                }
+
+                return query;
             };
 
-            if (filters.date === 'today') {
-                // Rango: Hoy 00:00 local hasta Hoy 23:59 local
-                const todayStr = getLocalDateISO(now);
-                const startOfDay = new Date(`${todayStr}T00:00:00`).toISOString();
-                const endOfDay = new Date(`${todayStr}T23:59:59.999`).toISOString();
-                
-                query = query.gte('visit_start', startOfDay)
-                             .lte('visit_start', endOfDay);
-
-            } else if (filters.date === 'yesterday') {
-                const yesterday = new Date(now);
-                yesterday.setDate(yesterday.getDate() - 1);
-                const yesterdayStr = getLocalDateISO(yesterday);
-                
-                const startOfDay = new Date(`${yesterdayStr}T00:00:00`).toISOString();
-                const endOfDay = new Date(`${yesterdayStr}T23:59:59.999`).toISOString();
-
-                query = query.gte('visit_start', startOfDay)
-                             .lte('visit_start', endOfDay);
-
-            } else if (filters.date === 'week') {
-                // Últimos 7 días
-                const weekAgo = new Date(now);
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                // Usamos la fecha calculada para asegurar consistencia
-                query = query.gte('visit_start', weekAgo.toISOString());
-
-            } else if (filters.date === 'month') {
-                // Este mes (desde el día 1 del mes local)
-                const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-                const firstDayDate = new Date(`${firstDayStr}T00:00:00`).toISOString();
-                query = query.gte('visit_start', firstDayDate);
-
-            } else if (filters.date === 'custom' && filters.dateFrom && filters.dateTo) {
-                const from = filters.dateFrom <= filters.dateTo ? filters.dateFrom : filters.dateTo;
-                const to = filters.dateFrom <= filters.dateTo ? filters.dateTo : filters.dateFrom;
-                const startOfDay = new Date(`${from}T00:00:00`).toISOString();
-                const endOfDay = new Date(`${to}T23:59:59.999`).toISOString();
-                query = query.gte('visit_start', startOfDay)
-                             .lte('visit_start', endOfDay);
+            const rows: ShowroomVisit[] = [];
+            let from = 0;
+            while (true) {
+                const { data, error } = await buildQuery().range(from, from + VISIT_PAGE_SIZE - 1);
+                if (error) throw error;
+                const page = (data as ShowroomVisit[] | null) ?? [];
+                rows.push(...page);
+                if (page.length < VISIT_PAGE_SIZE) break;
+                from += VISIT_PAGE_SIZE;
             }
 
-            // C. Responsable (Seguridad RLS simulada en cliente)
-            if (isAdmin) {
-                // Si es admin, puede filtrar por vendedor específico
-                if (filters.salesperson !== 'all') {
-                    query = query.eq('salesperson_id', filters.salesperson);
-                }
-            } else {
-                // Si NO es admin, FORZAMOS a ver solo sus propios registros
-                query = query.eq('salesperson_id', user.id);
-            }
+            const kommoByPhone = await mapKommoIdsByPhone(
+                supabase,
+                rows.map((row) => row.phone)
+            );
 
-            const { data, error } = await query;
-
-            if (error) throw error;
-            setVisits(data as any || []);
+            setVisits(
+                rows.map((row) => ({
+                    ...row,
+                    lead_id_kommo: kommoByPhone.get(phoneLast9(row.phone)) ?? null,
+                }))
+            );
 
         } catch (error) {
             console.error("Error cargando showroom:", error);
         } finally {
             setIsLoading(false);
         }
-    }, [user, isAuthLoading, isAdmin, filters, supabase]);
+    }, [
+        user,
+        isAuthLoading,
+        isAdmin,
+        filters.search,
+        filters.date,
+        filters.dateFrom,
+        filters.dateTo,
+        filters.salesperson,
+        supabase,
+    ]);
 
-    // Recargar cuando cambian filtros o usuario
     useEffect(() => {
         fetchVisits();
     }, [fetchVisits]);
+
+    const visibleVisits = useMemo(() => {
+        if (filters.kommoChat === "with_chat") {
+            return visits.filter((row) => row.lead_id_kommo);
+        }
+        if (filters.kommoChat === "without_chat") {
+            return visits.filter((row) => !row.lead_id_kommo);
+        }
+        return visits;
+    }, [visits, filters.kommoChat]);
 
     // Helpers para actualizar filtros limpiamente
     const getTodayLocalISO = () => {
@@ -196,10 +230,11 @@ export function useShowroom() {
         }));
     };
     const setSelectedSalesperson = (val: string) => setFilters(prev => ({ ...prev, salesperson: val }));
+    const setKommoChatFilter = (val: KommoChatFilter) => setFilters(prev => ({ ...prev, kommoChat: val }));
 
     return {
         // Data
-        visits,
+        visits: visibleVisits,
         salespersons,
         isLoading,
         userRole,
@@ -213,6 +248,7 @@ export function useShowroom() {
         setDateFilter,
         setCustomDateRange,
         setSelectedSalesperson,
+        setKommoChatFilter,
         reload: fetchVisits
     };
 }
