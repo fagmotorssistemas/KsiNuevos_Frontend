@@ -19,6 +19,25 @@ import { Button } from "@/components/ui/buttontable";
 import type { LeadWithDetails, SortDescriptor } from "@/types/leads.types";
 import { getDisplayInterestCar } from "@/utils/leads.logic";
 
+function formatLeadCreatedAt(iso: string | null | undefined) {
+    if (!iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return {
+        datePart: date.toLocaleDateString("es-EC", {
+            timeZone: "America/Guayaquil",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }),
+        timePart: date.toLocaleTimeString("es-EC", {
+            timeZone: "America/Guayaquil",
+            hour: "2-digit",
+            minute: "2-digit",
+        }),
+    };
+}
+
 interface LeadsListProps {
     leads: LeadWithDetails[];
     sortDescriptor: SortDescriptor;
@@ -160,6 +179,8 @@ export function LeadsList({
                     <Table.Head id="resume" label="Resumen" className="hidden lg:table-cell" />
                     
                     <Table.Head id="temperature" label="Temp" allowsSorting />
+
+                    <Table.Head id="created_at" label="Creación" allowsSorting />
                     
                     {/* Columna de acciones */}
                     <Table.Head id="actions" label="" />
@@ -181,6 +202,7 @@ export function LeadsList({
                                 ? `Mes actual: ${item.month_temperature} · operativo: ${item.temperature ?? '—'}`
                                 : undefined;
                         const callStatus = getCallStatus(item);
+                        const createdAt = formatLeadCreatedAt(item.created_at);
 
                         return (
                             <Table.Row id={item.id}>
@@ -298,6 +320,24 @@ export function LeadsList({
                                             {tempDisplay || '-'}
                                         </BadgeWithIcon>
                                     </span>
+                                </Table.Cell>
+
+                                <Table.Cell>
+                                    {createdAt ? (
+                                        <div
+                                            className="flex flex-col"
+                                            title={item.created_at || undefined}
+                                        >
+                                            <span className="text-sm text-slate-700 whitespace-nowrap">
+                                                {createdAt.datePart}
+                                            </span>
+                                            <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                                                {createdAt.timePart}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-slate-400 italic">—</span>
+                                    )}
                                 </Table.Cell>
 
                                 <Table.Cell>
