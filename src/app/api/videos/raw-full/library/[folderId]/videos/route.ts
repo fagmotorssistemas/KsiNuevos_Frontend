@@ -3,6 +3,7 @@ import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 import {
   deleteRawFullVideo,
   prepareAppendRawFullVideos,
+  setRawFullVideoFeatured,
 } from '@/lib/videos/raw-full-videos-library'
 
 export const dynamic = 'force-dynamic'
@@ -57,6 +58,38 @@ export async function DELETE(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[raw-full/library/folderId/videos DELETE]', message)
+    const status =
+      message.includes('no encontrada') || message.includes('no encontrado')
+        ? 404
+        : message.includes('inválida') || message.includes('No es un video')
+          ? 400
+          : 500
+    return NextResponse.json({ error: message }, { status })
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ folderId: string }> }
+) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
+  try {
+    const { folderId } = await params
+    const body = (await request.json()) as { path?: string; featured?: boolean }
+    const path = body.path?.trim()
+    if (!path) {
+      return NextResponse.json({ error: 'path es requerido' }, { status: 400 })
+    }
+    if (typeof body.featured !== 'boolean') {
+      return NextResponse.json({ error: 'featured es requerido' }, { status: 400 })
+    }
+    const result = await setRawFullVideoFeatured(folderId, path, body.featured)
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno'
+    console.error('[raw-full/library/folderId/videos PATCH]', message)
     const status =
       message.includes('no encontrada') || message.includes('no encontrado')
         ? 404

@@ -24,6 +24,7 @@ export type RawFullVideoFolderSummary = {
   inventoryVehicleId2: string | null
   formato: string | null
   caption: string | null
+  featuredVideoPath: string | null
   inventory: RawFullVideoInventorySnippet | null
   folderName: string | null
   videoCount: number
@@ -39,6 +40,7 @@ export type RawFullVideoItem = {
   signedUrl: string
   sizeBytes: number
   createdAt: string | null
+  featured: boolean
 }
 
 export type RawFullVideoLibraryStats = {

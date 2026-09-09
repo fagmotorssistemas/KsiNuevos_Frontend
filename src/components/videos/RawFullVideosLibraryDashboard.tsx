@@ -14,9 +14,15 @@ import {
   Upload,
   Download,
   PlayCircle,
+  Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatBytes, type RawFullVideoFolderSummary, type RawFullVideoItem } from '@/lib/videos/raw-full-videos-library'
+import {
+  formatBytes,
+  sanitizeFullVideoFilename,
+  type RawFullVideoFolderSummary,
+  type RawFullVideoItem,
+} from '@/lib/videos/raw-full-videos-library'
 import {
   RAW_FULL_PILAR_TABS,
   rawFullFolderToPilarTab,
@@ -49,6 +55,41 @@ function cardTitle(folder: RawFullVideoFolderSummary): string {
   return folder.title
 }
 
+function formatDownloadStamp(iso: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Guayaquil',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(iso))
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+    return `${get('year')}-${get('month')}-${get('day')}_${get('hour')}-${get('minute')}`
+  } catch {
+    return iso.slice(0, 10)
+  }
+}
+
+function videoExtension(name: string): string {
+  const match = name.trim().match(/\.[a-z0-9]{1,8}$/i)
+  return match ? match[0].toLowerCase() : '.mp4'
+}
+
+function downloadFilenameForCard(folder: RawFullVideoFolderSummary, video: RawFullVideoItem): string {
+  const stamp = formatDownloadStamp(video.createdAt || folder.createdAt)
+  const titleSlug =
+    cardTitle(folder)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 90) || 'video'
+  return `${titleSlug}_${stamp}${videoExtension(video.name)}`
+}
+
 const PILAR_CHIP: Record<RawFullPilarTabId, string> = {
   pilar1: 'bg-cyan-50 text-cyan-800',
   pilar2: 'bg-rose-50 text-rose-800',
@@ -61,6 +102,66 @@ type MainTab = 'library' | 'queue'
 type LibraryVideoCard = {
   folder: RawFullVideoFolderSummary
   video: RawFullVideoItem
+}
+
+function asDownloadFilename(filename: string): string {
+  const cleaned = filename.trim().split(/[/\\]/).pop() || 'video.mp4'
+  if (/^[a-zA-Z0-9._-]+\.[a-z0-9]{1,8}$/i.test(cleaned) && cleaned.length <= 140) {
+    return cleaned
+  }
+  return sanitizeFullVideoFilename(cleaned)
+}
+
+/** El atributo HTML `download` se ignora en URLs de otro origen; Supabase respeta `?download=`. */
+function signedUrlWithForcedDownload(signedUrl: string, filename: string): string {
+  const safeName = asDownloadFilename(filename)
+  try {
+    const url = new URL(signedUrl)
+    url.searchParams.set('download', safeName)
+    return url.toString()
+  } catch {
+    const sep = signedUrl.includes('?') ? '&' : '?'
+    return `${signedUrl}${sep}download=${encodeURIComponent(safeName)}`
+  }
+}
+
+function triggerSignedVideoDownload(signedUrl: string, filename: string): void {
+  const href = signedUrlWithForcedDownload(signedUrl, filename)
+  const anchor = document.createElement('a')
+  anchor.href = href
+  anchor.download = asDownloadFilename(filename)
+  anchor.target = '_blank'
+  anchor.rel = 'noopener noreferrer'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+}
+
+const BLOB_DOWNLOAD_MAX_BYTES = 200 * 1024 * 1024
+
+async function downloadSignedVideo(signedUrl: string, filename: string): Promise<void> {
+  const safeName = asDownloadFilename(filename)
+  try {
+    const res = await fetch(signedUrl, { mode: 'cors' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const len = Number(res.headers.get('content-length') || '0')
+    if (len > BLOB_DOWNLOAD_MAX_BYTES) {
+      if (res.body) await res.body.cancel().catch(() => undefined)
+      triggerSignedVideoDownload(signedUrl, safeName)
+      return
+    }
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = blobUrl
+    anchor.download = safeName
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    triggerSignedVideoDownload(signedUrl, safeName)
+  }
 }
 
 export type RawFullVideosLibraryDashboardProps = {
@@ -107,6 +208,8 @@ export function RawFullVideosLibraryDashboard({
   } | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [busyPath, setBusyPath] = useState<string | null>(null)
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null)
+  const [featuringPath, setFeaturingPath] = useState<string | null>(null)
   const [scheduleTarget, setScheduleTarget] = useState<{
     folderId: string
     videoPath: string
@@ -161,6 +264,12 @@ export function RawFullVideosLibraryDashboard({
         cards.push({ folder, video })
       }
     }
+    cards.sort((a, b) => {
+      if (a.video.featured !== b.video.featured) return a.video.featured ? -1 : 1
+      const ta = a.video.createdAt ? new Date(a.video.createdAt).getTime() : 0
+      const tb = b.video.createdAt ? new Date(b.video.createdAt).getTime() : 0
+      return tb - ta
+    })
     return cards
   }, [filteredFolders])
 
@@ -176,6 +285,58 @@ export function RawFullVideosLibraryDashboard({
       totalBytes: videoCards.reduce((sum, c) => sum + c.video.sizeBytes, 0),
     }
   }, [inventoryVehicleId, lockedPilarTab, stats.totalBytes, stats.totalVideos, videoCards])
+
+  async function handleToggleFeatured(folder: RawFullVideoFolderSummary, video: RawFullVideoItem) {
+    if (featuringPath) return
+    const nextFeatured = !video.featured
+    setFeaturingPath(video.path)
+    try {
+      const res = await fetch(`/api/videos/raw-full/library/${folder.id}/videos`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: video.path, featured: nextFeatured }),
+      })
+      const data = (await res.json()) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo actualizar el destacado')
+
+      const vehicleId = folder.inventoryVehicleId
+      setFolders((prev) =>
+        prev.map((f) => {
+          const sameScope = vehicleId ? f.inventoryVehicleId === vehicleId : f.id === folder.id
+          if (!sameScope) return f
+          const featuredPath = nextFeatured && f.id === folder.id ? video.path : null
+          return {
+            ...f,
+            featuredVideoPath: featuredPath,
+            videos: (f.videos ?? []).map((v) => ({
+              ...v,
+              featured: Boolean(featuredPath && v.path === featuredPath),
+            })),
+          }
+        })
+      )
+      toast.success(nextFeatured ? 'Video destacado' : 'Ya no está destacado')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al destacar')
+    } finally {
+      setFeaturingPath(null)
+    }
+  }
+
+  async function handleDownloadVideo(folder: RawFullVideoFolderSummary, video: RawFullVideoItem) {
+    if (!video.signedUrl || downloadingPath) return
+    setDownloadingPath(video.path)
+    const toastId = toast.loading('Preparando descarga...')
+    try {
+      await downloadSignedVideo(video.signedUrl, downloadFilenameForCard(folder, video))
+      toast.success('Descarga iniciada', { id: toastId })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo descargar el video', { id: toastId })
+    } finally {
+      setDownloadingPath(null)
+    }
+  }
 
   async function handleDeleteVideo(folderId: string, path: string) {
     if (!confirm('¿Eliminar este video de la biblioteca?')) return
@@ -483,7 +644,11 @@ export function RawFullVideosLibraryDashboard({
                 return (
                   <article
                     key={video.path}
-                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+                    className={`group flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                      video.featured
+                        ? 'border-amber-300 ring-2 ring-amber-200 hover:border-amber-400'
+                        : 'border-slate-200/90 hover:border-slate-300'
+                    }`}
                   >
                     <div className="relative aspect-video bg-slate-950">
                       {video.signedUrl ? (
@@ -511,12 +676,35 @@ export function RawFullVideosLibraryDashboard({
                           </span>
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        disabled={featuringPath === video.path}
+                        onClick={() => void handleToggleFeatured(folder, video)}
+                        className={`absolute right-2 top-2 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition disabled:opacity-50 ${
+                          video.featured
+                            ? 'border-amber-300 bg-amber-400 text-white hover:bg-amber-500'
+                            : 'border-white/40 bg-black/55 text-white hover:bg-black/75'
+                        }`}
+                        title={video.featured ? 'Quitar destacado' : 'Destacar este video (solo uno)'}
+                      >
+                        {featuringPath === video.path ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Star className={`h-4 w-4 ${video.featured ? 'fill-white' : ''}`} />
+                        )}
+                      </button>
                       <span className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-semibold text-white">
                         {formatBytes(video.sizeBytes)}
                       </span>
                     </div>
                     <div className="flex flex-1 flex-col gap-3 p-4">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {video.featured ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                            <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                            Destacado
+                          </span>
+                        ) : null}
                         {pilarMeta ? (
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${PILAR_CHIP[pilarMeta.id]}`}
@@ -562,14 +750,19 @@ export function RawFullVideosLibraryDashboard({
                           Programar
                         </button>
                         {video.signedUrl ? (
-                          <a
-                            href={video.signedUrl}
-                            download={video.name}
-                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                          <button
+                            type="button"
+                            disabled={downloadingPath === video.path}
+                            onClick={() => void handleDownloadVideo(folder, video)}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-50"
                             title="Descargar"
                           >
-                            <Download className="h-4 w-4" />
-                          </a>
+                            {downloadingPath === video.path ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </button>
                         ) : null}
                         {!hideUploadButton ? (
                           <button

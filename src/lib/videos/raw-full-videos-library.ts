@@ -38,10 +38,14 @@ type FolderRow = {
   formato: string | null
   caption: string | null
   folder_name: string | null
+  featured_video_path: string | null
   video_paths: string[] | null
   created_at: string
   updated_at: string
 }
+
+const FOLDER_SELECT =
+  'id, inventory_vehicle_id, inventory_vehicle_id_2, formato, caption, folder_name, featured_video_path, video_paths, created_at, updated_at'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -152,7 +156,8 @@ async function listStorageForFolder(folderId: string): Promise<
 
 async function buildVideoItems(
   videoPaths: string[] | null,
-  storage: Array<{ path: string; sizeBytes: number; createdAt: string | null }>
+  storage: Array<{ path: string; sizeBytes: number; createdAt: string | null }>,
+  featuredPath: string | null = null
 ): Promise<RawFullVideoItem[]> {
   const storageByPath = new Map(storage.map((s) => [s.path, s]))
   const paths = asVideoPathList(videoPaths).filter(isVideoPath)
@@ -176,11 +181,13 @@ async function buildVideoItems(
         signedUrl,
         sizeBytes: meta?.sizeBytes ?? 0,
         createdAt: meta?.createdAt ?? null,
+        featured: Boolean(featuredPath && featuredPath === path),
       } satisfies RawFullVideoItem
     })
   )
 
   videos.sort((a, b) => {
+    if (a.featured !== b.featured) return a.featured ? -1 : 1
     const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
     const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
     return tb - ta
@@ -231,6 +238,7 @@ function toSummary(
       inventoryVehicleId2: row.inventory_vehicle_id_2,
       formato: row.formato,
       caption: row.caption,
+      featuredVideoPath: row.featured_video_path ?? null,
       inventory: inv,
       folderName: row.folder_name,
       videoCount,
@@ -255,6 +263,7 @@ function toSummary(
     inventoryVehicleId2: row.inventory_vehicle_id_2,
     formato: row.formato,
     caption: row.caption,
+    featuredVideoPath: row.featured_video_path ?? null,
     inventory: null,
     folderName: row.folder_name,
     videoCount,
@@ -282,7 +291,7 @@ export async function fetchRawFullVideoLibrary(opts: {
   const supabase = getServiceClient()
 
   let query = foldersDb(supabase)
-    .select('id, inventory_vehicle_id, inventory_vehicle_id_2, formato, caption, folder_name, video_paths, created_at, updated_at')
+    .select(FOLDER_SELECT)
     .order('created_at', { ascending: false })
 
   if (opts.inventoryVehicleId?.trim()) {
@@ -329,7 +338,7 @@ export async function fetchRawFullVideoLibrary(opts: {
 
   for (const row of pageRows) {
     const storage = await listStorageForFolder(row.id)
-    const videos = await buildVideoItems(row.video_paths, storage)
+    const videos = await buildVideoItems(row.video_paths, storage, row.featured_video_path)
     const videoCount = videos.length
     const bytes = videos.reduce((s, x) => s + x.sizeBytes, 0)
     totalVideos += videoCount
@@ -360,7 +369,7 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
 } | null> {
   const supabase = getServiceClient()
   const { data, error } = await foldersDb(supabase)
-    .select('id, inventory_vehicle_id, inventory_vehicle_id_2, formato, caption, folder_name, video_paths, created_at, updated_at')
+    .select(FOLDER_SELECT)
     .eq('id', folderId)
     .maybeSingle()
 
@@ -372,7 +381,7 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
     row.inventory_vehicle_id ? [row.inventory_vehicle_id] : []
   )
   const storage = await listStorageForFolder(folderId)
-  const videos = await buildVideoItems(row.video_paths, storage)
+  const videos = await buildVideoItems(row.video_paths, storage, row.featured_video_path)
   const bytes = videos.reduce((s, v) => s + v.sizeBytes, 0)
   const inv = row.inventory_vehicle_id ? invMap.get(row.inventory_vehicle_id) ?? null : null
   return {
@@ -612,14 +621,14 @@ export async function deleteRawFullVideo(
 
   const supabase = getServiceClient()
   const { data, error } = await foldersDb(supabase)
-    .select('id, video_paths')
+    .select('id, video_paths, featured_video_path')
     .eq('id', folderId)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!data) throw new Error('Carpeta no encontrada')
 
-  const row = data as { id: string; video_paths: string[] | null }
+  const row = data as { id: string; video_paths: string[] | null; featured_video_path: string | null }
   const next = (row.video_paths ?? []).filter((x) => x !== p)
   if (next.length === (row.video_paths ?? []).length) {
     throw new Error('Video no encontrado en esta carpeta')
@@ -638,10 +647,66 @@ export async function deleteRawFullVideo(
   }
 
   const { error: updErr } = await foldersDb(supabase)
-    .update({ video_paths: next, updated_at: new Date().toISOString() })
+    .update({
+      video_paths: next,
+      featured_video_path: row.featured_video_path === p ? null : row.featured_video_path,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', folderId)
   if (updErr) throw new Error(updErr.message)
   return { videoCount: next.length, folderDeleted: false }
+}
+
+export async function setRawFullVideoFeatured(
+  folderId: string,
+  path: string,
+  featured: boolean
+): Promise<{ featuredPath: string | null }> {
+  const p = path.trim()
+  if (!p.startsWith(`${folderId}/`)) throw new Error('Ruta de video inválida')
+  if (!isVideoPath(p)) throw new Error('No es un video')
+
+  const supabase = getServiceClient()
+  const { data, error } = await foldersDb(supabase)
+    .select('id, inventory_vehicle_id, featured_video_path')
+    .eq('id', folderId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Carpeta no encontrada')
+
+  const row = data as {
+    id: string
+    inventory_vehicle_id: string | null
+    featured_video_path: string | null
+  }
+
+  const now = new Date().toISOString()
+  const vehicleId = row.inventory_vehicle_id?.trim() || null
+
+  if (!featured) {
+    if (row.featured_video_path !== p) return { featuredPath: row.featured_video_path }
+    const { error: clearErr } = await foldersDb(supabase)
+      .update({ featured_video_path: null, updated_at: now })
+      .eq('id', folderId)
+    if (clearErr) throw new Error(clearErr.message)
+    return { featuredPath: null }
+  }
+
+  if (vehicleId) {
+    const { error: othersErr } = await foldersDb(supabase)
+      .update({ featured_video_path: null, updated_at: now })
+      .eq('inventory_vehicle_id', vehicleId)
+      .neq('id', folderId)
+      .not('featured_video_path', 'is', null)
+    if (othersErr) throw new Error(othersErr.message)
+  }
+
+  const { error: updErr } = await foldersDb(supabase)
+    .update({ featured_video_path: p, updated_at: now })
+    .eq('id', folderId)
+  if (updErr) throw new Error(updErr.message)
+  return { featuredPath: p }
 }
 
 export async function deleteRawFullVideoFolder(folderId: string): Promise<void> {
