@@ -186,7 +186,9 @@ export default function RastreoPage() {
                             asesoresLoading={asesoresLoading}
                             onVolver={handleVolver}
                             onNuevoDispositivo={() => setShowNuevoDispositivoForm(true)}
-                            onHistorialUpdate={(gps) => setHistorialCliente(prev => prev.map(p => p.id === gps.id ? gps : p))}
+                            onHistorialUpdate={(gps) => setHistorialCliente(prev => prev.map(p =>
+                                (p.venta_id && gps.venta_id ? p.venta_id === gps.venta_id : p.id === gps.id) ? { ...p, ...gps } : p
+                            ))}
                         />
                     )}
 

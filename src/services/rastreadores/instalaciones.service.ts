@@ -105,6 +105,7 @@ export async function actualizarTipoPagoYPlazo(
             tipo_pago,
             numero_cuotas: numero_cuotas ?? null
         })
-        .eq('gps_id', gpsId);
+        .eq('gps_id', gpsId)
+        .in('estado_dispositivo', ['INSTALADO', 'VENDIDO', 'RMA']);
     return { success: !error, error: error?.message };
 }

@@ -62,6 +62,11 @@ function isVideoPath(path: string): boolean {
   return VIDEO_EXT.test(base)
 }
 
+function asVideoPathList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((x): x is string => typeof x === 'string')
+  return []
+}
+
 export function sanitizeFullVideoFilename(filename: string): string {
   const base = filename.trim().split(/[/\\]/).pop() || 'video.mp4'
   const dot = base.lastIndexOf('.')
@@ -145,11 +150,51 @@ async function listStorageForFolder(folderId: string): Promise<
     })
 }
 
+async function buildVideoItems(
+  videoPaths: string[] | null,
+  storage: Array<{ path: string; sizeBytes: number; createdAt: string | null }>
+): Promise<RawFullVideoItem[]> {
+  const storageByPath = new Map(storage.map((s) => [s.path, s]))
+  const paths = asVideoPathList(videoPaths).filter(isVideoPath)
+  const pathSet = new Set(paths)
+  for (const s of storage) {
+    if (!pathSet.has(s.path)) paths.push(s.path)
+  }
+
+  const videos = await Promise.all(
+    paths.map(async (path) => {
+      const meta = storageByPath.get(path)
+      let signedUrl = ''
+      try {
+        signedUrl = await getSignedUrlForFullRawPath(path)
+      } catch (e) {
+        console.warn('[raw-full-videos] signed url', path, e)
+      }
+      return {
+        path,
+        name: path.split('/').pop() ?? path,
+        signedUrl,
+        sizeBytes: meta?.sizeBytes ?? 0,
+        createdAt: meta?.createdAt ?? null,
+      } satisfies RawFullVideoItem
+    })
+  )
+
+  videos.sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return tb - ta
+  })
+
+  return videos
+}
+
 function toSummary(
   row: FolderRow,
   inv: RawFullVideoInventorySnippet | null,
   bytes: number,
-  videoCount: number
+  videoCount: number,
+  videos: RawFullVideoItem[] = []
 ): RawFullVideoFolderSummary {
   if (inv) {
     const label = resolveJobVehicleLabel(
@@ -192,6 +237,7 @@ function toSummary(
       totalBytes: bytes,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      videos,
     }
   }
 
@@ -215,6 +261,7 @@ function toSummary(
     totalBytes: bytes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    videos,
   }
 }
 
@@ -282,17 +329,17 @@ export async function fetchRawFullVideoLibrary(opts: {
 
   for (const row of pageRows) {
     const storage = await listStorageForFolder(row.id)
-    const paths = (row.video_paths ?? []).filter(isVideoPath)
-    const videoCount = Math.max(paths.length, storage.length)
-    const bytes = storage.reduce((s, x) => s + x.sizeBytes, 0)
+    const videos = await buildVideoItems(row.video_paths, storage)
+    const videoCount = videos.length
+    const bytes = videos.reduce((s, x) => s + x.sizeBytes, 0)
     totalVideos += videoCount
     totalBytes += bytes
     const inv = row.inventory_vehicle_id ? invMap.get(row.inventory_vehicle_id) ?? null : null
-    folders.push(toSummary(row, inv, bytes, videoCount))
+    folders.push(toSummary(row, inv, bytes, videoCount, videos))
   }
 
   // Stats globales ligeras (paths en DB)
-  const allPathsCount = rows.reduce((n, r) => n + (r.video_paths ?? []).filter(isVideoPath).length, 0)
+  const allPathsCount = rows.reduce((n, r) => n + asVideoPathList(r.video_paths).filter(isVideoPath).length, 0)
 
   return {
     folders,
@@ -325,41 +372,11 @@ export async function fetchRawFullVideoFolderDetail(folderId: string): Promise<{
     row.inventory_vehicle_id ? [row.inventory_vehicle_id] : []
   )
   const storage = await listStorageForFolder(folderId)
-  const storageByPath = new Map(storage.map((s) => [s.path, s]))
-  const paths = (row.video_paths ?? []).filter(isVideoPath)
-  const pathSet = new Set(paths)
-  for (const s of storage) {
-    if (!pathSet.has(s.path)) paths.push(s.path)
-  }
-
-  const videos: RawFullVideoItem[] = []
-  for (const path of paths) {
-    const meta = storageByPath.get(path)
-    let signedUrl = ''
-    try {
-      signedUrl = await getSignedUrlForFullRawPath(path)
-    } catch (e) {
-      console.warn('[raw-full-videos] signed url', path, e)
-    }
-    videos.push({
-      path,
-      name: path.split('/').pop() ?? path,
-      signedUrl,
-      sizeBytes: meta?.sizeBytes ?? 0,
-      createdAt: meta?.createdAt ?? null,
-    })
-  }
-
-  videos.sort((a, b) => {
-    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
-    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
-    return tb - ta
-  })
-
+  const videos = await buildVideoItems(row.video_paths, storage)
   const bytes = videos.reduce((s, v) => s + v.sizeBytes, 0)
   const inv = row.inventory_vehicle_id ? invMap.get(row.inventory_vehicle_id) ?? null : null
   return {
-    folder: toSummary(row, inv, bytes, videos.length),
+    folder: toSummary(row, inv, bytes, videos.length, videos),
     videos,
   }
 }

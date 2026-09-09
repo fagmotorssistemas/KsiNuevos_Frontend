@@ -25,6 +25,7 @@ export async function getGPSPorVenta(notaVenta: string) {
                 observacion,
                 url_comprobante_pago,
                 url_evidencia_gps,
+                estado_dispositivo,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -65,6 +66,7 @@ export async function getGPSPorClienteId(clienteId: string) {
                 observacion,
                 url_comprobante_pago,
                 url_evidencia_gps,
+                estado_dispositivo,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -84,7 +86,8 @@ export async function getGPSPorClienteId(clienteId: string) {
 
 function mapVentasToHistorial(data: any[]) {
     return data.map((v: any) => {
-        const gps = v.gps_inventario;
+        const gpsRaw = v.gps_inventario;
+        const gps = Array.isArray(gpsRaw) ? gpsRaw[0] : gpsRaw;
         const modeloGps = gps?.modelo;
         const modeloRaw = Array.isArray(modeloGps) ? modeloGps[0] : modeloGps;
         const modeloNombre = modeloRaw?.marca ?? gps?.serie ?? null;
@@ -102,7 +105,7 @@ function mapVentasToHistorial(data: any[]) {
             fecha_entrega: v.fecha_entrega ?? null,
             asesor_id: v.asesor_id ?? null,
             imei: gps?.imei,
-            estado: gps?.estado,
+            estado: v.estado_dispositivo ?? gps?.estado,
             modelo: modeloNombre,
             costo_compra: gps?.costo_compra,
             instalador_id: v.instalador_id,
@@ -178,6 +181,7 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 observacion,
                 url_comprobante_pago,
                 url_evidencia_gps,
+                estado_dispositivo,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -204,6 +208,7 @@ export async function actualizarVinculacionGPS(gpsId: string, notaVenta: string)
             .from('ventas_rastreador')
             .update({ nota_venta: limpiarTexto(notaVenta) })
             .eq('gps_id', gpsId)
+            .in('estado_dispositivo', ['INSTALADO', 'VENDIDO', 'RMA'])
             .select()
             .single();
 
@@ -234,6 +239,7 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
                 gps_id,
                 costo_instalacion,
                 es_venta_externa,
+                estado_dispositivo,
                 instalador_id,
                 cliente_externo:clientes_externos(*),
                 gps_inventario:gps_inventario(*),
@@ -265,7 +271,7 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
                 costo_instalacion: v.costo_instalacion,
                 created_at: v.created_at,
                 es_venta_externa: v.es_venta_externa,
-                estado: gps?.estado,
+                estado: v.estado_dispositivo ?? gps?.estado,
                 estado_coneccion: gps?.estado_coneccion ?? 'offline',
                 sim_id: null,
                 instalador_id: v.instalador_id,
@@ -280,14 +286,79 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
     }
 }
 
+const ESTADOS_LIBERA_STOCK = new Set(['BAJA', 'STOCK']);
+
 /**
- * Actualiza estado del GPS en gps_inventario (ya no en dispositivos_rastreo).
+ * Actualiza el estado del dispositivo en la venta.
+ * Si es BAJA (o STOCK), el GPS vuelve a inventario para otra venta y esta venta queda como historial.
  */
-export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string) {
+export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string, ventaId?: string | null) {
     try {
+        const liberaStock = ESTADOS_LIBERA_STOCK.has(nuevoEstado);
+        const estadoInventario = liberaStock ? 'STOCK' : nuevoEstado;
+
+        if (ventaId) {
+            const { data: ventaActual, error: ventaReadErr } = await supabase
+                .from('ventas_rastreador')
+                .select('id, gps_id, estado_dispositivo')
+                .eq('id', ventaId)
+                .single();
+            if (ventaReadErr) throw ventaReadErr;
+
+            if (ESTADOS_LIBERA_STOCK.has(ventaActual?.estado_dispositivo ?? '') && !liberaStock) {
+                return {
+                    success: false,
+                    error: 'Esta venta ya está dada de baja. El dispositivo volvió a stock y puede usarse en otra venta.'
+                };
+            }
+
+            const { error: ventaErr } = await supabase
+                .from('ventas_rastreador')
+                .update({ estado_dispositivo: nuevoEstado })
+                .eq('id', ventaId);
+            if (ventaErr) throw ventaErr;
+        } else {
+            const { error: ventaErr } = await supabase
+                .from('ventas_rastreador')
+                .update({ estado_dispositivo: nuevoEstado })
+                .eq('gps_id', gpsId)
+                .in('estado_dispositivo', ['INSTALADO', 'VENDIDO', 'RMA']);
+            if (ventaErr) throw ventaErr;
+        }
+
+        if (liberaStock) {
+            let hayVentaActivaQuery = supabase
+                .from('ventas_rastreador')
+                .select('id')
+                .eq('gps_id', gpsId)
+                .in('estado_dispositivo', ['INSTALADO', 'VENDIDO', 'RMA'])
+                .limit(1);
+            if (ventaId) hayVentaActivaQuery = hayVentaActivaQuery.neq('id', ventaId);
+            const { data: ventaActiva } = await hayVentaActivaQuery.maybeSingle();
+
+            if (!ventaActiva) {
+                const { data, error } = await supabase
+                    .from('gps_inventario')
+                    .update({ estado: 'STOCK' })
+                    .eq('id', gpsId)
+                    .select()
+                    .single();
+                if (error) throw error;
+                return { success: true, data };
+            }
+
+            const { data, error } = await supabase
+                .from('gps_inventario')
+                .select()
+                .eq('id', gpsId)
+                .single();
+            if (error) throw error;
+            return { success: true, data };
+        }
+
         const { data, error } = await supabase
             .from('gps_inventario')
-            .update({ estado: nuevoEstado })
+            .update({ estado: estadoInventario })
             .eq('id', gpsId)
             .select()
             .single();

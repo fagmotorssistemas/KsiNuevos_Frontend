@@ -255,6 +255,7 @@ async function crearVentaRastreadorCompleta(params: CrearVentaCompletaParams) {
         observacion: pago.observacion && pago.observacion.trim() !== '' ? pago.observacion.trim() : null,
         nota_venta,
         es_venta_externa: true,
+        estado_dispositivo: 'INSTALADO',
         instalador_id: pago.instalador_id && pago.instalador_id !== '' ? pago.instalador_id : null,
         costo_instalacion: pago.costo_instalacion ?? null,
     };

@@ -13,7 +13,9 @@ const ESTADO_CONFIG = {
     'ACTIVO': { color: 'bg-green-50 text-green-700 border-green-100', icon: CheckCircle, label: 'Activo', bgIcon: 'bg-green-100' },
     'SUSPENDIDO': { color: 'bg-orange-50 text-orange-700 border-orange-100', icon: AlertCircle, label: 'Suspendido', bgIcon: 'bg-orange-100' },
     'RETIRADO': { color: 'bg-red-50 text-red-700 border-red-100', icon: Trash2, label: 'Retirado', bgIcon: 'bg-red-100' },
-    'STOCK': { color: 'bg-slate-50 text-slate-700 border-slate-100', icon: Clock, label: 'Stock', bgIcon: 'bg-slate-100' }
+    'STOCK': { color: 'bg-slate-50 text-slate-700 border-slate-100', icon: Clock, label: 'Stock', bgIcon: 'bg-slate-100' },
+    'BAJA': { color: 'bg-red-50 text-red-700 border-red-100', icon: Trash2, label: 'Baja', bgIcon: 'bg-red-100' },
+    'RMA': { color: 'bg-orange-50 text-orange-700 border-orange-100', icon: AlertCircle, label: 'RMA', bgIcon: 'bg-orange-100' }
 } as const;
 
 const CONEXION_CONFIG = {

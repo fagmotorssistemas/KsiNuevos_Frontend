@@ -30,6 +30,7 @@ export type RawFullVideoFolderSummary = {
   totalBytes: number
   createdAt: string
   updatedAt: string
+  videos: RawFullVideoItem[]
 }
 
 export type RawFullVideoItem = {

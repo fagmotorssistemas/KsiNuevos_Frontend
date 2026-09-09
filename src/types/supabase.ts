@@ -8038,6 +8038,7 @@ export type Database = {
           created_at: string | null
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
           es_venta_externa: boolean | null
+          estado_dispositivo: string | null
           fecha_entrega: string | null
           fecha_instalacion: string | null
           gps_id: string | null
@@ -8065,6 +8066,7 @@ export type Database = {
           created_at?: string | null
           entorno: Database["public"]["Enums"]["entorno_venta_enum"]
           es_venta_externa?: boolean | null
+          estado_dispositivo?: string | null
           fecha_entrega?: string | null
           fecha_instalacion?: string | null
           gps_id?: string | null
@@ -8092,6 +8094,7 @@ export type Database = {
           created_at?: string | null
           entorno?: Database["public"]["Enums"]["entorno_venta_enum"]
           es_venta_externa?: boolean | null
+          estado_dispositivo?: string | null
           fecha_entrega?: string | null
           fecha_instalacion?: string | null
           gps_id?: string | null
@@ -8128,7 +8131,7 @@ export type Database = {
           {
             foreignKeyName: "fk_venta_gps"
             columns: ["gps_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "gps_inventario"
             referencedColumns: ["id"]
           },

@@ -30,18 +30,27 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
     const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIA_RASTREADOR' | 'EVIDENCIA_PAGO' }>({});
     const [uploadingGPSId, setUploadingGPSId] = useState<string | null>(null);
 
-    const handleActualizarEstado = async (gpsId: string) => {
-        const nuevoEstado = estadosSeleccionados[gpsId];
-        if (!nuevoEstado) return toast.error("Seleccione un estado");
+    const itemKey = (gps: { venta_id?: string; id?: string }) => gps.venta_id || gps.id || '';
 
-        setGuardandoGPSId(gpsId);
+    const handleActualizarEstado = async (gps: { id: string; venta_id?: string; estado?: string }) => {
+        const key = itemKey(gps);
+        const nuevoEstado = estadosSeleccionados[key] || gps.estado;
+        if (!nuevoEstado) return toast.error("Seleccione un estado");
+        if (nuevoEstado === gps.estado) return toast.error("Seleccione un estado distinto al actual");
+
+        setGuardandoGPSId(key);
         try {
-            const res = await rastreadoresService.actualizarEstadoGPS(gpsId, nuevoEstado);
+            const res = await rastreadoresService.actualizarEstadoGPS(gps.id, nuevoEstado, gps.venta_id);
             if (res.success) {
-                onHistorialUpdate({ ...res.data, estado: nuevoEstado });
-                toast.success("Estado actualizado correctamente");
+                onHistorialUpdate({ ...gps, estado: nuevoEstado, venta_id: gps.venta_id });
+                if (nuevoEstado === 'BAJA' || nuevoEstado === 'STOCK') {
+                    toast.success("Dispositivo dado de baja. Volvió a stock y puede usarse en otra venta.");
+                } else {
+                    toast.success("Estado actualizado correctamente");
+                }
             } else {
-                toast.error("Error al actualizar estado");
+                const mensaje = typeof res.error === 'string' ? res.error : "Error al actualizar estado";
+                toast.error(mensaje);
             }
         } catch (err) {
             console.error(err);
@@ -109,30 +118,33 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
             )}
             <div className="space-y-4">
                 {historialgps.map((gps) => {
-                    const estadoActual = estadosSeleccionados[gps.id] || gps.estado || 'VENDIDO';
-                    const activeTab = tabs[gps.id] || 'DATOS';
+                    const key = itemKey(gps);
+                    const estadoGuardado = gps.estado || 'VENDIDO';
+                    const estadoActual = estadosSeleccionados[key] || estadoGuardado;
+                    const esBajaGuardada = estadoGuardado === 'BAJA';
+                    const activeTab = tabs[key] || 'DATOS';
 
                     const urlsEvidenciaRastreador = gps.url_evidencia_gps ? gps.url_evidencia_gps.split(',').filter(Boolean) : [];
                     const urlsComprobantePago = gps.url_comprobante_pago ? gps.url_comprobante_pago.split(',').filter(Boolean) : [];
 
                     return (
-                        <div key={gps.id} className="p-5 bg-slate-50/80 border-2 border-slate-200 rounded-2xl hover:border-slate-300 transition-colors">
+                        <div key={key} className="p-5 bg-slate-50/80 border-2 border-slate-200 rounded-2xl hover:border-slate-300 transition-colors">
                             {/* TABS */}
                             <div className="flex gap-2 mb-4 border-b border-slate-200 pb-2 flex-wrap">
                                 <button
-                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'DATOS' }))}
+                                    onClick={() => setTabs(prev => ({ ...prev, [key]: 'DATOS' }))}
                                     className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'DATOS' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
                                 >
                                     Datos del Dispositivo
                                 </button>
                                 <button
-                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIA_RASTREADOR' }))}
+                                    onClick={() => setTabs(prev => ({ ...prev, [key]: 'EVIDENCIA_RASTREADOR' }))}
                                     className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIA_RASTREADOR' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
                                 >
                                     Evidencia rastreador ({urlsEvidenciaRastreador.length})
                                 </button>
                                 <button
-                                    onClick={() => setTabs(prev => ({ ...prev, [gps.id]: 'EVIDENCIA_PAGO' }))}
+                                    onClick={() => setTabs(prev => ({ ...prev, [key]: 'EVIDENCIA_PAGO' }))}
                                     className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'EVIDENCIA_PAGO' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
                                 >
                                     Forma de pago ({urlsComprobantePago.length})
@@ -276,11 +288,21 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                 </div>
                                 {activeTab === 'DATOS' && (
                                     <div className="flex flex-col gap-2 shrink-0 sm:items-end">
+                                        {esBajaGuardada ? (
+                                            <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
+                                                Retirado del cliente. El dispositivo volvió a stock y esta venta queda como historial.
+                                            </p>
+                                        ) : estadoActual === 'BAJA' ? (
+                                            <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
+                                                Al guardar, se retira del cliente y el dispositivo vuelve a stock para otra venta.
+                                            </p>
+                                        ) : null}
                                         <div className="flex gap-2 flex-wrap">
                                             <select
                                                 value={estadoActual}
-                                                onChange={e => setEstadosSeleccionados({ ...estadosSeleccionados, [gps.id]: e.target.value })}
-                                                className="text-sm font-bold px-3 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                                                onChange={e => setEstadosSeleccionados({ ...estadosSeleccionados, [key]: e.target.value })}
+                                                disabled={esBajaGuardada}
+                                                className="text-sm font-bold px-3 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 disabled:opacity-60 disabled:cursor-not-allowed"
                                             >
                                                 {ESTADOS_GPS.map(estado => (
                                                     <option key={estado.value} value={estado.value}>
@@ -290,11 +312,11 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false }
                                             </select>
                                             <button
                                                 type="button"
-                                                onClick={() => handleActualizarEstado(gps.id)}
-                                                disabled={guardandoGPSId === gps.id}
+                                                onClick={() => handleActualizarEstado(gps)}
+                                                disabled={guardandoGPSId === key || esBajaGuardada}
                                                 className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold uppercase disabled:opacity-50 transition-all"
                                             >
-                                                {guardandoGPSId === gps.id ? <Loader2 className="animate-spin" size={16} /> : 'Guardar estado'}
+                                                {guardandoGPSId === key ? <Loader2 className="animate-spin" size={16} /> : 'Guardar estado'}
                                             </button>
                                         </div>
                                     </div>

@@ -112,6 +112,7 @@ export function usePagoRastreador() {
                     payload.costo_instalacion != null
                         ? Number(payload.costo_instalacion)
                         : undefined,
+                estado_dispositivo: 'INSTALADO',
             };
 
             const { data: ventaData, error: ventaError } = await supabase

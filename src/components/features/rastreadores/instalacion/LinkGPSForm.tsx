@@ -455,7 +455,9 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 {historialgps.length > 0 && (
                     <HistorialGPS
                         historialgps={historialgps}
-                        onHistorialUpdate={(gps) => setHistorialGps(prev => prev.map(g => g.id === gps.id ? gps : g))}
+                        onHistorialUpdate={(gps) => setHistorialGps(prev => prev.map(g =>
+                            (g.venta_id && gps.venta_id ? g.venta_id === gps.venta_id : g.id === gps.id) ? { ...g, ...gps } : g
+                        ))}
                         asCard
                     />
                 )}
