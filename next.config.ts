@@ -59,7 +59,7 @@ const nextConfig: NextConfig = {
       {
         source: "/",
         destination: "/cuenca-azuay",
-        permanent: false,
+        permanent: true,
       },
       {
         source: "/home",
