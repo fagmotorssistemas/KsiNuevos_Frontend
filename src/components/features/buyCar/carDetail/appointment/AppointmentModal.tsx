@@ -6,6 +6,7 @@ import { createBuyingAppointment } from '@/hooks/Homeksi/appointment-actions'
 import { KsButton } from '@/components/ui/Homeksi/KsButton'
 import { useAppointmentSlots } from '@/hooks/Homeksi/useAppointmentSlots'
 import { TimePicker } from './TimePicker'
+import { trackLead } from '@/lib/meta/pixel'
 
 interface AppointmentModalProps {
   isOpen: boolean
@@ -33,6 +34,11 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
       document.body.style.overflow = 'unset';
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isSuccess || !carId) return
+    trackLead({ id: carId })
+  }, [isSuccess, carId])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

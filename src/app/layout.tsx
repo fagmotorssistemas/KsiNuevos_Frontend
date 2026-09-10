@@ -4,6 +4,7 @@ import './global.css'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { NavbarWrapper } from '@/components/layout/NavbarWrapper' // <--- IMPORTAR NUEVO WRAPPER
 import { AppToaster } from '@/components/ui/AppToaster'
+import { MetaPixel } from '@/components/meta/MetaPixel'
 
 const satoshi = localFont({
   src: [
@@ -46,6 +47,7 @@ export default function RootLayout({
     <html lang="es" className={satoshi.variable}>
       <body className="font-sans bg-[#f2f2f2] text-[#000]">
         <AppToaster />
+        <MetaPixel />
         <AuthProvider>
           <div className="print:hidden">
             {/* CAMBIO: Usamos el Wrapper condicional */}

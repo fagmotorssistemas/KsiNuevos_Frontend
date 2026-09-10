@@ -16,6 +16,7 @@ import { CarGallery } from "@/components/features/buyCar/carDetail/CarGallery";
 import { CarHeader } from "@/components/features/buyCar/carDetail/CarHeader";
 import { CarSpecs } from "@/components/features/buyCar/carDetail/CarSpecs";
 import BookingButton from "@/components/features/buyCar/carDetail/BookingButton";
+import { VehicleViewTracker } from "@/components/meta/VehicleViewTracker";
 
 function VehicleLoadingShell() {
   return (
@@ -68,6 +69,7 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
   const ActionBlock = () => (
     <div className="bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
       <CarHeader
+        id={car.id}
         brand={car.brand}
         model={car.model}
         version={car.version}
@@ -75,6 +77,10 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
         price={car.price || 0}
         mileage={car.mileage}
         city={car.registration_place || "Cuenca"}
+        color={car.color}
+        transmission={car.transmission}
+        type_body={car.type_body}
+        fuel_type={car.fuel_type}
       />
 
       <div className="mt-8 space-y-3">
@@ -113,6 +119,7 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900">
+      <VehicleViewTracker car={car} />
       <MainNavbar />
 
       <main className="flex-grow pt-4 lg:pt-6 pb-20">

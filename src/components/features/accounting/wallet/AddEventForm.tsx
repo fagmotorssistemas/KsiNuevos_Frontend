@@ -173,6 +173,8 @@ export function AddEventForm({
   );
   const [contratoCompleto, setContratoCompleto] = useState(false);
   const [kardexRevisado, setKardexRevisado] = useState(false);
+  const [letraCambio, setLetraCambio] = useState(false);
+  const [pagare, setPagare] = useState(false);
   const [codeudor, setCodeudor] = useState<"si" | "no" | "">("");
   const [fechaEnvio, setFechaEnvio] = useState("");
   const [numeroProceso, setNumeroProceso] = useState("");
@@ -221,6 +223,8 @@ export function AddEventForm({
     setResultado("");
     setContratoCompleto(false);
     setKardexRevisado(false);
+    setLetraCambio(false);
+    setPagare(false);
     setCodeudor("");
     setFechaEnvio("");
     setNumeroProceso("");
@@ -242,10 +246,6 @@ export function AddEventForm({
     if (!resultado || !descripcion.trim()) return false;
     if (isFormal) {
       if (!hasAdjunto) return false;
-      if (tipo === "verificacion") {
-        if (!poderEspecial) return false;
-        if (!contratoCompleto || !kardexRevisado || !codeudor) return false;
-      }
       if (tipo === "predemanda" && !fechaEnvio) return false;
       if (tipo === "via_judicial") {
         if (!numeroProceso.trim() || !juzgado.trim() || !fechaIngreso)
@@ -264,10 +264,6 @@ export function AddEventForm({
     isFormal,
     hasAdjunto,
     tipo,
-    poderEspecial,
-    contratoCompleto,
-    kardexRevisado,
-    codeudor,
     fechaEnvio,
     numeroProceso,
     juzgado,
@@ -342,6 +338,8 @@ export function AddEventForm({
           detalle: detalleFinal,
           contratoCompleto,
           kardexRevisado,
+          letraCambio,
+          pagare,
           codeudor,
           poder: poderEspecial || null,
         });
@@ -468,30 +466,49 @@ export function AddEventForm({
         {isFormal && tipo === "verificacion" && (
           <div className="md:col-span-2 rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-4">
             <div>
-              <p className={label + " mb-2"}>Checklist de verificación</p>
+              <p className={label + " mb-1"}>Checklist de verificación</p>
+              <p className="text-[11px] text-slate-400 mb-2">
+                Opcional: marca solo lo que ya revisaste.
+              </p>
               <div className="space-y-2">
-                <label className="flex items-center gap-2.5 cursor-pointer rounded-lg bg-white border border-slate-200 px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={contratoCompleto}
-                    onChange={(e) => setContratoCompleto(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900"
-                  />
-                  <span className="text-sm font-medium text-slate-800">
-                    Contrato completo y firmado
-                  </span>
-                </label>
-                <label className="flex items-center gap-2.5 cursor-pointer rounded-lg bg-white border border-slate-200 px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={kardexRevisado}
-                    onChange={(e) => setKardexRevisado(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-slate-900"
-                  />
-                  <span className="text-sm font-medium text-slate-800">
-                    Kardex de deuda revisado (monto real validado)
-                  </span>
-                </label>
+                {(
+                  [
+                    [
+                      "contrato",
+                      "Contrato completo y firmado",
+                      contratoCompleto,
+                      setContratoCompleto,
+                    ],
+                    [
+                      "kardex",
+                      "Kardex de deuda revisado (monto real validado)",
+                      kardexRevisado,
+                      setKardexRevisado,
+                    ],
+                    [
+                      "letra",
+                      "Letra de cambio",
+                      letraCambio,
+                      setLetraCambio,
+                    ],
+                    ["pagare", "Pagaré", pagare, setPagare],
+                  ] as const
+                ).map(([key, text, checked, setChecked]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2.5 cursor-pointer rounded-lg bg-white border border-slate-200 px-3 py-2.5"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => setChecked(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                    />
+                    <span className="text-sm font-medium text-slate-800">
+                      {text}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -507,7 +524,9 @@ export function AddEventForm({
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setCodeudor(value)}
+                    onClick={() =>
+                      setCodeudor((prev) => (prev === value ? "" : value))
+                    }
                     className={`h-9 px-4 rounded-xl text-sm font-semibold border transition ${
                       codeudor === value
                         ? "bg-slate-900 text-white border-slate-900"

@@ -160,6 +160,8 @@ export function encodeMetaTag(key: string, value: string): string {
 const META_LABELS: Record<string, string> = {
   contrato_completo: "Contrato",
   kardex_revisado: "Kardex",
+  letra_cambio: "Letra de cambio",
+  pagare: "Pagaré",
   codeudor: "Codeudor",
   poder_especial: "Poder",
   fecha_envio: "Envío",
@@ -228,12 +230,16 @@ export function encodeVerificacionDetalle(input: {
   detalle: string;
   contratoCompleto: boolean;
   kardexRevisado: boolean;
+  letraCambio: boolean;
+  pagare: boolean;
   codeudor: "si" | "no" | "";
   poder: PoderEspecialStatus | null;
 }): string {
   const tags = [
     encodeMetaTag("contrato_completo", input.contratoCompleto ? "si" : "no"),
     encodeMetaTag("kardex_revisado", input.kardexRevisado ? "si" : "no"),
+    encodeMetaTag("letra_cambio", input.letraCambio ? "si" : "no"),
+    encodeMetaTag("pagare", input.pagare ? "si" : "no"),
     input.codeudor
       ? encodeMetaTag("codeudor", input.codeudor)
       : null,

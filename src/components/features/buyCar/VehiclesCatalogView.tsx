@@ -9,6 +9,7 @@ import { CatalogToolbar } from "@/components/features/buyCar/CatalogToolbar";
 import { CarCard } from "@/components/features/buyCar/CarCard";
 import { MainNavbar } from "@/components/layout/Homeksi/MainNavbar";
 import { MainFooter } from "@/components/layout/Homeksi/MainFooter";
+import { CatalogSearchTracker } from "@/components/meta/CatalogSearchTracker";
 
 function VehiclesCatalogContent({
   brandSlug,
@@ -66,6 +67,12 @@ function VehiclesCatalogContent({
 
   return (
     <>
+      <CatalogSearchTracker
+        isLoading={isLoading}
+        brandSlug={brandSlug}
+        filters={filters}
+        contentIds={cars.map((car) => car.id)}
+      />
       <HeroSection title={heading} intro={intro} />
 
       <div className="max-w-7xl mx-auto px-4 py-12 flex items-start gap-10">
