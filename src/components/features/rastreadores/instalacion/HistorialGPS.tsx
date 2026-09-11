@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, History, Smartphone, Plus, AlertTriangle, RefreshCw, PackageMinus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, History, Smartphone, Plus, ChevronDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,12 +12,84 @@ function esEstadoHistorial(estado?: string) {
 }
 
 const ESTADOS_GPS = [
-    { value: 'VENDIDO', label: 'Pendiente Instalación' },
+    { value: 'VENDIDO', label: 'Pendiente instalación' },
     { value: 'INSTALADO', label: 'Instalado' },
-    { value: 'STOCK', label: 'En Stock' },
+    { value: 'STOCK', label: 'En stock' },
     { value: 'RMA', label: 'RMA' },
-    { value: 'BAJA', label: 'Baja' }
+    { value: 'BAJA', label: 'Baja' },
 ] as const;
+
+const MOTIVOS_BAJA = [
+    { value: 'RETIRO' as const, label: 'Se retiró el dispositivo' },
+    { value: 'CONFUSION' as const, label: 'Confusión de IMEI' },
+];
+
+function CompactSelect({
+    value,
+    placeholder,
+    options,
+    open,
+    disabled,
+    onToggle,
+    onChange,
+}: {
+    value: string;
+    placeholder?: string;
+    options: { value: string; label: string }[];
+    open: boolean;
+    disabled?: boolean;
+    onToggle: () => void;
+    onChange: (value: string) => void;
+}) {
+    const selected = options.find((option) => option.value === value);
+
+    return (
+        <div className="relative min-w-0 flex-1">
+            <button
+                type="button"
+                disabled={disabled}
+                aria-expanded={open}
+                aria-haspopup="listbox"
+                onClick={onToggle}
+                className={`flex h-10 w-full items-center gap-2 rounded-xl border pl-3 pr-2 text-left text-sm font-medium shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                    open
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+            >
+                <span className="min-w-0 flex-1 truncate">{selected?.label || placeholder}</span>
+                <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180 text-white/70' : 'text-slate-400'}`}
+                />
+            </button>
+            {open ? (
+                <div
+                    role="listbox"
+                    className="absolute right-0 top-[calc(100%+0.4rem)] z-[90] w-full min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl"
+                >
+                    {options.map((option) => {
+                        const active = option.value === value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                onClick={() => onChange(option.value)}
+                                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                                    active ? 'bg-slate-900 font-semibold text-white' : 'text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                                {active ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </div>
+    );
+}
 
 interface HistorialGPSProps {
     historialgps: any[];
@@ -36,7 +108,25 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
     const [guardandoGPSId, setGuardandoGPSId] = useState<string | null>(null);
     const [tabs, setTabs] = useState<{ [key: string]: 'DATOS' | 'EVIDENCIA_RASTREADOR' | 'EVIDENCIA_PAGO' }>({});
     const [uploadingGPSId, setUploadingGPSId] = useState<string | null>(null);
-    const [bajaPendiente, setBajaPendiente] = useState<any | null>(null);
+    const [motivosBaja, setMotivosBaja] = useState<{ [key: string]: 'RETIRO' | 'CONFUSION' }>({});
+    const [openMenu, setOpenMenu] = useState<string | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!openMenu) return;
+        const onPointerDown = (event: MouseEvent) => {
+            if (!menuRef.current?.contains(event.target as Node)) setOpenMenu(null);
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setOpenMenu(null);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [openMenu]);
 
     const itemKey = (gps: { venta_id?: string; id?: string }) => gps.venta_id || gps.id || '';
     const nHistorial = historialgps.filter((g) => esEstadoHistorial(g.estado)).length;
@@ -125,7 +215,9 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
         if (!nuevoEstado) return toast.error("Seleccione un estado");
         if (nuevoEstado === gps.estado) return toast.error("Seleccione un estado distinto al actual");
         if (nuevoEstado === 'BAJA') {
-            setBajaPendiente(gps);
+            const motivo = motivosBaja[key];
+            if (!motivo) return toast.error("Indique por qué se da de baja antes de guardar");
+            await persistirEstado(gps, 'BAJA', motivo);
             return;
         }
         await persistirEstado(gps, nuevoEstado);
@@ -187,7 +279,7 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
                     <span className="text-sm font-bold text-slate-600">{etiquetaConteo}</span>
                 </div>
             )}
-            <div className="space-y-4">
+            <div ref={menuRef} className="space-y-4">
                 {historialgps.map((gps) => {
                     const key = itemKey(gps);
                     const estadoGuardado = gps.estado || 'VENDIDO';
@@ -398,48 +490,63 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
 
                                 </div>
                                 {activeTab === 'DATOS' && (
-                                    <div className="flex flex-col gap-2 shrink-0 sm:items-end">
+                                    <div className="flex flex-col gap-2 shrink-0 w-full sm:w-[280px]">
                                         {esBajaGuardada ? (
                                             gps.motivo_baja === 'CONFUSION' ? (
-                                                <p className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
-                                                    IMEI incorrecto. Mismo dispositivo; no suma al valor de venta.
+                                                <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                                    Confusión de IMEI. No suma al valor de venta.
                                                 </p>
                                             ) : gps.motivo_baja === 'RETIRO' ? (
-                                                <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
-                                                    Retirado. El dispositivo volvió a stock y esta venta queda como historial.
+                                                <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                                                    Retirado. Volvió a stock.
                                                 </p>
                                             ) : (
-                                                <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
-                                                    Indique arriba si fue retiro o solo confusión de IMEI.
+                                                <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                                                    Falta indicar si fue retiro o confusión de IMEI.
                                                 </p>
                                             )
-                                        ) : estadoActual === 'BAJA' ? (
-                                            <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 max-w-[220px] text-right">
-                                                Al guardar podrá elegir: se retiró el aparato, o hubo confusión de IMEI.
-                                            </p>
                                         ) : null}
-                                        <div className="flex gap-2 flex-wrap">
-                                            <select
-                                                value={estadoActual}
-                                                onChange={e => setEstadosSeleccionados({ ...estadosSeleccionados, [key]: e.target.value })}
-                                                disabled={esBajaGuardada}
-                                                className="text-sm font-bold px-3 py-2 rounded-xl border-2 border-slate-200 bg-white text-slate-900 outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 disabled:opacity-60 disabled:cursor-not-allowed"
-                                            >
-                                                {ESTADOS_GPS.map(estado => (
-                                                    <option key={estado.value} value={estado.value}>
-                                                        {estado.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleActualizarEstado(gps)}
-                                                disabled={guardandoGPSId === key || esBajaGuardada}
-                                                className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold uppercase disabled:opacity-50 transition-all"
-                                            >
-                                                {guardandoGPSId === key ? <Loader2 className="animate-spin" size={16} /> : 'Guardar estado'}
-                                            </button>
-                                        </div>
+                                        <CompactSelect
+                                            value={estadoActual}
+                                            options={ESTADOS_GPS.map((estado) => ({ value: estado.value, label: estado.label }))}
+                                            open={openMenu === `${key}-estado`}
+                                            disabled={esBajaGuardada}
+                                            onToggle={() => setOpenMenu((current) => (current === `${key}-estado` ? null : `${key}-estado`))}
+                                            onChange={(next) => {
+                                                setEstadosSeleccionados({ ...estadosSeleccionados, [key]: next });
+                                                setOpenMenu(null);
+                                                if (next !== 'BAJA') {
+                                                    setMotivosBaja((prev) => {
+                                                        const copy = { ...prev };
+                                                        delete copy[key];
+                                                        return copy;
+                                                    });
+                                                } else {
+                                                    setOpenMenu(`${key}-motivo`);
+                                                }
+                                            }}
+                                        />
+                                        {!esBajaGuardada && estadoActual === 'BAJA' ? (
+                                            <CompactSelect
+                                                value={motivosBaja[key] ?? ''}
+                                                placeholder="Motivo de baja"
+                                                options={MOTIVOS_BAJA}
+                                                open={openMenu === `${key}-motivo`}
+                                                onToggle={() => setOpenMenu((current) => (current === `${key}-motivo` ? null : `${key}-motivo`))}
+                                                onChange={(next) => {
+                                                    setMotivosBaja((prev) => ({ ...prev, [key]: next as 'RETIRO' | 'CONFUSION' }));
+                                                    setOpenMenu(null);
+                                                }}
+                                            />
+                                        ) : null}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleActualizarEstado(gps)}
+                                            disabled={guardandoGPSId === key || esBajaGuardada || (estadoActual === 'BAJA' && !motivosBaja[key])}
+                                            className="h-10 bg-slate-800 hover:bg-slate-900 text-white px-4 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all"
+                                        >
+                                            {guardandoGPSId === key ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Guardar estado'}
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -452,68 +559,8 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
 
     if (historialgps.length === 0) return null;
 
-    const modalBaja = bajaPendiente ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-                    <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-4">
-                        <div className="flex items-start gap-3">
-                            <div className="p-2 rounded-xl bg-amber-50 text-amber-700">
-                                <AlertTriangle size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-black text-slate-900 uppercase">Dar de baja</h3>
-                                <p className="text-sm text-slate-600 mt-1">
-                                    IMEI <span className="font-mono font-bold">{bajaPendiente.imei}</span>. El aparato vuelve a stock y esta venta queda como historial.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="grid gap-2">
-                            <button
-                                type="button"
-                                disabled={!!guardandoGPSId}
-                                onClick={async () => {
-                                    const gps = bajaPendiente;
-                                    setBajaPendiente(null);
-                                    await persistirEstado(gps, 'BAJA', 'RETIRO');
-                                }}
-                                className="flex items-start gap-3 text-left p-4 rounded-xl border-2 border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-colors"
-                            >
-                                <PackageMinus size={18} className="text-slate-600 mt-0.5 shrink-0" />
-                                <span>
-                                    <span className="block text-sm font-black text-slate-900 uppercase">Se retiró el dispositivo</span>
-                                    <span className="block text-xs text-slate-500 mt-0.5">Ya no queda GPS activo en este cliente por esta venta.</span>
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!!guardandoGPSId}
-                                onClick={async () => {
-                                    const gps = bajaPendiente;
-                                    setBajaPendiente(null);
-                                    await persistirEstado(gps, 'BAJA', 'CONFUSION');
-                                }}
-                                className="flex items-start gap-3 text-left p-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-colors"
-                            >
-                                <RefreshCw size={18} className="text-blue-700 mt-0.5 shrink-0" />
-                                <span>
-                                    <span className="block text-sm font-black text-slate-900 uppercase">Hubo confusión</span>
-                                    <span className="block text-xs text-slate-500 mt-0.5">IMEI incorrecto. Queda en historial y luego registra el IMEI correcto, sin volver a cobrar.</span>
-                                </span>
-                            </button>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setBajaPendiente(null)}
-                            className="w-full text-sm font-bold text-slate-500 hover:text-slate-800 py-2"
-                        >
-                            Cancelar
-                        </button>
-                    </div>
-                </div>
-    ) : null;
-
     if (asCard) {
         return (
-            <>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2 border-l-4 border-l-blue-500">
                     <History size={18} className="text-slate-500" />
@@ -524,15 +571,12 @@ export function HistorialGPS({ historialgps, onHistorialUpdate, asCard = false, 
                     {content}
                 </div>
             </div>
-            {modalBaja}
-            </>
         );
     }
 
     return (
         <div className="mt-6 pt-6 border-t border-slate-200">
             {content}
-            {modalBaja}
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import type { Cuenta, TransaccionFinanciera, CuentaPorCobrar } from "@/types/taller";
+import type { Cuenta, TallerTipoCuenta, TransaccionFinanciera, CuentaPorCobrar } from "@/types/taller";
 import { logModuleAudit } from "@/lib/audit/moduleAudit";
 
 export type Transaccion = TransaccionFinanciera;
@@ -27,7 +27,9 @@ export function useFinanzas() {
                     nombre_cuenta: c.nombre_cuenta,
                     saldo_actual: c.saldo_actual ?? 0, 
                     numero_cuenta: c.numero_cuenta ?? "", 
-                    es_caja_chica: c.es_caja_chica ?? false
+                    es_caja_chica: c.es_caja_chica ?? false,
+                    tipo_cuenta: (c.tipo_cuenta as TallerTipoCuenta | null) ?? null,
+                    nombre_titular: c.nombre_titular ?? null,
                 }));
                 setCuentas(cuentasSeguras);
             }
@@ -112,9 +114,11 @@ export function useFinanzas() {
                 .from('taller_cuentas')
                 .insert([{
                     nombre_cuenta: datosCuenta.nombre_cuenta,
-                    numero_cuenta: datosCuenta.numero_cuenta,
+                    numero_cuenta: datosCuenta.numero_cuenta || null,
                     saldo_actual: datosCuenta.saldo_actual,
-                    es_caja_chica: datosCuenta.es_caja_chica
+                    es_caja_chica: datosCuenta.es_caja_chica,
+                    tipo_cuenta: datosCuenta.tipo_cuenta || null,
+                    nombre_titular: datosCuenta.nombre_titular || null,
                 }]);
 
             if (error) throw error;

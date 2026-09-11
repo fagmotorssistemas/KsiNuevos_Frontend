@@ -600,6 +600,8 @@ CREATE TABLE public.taller_cuentas (
   saldo_actual numeric DEFAULT 0,
   numero_cuenta text,
   es_caja_chica boolean DEFAULT false,
+  tipo_cuenta text,
+  nombre_titular text,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT taller_cuentas_pkey PRIMARY KEY (id)
 );

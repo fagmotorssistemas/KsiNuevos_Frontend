@@ -70,12 +70,16 @@ export interface InventarioItem {
     ubicacion_bodega?: string;
 }
 
+export type TallerTipoCuenta = 'ahorro' | 'corriente';
+
 export interface Cuenta {
     id: string;
     nombre_cuenta: string;
     saldo_actual: number;
     numero_cuenta: string;
     es_caja_chica: boolean;
+    tipo_cuenta: TallerTipoCuenta | null;
+    nombre_titular: string | null;
 }
 
 export interface TransaccionFinanciera {

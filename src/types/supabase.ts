@@ -7312,24 +7312,30 @@ export type Database = {
           es_caja_chica: boolean | null
           id: string
           nombre_cuenta: string
+          nombre_titular: string | null
           numero_cuenta: string | null
           saldo_actual: number | null
+          tipo_cuenta: string | null
         }
         Insert: {
           created_at?: string | null
           es_caja_chica?: boolean | null
           id?: string
           nombre_cuenta: string
+          nombre_titular?: string | null
           numero_cuenta?: string | null
           saldo_actual?: number | null
+          tipo_cuenta?: string | null
         }
         Update: {
           created_at?: string | null
           es_caja_chica?: boolean | null
           id?: string
           nombre_cuenta?: string
+          nombre_titular?: string | null
           numero_cuenta?: string | null
           saldo_actual?: number | null
+          tipo_cuenta?: string | null
         }
         Relationships: []
       }

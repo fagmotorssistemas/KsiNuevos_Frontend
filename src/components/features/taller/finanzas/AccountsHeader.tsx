@@ -38,9 +38,17 @@ export function AccountsHeader({ cuentas, onNewAccount }: AccountsHeaderProps) {
                     </div>
                     <div>
                         <h4 className="font-bold text-slate-700 text-sm mb-1">{cuenta.nombre_cuenta}</h4>
+                        {!cuenta.es_caja_chica && cuenta.tipo_cuenta && (
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 mb-1">
+                                {cuenta.tipo_cuenta === 'ahorro' ? 'Ahorro' : 'Corriente'}
+                            </p>
+                        )}
                         <p className={`text-2xl font-bold ${cuenta.saldo_actual < 0 ? 'text-red-600' : 'text-slate-900'}`}>
                             ${cuenta.saldo_actual.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </p>
+                        {cuenta.nombre_titular && (
+                            <p className="text-xs text-slate-500 mt-1 truncate">{cuenta.nombre_titular}</p>
+                        )}
                         {cuenta.numero_cuenta && (
                             <p className="text-xs text-slate-400 mt-1 font-mono group-hover:text-blue-500 transition-colors">
                                 **** {cuenta.numero_cuenta.slice(-4)}
