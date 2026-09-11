@@ -1,5 +1,5 @@
 import { getConcesionarias, crearOActualizarConcesionaria, getConcesionariaByRuc } from './rastreadores/concesionarias.service';
-import { getDetalleContratoGPS, getListaContratosGPS } from './rastreadores/contratos.service';
+import { getDetalleContratoGPS, getListaContratosGPS, getContratoGPSPorNotaVenta } from './rastreadores/contratos.service';
 import { getCarteraRastreadores } from './rastreadores/cartera-rastreadores.service';
 import { getKpisFinancieros } from './rastreadores/financiero.service';
 import {
@@ -34,6 +34,7 @@ import {
     getGPSPorClienteId,
     getGPSPorVenta,
     obtenerVentasConGPS,
+    registrarMotivoBaja,
     agregarEvidenciasVenta
 } from './rastreadores/vinculacion.service';
 
@@ -42,6 +43,7 @@ export { supabase } from './rastreadores/supabaseClient';
 export const rastreadoresService = {
     getListaContratosGPS,
     getDetalleContratoGPS,
+    getContratoGPSPorNotaVenta,
     getConcesionarias,
     crearOActualizarConcesionaria,
     getConcesionariaByRuc,
@@ -74,5 +76,6 @@ export const rastreadoresService = {
     actualizarVinculacionGPS,
     obtenerVentasConGPS,
     actualizarEstadoGPS,
+    registrarMotivoBaja,
     agregarEvidenciasVenta
 };

@@ -29,6 +29,8 @@ interface LinkGPSFormProps {
     /** Valores iniciales al abrir desde vista historial (fecha/asesor ya llenados) */
     initialFechaEntrega?: string;
     initialAsesorId?: string | null;
+    /** Baja por IMEI incorrecto: registra el nuevo sin volver a cobrar */
+    reemplazoPorConfusion?: boolean;
 }
 
 interface NuevoClienteState {
@@ -43,7 +45,7 @@ interface NuevoClienteState {
     color: string;
 }
 
-export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEntrega, initialAsesorId }: LinkGPSFormProps) {
+export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEntrega, initialAsesorId, reemplazoPorConfusion = false }: LinkGPSFormProps) {
     const isExternal = !seleccionado;
 
     const { sims } = useInventarioSIM();
@@ -342,7 +344,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                     toast.error('Venta registrada pero no se pudo actualizar estado del dispositivo.');
                 }
 
-                const precioTotal = seleccionado!.totalRastreador;
+                const precioTotal = reemplazoPorConfusion ? 0 : seleccionado!.totalRastreador;
                 let urlComprobante: string | null = null;
                 if (comprobantePagoRastreadorFile) {
                     urlComprobante = await rastreadoresService.subirComprobantePago(comprobantePagoRastreadorFile);
@@ -351,9 +353,9 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 // Combinar el comprobante de pago y las evidencias en un solo string separado por comas
                 const todasLasUrls = [urlComprobante, ...urlsFinales].filter(Boolean).join(',') || undefined;
 
-                const totalFinanciado = pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined;
+                const totalFinanciado = reemplazoPorConfusion ? 0 : (pagoRastreador ? (precioTotal - (pagoRastreador.abono_inicial ?? 0)) : undefined);
                 let cuotasData: Array<{ valor: number; fecha_vencimiento: string }> | undefined;
-                if (pagoRastreador?.tipo_pago === TipoPagoEnum.CREDITO && pagoRastreador.numero_cuotas_credito && pagoRastreador.numero_cuotas_credito > 0 && pagoRastreador.valor_rastreador_mensual > 0) {
+                if (!reemplazoPorConfusion && pagoRastreador?.tipo_pago === TipoPagoEnum.CREDITO && pagoRastreador.numero_cuotas_credito && pagoRastreador.numero_cuotas_credito > 0 && pagoRastreador.valor_rastreador_mensual > 0) {
                     const hoy = new Date();
                     const fechasVencimiento: string[] = [];
                     for (let i = 1; i <= pagoRastreador.numero_cuotas_credito; i++) {
@@ -368,16 +370,18 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                         {
                             gps_id: gpsIdParaVenta,
                             entorno: 'CON_VEHICULO',
-                            tipo_pago: pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO,
+                            tipo_pago: reemplazoPorConfusion ? TipoPagoEnum.CONTADO : (pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO),
                             precio_total: precioTotal,
-                            numero_cuotas: pagoRastreador?.numero_cuotas_credito ?? undefined,
-                            abono_inicial: pagoRastreador?.abono_inicial ?? 0,
+                            numero_cuotas: reemplazoPorConfusion ? undefined : (pagoRastreador?.numero_cuotas_credito ?? undefined),
+                            abono_inicial: reemplazoPorConfusion ? 0 : (pagoRastreador?.abono_inicial ?? 0),
                             total_financiado: totalFinanciado,
-                            metodo_pago: pagoRastreador?.metodo_pago_medio ?? metodoPagoRastreador,
+                            metodo_pago: reemplazoPorConfusion ? undefined : (pagoRastreador?.metodo_pago_medio ?? metodoPagoRastreador),
                             url_comprobante_pago: todasLasUrls,
                             fecha_entrega: fechaEntrega?.trim() || null,
                             asesor_id: asesorId?.trim() || null,
-                            observacion: observacion.trim() || null,
+                            observacion: reemplazoPorConfusion
+                                ? ['Reemplazo por confusión de IMEI.', observacion.trim()].filter(Boolean).join(' ')
+                                : (observacion.trim() || null),
                             nota_venta: notaVentaGenerada?.trim() || null,
                             instalador_id: form.instalador_id?.trim() || null,
                             costo_instalacion: form.costo_instalacion != null && form.costo_instalacion > 0 ? form.costo_instalacion : null
@@ -386,8 +390,8 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                     );
                     await rastreadoresService.actualizarTipoPagoYPlazo(
                         gpsIdParaVenta,
-                        pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO,
-                        pagoRastreador?.numero_cuotas_credito ?? null
+                        reemplazoPorConfusion ? TipoPagoEnum.CONTADO : (pagoRastreador?.tipo_pago ?? TipoPagoEnum.CONTADO),
+                        reemplazoPorConfusion ? null : (pagoRastreador?.numero_cuotas_credito ?? null)
                     );
                 } catch (pagoError) {
                     console.error("Error registrando pago del rastreador:", pagoError);
@@ -396,7 +400,13 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
             }
 
             if (res.success) {
-                toast.success(isExternal ? "Venta Externa Registrada" : "Vinculación Exitosa");
+                toast.success(
+                    isExternal
+                        ? "Venta Externa Registrada"
+                        : reemplazoPorConfusion
+                            ? "IMEI correcto registrado. No se sumó al valor de venta."
+                            : "Vinculación Exitosa"
+                );
                 onSuccess();
             } else {
                 toast.error(res.error || "Error al guardar");
@@ -419,10 +429,14 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 </button>
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 uppercase">
-                        {isExternal ? 'Nueva Venta a Tercero' : 'Vinculación GPS a Auto'}
+                        {isExternal ? 'Nueva Venta a Tercero' : reemplazoPorConfusion ? 'Reemplazo de IMEI' : 'Vinculación GPS a Auto'}
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        {isExternal ? 'Registre los datos del cliente y el dispositivo.' : `Cliente: ${seleccionado?.cliente}`}
+                        {isExternal
+                            ? 'Registre los datos del cliente y el dispositivo.'
+                            : reemplazoPorConfusion
+                                ? `Confusión de IMEI · Cliente: ${seleccionado?.cliente}. El anterior queda en historial y este no suma al valor de venta.`
+                                : `Cliente: ${seleccionado?.cliente}`}
                     </p>
                 </div>
             </div>
@@ -463,7 +477,7 @@ export function LinkGPSForm({ seleccionado, onCancel, onSuccess, initialFechaEnt
                 )}
 
                 {/* 3. Módulo de Pago del Rastreador: AUTO (con contrato). Tipo y valores desde cartera */}
-                {!isExternal && seleccionado && (
+                {!isExternal && seleccionado && !reemplazoPorConfusion && (
                     <PagoRastreadorModule
                         seleccionado={seleccionado}
                         totalRastreador={seleccionado.totalRastreador}

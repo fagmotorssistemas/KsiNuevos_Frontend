@@ -37,9 +37,9 @@ type FilterOption = {
 type OpenFilter = "date" | "seller" | "kommo" | null;
 
 const KOMMO_OPTIONS: FilterOption[] = [
+    { value: "all", label: "Todos" },
     { value: "with_chat", label: "Con chat Kommo" },
     { value: "without_chat", label: "Sin chat Kommo" },
-    { value: "all", label: "Todos" },
 ];
 
 const DATE_OPTIONS: FilterOption[] = [

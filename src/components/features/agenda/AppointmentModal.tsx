@@ -549,8 +549,9 @@ export function AppointmentModal({
                 // INSERT: Aquí responsible_id es OBLIGATORIO, lo construimos explícitamente
                 const insertPayload = {
                     ...commonData,
-                    responsible_id: user.id, // TypeScript ahora ve que esto es obligatorio
-                    status: "pendiente" as AppointmentStatus
+                    responsible_id: user.id,
+                    status: "pendiente" as AppointmentStatus,
+                    is_completed: false
                 };
 
                 const { error } = await supabase

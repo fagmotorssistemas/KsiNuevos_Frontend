@@ -35,6 +35,7 @@ export default function RastreoPage() {
     const [seleccionado, setSeleccionado] = useState<ContratoGPS | null>(null);
     /** Si true, se muestra el formulario "Nuevo dispositivo"; si false, solo historial del cliente */
     const [showNuevoDispositivoForm, setShowNuevoDispositivoForm] = useState(false);
+    const [reemplazoPorConfusion, setReemplazoPorConfusion] = useState(false);
     const [historialCliente, setHistorialCliente] = useState<any[]>([]);
     const [loadingHistorial, setLoadingHistorial] = useState(false);
     const [fechaEntrega, setFechaEntrega] = useState("");
@@ -76,6 +77,7 @@ export default function RastreoPage() {
     const handleVolver = () => {
         setSeleccionado(null);
         setShowNuevoDispositivoForm(false);
+        setReemplazoPorConfusion(false);
         setVista('DASHBOARD');
         cargarContratos();
     };
@@ -185,7 +187,14 @@ export default function RastreoPage() {
                             asesores={asesores}
                             asesoresLoading={asesoresLoading}
                             onVolver={handleVolver}
-                            onNuevoDispositivo={() => setShowNuevoDispositivoForm(true)}
+                            onNuevoDispositivo={() => {
+                                setReemplazoPorConfusion(false);
+                                setShowNuevoDispositivoForm(true);
+                            }}
+                            onConfusionImei={() => {
+                                setReemplazoPorConfusion(true);
+                                setShowNuevoDispositivoForm(true);
+                            }}
                             onHistorialUpdate={(gps) => setHistorialCliente(prev => prev.map(p =>
                                 (p.venta_id && gps.venta_id ? p.venta_id === gps.venta_id : p.id === gps.id) ? { ...p, ...gps } : p
                             ))}
@@ -196,10 +205,14 @@ export default function RastreoPage() {
                     {vista === 'FORMULARIO' && seleccionado && showNuevoDispositivoForm && (
                         <LinkGPSForm
                             seleccionado={seleccionado}
-                            onCancel={() => setShowNuevoDispositivoForm(false)}
+                            onCancel={() => {
+                                setShowNuevoDispositivoForm(false);
+                                setReemplazoPorConfusion(false);
+                            }}
                             onSuccess={handleVolver}
                             initialFechaEntrega={fechaEntrega}
                             initialAsesorId={asesorId}
+                            reemplazoPorConfusion={reemplazoPorConfusion}
                         />
                     )}
 

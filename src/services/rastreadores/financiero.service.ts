@@ -33,7 +33,7 @@ export async function getKpisFinancieros(asesorId?: string | null) {
         // 3. COSTOS (EGRESOS): ventas_rastreador; vendedor solo sus ventas (asesor_id null solo admin).
         let ventasQuery = supabase
             .from('ventas_rastreador')
-            .select('gps_inventario(costo_compra)');
+            .select('gps_inventario(costo_compra), motivo_baja');
         if (asesorId) {
             ventasQuery = ventasQuery.eq('asesor_id', asesorId);
         }
@@ -43,6 +43,7 @@ export async function getKpisFinancieros(asesorId?: string | null) {
 
         const costosTotales =
             (ventasConGps ?? []).reduce((acc: number, item: any) => {
+                if (String(item.motivo_baja ?? '') === 'CONFUSION') return acc;
                 const gps = Array.isArray(item.gps_inventario) ? item.gps_inventario[0] : item.gps_inventario;
                 return acc + (Number(gps?.costo_compra) || 0);
             }, 0) || 0;

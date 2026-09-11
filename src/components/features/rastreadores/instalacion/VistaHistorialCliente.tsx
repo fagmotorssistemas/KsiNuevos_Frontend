@@ -19,6 +19,7 @@ interface VistaHistorialClienteProps {
     onVolver: () => void;
     onNuevoDispositivo: () => void;
     onHistorialUpdate: (gps: any) => void;
+    onConfusionImei?: () => void;
 }
 
 export function VistaHistorialCliente({
@@ -33,7 +34,8 @@ export function VistaHistorialCliente({
     asesoresLoading,
     onVolver,
     onNuevoDispositivo,
-    onHistorialUpdate
+    onHistorialUpdate,
+    onConfusionImei
 }: VistaHistorialClienteProps) {
     return (
         <div className="max-w-4xl mx-auto animate-in slide-in-from-right-4 duration-300 pb-10 space-y-6">
@@ -90,6 +92,7 @@ export function VistaHistorialCliente({
                         <HistorialGPS
                             historialgps={historialCliente}
                             onHistorialUpdate={onHistorialUpdate}
+                            onConfusionImei={onConfusionImei}
                             asCard={false}
                         />
                     ) : (

@@ -56,6 +56,7 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
                 nota_venta,
                 gps_id,
                 cliente_id,
+                motivo_baja,
                 cliente_externo:clientes_externos(nombre_completo, identificacion),
                 gps_inventario(imei)
             `)
@@ -82,6 +83,7 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
 
         // --- Procesar ventas_rastreador (fuente 1) ---
         for (const v of ventas ?? []) {
+            if (String((v as any).motivo_baja ?? '') === 'CONFUSION') continue;
             const clienteExterno = Array.isArray((v as any).cliente_externo) ? (v as any).cliente_externo[0] : (v as any).cliente_externo;
             const gpsInv = Array.isArray((v as any).gps_inventario) ? (v as any).gps_inventario[0] : (v as any).gps_inventario;
             const nota_venta = (v as any).nota_venta ?? null;

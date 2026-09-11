@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { 
     CalendarCheck, 
@@ -14,7 +14,8 @@ import {
     LayoutGrid,
     ListFilter,
     SortAsc,
-    SortDesc
+    SortDesc,
+    Search
 } from "lucide-react";
 
 import {
@@ -58,6 +59,7 @@ export default function AgendaPage() {
     const [selectedWebAppointment, setSelectedWebAppointment] = useState<WebApptType | null>(null);
     const [noShowAppointment, setNoShowAppointment] = useState<AppointmentWithDetails | null>(null);
     const [savingNoShow, setSavingNoShow] = useState(false);
+    const [phoneSearch, setPhoneSearch] = useState("");
 
     // -- ESTADO PARA SUB-PESTAÑAS DE HISTORIAL --
     const [historySubTab, setHistorySubTab] = useState<'leads' | 'web'>('leads');
@@ -69,6 +71,9 @@ export default function AgendaPage() {
         agents,
         groupedPending, 
         groupedHistory,
+        pendingAppointments,
+        historyAppointments,
+        allAppointments,
         botSuggestions, 
         pendingCount,
         suggestionsCount,
@@ -76,18 +81,70 @@ export default function AgendaPage() {
         setActiveTab,
         filters,
         setFilters,
-        actions: { markAsCompleted, markAsNoShow, discardSuggestion },
+        actions: { markAsCompleted, markAsNoShow, discardSuggestion, confirmSuggestionScheduled },
         refresh
     } = useAgenda();
 
     const agendaFiltersActive =
-        filters.responsibleId !== 'all' || filters.dateRange !== 'all';
+        filters.responsibleId !== 'all' || filters.dateRange !== 'all' || phoneSearch.trim().length > 0;
 
     const dateFilterActive = filters.dateRange !== 'all';
     const responsibleFilterActive = isAdmin && filters.responsibleId !== 'all';
 
-    const resetAgendaFilters = () =>
+    const resetAgendaFilters = () => {
         setFilters({ responsibleId: 'all', dateRange: 'all', customDate: '' });
+        setPhoneSearch('');
+    };
+
+    const phoneDigits = phoneSearch.replace(/\D/g, '');
+
+    const appointmentLead = (a: AppointmentWithDetails) => {
+        const raw = a.lead as unknown;
+        return (Array.isArray(raw) ? raw[0] : raw) as AppointmentWithDetails['lead'];
+    };
+
+    const matchesPhone = (phone: string | null | undefined) => {
+        if (phoneDigits.length < 4) return true;
+        const digits = String(phone ?? '').replace(/\D/g, '');
+        if (digits.length < 4) return false;
+        return digits.includes(phoneDigits) || phoneDigits.includes(digits);
+    };
+
+    const matchesPhoneQuery = (a: AppointmentWithDetails) => {
+        if (phoneDigits.length < 4) return true;
+        return matchesPhone(appointmentLead(a)?.phone);
+    };
+
+    const groupByDateLabel = (list: AppointmentWithDetails[]) => {
+        const groups: Record<string, AppointmentWithDetails[]> = {};
+        for (const appt of list) {
+            const date = new Date(appt.start_time);
+            const key = Number.isNaN(date.getTime())
+                ? 'Sin fecha'
+                : date.toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(appt);
+        }
+        return groups;
+    };
+
+    const visiblePending = useMemo(() => {
+        if (phoneDigits.length < 4) return groupedPending;
+        const pendingHits = pendingAppointments.filter(matchesPhoneQuery);
+        if (pendingHits.length > 0) return groupByDateLabel(pendingHits);
+        const anyHits = allAppointments.filter(matchesPhoneQuery);
+        return groupByDateLabel(anyHits);
+    }, [groupedPending, pendingAppointments, allAppointments, phoneDigits]);
+
+    const visibleHistory = useMemo(() => {
+        if (phoneDigits.length < 4) return groupedHistory;
+        return groupByDateLabel(historyAppointments.filter(matchesPhoneQuery));
+    }, [groupedHistory, historyAppointments, phoneDigits]);
+
+    const visibleSuggestions = useMemo(
+        () => (phoneDigits.length < 4 ? botSuggestions : botSuggestions.filter((s) => matchesPhone(s.phone))),
+        [botSuggestions, phoneDigits]
+    );
 
     const handleDateRangeChange = (value: DateFilterOption) => {
         setFilters((prev) => {
@@ -305,6 +362,21 @@ export default function AgendaPage() {
                         </div>
                     )}
 
+                    <div className="flex-1 w-full lg:min-w-[220px]">
+                        <label className="text-xs text-slate-400 font-semibold block mb-1">Buscar por número</label>
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="search"
+                                inputMode="tel"
+                                placeholder="Ej. 14752376420"
+                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                value={phoneSearch}
+                                onChange={(e) => setPhoneSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
                     {agendaFiltersActive && (
                         <button
                             type="button"
@@ -390,8 +462,8 @@ export default function AgendaPage() {
                         Cargando agenda...
                     </div>
                 ) : activeTab === 'pending' ? (
-                    Object.keys(groupedPending).length > 0 ? (
-                        Object.entries(groupedPending).map(([date, list]) => 
+                    Object.keys(visiblePending).length > 0 ? (
+                        Object.entries(visiblePending).map(([date, list]) => 
                             renderDaySection(date, list)
                         )
                     ) : (
@@ -401,10 +473,11 @@ export default function AgendaPage() {
                             </div>
                             {agendaFiltersActive ? (
                                 <>
-                                    <h3 className="text-lg font-medium text-slate-900">No hay citas en este período</h3>
+                                    <h3 className="text-lg font-medium text-slate-900">No hay citas con estos filtros</h3>
                                     <p className="text-slate-500 max-w-sm mt-2">
-                                        No se encontraron eventos pendientes con los filtros actuales. Prueba otro rango
-                                        o limpia los filtros.
+                                        {phoneDigits.length >= 4
+                                            ? 'No hay pendientes con ese número. Prueba en Historial o limpia el filtro.'
+                                            : 'No se encontraron eventos pendientes. Prueba otro rango o limpia los filtros.'}
                                     </p>
                                 </>
                             ) : (
@@ -482,15 +555,15 @@ export default function AgendaPage() {
                     )
 
                 ) : activeTab === 'suggestions' ? (
-                    botSuggestions.length > 0 ? (
+                    visibleSuggestions.length > 0 ? (
                         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500 py-6">
                             <div className="flex items-center justify-between mb-2 px-1">
                                 <h3 className="text-sm font-bold text-indigo-500 uppercase tracking-wider">
-                                    Detectadas Automáticamente ({suggestionsCount})
+                                    Detectadas Automáticamente ({visibleSuggestions.length})
                                 </h3>
                             </div>
                             <div className="grid gap-4 md:grid-cols-2">
-                                {botSuggestions.map((suggestion) => (
+                                {visibleSuggestions.map((suggestion) => (
                                     <BotSuggestionCard 
                                         key={suggestion.id} 
                                         suggestion={suggestion} 
@@ -556,8 +629,8 @@ export default function AgendaPage() {
 
                         <div className="mt-6">
                             {historySubTab === 'leads' ? (
-                                Object.keys(groupedHistory).length > 0 ? (
-                                    Object.entries(groupedHistory).map(([date, list]) => renderDaySection(date, list))
+                                Object.keys(visibleHistory).length > 0 ? (
+                                    Object.entries(visibleHistory).map(([date, list]) => renderDaySection(date, list))
                                 ) : (
                                     <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
                                         <History className="h-8 w-8 text-slate-300 mb-3" />
@@ -626,7 +699,16 @@ export default function AgendaPage() {
             <AppointmentModal 
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onSuccess={refresh}
+                onSuccess={async () => {
+                    const leadId = suggestionData?.lead_id;
+                    setSuggestionData(null);
+                    setSuggestionVehicles(null);
+                    setActiveTab('pending');
+                    if (leadId) {
+                        await confirmSuggestionScheduled(Number(leadId));
+                    }
+                    refresh();
+                }}
                 appointmentToEdit={editingAppointment}
                 initialData={suggestionData}
                 initialLeadId={suggestionData?.lead_id ?? editingAppointment?.lead_id ?? null}

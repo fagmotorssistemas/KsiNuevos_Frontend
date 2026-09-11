@@ -8176,6 +8176,7 @@ export type Database = {
           metodo_pago:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          motivo_baja: string | null
           nota_venta: string | null
           numero_cuotas: number | null
           observacion: string | null
@@ -8204,6 +8205,7 @@ export type Database = {
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          motivo_baja?: string | null
           nota_venta?: string | null
           numero_cuotas?: number | null
           observacion?: string | null
@@ -8232,6 +8234,7 @@ export type Database = {
           metodo_pago?:
             | Database["public"]["Enums"]["metodo_pago_rastreador_enum"]
             | null
+          motivo_baja?: string | null
           nota_venta?: string | null
           numero_cuotas?: number | null
           observacion?: string | null

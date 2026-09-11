@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2, ChevronDown } from "lucide-react";
 import { ContratoGPS } from "@/types/rastreadores.types";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { RastreoStats } from "./RastreoStats";
+import { limpiarTexto } from "@/utils/rastreo-format";
 
 // Mapeo de estados con colores e iconos
 const ESTADO_CONFIG = {
@@ -41,13 +42,91 @@ const EXTERNO_OPCIONES: { id: FiltroOrigen; label: string; icon: typeof User }[]
     { id: 'EXTERNO_CONCESIONARIA', label: 'Solo concesionaria', icon: Store },
 ];
 
+type GpsVentaRow = {
+    id?: string;
+    venta_id?: string;
+    cliente_id?: string | null;
+    nota_venta?: string | null;
+    imei?: string | null;
+    modelo?: string | null;
+    placa?: string | null;
+    marca?: string | null;
+    modelo_vehiculo?: string | null;
+    precio_venta?: number;
+    created_at?: string;
+    es_venta_externa?: boolean | null;
+    estado?: string | null;
+    estado_coneccion?: string | null;
+    identificacion_cliente?: string | null;
+    cliente_externo?: { nombre_completo?: string | null; identificacion?: string | null } | null;
+    gps_instaladores?: unknown;
+};
+
+function notaKey(nota: string | null | undefined): string {
+    return limpiarTexto(nota).toLowerCase() || "venta-directa";
+}
+
+function notaLoose(nota: string | null | undefined): string {
+    return limpiarTexto(nota).toLowerCase().replace(/[\s\-_.]/g, "");
+}
+
+function mismaNota(a: string | null | undefined, b: string | null | undefined): boolean {
+    if (notaKey(a) === notaKey(b)) return true;
+    const la = notaLoose(a);
+    const lb = notaLoose(b);
+    return la.length > 0 && la === lb;
+}
+
+function digitsOnly(value: string): string {
+    return value.replace(/\D/g, "");
+}
+
+function gpsMatchesSearch(gps: GpsVentaRow, term: string, termDigits: string): boolean {
+    const imei = String(gps.imei ?? "").toLowerCase();
+    const modelo = String(gps.modelo ?? "").toLowerCase();
+    if (imei.includes(term) || modelo.includes(term)) return true;
+    if (termDigits.length >= 8 && digitsOnly(imei).includes(termDigits)) return true;
+    return false;
+}
+
+function pickGpsForDisplay(list: GpsVentaRow[]): GpsVentaRow | undefined {
+    if (list.length === 0) return undefined;
+    return list.find((g) => {
+        const estado = String(g.estado ?? "").toUpperCase();
+        return estado !== "BAJA" && estado !== "STOCK";
+    }) ?? list[0];
+}
+
+function contratoFromGpsVenta(gps: GpsVentaRow): ContratoGPS | null {
+    if (!gps.es_venta_externa) return null;
+    const cliente = gps.cliente_externo;
+    if (!cliente?.nombre_completo) return null;
+    return {
+        ccoCodigo: gps.venta_id || gps.id || `imei-${gps.imei || "gps"}`,
+        notaVenta: gps.nota_venta || "VENTA-DIRECTA",
+        nroContrato: "S/N",
+        cliente: cliente.nombre_completo,
+        ruc: gps.identificacion_cliente || cliente.identificacion || "",
+        placa: gps.placa || "S/N",
+        marca: gps.marca || "EXTERNO",
+        modelo: gps.modelo_vehiculo || "",
+        color: "",
+        anio: "",
+        totalRastreador: Number(gps.precio_venta || 0),
+        fechaInstalacion: gps.created_at || "",
+        origen: "EXTERNO",
+        clienteExternoId: gps.cliente_id || undefined,
+    };
+}
+
 export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFiltro }: RastreoListProps) {
     const [searchTerm, setSearchTerm] = useState("");
-    const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>('TODOS');
+    const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>("TODOS");
     const [externosOpen, setExternosOpen] = useState(false);
     const externosRef = useRef<HTMLDivElement>(null);
-    const [gpsMap, setGpsMap] = useState<Map<string, any>>(new Map());
+    const [gpsVentas, setGpsVentas] = useState<GpsVentaRow[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [hydratedAutos, setHydratedAutos] = useState<ContratoGPS[]>([]);
 
     // Cerrar dropdown al hacer clic fuera
     useEffect(() => {
@@ -63,16 +142,8 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
     // Función para recargar el mapa de GPS (filtrado por asesor cuando es vendedor)
     const cargarGPS = async () => {
         try {
-            const ventasConGPS = await rastreadoresService.obtenerVentasConGPS('TODOS', asesorIdFiltro);
-            const mapa = new Map();
-            
-            ventasConGPS.forEach(gps => {
-                if (gps.nota_venta) {
-                    mapa.set(gps.nota_venta, gps);
-                }
-            });
-            
-            setGpsMap(mapa);
+            const ventasConGPS = await rastreadoresService.obtenerVentasConGPS("TODOS", asesorIdFiltro);
+            setGpsVentas((ventasConGPS || []) as GpsVentaRow[]);
         } catch (err) {
             console.error("Error cargando GPS map:", err);
         }
@@ -92,24 +163,142 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
         return () => clearInterval(intervalo);
     }, [asesorIdFiltro]);
 
+    const gpsByNota = useMemo(() => {
+        const map = new Map<string, GpsVentaRow[]>();
+        const add = (key: string, gps: GpsVentaRow) => {
+            if (!key) return;
+            const list = map.get(key) ?? [];
+            list.push(gps);
+            map.set(key, list);
+        };
+        for (const gps of gpsVentas) {
+            add(notaKey(gps.nota_venta), gps);
+            const loose = notaLoose(gps.nota_venta);
+            if (loose && loose !== notaKey(gps.nota_venta)) add(loose, gps);
+        }
+        return map;
+    }, [gpsVentas]);
+
+    const gpsByCliente = useMemo(() => {
+        const map = new Map<string, GpsVentaRow[]>();
+        for (const gps of gpsVentas) {
+            if (!gps.cliente_id) continue;
+            const list = map.get(gps.cliente_id) ?? [];
+            list.push(gps);
+            map.set(gps.cliente_id, list);
+        }
+        return map;
+    }, [gpsVentas]);
+
+    const gpsForContrato = (c: ContratoGPS): GpsVentaRow[] => {
+        const seen = new Set<string>();
+        const list: GpsVentaRow[] = [];
+        const pushAll = (rows: GpsVentaRow[]) => {
+            for (const row of rows) {
+                const id = row.venta_id || `${row.id}-${row.nota_venta}`;
+                if (seen.has(id)) continue;
+                seen.add(id);
+                list.push(row);
+            }
+        };
+        pushAll(gpsByNota.get(notaKey(c.notaVenta)) ?? []);
+        const loose = notaLoose(c.notaVenta);
+        if (loose && loose !== notaKey(c.notaVenta)) {
+            pushAll(gpsByNota.get(loose) ?? []);
+        }
+        if (c.clienteExternoId) pushAll(gpsByCliente.get(c.clienteExternoId) ?? []);
+        return list;
+    };
+
+    const pendingAutoNotasKey = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        const digits = digitsOnly(searchTerm);
+        if (term === "" && digits.length < 8) return "";
+        const seen = new Set<string>();
+        const notas: string[] = [];
+        for (const gps of gpsVentas) {
+            if (gps.es_venta_externa) continue;
+            if (!gpsMatchesSearch(gps, term, digits)) continue;
+            const nota = limpiarTexto(gps.nota_venta);
+            if (!nota || nota.toLowerCase() === "venta-directa") continue;
+            if (data.some((c) => mismaNota(c.notaVenta, nota))) continue;
+            const k = notaLoose(nota);
+            if (!k || seen.has(k)) continue;
+            seen.add(k);
+            notas.push(nota);
+        }
+        return notas.join("|");
+    }, [gpsVentas, data, searchTerm]);
+
+    useEffect(() => {
+        const notas = pendingAutoNotasKey ? pendingAutoNotasKey.split("|").filter(Boolean) : [];
+        if (notas.length === 0) {
+            setHydratedAutos([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            const results = await Promise.all(
+                notas.map((n) => rastreadoresService.getContratoGPSPorNotaVenta(n))
+            );
+            if (cancelled) return;
+            setHydratedAutos(results.filter((c): c is ContratoGPS => !!c));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [pendingAutoNotasKey]);
+
     const searchLower = searchTerm.trim().toLowerCase();
-    const filteredData = data.filter(c => {
-        const gps = gpsMap.get(c.notaVenta);
-        const matchesSearch = searchLower === "" ||
-            c.cliente.toLowerCase().includes(searchLower) ||
-            c.ruc.includes(searchTerm.trim()) ||
-            c.placa.toLowerCase().includes(searchLower) ||
-            (gps && (
-                (gps.imei && String(gps.imei).toLowerCase().includes(searchLower)) ||
-                (gps.modelo && String(gps.modelo).toLowerCase().includes(searchLower))
-            ));
-        let matchesOrigen = true;
-        if (filtroOrigen === 'AUTO') matchesOrigen = c.origen === 'AUTO';
-        else if (filtroOrigen === 'EXTERNO') matchesOrigen = c.origen === 'EXTERNO';
-        else if (filtroOrigen === 'EXTERNO_CLIENTE') matchesOrigen = c.origen === 'EXTERNO' && !c.esConcesionaria;
-        else if (filtroOrigen === 'EXTERNO_CONCESIONARIA') matchesOrigen = c.origen === 'EXTERNO' && !!c.esConcesionaria;
-        return matchesSearch && matchesOrigen;
-    });
+    const searchDigits = digitsOnly(searchTerm);
+    const filteredData = (() => {
+        const matchesOrigen = (c: ContratoGPS) => {
+            if (filtroOrigen === "AUTO") return c.origen === "AUTO";
+            if (filtroOrigen === "EXTERNO") return c.origen === "EXTERNO";
+            if (filtroOrigen === "EXTERNO_CLIENTE") return c.origen === "EXTERNO" && !c.esConcesionaria;
+            if (filtroOrigen === "EXTERNO_CONCESIONARIA") return c.origen === "EXTERNO" && !!c.esConcesionaria;
+            return true;
+        };
+
+        const fromLista = data.filter((c) => {
+            if (!matchesOrigen(c)) return false;
+            if (searchLower === "") return true;
+            const gpsList = gpsForContrato(c);
+            return (
+                c.cliente.toLowerCase().includes(searchLower) ||
+                (c.ruc || "").toLowerCase().includes(searchLower) ||
+                c.placa.toLowerCase().includes(searchLower) ||
+                (c.notaVenta || "").toLowerCase().includes(searchLower) ||
+                (c.nroContrato || "").toLowerCase().includes(searchLower) ||
+                gpsList.some((gps) => gpsMatchesSearch(gps, searchLower, searchDigits))
+            );
+        });
+
+        if (searchLower === "" && searchDigits.length < 8) return fromLista;
+
+        const already = new Set(
+            fromLista.map((c) => `${c.origen}:${c.ccoCodigo}:${notaKey(c.notaVenta)}:${c.clienteExternoId || ""}`)
+        );
+        const extras: ContratoGPS[] = [];
+        for (const gps of gpsVentas) {
+            if (!gpsMatchesSearch(gps, searchLower, searchDigits)) continue;
+            const extra = gps.es_venta_externa
+                ? contratoFromGpsVenta(gps)
+                : hydratedAutos.find((c) => mismaNota(c.notaVenta, gps.nota_venta)) ?? null;
+            if (!extra || !matchesOrigen(extra)) continue;
+            const key = `${extra.origen}:${extra.ccoCodigo}:${notaKey(extra.notaVenta)}:${extra.clienteExternoId || ""}`;
+            const alreadyInLista = fromLista.some(
+                (c) =>
+                    mismaNota(c.notaVenta, gps.nota_venta) ||
+                    (!!c.clienteExternoId && c.clienteExternoId === gps.cliente_id) ||
+                    c.ccoCodigo === gps.venta_id
+            );
+            if (alreadyInLista || already.has(key)) continue;
+            already.add(key);
+            extras.push(extra);
+        }
+        return [...fromLista, ...extras];
+    })();
 
     const totalRecaudado = filteredData.reduce((acc, curr) => acc + curr.totalRastreador, 0);
     const esExterno = filtroOrigen === 'EXTERNO' || filtroOrigen === 'EXTERNO_CLIENTE' || filtroOrigen === 'EXTERNO_CONCESIONARIA';
@@ -198,13 +387,13 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                     <table className="w-full text-sm text-left whitespace-nowrap">
                         <thead className="bg-slate-50 text-slate-400 text-[9px] uppercase font-black tracking-[0.2em] border-b border-slate-100">
                             <tr>
-                                <th className="px-6 py-4">Origen</th>
+                                <th className="px-6 py-4 w-px">Origen</th>
                                 <th className="px-6 py-4">Cliente / Nota</th>
-                                <th className="px-6 py-4">Vehículo</th>
-                                <th className="px-6 py-4">Instalación</th>
-                                <th className="px-6 py-4">Conexión</th>
-                                <th className="px-6 py-4 text-right">Valor Venta</th>
-                                <th className="px-6 py-4 text-center">Acción</th>
+                                <th className="px-6 py-4 w-56 max-w-56">Vehículo</th>
+                                <th className="px-6 py-4 w-px">Instalación</th>
+                                <th className="px-6 py-4 w-px">Conexión</th>
+                                <th className="px-6 py-4 w-px text-right">Valor Venta</th>
+                                <th className="px-6 py-4 w-px text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -212,10 +401,10 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                 <tr><td colSpan={7} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
                             ) : filteredData.length > 0 ? (
                                 filteredData.map((item) => {
-                                    const gpsVinculado = gpsMap.get(item.notaVenta);
+                                    const gpsVinculado = pickGpsForDisplay(gpsForContrato(item));
                                     return (
                                         <tr key={item.ccoCodigo} className="group hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 w-px">
                                                 {item.origen === 'AUTO' ? (
                                                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black border border-blue-100"><Building2 size={10}/> K-SI</span>
                                                 ) : item.esConcesionaria ? (
@@ -228,11 +417,11 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                                 <div className="font-bold text-slate-900 uppercase">{item.cliente}</div>
                                                 <div className="text-xs text-slate-400 font-mono mt-0.5">{item.ruc}</div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="font-bold text-slate-700 uppercase">{item.marca} {item.modelo}</div>
+                                            <td className="px-6 py-4 w-56 max-w-56 whitespace-normal">
+                                                <div className="font-bold text-slate-700 uppercase leading-tight line-clamp-2 break-words">{item.marca} {item.modelo}</div>
                                                 <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200 font-black uppercase mt-1 inline-block">{item.placa}</span>
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 w-px">
                                                 {gpsVinculado ? (
                                                     // Estado del dispositivo (Pendiente / Instalado / Activo...)
                                                     (() => {
@@ -254,7 +443,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 w-px">
                                                 {gpsVinculado ? (
                                                     // Conexión: Online / Inactivo / Offline
                                                     (() => {
@@ -272,10 +461,10 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 w-px text-right">
                                                 <span className="font-mono font-black text-slate-700 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">${item.totalRastreador.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                             </td>
-                                            <td className="px-6 py-4 text-center">
+                                            <td className="px-6 py-4 w-px text-center">
                                                 <button onClick={() => onManage(item)} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-slate-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95">
                                                     <MapPin size={14} /> Gestionar
                                                 </button>

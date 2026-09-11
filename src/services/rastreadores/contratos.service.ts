@@ -192,3 +192,48 @@ export async function getDetalleContratoGPS(id: string): Promise<ContratoGPS | n
         return null;
     }
 }
+
+function limpiaTextoSafe(nota: string): string {
+    return limpiarTexto(nota).toLowerCase().replace(/[\s\-_.]/g, '');
+}
+
+/** Contrato AUTO de Oracle por nota de venta (aunque totRastreador sea 0). */
+export async function getContratoGPSPorNotaVenta(notaVenta: string): Promise<ContratoGPS | null> {
+    const nota = limpiarTexto(notaVenta);
+    if (!nota) return null;
+    const loose = limpiaTextoSafe(nota);
+    try {
+        const res = await fetch(`${API_URL}/contratos/list`, { cache: 'no-store' });
+        if (!res.ok) return null;
+        const apiResponse = await res.json();
+        const resumen = apiResponse.data || [];
+        const item = resumen.find((raw: any) => {
+            const nv = limpiarTexto(raw.notaVenta || raw.NOTA_VENTA || raw.nota_venta);
+            return nv.toLowerCase() === nota.toLowerCase() || limpiaTextoSafe(nv) === loose;
+        });
+        if (!item) return null;
+        const id = item.ccoCodigo || item.CCO_CODIGO;
+        if (id) {
+            const detalle = await getDetalleContratoGPS(String(id));
+            if (detalle) return detalle;
+        }
+        return {
+            ccoCodigo: String(id || nota),
+            notaVenta: nota,
+            nroContrato: item.nroContrato || item.NRO_CONTRATO || 'S/N',
+            cliente: limpiarTexto(item.clienteNombre || item.CLIENTE || item.cliente || item.facturaNombre || item.cfac_nombre) || nota,
+            ruc: limpiarTexto(item.clienteId || item.facturaRuc || item.cfac_ced_ruc) || '',
+            placa: limpiarTexto(item.placa || item.PLACA) || 'S/N',
+            marca: limpiarTexto(item.marca || item.MARCA) || '',
+            modelo: limpiarTexto(item.modelo || item.MODELO) || '',
+            color: limpiarTexto(item.color || item.COLOR) || '',
+            anio: limpiarTexto(item.anio || item.ANIO) || '',
+            totalRastreador: parseMonedaGPS(item.totRastreador ?? item.tot_rastreador ?? 0),
+            fechaInstalacion: limpiarTexto(item.fechaVenta || item.fechaCiudad || item.textoFecha) || '',
+            origen: 'AUTO'
+        };
+    } catch (error) {
+        console.error('Error buscando contrato por nota de venta:', error);
+        return null;
+    }
+}

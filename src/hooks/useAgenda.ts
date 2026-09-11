@@ -157,47 +157,64 @@ export function useAgenda() {
         if (data) setAgents(data);
     }, [supabase, isAdmin]);
 
-    // 2. CARGAR CITAS
+    const mapAppointmentRow = (appt: any): AppointmentWithDetails => {
+        const leadRaw = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead;
+        const responsibleRaw = Array.isArray(appt.responsible) ? appt.responsible[0] : appt.responsible;
+        if (leadRaw?.interested_cars) {
+            leadRaw.interested_cars = leadRaw.interested_cars.map((c: any) => ({
+                ...c,
+                brand: c.inventoryoracle?.brand || c.brand,
+                model: c.inventoryoracle?.model || c.model,
+                year: c.inventoryoracle?.year || c.year,
+            }));
+        }
+        return { ...appt, lead: leadRaw ?? null, responsible: responsibleRaw };
+    };
+
+    // 2. CARGAR CITAS (paginado: PostgREST recorta en 1000 y las citas nuevas no llegaban)
     const fetchAppointments = useCallback(async () => {
         if (!user) return;
         setIsLoading(true);
 
-        // Usamos !responsible_id para resolver la ambigüedad de la FK
-        let query = supabase
-            .from('appointments')
-            .select(`
+        const select = `
                 *,
-                lead:leads (
+                lead:leads!appointments_lead_id_fkey (
                     *,
                     interested_cars (*, inventoryoracle(id, brand, model, year))
                 ),
-                responsible:profiles!responsible_id (*) 
-            `);
+                responsible:profiles!responsible_id (*)
+            `;
+        const PAGE = 1000;
+        const mappedAppointments: AppointmentWithDetails[] = [];
+        let from = 0;
+        let fetchError: string | null = null;
 
-        if (!isAdmin) {
-            query = query.eq('responsible_id', user.id);
+        while (from < 20000) {
+            let query = supabase.from('appointments').select(select);
+            if (!isAdmin) {
+                query = query.eq('responsible_id', user.id);
+            }
+            const { data, error } = await query
+                .order('start_time', { ascending: true })
+                .range(from, from + PAGE - 1);
+
+            if (error) {
+                fetchError = error.message || JSON.stringify(error);
+                break;
+            }
+
+            const rows = data || [];
+            mappedAppointments.push(...rows.map(mapAppointmentRow));
+            if (rows.length < PAGE) break;
+            from += PAGE;
         }
 
-        const { data, error } = await query.order('start_time', { ascending: true });
-
-        if (error) {
-            console.error("Error cargando agenda:", error.message || JSON.stringify(error));
+        if (fetchError) {
+            console.error("Error cargando agenda:", fetchError);
         } else {
-            const mappedAppointments = (data || []).map((appt: any) => {
-                if (appt.lead && appt.lead.interested_cars) {
-                    appt.lead.interested_cars = appt.lead.interested_cars.map((c: any) => ({
-                        ...c,
-                        brand: c.inventoryoracle?.brand || c.brand,
-                        model: c.inventoryoracle?.model || c.model,
-                        year: c.inventoryoracle?.year || c.year,
-                    }));
-                }
-                return appt;
-            });
-            // @ts-ignore
-            setAllAppointments(mappedAppointments as AppointmentWithDetails[]);
+            setAllAppointments(mappedAppointments);
         }
-        
+
         setIsLoading(false);
     }, [supabase, user, isAdmin]);
 
@@ -251,14 +268,14 @@ export function useAgenda() {
     // A. Filtramos sugerencias que YA tienen cita agendada
     const botSuggestions = useMemo(() => {
         // Obtenemos los IDs de leads que tienen citas activas (no canceladas)
-        const activeLeadIds = new Set(
+        const scheduledLeadIds = new Set(
             allAppointments
-                .filter(a => a.lead_id && isAppointmentPendingActive(a))
-                .map(a => a.lead_id)
+                .filter((a) => a.lead_id && a.status !== 'cancelada')
+                .map((a) => Number(a.lead_id))
         );
 
         let filtered = rawSuggestions
-            .filter((lead) => !activeLeadIds.has(lead.id))
+            .filter((lead) => !scheduledLeadIds.has(Number(lead.id)))
             .filter(isBotSuggestionVisible);
 
         // NUEVO: Aplicar filtro de responsable si es admin
@@ -390,6 +407,25 @@ export function useAgenda() {
         }
     };
 
+    const confirmSuggestionScheduled = async (leadId: number) => {
+        const id = Number(leadId);
+        if (!id) return;
+        setRawSuggestions((prev) => prev.filter((l) => Number(l.id) !== id));
+        const { error } = await supabase
+            .from('leads')
+            .update({
+                time_reference: null,
+                day_detected: null,
+                hour_detected: null
+            })
+            .eq('id', id);
+        if (error) {
+            console.error("Error cerrando sugerencia IA:", error);
+            fetchBotSuggestions();
+        }
+        await fetchAppointments();
+    };
+
     // 6. AGRUPAMIENTO VISUAL
     const groupAppointmentsByDate = (list: AppointmentWithDetails[]) => {
         const groups: Record<string, AppointmentWithDetails[]> = {};
@@ -418,6 +454,9 @@ export function useAgenda() {
     return {
         groupedPending: groupAppointmentsByDate(pendingAppointments),
         groupedHistory: groupAppointmentsByDate(historyAppointments),
+        pendingAppointments,
+        historyAppointments,
+        allAppointments,
         botSuggestions, 
         pendingCount: pendingAppointments.length,
         suggestionsCount: botSuggestions.length,
@@ -429,6 +468,6 @@ export function useAgenda() {
         activeTab,
         setActiveTab,
         refresh: () => { fetchAppointments(); fetchBotSuggestions(); },
-        actions: { markAsCompleted, markAsNoShow, cancelAppointment, updateAppointment, discardSuggestion }
+        actions: { markAsCompleted, markAsNoShow, cancelAppointment, updateAppointment, discardSuggestion, confirmSuggestionScheduled }
     };
 }

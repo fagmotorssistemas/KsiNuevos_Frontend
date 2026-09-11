@@ -26,6 +26,7 @@ export async function getGPSPorVenta(notaVenta: string) {
                 url_comprobante_pago,
                 url_evidencia_gps,
                 estado_dispositivo,
+                motivo_baja,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -67,6 +68,7 @@ export async function getGPSPorClienteId(clienteId: string) {
                 url_comprobante_pago,
                 url_evidencia_gps,
                 estado_dispositivo,
+                motivo_baja,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -114,6 +116,7 @@ function mapVentasToHistorial(data: any[]) {
             gps_sims: sim ? { iccid: sim.iccid, imsi: sim.imsi ?? null } : null,
             proveedor: proveedorObj ? { nombre: proveedorObj.nombre } : null,
             observacion: v.observacion ?? null,
+            motivo_baja: v.motivo_baja ?? null,
             url_comprobante_pago: v.url_comprobante_pago ?? null,
             url_evidencia_gps: v.url_evidencia_gps ?? null
         };
@@ -182,6 +185,7 @@ export async function getGPSPorCliente(identificacionCliente: string) {
                 url_comprobante_pago,
                 url_evidencia_gps,
                 estado_dispositivo,
+                motivo_baja,
                 gps_inventario:gps_inventario(*, modelo:gps_modelos(marca, gps_proveedores(nombre)), gps_sims(iccid, imsi)),
                 gps_instaladores:gps_instaladores(*)
             `)
@@ -237,13 +241,15 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
                 precio_total,
                 created_at,
                 gps_id,
+                cliente_id,
                 costo_instalacion,
                 es_venta_externa,
                 estado_dispositivo,
                 instalador_id,
                 cliente_externo:clientes_externos(*),
                 gps_inventario:gps_inventario(*),
-                gps_instaladores:gps_instaladores(*)
+                gps_instaladores:gps_instaladores(*),
+                vehiculo:vehiculos(placa, marca, modelo)
             `)
             .order('created_at', { ascending: false });
 
@@ -259,14 +265,28 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
         }
 
         const gpsInv = (v: any) => Array.isArray(v.gps_inventario) ? v.gps_inventario[0] : v.gps_inventario;
+        const clienteExt = (v: any) => Array.isArray(v.cliente_externo) ? v.cliente_externo[0] : v.cliente_externo;
+        const vehiculo = (v: any) => Array.isArray(v.vehiculo) ? v.vehiculo[0] : v.vehiculo;
+        const modeloGps = (gps: any) => {
+            const m = gps?.modelo;
+            const raw = Array.isArray(m) ? m[0] : m;
+            return raw?.marca ?? gps?.serie ?? null;
+        };
         return (data || []).map((v: any) => {
             const gps = gpsInv(v);
+            const cliente = clienteExt(v);
+            const veh = vehiculo(v);
             return {
                 id: gps?.id ?? v.gps_id,
+                venta_id: v.id,
+                cliente_id: v.cliente_id ?? cliente?.id ?? null,
                 nota_venta: v.nota_venta,
-                identificacion_cliente: v.cliente_externo?.identificacion,
+                identificacion_cliente: cliente?.identificacion ?? null,
                 imei: gps?.imei,
-                modelo: gps?.serie,
+                modelo: modeloGps(gps),
+                placa: veh?.placa ?? null,
+                marca: veh?.marca ?? null,
+                modelo_vehiculo: veh?.modelo ?? null,
                 precio_venta: v.precio_total,
                 costo_instalacion: v.costo_instalacion,
                 created_at: v.created_at,
@@ -275,7 +295,7 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
                 estado_coneccion: gps?.estado_coneccion ?? 'offline',
                 sim_id: null,
                 instalador_id: v.instalador_id,
-                cliente_externo: v.cliente_externo,
+                cliente_externo: cliente,
                 gps_sims: null,
                 gps_instaladores: v.gps_instaladores
             };
@@ -288,11 +308,61 @@ export async function obtenerVentasConGPS(origen: 'AUTO' | 'EXTERNO' | 'TODOS' =
 
 const ESTADOS_LIBERA_STOCK = new Set(['BAJA', 'STOCK']);
 
+export type MotivoBaja = 'RETIRO' | 'CONFUSION';
+
+const NOTA_CONFUSION_IMEI = 'Confusión de IMEI: no es una venta extra; el precio no suma (mismo dispositivo).';
+
+function payloadPorMotivoBaja(
+    motivo: MotivoBaja | undefined,
+    venta: { precio_total?: number | null; observacion?: string | null } | null
+) {
+    if (!motivo) return {} as { motivo_baja?: MotivoBaja; precio_total?: number; observacion?: string };
+    const payload: { motivo_baja: MotivoBaja; precio_total?: number; observacion?: string } = { motivo_baja: motivo };
+    if (motivo === 'CONFUSION') {
+        payload.precio_total = 0;
+        const obs = String(venta?.observacion ?? '').trim();
+        if (!obs.includes('Confusión de IMEI')) {
+            payload.observacion = [obs, NOTA_CONFUSION_IMEI].filter(Boolean).join(' · ');
+        }
+    }
+    return payload;
+}
+
+/**
+ * Clasifica una baja ya guardada (retiro vs confusión de IMEI).
+ * Confusión deja precio en 0 para no inflar el valor de dispositivos.
+ */
+export async function registrarMotivoBaja(ventaId: string, motivo: MotivoBaja) {
+    try {
+        const { data: venta, error: readErr } = await supabase
+            .from('ventas_rastreador')
+            .select('id, precio_total, observacion, estado_dispositivo')
+            .eq('id', ventaId)
+            .single();
+        if (readErr) throw readErr;
+
+        const { error } = await supabase
+            .from('ventas_rastreador')
+            .update(payloadPorMotivoBaja(motivo, venta))
+            .eq('id', ventaId);
+        if (error) throw error;
+        return { success: true as const, precio_total: motivo === 'CONFUSION' ? 0 : Number(venta?.precio_total ?? 0) };
+    } catch (err) {
+        console.error('Error registrando motivo de baja:', err);
+        return { success: false as const, error: err };
+    }
+}
+
 /**
  * Actualiza el estado del dispositivo en la venta.
  * Si es BAJA (o STOCK), el GPS vuelve a inventario para otra venta y esta venta queda como historial.
  */
-export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string, ventaId?: string | null) {
+export async function actualizarEstadoGPS(
+    gpsId: string,
+    nuevoEstado: string,
+    ventaId?: string | null,
+    motivoBaja?: MotivoBaja
+) {
     try {
         const liberaStock = ESTADOS_LIBERA_STOCK.has(nuevoEstado);
         const estadoInventario = liberaStock ? 'STOCK' : nuevoEstado;
@@ -300,7 +370,7 @@ export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string, ve
         if (ventaId) {
             const { data: ventaActual, error: ventaReadErr } = await supabase
                 .from('ventas_rastreador')
-                .select('id, gps_id, estado_dispositivo')
+                .select('id, gps_id, estado_dispositivo, precio_total, observacion')
                 .eq('id', ventaId)
                 .single();
             if (ventaReadErr) throw ventaReadErr;
@@ -314,7 +384,10 @@ export async function actualizarEstadoGPS(gpsId: string, nuevoEstado: string, ve
 
             const { error: ventaErr } = await supabase
                 .from('ventas_rastreador')
-                .update({ estado_dispositivo: nuevoEstado })
+                .update({
+                    estado_dispositivo: nuevoEstado,
+                    ...(nuevoEstado === 'BAJA' ? payloadPorMotivoBaja(motivoBaja, ventaActual) : {})
+                })
                 .eq('id', ventaId);
             if (ventaErr) throw ventaErr;
         } else {

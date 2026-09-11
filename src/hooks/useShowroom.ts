@@ -25,7 +25,7 @@ export function useShowroom() {
         dateFrom: "",
         dateTo: "",
         salesperson: "all",
-        kommoChat: "with_chat" as KommoChatFilter,
+        kommoChat: "all" as KommoChatFilter,
     });
 
     // 2. CARGAR LISTA DE VENDEDORES (Solo si es Admin)
