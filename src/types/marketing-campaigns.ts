@@ -1,6 +1,6 @@
 export type CampaignGroupStatus = 'draft' | 'active' | 'completed'
 export type CampaignVideoStatus = 'pending' | 'done' | 'needs_another'
-export type CampaignSegment = 'suv' | 'sedan' | 'camioneta'
+export type CampaignSegment = 'suv' | 'sedan' | 'camioneta' | 'otros'
 
 export type CampaignCreator = {
   id: string

@@ -17,8 +17,19 @@ import { inventarioService } from "@/services/inventario.service";
 import { useAuth } from "@/hooks/useAuth";
 import { VehicleDetailModal } from "./VehicleDetailModal";
 import { InventorySellerPicker } from "@/components/features/inventory/InventorySellerPicker";
+import { InventoryBodyFilterDropdown } from "@/components/features/inventory/InventoryBodyFilterDropdown";
+import { InventoryDateFilterDropdown } from "@/components/features/inventory/InventoryDateFilterDropdown";
 import { formatRevertCountdown, formatInventoryPrice, isPromoPublicPriceActive, buildPromoReasonFromSeller, isVehicleAvailableForPriceRules } from "@/lib/inventario/inventory-pricing";
 import { matchesInventorySearch } from "@/lib/inventario/inventorySearch";
+import {
+    classifyInventoryBody,
+    type InventoryBodyCategoryFilter,
+} from "@/lib/inventario/inventoryBodyCategory";
+import {
+    getEcuadorDateISO,
+    matchesInventoryDateRange,
+    type InventoryDateRange,
+} from "@/lib/inventario/inventoryDateFilter";
 
 function PricingFormField({
     label,
@@ -97,6 +108,10 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     const [vehiculos, setVehiculos] = useState(initialVehiculos); 
     
     const [searchTerm, setSearchTerm] = useState("");
+    const [bodyCategory, setBodyCategory] = useState<InventoryBodyCategoryFilter>("all");
+    const [dateRange, setDateRange] = useState<InventoryDateRange>("all");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
     const [selectedVehiculo, setSelectedVehiculo] = useState<VehiculoInventario | null>(null);
     
     // --- NUEVOS ESTADOS PARA EDICIÓN ---
@@ -386,8 +401,8 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
     };
 
     // Filtrado
-    const filteredVehiculos = vehiculos.filter((v) =>
-        matchesInventorySearch(searchTerm, [
+    const filteredVehiculos = vehiculos.filter((v) => {
+        const matchesSearch = matchesInventorySearch(searchTerm, [
             v.marca,
             v.modelo,
             v.anioModelo,
@@ -399,8 +414,17 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
             v.tipo,
             v.version,
             v.motor,
-        ])
-    );
+        ]);
+        if (!matchesSearch) return false;
+        if (bodyCategory !== "all" && classifyInventoryBody(v.tipo) !== bodyCategory) return false;
+        if (
+            dateRange !== "all" &&
+            !matchesInventoryDateRange(v.createdAt, { dateRange, dateFrom, dateTo })
+        ) {
+            return false;
+        }
+        return true;
+    });
 
     // Paginación
     const totalPages = Math.ceil(filteredVehiculos.length / itemsPerPage);
@@ -409,19 +433,82 @@ export function InventarioTable({ vehiculos: initialVehiculos }: InventarioTable
 
     return (
         <div>
-            {/* Barra de Búsqueda */}
-            <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <Search className="h-5 w-5 text-slate-400" />
-                <input 
-                    type="text"
-                    placeholder="Buscar por placa, marca, modelo o chasis..."
-                    className="bg-transparent border-none outline-none text-sm w-full text-slate-700 placeholder:text-slate-400"
-                    value={searchTerm}
-                    onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1);
-                    }}
-                />
+            {/* Barra de Búsqueda y filtros */}
+            <div className="mb-6 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:flex-row lg:items-end">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Search className="h-5 w-5 shrink-0 text-slate-400" />
+                    <input 
+                        type="text"
+                        placeholder="Buscar por placa, marca, modelo o chasis..."
+                        className="bg-transparent border-none outline-none text-sm w-full text-slate-700 placeholder:text-slate-400"
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                    />
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                    <label className="min-w-[210px]">
+                        <span className="mb-1 block px-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                            Tipo
+                        </span>
+                        <InventoryBodyFilterDropdown
+                            value={bodyCategory}
+                            onChange={(value) => {
+                                setBodyCategory(value);
+                                setCurrentPage(1);
+                            }}
+                        />
+                    </label>
+                    <label className="min-w-[210px]">
+                        <span className="mb-1 block px-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                            Fecha ingreso
+                        </span>
+                        <InventoryDateFilterDropdown
+                            value={dateRange}
+                            onChange={(next) => {
+                                setDateRange(next);
+                                setCurrentPage(1);
+                                if (next === "custom") {
+                                    const today = getEcuadorDateISO();
+                                    setDateFrom((prev) => prev || today);
+                                    setDateTo((prev) => prev || today);
+                                } else {
+                                    setDateFrom("");
+                                    setDateTo("");
+                                }
+                            }}
+                        />
+                    </label>
+                    {dateRange === "custom" && (
+                        <div className="flex items-center gap-1.5">
+                            <input
+                                type="date"
+                                aria-label="Fecha de ingreso desde"
+                                value={dateFrom}
+                                max={dateTo || undefined}
+                                onChange={(e) => {
+                                    setDateFrom(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="h-10 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-sm outline-none focus:border-indigo-300"
+                            />
+                            <span className="text-slate-300">—</span>
+                            <input
+                                type="date"
+                                aria-label="Fecha de ingreso hasta"
+                                value={dateTo}
+                                min={dateFrom || undefined}
+                                onChange={(e) => {
+                                    setDateTo(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="h-10 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 shadow-sm outline-none focus:border-indigo-300"
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Tabla Principal */}

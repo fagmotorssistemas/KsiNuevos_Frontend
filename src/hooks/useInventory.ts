@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
+import { classifyInventoryBody, type InventoryBodyCategoryFilter } from "@/lib/inventario/inventoryBodyCategory";
+import {
+    matchesInventoryDateRange,
+    type InventoryDateRange,
+} from "@/lib/inventario/inventoryDateFilter";
 import type { Database } from "@/types/supabase";
 
 // --- TIPOS ---
@@ -8,13 +13,14 @@ export type InventoryCar = Database['public']['Tables']['inventoryoracle']['Row'
 
 export type SortOption = 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' | 'newest';
 
-export type InventoryDateRange = 'all' | 'today' | '7days' | '15days' | 'thisMonth' | 'custom';
+export type { InventoryDateRange };
+export type { InventoryBodyCategoryFilter };
 
 export type InventoryFilters = {
     search: string;
     status: string | 'all';
     location: string | 'all';
-    minYear: string;
+    bodyCategory: InventoryBodyCategoryFilter;
     dateRange: InventoryDateRange;
     dateFrom: string;
     dateTo: string;
@@ -24,48 +30,11 @@ const INITIAL_FILTERS: InventoryFilters = {
     search: '',
     status: 'all',
     location: 'all',
-    minYear: '',
+    bodyCategory: 'all',
     dateRange: 'all',
     dateFrom: '',
     dateTo: '',
 };
-
-const ECUADOR_TZ = 'America/Guayaquil';
-
-function toEcuadorYmd(value: Date | string): string {
-    return new Date(value).toLocaleDateString('en-CA', { timeZone: ECUADOR_TZ });
-}
-
-function addCalendarDays(ymd: string, days: number): string {
-    const [year, month, day] = ymd.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
-
-function matchesCreatedAt(createdAt: string | null, filters: InventoryFilters): boolean {
-    if (filters.dateRange === 'all') return true;
-    if (!createdAt) return false;
-
-    const createdYmd = toEcuadorYmd(createdAt);
-    const todayYmd = toEcuadorYmd(new Date());
-
-    if (filters.dateRange === 'custom') {
-        if (!filters.dateFrom || !filters.dateTo) return true;
-        return createdYmd >= filters.dateFrom && createdYmd <= filters.dateTo;
-    }
-
-    switch (filters.dateRange) {
-        case 'today':
-            return createdYmd === todayYmd;
-        case '7days':
-            return createdYmd >= addCalendarDays(todayYmd, -6) && createdYmd <= todayYmd;
-        case '15days':
-            return createdYmd >= addCalendarDays(todayYmd, -14) && createdYmd <= todayYmd;
-        case 'thisMonth':
-            return createdYmd.startsWith(todayYmd.slice(0, 7));
-        default:
-            return true;
-    }
-}
 
 export function useInventory() {
     const { supabase, user, isLoading: isAuthLoading } = useAuth();
@@ -129,15 +98,20 @@ export function useInventory() {
             result = result.filter(car => car.location === filters.location);
         }
 
-        if (filters.minYear) {
-            const year = parseInt(filters.minYear);
-            if (!isNaN(year)) {
-                result = result.filter(car => car.year >= year);
-            }
+        if (filters.bodyCategory !== 'all') {
+            result = result.filter(
+                (car) => classifyInventoryBody(car.type_body) === filters.bodyCategory
+            );
         }
 
         if (filters.dateRange !== 'all') {
-            result = result.filter((car) => matchesCreatedAt(car.created_at, filters));
+            result = result.filter((car) =>
+                matchesInventoryDateRange(car.created_at, {
+                    dateRange: filters.dateRange,
+                    dateFrom: filters.dateFrom,
+                    dateTo: filters.dateTo,
+                })
+            );
         }
 
         // --- ORDENAMIENTO ---

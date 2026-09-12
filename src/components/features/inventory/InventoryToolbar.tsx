@@ -3,7 +3,6 @@ import {
     Search,
     X,
     ChevronDown,
-    Car,
     Tag,
     ArrowUpDown,
     Calendar,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { InventoryDateRange, InventoryFilters, SortOption } from "../../../hooks/useInventory";
+import { InventoryBodyFilterDropdown } from "./InventoryBodyFilterDropdown";
 
 interface InventoryToolbarProps {
     filters: InventoryFilters;
@@ -30,7 +30,7 @@ type FilterOption = {
     dot?: string;
 };
 
-type OpenFilter = "status" | "year" | "date" | "sort" | null;
+type OpenFilter = "status" | "date" | "sort" | null;
 
 const STATUS_OPTIONS: FilterOption[] = [
     { value: "all", label: "Todos", dot: "bg-slate-300" },
@@ -38,14 +38,6 @@ const STATUS_OPTIONS: FilterOption[] = [
     { value: "reservado", label: "Reservado", dot: "bg-amber-400" },
     { value: "vendido", label: "Vendido", dot: "bg-rose-500" },
     { value: "mantenimiento", label: "Taller", dot: "bg-orange-500" },
-];
-
-const YEAR_OPTIONS: FilterOption[] = [
-    { value: "", label: "Todos" },
-    { value: "2024", label: "2024 o más nuevo" },
-    { value: "2022", label: "2022 o más nuevo" },
-    { value: "2020", label: "2020 o más nuevo" },
-    { value: "2015", label: "2015 o más nuevo" },
 ];
 
 const DATE_OPTIONS: FilterOption[] = [
@@ -187,7 +179,7 @@ export function InventoryToolbar({
     const hasActiveFilters =
         filters.status !== "all" ||
         filters.location !== "all" ||
-        filters.minYear !== "" ||
+        filters.bodyCategory !== "all" ||
         filters.search !== "" ||
         filters.dateRange !== "all";
 
@@ -249,18 +241,13 @@ export function InventoryToolbar({
                         />
                     </FilterField>
 
-                    <FilterField label="Año del auto" className="min-w-[170px]">
-                        <FilterDropdown
-                            icon={Car}
-                            value={filters.minYear}
-                            options={YEAR_OPTIONS}
-                            open={openFilter === "year"}
-                            onToggle={() => toggleFilter("year")}
+                    <FilterField label="Tipo" className="min-w-[210px]">
+                        <InventoryBodyFilterDropdown
+                            value={filters.bodyCategory}
                             onChange={(value) => {
-                                onFilterChange("minYear", value);
+                                onFilterChange("bodyCategory", value);
                                 setOpenFilter(null);
                             }}
-                            menuClassName="w-52"
                         />
                     </FilterField>
 

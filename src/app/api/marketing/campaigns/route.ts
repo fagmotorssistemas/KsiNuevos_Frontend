@@ -114,6 +114,7 @@ function buildSegmentStats(): Record<CampaignSegment, CampaignSegmentStats> {
     suv: { ...EMPTY_SEGMENT_STATS },
     sedan: { ...EMPTY_SEGMENT_STATS },
     camioneta: { ...EMPTY_SEGMENT_STATS },
+    otros: { ...EMPTY_SEGMENT_STATS },
   }
 }
 
@@ -191,7 +192,7 @@ export async function GET(request: NextRequest) {
             segment: inferCampaignSegment(inv),
           }
         })
-        .filter((v): v is CampaignVehicleRow => v != null)
+        .filter((v): v is NonNullable<typeof v> => v != null)
         .sort((a, b) => a.sort_order - b.sort_order)
 
       const needsVideoVehicles = vehicles

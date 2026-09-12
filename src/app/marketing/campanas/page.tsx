@@ -75,8 +75,8 @@ export default function CampanasPage() {
                 Organizador de campañas
               </h1>
               <p className="text-sm text-slate-500 mt-0.5 max-w-xl">
-                Reparte el trabajo por categoría: SUVs, Sedans y Camionetas. Cada persona arma sus
-                grupos con el inventario que le corresponde.
+                Reparte el trabajo por categoría: SUV (jeep), Sedans, Camionetas y Otros. Cada persona
+                arma sus grupos con el inventario que le corresponde.
               </p>
             </div>
           </div>

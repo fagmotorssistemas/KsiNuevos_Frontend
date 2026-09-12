@@ -77,7 +77,7 @@ async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
     const { data, error } = await supabase
         .from('inventoryoracle')
         .select(
-            'id, oracle_id, plate, brand, model, year, color, description, type, engine_number, vin, engine_displacement, fuel_type, country_origin, tonnage, passenger_capacity, wheels_count, axles_count, registration_year, registration_place, supplier, purchase_date, stock, status, mileage, price, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, created_at, version'
+            'id, oracle_id, plate, brand, model, year, color, description, type, type_body, engine_number, vin, engine_displacement, fuel_type, country_origin, tonnage, passenger_capacity, wheels_count, axles_count, registration_year, registration_place, supplier, purchase_date, stock, status, mileage, price, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, created_at, version'
         )
         .order('created_at', { ascending: false })
         .limit(2000)
@@ -94,7 +94,7 @@ async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
             anioModelo: row.year != null ? String(row.year) : '',
             descripcion: row.description || '',
             placa: row.plate || '',
-            tipo: row.type || '',
+            tipo: row.type_body || row.type || '',
             color: row.color || '',
             motor: row.engine_number || '',
             chasis: row.vin || '',
@@ -136,7 +136,7 @@ async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
 }
 
 const SUPABASE_PRICE_SELECT =
-    'plate, price, mileage, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, stock, status, id, created_at';
+    'plate, price, mileage, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, stock, status, id, created_at, type, type_body';
 
 type SupabasePriceRow = {
     plate: string | null;
@@ -152,6 +152,8 @@ type SupabasePriceRow = {
     status: string | null;
     id: string;
     created_at: string | null;
+    type: string | null;
+    type_body: string | null;
 };
 
 async function logPriceHistoryClient(
@@ -250,6 +252,7 @@ export const inventarioService = {
                 mileage: supabaseInfo?.mileage ?? (Number.isFinite(numKm) ? numKm : null),
                 precioVenta: Number.isFinite(numVendidoEn) ? numVendidoEn : null,
                 createdAt: supabaseInfo?.created_at ?? null,
+                tipo: vehiculo.tipo || supabaseInfo?.type_body || supabaseInfo?.type || '',
             };
         });
 
