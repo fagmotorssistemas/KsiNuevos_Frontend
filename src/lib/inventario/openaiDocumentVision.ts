@@ -133,7 +133,8 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
   }
   if (docType === 'prohibicion') {
     return [
-      `Analiza esta foto como prohibición (${docLabel}): prenda, gravamen, medida cautelar o proceso que restrinja la venta.`,
+      `Analiza esta foto como prohibición de enajenar / prenda (${docLabel}).`,
+      'Extrae si hay prohibición vigente, prenda industrial, acreedor, fechas y placa. NO es un informe de juicios de Función Judicial.',
       'Extrae si hay prohibición vigente, prenda, acreedor, fechas y placa.',
       'REGLA DE CARGA: si el documento muestra una prohibición o gravamen vigente, photo_should_not_be_uploaded=true y descríbelo. Si dice que no hay prohibición, está bien. PROHIBIDO decir "hay discrepancias".',
     ]

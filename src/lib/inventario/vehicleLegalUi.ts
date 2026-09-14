@@ -196,7 +196,7 @@ export function mergePoderContratoRow(
   }
 }
 
-/** Fusiona prenda / procesos legales / levantamiento en Prohibición */
+/** Fusiona prenda industrial y levantamiento de prenda en Prohibición */
 export function mergeProhibicionRow(
   byType: Map<string, VehicleDocumentRow>
 ): VehicleDocumentRow | undefined {

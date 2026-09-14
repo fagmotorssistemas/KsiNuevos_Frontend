@@ -21,12 +21,8 @@ export type VehicleDocType =
 /** Tipos antiguos fusionados en poder_contrato */
 export const LEGACY_PODER_CONTRATO_TYPES = ['poder', 'contrato_compra_venta'] as const
 
-/** Tipos antiguos fusionados en Prohibición */
-export const LEGACY_PROHIBICION_TYPES = [
-  'prenda_industrial',
-  'procesos_legales',
-  'levantamiento_prendas',
-] as const
+/** Tipos antiguos fusionados en Prohibición (prenda / gravamen, no juicios) */
+export const LEGACY_PROHIBICION_TYPES = ['prenda_industrial', 'levantamiento_prendas'] as const
 
 export function isProhibicionDocType(docType: string): boolean {
   return docType === 'prohibicion' || (LEGACY_PROHIBICION_TYPES as readonly string[]).includes(docType)

@@ -7,6 +7,7 @@ import {
   DOCUMENT_SECTION_TITLES,
   getCatalogDocumentRow,
   hasPoderContratoSlot,
+  hasProhibicionSlot,
   isDocumentCatalogItemVisible,
   listPendingDocumentCatalog,
 } from '@/lib/inventario/vehicleLegalUi'
@@ -74,9 +75,11 @@ export function DocumentosTab({
   const autoOpenedWizard = useRef(false)
 
   const byType = new Map(documents.map((d) => [d.doc_type, d]))
-  const catalogReady = VEHICLE_DOCUMENT_CATALOG.every((c) =>
-    c.docType === 'poder_contrato' ? hasPoderContratoSlot(byType) : byType.has(c.docType)
-  )
+  const catalogReady = VEHICLE_DOCUMENT_CATALOG.every((c) => {
+    if (c.docType === 'poder_contrato') return hasPoderContratoSlot(byType)
+    if (c.docType === 'prohibicion') return hasProhibicionSlot(byType)
+    return byType.has(c.docType)
+  })
   const legal = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'legal')
   const consultas = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'consulta')
   const physical = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'physical')

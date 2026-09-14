@@ -130,7 +130,7 @@ function isCatalogDocType(key: string): key is VehicleDocType {
 }
 
 function topicSources(row: ContrastMatrixRow) {
-  const antLabel = row.key === "procesos_legales" || row.key === "prohibicion" ? "Función Judicial" : "ANT"
+  const antLabel = row.key === "procesos_legales" ? "Función Judicial" : "ANT"
   return [
     { label: "SRI", text: row.sri.text, kind: row.sri.kind },
     { label: antLabel, text: row.ant.text, kind: row.ant.kind },
@@ -180,7 +180,7 @@ function ProcesosLegalesOwnerTable({ juicios }: { juicios: EcuadorJuiciosConsult
   const procesos = juicios?.procesos ?? []
   return (
     <section>
-      <h4 className="text-sm font-bold text-slate-900 mb-1">Prohibición y Función Judicial</h4>
+      <h4 className="text-sm font-bold text-slate-900 mb-1">Procesos legales del propietario</h4>
       {juicios?.titular || juicios?.cedula ? (
         <p className="text-[11px] text-slate-500 mb-3">
           {[juicios.titular, juicios.cedula].filter(Boolean).join(" · ")}

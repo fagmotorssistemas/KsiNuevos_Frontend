@@ -52,7 +52,8 @@ const ICONS: Record<string, typeof FileText> = {
 }
 
 const DETAIL_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
-  prohibicion: '¿Hay prohibición, prenda o proceso? Observaciones…',
+  prohibicion: '¿Hay prohibición de enajenar o prenda? Observaciones…',
+  procesos_legales: 'Trámites legales en curso, abogado, fechas…',
   accesorios_llaves: 'Ej. 2 llaves, control remoto, manual…',
   documentos_pendientes: 'Lista de documentos que faltan por recibir…',
 }

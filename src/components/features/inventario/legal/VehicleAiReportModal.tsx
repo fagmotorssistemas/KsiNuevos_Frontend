@@ -110,7 +110,7 @@ function juiciosForSection(
   section: VehicleAiInformeSection,
   payload: VehicleAiInformePayload | null
 ): EcuadorJuiciosConsulta | null {
-  if (!isProhibicionDocType(section.docType)) return null
+  if (section.docType !== 'procesos_legales') return null
   return usableJuicios(section.juicios ?? payload?.juicios ?? null)
 }
 
@@ -118,7 +118,7 @@ function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionRes
   const results: ConclusionResult[] = []
   for (const section of payload.sections) {
     const juicios = juiciosForSection(section, payload)
-    if (isProhibicionDocType(section.docType) && juicios) {
+    if (section.docType === 'procesos_legales' && juicios) {
       const reasons = juicios.error
         ? [juicios.error]
         : [
@@ -145,7 +145,7 @@ function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionRes
       })
     }
     if (section.missing) {
-      if (isProhibicionDocType(section.docType) && juicios) {
+      if (section.docType === 'procesos_legales' && juicios) {
         /* la consulta oficial ya cubre esta sección */
       } else {
         results.push({
@@ -269,7 +269,7 @@ function buildSections(
     const analyzable = fileResults
       .filter((file) => fileIds.has(file.fileId) && !file.fileId.startsWith('legacy-'))
       .map((file, index) => ({ ...file, photoIndex: index + 1 }))
-    const sectionJuicios = col.docType === 'prohibicion' ? juicios ?? null : null
+    const sectionJuicios = col.docType === 'procesos_legales' ? juicios ?? null : null
     return {
       docType: col.docType,
       docLabel: col.label,
@@ -432,8 +432,8 @@ function juiciosSynthesisItem(juicios: EcuadorJuiciosConsulta | null): VehicleAi
       ? ['Sin procesos judiciales reportados por Función Judicial.']
       : usable.procesos.map(formatJuicioLine)
   return {
-    docType: 'prohibicion',
-    docLabel: 'Prohibición',
+    docType: 'procesos_legales',
+    docLabel: 'Procesos legales',
     fileName: '',
     summary: usable.error
       ? `Función Judicial: ${usable.error}`
@@ -654,7 +654,7 @@ function VehicleAiReportModal({
           items: [
             ...sections.flatMap((section): VehicleAiSynthesisItem[] => {
               if (section.missing) {
-                if (isProhibicionDocType(section.docType) && juiciosItem) return []
+                if (section.docType === 'procesos_legales' && juiciosItem) return []
                 return [
                   {
                     docType: section.docType,
@@ -720,31 +720,27 @@ function VehicleAiReportModal({
   const displayPayload = useMemo(() => {
     if (!payload) return null
     const juicios = payload.juicios ?? contrasteJuicios
-    const catalog = VEHICLE_DOCUMENT_CATALOG.find((col) => col.docType === 'prohibicion')
-    const prohibicionLabel = catalog?.label ?? 'Prohibición'
+    const catalog = VEHICLE_DOCUMENT_CATALOG.find((col) => col.docType === 'procesos_legales')
+    const procesosLabel = catalog?.label ?? 'Procesos legales'
     let sections = payload.sections.map((section) =>
       isProhibicionDocType(section.docType)
-        ? {
-            ...section,
-            docType: 'prohibicion',
-            docLabel: prohibicionLabel,
-            juicios: section.juicios ?? juicios ?? section.juicios,
-            missing: section.files.length === 0 && !usableJuicios(section.juicios ?? juicios),
-          }
-        : section
+        ? { ...section, docType: 'prohibicion', docLabel: 'Prohibición', juicios: null }
+        : section.docType === 'procesos_legales'
+          ? { ...section, juicios: section.juicios ?? juicios, missing: section.files.length === 0 && !usableJuicios(section.juicios ?? juicios) }
+          : section
     )
     if (juicios) {
       sections = sections.map((section) =>
-        section.docType === 'prohibicion'
+        section.docType === 'procesos_legales'
           ? { ...section, juicios: section.juicios ?? juicios, missing: section.files.length === 0 && !juicios }
           : section
       )
-      if (!sections.some((section) => section.docType === 'prohibicion')) {
+      if (!sections.some((section) => section.docType === 'procesos_legales')) {
         sections = [
           ...sections,
           {
-            docType: 'prohibicion',
-            docLabel: prohibicionLabel,
+            docType: 'procesos_legales',
+            docLabel: procesosLabel,
             category: 'legal' as const,
             detailText: null,
             missing: false,

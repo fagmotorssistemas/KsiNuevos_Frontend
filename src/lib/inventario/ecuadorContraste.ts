@@ -497,12 +497,12 @@ export function contrasteTopicDetail(
           ? 'No hay citaciones reportadas por ANT. Vuelve a Consultar para traer pagadas e impugnadas.'
           : 'Sin ítems para mostrar.'
     }
-  } else if (key === 'prenda_industrial') {
+  } else if (key === 'prenda_industrial' || key === 'prohibicion') {
     if (payload.prenda_industrial?.text) {
       facts.push({ label: 'Fuente oficial', value: payload.prenda_industrial.text })
     }
     emptyHint = 'EcuadorAPI no publica prenda industrial. El contraste es con lo cargado por el encargado.'
-  } else if (key === 'procesos_legales' || key === 'prohibicion') {
+  } else if (key === 'procesos_legales') {
     const juicios = payload.juicios
     if (juicios?.cedula) facts.push({ label: 'Cédula / RUC consultado', value: juicios.cedula })
     if (juicios?.titular) facts.push({ label: 'Titular', value: juicios.titular })
@@ -1053,7 +1053,15 @@ export function buildContrastMatrix(
             kind: compareContrastRow(current.status, official.vigente).kind,
           }
         : { text: 'Sin consultar', kind: 'idle' }
-    } else if (docType === 'procesos_legales' || docType === 'prohibicion') {
+    } else if (docType === 'prohibicion') {
+      const official = payload?.prenda_industrial
+      antCell = official
+        ? {
+            text: official.text,
+            kind: compareContrastRow(current.status, official.vigente).kind,
+          }
+        : { text: 'Sin consultar', kind: 'idle' }
+    } else if (docType === 'procesos_legales') {
       if (payload?.juicios?.error) {
         antCell = { text: payload.juicios.error, kind: 'warn' }
       } else if (payload?.juicios) {

@@ -17,6 +17,7 @@ export const VEHICLE_DOCUMENT_CATALOG: DocCatalogEntry[] = [
   { docType: 'revision_tecnica', label: 'Revisión técnica vehicular', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'contrato_interno', label: 'Contrato interno', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'prohibicion', label: 'Prohibición', category: 'legal', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
+  { docType: 'procesos_legales', label: 'Procesos legales', category: 'legal', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
   { docType: 'documentos_pendientes', label: 'Documentos pendientes', category: 'legal', requiresFile: false, defaultStatus: 'pendiente' },
   { docType: 'informe_ant_siat', label: 'Informe ANT', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'informe_emov', label: 'Informe EMOV', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
