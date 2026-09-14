@@ -344,6 +344,6 @@ Proprietary software developed for **FAG MOTORS / KSI NUEVOS**. All rights reser
 ## Contact
 
 - **Freddy Paguay** — [github.com/FreddyJPC](https://github.com/FreddyJPC)
-- **Nathaly Caballero** — co-developer
+- **Nathaly Caballero** — [https://github.com/Nathaly222]
 
 *Built with Next.js, Supabase, and modern AI tooling for automotive retail operations.*
