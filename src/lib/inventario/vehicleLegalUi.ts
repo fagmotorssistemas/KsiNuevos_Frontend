@@ -7,11 +7,12 @@ import type {
   VehicleDebtRow,
   VehicleDocType,
 } from '@/types/vehicleLegal.types'
-import { LEGACY_PODER_CONTRATO_TYPES } from '@/types/vehicleLegal.types'
+import { LEGACY_PODER_CONTRATO_TYPES, LEGACY_PROHIBICION_TYPES } from '@/types/vehicleLegal.types'
 
 /** Mismos títulos que la pestaña Documentos del modal */
 export const DOCUMENT_SECTION_TITLES = {
   legal: 'Documentación legal',
+  consulta: 'Consultas de tránsito (fotos)',
   physical: 'Estado del vehículo',
 } as const
 
@@ -195,11 +196,38 @@ export function mergePoderContratoRow(
   }
 }
 
+/** Fusiona prenda / procesos legales / levantamiento en Prohibición */
+export function mergeProhibicionRow(
+  byType: Map<string, VehicleDocumentRow>
+): VehicleDocumentRow | undefined {
+  const canonical = byType.get('prohibicion')
+  const legacy = LEGACY_PROHIBICION_TYPES.map((t) => byType.get(t)).filter(
+    (r): r is VehicleDocumentRow => Boolean(r)
+  )
+  const rows = [canonical, ...legacy].filter((r): r is VehicleDocumentRow => Boolean(r))
+  if (rows.length === 0) return undefined
+
+  const primary = canonical ?? legacy[0]
+  const files = rows.flatMap((r) => listDocumentFiles(r))
+  const notes = rows
+    .map((r) => r.detail_text?.trim())
+    .filter((t): t is string => Boolean(t))
+
+  return {
+    ...primary,
+    doc_type: 'prohibicion',
+    status: pickBestDocStatus(rows),
+    detail_text: notes.length > 0 ? [...new Set(notes)].join('\n') : primary.detail_text,
+    files,
+  }
+}
+
 export function getCatalogDocumentRow(
   documents: Map<string, VehicleDocumentRow>,
   docType: VehicleDocType
 ): VehicleDocumentRow | undefined {
   if (docType === 'poder_contrato') return mergePoderContratoRow(documents)
+  if (docType === 'prohibicion') return mergeProhibicionRow(documents)
   return documents.get(docType)
 }
 
@@ -207,6 +235,12 @@ export function hasPoderContratoSlot(byType: Map<string, VehicleDocumentRow>): b
   return Boolean(
     byType.get('poder_contrato') ||
       LEGACY_PODER_CONTRATO_TYPES.some((t) => byType.has(t))
+  )
+}
+
+export function hasProhibicionSlot(byType: Map<string, VehicleDocumentRow>): boolean {
+  return Boolean(
+    byType.get('prohibicion') || LEGACY_PROHIBICION_TYPES.some((t) => byType.has(t))
   )
 }
 
@@ -238,14 +272,11 @@ export function orderCatalogPendingFirst(
   return { pending: pendingOrdered, complete }
 }
 
-/** Misma visibilidad que DocumentosTab (p. ej. levantamiento solo con prenda) */
+/** Misma visibilidad que DocumentosTab. */
 export function isDocumentCatalogItemVisible(
-  docType: VehicleDocType,
-  byType: Map<string, VehicleDocumentRow>
+  _docType: VehicleDocType,
+  _byType: Map<string, VehicleDocumentRow>
 ): boolean {
-  if (docType === 'levantamiento_prendas') {
-    return hasPrendaIndustrial(byType.get('prenda_industrial'))
-  }
   return true
 }
 

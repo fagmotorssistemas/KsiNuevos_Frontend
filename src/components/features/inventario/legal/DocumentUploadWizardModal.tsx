@@ -5,9 +5,9 @@ import { ChevronLeft, FileText, Loader2, Plus, Replace, Upload, X } from 'lucide
 import { toast } from 'sonner'
 import { VEHICLE_DOCUMENT_CATALOG, type DocCatalogEntry } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
+  DOCUMENT_SECTION_TITLES,
   getCatalogDocumentRow,
   getDocumentCheckStatus,
-  isDocumentCatalogItemVisible,
   isDocumentImageFile,
   listDocumentFiles,
   listPendingDocumentCatalog,
@@ -28,13 +28,15 @@ const NOTE_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
   matricula: 'Ej. La matrícula física no llegó; se regulariza el…',
   revision_tecnica: 'Ej. Vehículo exento / RTV en trámite…',
   contrato_interno: 'Ej. Aún no se firma el contrato interno porque…',
-  prenda_industrial: 'Ej. No tiene prenda industrial.',
-  levantamiento_prendas: 'Ej. La prenda sigue vigente; el levantamiento va el…',
+  prohibicion: 'Ej. Sin prohibición, prenda ni proceso judicial…',
   informe_ant_siat: 'Ej. Informe ANT se solicita esta semana porque…',
+  informe_emov: 'Ej. Informe EMOV se solicita esta semana porque…',
+  informe_cte: 'Ej. Informe CTE se solicita esta semana porque…',
+  informe_amt: 'Ej. Informe AMT se solicita esta semana porque…',
+  informe_sri: 'Ej. Informe SRI se solicita esta semana porque…',
   historial_mantenimiento: 'Ej. Sin historial; vehículo nuevo de agencia…',
   accesorios_llaves: 'Ej. 1 llave, sin control; el resto no aplica porque…',
   documentos_pendientes: 'Lista de lo que falta y por qué no hay foto todavía…',
-  procesos_legales: 'Ej. No hay procesos legales abiertos.',
 }
 
 type PendingAiFile = {
@@ -144,10 +146,6 @@ export function DocumentUploadWizardModal({
     )
     return [...initial.pending, ...initial.complete]
   })
-  const [prendaHasEvidence, setPrendaHasEvidence] = useState(() =>
-    isDocumentCatalogItemVisible('levantamiento_prendas', byType)
-  )
-
   const [index, setIndex] = useState(0)
   const [picked, setPicked] = useState<PickedFile[]>([])
   const [note, setNote] = useState(() => (steps[0] ? getCatalogDocumentRow(byType, steps[0].docType)?.detail_text ?? '' : ''))
@@ -175,18 +173,7 @@ export function DocumentUploadWizardModal({
     setPicked([])
     setIndex(nextIndex)
     const nextRow = next ? getCatalogDocumentRow(byType, next.docType) : undefined
-    const nextNote = nextRow?.detail_text ?? ''
-    const nextExisting = nextRow ? listDocumentFiles(nextRow) : []
-    if (
-      next?.docType === 'levantamiento_prendas' &&
-      !prendaHasEvidence &&
-      nextExisting.length === 0 &&
-      nextNote.trim().length < 8
-    ) {
-      setNote('No aplica: sin prenda industrial.')
-    } else {
-      setNote(nextNote)
-    }
+    setNote(nextRow?.detail_text ?? '')
   }
 
   const addFiles = (list: FileList | File[] | null) => {
@@ -249,17 +236,6 @@ export function DocumentUploadWizardModal({
       } catch {
         // Si solo se avanza con archivo ya existente, no bloquear el wizard.
       }
-    }
-
-    if (catalog.docType === 'prenda_industrial') {
-      const noPrenda = /no (tiene|hay) prenda|sin prenda/i.test(noteText)
-      setPrendaHasEvidence(
-        !noPrenda &&
-          (uploaded.length > 0 ||
-            picked.length > 0 ||
-            existingFiles.length > 0 ||
-            /tiene prenda|\bsí\b|\bsi\b/i.test(noteText))
-      )
     }
 
     return uploaded
@@ -432,7 +408,7 @@ export function DocumentUploadWizardModal({
       enqueueAi(uploaded)
       const allPending = pendingAiRef.current
 
-      const finished = isLast || (step.docType === 'prenda_industrial' && index + 1 >= steps.length)
+      const finished = isLast
       if (finished) {
         await analyzePendingPhotos(allPending)
         onRefresh()
@@ -724,7 +700,7 @@ export function DocumentUploadWizardModal({
           <PendingDocumentsNotice labels={pendingDocs.map((item) => item.label)} />
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              {step.category === 'legal' ? 'Documentación legal' : 'Estado del vehículo'}
+              {DOCUMENT_SECTION_TITLES[step.category]}
             </p>
             <h3 className="text-base font-bold text-slate-900 mt-1">{step.label}</h3>
             <p className="text-sm text-slate-600 mt-1">

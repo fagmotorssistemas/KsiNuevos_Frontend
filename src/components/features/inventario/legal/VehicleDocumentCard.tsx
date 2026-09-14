@@ -37,9 +37,14 @@ const ICONS: Record<string, typeof FileText> = {
   matricula: IdCard,
   revision_tecnica: ClipboardCheck,
   contrato_interno: Car,
+  prohibicion: Scale,
   prenda_industrial: Lock,
   levantamiento_prendas: Lock,
   informe_ant_siat: Search,
+  informe_emov: Search,
+  informe_cte: Search,
+  informe_amt: Search,
+  informe_sri: Search,
   historial_mantenimiento: Wrench,
   accesorios_llaves: Key,
   documentos_pendientes: FolderOpen,
@@ -47,10 +52,9 @@ const ICONS: Record<string, typeof FileText> = {
 }
 
 const DETAIL_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
-  prenda_industrial: '¿Tiene prenda? Sí/No. Proceso, levantamiento y observaciones…',
+  prohibicion: '¿Hay prohibición, prenda o proceso? Observaciones…',
   accesorios_llaves: 'Ej. 2 llaves, control remoto, manual…',
   documentos_pendientes: 'Lista de documentos que faltan por recibir…',
-  procesos_legales: 'Trámites legales en curso, abogado, fechas…',
 }
 
 type Props = {
@@ -173,11 +177,6 @@ export function VehicleDocumentCard({
           )}
           {row.expires_at && (
             <p className="text-xs text-slate-500 mt-1">Vence {formatShortDate(row.expires_at)}</p>
-          )}
-          {row.doc_type === 'levantamiento_prendas' && (
-            <p className="text-[10px] text-amber-700 font-medium mt-2">
-              Aplica cuando hay prenda industrial registrada
-            </p>
           )}
           {expedienteVinculo && row.doc_type === 'historial_mantenimiento' && (
             <p className="text-[10px] text-violet-700 font-semibold mt-2">

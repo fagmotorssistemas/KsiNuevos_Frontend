@@ -5,7 +5,7 @@ import { Loader2, Upload } from 'lucide-react'
 import { VEHICLE_DOCUMENT_CATALOG } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
   DOCUMENT_SECTION_TITLES,
-  mergePoderContratoRow,
+  getCatalogDocumentRow,
   hasPoderContratoSlot,
   isDocumentCatalogItemVisible,
   listPendingDocumentCatalog,
@@ -78,6 +78,7 @@ export function DocumentosTab({
     c.docType === 'poder_contrato' ? hasPoderContratoSlot(byType) : byType.has(c.docType)
   )
   const legal = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'legal')
+  const consultas = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'consulta')
   const physical = VEHICLE_DOCUMENT_CATALOG.filter((c) => c.category === 'physical')
 
   const visibleItems = (items: typeof legal) =>
@@ -121,10 +122,7 @@ export function DocumentosTab({
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {visible.map((cat) => {
-            const row =
-              cat.docType === 'poder_contrato'
-                ? mergePoderContratoRow(byType)
-                : byType.get(cat.docType)
+            const row = getCatalogDocumentRow(byType, cat.docType)
             if (!row) return null
             return (
               <VehicleDocumentCard
@@ -182,11 +180,15 @@ export function DocumentosTab({
           Cargando documentos del vehículo…
         </div>
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Documentación legal</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{DOCUMENT_SECTION_TITLES.legal}</p>
           <DocumentSkeletonGrid count={legal.length} />
         </div>
         <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Estado del vehículo</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{DOCUMENT_SECTION_TITLES.consulta}</p>
+          <DocumentSkeletonGrid count={consultas.length} />
+        </div>
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{DOCUMENT_SECTION_TITLES.physical}</p>
           <DocumentSkeletonGrid count={physical.length} />
         </div>
       </div>
@@ -239,6 +241,7 @@ export function DocumentosTab({
       </div>
       <PendingDocumentsNotice labels={listPendingDocumentCatalog(byType).map((item) => item.label)} />
       {renderSection(DOCUMENT_SECTION_TITLES.legal, legal)}
+      {renderSection(DOCUMENT_SECTION_TITLES.consulta, consultas)}
       {renderSection(DOCUMENT_SECTION_TITLES.physical, physical)}
       {wizardOpen && inventoryoracleId ? (
         <DocumentUploadWizardModal

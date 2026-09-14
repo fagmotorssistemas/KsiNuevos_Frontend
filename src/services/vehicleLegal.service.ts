@@ -191,6 +191,12 @@ export async function resolveOwnerIdentityForContraste(
   return { cedula, ownerName: current?.owner_name?.trim() || null }
 }
 
+function isUniqueViolation(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === '23505') return true
+  return /duplicate key value violates unique constraint/i.test(error.message ?? '')
+}
+
 async function seedDocumentSlots(supabase: SupabaseClient, inventoryoracleId: string) {
   const { data: existing, error: readErr } = await supabase
     .from('inventory_vehicle_documents')
@@ -202,15 +208,22 @@ async function seedDocumentSlots(supabase: SupabaseClient, inventoryoracleId: st
   const missing = VEHICLE_DOCUMENT_CATALOG.filter((d) => !have.has(d.docType))
   if (missing.length === 0) return
 
-  const { error } = await supabase.from('inventory_vehicle_documents').insert(
-    missing.map((d) => ({
-      inventoryoracle_id: inventoryoracleId,
-      doc_type: d.docType,
-      category: d.category,
-      status: d.defaultStatus,
-    }))
-  )
-  if (error) throw error
+  const payload = missing.map((d) => ({
+    inventoryoracle_id: inventoryoracleId,
+    doc_type: d.docType,
+    category: d.category,
+    status: d.defaultStatus,
+  }))
+  const upsertOpts = { onConflict: 'inventoryoracle_id,doc_type', ignoreDuplicates: true } as const
+  const { error } = await supabase.from('inventory_vehicle_documents').upsert(payload, upsertOpts)
+  if (!error || isUniqueViolation(error)) return
+
+  const fallback = payload.map((row) => ({
+    ...row,
+    category: row.category === 'consulta' ? 'legal' : row.category,
+  }))
+  const { error: retryErr } = await supabase.from('inventory_vehicle_documents').upsert(fallback, upsertOpts)
+  if (retryErr && !isUniqueViolation(retryErr)) throw new Error(retryErr.message)
 }
 
 async function seedDebtSlots(supabase: SupabaseClient, inventoryoracleId: string) {
@@ -224,14 +237,15 @@ async function seedDebtSlots(supabase: SupabaseClient, inventoryoracleId: string
   const missing = VEHICLE_DEBT_CATALOG.filter((d) => !have.has(d.debtType))
   if (missing.length === 0) return
 
-  const { error } = await supabase.from('inventory_vehicle_debts').insert(
+  const { error } = await supabase.from('inventory_vehicle_debts').upsert(
     missing.map((d) => ({
       inventoryoracle_id: inventoryoracleId,
       debt_type: d.debtType,
       status: 'pendiente' as const,
-    }))
+    })),
+    { onConflict: 'inventoryoracle_id,debt_type', ignoreDuplicates: true }
   )
-  if (error) throw error
+  if (error && !isUniqueViolation(error)) throw error
 }
 
 export async function loadBulkVehicleLegalChecklist(

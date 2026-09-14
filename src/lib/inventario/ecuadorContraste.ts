@@ -502,7 +502,7 @@ export function contrasteTopicDetail(
       facts.push({ label: 'Fuente oficial', value: payload.prenda_industrial.text })
     }
     emptyHint = 'EcuadorAPI no publica prenda industrial. El contraste es con lo cargado por el encargado.'
-  } else if (key === 'procesos_legales') {
+  } else if (key === 'procesos_legales' || key === 'prohibicion') {
     const juicios = payload.juicios
     if (juicios?.cedula) facts.push({ label: 'Cédula / RUC consultado', value: juicios.cedula })
     if (juicios?.titular) facts.push({ label: 'Titular', value: juicios.titular })
@@ -1039,6 +1039,12 @@ export function buildContrastMatrix(
       amtCell = amtRev(current.status)
     } else if (docType === 'informe_ant_siat') {
       antCell = antStatus('Sin citaciones pendientes', '{n} citación(es) · {usd}', current.status)
+    } else if (docType === 'informe_sri') {
+      sriCell = sriMoney(rubros.total, current.status, 'Valores pendientes', 'Sin pendientes SRI')
+    } else if (docType === 'informe_amt') {
+      amtCell = amtRev(current.status)
+    } else if (docType === 'informe_emov' || docType === 'informe_cte') {
+      antCell = { text: 'Sin consulta automática', kind: 'idle' }
     } else if (docType === 'prenda_industrial') {
       const official = payload?.prenda_industrial
       antCell = official
@@ -1047,7 +1053,7 @@ export function buildContrastMatrix(
             kind: compareContrastRow(current.status, official.vigente).kind,
           }
         : { text: 'Sin consultar', kind: 'idle' }
-    } else if (docType === 'procesos_legales') {
+    } else if (docType === 'procesos_legales' || docType === 'prohibicion') {
       if (payload?.juicios?.error) {
         antCell = { text: payload.juicios.error, kind: 'warn' }
       } else if (payload?.juicios) {

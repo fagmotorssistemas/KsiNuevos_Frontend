@@ -5,6 +5,7 @@ import { analyzeDocumentFileWithOpenAI } from '@/lib/inventario/openaiDocumentVi
 import { buildContrasteAiContext, buildVehicleRecordContext } from '@/lib/inventario/documentAiRules'
 import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import { getLatestDocumentAiReport, saveDocumentAiReport } from '@/services/documentAiReports.service'
+import { isProhibicionDocType } from '@/types/vehicleLegal.types'
 
 export const maxDuration = 60
 
@@ -138,11 +139,12 @@ export async function POST(
       bytes = new Uint8Array(await fallback.arrayBuffer())
     }
 
+    const analysisDocType = isProhibicionDocType(document.doc_type) ? 'prohibicion' : document.doc_type
     const { analysis, model } = await analyzeDocumentFileWithOpenAI({
       bytes,
       mime: file.mime_type || 'application/octet-stream',
       fileName: file.file_name,
-      docType: document.doc_type,
+      docType: analysisDocType,
       placa,
       contraste,
       vehicleRecord,
@@ -152,7 +154,7 @@ export async function POST(
       fileId: file.id,
       documentId: document.id,
       inventoryoracleId: document.inventoryoracle_id,
-      docType: document.doc_type,
+      docType: analysisDocType,
       placa,
       model,
       analysis,

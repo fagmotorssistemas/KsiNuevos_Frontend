@@ -62,6 +62,7 @@ interface InventarioDocumentReportProps {
 }
 
 const LEGAL_COLUMNS = VEHICLE_DOCUMENT_CATALOG.filter((d) => d.category === "legal");
+const CONSULTA_COLUMNS = VEHICLE_DOCUMENT_CATALOG.filter((d) => d.category === "consulta");
 const PHYSICAL_COLUMNS = VEHICLE_DOCUMENT_CATALOG.filter((d) => d.category === "physical");
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -421,6 +422,21 @@ function DocumentDetailPanel({
                             <DocumentYesNoCell
                                 doc={doc}
                                 catalogLabel={catalogLabel}
+                                status={status}
+                                vehicleLabel={vehicleLabel}
+                                onPreview={onPreview}
+                            />
+                        </DetailFieldCard>
+                    );
+                })}
+                {CONSULTA_COLUMNS.map((col) => {
+                    const doc = entry ? getCatalogDocumentRow(entry.documents, col.docType) : undefined;
+                    const status = documentCellStatus(linked, entry, col);
+                    return (
+                        <DetailFieldCard key={col.docType} label={col.label}>
+                            <DocumentYesNoCell
+                                doc={doc}
+                                catalogLabel={col.label}
                                 status={status}
                                 vehicleLabel={vehicleLabel}
                                 onPreview={onPreview}

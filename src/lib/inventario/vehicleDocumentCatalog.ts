@@ -1,11 +1,11 @@
-import type { VehicleDocType } from '@/types/vehicleLegal.types'
+import type { VehicleDocCategory, VehicleDocType } from '@/types/vehicleLegal.types'
 
 export const INVENTORY_VEHICLE_DOCS_BUCKET = 'inventory-vehicle-documents'
 
 export type DocCatalogEntry = {
   docType: VehicleDocType
   label: string
-  category: 'legal' | 'physical'
+  category: VehicleDocCategory
   requiresFile: boolean
   allowsFile?: boolean
   defaultStatus: 'falta' | 'pendiente'
@@ -16,13 +16,15 @@ export const VEHICLE_DOCUMENT_CATALOG: DocCatalogEntry[] = [
   { docType: 'matricula', label: 'Matrícula vigente', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'revision_tecnica', label: 'Revisión técnica vehicular', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'contrato_interno', label: 'Contrato interno', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
-  { docType: 'prenda_industrial', label: 'Prenda industrial', category: 'legal', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
-  { docType: 'levantamiento_prendas', label: 'Levantamiento de prenda', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
-  { docType: 'informe_ant_siat', label: 'Informe ANT', category: 'legal', requiresFile: true, defaultStatus: 'falta' },
+  { docType: 'prohibicion', label: 'Prohibición', category: 'legal', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
+  { docType: 'documentos_pendientes', label: 'Documentos pendientes', category: 'legal', requiresFile: false, defaultStatus: 'pendiente' },
+  { docType: 'informe_ant_siat', label: 'Informe ANT', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
+  { docType: 'informe_emov', label: 'Informe EMOV', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
+  { docType: 'informe_cte', label: 'Informe CTE', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
+  { docType: 'informe_amt', label: 'Informe AMT', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
+  { docType: 'informe_sri', label: 'Informe SRI', category: 'consulta', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'historial_mantenimiento', label: 'Historial de mantenimiento', category: 'physical', requiresFile: true, defaultStatus: 'falta' },
   { docType: 'accesorios_llaves', label: 'Accesorios / llaves', category: 'physical', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
-  { docType: 'documentos_pendientes', label: 'Documentos pendientes', category: 'legal', requiresFile: false, defaultStatus: 'pendiente' },
-  { docType: 'procesos_legales', label: 'Procesos legales', category: 'legal', requiresFile: false, allowsFile: true, defaultStatus: 'pendiente' },
 ]
 
 export const VEHICLE_DEBT_CATALOG: { debtType: 'impuesto_predial' | 'banco_financiera' | 'dinardap'; label: string }[] = [
@@ -41,9 +43,14 @@ export const DOCUMENT_SHORT: Record<VehicleDocType, string> = {
   matricula: 'MAT',
   revision_tecnica: 'RTV',
   contrato_interno: 'CIN',
+  prohibicion: 'PRH',
   prenda_industrial: 'PRE',
   levantamiento_prendas: 'LEV',
   informe_ant_siat: 'ANT',
+  informe_emov: 'EMOV',
+  informe_cte: 'CTE',
+  informe_amt: 'AMT',
+  informe_sri: 'SRI',
   historial_mantenimiento: 'MAN',
   accesorios_llaves: 'LLV',
   documentos_pendientes: 'PEN',

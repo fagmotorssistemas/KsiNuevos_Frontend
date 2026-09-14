@@ -56,7 +56,18 @@ export function useVehicleLegalDossier(
         setAiRejectedPhotos(false)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error cargando expediente')
+      const message = e instanceof Error ? e.message : 'Error cargando expediente'
+      if (/duplicate key value violates unique constraint/i.test(message)) {
+        try {
+          const data = await loadVehicleLegalDossier(supabase, placa, oracleId)
+          setDossier(data)
+          setError(null)
+          return
+        } catch {
+          /* sigue el error original */
+        }
+      }
+      setError(message)
       setDossier(EMPTY)
       setAiRejectedPhotos(false)
     } finally {

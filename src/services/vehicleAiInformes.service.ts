@@ -17,7 +17,7 @@ export type VehicleAiInformeSectionFile = {
 export type VehicleAiInformeSection = {
   docType: string
   docLabel: string
-  category: 'legal' | 'physical'
+  category: 'legal' | 'physical' | 'consulta'
   detailText: string | null
   missing: boolean
   files: VehicleAiInformeSectionFile[]

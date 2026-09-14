@@ -1,11 +1,18 @@
+export type VehicleDocCategory = 'legal' | 'physical' | 'consulta'
+
 export type VehicleDocType =
   | 'poder_contrato'
   | 'matricula'
   | 'revision_tecnica'
   | 'contrato_interno'
+  | 'prohibicion'
   | 'prenda_industrial'
   | 'levantamiento_prendas'
   | 'informe_ant_siat'
+  | 'informe_emov'
+  | 'informe_cte'
+  | 'informe_amt'
+  | 'informe_sri'
   | 'historial_mantenimiento'
   | 'accesorios_llaves'
   | 'documentos_pendientes'
@@ -13,6 +20,17 @@ export type VehicleDocType =
 
 /** Tipos antiguos fusionados en poder_contrato */
 export const LEGACY_PODER_CONTRATO_TYPES = ['poder', 'contrato_compra_venta'] as const
+
+/** Tipos antiguos fusionados en Prohibición */
+export const LEGACY_PROHIBICION_TYPES = [
+  'prenda_industrial',
+  'procesos_legales',
+  'levantamiento_prendas',
+] as const
+
+export function isProhibicionDocType(docType: string): boolean {
+  return docType === 'prohibicion' || (LEGACY_PROHIBICION_TYPES as readonly string[]).includes(docType)
+}
 
 export type VehicleDocStatus =
   | 'falta'
@@ -67,7 +85,7 @@ export interface VehicleDocumentRow {
   id: string
   inventoryoracle_id: string
   doc_type: VehicleDocType
-  category: 'legal' | 'physical'
+  category: VehicleDocCategory
   status: VehicleDocStatus
   detail_text: string | null
   expires_at: string | null

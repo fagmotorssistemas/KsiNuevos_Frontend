@@ -15,6 +15,7 @@ import {
   Pin,
   RefreshCw,
   Scale,
+  Search,
   ShieldCheck,
   Table2,
   User,
@@ -115,7 +116,8 @@ function sourceTextClass(kind: ResultKind): string {
 function topicIcon(key: string) {
   if (key === "matricula") return Calendar;
   if (key === "revision_tecnica") return ClipboardCheck;
-  if (key === "informe_ant_siat" || key === "procesos_legales") return Scale;
+  if (key === "informe_ant_siat" || key === "informe_emov" || key === "informe_cte" || key === "informe_amt" || key === "informe_sri") return Search;
+  if (key === "prohibicion" || key === "procesos_legales") return Scale;
   if (key === "prenda_industrial" || key === "levantamiento_prendas") return Pin;
   if (key === "poder_contrato" || key === "contrato_interno") return FileText;
   if (key === "accesorios_llaves") return KeyRound;
@@ -128,7 +130,7 @@ function isCatalogDocType(key: string): key is VehicleDocType {
 }
 
 function topicSources(row: ContrastMatrixRow) {
-  const antLabel = row.key === "procesos_legales" ? "Función Judicial" : "ANT"
+  const antLabel = row.key === "procesos_legales" || row.key === "prohibicion" ? "Función Judicial" : "ANT"
   return [
     { label: "SRI", text: row.sri.text, kind: row.sri.kind },
     { label: antLabel, text: row.ant.text, kind: row.ant.kind },
@@ -178,7 +180,7 @@ function ProcesosLegalesOwnerTable({ juicios }: { juicios: EcuadorJuiciosConsult
   const procesos = juicios?.procesos ?? []
   return (
     <section>
-      <h4 className="text-sm font-bold text-slate-900 mb-1">Procesos legales del propietario</h4>
+      <h4 className="text-sm font-bold text-slate-900 mb-1">Prohibición y Función Judicial</h4>
       {juicios?.titular || juicios?.cedula ? (
         <p className="text-[11px] text-slate-500 mb-3">
           {[juicios.titular, juicios.cedula].filter(Boolean).join(" · ")}

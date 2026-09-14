@@ -103,6 +103,41 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
       'REGLA DE CARGA: si el informe muestra deudas o citaciones pendientes, photo_should_not_be_uploaded=true y nombra cuántas citaciones y el valor. PROHIBIDO decir "hay discrepancias".',
     ]
   }
+  if (docType === 'informe_emov') {
+    return [
+      `Analiza esta foto como informe EMOV (${docLabel}).`,
+      'Céntrate en deudas, infracciones o pendientes de EMOV. NO evalúes vigencia de matrícula.',
+      'REGLA DE CARGA: si el informe muestra deudas o valores pendientes, photo_should_not_be_uploaded=true y nombra el monto. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
+  if (docType === 'informe_cte') {
+    return [
+      `Analiza esta foto como informe CTE (${docLabel}).`,
+      'Céntrate en deudas, infracciones o pendientes de CTE. NO evalúes vigencia de matrícula.',
+      'REGLA DE CARGA: si el informe muestra deudas o valores pendientes, photo_should_not_be_uploaded=true y nombra el monto. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
+  if (docType === 'informe_amt') {
+    return [
+      `Analiza esta foto como informe AMT (${docLabel}).`,
+      'Céntrate en deudas, revisión o pendientes de AMT. NO evalúes vigencia de matrícula.',
+      'REGLA DE CARGA: si el informe muestra deudas o valores pendientes, photo_should_not_be_uploaded=true y nombra el monto. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
+  if (docType === 'informe_sri') {
+    return [
+      `Analiza esta foto como informe SRI (${docLabel}).`,
+      'Céntrate en rubros SRI (matrícula, revisión, transferencia u otros). NO digas que falta la matrícula física.',
+      'REGLA DE CARGA: si el informe muestra valores pendientes, photo_should_not_be_uploaded=true y nombra el monto. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
+  if (docType === 'prohibicion') {
+    return [
+      `Analiza esta foto como prohibición (${docLabel}): prenda, gravamen, medida cautelar o proceso que restrinja la venta.`,
+      'Extrae si hay prohibición vigente, prenda, acreedor, fechas y placa.',
+      'REGLA DE CARGA: si el documento muestra una prohibición o gravamen vigente, photo_should_not_be_uploaded=true y descríbelo. Si dice que no hay prohibición, está bien. PROHIBIDO decir "hay discrepancias".',
+    ]
+  }
   if (docType === 'poder_contrato') {
     return [
       `Analiza esta foto como poder / contrato (${docLabel}).`,
@@ -124,7 +159,17 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
 }
 
 function shouldAttachContraste(docType: string): boolean {
-  return docType === 'matricula' || docType === 'revision_tecnica' || docType === 'informe_ant_siat' || docType === 'procesos_legales'
+  return (
+    docType === 'matricula' ||
+    docType === 'revision_tecnica' ||
+    docType === 'informe_ant_siat' ||
+    docType === 'informe_emov' ||
+    docType === 'informe_cte' ||
+    docType === 'informe_amt' ||
+    docType === 'informe_sri' ||
+    docType === 'prohibicion' ||
+    docType === 'procesos_legales'
+  )
 }
 
 function buildPrompt(input: {

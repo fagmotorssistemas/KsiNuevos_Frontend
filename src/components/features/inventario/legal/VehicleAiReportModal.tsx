@@ -9,6 +9,7 @@ import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/veh
 import {
   DOCUMENT_SECTION_TITLES,
   formatShortDate,
+  getCatalogDocumentRow,
   isDocumentCatalogItemVisible,
   isDocumentImageFile,
   listDocumentFiles,
@@ -34,6 +35,7 @@ import {
   type VehicleAiInformeSectionFile,
 } from '@/services/vehicleAiInformes.service'
 import type { VehicleDocType, VehicleDocumentFileRow, VehicleLegalDossier, VehicleOwnerRow } from '@/types/vehicleLegal.types'
+import { isProhibicionDocType } from '@/types/vehicleLegal.types'
 import type { VehiculoInventario } from '@/types/inventario.types'
 
 type PhotoPreview = {
@@ -108,7 +110,7 @@ function juiciosForSection(
   section: VehicleAiInformeSection,
   payload: VehicleAiInformePayload | null
 ): EcuadorJuiciosConsulta | null {
-  if (section.docType !== 'procesos_legales') return null
+  if (!isProhibicionDocType(section.docType)) return null
   return usableJuicios(section.juicios ?? payload?.juicios ?? null)
 }
 
@@ -116,7 +118,7 @@ function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionRes
   const results: ConclusionResult[] = []
   for (const section of payload.sections) {
     const juicios = juiciosForSection(section, payload)
-    if (section.docType === 'procesos_legales' && juicios) {
+    if (isProhibicionDocType(section.docType) && juicios) {
       const reasons = juicios.error
         ? [juicios.error]
         : [
@@ -143,7 +145,7 @@ function buildConclusionResults(payload: VehicleAiInformePayload): ConclusionRes
       })
     }
     if (section.missing) {
-      if (section.docType === 'procesos_legales' && juicios) {
+      if (isProhibicionDocType(section.docType) && juicios) {
         /* la consulta oficial ya cubre esta sección */
       } else {
         results.push({
@@ -237,15 +239,18 @@ function analysisFromReport(report: DocumentAiReportRow): DocumentAiAnalysis {
 
 function collectJobs(dossier: VehicleLegalDossier): FileJob[] {
   const jobs: FileJob[] = []
-  for (const row of dossier.documents) {
-    const catalog = docCatalogByType(row.doc_type as VehicleDocType)
+  const byType = new Map(dossier.documents.map((row) => [row.doc_type, row]))
+  for (const col of VEHICLE_DOCUMENT_CATALOG) {
+    if (!isDocumentCatalogItemVisible(col.docType, byType)) continue
+    const row = getCatalogDocumentRow(byType, col.docType)
+    if (!row) continue
     for (const file of listDocumentFiles(row)) {
       if (file.id.startsWith('legacy-')) continue
       jobs.push({
         fileId: file.id,
         fileName: file.file_name,
-        docType: row.doc_type as VehicleDocType,
-        docLabel: catalog?.label ?? row.doc_type,
+        docType: col.docType,
+        docLabel: col.label,
       })
     }
   }
@@ -259,12 +264,12 @@ function buildSections(
 ): VehicleAiInformeSection[] {
   const byType = new Map(dossier.documents.map((row) => [row.doc_type, row]))
   return VEHICLE_DOCUMENT_CATALOG.filter((col) => isDocumentCatalogItemVisible(col.docType, byType)).map((col) => {
-    const row = byType.get(col.docType)
+    const row = getCatalogDocumentRow(byType, col.docType)
     const fileIds = new Set(row ? listDocumentFiles(row).map((file) => file.id) : [])
     const analyzable = fileResults
       .filter((file) => fileIds.has(file.fileId) && !file.fileId.startsWith('legacy-'))
       .map((file, index) => ({ ...file, photoIndex: index + 1 }))
-    const sectionJuicios = col.docType === 'procesos_legales' ? juicios ?? null : null
+    const sectionJuicios = col.docType === 'prohibicion' ? juicios ?? null : null
     return {
       docType: col.docType,
       docLabel: col.label,
@@ -427,8 +432,8 @@ function juiciosSynthesisItem(juicios: EcuadorJuiciosConsulta | null): VehicleAi
       ? ['Sin procesos judiciales reportados por Función Judicial.']
       : usable.procesos.map(formatJuicioLine)
   return {
-    docType: 'procesos_legales',
-    docLabel: 'Procesos legales',
+    docType: 'prohibicion',
+    docLabel: 'Prohibición',
     fileName: '',
     summary: usable.error
       ? `Función Judicial: ${usable.error}`
@@ -649,7 +654,7 @@ function VehicleAiReportModal({
           items: [
             ...sections.flatMap((section): VehicleAiSynthesisItem[] => {
               if (section.missing) {
-                if (section.docType === 'procesos_legales' && juiciosItem) return []
+                if (isProhibicionDocType(section.docType) && juiciosItem) return []
                 return [
                   {
                     docType: section.docType,
@@ -715,32 +720,55 @@ function VehicleAiReportModal({
   const displayPayload = useMemo(() => {
     if (!payload) return null
     const juicios = payload.juicios ?? contrasteJuicios
-    if (!juicios) return payload
-    const catalog = VEHICLE_DOCUMENT_CATALOG.find((col) => col.docType === 'procesos_legales')
+    const catalog = VEHICLE_DOCUMENT_CATALOG.find((col) => col.docType === 'prohibicion')
+    const prohibicionLabel = catalog?.label ?? 'Prohibición'
     let sections = payload.sections.map((section) =>
-      section.docType === 'procesos_legales'
-        ? { ...section, juicios: section.juicios ?? juicios, missing: section.files.length === 0 && !juicios }
+      isProhibicionDocType(section.docType)
+        ? {
+            ...section,
+            docType: 'prohibicion',
+            docLabel: prohibicionLabel,
+            juicios: section.juicios ?? juicios ?? section.juicios,
+            missing: section.files.length === 0 && !usableJuicios(section.juicios ?? juicios),
+          }
         : section
     )
-    if (!sections.some((section) => section.docType === 'procesos_legales')) {
-      sections = [
-        ...sections,
-        {
-          docType: 'procesos_legales',
-          docLabel: catalog?.label ?? 'Procesos legales',
-          category: 'legal' as const,
-          detailText: null,
-          missing: false,
-          files: [],
-          juicios,
-        },
-      ]
+    if (juicios) {
+      sections = sections.map((section) =>
+        section.docType === 'prohibicion'
+          ? { ...section, juicios: section.juicios ?? juicios, missing: section.files.length === 0 && !juicios }
+          : section
+      )
+      if (!sections.some((section) => section.docType === 'prohibicion')) {
+        sections = [
+          ...sections,
+          {
+            docType: 'prohibicion',
+            docLabel: prohibicionLabel,
+            category: 'legal' as const,
+            detailText: null,
+            missing: false,
+            files: [],
+            juicios,
+          },
+        ]
+      }
     }
     return { ...payload, juicios, sections }
   }, [payload, contrasteJuicios])
 
-  const legalBlocks = (displayPayload?.sections ?? []).filter((s) => s.category === 'legal')
-  const physicalBlocks = (displayPayload?.sections ?? []).filter((s) => s.category === 'physical')
+  const legalBlocks = (displayPayload?.sections ?? []).filter((s) => {
+    const category = docCatalogByType(s.docType as VehicleDocType)?.category ?? s.category
+    return category === 'legal'
+  })
+  const consultaBlocks = (displayPayload?.sections ?? []).filter((s) => {
+    const category = docCatalogByType(s.docType as VehicleDocType)?.category ?? s.category
+    return category === 'consulta'
+  })
+  const physicalBlocks = (displayPayload?.sections ?? []).filter((s) => {
+    const category = docCatalogByType(s.docType as VehicleDocType)?.category ?? s.category
+    return category === 'physical'
+  })
   const conclusionResults = useMemo(
     () => (displayPayload ? buildConclusionResults(displayPayload) : []),
     [displayPayload]
@@ -896,7 +924,7 @@ function VehicleAiReportModal({
             </section>
           ) : null}
 
-          {legalBlocks.length > 0 || physicalBlocks.length > 0 ? (
+          {legalBlocks.length > 0 || consultaBlocks.length > 0 || physicalBlocks.length > 0 ? (
             <button
               type="button"
               aria-expanded={showLegalDetails}
@@ -917,6 +945,27 @@ function VehicleAiReportModal({
                     key={block.docType}
                     section={block}
                     synthesis={displayPayload?.synthesis.blocks.find((b) => b.docType === block.docType)}
+                    onOpenFindingPhoto={openFindingPhoto}
+                    onOpenSectionPhoto={openSectionPhoto}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {showLegalDetails && consultaBlocks.length > 0 ? (
+            <section>
+              <h4 className="text-sm font-bold text-slate-900 mb-3">{DOCUMENT_SECTION_TITLES.consulta}</h4>
+              <div className="space-y-3">
+                {consultaBlocks.map((block) => (
+                  <AiDocBlock
+                    key={block.docType}
+                    section={block}
+                    synthesis={displayPayload?.synthesis.blocks.find(
+                      (b) =>
+                        b.docType === block.docType ||
+                        (isProhibicionDocType(block.docType) && isProhibicionDocType(b.docType))
+                    )}
                     onOpenFindingPhoto={openFindingPhoto}
                     onOpenSectionPhoto={openSectionPhoto}
                   />

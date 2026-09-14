@@ -740,7 +740,15 @@ function stripMatriculaNoise(analysis: DocumentAiAnalysis, docType: string): Doc
     quality: forcedWrongType ? 'ok' : analysis.quality,
     matricula_expired: null,
     vigencia_hasta: null,
-    contraste_mismatch: docType === 'revision_tecnica' || docType === 'informe_ant_siat' ? analysis.contraste_mismatch : null,
+    contraste_mismatch:
+      docType === 'revision_tecnica' ||
+      docType === 'informe_ant_siat' ||
+      docType === 'informe_emov' ||
+      docType === 'informe_cte' ||
+      docType === 'informe_amt' ||
+      docType === 'informe_sri'
+        ? analysis.contraste_mismatch
+        : null,
     photo_should_not_be_uploaded: analysis.photo_should_not_be_uploaded ?? null,
     matches_expected_type: forcedWrongType ? true : analysis.matches_expected_type,
   }
@@ -873,6 +881,14 @@ function invalidUploadReasons(input: {
       `el informe ANT no está al día: ${contraste.citationsPendingCount} citación(es) pendiente(s)` +
         (contraste.citationsPendingTotal > 0.009 ? ` por $${contraste.citationsPendingTotal.toFixed(2)}` : '')
     )
+  }
+
+  if (input.docType === 'informe_sri' && contraste && contraste.sriTotalPending > 0.009) {
+    reasons.push(`el informe SRI muestra valores pendientes de $${contraste.sriTotalPending.toFixed(2)}`)
+  }
+
+  if (input.docType === 'informe_amt' && contraste && contraste.sriRevisionPending > 0.009) {
+    reasons.push(`AMT/SRI tienen revisión pendiente de $${contraste.sriRevisionPending.toFixed(2)}`)
   }
 
   if (reasons.length === 0) {
