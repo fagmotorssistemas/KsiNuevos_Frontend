@@ -26,7 +26,7 @@ For recruiters and reviewers: this is not a tutorial app — it is a **multi-mod
 | Role | Name | Links |
 |------|------|--------|
 | **Lead developer** | Freddy Paguay | [GitHub @FreddyJPC](https://github.com/FreddyJPC) |
-| **Developer** | Nathaly Caballero | — |
+| **Developer** | Nathaly Caballero | [GitHub @Nathaly222](https://github.com/Nathaly222) |
 
 ---
 
@@ -344,6 +344,6 @@ Proprietary software developed for **FAG MOTORS / KSI NUEVOS**. All rights reser
 ## Contact
 
 - **Freddy Paguay** — [github.com/FreddyJPC](https://github.com/FreddyJPC)
-- **Nathaly Caballero** — [https://github.com/Nathaly222]
+- **Nathaly Caballero** — [github.com/Nathaly222](https://github.com/Nathaly222)
 
 *Built with Next.js, Supabase, and modern AI tooling for automotive retail operations.*
