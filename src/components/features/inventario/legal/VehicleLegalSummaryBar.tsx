@@ -98,7 +98,7 @@ export function VehicleLegalSummaryBar({
           <span className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center">
             <CircleDollarSign className="h-4 w-4 text-red-600" />
           </span>
-          <p className="text-xs text-slate-500">Valores pendientes</p>
+          <p className="text-xs text-slate-500">Pendientes SRI / ANT / AMT</p>
         </div>
         <p className={`text-xl font-bold mt-2 ${hasDebt ? 'text-red-600' : 'text-slate-700'}`}>
           {!hasConsulta ? '—' : money(pending?.total ?? 0)}
@@ -108,6 +108,7 @@ export function VehicleLegalSummaryBar({
             <span className="text-[10px] text-slate-400">Sin consulta oficial</span>
           ) : (
             <>
+              <PendingChip label="EMOV" value={pending?.emovTotal == null ? "Sin verificar" : money(pending.emovTotal)} />
               <PendingChip label="SRI" value={money(pending?.sriTotal ?? 0)} />
               <PendingChip
                 label="ANT"

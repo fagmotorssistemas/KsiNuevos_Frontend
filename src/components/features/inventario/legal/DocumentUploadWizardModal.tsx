@@ -34,6 +34,7 @@ const NOTE_PLACEHOLDERS: Partial<Record<VehicleDocType, string>> = {
   informe_emov: 'Ej. Informe EMOV se solicita esta semana porque…',
   informe_cte: 'Ej. Informe CTE se solicita esta semana porque…',
   informe_amt: 'Ej. Informe AMT se solicita esta semana porque…',
+  informe_atm: 'Ej. Informe ATM se solicita esta semana porque…',
   informe_sri: 'Ej. Informe SRI se solicita esta semana porque…',
   historial_mantenimiento: 'Ej. Sin historial; vehículo nuevo de agencia…',
   accesorios_llaves: 'Ej. 1 llave, sin control; el resto no aplica porque…',

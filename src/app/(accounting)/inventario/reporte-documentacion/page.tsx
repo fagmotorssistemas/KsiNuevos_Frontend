@@ -41,7 +41,7 @@ export default function ReporteDocumentacionPage({
                         Mismas fuentes de datos que la pestaña Documentos; el detalle se abre en la fila
                     </p>
                 </div>
-                <div className="flex items-center gap-2 self-start">
+                <div className="flex flex-wrap items-center gap-2 self-start">
                     <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                         <Link
                             href="/inventario"
@@ -85,6 +85,7 @@ export default function ReporteDocumentacionPage({
                     setDetailVehicle(v);
                 }}
             />
+
 
             {consultaOpen ? (
                 <ConsultaUnificadaDialog

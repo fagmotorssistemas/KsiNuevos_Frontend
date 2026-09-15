@@ -215,9 +215,10 @@ function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | unde
     return (
         <div className="flex flex-col gap-0.5 min-w-0">
             <span className={`text-[12px] font-bold tabular-nums ${hasDebt ? "text-red-700" : "text-emerald-700"}`}>
-                {money(pending.total)}
+                {money(pending.total)} <span className="text-[10px] font-normal">SRI / ANT / AMT</span>
             </span>
             <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-slate-500">
+                <span>EMOV {pending.emovTotal == null ? "Sin verificar" : money(pending.emovTotal)}</span>
                 <span>SRI {money(pending.sriTotal)}</span>
                 <span>
                     ANT{" "}

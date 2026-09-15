@@ -1,3 +1,4 @@
+import { refreshEmov } from '@/lib/inventario/emovContraste.server'
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { INVENTORY_VEHICLE_DOCS_BUCKET } from '@/lib/inventario/vehicleDocumentCatalog'
@@ -68,6 +69,7 @@ async function loadFileContext(
   } catch {
     latestConsulta = null
   }
+  if (latestConsulta) latestConsulta = await refreshEmov(supabase, latestConsulta)
   const contrastePayload = latestConsulta ? payloadFromConsulta(latestConsulta) : null
 
   const ownerNames = [

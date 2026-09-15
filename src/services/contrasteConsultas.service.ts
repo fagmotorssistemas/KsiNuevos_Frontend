@@ -21,7 +21,7 @@ export async function listContrasteConsultas(
     .order('created_at', { ascending: false })
     .limit(100)
   if (error) throw error
-  return data ?? []
+  return refreshEmovRows(data ?? [])
 }
 
 export async function saveContrasteConsulta(
@@ -72,24 +72,26 @@ export async function listLatestContrasteConsultasByPlacas(
   placas: string[]
 ): Promise<Map<string, LatestContrasteByPlate>> {
   const unique = [...new Set(placas.map((p) => normalizePlate(p)).filter(Boolean))]
-  const latest = new Map<string, { created_at: string; payload: Json | null }>()
+  const latest = new Map<string, ContrasteConsultaRow>()
   for (let i = 0; i < unique.length; i += PLATE_IN_CHUNK) {
     const chunk = unique.slice(i, i + PLATE_IN_CHUNK)
     const { data, error } = await supabase
       .from('inventory_vehicle_contraste_consultas')
-      .select('placa, created_at, payload')
+      .select('*')
       .in('placa', chunk)
     if (error) throw error
     for (const row of data ?? []) {
       const plate = normalizePlate(row.placa)
       const prev = latest.get(plate)
       if (!prev || row.created_at > prev.created_at) {
-        latest.set(plate, { created_at: row.created_at, payload: row.payload })
+        latest.set(plate, row)
       }
     }
   }
   const out = new Map<string, LatestContrasteByPlate>()
-  for (const [plate, row] of latest) {
+  const refreshed = await refreshEmovRows([...latest.values()])
+  for (const row of refreshed) {
+    const plate = normalizePlate(row.placa)
     const parsed = payloadFromConsulta({ payload: row.payload } as ContrasteConsultaRow)
     out.set(plate, {
       consultedAt: row.created_at,
@@ -121,4 +123,24 @@ export async function hasContrasteConsulta(
     .limit(1)
   if (error) throw error
   return (data ?? []).length > 0
+}
+
+/** Refresh only pending jobs; this never starts another scrape. */
+export async function refreshEmovRows(rows: ContrasteConsultaRow[]): Promise<ContrasteConsultaRow[]> {
+  if (typeof window === 'undefined') return rows
+  const active = rows.filter(row => {
+    const emov = payloadFromConsulta(row)?.emov
+    return emov && ['pendiente', 'en_proceso', 'esperando_intervencion'].includes(emov.estado)
+  })
+  const updates = new Map<string, ContrasteConsultaRow>()
+  for (let i = 0; i < active.length; i += 10) {
+    try {
+      const response = await fetch('/api/inventario/contraste/emov', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: active.slice(i, i + 10).map(row => row.id) }) })
+      if (response.ok) {
+        const body = await response.json() as { rows: ContrasteConsultaRow[] }
+        for (const row of body.rows) updates.set(row.id, row)
+      }
+    } catch { /* Keep the persisted pending state on temporary connection errors. */ }
+  }
+  return rows.map(row => updates.get(row.id) || row)
 }

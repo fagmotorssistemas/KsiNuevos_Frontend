@@ -1,3 +1,4 @@
+import { startEmov } from '@/lib/inventario/emovContraste.server'
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
@@ -23,6 +24,7 @@ async function handleContraste(rawPlaca: string) {
 
   try {
     const data = await fetchEcuadorContraste(placa)
+    data.emov = await startEmov(placa, user.id)
     const owner = await resolveOwnerIdentityForContraste(supabase, placa)
     const juicios = await loadJuiciosForOwner({
       cedula: owner.cedula,

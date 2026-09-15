@@ -329,11 +329,11 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
       autoTable(pdf, {
         ...tableOpts,
         startY: y,
-        head: [showAmt ? ['Dato', 'SRI', 'ANT', 'AMT', 'Resultado'] : ['Dato', 'SRI', 'ANT', 'Resultado']],
+        head: [showAmt ? ['Dato', 'SRI', 'ANT', 'EMOV', 'AMT', 'Resultado'] : ['Dato', 'SRI', 'ANT', 'EMOV', 'Resultado']],
         body: matrix.map((row) =>
           showAmt
-            ? [row.label, row.sri.text, row.ant.text, row.amt.text, row.resultado.text]
-            : [row.label, row.sri.text, row.ant.text, row.resultado.text]
+            ? [row.label, row.sri.text, row.ant.text, row.emov.text, row.amt.text, row.resultado.text]
+            : [row.label, row.sri.text, row.ant.text, row.emov.text, row.resultado.text]
         ),
       })
 
@@ -586,6 +586,7 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                           <th className="px-3 py-2.5">Dato</th>
                           <th className="px-3 py-2.5">SRI</th>
                           <th className="px-3 py-2.5">ANT</th>
+                          <th className="px-3 py-2.5">EMOV</th>
                           {showAmt ? <th className="px-3 py-2.5">AMT</th> : null}
                           <th className="px-3 py-2.5">Resultado</th>
                         </tr>
@@ -596,6 +597,7 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                             <td className="px-3 py-2.5 font-semibold text-slate-800">{row.label}</td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.sri.kind)}`}>{row.sri.text}</td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.ant.kind)}`}>{row.ant.text}</td>
+                            <td className={`whitespace-pre-line px-3 py-2.5 ${matrixCellClass(row.emov.kind)}`}>{row.emov.text}</td>
                             {showAmt ? (
                               <td className={`px-3 py-2.5 ${matrixCellClass(row.amt.kind)}`}>{row.amt.text}</td>
                             ) : null}

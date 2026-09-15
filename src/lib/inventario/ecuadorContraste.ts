@@ -1,3 +1,4 @@
+import { emovText, type EmovSnapshot } from './emovResult'
 import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import type { VehicleDocType } from '@/types/vehicleLegal.types'
 
@@ -61,6 +62,7 @@ export type EcuadorJuiciosConsulta = {
 }
 
 export type EcuadorContrastePayload = {
+  emov?: EmovSnapshot | null
   plate: string
   fetchedAt: string | null
   vehicleLabel: string | null
@@ -280,6 +282,7 @@ export const CONTRASTE_OFICIAL_DOC_TYPES: VehicleDocType[] = [
   'matricula',
   'revision_tecnica',
   'informe_ant_siat',
+  'informe_emov',
 ]
 
 export type EcuadorPendientes = {
@@ -437,6 +440,9 @@ export function contrasteTopicDetail(
   let lines: ContrastePendienteLine[] = []
   let emptyHint = 'La fuente oficial no reportó ítems para este rubro.'
 
+  if (key === 'informe_emov' || key === 'emov') {
+    return { facts: [{ label: 'EMOV Cuenca', value: emovText(payload.emov) }], lines: (payload.emov?.conceptos || []).map(c => toPendienteLine({ description: c.concepto, amount: c.total }, 'EMOV')), emptyHint: emovText(payload.emov) }
+  }
   if (key === 'matricula') {
     if (lookup?.ownerName) facts.push({ label: 'Propietario', value: lookup.ownerName })
     if (lookup?.canton) facts.push({ label: 'Cantón', value: lookup.canton })
@@ -611,6 +617,7 @@ export function sriRubros(sri: EcuadorPendientes | null): SriRubros {
 }
 
 export type OfficialPendingSummary = {
+  emovTotal: number | null
   sriTotal: number
   sriMatricula: number
   sriRevision: number
@@ -632,6 +639,7 @@ export function officialPendingSummary(payload: EcuadorContrastePayload | null):
     antTotal,
     amtTotal,
     citationsCount,
+    emovTotal: payload?.emov?.estado === 'completada' ? payload.emov.total : null,
     total: sri.total + antTotal + amtTotal,
   }
 }
@@ -901,6 +909,7 @@ export type ContrastMatrixRow = {
   sri: MatrixCell
   ant: MatrixCell
   amt: MatrixCell
+  emov: MatrixCell
   resultado: MatrixCell
 }
 
@@ -921,8 +930,8 @@ export function contrastShowAmt(payload: EcuadorContrastePayload | null): boolea
   return /quito/i.test(payload.lookup?.canton || '')
 }
 
-function rowResultado(sri: MatrixCell, ant: MatrixCell, amt: MatrixCell): MatrixCell {
-  const cells = [sri, ant, amt].filter((c) => c.kind !== 'idle' && c.text !== '—')
+function rowResultado(sri: MatrixCell, ant: MatrixCell, amt: MatrixCell, emov: MatrixCell): MatrixCell {
+  const cells = [sri, ant, amt, emov].filter((c) => c.kind !== 'idle' && c.text !== '—')
   if (cells.length === 0) return { text: 'Sin consultar', kind: 'idle' }
   if (cells.some((c) => c.kind === 'missing')) return { text: 'Revisar', kind: 'missing' }
   if (cells.every((c) => c.kind === 'ok')) return { text: 'Coincide', kind: 'ok' }
@@ -1008,6 +1017,7 @@ export function buildContrastMatrix(
     let sriCell: MatrixCell = DASH
     let antCell: MatrixCell = DASH
     let amtCell: MatrixCell = DASH
+    let emovCell: MatrixCell = DASH
 
     if (docType === 'matricula') {
       sriCell = sriMoney(rubros.matricula, current.status, 'Pagar matrícula', 'Sin pendiente de matrícula')
@@ -1043,7 +1053,10 @@ export function buildContrastMatrix(
       sriCell = sriMoney(rubros.total, current.status, 'Valores pendientes', 'Sin pendientes SRI')
     } else if (docType === 'informe_amt') {
       amtCell = amtRev(current.status)
-    } else if (docType === 'informe_emov' || docType === 'informe_cte') {
+    } else if (docType === 'informe_emov') {
+      const e = payload?.emov
+      emovCell = { text: emovText(e), kind: !e ? 'idle' : e.estado !== 'completada' || e.total === null ? 'warn' : compareContrastRow(current.status, e.total === 0).kind }
+    } else if (docType === 'informe_atm' || docType === 'informe_cte') {
       antCell = { text: 'Sin consulta automática', kind: 'idle' }
     } else if (docType === 'prenda_industrial') {
       const official = payload?.prenda_industrial
@@ -1089,9 +1102,10 @@ export function buildContrastMatrix(
       sri: sriCell,
       ant: antCell,
       amt: amtCell,
+      emov: emovCell,
       resultado: DASH,
     }
-    return { ...row, resultado: rowResultado(row.sri, row.ant, row.amt) }
+    return { ...row, resultado: rowResultado(row.sri, row.ant, row.amt, row.emov) }
   }
 
   return docTypes.map(rowForDocType)
@@ -1100,7 +1114,7 @@ export function buildContrastMatrix(
 export function summarizeMatrix(rows: ContrastMatrixRow[], showAmt: boolean): ContrasteSummary {
   const kinds: ContrastResultKind[] = []
   for (const row of rows) {
-    for (const cell of showAmt ? [row.sri, row.ant, row.amt] : [row.sri, row.ant]) {
+    for (const cell of showAmt ? [row.sri, row.ant, row.amt, row.emov] : [row.sri, row.ant, row.emov]) {
       if (cell.kind === 'idle' || cell.text === '—') continue
       kinds.push(cell.kind)
     }

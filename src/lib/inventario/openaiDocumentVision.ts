@@ -117,6 +117,9 @@ function typeFocusRules(docType: string, docLabel: string): string[] {
       'REGLA DE CARGA: si el informe muestra deudas o valores pendientes, photo_should_not_be_uploaded=true y nombra el monto. PROHIBIDO decir "hay discrepancias".',
     ]
   }
+  if (docType === 'informe_atm') {
+    return ['Analiza como informe ATM de Guayaquil. Verifica placa, fecha, valores y estado. ATM es una fuente distinta de AMT Quito y EMOV Cuenca. No atribuyas valores de otras entidades a ATM.']
+  }
   if (docType === 'informe_amt') {
     return [
       `Analiza esta foto como informe AMT (${docLabel}).`,
@@ -167,6 +170,7 @@ function shouldAttachContraste(docType: string): boolean {
     docType === 'informe_emov' ||
     docType === 'informe_cte' ||
     docType === 'informe_amt' ||
+    docType === 'informe_atm' ||
     docType === 'informe_sri' ||
     docType === 'prohibicion' ||
     docType === 'procesos_legales'
@@ -448,6 +452,7 @@ function sourceLabel(input: {
   if (input.kind === 'missing') return `Sin archivo · ${input.docLabel}`
   if (input.kind === 'detail') return `Detalle · ${input.docLabel}`
   if (input.kind === 'api') {
+    if (/EMOV/i.test(input.docLabel)) return 'EMOV Cuenca (consulta oficial)'
     if (/proceso/i.test(input.docLabel)) return 'Función Judicial (Consultas.ec)'
     return 'EcuadorAPI (contraste)'
   }
@@ -614,6 +619,7 @@ export async function synthesizeVehicleAiReport(input: {
     'Si no_debio_subirse=true, copia el motivo concreto de alertas: fecha de vencimiento, monto SRI, citaciones, o por qué la foto no es válida. Cita Foto N.',
     'PROHIBIDO escribir "hay discrepancias", "existen inconsistencias" o frases equivalentes sin nombrar el hecho.',
     'Si sin_archivo=true, kind=missing. Si usas el detalle del encargado, kind=detail. Si el dato es de EcuadorAPI/SRI, kind=api Y además la foto de matrícula con la que se contrastó.',
+    'Los datos del tipo emov_consulta_oficial tienen kind=api y fuente EMOV Cuenca, nunca foto. Presenta todos sus conceptos y el estado de la consulta. ATM es diferente de AMT. No sumes de nuevo el total EMOV y sus conceptos, ni dupliques obligaciones entre fuentes.',
     'NO inventes fotos. No mezcles tipos.',
     'Responde SOLO JSON:',
     '{',

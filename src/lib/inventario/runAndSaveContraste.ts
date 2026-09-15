@@ -1,3 +1,4 @@
+import { startEmov } from '@/lib/inventario/emovContraste.server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/types/supabase'
 import {
@@ -50,6 +51,7 @@ export async function runAndSaveContrasteIngreso(
     }
   }
 
+  payload.emov = await startEmov(placa, input.consultedBy)
   const owner = await resolveOwnerIdentityForContraste(supabase, placa, input.inventoryoracleId)
   const juicios = await loadJuiciosForOwner({
     cedula: owner.cedula,

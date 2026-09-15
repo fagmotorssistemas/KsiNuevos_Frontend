@@ -4,7 +4,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, Loader2, Scale, Sparkles, User, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
-import { listContrasteConsultas, payloadFromConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
+import { emovActive } from '@/lib/inventario/emovResult'
+import { refreshEmovRows, listContrasteConsultas, payloadFromConsulta, saveContrasteConsulta } from '@/services/contrasteConsultas.service'
 import { VEHICLE_DOCUMENT_CATALOG, docCatalogByType } from '@/lib/inventario/vehicleDocumentCatalog'
 import {
   DOCUMENT_SECTION_TITLES,
@@ -594,7 +595,7 @@ function VehicleAiReportModal({
           buildContrastMatrix(contrastBody.data, staff),
           contrastShowAmt(contrastBody.data)
         )
-        await saveContrasteConsulta(supabase, {
+        let savedContrast = await saveContrasteConsulta(supabase, {
           placa: vehiculo.placa,
           inventoryoracleId: dossier.inventoryoracleId,
           payload: contrastBody.data,
@@ -603,12 +604,18 @@ function VehicleAiReportModal({
           diferencias: counts.diferencias,
           sinVerificar: counts.sinVerificar,
           estadoGeneral: counts.estadoGeneral,
-          consultedBy: profile?.id ?? null,
+          consultedBy: user?.id ?? null,
           consultedByName: profile?.full_name?.trim() || user?.email || 'Informe IA',
         })
+        const deadline = Date.now() + 480_000
+        while (emovActive(payloadFromConsulta(savedContrast)?.emov) && Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          savedContrast = (await refreshEmovRows([savedContrast]))[0]
+        }
+        contrastePayload = payloadFromConsulta(savedContrast) || contrastBody.data
         setApiOwner(contrastBody.data.lookup?.ownerName?.trim() || null)
         setApiCanton(contrastBody.data.lookup?.canton?.trim() || null)
-        onContrasteUpdated?.(contrastBody.data)
+        onContrasteUpdated?.(contrastePayload)
         setContrasteJuicios(contrastBody.data.juicios ?? null)
       } else {
         throw new Error('EcuadorAPI no está configurada. No se puede actualizar el contraste.')
@@ -850,7 +857,7 @@ function VehicleAiReportModal({
           {running ? (
             <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
               {phase === 'contraste'
-                ? 'Consultando EcuadorAPI para actualizar el contraste…'
+                ? 'Actualizando el contraste oficial y esperando los resultados de EMOV…'
                 : phase === 'files'
                 ? `Analizando fotos ${progress} de ${jobs.length}…`
                 : 'Redactando conclusiones por sección…'}

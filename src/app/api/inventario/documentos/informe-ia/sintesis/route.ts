@@ -1,3 +1,6 @@
+import { refreshEmov } from '@/lib/inventario/emovContraste.server'
+import { emovText } from '@/lib/inventario/emovResult'
+import { listContrasteConsultas, payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { synthesizeVehicleAiReport, type VehicleAiSynthesisItem } from '@/lib/inventario/openaiDocumentVision'
@@ -24,10 +27,18 @@ export async function POST(req: Request) {
   }
 
   try {
+    const latest = (await listContrasteConsultas(supabase, placa))[0]
+    const official = latest ? payloadFromConsulta(await refreshEmov(supabase, latest)) : null
+    const emovItem: VehicleAiSynthesisItem = {
+      docType: 'emov_consulta_oficial', docLabel: 'Consulta oficial EMOV Cuenca', fileName: 'Fuente oficial EMOV',
+      summary: emovText(official?.emov),
+      issues: official?.emov?.estado === 'completada' && official.emov.total !== null ? (official.emov.total > 0 ? ['EMOV reporta valores pendientes; revisar cada concepto.'] : []) : ['EMOV no está verificada: no concluir que el vehículo está libre de deudas.'],
+      detailText: 'Presentar todos los conceptos EMOV. El total ya contiene esos conceptos: no sumarlos dos veces. No acumular con ANT sin verificar si corresponden a las mismas obligaciones. ATM es distinta de AMT y debe analizarse como documento separado.',
+    }
     const synthesis = await synthesizeVehicleAiReport({
       placa,
       vehicleLabel: body.vehicleLabel?.trim() || placa,
-      items: items.slice(0, 40),
+      items: [...items.filter(item => item.docType !== 'emov_consulta_oficial').slice(0, 39), emovItem],
     })
     return NextResponse.json({ synthesis })
   } catch (e) {

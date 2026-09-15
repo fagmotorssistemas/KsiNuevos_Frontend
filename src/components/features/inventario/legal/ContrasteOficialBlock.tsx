@@ -116,7 +116,7 @@ function sourceTextClass(kind: ResultKind): string {
 function topicIcon(key: string) {
   if (key === "matricula") return Calendar;
   if (key === "revision_tecnica") return ClipboardCheck;
-  if (key === "informe_ant_siat" || key === "informe_emov" || key === "informe_cte" || key === "informe_amt" || key === "informe_sri") return Search;
+  if (key === "informe_ant_siat" || key === "informe_emov" || key === "informe_cte" || key === "informe_amt" || key === "informe_atm" || key === "informe_sri") return Search;
   if (key === "prohibicion" || key === "procesos_legales") return Scale;
   if (key === "prenda_industrial" || key === "levantamiento_prendas") return Pin;
   if (key === "poder_contrato" || key === "contrato_interno") return FileText;
@@ -134,6 +134,7 @@ function topicSources(row: ContrastMatrixRow) {
   return [
     { label: "SRI", text: row.sri.text, kind: row.sri.kind },
     { label: antLabel, text: row.ant.text, kind: row.ant.kind },
+    { label: "EMOV", text: row.emov.text, kind: row.emov.kind },
     { label: "AMT", text: row.amt.text, kind: row.amt.kind },
   ].filter((s) => s.text && s.text !== "—" && s.kind !== "idle")
 }
@@ -665,6 +666,27 @@ export function ContrasteOficialBlock({
     };
   }
 
+  useEffect(() => {
+    if (!activeConsultaId || !payload?.emov || !['pendiente', 'en_proceso', 'esperando_intervencion'].includes(payload.emov.estado)) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const rows = await listContrasteConsultas(supabase, placa);
+        if (cancelled) return;
+        const row = rows.find(r => r.id === activeConsultaId);
+        const next = row ? payloadFromConsulta(row) : null;
+        if (next) {
+          setHistory(rows); setPayload(next);
+          if (next.emov && ['completada', 'error'].includes(next.emov.estado)) { onConsultaSaved?.(next); return; }
+        }
+      } catch { /* Retry transient errors without clearing the last result. */ }
+      if (!cancelled) timer = setTimeout(poll, 3000);
+    };
+    timer = setTimeout(() => void poll().catch(() => {}), 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [activeConsultaId, payload?.emov?.estado, supabase, placa, onConsultaSaved]);
+
   const latest = history[0] ?? null;
   const activeConsulta = history.find((row) => row.id === activeConsultaId) ?? latest;
   const viewingOlder = Boolean(
@@ -747,7 +769,7 @@ export function ContrasteOficialBlock({
           diferencias: counts.diferencias,
           sinVerificar: counts.sinVerificar,
           estadoGeneral: counts.estadoGeneral,
-          consultedBy: profile?.id ?? null,
+          consultedBy: user?.id ?? null,
           consultedByName: profile?.full_name?.trim() || user?.email || "Usuario",
         });
         setActiveConsultaId(saved.id);
@@ -980,6 +1002,7 @@ export function ContrasteOficialBlock({
                           <th className="px-3 py-2.5">Encargado</th>
                           <th className="px-3 py-2.5">SRI</th>
                           <th className="px-3 py-2.5">ANT</th>
+                          <th className="px-3 py-2.5">EMOV</th>
                           {showAmt ? <th className="px-3 py-2.5">AMT</th> : null}
                         </tr>
                       </thead>
@@ -1007,6 +1030,7 @@ export function ContrasteOficialBlock({
                             </td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.sri.kind)}`}>{row.sri.text}</td>
                             <td className={`px-3 py-2.5 ${matrixCellClass(row.ant.kind)}`}>{row.ant.text}</td>
+                            <td className={`whitespace-pre-line px-3 py-2.5 ${matrixCellClass(row.emov.kind)}`}>{row.emov.text}</td>
                             {showAmt ? (
                               <td className={`px-3 py-2.5 ${matrixCellClass(row.amt.kind)}`}>{row.amt.text}</td>
                             ) : null}

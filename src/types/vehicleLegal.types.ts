@@ -12,6 +12,7 @@ export type VehicleDocType =
   | 'informe_emov'
   | 'informe_cte'
   | 'informe_amt'
+  | 'informe_atm'
   | 'informe_sri'
   | 'historial_mantenimiento'
   | 'accesorios_llaves'

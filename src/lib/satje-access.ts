@@ -13,7 +13,7 @@ import type { Database } from '@/types/supabase'
 
 export const SATJE_ACTIVE_STATUSES = ['pendiente', 'en_proceso', 'esperando_captcha'] as const
 
-export async function requireSatjeAccess(): Promise<
+export async function requireSatjeAccess(service: 'SATJE' | 'EMOV' = 'SATJE'): Promise<
   | { supabase: SupabaseClient<Database>; user: User }
   | { response: NextResponse }
 > {
@@ -33,7 +33,7 @@ export async function requireSatjeAccess(): Promise<
 
   const ctx = createPermissionContext(profile?.role ?? null, rowsToPermissionMap((permRows ?? []) as EffectivePermissionRow[]), catalogBaseRole)
   if (!isFullSystemAdmin(ctx) && !isRouteAllowed('/inventario', ctx)) {
-    return { response: NextResponse.json({ error: 'Sin permiso para consultar SATJE' }, { status: 403 }) }
+    return { response: NextResponse.json({ error: `Sin permiso para consultar ${service}` }, { status: 403 }) }
   }
 
   return { supabase, user }

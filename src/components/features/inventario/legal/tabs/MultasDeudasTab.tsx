@@ -1,5 +1,7 @@
 'use client'
 
+import { EmovValores } from '../EmovValores'
+import { emovActive } from '@/lib/inventario/emovResult'
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, Loader2, Scale } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -86,6 +88,23 @@ export function MultasDeudasTab({ placa }: Props) {
     }
   }, [placa, supabase])
 
+  useEffect(() => {
+    if (!emovActive(payload?.emov)) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      try {
+        const rows = await listContrasteConsultas(supabase, placa)
+        if (cancelled) return
+        const next = rows[0] ? payloadFromConsulta(rows[0]) : null
+        if (next) setPayload(next)
+      } catch { /* Preserve the last result while reconnecting. */ }
+      if (!cancelled) timer = setTimeout(poll, 3000)
+    }
+    timer = setTimeout(poll, 3000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [payload?.emov?.estado, placa, supabase])
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-500">
@@ -118,6 +137,7 @@ export function MultasDeudasTab({ placa }: Props) {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
+      <EmovValores emov={payload.emov} />
       {consultedAt && (
         <p className="text-[11px] text-slate-500">
           Datos de la consulta del {formatContrasteConsultedAt(consultedAt)} (

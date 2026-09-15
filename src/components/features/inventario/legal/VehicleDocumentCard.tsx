@@ -44,6 +44,7 @@ const ICONS: Record<string, typeof FileText> = {
   informe_emov: Search,
   informe_cte: Search,
   informe_amt: Search,
+  informe_atm: Search,
   informe_sri: Search,
   historial_mantenimiento: Wrench,
   accesorios_llaves: Key,

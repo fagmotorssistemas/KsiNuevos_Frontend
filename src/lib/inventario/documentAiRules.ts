@@ -1,3 +1,4 @@
+import { emovText } from './emovResult'
 import {
   formatContrasteConsultedPretty,
   sriRubros,
@@ -350,6 +351,8 @@ export function buildContrasteAiContext(
       ? `Última consulta EcuadorAPI (guardada, no se volvió a llamar): ${formatContrasteConsultedPretty(consultedAt)}`
       : 'Última consulta EcuadorAPI: fecha desconocida',
     `Placa API: ${payload.plate}`,
+    emovText(payload.emov),
+    "EMOV se presenta por concepto y fuente; no sumar nuevamente el total y sus conceptos ni duplicar valores que pudieran estar también en ANT. Un estado pendiente o error no significa ausencia de deudas.",
     `Vehículo API: ${payload.vehicleLabel ?? '—'}`,
     `Propietario API: ${lookup?.ownerName ?? '—'}`,
     `Último año pagado (API): ${lookup?.lastPaidYear ?? '—'}`,
@@ -746,6 +749,7 @@ function stripMatriculaNoise(analysis: DocumentAiAnalysis, docType: string): Doc
       docType === 'informe_emov' ||
       docType === 'informe_cte' ||
       docType === 'informe_amt' ||
+    docType === 'informe_atm' ||
       docType === 'informe_sri'
         ? analysis.contraste_mismatch
         : null,

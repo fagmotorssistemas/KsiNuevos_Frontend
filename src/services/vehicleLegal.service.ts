@@ -436,7 +436,7 @@ export async function loadVehicleLegalDossier(
 
   const documents = (docsRes.data ?? []) as VehicleDocumentRow[]
   const finesRaw = (finesRes.data ?? []) as VehicleFineRow[]
-  if (documents.length < VEHICLE_DOCUMENT_CATALOG.length) {
+  if (VEHICLE_DOCUMENT_CATALOG.some(item => !documents.some(doc => doc.doc_type === item.docType))) {
     await seedDocumentSlots(supabase, inventoryoracleId)
     const { data: retryDocs, error: retryErr } = await supabase
       .from('inventory_vehicle_documents')
