@@ -104,3 +104,14 @@ test('Temporary remote errors preserve pending status rather than claiming zero'
   assert.equal(saved, null)
   remoteOk = true
 })
+
+test('A new EMOV query on an old contrast uses the EMOV requester for status and result', async () => {
+  remoteOk = true; visible = true; calls = []
+  const input = { ...historyRow, payload: { ...historyRow.payload, emov: { ...historyRow.payload.emov, ownerId: 'new-requester' } } }
+  const result = await refreshEmov(authenticatedDb, input)
+  assert.equal(calls.length, 2)
+  assert.ok(calls.every(c => c.owner === 'new-requester'))
+  assert.equal(result.payload.emov.ownerId, 'new-requester')
+  assert.equal(result.consulted_by, 'owner-of-original-query')
+  assert.equal(result.payload.emov.total, 112.6)
+})

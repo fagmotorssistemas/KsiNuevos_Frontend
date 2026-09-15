@@ -15,7 +15,7 @@ export async function startEmov(plate: string, userId: string | null): Promise<E
     const body = await response.json()
     if (!response.ok) return { ...base, error: body.error }
     if (!EMOV_ID.test(body.id) || body.valor !== plate) throw new Error('Respuesta de consulta inválida.')
-    return { ...base, jobId: body.id, estado: body.estado }
+    return { ...base, jobId: body.id, ownerId: userId, estado: body.estado }
   } catch {
     return { ...base, error: 'No se pudo iniciar EMOV. Vuelve a consultar.' }
   }
@@ -45,7 +45,10 @@ async function persistEmov(
       estado_general: summary.estadoGeneral,
     })
     .eq('id', row.id)
-  if (previousEstado) query = query.eq('payload->emov->>estado', previousEstado)
+  if (previousEstado) {
+    query = query.eq('payload->emov->>estado', previousEstado)
+    if (payload.emov?.jobId) query = query.eq('payload->emov->>jobId', payload.emov.jobId)
+  }
   const { data, error } = await query.select('*').maybeSingle()
   if (error) throw new Error('No se pudo guardar el resultado EMOV.')
   if (data) return data
@@ -91,10 +94,11 @@ export async function attachEmovToConsulta(
 export async function refreshEmov(supabase: SupabaseClient<Database>, row: ContrasteConsultaRow): Promise<ContrasteConsultaRow> {
   const payload = payloadFromConsulta(row)
   const current = payload?.emov
-  if (!payload || !emovActive(current) || !current?.jobId || !row.consulted_by) return row
+  const ownerId = current?.ownerId || row.consulted_by
+  if (!payload || !emovActive(current) || !current?.jobId || !ownerId) return row
   let next: EmovSnapshot
   try {
-    const response = await emovRequest(`/consultas/${current.jobId}`, row.consulted_by)
+    const response = await emovRequest(`/consultas/${current.jobId}`, ownerId)
     if (response.status === 404) {
       return persistEmov(
         supabase,
@@ -103,7 +107,7 @@ export async function refreshEmov(supabase: SupabaseClient<Database>, row: Contr
         {
           ...current,
           estado: 'error',
-          error: 'La consulta EMOV expiró o ya no está en el servidor. Vuelve a consultar.',
+          error: 'No se pudo recuperar esta consulta EMOV con el usuario asociado. Vuelve a consultar.',
           actualizadoEn: new Date().toISOString(),
         },
         current.estado
@@ -114,10 +118,10 @@ export async function refreshEmov(supabase: SupabaseClient<Database>, row: Contr
     if (status.valor !== payload.plate) return row
     next = { ...current, estado: status.estado, error: status.error, actualizadoEn: status.actualizado_en }
     if (status.estado === 'completada') {
-      const result = await emovRequest(`/consultas/${current.jobId}/resultado`, row.consulted_by)
+      const result = await emovRequest(`/consultas/${current.jobId}/resultado`, ownerId)
       if (!result.ok) return row
       try {
-        next = emovResult(await result.json(), payload.plate, current.jobId)
+        next = { ...emovResult(await result.json(), payload.plate, current.jobId), ownerId }
       } catch {
         next = { ...current, estado: 'error', error: 'EMOV devolvió un resultado inválido. Vuelve a consultar.' }
       }

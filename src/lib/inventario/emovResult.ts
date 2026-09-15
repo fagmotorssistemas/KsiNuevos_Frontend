@@ -1,5 +1,6 @@
 export type EmovSnapshot = {
   jobId?: string
+  ownerId?: string
   estado: 'pendiente' | 'en_proceso' | 'esperando_intervencion' | 'completada' | 'error'
   actualizadoEn: string
   total: number | null
