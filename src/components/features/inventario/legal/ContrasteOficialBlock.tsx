@@ -56,6 +56,8 @@ import {
   type EcuadorContrastePayload,
   type EcuadorJuiciosConsulta,
 } from "@/lib/inventario/ecuadorContraste";
+import { emovActive, emovText } from "@/lib/inventario/emovResult";
+import { normalizePlate } from "@/lib/inventario/normalizePlate";
 import {
   listContrasteConsultas,
   payloadFromConsulta,
@@ -318,6 +320,7 @@ function TopicDetailPanel({
   payload,
   documents,
   fines,
+  emovBusyPlate,
   onClose,
   onOpenPhoto,
 }: {
@@ -325,6 +328,7 @@ function TopicDetailPanel({
   payload: EcuadorContrastePayload | null;
   documents: VehicleDocumentRow[];
   fines: VehicleFineRow[];
+  emovBusyPlate: string | null;
   onClose: () => void;
   onOpenPhoto: (files: VehicleDocumentFileRow[], title: string) => void;
 }) {
@@ -401,6 +405,12 @@ function TopicDetailPanel({
               ))}
             </dl>
           </section>
+
+          {row.key === "informe_emov" && emovBusyPlate ? (
+            <p className="text-xs text-amber-800">
+              Se está realizando la consulta de otra placa en este momento.
+            </p>
+          ) : null}
 
           {detail.facts.length > 0 ? (
             <section>
@@ -541,6 +551,8 @@ export function ContrasteOficialBlock({
   const { supabase, user, profile } = useAuth();
   const [ready, setReady] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
+  const [emovLoading, setEmovLoading] = useState(false);
+  const [activeEmovPlate, setActiveEmovPlate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EcuadorContrastePayload | null>(null);
   const [history, setHistory] = useState<ContrasteConsultaRow[]>([]);
@@ -552,6 +564,18 @@ export function ContrasteOficialBlock({
   const [viewMode, setViewMode] = useState<ContrasteView>("cards");
   const [defaultView, setDefaultView] = useState<ContrasteView>("cards");
   const inFlight = useRef(false);
+  const emovInFlight = useRef(false);
+
+  async function refreshActiveEmovPlate() {
+    try {
+      const res = await fetch("/api/inventario/contraste/emov", { cache: "no-store" });
+      if (!res.ok) return;
+      const body = (await res.json()) as { plate?: string | null };
+      setActiveEmovPlate(body.plate?.trim() || null);
+    } catch {
+      /* keep last known lock */
+    }
+  }
 
   useEffect(() => {
     const stored = readStoredContrasteView();
@@ -564,7 +588,12 @@ export function ContrasteOficialBlock({
     const stored = readStoredContrasteView();
     setViewMode(stored);
     setDefaultView(stored);
-  }, [modalOpen]);
+    void refreshActiveEmovPlate();
+    const timer = window.setInterval(() => {
+      void refreshActiveEmovPlate();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [modalOpen, placa]);
 
   useEffect(() => {
     setPayload(null);
@@ -576,6 +605,8 @@ export function ContrasteOficialBlock({
     setOpenTopicKey(null);
     setPhotoPreview(null);
     inFlight.current = false;
+    emovInFlight.current = false;
+    setEmovLoading(false);
     let cancelled = false;
 
     void Promise.all([
@@ -597,6 +628,10 @@ export function ContrasteOficialBlock({
           setPayload(saved);
           setActiveConsultaId(latest.id);
           setLiveConsulta(false);
+          if (emovActive(saved.emov)) {
+            setEmovLoading(true);
+            setActiveEmovPlate(saved.plate || latest.placa);
+          }
         }
       }
     });
@@ -625,6 +660,10 @@ export function ContrasteOficialBlock({
         setPayload(saved);
         setActiveConsultaId(latest.id);
         setLiveConsulta(false);
+        if (emovActive(saved.emov)) {
+          setEmovLoading(true);
+          setActiveEmovPlate(saved.plate || latest.placa);
+        }
       })
       .catch(() => {
         /* se mantiene el snapshot del informe IA */
@@ -678,7 +717,12 @@ export function ContrasteOficialBlock({
         const next = row ? payloadFromConsulta(row) : null;
         if (next) {
           setHistory(rows); setPayload(next);
-          if (next.emov && ['completada', 'error'].includes(next.emov.estado)) { onConsultaSaved?.(next); return; }
+          if (next.emov && ['completada', 'error'].includes(next.emov.estado)) {
+            setEmovLoading(false);
+            setActiveEmovPlate(null);
+            onConsultaSaved?.(next);
+            return;
+          }
         }
       } catch { /* Retry transient errors without clearing the last result. */ }
       if (!cancelled) timer = setTimeout(poll, 3000);
@@ -787,6 +831,69 @@ export function ContrasteOficialBlock({
       setLoading(false);
     }
   };
+
+  const handleConsultarEmov = async () => {
+    const plate = normalizePlate(placa);
+    if (!plate || emovInFlight.current) return;
+    const otherBusy = Boolean(activeEmovPlate && normalizePlate(activeEmovPlate) !== plate);
+    if (otherBusy) {
+      setError(`Espera a que termine la consulta EMOV de ${activeEmovPlate} antes de consultar otro auto.`);
+      return;
+    }
+    if (emovActive(payload?.emov)) return;
+    const consultaId = history[0]?.id ?? activeConsultaId;
+    if (!consultaId) {
+      setError("Primero pulsa Consultar nuevamente (SRI / ANT) y después Consultar EMOV.");
+      return;
+    }
+    emovInFlight.current = true;
+    setEmovLoading(true);
+    setError(null);
+    setActiveEmovPlate(plate);
+    try {
+      const res = await fetch("/api/inventario/contraste/emov", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", placa: plate, consultaId }),
+      });
+      const body = (await res.json()) as {
+        data?: EcuadorContrastePayload;
+        row?: ContrasteConsultaRow;
+        error?: string;
+        plate?: string;
+      };
+      if (res.status === 409) {
+        setActiveEmovPlate(body.plate || activeEmovPlate);
+        setEmovLoading(false);
+        setError(body.error || "Hay otra consulta EMOV en proceso.");
+        return;
+      }
+      if (!res.ok || !body.data || !body.row) {
+        setEmovLoading(false);
+        setActiveEmovPlate(null);
+        setError(body.error || "No se pudo iniciar EMOV.");
+        return;
+      }
+      setPayload(body.data);
+      setActiveConsultaId(body.row.id);
+      setHistory((prev) => [body.row!, ...prev.filter((row) => row.id !== body.row!.id)].slice(0, 100));
+      if (!emovActive(body.data.emov)) {
+        setEmovLoading(false);
+        setActiveEmovPlate(null);
+        onConsultaSaved?.(body.data);
+      }
+    } catch {
+      setEmovLoading(false);
+      setActiveEmovPlate(null);
+      setError("No se pudo conectar con EMOV.");
+    } finally {
+      emovInFlight.current = false;
+    }
+  };
+
+  const emovRunning = emovLoading || emovActive(payload?.emov);
+  const otherEmovBusy = Boolean(activeEmovPlate && normalizePlate(activeEmovPlate) !== normalizePlate(placa));
+  const emovBusy = emovRunning || otherEmovBusy;
 
   const openTopic = matrix.find((row) => row.key === openTopicKey) ?? null;
 
@@ -916,16 +1023,34 @@ export function ContrasteOficialBlock({
                   {viewMode === defaultView ? "Vista por defecto" : "Dejar por defecto"}
                 </button>
                 {ready ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleConsultar()}
-                    disabled={loading || !placa.trim()}
-                    title="Consulta placa + SRI + historial ANT de multas (~$0.03; +$0.01 si es Quito/AMT)"
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    Consultar nuevamente
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void handleConsultar()}
+                      disabled={loading || !placa.trim()}
+                      title="Consulta placa + SRI + historial ANT de multas (~$0.03; +$0.01 si es Quito/AMT). No consulta EMOV."
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      Consultar nuevamente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleConsultarEmov()}
+                      disabled={emovBusy || !placa.trim() || !history[0]}
+                    title={
+                      otherEmovBusy
+                        ? "Se está realizando la consulta de otra placa en este momento."
+                        : history[0]
+                          ? "Consultar EMOV"
+                          : "Primero consulta SRI / ANT"
+                    }
+                      className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-emerald-700 text-white text-sm font-semibold hover:bg-emerald-800 disabled:opacity-50 transition-colors"
+                    >
+                      {emovRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      {emovRunning ? "Consultando EMOV…" : "Consultar EMOV"}
+                    </button>
+                  </>
                 ) : (
                   <span className="inline-flex items-center h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
                     {ready === null ? "Comprobando API…" : "Consulta no disponible"}
@@ -1042,11 +1167,36 @@ export function ContrasteOficialBlock({
                 </section>
               ) : null}
 
+              {payload ? (
+                <section className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                    <h4 className="text-sm font-bold text-slate-900">EMOV Cuenca</h4>
+                    <button
+                      type="button"
+                      onClick={() => void handleConsultarEmov()}
+                      disabled={emovBusy || !history[0]}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 disabled:opacity-50"
+                    >
+                      {emovRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                      {emovRunning ? "Consultando EMOV…" : "Consultar EMOV"}
+                    </button>
+                  </div>
+                  {otherEmovBusy ? (
+                    <p className="text-xs text-slate-500 mb-2">
+                      Se está realizando la consulta de otra placa en este momento.
+                    </p>
+                  ) : null}
+                  <p className="text-sm text-slate-700 whitespace-pre-line" role="status">
+                    {emovRunning && !payload.emov ? "Consultando valores en EMOV…" : emovText(payload.emov)}
+                  </p>
+                </section>
+              ) : null}
+
               {payload ? <ProcesosLegalesOwnerTable juicios={payload.juicios} /> : null}
 
               {!payload ? (
                 <p className="text-sm text-slate-500">
-                  Pulsa Consultar nuevamente para traer SRI, historial de multas ANT y matrícula (~$0.03).
+                  Pulsa Consultar nuevamente para traer SRI, historial de multas ANT y matrícula (~$0.03). EMOV se consulta con su propio botón.
                 </p>
               ) : null}
 
@@ -1106,6 +1256,7 @@ export function ContrasteOficialBlock({
                 payload={payload}
                 documents={documents}
                 fines={fines}
+                emovBusyPlate={otherEmovBusy ? activeEmovPlate : null}
                 onClose={() => setOpenTopicKey(null)}
                 onOpenPhoto={(files, title) => setPhotoPreview({ files, title, index: 0 })}
               />

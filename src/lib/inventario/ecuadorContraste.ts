@@ -627,11 +627,35 @@ export type OfficialPendingSummary = {
   total: number
 }
 
+function isPendingCitationStatus(status: string | null | undefined): boolean {
+  const key = (status || '').toLowerCase()
+  return key === 'pending' || key === 'pendiente'
+}
+
+function isAmtCitation(citation: EcuadorCitation): boolean {
+  return /\bamt\b|agencia metropolitana/i.test(citation.entity || '')
+}
+
 export function officialPendingSummary(payload: EcuadorContrastePayload | null): OfficialPendingSummary {
   const sri = sriRubros(payload?.sri ?? null)
-  const antTotal = Number(payload?.citationsPendingTotal ?? payload?.ant?.total ?? 0) || 0
-  const amtTotal = Number(payload?.amt?.total ?? 0) || 0
-  const citationsCount = Number(payload?.citationsPendingCount ?? 0) || 0
+  let antTotal = Number(payload?.citationsPendingTotal ?? payload?.ant?.total ?? 0) || 0
+  let amtTotal = Number(payload?.amt?.total ?? 0) || 0
+  let citationsCount = Number(payload?.citationsPendingCount ?? 0) || 0
+  const pendingCitations = citationsFromPayload(payload).filter((citation) =>
+    isPendingCitationStatus(citation.status)
+  )
+  const amtFromCitations = pendingCitations
+    .filter(isAmtCitation)
+    .reduce((sum, citation) => sum + (Number(citation.total ?? citation.fine) || 0), 0)
+
+  // Las multas AMT a veces llegan en /multas con entidad AMT y se mezclan en el total ANT.
+  if (amtTotal <= 0.009 && amtFromCitations > 0.009) {
+    amtTotal = amtFromCitations
+    antTotal = Math.max(0, antTotal - amtFromCitations)
+    citationsCount = pendingCitations.filter((citation) => !isAmtCitation(citation)).length
+  }
+
+  const emovTotal = payload?.emov?.estado === 'completada' ? payload.emov.total : null
   return {
     sriTotal: sri.total,
     sriMatricula: sri.matricula,
@@ -639,8 +663,8 @@ export function officialPendingSummary(payload: EcuadorContrastePayload | null):
     antTotal,
     amtTotal,
     citationsCount,
-    emovTotal: payload?.emov?.estado === 'completada' ? payload.emov.total : null,
-    total: sri.total + antTotal + amtTotal,
+    emovTotal,
+    total: sri.total + antTotal + amtTotal + (emovTotal ?? 0),
   }
 }
 

@@ -1,8 +1,8 @@
-import { startEmov } from '@/lib/inventario/emovContraste.server'
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
 import { EcuadorApiError, fetchEcuadorContraste, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
+import { payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
 
 async function handleContraste(rawPlaca: string) {
@@ -24,7 +24,15 @@ async function handleContraste(rawPlaca: string) {
 
   try {
     const data = await fetchEcuadorContraste(placa)
-    data.emov = await startEmov(placa, user.id)
+    const { data: latest } = await supabase
+      .from('inventory_vehicle_contraste_consultas')
+      .select('*')
+      .eq('placa', placa)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const previousEmov = latest ? payloadFromConsulta(latest)?.emov : null
+    if (previousEmov) data.emov = previousEmov
     const owner = await resolveOwnerIdentityForContraste(supabase, placa)
     const juicios = await loadJuiciosForOwner({
       cedula: owner.cedula,

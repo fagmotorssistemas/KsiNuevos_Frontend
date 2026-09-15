@@ -11,6 +11,6 @@ export function EmovValores({ emov }: { emov?: EmovSnapshot | null }) {
       {emov.total === 0 && <p className="text-sm">Sin valores pendientes en EMOV.</p>}
       {!!emov.total && !emov.conceptos.length && <p className="text-sm">EMOV reportó un total sin desglose.</p>}
       <p className="text-xs text-slate-600">Los valores se muestran por fuente; no se suman nuevamente a las citaciones ANT.</p>
-    </> : <p role="status" className="text-sm">{emovText(emov)}{!emov || emov.estado === 'error' ? '. Pulsa Consultar nuevamente en Contraste oficial.' : ''}</p>}
+    </> : <p role="status" className="text-sm">{emovText(emov)}{!emov || emov.estado === 'error' ? '. Pulsa Consultar EMOV en Contraste oficial.' : ''}</p>}
   </section>
 }

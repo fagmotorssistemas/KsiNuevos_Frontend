@@ -857,7 +857,7 @@ function VehicleAiReportModal({
           {running ? (
             <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
               {phase === 'contraste'
-                ? 'Actualizando el contraste oficial y esperando los resultados de EMOV…'
+                ? 'Actualizando el contraste oficial (SRI / ANT)…'
                 : phase === 'files'
                 ? `Analizando fotos ${progress} de ${jobs.length}…`
                 : 'Redactando conclusiones por sección…'}

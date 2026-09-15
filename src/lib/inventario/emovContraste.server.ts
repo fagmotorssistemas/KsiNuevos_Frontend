@@ -21,6 +21,73 @@ export async function startEmov(plate: string, userId: string | null): Promise<E
   }
 }
 
+async function persistEmov(
+  supabase: SupabaseClient<Database>,
+  row: ContrasteConsultaRow,
+  payload: NonNullable<ReturnType<typeof payloadFromConsulta>>,
+  next: EmovSnapshot,
+  previousEstado?: string
+): Promise<ContrasteConsultaRow> {
+  const updated = { ...payload, emov: next }
+  const summary = summarizeMatrix(
+    buildContrastMatrix(updated, (row.staff_snapshot as ContrastStaffByDoc) || emptyContrasteStaff()),
+    contrastShowAmt(updated)
+  )
+  const { data: visible } = await supabase.from('inventory_vehicle_contraste_consultas').select('id').eq('id', row.id).maybeSingle()
+  if (!visible) return row
+  let query = createServiceRoleClient()
+    .from('inventory_vehicle_contraste_consultas')
+    .update({
+      payload: updated as unknown as Json,
+      coinciden: summary.coinciden,
+      diferencias: summary.diferencias,
+      sin_verificar: summary.sinVerificar,
+      estado_general: summary.estadoGeneral,
+    })
+    .eq('id', row.id)
+  if (previousEstado) query = query.eq('payload->emov->>estado', previousEstado)
+  const { data, error } = await query.select('*').maybeSingle()
+  if (error) throw new Error('No se pudo guardar el resultado EMOV.')
+  if (data) return data
+  const { data: latest } = await supabase.from('inventory_vehicle_contraste_consultas').select('*').eq('id', row.id).maybeSingle()
+  return latest || row
+}
+
+export async function findActiveEmovConsulta(
+  supabase: SupabaseClient<Database>
+): Promise<ContrasteConsultaRow | null> {
+  const { data, error } = await supabase
+    .from('inventory_vehicle_contraste_consultas')
+    .select('*')
+    .or(
+      'payload->emov->>estado.eq.pendiente,payload->emov->>estado.eq.en_proceso,payload->emov->>estado.eq.esperando_intervencion'
+    )
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) throw error
+  const row = data?.[0] ?? null
+  if (!row) return null
+  return emovActive(payloadFromConsulta(row)?.emov) ? row : null
+}
+
+export async function attachEmovToConsulta(
+  supabase: SupabaseClient<Database>,
+  row: ContrasteConsultaRow,
+  userId: string
+): Promise<{ row: ContrasteConsultaRow; busyPlate?: string }> {
+  const payload = payloadFromConsulta(row)
+  if (!payload) throw new Error('Esa consulta no tiene datos para EMOV.')
+  const active = await findActiveEmovConsulta(supabase)
+  const activePlate = active ? payloadFromConsulta(active)?.plate || active.placa : null
+  if (active && activePlate && activePlate !== payload.plate) {
+    return { row: active, busyPlate: activePlate }
+  }
+  if (emovActive(payload.emov)) return { row }
+  const emov = await startEmov(payload.plate, userId)
+  const saved = await persistEmov(supabase, row, payload, emov)
+  return { row: saved }
+}
+
 export async function refreshEmov(supabase: SupabaseClient<Database>, row: ContrasteConsultaRow): Promise<ContrasteConsultaRow> {
   const payload = payloadFromConsulta(row)
   const current = payload?.emov
@@ -28,6 +95,20 @@ export async function refreshEmov(supabase: SupabaseClient<Database>, row: Contr
   let next: EmovSnapshot
   try {
     const response = await emovRequest(`/consultas/${current.jobId}`, row.consulted_by)
+    if (response.status === 404) {
+      return persistEmov(
+        supabase,
+        row,
+        payload,
+        {
+          ...current,
+          estado: 'error',
+          error: 'La consulta EMOV expiró o ya no está en el servidor. Vuelve a consultar.',
+          actualizadoEn: new Date().toISOString(),
+        },
+        current.estado
+      )
+    }
     if (!response.ok) return row
     const status = await response.json()
     if (status.valor !== payload.plate) return row
@@ -45,18 +126,5 @@ export async function refreshEmov(supabase: SupabaseClient<Database>, row: Contr
     return row
   }
   if (JSON.stringify(next) === JSON.stringify(current)) return row
-  const updated = { ...payload, emov: next }
-  const summary = summarizeMatrix(buildContrastMatrix(updated, (row.staff_snapshot as ContrastStaffByDoc) || emptyContrasteStaff()), contrastShowAmt(updated))
-  // Recheck visibility with the authenticated client before the narrowly scoped service-role update.
-  const { data: visible } = await supabase.from('inventory_vehicle_contraste_consultas').select('id').eq('id', row.id).maybeSingle()
-  if (!visible) return row
-  const { data, error } = await createServiceRoleClient().from('inventory_vehicle_contraste_consultas').update({
-    payload: updated as unknown as Json,
-    coinciden: summary.coinciden, diferencias: summary.diferencias,
-    sin_verificar: summary.sinVerificar, estado_general: summary.estadoGeneral,
-  }).eq('id', row.id).eq('payload->emov->>estado', current.estado).select('*').maybeSingle()
-  if (error) throw new Error('No se pudo guardar el resultado EMOV.')
-  if (data) return data
-  const { data: latest } = await supabase.from('inventory_vehicle_contraste_consultas').select('*').eq('id', row.id).maybeSingle()
-  return latest || row
+  return persistEmov(supabase, row, payload, next, current.estado)
 }

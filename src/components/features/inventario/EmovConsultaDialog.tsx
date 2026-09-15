@@ -76,8 +76,10 @@ export function EmovConsultaDialog({ open, onClose }: { open: boolean; onClose: 
           }))
           if (controller.signal.aborted) return
           setResultado(data)
+          setStarting(false)
         } else if (status.estado === 'error') {
           setError(status.error || messages.error)
+          setStarting(false)
         } else {
           timer = setTimeout(poll, 3000)
         }
@@ -101,6 +103,14 @@ export function EmovConsultaDialog({ open, onClose }: { open: boolean; onClose: 
     setResultado(null)
     setJob(null)
     try {
+      const lockRes = await fetch('/api/inventario/contraste/emov', { cache: 'no-store' })
+      if (lockRes.ok) {
+        const lock = (await lockRes.json()) as { plate?: string | null }
+        const busy = (lock.plate || '').replace(/[\s-]/g, '').toUpperCase()
+        if (busy && busy !== normalized) {
+          throw new Error(`Espera a que termine la consulta EMOV de ${lock.plate} antes de consultar otro auto.`)
+        }
+      }
       const next = await readResponse<Job>(await fetch('/api/emov', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ placa: normalized }),
@@ -110,9 +120,9 @@ export function EmovConsultaDialog({ open, onClose }: { open: boolean; onClose: 
       setRetry((n) => n + 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo iniciar la consulta.')
+      setStarting(false)
     } finally {
       submitting.current = false
-      setStarting(false)
     }
   }
 

@@ -212,10 +212,14 @@ function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | unde
         return <span className="text-[11px] text-slate-400">Sin consulta</span>;
     }
     const hasDebt = pending.total > 0.009;
+    const showAmt = (pending.amtTotal ?? 0) > 0.009;
+    const sources = ["SRI", "ANT"];
+    if (showAmt) sources.push("AMT");
+    if (pending.emovTotal != null) sources.push("EMOV");
     return (
         <div className="flex flex-col gap-0.5 min-w-0">
             <span className={`text-[12px] font-bold tabular-nums ${hasDebt ? "text-red-700" : "text-emerald-700"}`}>
-                {money(pending.total)} <span className="text-[10px] font-normal">SRI / ANT / AMT</span>
+                {money(pending.total)} <span className="text-[10px] font-normal">{sources.join(" / ")}</span>
             </span>
             <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-slate-500">
                 <span>EMOV {pending.emovTotal == null ? "Sin verificar" : money(pending.emovTotal)}</span>
@@ -226,6 +230,7 @@ function PendingValuesCell({ pending }: { pending: OfficialPendingSummary | unde
                         ? `${pending.citationsCount} · ${money(pending.antTotal)}`
                         : money(pending.antTotal)}
                 </span>
+                {showAmt ? <span>AMT {money(pending.amtTotal)}</span> : null}
             </div>
         </div>
     );
