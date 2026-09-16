@@ -15,24 +15,25 @@ function isDue(lead: LeadCallRequest, nowMs: number) {
 }
 
 export function useLeadCallRequests() {
-    const { supabase, user, profile, isLoading: isAuthLoading, isAdminLike } = useAuth();
+    const { supabase, user, isLoading: isAuthLoading } = useAuth();
     const [leads, setLeads] = useState<LeadCallRequest[]>([]);
     const [nowMs, setNowMs] = useState(() => Date.now());
     const [submitting, setSubmitting] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const assignedScope = useMemo(() => {
-        const role = (profile?.role || "").toLowerCase().trim();
-        if (!isAdminLike && role === "vendedor" && user?.id) return user.id;
-        return "all" as const;
-    }, [profile?.role, user?.id, isAdminLike]);
+    // El aviso obligatorio solo es para el vendedor asignado al lead.
+    // Admin y el resto de roles siguen viendo el filtro/historial, no este modal.
+    const assignedScope = user?.id ?? null;
 
     const load = useCallback(async () => {
-        if (!user) return;
+        if (!user?.id || !assignedScope) {
+            setLeads([]);
+            return;
+        }
         const rows = await fetchCallRequests(supabase, assignedScope);
-        setLeads(rows);
+        setLeads(rows.filter((lead) => lead.assigned_to === assignedScope));
         setNowMs(Date.now());
-    }, [assignedScope, supabase, user]);
+    }, [assignedScope, supabase, user?.id]);
 
     useEffect(() => {
         if (isAuthLoading || !user) return;
@@ -71,8 +72,14 @@ export function useLeadCallRequests() {
     }, [load, supabase, user]);
 
     const dueLeads = useMemo(
-        () => leads.filter((lead) => isDue(lead, nowMs)),
-        [leads, nowMs]
+        () =>
+            leads.filter(
+                (lead) =>
+                    Boolean(assignedScope) &&
+                    lead.assigned_to === assignedScope &&
+                    isDue(lead, nowMs)
+            ),
+        [assignedScope, leads, nowMs]
     );
 
     const nextDueAt = useMemo(() => {
