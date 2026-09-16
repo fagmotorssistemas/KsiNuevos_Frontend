@@ -75,6 +75,7 @@ export interface VideoJob {
   id: string
   job_name?: string | null
   inventory_vehicle_id?: string | null
+  is_featured?: boolean | null
   inventory_vehicle?: VideoJobInventoryJoin | null
   vehicle_line_1?: string | null
   vehicle_line_2?: string | null

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, Film, Search } from 'lucide-react'
+import { toast } from 'sonner'
 import { VideoJobCard } from './VideoJobCard'
 import type { VideoJob, VideoJobStatus } from '@/lib/videos/types'
 
@@ -32,6 +33,13 @@ function escapeIlikePattern(value: string): string {
   return value.replace(/[%_\\]/g, '\\$&')
 }
 
+function sortJobs(items: VideoJob[]): VideoJob[] {
+  return [...items].sort((a, b) => {
+    if (Boolean(a.is_featured) !== Boolean(b.is_featured)) return a.is_featured ? -1 : 1
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+}
+
 interface VideoJobListProps {
   refreshKey?: number
   /** Incrementar para refrescar lista tras cambios en publicación (aprobar, etc.). */
@@ -55,6 +63,7 @@ export function VideoJobList({
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const [featuringId, setFeaturingId] = useState<string | null>(null)
 
   const PAGE_SIZE = 20
 
@@ -78,6 +87,7 @@ export function VideoJobList({
           .select(JOB_SELECT)
           .neq('flow_type', 'noticiero')
           .neq('flow_type', 'raw_full')
+          .order('is_featured', { ascending: false })
           .order('created_at', { ascending: false })
           .range(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE - 1)
 
@@ -114,7 +124,7 @@ export function VideoJobList({
         if (error) throw error
 
         const items = (data ?? []) as unknown as VideoJob[]
-        setJobs(currentPage === 0 ? items : (prev) => [...prev, ...items])
+        setJobs((prev) => sortJobs(currentPage === 0 ? items : [...prev, ...items]))
         setHasMore(items.length === PAGE_SIZE)
       } catch (err) {
         console.error('[VideoJobList] Error cargando jobs:', err)
@@ -161,6 +171,40 @@ export function VideoJobList({
 
   function handleJobDeleted(jobId: string) {
     setJobs((prev) => prev.filter((job) => job.id !== jobId))
+  }
+
+  async function handleToggleFeatured(job: VideoJob) {
+    if (featuringId) return
+    const nextFeatured = !job.is_featured
+    setFeaturingId(job.id)
+    try {
+      const res = await fetch(`/api/videos/jobs/${job.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featured: nextFeatured }),
+      })
+      const data = (await res.json()) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo actualizar el destacado')
+
+      const vehicleId = job.inventory_vehicle_id?.trim() || null
+      setJobs((prev) =>
+        sortJobs(
+          prev.map((item) => {
+            if (nextFeatured && vehicleId && item.inventory_vehicle_id === vehicleId) {
+              return { ...item, is_featured: item.id === job.id }
+            }
+            if (item.id === job.id) return { ...item, is_featured: nextFeatured }
+            return item
+          })
+        )
+      )
+      toast.success(nextFeatured ? 'Video destacado' : 'Ya no está destacado')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al destacar')
+    } finally {
+      setFeaturingId(null)
+    }
   }
 
   const showResultCount = embedded ? !!inventoryVehicleId : !!debouncedSearch
@@ -242,11 +286,13 @@ export function VideoJobList({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {jobs.map((job) => (
               <VideoJobCard
                 key={job.id}
                 job={job}
+                featuring={featuringId === job.id}
+                onToggleFeatured={() => void handleToggleFeatured(job)}
                 onJobDeleted={handleJobDeleted}
               />
             ))}

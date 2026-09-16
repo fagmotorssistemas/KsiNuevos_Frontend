@@ -8364,6 +8364,7 @@ export type Database = {
           gemini_analysis: Json | null
           id: string
           inventory_vehicle_id: string | null
+          is_featured: boolean
           job_name: string | null
           logo_url: string | null
           music_track_url: string | null
@@ -8401,6 +8402,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           inventory_vehicle_id?: string | null
+          is_featured?: boolean
           job_name?: string | null
           logo_url?: string | null
           music_track_url?: string | null
@@ -8438,6 +8440,7 @@ export type Database = {
           gemini_analysis?: Json | null
           id?: string
           inventory_vehicle_id?: string | null
+          is_featured?: boolean
           job_name?: string | null
           logo_url?: string | null
           music_track_url?: string | null
@@ -9421,6 +9424,27 @@ export type Database = {
         }
         Returns: {
           lead_id: number
+        }[]
+      }
+      reassign_cold_warm_leads_to_juan_vazquez: {
+        Args: never
+        Returns: {
+          leads_transferred: number
+          timestamp_executed: string
+        }[]
+      }
+      reassign_leads_without_resume_to_juan_vazquez: {
+        Args: never
+        Returns: {
+          leads_transferred: number
+          timestamp_executed: string
+        }[]
+      }
+      reassign_vanessa_leads_to_juan_temporal: {
+        Args: never
+        Returns: {
+          leads_transferred: number
+          timestamp_executed: string
         }[]
       }
       refresh_daily_progress_snapshot: {
