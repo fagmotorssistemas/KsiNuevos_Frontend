@@ -629,7 +629,6 @@ export function ContrasteOficialBlock({
           setActiveConsultaId(latest.id);
           setLiveConsulta(false);
           if (emovActive(saved.emov)) {
-            setEmovLoading(true);
             setActiveEmovPlate(saved.plate || latest.placa);
           }
         }
@@ -661,7 +660,6 @@ export function ContrasteOficialBlock({
         setActiveConsultaId(latest.id);
         setLiveConsulta(false);
         if (emovActive(saved.emov)) {
-          setEmovLoading(true);
           setActiveEmovPlate(saved.plate || latest.placa);
         }
       })
@@ -887,10 +885,12 @@ export function ContrasteOficialBlock({
       setActiveEmovPlate(null);
       setError("No se pudo conectar con EMOV.");
     } finally {
+      setEmovLoading(false);
       emovInFlight.current = false;
     }
   };
 
+  // Local loading only covers the start request; the job status controls the remaining wait.
   const emovRunning = emovLoading || emovActive(payload?.emov);
   const otherEmovBusy = Boolean(activeEmovPlate && normalizePlate(activeEmovPlate) !== normalizePlate(placa));
   const emovBusy = emovRunning || otherEmovBusy;
