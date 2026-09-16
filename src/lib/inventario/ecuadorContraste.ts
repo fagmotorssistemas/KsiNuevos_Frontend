@@ -742,13 +742,8 @@ export function officialMatriculaStatus(payload: EcuadorContrastePayload | null)
   const issuedYmd = toYmd(lookup?.lastRegistrationDate)
   const expiryYmd =
     toYmd(lookup?.registrationExpiry) || (issuedYmd ? addYearsYmd(issuedYmd, MATRICULA_YEARS) : null)
-  let expired: boolean | null = payload.matricula?.vigente == null ? null : !payload.matricula.vigente
-  if (expiryYmd) expired = expiryYmd < ecuadorTodayYmd()
-  if (payload.matricula?.vigente === false) expired = true
-  const cal = matriculaCalendarPending(lookup?.plate, lookup?.lastPaidYear ?? null)
-  if (cal.pendingThisYear && cal.beforeWindow) expired = false
   return {
-    expired,
+    expired: expiryYmd ? expiryYmd < ecuadorTodayYmd() : null,
     expiryLabel: expiryYmd ? formatYmdEs(expiryYmd) : null,
   }
 }
@@ -782,19 +777,17 @@ export function inferMatriculaVigente(lookup: {
   }
 
   let cell: ContrastApiCell
-  if (lookup.registrationExpiry) {
-    const vigente = lookup.registrationExpiry >= ecuadorTodayYmd()
+  const expiryYmd = toYmd(lookup.registrationExpiry)
+  if (expiryYmd) {
+    const vigente = expiryYmd >= ecuadorTodayYmd()
     cell = {
       vigente,
-      text: vigente
-        ? `Vigente hasta ${lookup.registrationExpiry}`
-        : `Vencida (${lookup.registrationExpiry})`,
+      text: vigente ? `Vigente hasta ${formatYmdEs(expiryYmd)}` : `Vencida (${formatYmdEs(expiryYmd)})`,
     }
   } else if (lookup.lastPaidYear != null) {
-    const vigente = lookup.lastPaidYear >= ecuadorYear()
     cell = {
-      vigente,
-      text: vigente
+      vigente: null,
+      text: lookup.lastPaidYear >= ecuadorYear()
         ? `Año pagado ${lookup.lastPaidYear}`
         : `Último pago ${lookup.lastPaidYear}`,
     }
@@ -809,7 +802,7 @@ export function inferMatriculaVigente(lookup: {
     const pending = (sri.matricula ?? typeAmount(sri, 'MATRICULA')) || 0
     if (pending > 0) {
       return {
-        vigente: false,
+        ...cell,
         text: `${cell.text} · SRI pendiente ${usd(pending)}`,
       }
     }
