@@ -15,6 +15,7 @@ import {
   formatContrasteConsultedAt,
   formatContrasteRelative,
   groupItemsByCitationStatus,
+  payloadHasCitationHistory,
   type EcuadorCitation,
   type EcuadorContrastePayload,
 } from '@/lib/inventario/ecuadorContraste'
@@ -133,7 +134,7 @@ export function MultasDeudasTab({ placa }: Props) {
   const pendingTotal = pending.reduce((sum, c) => sum + (c.total ?? c.fine ?? 0), 0)
   const ant = payload.ant
   const antUnavailable = ant?.status === 'unavailable' || ant?.status === 'not_applicable'
-  const hasFullHistory = payload.citations != null
+  const hasFullHistory = payloadHasCitationHistory(payload)
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -168,7 +169,12 @@ export function MultasDeudasTab({ placa }: Props) {
 
       {!hasFullHistory && citations.length > 0 ? (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-          Esta consulta solo guardó pendientes. Consulta nuevamente para ver pagadas, impugnadas y anuladas.
+          Esta consulta solo guardó pendientes. Consulta nuevamente para ver pagadas, impugnadas, anuladas y en convenio.
+        </p>
+      ) : null}
+      {hasFullHistory && payload.citationsScope === 'owner' ? (
+        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+          Historial ANT del titular. EcuadorAPI no marca la placa en cada citación.
         </p>
       ) : null}
 

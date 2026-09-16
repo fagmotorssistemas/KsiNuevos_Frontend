@@ -19,6 +19,7 @@ import {
   contrasteOfficialOwners,
   formatContrasteConsultedPretty,
   groupItemsByCitationStatus,
+  payloadHasCitationHistory,
   sriRubros,
   summarizeMatrix,
   type ContrastResultKind,
@@ -145,7 +146,7 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
   const sri = payload?.sri ? sriRubros(payload.sri) : null
   const lookup = payload?.lookup
   const officialOwners = contrasteOfficialOwners(lookup)
-  const hasFullHistory = payload?.citations != null
+  const hasFullHistory = payloadHasCitationHistory(payload)
 
   const staffFinesByStatus = useMemo(() => {
     const map = new Map<string, typeof dossier.fines>()
@@ -473,7 +474,11 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                   <div className="space-y-4">
                     {!hasFullHistory ? (
                       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                        Esta consulta antigua solo guardó pendientes. Vuelve a Consultar nuevamente para ver pagadas, impugnadas y anuladas (mismo costo, cambia ANT por el historial completo).
+                        Esta consulta antigua solo guardó pendientes. Vuelve a Consultar nuevamente para ver pagadas, impugnadas, anuladas y en convenio.
+                      </p>
+                    ) : payload?.citationsScope === 'owner' ? (
+                      <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                        Historial ANT del titular. EcuadorAPI no marca la placa en cada citación.
                       </p>
                     ) : null}
                     {citationGroups.map((group) => (
