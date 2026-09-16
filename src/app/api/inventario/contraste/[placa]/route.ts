@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+
+export const maxDuration = 60
 import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
 import { EcuadorApiError, fetchEcuadorContraste, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
 import { payloadFromConsulta } from '@/services/contrasteConsultas.service'

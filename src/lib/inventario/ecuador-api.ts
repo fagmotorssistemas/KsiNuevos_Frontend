@@ -123,11 +123,14 @@ async function ecuadorGetJsonUncached<T>(path: string, timeoutMs: number): Promi
     cache: 'no-store',
   })
 
+  const raw = await res.text()
   let body: EcuadorEnvelope<T> | null = null
-  try {
-    body = (await res.json()) as EcuadorEnvelope<T>
-  } catch {
-    throw new EcuadorApiError('Respuesta inválida de EcuadorAPI', 502, 'bad_gateway')
+  if (raw) {
+    try {
+      body = JSON.parse(raw) as EcuadorEnvelope<T>
+    } catch {
+      throw new EcuadorApiError('Respuesta inválida de EcuadorAPI', 502, 'bad_gateway')
+    }
   }
 
   if (res.status === 404 || body?.code === 'not_found') {
@@ -184,20 +187,53 @@ export async function fetchEcuadorPlate(placa: string): Promise<EcuadorPlateLook
   return mapPlate(d, placa)
 }
 
+function isBillingOrAuthError(e: unknown): boolean {
+  return e instanceof EcuadorApiError && (e.httpStatus === 402 || e.httpStatus === 401 || e.httpStatus === 429)
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTimeoutError(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false
+  const name = 'name' in e ? String(e.name) : ''
+  return name === 'TimeoutError' || name === 'AbortError'
+}
+
+async function ecuadorGetJsonRetry<T>(path: string, timeoutMs: number, retries = 1): Promise<T> {
+  try {
+    return await ecuadorGetJson<T>(path, timeoutMs)
+  } catch (e) {
+    if (retries < 1 || (e instanceof EcuadorApiError && (e.httpStatus === 401 || e.httpStatus === 402))) {
+      throw e
+    }
+    if (e instanceof EcuadorApiError && e.httpStatus === 429) {
+      await wait(2000)
+      return ecuadorGetJsonRetry<T>(path, timeoutMs, retries - 1)
+    }
+    // EcuadorAPI sigue scrapeando ANT tras nuestro corte; el retry suele salir de su caché.
+    if (isTimeoutError(e) || (e instanceof EcuadorApiError && (e.httpStatus === 502 || e.httpStatus === 504))) {
+      await wait(8000)
+      return ecuadorGetJsonRetry<T>(path, Math.min(timeoutMs, 20_000), retries - 1)
+    }
+    await wait(800)
+    return ecuadorGetJsonRetry<T>(path, timeoutMs, retries - 1)
+  }
+}
+
 async function fetchPendientesSafe(
   placa: string,
-  source: 'sri' | 'amt',
+  source: 'sri' | 'amt' | 'ant',
   timeoutMs?: number
 ): Promise<EcuadorPendientes | null> {
   try {
-    return await ecuadorGetJson<EcuadorPendientes>(
+    return await ecuadorGetJsonRetry<EcuadorPendientes>(
       `/placas/${encodeURIComponent(placa)}/pendientes/${source}`,
-      timeoutMs
+      timeoutMs ?? 30_000
     )
   } catch (e) {
-    if (e instanceof EcuadorApiError && (e.httpStatus === 402 || e.httpStatus === 401 || e.httpStatus === 429)) {
-      throw e
-    }
+    if (isBillingOrAuthError(e)) throw e
     return null
   }
 }
@@ -246,32 +282,122 @@ function mapCitations(row: MultasApiRow): EcuadorCitation[] {
   }))
 }
 
-async function fetchMultasSafe(placa: string): Promise<{
-  citations: EcuadorCitation[]
-  pendingCount: number
-  pendingTotal: number
-  ownerName: string | null
-  ownerId: string | null
-} | null> {
+function ownerCedula(id: string | null | undefined): string | null {
+  const digits = (id || '').replace(/\D/g, '')
+  if (digits.length === 10) return digits
+  if (digits.length === 13 && digits.endsWith('001')) return digits.slice(0, 10)
+  return null
+}
+
+function normalizeCitationPlate(value: string | null | undefined): string {
+  return (value || '').replace(/[\s-]/g, '').toUpperCase()
+}
+
+async function fetchMultasRow(path: string, timeoutMs: number): Promise<MultasApiRow | null> {
   try {
-    const row = await ecuadorGetJson<MultasApiRow>(`/multas/${encodeURIComponent(placa)}`)
-    return {
-      citations: mapCitations(row),
-      pendingCount: row.pending_count ?? 0,
-      pendingTotal: row.total_pending ?? 0,
-      ownerName: personName(row.owner) || row.owner_name?.trim() || null,
-      ownerId: personId(row.owner) || row.owner_id?.trim() || null,
-    }
+    return await ecuadorGetJson<MultasApiRow>(path, timeoutMs)
   } catch (e) {
-    if (e instanceof EcuadorApiError && (e.httpStatus === 402 || e.httpStatus === 401 || e.httpStatus === 429)) {
-      throw e
+    if (isBillingOrAuthError(e)) throw e
+    if (e instanceof EcuadorApiError && e.httpStatus === 404) return null
+    if (isTimeoutError(e) || (e instanceof EcuadorApiError && (e.httpStatus === 502 || e.httpStatus === 504))) {
+      await wait(8000)
+      try {
+        return await ecuadorGetJsonUncached<MultasApiRow>(path, Math.min(timeoutMs, 20_000))
+      } catch (retryError) {
+        if (isBillingOrAuthError(retryError)) throw retryError
+        return null
+      }
     }
     return null
   }
 }
 
+function snapshotFromMultasRow(
+  placa: string,
+  row: MultasApiRow,
+  scopeHint: 'plate' | 'owner'
+): {
+  ant: EcuadorPendientes | null
+  citations: EcuadorCitation[]
+  pendingCount: number
+  pendingTotal: number
+  ownerName: string | null
+  ownerId: string | null
+  historyStatus: 'ok'
+  citationsScope: 'plate' | 'owner'
+} {
+  const all = mapCitations(row)
+  const target = normalizeCitationPlate(placa)
+  const withPlate = all.filter((citation) => normalizeCitationPlate(citation.plate))
+  const citations = withPlate.length > 0 ? all.filter((citation) => normalizeCitationPlate(citation.plate) === target) : all
+  const pending = citations.filter((citation) => {
+    const status = (citation.status || '').toLowerCase()
+    return status === 'pending' || status === 'pendiente'
+  })
+  const pendingTotal = pending.reduce((sum, citation) => sum + (Number(citation.total ?? citation.fine) || 0), 0)
+  return {
+    ant: null,
+    citations,
+    pendingCount: pending.length,
+    pendingTotal,
+    ownerName: personName(row.owner) || row.owner_name?.trim() || null,
+    ownerId: personId(row.owner) || row.owner_id?.trim() || null,
+    historyStatus: 'ok',
+    citationsScope: withPlate.length > 0 ? 'plate' : scopeHint,
+  }
+}
+
+export type AntSnapshot = {
+  ant: EcuadorPendientes | null
+  citations: EcuadorCitation[] | undefined
+  pendingCount: number | null
+  pendingTotal: number | null
+  ownerName: string | null
+  ownerId: string | null
+  historyStatus: 'ok' | 'no_owner' | 'unavailable' | null
+  citationsScope: 'plate' | 'owner' | null
+}
+
 function isQuito(canton: string | null): boolean {
   return /quito/i.test(canton || '')
+}
+
+export async function fetchAntSnapshot(placa: string, ownerId?: string | null): Promise<AntSnapshot> {
+  const byPlate = await fetchMultasRow(`/multas/${encodeURIComponent(placa)}`, 45_000)
+  if (byPlate) {
+    return snapshotFromMultasRow(placa, byPlate, 'plate')
+  }
+
+  const cedula = ownerCedula(ownerId)
+  if (cedula) {
+    const byOwner = await fetchMultasRow(`/cedulas/${encodeURIComponent(cedula)}/multas`, 45_000)
+    if (byOwner) {
+      return snapshotFromMultasRow(placa, byOwner, 'owner')
+    }
+    const ant = await fetchPendientesSafe(placa, 'ant', 20_000)
+    return {
+      ant,
+      citations: undefined,
+      pendingCount: null,
+      pendingTotal: ant?.total ?? null,
+      ownerName: null,
+      ownerId: null,
+      historyStatus: 'unavailable',
+      citationsScope: null,
+    }
+  }
+
+  const ant = await fetchPendientesSafe(placa, 'ant', 20_000)
+  return {
+    ant,
+    citations: undefined,
+    pendingCount: null,
+    pendingTotal: ant?.total ?? null,
+    ownerName: null,
+    ownerId: null,
+    historyStatus: ownerId ? 'unavailable' : 'no_owner',
+    citationsScope: null,
+  }
 }
 
 export async function fetchEcuadorContraste(placa: string): Promise<EcuadorContrastePayload> {
@@ -279,22 +405,53 @@ export async function fetchEcuadorContraste(placa: string): Promise<EcuadorContr
   const amtPromise = isQuito(lookup.canton)
     ? fetchPendientesSafe(placa, 'amt', 25_000)
     : Promise.resolve(null)
-  const [sri, multas, amt] = await Promise.all([
+  const [sri, antSnap, amt] = await Promise.all([
     fetchPendientesSafe(placa, 'sri'),
-    fetchMultasSafe(placa),
+    fetchAntSnapshot(placa, lookup.ownerIdAnt || lookup.ownerIdSri),
     amtPromise,
   ])
-  if (multas) {
-    lookup.ownerNameAnt = lookup.ownerNameAnt || multas.ownerName
-    lookup.ownerIdAnt = lookup.ownerIdAnt || multas.ownerId
-  }
-  return buildContrastePayload({
+  if (antSnap.ownerName) lookup.ownerNameAnt = lookup.ownerNameAnt || antSnap.ownerName
+  if (antSnap.ownerId) lookup.ownerIdAnt = lookup.ownerIdAnt || antSnap.ownerId
+  const payload = buildContrastePayload({
     lookup,
     sri,
-    ant: null,
+    ant: antSnap.ant,
     amt,
-    citations: multas?.citations,
-    citationsPendingCount: multas?.pendingCount ?? null,
-    citationsPendingTotal: multas?.pendingTotal ?? null,
+    citations: antSnap.citations,
+    citationsPendingCount: antSnap.pendingCount,
+    citationsPendingTotal: antSnap.pendingTotal,
   })
+  applyAntHistoryFlags(payload, antSnap)
+  return payload
+}
+
+function applyAntHistoryFlags(payload: EcuadorContrastePayload, snap: AntSnapshot) {
+  payload.antFetchedAt = new Date().toISOString()
+  payload.antHistoryStatus = snap.historyStatus
+  payload.citationsScope = snap.citationsScope
+  if (snap.historyStatus === 'ok') payload.antHistoryFetchedAt = payload.antFetchedAt
+}
+
+export function mergeAntIntoContrastePayload(
+  prev: EcuadorContrastePayload,
+  snap: AntSnapshot
+): EcuadorContrastePayload {
+  if (!prev.lookup) return prev
+  const lookup = { ...prev.lookup }
+  if (snap.ownerName) lookup.ownerNameAnt = lookup.ownerNameAnt || snap.ownerName
+  if (snap.ownerId) lookup.ownerIdAnt = lookup.ownerIdAnt || snap.ownerId
+  const next = buildContrastePayload({
+    lookup,
+    sri: prev.sri ?? null,
+    ant: snap.ant,
+    amt: prev.amt ?? null,
+    citations: snap.citations,
+    citationsPendingCount: snap.pendingCount,
+    citationsPendingTotal: snap.pendingTotal,
+  })
+  next.emov = prev.emov
+  next.juicios = prev.juicios
+  next.procesos_legales = prev.procesos_legales
+  applyAntHistoryFlags(next, snap)
+  return next
 }

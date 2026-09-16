@@ -80,6 +80,10 @@ export type EcuadorContrastePayload = {
   multas: ContrastApiCell
   procesos_legales?: ContrastApiCell
   juicios?: EcuadorJuiciosConsulta | null
+  antFetchedAt?: string | null
+  antHistoryFetchedAt?: string | null
+  antHistoryStatus?: 'ok' | 'no_owner' | 'unavailable' | null
+  citationsScope?: 'plate' | 'owner' | null
 }
 
 export type EcuadorCitationStatus = 'pending' | 'paid' | 'appealed' | 'annulled' | 'agreement'
@@ -627,6 +631,43 @@ export type OfficialPendingSummary = {
   total: number
 }
 
+function isHistoricalCitationStatus(status: string | null | undefined): boolean {
+  const key = (status || '').toLowerCase()
+  return (
+    key === 'paid' ||
+    key === 'pagada' ||
+    key === 'appealed' ||
+    key === 'impugnada' ||
+    key === 'annulled' ||
+    key === 'anulada' ||
+    key === 'agreement' ||
+    key === 'convenio'
+  )
+}
+
+export function payloadHasCitationHistory(payload: EcuadorContrastePayload | null): boolean {
+  if (!payload) return false
+  if (payload.antHistoryFetchedAt) return true
+  return (payload.citations ?? []).some((citation) => isHistoricalCitationStatus(citation.status))
+}
+
+export function payloadMissingAnt(payload: EcuadorContrastePayload | null): boolean {
+  if (!payload) return false
+  if (payloadHasCitationHistory(payload)) return false
+  if (payload.antHistoryStatus === 'unavailable' || payload.antHistoryStatus === 'no_owner') {
+    if (payload.antFetchedAt) return false
+    if (payload.ant?.status === 'ok') return false
+    if (payload.citationsPendingCount != null) return false
+    return true
+  }
+  const ownerDigits = (payload.lookup?.ownerIdAnt || payload.lookup?.ownerIdSri || '').replace(/\D/g, '')
+  const hasCedula = ownerDigits.length === 10 || (ownerDigits.length === 13 && ownerDigits.endsWith('001'))
+  if (!hasCedula && (payload.antFetchedAt || payload.ant?.status === 'ok' || payload.citationsPendingCount != null)) {
+    return false
+  }
+  return true
+}
+
 function isPendingCitationStatus(status: string | null | undefined): boolean {
   const key = (status || '').toLowerCase()
   return key === 'pending' || key === 'pendiente'
@@ -868,13 +909,21 @@ export function buildContrastePayload(input: {
     0
   const paidCount = citations?.filter((c) => (c.status || '').toLowerCase() === 'paid').length ?? 0
   const appealedCount = citations?.filter((c) => (c.status || '').toLowerCase() === 'appealed').length ?? 0
+  const annulledCount = citations?.filter((c) => (c.status || '').toLowerCase() === 'annulled').length ?? 0
+  const agreementCount = citations?.filter((c) => (c.status || '').toLowerCase() === 'agreement').length ?? 0
   if (citations) {
+    const historyBits = [
+      paidCount ? `${paidCount} pagada${paidCount === 1 ? '' : 's'}` : null,
+      appealedCount ? `${appealedCount} impugnada${appealedCount === 1 ? '' : 's'}` : null,
+      agreementCount ? `${agreementCount} en convenio` : null,
+      annulledCount ? `${annulledCount} anulada${annulledCount === 1 ? '' : 's'}` : null,
+    ].filter(Boolean)
     antCells.multas = {
       vigente: pendingCount <= 0,
       text:
         pendingCount <= 0
-          ? `Sin pendientes · ${paidCount} pagada${paidCount === 1 ? '' : 's'}${appealedCount ? ` · ${appealedCount} impugnada${appealedCount === 1 ? '' : 's'}` : ''}`
-          : `${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} · ${usd(input.citationsPendingTotal ?? ant?.total ?? 0)}`,
+          ? `Sin pendientes${historyBits.length ? ` · ${historyBits.join(' · ')}` : ''}`
+          : `${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} · ${usd(input.citationsPendingTotal ?? ant?.total ?? 0)}${historyBits.length ? ` · ${historyBits.join(' · ')}` : ''}`,
     }
   }
   return {
@@ -1007,7 +1056,11 @@ export function buildContrastMatrix(
   }
 
   const antStatus = (okText: string, pendingText: string, staffTone: ContrastStaffTone): MatrixCell => {
-    if (!ant) return { text: 'Sin consultar', kind: 'idle' }
+    if (!ant) {
+      return payload
+        ? { text: payload.informe_ant_siat?.text || 'No se pudo consultar ANT', kind: 'warn' }
+        : { text: 'Sin consultar', kind: 'idle' }
+    }
     if (ant.status === 'unavailable') return { text: 'ANT no disponible', kind: 'warn' }
     if (ant.status === 'not_applicable') return { text: 'ANT: sin registro', kind: 'warn' }
     if (ant.status === 'ok') {
