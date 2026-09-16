@@ -19,6 +19,8 @@ import {
   contrasteOfficialOwners,
   formatContrasteConsultedPretty,
   groupItemsByCitationStatus,
+  isLegacyOwnerCitations,
+  ownerCitationsFromPayload,
   payloadHasCitationHistory,
   sriRubros,
   summarizeMatrix,
@@ -143,10 +145,13 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
 
   const citations = useMemo(() => citationsFromPayload(payload), [payload])
   const citationGroups = useMemo(() => groupItemsByCitationStatus(citations), [citations])
+  const ownerCitations = useMemo(() => ownerCitationsFromPayload(payload), [payload])
+  const ownerGroups = useMemo(() => groupItemsByCitationStatus(ownerCitations), [ownerCitations])
   const sri = payload?.sri ? sriRubros(payload.sri) : null
   const lookup = payload?.lookup
   const officialOwners = contrasteOfficialOwners(lookup)
   const hasFullHistory = payloadHasCitationHistory(payload)
+  const legacyMix = isLegacyOwnerCitations(payload)
 
   const staffFinesByStatus = useMemo(() => {
     const map = new Map<string, typeof dossier.fines>()
@@ -280,10 +285,10 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
       autoTable(pdf, {
         ...tableOpts,
         startY: y,
-        head: [['Multas ANT', 'N.º', 'Estado', 'Monto']],
+        head: [['Multas ANT de esta placa', 'N.º', 'Estado', 'Monto']],
         body:
           citations.length === 0
-            ? [['Sin citaciones', '', '', '']]
+            ? [['Sin citaciones pendientes en esta placa', '', '', '']]
             : citations.map((c) => [
                 factText(c.infraction || c.article || 'Citación'),
                 factText(c.citationNumber),
@@ -291,6 +296,21 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                 usd(c.total ?? c.fine),
               ]),
       })
+
+      if (ownerCitations.length > 0) {
+        y = pdfLastY(pdf, y) + 8
+        autoTable(pdf, {
+          ...tableOpts,
+          startY: y,
+          head: [['Historial ANT del titular (no de esta placa)', 'N.º', 'Estado', 'Monto']],
+          body: ownerCitations.map((c) => [
+            factText(c.infraction || c.article || 'Citación'),
+            factText(c.citationNumber),
+            citationStatusLabel(c.status),
+            usd(c.total ?? c.fine),
+          ]),
+        })
+      }
 
       if (dossier.fines.length > 0) {
         y = pdfLastY(pdf, y) + 8
@@ -465,20 +485,20 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                 )}
               </Section>
 
-              <Section title="Multas ANT">
+              <Section title="Multas ANT de esta placa">
                 {!payload ? (
                   <p className="text-sm text-slate-500">Sin consulta oficial.</p>
                 ) : citations.length === 0 ? (
-                  <p className="text-sm text-emerald-700 font-medium">No hay citaciones en el historial consultado.</p>
+                  <p className="text-sm text-emerald-700 font-medium">
+                    {legacyMix
+                      ? 'No se usan las citaciones del titular como deuda de esta placa. Consulta nuevamente para confirmar el pendiente ANT del vehículo.'
+                      : 'ANT no reporta citaciones pendientes para esta placa.'}
+                  </p>
                 ) : (
                   <div className="space-y-4">
                     {!hasFullHistory ? (
                       <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                        Esta consulta antigua solo guardó pendientes. Vuelve a Consultar nuevamente para ver pagadas, impugnadas, anuladas y en convenio.
-                      </p>
-                    ) : payload?.citationsScope === 'owner' ? (
-                      <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                        Historial ANT del titular. EcuadorAPI no marca la placa en cada citación.
+                        Esta consulta solo guardó pendientes de la placa.
                       </p>
                     ) : null}
                     {citationGroups.map((group) => (
@@ -521,6 +541,51 @@ export function VehicleCompleteReportModal({ vehiculo, dossier, onClose }: Props
                   </div>
                 )}
               </Section>
+
+              {ownerCitations.length > 0 ? (
+                <Section title="Historial ANT del titular">
+                  <p className="text-xs text-slate-600 mb-3">
+                    Citaciones de la cédula{payload?.ownerCitationsCedula || lookup?.ownerIdAnt ? ` ${payload?.ownerCitationsCedula || lookup?.ownerIdAnt}` : ''}.
+                    No son de esta placa y no se suman al pendiente ANT del vehículo.
+                  </p>
+                  <div className="space-y-4">
+                    {ownerGroups.map((group) => (
+                      <div key={`owner-${group.status}`}>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <h5 className="text-sm font-bold text-slate-900">{citationHistorySectionTitle(group.status)}</h5>
+                          <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-md ${citationStatusClass(group.status)}`}>
+                            {citationStatusLabel(group.status)} · {group.items.length}
+                          </span>
+                        </div>
+                        <ul className="space-y-2">
+                          {group.items.map((c, i) => (
+                            <li key={`owner-${c.citationNumber || c.id}-${i}`} className={`rounded-xl border px-4 py-3 ${citationStatusCardClass(c.status)}`}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900">{c.infraction || c.article || 'Citación'}</p>
+                                  <p className="text-[11px] text-slate-500 mt-1">
+                                    {[
+                                      c.entity,
+                                      c.citationNumber ? `N.º ${c.citationNumber}` : null,
+                                      c.issueDate ? `emitida ${c.issueDate}` : null,
+                                      c.article,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </p>
+                                </div>
+                                <p className={`text-sm font-bold whitespace-nowrap ${citationAmountClass(c.status)}`}>
+                                  {usd(c.total ?? c.fine)}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
 
               {dossier.fines.length > 0 ? (
                 <Section title="Multas registradas internamente">

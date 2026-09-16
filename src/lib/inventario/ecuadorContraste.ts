@@ -73,6 +73,8 @@ export type EcuadorContrastePayload = {
   citations?: EcuadorCitation[]
   citationsPendingCount?: number | null
   citationsPendingTotal?: number | null
+  ownerCitations?: EcuadorCitation[]
+  ownerCitationsCedula?: string | null
   matricula: ContrastApiCell
   revision_tecnica: ContrastApiCell
   prenda_industrial: ContrastApiCell
@@ -171,9 +173,18 @@ export function groupItemsByCitationStatus<T extends { status?: string | null }>
   return keys.map((status) => ({ status, items: map.get(status) ?? [] }))
 }
 
-export function citationsFromPayload(payload: EcuadorContrastePayload | null): EcuadorCitation[] {
+export function isLegacyOwnerCitations(payload: EcuadorContrastePayload | null): boolean {
+  return Boolean(payload && payload.citationsScope === 'owner' && payload.ownerCitations == null)
+}
+
+export function ownerCitationsFromPayload(payload: EcuadorContrastePayload | null): EcuadorCitation[] {
   if (!payload) return []
-  if (payload.citations && payload.citations.length > 0) return payload.citations
+  if (payload.ownerCitations) return payload.ownerCitations
+  if (payload.citationsScope === 'owner') return payload.citations ?? []
+  return []
+}
+
+function antItemsAsCitations(payload: EcuadorContrastePayload): EcuadorCitation[] {
   return (payload.ant?.items ?? []).map((item) => ({
     id: item.citation_number ?? null,
     entity: item.beneficiary || payload.ant?.entity || 'ANT',
@@ -188,6 +199,13 @@ export function citationsFromPayload(payload: EcuadorContrastePayload | null): E
     infraction: item.infraction || item.description || item.type_description || null,
     status: 'pending',
   }))
+}
+
+export function citationsFromPayload(payload: EcuadorContrastePayload | null): EcuadorCitation[] {
+  if (!payload) return []
+  if (isLegacyOwnerCitations(payload)) return []
+  if (payload.citations && payload.citations.length > 0) return payload.citations
+  return antItemsAsCitations(payload)
 }
 
 export function antPendientesFromCitations(
@@ -470,8 +488,9 @@ export function contrasteTopicDetail(
     ]
     emptyHint = 'SRI/AMT no reportan ítems de revisión técnica.'
   } else if (key === 'informe_ant_siat' || key === 'multas' || key === 'ant') {
+    const plateAntTotal = isLegacyOwnerCitations(payload) ? 0 : (ant?.total ?? null)
     if (ant?.status) facts.push({ label: 'Estado ANT', value: ant.status })
-    if (ant?.total != null) facts.push({ label: 'Total pendiente ANT', value: `$${ant.total.toFixed(2)}` })
+    if (plateAntTotal != null) facts.push({ label: 'Total pendiente ANT (placa)', value: `$${Number(plateAntTotal).toFixed(2)}` })
     const citations = citationsFromPayload(payload)
     if (citations.length > 0) {
       lines = citations.map((c) => ({
@@ -490,7 +509,11 @@ export function contrasteTopicDetail(
         location: null,
         status: c.status,
       }))
-      emptyHint = 'No hay citaciones en el historial ANT.'
+      emptyHint = 'No hay citaciones pendientes de ANT para esta placa.'
+    } else if (isLegacyOwnerCitations(payload)) {
+      lines = []
+      emptyHint =
+        'Esta consulta mezcló citaciones del titular. No se muestran como deuda de esta placa. Consulta nuevamente para confirmar el pendiente ANT del vehículo.'
     } else {
       lines = [
         ...linesFromBlock(ant, 'ANT', (item) => {
@@ -504,7 +527,9 @@ export function contrasteTopicDetail(
       ]
       emptyHint =
         lines.length === 0
-          ? 'No hay citaciones reportadas por ANT. Vuelve a Consultar para traer pagadas e impugnadas.'
+          ? ant?.status === 'ok'
+            ? 'ANT confirmó esta placa: no hay citaciones pendientes.'
+            : 'No hay citaciones pendientes de ANT para esta placa.'
           : 'Sin ítems para mostrar.'
     }
   } else if (key === 'prenda_industrial' || key === 'prohibicion') {
@@ -647,6 +672,7 @@ function isHistoricalCitationStatus(status: string | null | undefined): boolean 
 
 export function payloadHasCitationHistory(payload: EcuadorContrastePayload | null): boolean {
   if (!payload) return false
+  if (payload.ownerCitations != null) return true
   if (payload.antHistoryFetchedAt) return true
   return (payload.citations ?? []).some((citation) => isHistoricalCitationStatus(citation.status))
 }
@@ -679,9 +705,10 @@ function isAmtCitation(citation: EcuadorCitation): boolean {
 
 export function officialPendingSummary(payload: EcuadorContrastePayload | null): OfficialPendingSummary {
   const sri = sriRubros(payload?.sri ?? null)
-  let antTotal = Number(payload?.citationsPendingTotal ?? payload?.ant?.total ?? 0) || 0
+  const ownerScoped = isLegacyOwnerCitations(payload)
+  let antTotal = ownerScoped ? 0 : Number(payload?.citationsPendingTotal ?? payload?.ant?.total ?? 0) || 0
   let amtTotal = Number(payload?.amt?.total ?? 0) || 0
-  let citationsCount = Number(payload?.citationsPendingCount ?? 0) || 0
+  let citationsCount = ownerScoped ? 0 : Number(payload?.citationsPendingCount ?? 0) || 0
   const pendingCitations = citationsFromPayload(payload).filter((citation) =>
     isPendingCitationStatus(citation.status)
   )
