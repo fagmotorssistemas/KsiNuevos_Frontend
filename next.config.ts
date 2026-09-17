@@ -42,6 +42,20 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/ib1q07zomxfos3gvvpo7924l8fuq11.html",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+          { key: "Content-Type", value: "text/plain; charset=utf-8" },
+        ],
+      },
+      {
+        source: "/sngb3skecq1n7l19qlq0k4gigjlhr.html",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
+          { key: "Content-Type", value: "text/plain; charset=utf-8" },
+        ],
+      },
+      {
         // SharedArrayBuffer necesario para @ffmpeg/ffmpeg WASM.
         // COEP "credentialless" permite cargar recursos de Supabase/CDN sin romper URLs firmadas.
         source: "/marketing/:path*",
