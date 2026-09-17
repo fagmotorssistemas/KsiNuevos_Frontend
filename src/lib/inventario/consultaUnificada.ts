@@ -7,7 +7,12 @@ import {
   normalizeCedulaOrRuc,
 } from '@/lib/inventario/consultas-ec'
 import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
-import type { EcuadorContrastePayload } from '@/lib/inventario/ecuadorContraste'
+import {
+  citationsFromPayload,
+  isLegacyOwnerCitations,
+  ownerCitationsFromPayload,
+  type EcuadorContrastePayload,
+} from '@/lib/inventario/ecuadorContraste'
 import type { Database } from '@/types/supabase'
 import { buildReadableReport } from '@/lib/inventario/consultaUnificada.report'
 import type {
@@ -492,18 +497,21 @@ function ecuadorSection(payload: EcuadorContrastePayload, plateRaw?: unknown): U
       ].filter((row): row is UnifiedFact => Boolean(row))
 
   if (payload.sri?.total != null) facts.push({ label: 'SRI pendiente', value: `$${payload.sri.total}`, origin: 'EcuadorAPI' })
-  if (payload.citationsPendingTotal != null) {
-    facts.push({ label: 'Multas ANT (vehículo)', value: `$${payload.citationsPendingTotal}`, origin: 'EcuadorAPI' })
+  const plateAntTotal = isLegacyOwnerCitations(payload)
+    ? 0
+    : payload.citationsPendingTotal ?? payload.ant?.total
+  if (plateAntTotal != null) {
+    facts.push({ label: 'Multas ANT (esta placa)', value: `$${plateAntTotal}`, origin: 'EcuadorAPI' })
   }
-  if (payload.citationsPendingCount != null) {
-    facts.push({ label: 'Citaciones pendientes', value: String(payload.citationsPendingCount), origin: 'EcuadorAPI' })
+  if (!isLegacyOwnerCitations(payload) && payload.citationsPendingCount != null) {
+    facts.push({ label: 'Citaciones pendientes (placa)', value: String(payload.citationsPendingCount), origin: 'EcuadorAPI' })
   }
   if (payload.amt?.total != null) facts.push({ label: 'AMT Quito pendiente', value: `$${payload.amt.total}`, origin: 'EcuadorAPI' })
 
   const sriRows = rowsFromRecords(payload.sri?.items ?? [], 'Rubro SRI')
   const amtRows = rowsFromRecords(payload.amt?.items ?? [], 'Rubro AMT')
-  const citationRows = (payload.citations ?? []).map((citation) => ({
-    title: citation.infraction || citation.citationNumber || 'Citación ANT',
+  const citationRows = citationsFromPayload(payload).map((citation) => ({
+    title: citation.infraction || citation.citationNumber || 'Citación ANT (placa)',
     subtitle: citation.status,
     facts: [
       citation.entity ? { label: 'Entidad', value: citation.entity } : null,
@@ -515,9 +523,19 @@ function ecuadorSection(payload: EcuadorContrastePayload, plateRaw?: unknown): U
       citation.points != null ? { label: 'Puntos', value: String(citation.points) } : null,
       citation.paymentDeadline ? { label: 'Límite de pago', value: citation.paymentDeadline } : null,
       citation.article ? { label: 'Artículo', value: citation.article } : null,
-      (citation.plate || payload.lookup?.plate || payload.plate)
-        ? { label: 'Placa', value: citation.plate || payload.lookup?.plate || payload.plate }
-        : null,
+      { label: 'Placa', value: payload.lookup?.plate || payload.plate || '—' },
+    ].filter((row): row is UnifiedFact => Boolean(row)),
+    rawJson: JSON.stringify(citation, null, 2),
+  }))
+  const ownerCitationRows = ownerCitationsFromPayload(payload).map((citation) => ({
+    title: citation.infraction || citation.citationNumber || 'Citación ANT (titular)',
+    subtitle: citation.status,
+    facts: [
+      { label: 'Alcance', value: 'Titular, no de esta placa' },
+      citation.entity ? { label: 'Entidad', value: citation.entity } : null,
+      citation.citationNumber ? { label: 'N° citación', value: citation.citationNumber } : null,
+      citation.total != null ? { label: 'Valor', value: `$${citation.total}` } : null,
+      payload.ownerCitationsCedula ? { label: 'Cédula', value: payload.ownerCitationsCedula } : null,
     ].filter((row): row is UnifiedFact => Boolean(row)),
     rawJson: JSON.stringify(citation, null, 2),
   }))
@@ -530,7 +548,7 @@ function ecuadorSection(payload: EcuadorContrastePayload, plateRaw?: unknown): U
     error: null,
     summary: payload.lookup?.ownerName ? `Propietario: ${payload.lookup.ownerName}` : null,
     facts,
-    rows: [...dumped.rows, ...sriRows, ...amtRows, ...citationRows],
+    rows: [...dumped.rows, ...sriRows, ...amtRows, ...citationRows, ...ownerCitationRows],
   }
 }
 

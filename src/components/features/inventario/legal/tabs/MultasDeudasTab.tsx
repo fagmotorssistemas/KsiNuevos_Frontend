@@ -15,6 +15,8 @@ import {
   formatContrasteConsultedAt,
   formatContrasteRelative,
   groupItemsByCitationStatus,
+  isLegacyOwnerCitations,
+  ownerCitationsFromPayload,
   payloadHasCitationHistory,
   type EcuadorCitation,
   type EcuadorContrastePayload,
@@ -129,12 +131,15 @@ export function MultasDeudasTab({ placa }: Props) {
   }
 
   const citations = citationsFromPayload(payload)
+  const ownerCitations = ownerCitationsFromPayload(payload)
   const groups = groupItemsByCitationStatus(citations)
+  const ownerGroups = groupItemsByCitationStatus(ownerCitations)
   const pending = citations.filter((c) => (c.status || '').toLowerCase() === 'pending')
   const pendingTotal = pending.reduce((sum, c) => sum + (c.total ?? c.fine ?? 0), 0)
   const ant = payload.ant
   const antUnavailable = ant?.status === 'unavailable' || ant?.status === 'not_applicable'
   const hasFullHistory = payloadHasCitationHistory(payload)
+  const legacyMix = isLegacyOwnerCitations(payload)
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -162,19 +167,19 @@ export function MultasDeudasTab({ placa }: Props) {
           <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
           <p className="text-sm text-amber-900">
             Esta consulta guardada no incluye el detalle ANT. Pulsa Consultar en Contraste oficial para
-            obtener el historial de citaciones.
+            obtener las citaciones de esta placa.
           </p>
         </div>
       )}
 
-      {!hasFullHistory && citations.length > 0 ? (
+      {legacyMix ? (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-          Esta consulta solo guardó pendientes. Consulta nuevamente para ver pagadas, impugnadas, anuladas y en convenio.
+          Esta consulta mezcló multas del titular con las de la placa. El total ANT de este auto no usa esas
+          citaciones. Consulta nuevamente para traer solo lo pendiente de esta placa.
         </p>
-      ) : null}
-      {hasFullHistory && payload.citationsScope === 'owner' ? (
-        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-          Historial ANT del titular. EcuadorAPI no marca la placa en cada citación.
+      ) : !hasFullHistory && citations.length > 0 ? (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+          Esta consulta solo guardó pendientes de la placa.
         </p>
       ) : null}
 
@@ -182,18 +187,18 @@ export function MultasDeudasTab({ placa }: Props) {
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex gap-3">
           <AlertTriangle className="h-5 w-5 text-red-700 shrink-0 mt-0.5" />
           <p className="text-sm text-red-900">
-            Hay <strong>{pending.length}</strong> citación{pending.length === 1 ? '' : 'es'} pendiente
+            Esta placa tiene <strong>{pending.length}</strong> citación{pending.length === 1 ? '' : 'es'} pendiente
             {pending.length === 1 ? '' : 's'} · total {usd(pendingTotal)}.
           </p>
         </div>
-      ) : citations.length > 0 || ant?.status === 'ok' ? (
+      ) : citations.length > 0 || ant?.status === 'ok' || legacyMix ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex gap-3">
           <Check className="h-5 w-5 text-emerald-700 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-emerald-900">Sin citaciones pendientes</p>
+            <p className="text-sm font-semibold text-emerald-900">Sin citaciones pendientes en esta placa</p>
             <p className="text-xs text-emerald-800 mt-0.5">
-              {citations.length > 0
-                ? 'El historial incluye citaciones ya pagadas, impugnadas o anuladas.'
+              {legacyMix
+                ? 'Hasta consultar de nuevo, no se usa el historial del titular como deuda de este auto.'
                 : 'La ANT no reporta valores pendientes de pago para esta placa.'}
             </p>
           </div>
@@ -215,6 +220,33 @@ export function MultasDeudasTab({ placa }: Props) {
           </ul>
         </section>
       ))}
+
+      {ownerCitations.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div>
+            <h5 className="text-sm font-bold text-slate-900">Historial ANT del titular</h5>
+            <p className="text-xs text-slate-600 mt-1">
+              Citaciones de la cédula{payload.ownerCitationsCedula ? ` ${payload.ownerCitationsCedula}` : ''}.
+              No son de esta placa y no se suman al pendiente ANT del vehículo.
+            </p>
+          </div>
+          {ownerGroups.map((group) => (
+            <section key={`owner-${group.status}`}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h6 className="text-xs font-bold text-slate-800">{citationHistorySectionTitle(group.status)}</h6>
+                <span className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-md ${citationStatusClass(group.status)}`}>
+                  {citationStatusLabel(group.status)} · {group.items.length}
+                </span>
+              </div>
+              <ul className="space-y-2">
+                {group.items.map((item, i) => (
+                  <CitationRow key={`owner-${item.citationNumber || item.id}-${i}`} item={item} />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
