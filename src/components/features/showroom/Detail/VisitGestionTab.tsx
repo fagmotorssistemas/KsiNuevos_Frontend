@@ -10,6 +10,7 @@ import {
   Loader2,
   Send,
   ClipboardList,
+  Calendar
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/Input";
@@ -20,6 +21,7 @@ import {
   type GestionType,
 } from "@/services/showroom.service";
 import type { ShowroomVisit, ShowroomVisitGestion } from "../constants";
+import { AppointmentModal } from "@/components/features/agenda/AppointmentModal";
 
 interface VisitGestionTabProps {
   visit: ShowroomVisit;
@@ -48,6 +50,7 @@ export function VisitGestionTab({ visit, onGestionAdded }: VisitGestionTabProps)
   const [note, setNote] = useState("");
   const [gestionType, setGestionType] = useState<GestionType>("nota");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,21 +145,32 @@ export function VisitGestionTab({ visit, onGestionAdded }: VisitGestionTabProps)
 
       <div className="p-4 bg-white border-t border-slate-200 shrink-0">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {GESTION_TYPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setGestionType(opt.value)}
-                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all whitespace-nowrap ${
-                  gestionType === opt.value
-                    ? "bg-slate-800 text-white border-slate-800"
-                    : "bg-white text-slate-600 border-slate-200"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center justify-between">
+            <div className="flex gap-2">
+              {GESTION_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setGestionType(opt.value)}
+                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all whitespace-nowrap ${
+                    gestionType === opt.value
+                      ? "bg-slate-800 text-white border-slate-800"
+                      : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setIsAppointmentModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium transition-all whitespace-nowrap bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Agendar Cita
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -181,6 +195,19 @@ export function VisitGestionTab({ visit, onGestionAdded }: VisitGestionTabProps)
           </div>
         </form>
       </div>
+
+      {isAppointmentModalOpen && (
+        <AppointmentModal
+          isOpen={isAppointmentModalOpen}
+          onClose={() => setIsAppointmentModalOpen(false)}
+          onSuccess={() => setIsAppointmentModalOpen(false)}
+          initialLeadId={visit.lead_id_kommo ? Number(visit.lead_id_kommo) : null}
+          initialData={{
+            external_client_name: visit.client_name,
+            location: "Showroom"
+          }}
+        />
+      )}
     </div>
   );
 }

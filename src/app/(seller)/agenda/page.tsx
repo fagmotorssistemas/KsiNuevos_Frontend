@@ -81,7 +81,7 @@ export default function AgendaPage() {
         setActiveTab,
         filters,
         setFilters,
-        actions: { markAsCompleted, markAsNoShow, discardSuggestion, confirmSuggestionScheduled },
+        actions: { markAsCompleted, markAsNoShow, discardSuggestion, confirmSuggestionScheduled, updateAppointment },
         refresh
     } = useAgenda();
 
@@ -684,11 +684,18 @@ export default function AgendaPage() {
                     if (savingNoShow) return;
                     setNoShowAppointment(null);
                 }}
-                onConfirm={async ({ reason, followUp }) => {
+                onConfirm={async ({ reason, followUp, rescheduleDate }) => {
                     if (!noShowAppointment) return;
                     setSavingNoShow(true);
                     try {
-                        await markAsNoShow(noShowAppointment.id, { reason, followUp });
+                        if (rescheduleDate) {
+                            // If they want to reschedule, we update the appointment with new start_time
+                            await updateAppointment(noShowAppointment.id, {
+                                start_time: rescheduleDate.toISOString(),
+                            });
+                        } else {
+                            await markAsNoShow(noShowAppointment.id, { reason, followUp });
+                        }
                         setNoShowAppointment(null);
                     } finally {
                         setSavingNoShow(false);

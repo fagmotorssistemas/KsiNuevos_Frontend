@@ -1,22 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { X, MapPin, ClipboardList, User, MessageCircle, Loader2 } from "lucide-react";
+import { X, MapPin, ClipboardList, User, MessageCircle, Loader2, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { openKommoChatByPhone } from "@/lib/leads/openKommoChat";
 import type { ShowroomVisit, ShowroomVisitGestion } from "../constants";
 import { getCreditLabel } from "../constants";
 import { VisitResumenTab } from "./VisitResumenTab";
 import { VisitGestionTab } from "./VisitGestionTab";
+import { LeadAgendaTabWrapper } from "./LeadAgendaTabWrapper";
+
+export type TabId = "resumen" | "seguimiento" | "agenda";
 
 interface VisitDetailModalProps {
-  visit: ShowroomVisit;
+  visit: ShowroomVisit & { lead_id?: number | null };
   onClose: () => void;
   onEdit: (visit: ShowroomVisit) => void;
   onVisitUpdated?: () => void;
 }
-
-type TabId = "resumen" | "seguimiento";
 
 function TabButton({
   active,
@@ -147,6 +148,14 @@ export function VisitDetailModal({
             icon={ClipboardList}
             label="Seguimiento"
           />
+          {visit.lead_id && (
+            <TabButton
+              active={activeTab === "agenda"}
+              onClick={() => setActiveTab("agenda")}
+              icon={Calendar}
+              label="Agenda"
+            />
+          )}
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -156,8 +165,10 @@ export function VisitDetailModal({
               onEdit={() => onEdit(visit)}
               onVisitUpdated={() => onVisitUpdated?.()}
             />
-          ) : (
+          ) : activeTab === "seguimiento" ? (
             <VisitGestionTab visit={visit} onGestionAdded={handleGestionAdded} />
+          ) : (
+            visit.lead_id && <LeadAgendaTabWrapper leadId={visit.lead_id} />
           )}
         </div>
       </div>

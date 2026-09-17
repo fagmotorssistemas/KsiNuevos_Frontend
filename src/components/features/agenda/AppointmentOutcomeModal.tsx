@@ -22,6 +22,7 @@ interface AppointmentOutcomeModalProps {
     onConfirm: (input: {
         reason: string;
         followUp: NoShowFollowUp;
+        rescheduleDate?: Date;
     }) => Promise<void> | void;
 }
 
@@ -35,12 +36,16 @@ export function AppointmentOutcomeModal({
 }: AppointmentOutcomeModalProps) {
     const [reason, setReason] = useState("");
     const [followUp, setFollowUp] = useState<NoShowFollowUp | null>(null);
+    const [newDate, setNewDate] = useState("");
+    const [newTime, setNewTime] = useState("");
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen) return;
         setReason("");
         setFollowUp(null);
+        setNewDate("");
+        setNewTime("");
         setError(null);
     }, [isOpen]);
 
@@ -57,8 +62,29 @@ export function AppointmentOutcomeModal({
             setError("Elige si se llamó o se dejó un mensaje");
             return;
         }
+
+        let rescheduleDate: Date | undefined = undefined;
+        if (trimmed === "Quiere reprogramar") {
+            if (!newDate || !newTime) {
+                setError("Selecciona la nueva fecha y hora para reprogramar");
+                return;
+            }
+            
+            // Forzamos los segundos a 00 para la hora seleccionada
+            const selectedDateTime = new Date(`${newDate}T${newTime}:00`);
+            const now = new Date();
+            
+            // Check if selected datetime is in the past
+            if (selectedDateTime < now) {
+                setError("No puedes seleccionar una fecha u hora en el pasado");
+                return;
+            }
+            
+            rescheduleDate = selectedDateTime;
+        }
+
         setError(null);
-        await onConfirm({ reason: trimmed, followUp });
+        await onConfirm({ reason: trimmed, followUp, rescheduleDate });
     };
 
     return (
@@ -123,6 +149,35 @@ export function AppointmentOutcomeModal({
                             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm resize-none outline-none focus:border-red-400 focus:ring-4 focus:ring-red-50"
                         />
                     </div>
+
+                    {reason === "Quiere reprogramar" && (
+                        <div className="space-y-1.5 p-3 bg-blue-50 border border-blue-100 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-[11px] font-semibold uppercase tracking-wide text-blue-800">
+                                Nueva Fecha y Hora
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <input
+                                    type="date"
+                                    value={newDate}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    onChange={(e) => {
+                                        setNewDate(e.target.value);
+                                        setError(null);
+                                    }}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                                />
+                                <input
+                                    type="time"
+                                    value={newTime}
+                                    onChange={(e) => {
+                                        setNewTime(e.target.value);
+                                        setError(null);
+                                    }}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-1.5">
                         <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
