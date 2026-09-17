@@ -42,6 +42,7 @@ import {
   formatContrasteRelative,
   sriRubros,
   summarizeMatrix,
+  contrasteFuenteSinResultado,
   citationStatusClass,
   citationStatusLabel,
   citationStatusCardClass,
@@ -552,6 +553,7 @@ export function ContrasteOficialBlock({
   const [ready, setReady] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [emovLoading, setEmovLoading] = useState(false);
+  const [retryingFuente, setRetryingFuente] = useState<"ant" | "sri" | null>(null);
   const [activeEmovPlate, setActiveEmovPlate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EcuadorContrastePayload | null>(null);
@@ -607,6 +609,7 @@ export function ContrasteOficialBlock({
     inFlight.current = false;
     emovInFlight.current = false;
     setEmovLoading(false);
+    setRetryingFuente(null);
     let cancelled = false;
 
     void Promise.all([
@@ -890,6 +893,44 @@ export function ContrasteOficialBlock({
     }
   };
 
+  const handleRetryFuente = async (fuente: "ant" | "sri") => {
+    const plate = normalizePlate(placa);
+    if (!plate || retryingFuente) return;
+    setRetryingFuente(fuente);
+    setError(null);
+    try {
+      const res = await fetch(`/api/inventario/contraste/${encodeURIComponent(plate)}/fuente`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fuente, consultaId: activeConsultaId }),
+      });
+      const body = (await res.json()) as {
+        data?: EcuadorContrastePayload;
+        row?: ContrasteConsultaRow;
+        error?: string;
+      };
+      if (!res.ok || !body.data || !body.row) {
+        setError(body.error || `No se pudo reintentar ${fuente.toUpperCase()}.`);
+        return;
+      }
+      setPayload(body.data);
+      setActiveConsultaId(body.row.id);
+      setHistory((prev) => [body.row!, ...prev.filter((row) => row.id !== body.row!.id)].slice(0, 100));
+      onConsultaSaved?.(body.data);
+      const stillFailed =
+        fuente === "ant" ? contrasteFuenteSinResultado(body.data.ant) : contrasteFuenteSinResultado(body.data.sri);
+      if (stillFailed) {
+        toast.error(`${fuente.toUpperCase()} sigue sin resultados. Intenta de nuevo en un momento.`);
+      } else {
+        toast.success(`${fuente.toUpperCase()} actualizado.`);
+      }
+    } catch {
+      setError(`No se pudo conectar para reintentar ${fuente.toUpperCase()}.`);
+    } finally {
+      setRetryingFuente(null);
+    }
+  };
+
   // Local loading only covers the start request; the job status controls the remaining wait.
   const emovRunning = emovLoading || emovActive(payload?.emov);
   const otherEmovBusy = Boolean(activeEmovPlate && normalizePlate(activeEmovPlate) !== normalizePlate(placa));
@@ -1095,6 +1136,36 @@ export function ContrasteOficialBlock({
                   {error}
                 </div>
               )}
+
+              {payload && contrasteFuenteSinResultado(payload.sri) ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                  <p>SRI no dio resultados. Vuelve a intentar SRI.</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryFuente("sri")}
+                    disabled={retryingFuente !== null || loading}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800 disabled:opacity-50"
+                  >
+                    {retryingFuente === "sri" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {retryingFuente === "sri" ? "Reintentando SRI…" : "Volver a intentar SRI"}
+                  </button>
+                </div>
+              ) : null}
+
+              {payload && contrasteFuenteSinResultado(payload.ant) ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                  <p>ANT no dio resultados. Vuelve a intentar ANT.</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryFuente("ant")}
+                    disabled={retryingFuente !== null || loading}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800 disabled:opacity-50"
+                  >
+                    {retryingFuente === "ant" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {retryingFuente === "ant" ? "Reintentando ANT…" : "Volver a intentar ANT"}
+                  </button>
+                </div>
+              ) : null}
 
               {sriTotal > 0 ? (
                 <p className="text-xs text-red-700 font-medium">SRI · total a pagar ${sriTotal.toFixed(2)}</p>

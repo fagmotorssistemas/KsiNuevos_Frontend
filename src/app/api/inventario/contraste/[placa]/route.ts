@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
-export const maxDuration = 60
 import { attachJuiciosToContraste, loadJuiciosForOwner } from '@/lib/inventario/consultas-ec'
 import { EcuadorApiError, fetchEcuadorContraste, normalizeConsultaPlaca } from '@/lib/inventario/ecuador-api'
 import { payloadFromConsulta } from '@/services/contrasteConsultas.service'
 import { resolveOwnerIdentityForContraste } from '@/services/vehicleLegal.service'
+
+export const maxDuration = 90
 
 async function handleContraste(rawPlaca: string) {
   const supabase = await createServerSupabaseClient()

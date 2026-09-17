@@ -307,6 +307,10 @@ export const CONTRASTE_OFICIAL_DOC_TYPES: VehicleDocType[] = [
   'informe_emov',
 ]
 
+export function contrasteFuenteSinResultado(block?: EcuadorPendientes | null): boolean {
+  return !block || block.status === 'unavailable'
+}
+
 export type EcuadorPendientes = {
   source?: string | null
   entity?: string | null
