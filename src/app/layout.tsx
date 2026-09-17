@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     icon: '/logo.png',
   },
   other: {
-    'facebook-domain-verification': 'sngb3kkecqTn7l9tqty0kd4glgfhr',
+    'facebook-domain-verification': 'sngb3skecq1n7l19qlq0k4gigjlhr',
   },
 }
 
