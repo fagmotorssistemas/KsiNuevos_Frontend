@@ -125,7 +125,7 @@ function appointmentMatchesDateFilter(
 }
 
 export function useAgenda() {
-    const { supabase, user, isAdminLike } = useAuth();
+    const { supabase, user, profile, isAdminLike } = useAuth();
 
     // Estados de Datos
     const [allAppointments, setAllAppointments] = useState<AppointmentWithDetails[]>([]);
@@ -144,10 +144,12 @@ export function useAgenda() {
     const [activeTab, setActiveTab] = useState<AgendaTab>('pending');
 
     const isAdmin = isAdminLike;
+    const canViewAllSalespersons =
+        isAdmin || profile?.role?.toLowerCase().trim() === 'marketing';
 
     // 1. CARGAR USUARIOS
     const fetchAgents = useCallback(async () => {
-        if (!isAdmin) return;
+        if (!canViewAllSalespersons) return;
         const { data } = await supabase
             .from('profiles')
             .select('*')
@@ -155,7 +157,7 @@ export function useAgenda() {
             .eq('role', 'vendedor')
             .order('full_name', { ascending: true });
         if (data) setAgents(data);
-    }, [supabase, isAdmin]);
+    }, [supabase, canViewAllSalespersons]);
 
     const mapAppointmentRow = (appt: any): AppointmentWithDetails => {
         const leadRaw = Array.isArray(appt.lead) ? appt.lead[0] : appt.lead;
@@ -191,7 +193,7 @@ export function useAgenda() {
 
         while (from < 20000) {
             let query = supabase.from('appointments').select(select);
-            if (!isAdmin) {
+            if (!canViewAllSalespersons) {
                 query = query.eq('responsible_id', user.id);
             }
             const { data, error } = await query
@@ -216,7 +218,7 @@ export function useAgenda() {
         }
 
         setIsLoading(false);
-    }, [supabase, user, isAdmin]);
+    }, [supabase, user, canViewAllSalespersons]);
 
     // 3. CARGAR SUGERENCIAS DEL BOT
     const fetchBotSuggestions = useCallback(async () => {
@@ -231,7 +233,7 @@ export function useAgenda() {
             // Traemos leads que tengan AL MENOS un campo detectado
             .or('time_reference.not.is.null,day_detected.not.is.null,hour_detected.not.is.null');
 
-        if (!isAdmin) {
+        if (!canViewAllSalespersons) {
             query = query.eq('assigned_to', user.id);
         }
 
@@ -254,7 +256,7 @@ export function useAgenda() {
             // @ts-ignore
             setRawSuggestions(mappedSuggestions as BotSuggestionLead[]);
         }
-    }, [supabase, user, isAdmin]);
+    }, [supabase, user, canViewAllSalespersons]);
 
     useEffect(() => {
         fetchAppointments();
@@ -279,7 +281,7 @@ export function useAgenda() {
             .filter(isBotSuggestionVisible);
 
         // NUEVO: Aplicar filtro de responsable si es admin
-        if (isAdmin && filters.responsibleId !== 'all') {
+        if (canViewAllSalespersons && filters.responsibleId !== 'all') {
             filtered = filtered.filter(lead => lead.assigned_to === filters.responsibleId);
         }
 
@@ -296,14 +298,14 @@ export function useAgenda() {
         }
 
         return filtered;
-    }, [rawSuggestions, allAppointments, isAdmin, filters]);
+    }, [rawSuggestions, allAppointments, canViewAllSalespersons, filters]);
 
 
     // B. Filtrado de Citas (Admin y Fechas)
     const filteredAppointments = useMemo(() => {
         let result = allAppointments;
 
-        if (isAdmin && filters.responsibleId !== 'all') {
+        if (canViewAllSalespersons && filters.responsibleId !== 'all') {
             result = result.filter(a => a.responsible_id === filters.responsibleId);
         }
 
@@ -313,7 +315,7 @@ export function useAgenda() {
             );
         }
         return result;
-    }, [allAppointments, filters, isAdmin]);
+    }, [allAppointments, filters, canViewAllSalespersons]);
 
     // C. Separación Pendientes vs Historial
     const { pendingAppointments, historyAppointments } = useMemo(() => {
@@ -462,6 +464,7 @@ export function useAgenda() {
         suggestionsCount: botSuggestions.length,
         isLoading,
         isAdmin,
+        canViewAllSalespersons,
         agents,
         filters,
         setFilters,

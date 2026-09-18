@@ -67,7 +67,7 @@ export default function AgendaPage() {
     // Hooks de Lógica Principal
     const {
         isLoading,
-        isAdmin,
+        canViewAllSalespersons,
         agents,
         groupedPending, 
         groupedHistory,
@@ -89,7 +89,7 @@ export default function AgendaPage() {
         filters.responsibleId !== 'all' || filters.dateRange !== 'all' || phoneSearch.trim().length > 0;
 
     const dateFilterActive = filters.dateRange !== 'all';
-    const responsibleFilterActive = isAdmin && filters.responsibleId !== 'all';
+    const responsibleFilterActive = canViewAllSalespersons && filters.responsibleId !== 'all';
 
     const resetAgendaFilters = () => {
         setFilters({ responsibleId: 'all', dateRange: 'all', customDate: '' });
@@ -174,7 +174,7 @@ export default function AgendaPage() {
 
     // --- LÓGICA DE FILTRADO PARA CITAS WEB (ADMIN/USER) ---
     const filteredWebAppointments = webAppointments.filter((appt: WebApptType) => {
-        if (isAdmin) return true;
+        if (canViewAllSalespersons) return true;
         return appt.responsible_id === profile?.id;
     });
 
@@ -259,7 +259,7 @@ export default function AgendaPage() {
                     <AppointmentCard 
                         key={appt.id} 
                         appointment={appt} 
-                        isAdminView={isAdmin} 
+                        isAdminView={canViewAllSalespersons} 
                         onComplete={handleClientCame}
                         onNoShow={setNoShowAppointment}
                         onEdit={handleEdit}
@@ -276,7 +276,7 @@ export default function AgendaPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-semibold text-slate-900">
-                        {isAdmin ? 'Agenda General' : 'Mi Agenda'}
+                        {canViewAllSalespersons ? 'Agenda General' : 'Mi Agenda'}
                     </h1>
                     <p className="text-md text-slate-500 mt-1">
                         {profile ? `Hola, ${profile.full_name}.` : 'Bienvenido.'} 
@@ -303,10 +303,10 @@ export default function AgendaPage() {
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row gap-4 items-start lg:items-end animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-medium lg:mr-2 lg:pb-2 shrink-0">
                         <Filter className="h-4 w-4" />
-                        {isAdmin ? 'Filtros Admin' : 'Filtros'}:
+                        Filtros:
                     </div>
 
-                    {isAdmin && (
+                    {canViewAllSalespersons && (
                         <div className="flex-1 w-full lg:min-w-[220px]">
                             <label className="text-xs text-slate-400 font-semibold block mb-1">Responsable</label>
                             <div className="relative">

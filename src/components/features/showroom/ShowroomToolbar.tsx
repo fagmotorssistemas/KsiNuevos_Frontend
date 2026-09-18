@@ -170,7 +170,9 @@ export default function ShowroomToolbar({
     kommoChatFilter,
     onKommoChatFilterChange,
 }: ShowroomToolbarProps) {
-    const isAdmin = currentUserRole?.toLowerCase() === "admin";
+    const canFilterBySalesperson = ["admin", "marketing"].includes(
+        currentUserRole?.toLowerCase().trim() ?? ""
+    );
     const isCustomRange = dateFilter === "custom";
     const [openFilter, setOpenFilter] = useState<OpenFilter>(null);
     const filterMenusRef = useRef<HTMLDivElement>(null);
@@ -284,7 +286,7 @@ export default function ShowroomToolbar({
                         </FilterField>
                     )}
 
-                    {isAdmin ? (
+                    {canFilterBySalesperson ? (
                         <FilterField label="Vendedor" className="min-w-[200px]">
                             <FilterDropdown
                                 icon={User}

@@ -12,11 +12,13 @@ export function useShowroom() {
 
     // --- ESTADOS DE DATOS ---
     const [visits, setVisits] = useState<ShowroomVisit[]>([]);
-    const [salespersons, setSalespersons] = useState<any[]>([]);
+    const [salespersons, setSalespersons] = useState<{ id: string; full_name: string }[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const isAdmin = isAdminLike;
     const userRole = isAdmin ? 'admin' : (profile?.role ?? null);
+    const canViewAllSalespersons =
+        isAdmin || profile?.role?.toLowerCase().trim() === 'marketing';
 
     // --- ESTADOS DE FILTROS ---
     const [filters, setFilters] = useState({
@@ -28,9 +30,9 @@ export function useShowroom() {
         kommoChat: "all" as KommoChatFilter,
     });
 
-    // 2. CARGAR LISTA DE VENDEDORES (Solo si es Admin)
+    // 2. CARGAR LISTA DE VENDEDORES
     useEffect(() => {
-        if (isAdmin) {
+        if (canViewAllSalespersons) {
             const fetchSalespersons = async () => {
                 const { data } = await supabase
                     .from('profiles')
@@ -43,7 +45,7 @@ export function useShowroom() {
             };
             fetchSalespersons();
         }
-    }, [isAdmin, supabase]);
+    }, [canViewAllSalespersons, supabase]);
 
     // 3. CARGAR VISITAS (Core Logic)
     const fetchVisits = useCallback(async () => {
@@ -127,7 +129,7 @@ export function useShowroom() {
                         .lte('visit_start', new Date(`${to}T23:59:59.999`).toISOString());
                 }
 
-                if (isAdmin) {
+                if (canViewAllSalespersons) {
                     if (filters.salesperson !== 'all') {
                         query = query.eq('salesperson_id', filters.salesperson);
                     }
@@ -169,7 +171,7 @@ export function useShowroom() {
     }, [
         user,
         isAuthLoading,
-        isAdmin,
+        canViewAllSalespersons,
         filters.search,
         filters.date,
         filters.dateFrom,
@@ -217,7 +219,7 @@ export function useShowroom() {
     };
     const setCustomDateRange = (from: string, to: string) => {
         if (!from && !to) return;
-        let dateFrom = from;
+        const dateFrom = from;
         let dateTo = to;
         if (dateFrom && dateTo && dateFrom > dateTo) {
             dateTo = dateFrom;
