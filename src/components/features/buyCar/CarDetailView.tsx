@@ -84,7 +84,11 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
       />
 
       <div className="mt-8 space-y-3">
-        <BookingButton carId={car.id} carTitle={`${car.brand} ${car.model} ${car.year}`} />
+        <BookingButton
+          carId={car.id}
+          carTitle={`${car.brand} ${car.model} ${car.year}`}
+          car={car}
+        />
 
         <div className="bg-neutral-50 rounded-xl p-5 flex justify-between items-center border border-neutral-100 hover:border-red-100 transition-colors cursor-default group">
           <div className="flex flex-col">

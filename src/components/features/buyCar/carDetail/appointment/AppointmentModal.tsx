@@ -6,16 +6,17 @@ import { createBuyingAppointment } from '@/hooks/Homeksi/appointment-actions'
 import { KsButton } from '@/components/ui/Homeksi/KsButton'
 import { useAppointmentSlots } from '@/hooks/Homeksi/useAppointmentSlots'
 import { TimePicker } from './TimePicker'
-import { trackLead } from '@/lib/meta/pixel'
+import { toVehiclePixel, trackLead, type VehiclePixelSource } from '@/lib/meta/pixel'
 
 interface AppointmentModalProps {
   isOpen: boolean
   onClose: () => void
   carId: string
   carTitle: string
+  car?: VehiclePixelSource
 }
 
-export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: AppointmentModalProps) => {
+export const AppointmentModal = ({ isOpen, onClose, carId, carTitle, car }: AppointmentModalProps) => {
   const [isLoading, setIsLoading] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -37,8 +38,8 @@ export const AppointmentModal = ({ isOpen, onClose, carId, carTitle }: Appointme
 
   useEffect(() => {
     if (!isSuccess || !carId) return
-    trackLead({ id: carId })
-  }, [isSuccess, carId])
+    trackLead(toVehiclePixel(car ?? { id: carId }))
+  }, [isSuccess, carId, car])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

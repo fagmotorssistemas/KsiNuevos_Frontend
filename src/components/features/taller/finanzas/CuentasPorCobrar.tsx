@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { User, Phone, DollarSign, History, Receipt, CheckCircle2, ArrowDownLeft, ArrowUpRight, Package } from "lucide-react";
+import { useMemo, useState } from "react";
+import { User, Phone, DollarSign, History, Receipt, CheckCircle2, ArrowDownLeft, ArrowUpRight, Package, Search } from "lucide-react";
 import type { CuentaPorCobrar } from "@/types/taller";
 
 interface Props {
@@ -11,24 +11,38 @@ interface Props {
 
 export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarPresupuesto }: Props) {
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
     const [filtroPresupuesto, setFiltroPresupuesto] = useState<"TODOS" | "SIN" | "CON">("TODOS");
     const [filtroCliente, setFiltroCliente] = useState<"TODOS" | "FAG" | "AUTOMEKANO">("TODOS");
 
-    const filteredCuentas = cuentas.filter((c) => {
-        // Filtro por presupuesto
-        if (filtroPresupuesto === "SIN" && c.presupuesto > 0) return false;
-        if (filtroPresupuesto === "CON" && c.presupuesto <= 0) return false;
+    const filteredCuentas = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
+        const termCompact = term.replace(/[\s-]/g, "");
 
-        // Filtro por cliente frecuente
-        const nombre = c.cliente?.nombre_completo?.toUpperCase() || "";
-        if (filtroCliente === "FAG") {
-            return nombre === "FABIAN LEONARDO AGUIRRE MARQUEZ";
-        }
-        if (filtroCliente === "AUTOMEKANO") {
-            return nombre === "AUTOMEKANO";
-        }
-        return true;
-    });
+        return cuentas.filter((c) => {
+            if (filtroPresupuesto === "SIN" && c.presupuesto > 0) return false;
+            if (filtroPresupuesto === "CON" && c.presupuesto <= 0) return false;
+
+            const nombre = c.cliente?.nombre_completo?.toUpperCase() || "";
+            if (filtroCliente === "FAG" && nombre !== "FABIAN LEONARDO AGUIRRE MARQUEZ") return false;
+            if (filtroCliente === "AUTOMEKANO" && nombre !== "AUTOMEKANO") return false;
+
+            if (!term) return true;
+
+            const haystack = [
+                c.cliente?.nombre_completo,
+                c.vehiculo_marca,
+                c.vehiculo_modelo,
+                c.vehiculo_placa,
+                String(c.numero_orden ?? ""),
+            ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+
+            return haystack.includes(term) || haystack.replace(/[\s-]/g, "").includes(termCompact);
+        });
+    }, [cuentas, filtroPresupuesto, filtroCliente, searchTerm]);
 
     // Calculamos el total global adeudado sobre el conjunto filtrado
     const totalDeuda = filteredCuentas.reduce((acc, c) => acc + c.saldo_pendiente, 0);
@@ -47,87 +61,93 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarP
 
     return (
         <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Filtros */}
-            <div className="flex flex-col gap-3">
-                {/* Filtro por presupuesto */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtro de cartera</p>
-                        <p className="text-[11px] text-slate-400">Visualiza órdenes sin presupuesto o con presupuesto asignado.</p>
-                    </div>
-                    <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
-                        <button
-                            type="button"
-                            onClick={() => setFiltroPresupuesto("TODOS")}
-                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroPresupuesto === "TODOS"
-                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            Todos
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFiltroPresupuesto("SIN")}
-                            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "SIN"
-                                ? "bg-white text-amber-700 shadow-sm border border-amber-200/70"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            <ArrowUpRight className="h-3 w-3" />
-                            Sin presupuesto
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFiltroPresupuesto("CON")}
-                            className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${filtroPresupuesto === "CON"
-                                ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            <DollarSign className="h-3 w-3" />
-                            Con presupuesto
-                        </button>
-                    </div>
+            {/* Búsqueda y filtros */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                    <input
+                        type="search"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Buscar por nombre, auto o placa..."
+                        aria-label="Buscar por nombre, auto o placa"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 focus:bg-white transition-all"
+                    />
                 </div>
 
-                {/* Filtro por cliente frecuente */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Filtrar por cliente</p>
-                        <p className="text-[11px] text-slate-400">Enfócate en clientes frecuentes o ver todos.</p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 pt-3 border-t border-slate-100">
+                    <div className="flex flex-col gap-2 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cartera</p>
+                        <div className="bg-slate-100 p-1 rounded-2xl flex gap-1 font-bold text-[10px] uppercase tracking-widest w-full lg:w-fit">
+                            <button
+                                type="button"
+                                onClick={() => setFiltroPresupuesto("TODOS")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${filtroPresupuesto === "TODOS"
+                                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                Todos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFiltroPresupuesto("SIN")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${filtroPresupuesto === "SIN"
+                                    ? "bg-white text-amber-700 shadow-sm border border-amber-200/70"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                <ArrowUpRight className="h-3 w-3" />
+                                Sin presupuesto
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFiltroPresupuesto("CON")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${filtroPresupuesto === "CON"
+                                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                <DollarSign className="h-3 w-3" />
+                                Con presupuesto
+                            </button>
+                        </div>
                     </div>
-                    <div className="bg-slate-100 p-1 rounded-2xl inline-flex gap-1 font-bold text-[10px] uppercase tracking-widest shadow-inner">
-                        <button
-                            type="button"
-                            onClick={() => setFiltroCliente("TODOS")}
-                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "TODOS"
-                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            Todos
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFiltroCliente("FAG")}
-                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "FAG"
-                                ? "bg-white text-blue-700 shadow-sm border border-blue-200/70"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            Fabian Aguirre
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFiltroCliente("AUTOMEKANO")}
-                            className={`px-3 py-1.5 rounded-xl transition-all ${filtroCliente === "AUTOMEKANO"
-                                ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
-                                }`}
-                        >
-                            Automekano
-                        </button>
+
+                    <div className="flex flex-col gap-2 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cliente</p>
+                        <div className="bg-slate-100 p-1 rounded-2xl flex gap-1 font-bold text-[10px] uppercase tracking-widest w-full lg:w-fit">
+                            <button
+                                type="button"
+                                onClick={() => setFiltroCliente("TODOS")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${filtroCliente === "TODOS"
+                                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                Todos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFiltroCliente("FAG")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${filtroCliente === "FAG"
+                                    ? "bg-white text-blue-700 shadow-sm border border-blue-200/70"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                Fabian Aguirre
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFiltroCliente("AUTOMEKANO")}
+                                className={`flex-1 lg:flex-none px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${filtroCliente === "AUTOMEKANO"
+                                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-200/70"
+                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/60"
+                                    }`}
+                            >
+                                Automekano
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -154,7 +174,7 @@ export function CuentasPorCobrar({ cuentas, onCobrar, onMarcarPagado, onAsignarP
                     <div className="md:col-span-2">
                         <div className="text-center py-10 px-4 border border-dashed border-slate-200 rounded-2xl bg-slate-50">
                             <p className="text-sm font-medium text-slate-500">
-                                No hay órdenes que coincidan con el filtro seleccionado.
+                                No hay órdenes que coincidan con la búsqueda o el filtro seleccionado.
                             </p>
                         </div>
                     </div>

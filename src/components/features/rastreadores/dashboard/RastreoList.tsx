@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2, ChevronDown } from "lucide-react";
+import { Search, MapPin, Building2, Users, User, Store, Plus, Smartphone, AlertCircle, CheckCircle, Clock, XCircle, Trash2, ChevronDown, CalendarDays } from "lucide-react";
 import { ContratoGPS } from "@/types/rastreadores.types";
 import { rastreadoresService } from "@/services/rastreadores.service";
 import { RastreoStats } from "./RastreoStats";
@@ -54,6 +54,7 @@ type GpsVentaRow = {
     modelo_vehiculo?: string | null;
     precio_venta?: number;
     created_at?: string;
+    fecha_entrega?: string | null;
     es_venta_externa?: boolean | null;
     estado?: string | null;
     estado_coneccion?: string | null;
@@ -89,6 +90,31 @@ function gpsMatchesSearch(gps: GpsVentaRow, term: string, termDigits: string): b
     return false;
 }
 
+function formatFechaVenta(raw: string | null | undefined): string {
+    if (!raw || !String(raw).trim()) return "—";
+    const s = String(raw).trim();
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+        const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+        if (!Number.isNaN(d.getTime())) {
+            return d.toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" });
+        }
+    }
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmy) {
+        const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        if (!Number.isNaN(d.getTime())) {
+            return d.toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" });
+        }
+    }
+    return s;
+}
+
+function fechaVentaDeFila(item: ContratoGPS, gps: GpsVentaRow | undefined): string {
+    if (item.origen === "AUTO") return formatFechaVenta(item.fechaInstalacion);
+    return formatFechaVenta(item.fechaInstalacion || gps?.fecha_entrega);
+}
+
 function pickGpsForDisplay(list: GpsVentaRow[]): GpsVentaRow | undefined {
     if (list.length === 0) return undefined;
     return list.find((g) => {
@@ -113,7 +139,7 @@ function contratoFromGpsVenta(gps: GpsVentaRow): ContratoGPS | null {
         color: "",
         anio: "",
         totalRastreador: Number(gps.precio_venta || 0),
-        fechaInstalacion: gps.created_at || "",
+        fechaInstalacion: gps.fecha_entrega || "",
         origen: "EXTERNO",
         clienteExternoId: gps.cliente_id || undefined,
     };
@@ -390,6 +416,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                 <th className="px-6 py-4 w-px">Origen</th>
                                 <th className="px-6 py-4">Cliente / Nota</th>
                                 <th className="px-6 py-4 w-56 max-w-56">Vehículo</th>
+                                <th className="px-6 py-4 w-px">Fecha venta</th>
                                 <th className="px-6 py-4 w-px">Instalación</th>
                                 <th className="px-6 py-4 w-px">Conexión</th>
                                 <th className="px-6 py-4 w-px text-right">Valor Venta</th>
@@ -398,7 +425,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
-                                <tr><td colSpan={7} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
+                                <tr><td colSpan={8} className="p-8 text-center text-slate-400 animate-pulse font-bold">Cargando datos...</td></tr>
                             ) : filteredData.length > 0 ? (
                                 filteredData.map((item) => {
                                     const gpsVinculado = pickGpsForDisplay(gpsForContrato(item));
@@ -420,6 +447,12 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                             <td className="px-6 py-4 w-56 max-w-56 whitespace-normal">
                                                 <div className="font-bold text-slate-700 uppercase leading-tight line-clamp-2 break-words">{item.marca} {item.modelo}</div>
                                                 <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200 font-black uppercase mt-1 inline-block">{item.placa}</span>
+                                            </td>
+                                            <td className="px-6 py-4 w-px">
+                                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                                    <CalendarDays size={12} className="text-slate-400 shrink-0" />
+                                                    {fechaVentaDeFila(item, gpsVinculado)}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4 w-px">
                                                 {gpsVinculado ? (
@@ -473,7 +506,7 @@ export function RastreoList({ data, loading, onManage, onNewExternal, asesorIdFi
                                     );
                                 })
                             ) : (
-                                <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
+                                <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-bold uppercase">No se encontraron resultados</td></tr>
                             )}
                         </tbody>
                     </table>

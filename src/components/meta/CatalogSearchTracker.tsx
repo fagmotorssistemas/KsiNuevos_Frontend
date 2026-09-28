@@ -11,20 +11,6 @@ type CatalogSearchTrackerProps = {
   contentIds: string[]
 }
 
-function hasActiveSearch(filters: InventoryFiltersState, brandSlug?: string) {
-  if (brandSlug?.trim()) return true
-  if (filters.searchQuery.trim()) return true
-  if (filters.minPrice != null || filters.maxPrice != null) return true
-  if (filters.categories.length > 0 || filters.locations.length > 0) return true
-  const specs = filters.specs
-  if (specs.minYear != null || specs.maxYear != null) return true
-  if (specs.minMileage != null || specs.maxMileage != null) return true
-  if ((specs.transmission?.length ?? 0) > 0) return true
-  if ((specs.fuelType?.length ?? 0) > 0) return true
-  if ((specs.colors?.length ?? 0) > 0) return true
-  return false
-}
-
 function searchString(filters: InventoryFiltersState, brandSlug?: string) {
   const parts = [
     brandSlug?.trim(),
@@ -44,16 +30,22 @@ export function CatalogSearchTracker({
   contentIds,
 }: CatalogSearchTrackerProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const idsKey = contentIds.slice(0, 5).join(',')
+  const lastSent = useRef<string | null>(null)
+  const ids = contentIds.map((id) => id.trim()).filter(Boolean).slice(0, 10)
+  const idsKey = ids.join(',')
 
   useEffect(() => {
-    if (isLoading || !hasActiveSearch(filters, brandSlug)) return
+    if (isLoading || ids.length === 0) return
+
+    const signature = `${brandSlug ?? ''}|${searchString(filters, brandSlug)}|${idsKey}`
+    if (lastSent.current === signature) return
 
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
+      lastSent.current = signature
       trackSearch({
-        searchString: searchString(filters, brandSlug) || undefined,
-        contentIds: idsKey ? idsKey.split(',') : undefined,
+        searchString: searchString(filters, brandSlug) || 'inventario',
+        contentIds: idsKey.split(',').filter(Boolean),
         make: brandSlug?.trim() || undefined,
       })
     }, 700)

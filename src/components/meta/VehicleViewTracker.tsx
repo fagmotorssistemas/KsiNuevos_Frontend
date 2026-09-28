@@ -1,7 +1,11 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { toVehiclePixel, trackViewContent } from '@/lib/meta/pixel'
+import {
+  isMetaCatalogVehicle,
+  toVehiclePixel,
+  trackViewContent,
+} from '@/lib/meta/pixel'
 
 type VehicleViewTrackerProps = {
   car: {
@@ -14,6 +18,7 @@ type VehicleViewTrackerProps = {
     transmission?: string | null
     type_body?: string | null
     fuel_type?: string | null
+    status?: string | null
   } | null
 }
 
@@ -21,7 +26,7 @@ export function VehicleViewTracker({ car }: VehicleViewTrackerProps) {
   const sentFor = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!car) return
+    if (!car || !isMetaCatalogVehicle(car)) return
     const id = car.id.trim()
     if (!id || sentFor.current === id) return
     sentFor.current = id

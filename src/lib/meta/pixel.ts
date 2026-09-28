@@ -116,7 +116,7 @@ export function vehicleCustomData(v: VehiclePixelPayload): Record<string, unknow
   return data
 }
 
-export function toVehiclePixel(car: {
+export type VehiclePixelSource = {
   id: string
   brand?: string | null
   model?: string | null
@@ -126,7 +126,20 @@ export function toVehiclePixel(car: {
   transmission?: string | null
   type_body?: string | null
   fuel_type?: string | null
-}): VehiclePixelPayload {
+  status?: string | null
+}
+
+export function isMetaCatalogVehicle(car: {
+  id?: string | null
+  status?: string | null
+}): boolean {
+  const id = String(car.id ?? '').trim()
+  if (!id) return false
+  const status = String(car.status ?? 'disponible').toLowerCase()
+  return status === 'disponible'
+}
+
+export function toVehiclePixel(car: VehiclePixelSource): VehiclePixelPayload {
   return {
     id: car.id,
     make: car.brand,
@@ -156,16 +169,24 @@ export function trackSearch(params: {
   model?: string
   year?: number
 }) {
+  const ids = (params.contentIds ?? []).map((id) => id.trim()).filter(Boolean).slice(0, 10)
+  if (ids.length === 0) return
   const data: Record<string, unknown> = {
     content_type: 'vehicle',
     country: 'Ecuador',
+    content_ids: ids,
   }
-  if (params.searchString?.trim()) data.search_string = params.searchString.trim()
-  if (params.contentIds?.length) data.content_ids = params.contentIds
+  const q = params.searchString?.trim()
+  if (q) data.search_string = q
   if (params.make?.trim()) data.make = params.make.trim()
   if (params.model?.trim()) data.model = params.model.trim()
   if (params.year != null && Number.isFinite(params.year)) data.year = params.year
   fbq('track', 'Search', data)
+}
+
+export function trackAddToWishlist(v: VehiclePixelPayload) {
+  if (!v.id?.trim()) return
+  fbq('track', 'AddToWishlist', vehicleCustomData(v))
 }
 
 export function trackContactWhatsApp(v: VehiclePixelPayload) {

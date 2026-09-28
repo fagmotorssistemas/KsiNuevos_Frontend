@@ -1,5 +1,9 @@
 import React from "react";
-import { trackContactWhatsApp, toVehiclePixel } from "@/lib/meta/pixel";
+import {
+  trackContactWhatsApp,
+  trackLead,
+  toVehiclePixel,
+} from "@/lib/meta/pixel";
 
 interface CarHeaderProps {
   id: string;
@@ -88,21 +92,21 @@ export const CarHeader = ({
           href={`https://wa.me/593983335555?text=${encodeURIComponent(`Hola, estoy interesado en el ${brand} ${model} ${year} que vi en la página web.`)}`}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() =>
-            trackContactWhatsApp(
-              toVehiclePixel({
-                id,
-                brand,
-                model,
-                year,
-                price,
-                color,
-                transmission,
-                type_body,
-                fuel_type,
-              }),
-            )
-          }
+          onClick={() => {
+            const payload = toVehiclePixel({
+              id,
+              brand,
+              model,
+              year,
+              price,
+              color,
+              transmission,
+              type_body,
+              fuel_type,
+            })
+            trackContactWhatsApp(payload)
+            trackLead(payload)
+          }}
           className="inline-flex items-center justify-center gap-2 w-full px-6 py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all duration-300 shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] hover:shadow-[0_6px_20px_rgba(37,211,102,0.23)] bg-[#25D366] text-white hover:bg-[#128C7E] active:scale-[0.98]"
         >
           <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">

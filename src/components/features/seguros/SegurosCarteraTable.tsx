@@ -1,6 +1,7 @@
 "use client";
 
-import { Calendar, DollarSign, FileText, ShieldCheck, AlertTriangle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Calendar, DollarSign, FileText, ShieldCheck, AlertTriangle, Search } from "lucide-react";
 import { formatDinero } from "@/utils/format";
 import type { SeguroVehicular } from "@/types/seguros.types";
 import type { SeguroEnriquecido } from "@/hooks/useSegurosCartera";
@@ -50,13 +51,34 @@ export function SegurosCarteraTable({
   onRefresh,
   isRefreshing,
 }: SegurosCarteraTableProps) {
-  const filteredSeguros = seguros.filter((s) => {
-    const enr = enrichedData.get(s.id);
-    const esCredito = enr?.esCredito ?? false;
-    if (filtroTipo === "CREDITO" && !esCredito) return false;
-    if (filtroTipo === "CONTADO" && esCredito) return false;
-    return true;
-  });
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredSeguros = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    const termCompact = term.replace(/[\s-]/g, "");
+
+    return seguros.filter((s) => {
+      const enr = enrichedData.get(s.id);
+      const esCredito = enr?.esCredito ?? false;
+      if (filtroTipo === "CREDITO" && !esCredito) return false;
+      if (filtroTipo === "CONTADO" && esCredito) return false;
+
+      if (!term) return true;
+
+      const haystack = [
+        s.cliente?.nombre,
+        s.cliente?.identificacion,
+        s.referencia,
+        s.bienAsegurado?.descripcion,
+        s.bienAsegurado?.placa,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term) || haystack.replace(/[\s-]/g, "").includes(termCompact);
+    });
+  }, [seguros, enrichedData, filtroTipo, searchTerm]);
 
   const totalSeguro = filteredSeguros.reduce((acc, s) => acc + s.valores.total, 0);
 
@@ -81,6 +103,18 @@ export function SegurosCarteraTable({
 
   return (
     <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Buscar por nombre, auto o placa..."
+          aria-label="Buscar por nombre, auto o placa"
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded-full bg-slate-100 p-1">
           {[
@@ -160,6 +194,16 @@ export function SegurosCarteraTable({
               </tr>
             </thead>
             <tbody>
+              {filteredSeguros.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={showVencimientoColumns ? 9 : 5}
+                    className="px-4 py-12 text-center text-sm text-slate-500"
+                  >
+                    No hay pólizas que coincidan con la búsqueda o el filtro seleccionado.
+                  </td>
+                </tr>
+              )}
               {filteredSeguros.map((row) => {
                 const enr = enrichedData.get(row.id);
                 const esCredito = enr?.esCredito ?? false;
