@@ -38,6 +38,7 @@ const STATUS_OPTIONS: FilterOption[] = [
     { value: "mantenimiento", label: "Taller", dot: "bg-orange-500" },
     { value: "conwilsonhernan", label: "Con Wilson Hernan", dot: "bg-indigo-500" },
     { value: "consignacion", label: "En consignación", dot: "bg-blue-500" },
+    { value: "otro", label: "Otro", dot: "bg-slate-500" },
 ];
 
 const DATE_OPTIONS: FilterOption[] = [

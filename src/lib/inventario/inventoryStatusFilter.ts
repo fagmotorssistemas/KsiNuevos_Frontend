@@ -12,5 +12,8 @@ export function matchesInventoryStatusFilter(car: InventoryStatusCar, status: st
     if (status === 'mantenimiento') {
         return car.status === 'mantenimiento' || car.location === 'taller'
     }
+    if (status === 'otro') {
+        return car.location === 'otro' || car.status === 'otro'
+    }
     return car.status === status
 }
