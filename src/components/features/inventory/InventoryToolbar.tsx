@@ -34,10 +34,10 @@ type OpenFilter = "status" | "date" | "sort" | null;
 
 const STATUS_OPTIONS: FilterOption[] = [
     { value: "all", label: "Todos", dot: "bg-slate-300" },
-    { value: "disponible", label: "Disponible", dot: "bg-emerald-500" },
     { value: "reservado", label: "Reservado", dot: "bg-amber-400" },
-    { value: "vendido", label: "Vendido", dot: "bg-rose-500" },
     { value: "mantenimiento", label: "Taller", dot: "bg-orange-500" },
+    { value: "conwilsonhernan", label: "Con Wilson Hernan", dot: "bg-indigo-500" },
+    { value: "consignacion", label: "En consignación", dot: "bg-blue-500" },
 ];
 
 const DATE_OPTIONS: FilterOption[] = [
@@ -177,11 +177,13 @@ export function InventoryToolbar({
     const isCustomRange = filters.dateRange === "custom";
 
     const hasActiveFilters =
+        filters.stock !== "all" ||
         filters.status !== "all" ||
         filters.location !== "all" ||
         filters.bodyCategory !== "all" ||
         filters.search !== "" ||
-        filters.dateRange !== "all";
+        filters.dateRange !== "all" ||
+        filters.publicPriceOnly;
 
     useEffect(() => {
         if (!openFilter) return;

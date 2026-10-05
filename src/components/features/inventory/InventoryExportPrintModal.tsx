@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { InventoryCar } from "@/hooks/useInventory";
+import { matchesInventoryStatusFilter } from "@/lib/inventario/inventoryStatusFilter";
 import {
     INVENTORY_EXPORT_FIELDS,
     DEFAULT_EXPORT_FIELD_IDS,
@@ -159,7 +160,7 @@ export function InventoryExportPrintModal({
     const carsToExport = useMemo(() => {
         if (statusFilter === "current") return allFilteredCars;
         if (statusFilter === "all") return fullInventory;
-        return fullInventory.filter((c) => c.status === statusFilter);
+        return fullInventory.filter((c) => matchesInventoryStatusFilter(c, statusFilter));
     }, [statusFilter, allFilteredCars, fullInventory]);
 
     const sortedCarsToExport = useMemo(
@@ -295,7 +296,7 @@ export function InventoryExportPrintModal({
             ? allFilteredCars.length
             : statusFilter === "all"
               ? fullInventory.length
-              : fullInventory.filter((c) => c.status === statusFilter).length;
+              : fullInventory.filter((c) => matchesInventoryStatusFilter(c, statusFilter)).length;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">

@@ -36,6 +36,7 @@ export default function InventoryPage() {
         resetFilters,
         reload,
         patchCar,
+        hasPublicPriceInView,
     } = useInventory();
 
     // Estados de Modales
@@ -85,17 +86,8 @@ export default function InventoryPage() {
         [allCars]
     );
 
-    const activeKpiFilter: InventoryKpiFilter =
-        filters.status === "disponible"
-            ? "active"
-            : filters.status === "vendido"
-              ? "baja"
-              : "all";
-
     const handleKpiFilterChange = (filter: InventoryKpiFilter) => {
-        if (filter === "active") updateFilter("status", "disponible");
-        else if (filter === "baja") updateFilter("status", "vendido");
-        else updateFilter("status", "all");
+        updateFilter("stock", filter);
     };
 
     return (
@@ -136,7 +128,7 @@ export default function InventoryPage() {
                 <InventoryKpiStats
                     data={kpiSummary}
                     loading={isLoading}
-                    activeFilter={activeKpiFilter}
+                    activeFilter={filters.stock}
                     onFilterChange={handleKpiFilterChange}
                 />
 
@@ -163,6 +155,11 @@ export default function InventoryPage() {
                         onPageChange={setPage}
                         currentUserRole={ventasRole}
                         currentUserId={profile?.id}
+                        publicPriceOnly={filters.publicPriceOnly}
+                        showPublicPriceFilter={hasPublicPriceInView || filters.publicPriceOnly}
+                        onTogglePublicPrice={() =>
+                            updateFilter("publicPriceOnly", !filters.publicPriceOnly)
+                        }
                     />
                 )}
             </div>

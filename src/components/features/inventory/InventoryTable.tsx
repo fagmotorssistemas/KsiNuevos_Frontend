@@ -214,6 +214,9 @@ interface InventoryTableProps {
     onPageChange: (newPage: number) => void;
     currentUserRole?: string | null;
     currentUserId?: string | null;
+    publicPriceOnly?: boolean;
+    showPublicPriceFilter?: boolean;
+    onTogglePublicPrice?: () => void;
 }
 
 const formatIngreso = (value: string | null) => {
@@ -235,6 +238,9 @@ export function InventoryTable({
     onPageChange,
     currentUserRole,
     currentUserId,
+    publicPriceOnly = false,
+    showPublicPriceFilter = false,
+    onTogglePublicPrice,
 }: InventoryTableProps) {
 
     const [viewingCar, setViewingCar] = useState<InventoryCar | null>(null);
@@ -328,7 +334,37 @@ export function InventoryTable({
                                 {canViewPrices && (
                                     <>
                                         <th className="px-4 py-3 font-semibold">Precio interno</th>
-                                        <th className="px-4 py-3 font-semibold">Precio público</th>
+                                        <th className="px-4 py-3 font-semibold">
+                                            {showPublicPriceFilter ? (
+                                                <button
+                                                    type="button"
+                                                    aria-pressed={publicPriceOnly}
+                                                    title={
+                                                        publicPriceOnly
+                                                            ? "Quitar filtro de precio público"
+                                                            : "Solo vehículos con precio público mayor al interno"
+                                                    }
+                                                    onClick={onTogglePublicPrice}
+                                                    className={`inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left uppercase transition-colors ${
+                                                        publicPriceOnly
+                                                            ? "bg-emerald-100 text-emerald-800"
+                                                            : "hover:bg-emerald-50 hover:text-emerald-800"
+                                                    }`}
+                                                >
+                                                    Precio público
+                                                    <span
+                                                        className={`h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 ${
+                                                            publicPriceOnly
+                                                                ? "shadow-[0_0_8px_rgba(16,185,129,0.95)]"
+                                                                : "opacity-80"
+                                                        }`}
+                                                        aria-hidden
+                                                    />
+                                                </button>
+                                            ) : (
+                                                "Precio público"
+                                            )}
+                                        </th>
                                     </>
                                 )}
                                 <th className="px-4 py-3 font-semibold hidden md:table-cell">Kilometraje</th>

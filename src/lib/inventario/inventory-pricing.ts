@@ -45,6 +45,14 @@ export function getEffectivePublicPrice(row: InventoryPriceFields): number | nul
   return publicPrice
 }
 
+/** Precio público activo y mayor que el interno fijo. */
+export function hasInventoryPublicPrice(car: InventoryPriceFields): boolean {
+  if (car.internal_fixed_price == null || !Number.isFinite(Number(car.internal_fixed_price))) return false
+  const publicPrice = getEffectivePublicPrice(car)
+  if (publicPrice == null || !Number.isFinite(publicPrice)) return false
+  return publicPrice > Number(car.internal_fixed_price)
+}
+
 export function computePublicPriceRevertAt(from: Date = new Date()): string {
   return addDays(from, PUBLIC_PRICE_PROMO_DAYS).toISOString()
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { hasInventoryPublicPrice } from "@/lib/inventario/inventory-pricing";
 import { carMatchesInventorySearch } from "@/lib/inventario/inventorySearch";
+import { matchesInventoryStatusFilter } from "@/lib/inventario/inventoryStatusFilter";
 import { classifyInventoryBody, type InventoryBodyCategoryFilter } from "@/lib/inventario/inventoryBodyCategory";
 import {
     matchesInventoryDateRange,
@@ -16,24 +18,33 @@ export type SortOption = 'price_asc' | 'price_desc' | 'year_desc' | 'year_asc' |
 export type { InventoryDateRange };
 export type { InventoryBodyCategoryFilter };
 
+export type InventoryStockFilter = 'all' | 'active' | 'baja';
+
 export type InventoryFilters = {
     search: string;
+    /** Tarjetas: total, disponibles (stock) o dados de baja. */
+    stock: InventoryStockFilter;
+    /** Desplegable de estado: disponible, reservado, vendido, taller, etc. */
     status: string | 'all';
     location: string | 'all';
     bodyCategory: InventoryBodyCategoryFilter;
     dateRange: InventoryDateRange;
     dateFrom: string;
     dateTo: string;
+    /** Solo vehículos cuyo precio público es mayor que el interno. */
+    publicPriceOnly: boolean;
 };
 
 const INITIAL_FILTERS: InventoryFilters = {
     search: '',
+    stock: 'all',
     status: 'all',
     location: 'all',
     bodyCategory: 'all',
     dateRange: 'all',
     dateFrom: '',
     dateTo: '',
+    publicPriceOnly: false,
 };
 
 export function useInventory() {
@@ -82,7 +93,7 @@ export function useInventory() {
     const allCars = cars;
 
     // 2. LÓGICA DE FILTRADO Y ORDENAMIENTO (Memoizada)
-    const processedInventory = useMemo(() => {
+    const inventoryView = useMemo(() => {
         let result = [...cars];
 
         // --- FILTROS ---
@@ -90,8 +101,14 @@ export function useInventory() {
             result = result.filter((car) => carMatchesInventorySearch(car, filters.search));
         }
 
+        if (filters.stock === 'active') {
+            result = result.filter((car) => car.status === 'disponible');
+        } else if (filters.stock === 'baja') {
+            result = result.filter((car) => car.status === 'vendido');
+        }
+
         if (filters.status !== 'all') {
-            result = result.filter(car => car.status === filters.status);
+            result = result.filter((car) => matchesInventoryStatusFilter(car, filters.status));
         }
 
         if (filters.location !== 'all') {
@@ -114,6 +131,11 @@ export function useInventory() {
             );
         }
 
+        const hasPublicPrice = result.some(hasInventoryPublicPrice);
+        if (filters.publicPriceOnly) {
+            result = result.filter(hasInventoryPublicPrice);
+        }
+
         // --- ORDENAMIENTO ---
         result.sort((a, b) => {
             switch (sortBy) {
@@ -127,8 +149,11 @@ export function useInventory() {
             }
         });
 
-        return result;
+        return { list: result, hasPublicPrice };
     }, [cars, filters, sortBy]);
+
+    const processedInventory = inventoryView.list;
+    const hasPublicPriceInView = inventoryView.hasPublicPrice;
 
     // 3. EFECTO DE RESETEO
     // Si cambian los filtros o el orden, regresamos a la página 1
@@ -174,5 +199,6 @@ export function useInventory() {
         filters,
         updateFilter,
         resetFilters,
+        hasPublicPriceInView,
     };
 }
