@@ -12,10 +12,8 @@ export interface NoticieroVehicle {
   transmission: string
   fuel_type: string
   engine_displacement: string
-  drive_type: string
   passenger_capacity: number | string | null
   type_body: string
-  horse_power?: number | string | null
   mileage?: number | string | null
   img_main_url?: string | null
 }
@@ -197,7 +195,6 @@ export type NoticieroVehicleOrder =
   | 'price_desc'
   | 'price_asc'
   | 'newest'
-  | 'is_featured'
   | 'mileage_desc'
   | 'mileage_asc'
 

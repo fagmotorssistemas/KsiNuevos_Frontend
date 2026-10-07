@@ -30,7 +30,7 @@ import type {
 } from './types'
 
 const INVENTORY_SELECT =
-  'id, brand, model, year, color, version, price, transmission, fuel_type, engine_displacement, drive_type, passenger_capacity, type_body, horse_power, mileage, img_main_url'
+  'id, brand, model, year, color, version, price, transmission, fuel_type, engine_displacement, passenger_capacity, type_body, mileage, img_main_url'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -100,11 +100,6 @@ async function fetchAvailableVehicles(order: NoticieroVehicleOrder): Promise<Not
       break
     case 'newest':
       ordered = base.order('updated_at', { ascending: false })
-      break
-    case 'is_featured':
-      ordered = base
-        .order('is_featured', { ascending: false, nullsFirst: false })
-        .order('price', { ascending: false, nullsFirst: false })
       break
     case 'mileage_desc':
       ordered = base.order('mileage', { ascending: false, nullsFirst: false })

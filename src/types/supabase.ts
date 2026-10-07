@@ -35,6 +35,24 @@ export type Database = {
         }
         Relationships: []
       }
+      analysis_job_lock: {
+        Row: {
+          id: number
+          locked_by: string
+          locked_until: string
+        }
+        Insert: {
+          id: number
+          locked_by: string
+          locked_until: string
+        }
+        Update: {
+          id?: number
+          locked_by?: string
+          locked_until?: string
+        }
+        Relationships: []
+      }
       app_runtime_secrets: {
         Row: {
           key: string
@@ -397,6 +415,45 @@ export type Database = {
           marker_key?: string
           run_day?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      automation_run_logs: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          detail: Json
+          error: string | null
+          id: string
+          lead_id: string | null
+          message_id: string | null
+          reason: string | null
+          status: string
+          step: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          reason?: string | null
+          status: string
+          step: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          reason?: string | null
+          status?: string
+          step?: string
         }
         Relationships: []
       }
@@ -1756,6 +1813,30 @@ export type Database = {
           },
         ]
       }
+      diccionario_codigos_inventario: {
+        Row: {
+          campo: string
+          codigo: string
+          columna_origen: string
+          es_patron: boolean
+          valor: string
+        }
+        Insert: {
+          campo: string
+          codigo: string
+          columna_origen: string
+          es_patron?: boolean
+          valor: string
+        }
+        Update: {
+          campo?: string
+          codigo?: string
+          columna_origen?: string
+          es_patron?: boolean
+          valor?: string
+        }
+        Relationships: []
+      }
       generated_artifacts: {
         Row: {
           car_image_url: string
@@ -2147,6 +2228,104 @@ export type Database = {
             foreignKeyName: "interested_cars_inventory_id_fkey"
             columns: ["inventory_id"]
             isOneToOne: false
+            referencedRelation: "inventoryoracle"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventario_ficha_bot: {
+        Row: {
+          asientos: number | null
+          asientos_origen: string | null
+          blindado: string | null
+          blindado_origen: string | null
+          cabina: string | null
+          cabina_origen: string | null
+          caja: string | null
+          caja_origen: string | null
+          combustible: string | null
+          combustible_origen: string | null
+          extraido_at: string
+          familia: string | null
+          familia_corregida: string | null
+          familia_origen: string | null
+          inventory_id: string
+          linea: string | null
+          linea_corregida: string | null
+          modelo_llm: string | null
+          motor: string | null
+          puertas: number | null
+          puertas_origen: string | null
+          texto_fuente: string
+          texto_hash: string
+          tipo: string | null
+          tipo_origen: string | null
+          traccion: string | null
+          traccion_origen: string | null
+        }
+        Insert: {
+          asientos?: number | null
+          asientos_origen?: string | null
+          blindado?: string | null
+          blindado_origen?: string | null
+          cabina?: string | null
+          cabina_origen?: string | null
+          caja?: string | null
+          caja_origen?: string | null
+          combustible?: string | null
+          combustible_origen?: string | null
+          extraido_at?: string
+          familia?: string | null
+          familia_corregida?: string | null
+          familia_origen?: string | null
+          inventory_id: string
+          linea?: string | null
+          linea_corregida?: string | null
+          modelo_llm?: string | null
+          motor?: string | null
+          puertas?: number | null
+          puertas_origen?: string | null
+          texto_fuente: string
+          texto_hash: string
+          tipo?: string | null
+          tipo_origen?: string | null
+          traccion?: string | null
+          traccion_origen?: string | null
+        }
+        Update: {
+          asientos?: number | null
+          asientos_origen?: string | null
+          blindado?: string | null
+          blindado_origen?: string | null
+          cabina?: string | null
+          cabina_origen?: string | null
+          caja?: string | null
+          caja_origen?: string | null
+          combustible?: string | null
+          combustible_origen?: string | null
+          extraido_at?: string
+          familia?: string | null
+          familia_corregida?: string | null
+          familia_origen?: string | null
+          inventory_id?: string
+          linea?: string | null
+          linea_corregida?: string | null
+          modelo_llm?: string | null
+          motor?: string | null
+          puertas?: number | null
+          puertas_origen?: string | null
+          texto_fuente?: string
+          texto_hash?: string
+          tipo?: string | null
+          tipo_origen?: string | null
+          traccion?: string | null
+          traccion_origen?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_ficha_bot_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: true
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
@@ -3121,42 +3300,28 @@ export type Database = {
       }
       inventoryoracle: {
         Row: {
-          accident_history: string | null
-          aesthetic_condition: string | null
-          airbags_count: number | null
-          autonomy_km: number | null
           axles_count: string | null
-          brake_assistance: boolean | null
-          brake_type: string | null
+          bot_id: number | null
           brand: string
           color: string | null
           country_origin: string | null
           created_at: string | null
-          cylinder_count: number | null
           description: string | null
           documentation_up_to_date: boolean | null
-          doors_count: number | null
-          drive_type: string | null
           engine_displacement: string | null
           engine_number: string | null
-          engine_type: string | null
-          features: Json | null
           fuel_type: string | null
-          horse_power: number | null
           id: string
           img_gallery_urls: string[] | null
           img_main_url: string | null
           img_prefix: string | null
           internal_fixed_price: number | null
           internal_fixed_price_set_at: string | null
-          is_featured: boolean | null
           listing_checklist: Json
           location: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio: boolean | null
           marketing_posts_count: number | null
-          marketing_stories_count: number | null
           marketing_videos_count: number | null
-          mechanical_condition: string | null
           mileage: number | null
           model: string
           oracle_id: string | null
@@ -3173,10 +3338,7 @@ export type Database = {
           purchase_date: string | null
           registration_place: string | null
           registration_year: string | null
-          slug: string | null
-          specs: Json | null
           status: Database["public"]["Enums"]["car_status"] | null
-          steering_type: string | null
           stock: number | null
           supplier: string | null
           tonnage: string | null
@@ -3184,50 +3346,34 @@ export type Database = {
           type: string | null
           type_body: string | null
           updated_at: string | null
-          upholstery_type: string | null
           version: string | null
-          video_url: string | null
           vin: string
           wheels_count: string | null
           year: number
         }
         Insert: {
-          accident_history?: string | null
-          aesthetic_condition?: string | null
-          airbags_count?: number | null
-          autonomy_km?: number | null
           axles_count?: string | null
-          brake_assistance?: boolean | null
-          brake_type?: string | null
+          bot_id?: number | null
           brand: string
           color?: string | null
           country_origin?: string | null
           created_at?: string | null
-          cylinder_count?: number | null
           description?: string | null
           documentation_up_to_date?: boolean | null
-          doors_count?: number | null
-          drive_type?: string | null
           engine_displacement?: string | null
           engine_number?: string | null
-          engine_type?: string | null
-          features?: Json | null
           fuel_type?: string | null
-          horse_power?: number | null
           id?: string
           img_gallery_urls?: string[] | null
           img_main_url?: string | null
           img_prefix?: string | null
           internal_fixed_price?: number | null
           internal_fixed_price_set_at?: string | null
-          is_featured?: boolean | null
           listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio?: boolean | null
           marketing_posts_count?: number | null
-          marketing_stories_count?: number | null
           marketing_videos_count?: number | null
-          mechanical_condition?: string | null
           mileage?: number | null
           model: string
           oracle_id?: string | null
@@ -3244,10 +3390,7 @@ export type Database = {
           purchase_date?: string | null
           registration_place?: string | null
           registration_year?: string | null
-          slug?: string | null
-          specs?: Json | null
           status?: Database["public"]["Enums"]["car_status"] | null
-          steering_type?: string | null
           stock?: number | null
           supplier?: string | null
           tonnage?: string | null
@@ -3255,50 +3398,34 @@ export type Database = {
           type?: string | null
           type_body?: string | null
           updated_at?: string | null
-          upholstery_type?: string | null
           version?: string | null
-          video_url?: string | null
           vin: string
           wheels_count?: string | null
           year: number
         }
         Update: {
-          accident_history?: string | null
-          aesthetic_condition?: string | null
-          airbags_count?: number | null
-          autonomy_km?: number | null
           axles_count?: string | null
-          brake_assistance?: boolean | null
-          brake_type?: string | null
+          bot_id?: number | null
           brand?: string
           color?: string | null
           country_origin?: string | null
           created_at?: string | null
-          cylinder_count?: number | null
           description?: string | null
           documentation_up_to_date?: boolean | null
-          doors_count?: number | null
-          drive_type?: string | null
           engine_displacement?: string | null
           engine_number?: string | null
-          engine_type?: string | null
-          features?: Json | null
           fuel_type?: string | null
-          horse_power?: number | null
           id?: string
           img_gallery_urls?: string[] | null
           img_main_url?: string | null
           img_prefix?: string | null
           internal_fixed_price?: number | null
           internal_fixed_price_set_at?: string | null
-          is_featured?: boolean | null
           listing_checklist?: Json
           location?: Database["public"]["Enums"]["car_location"] | null
           marketing_in_patio?: boolean | null
           marketing_posts_count?: number | null
-          marketing_stories_count?: number | null
           marketing_videos_count?: number | null
-          mechanical_condition?: string | null
           mileage?: number | null
           model?: string
           oracle_id?: string | null
@@ -3315,10 +3442,7 @@ export type Database = {
           purchase_date?: string | null
           registration_place?: string | null
           registration_year?: string | null
-          slug?: string | null
-          specs?: Json | null
           status?: Database["public"]["Enums"]["car_status"] | null
-          steering_type?: string | null
           stock?: number | null
           supplier?: string | null
           tonnage?: string | null
@@ -3326,9 +3450,7 @@ export type Database = {
           type?: string | null
           type_body?: string | null
           updated_at?: string | null
-          upholstery_type?: string | null
           version?: string | null
-          video_url?: string | null
           vin?: string
           wheels_count?: string | null
           year?: number
@@ -3390,6 +3512,139 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_conversation_analysis: {
+        Row: {
+          analizado_hasta: string | null
+          cerrada: boolean
+          cerrada_at: string | null
+          created_at: string
+          entrada_disponible: number | null
+          etapa_max: number
+          forma_pago: string | null
+          id: string
+          lead_id: number | null
+          objecion_evidencia: string | null
+          objecion_principal:
+            | Database["public"]["Enums"]["objecion_tipo"]
+            | null
+          objecion_texto: string | null
+          precio_max_mostrado: number | null
+          presupuesto_declarado: string | null
+          presupuesto_monto: number | null
+          resumen: string | null
+          segmento_ticket: string | null
+          seguimiento: string
+          session_id: string
+          updated_at: string
+          vehiculos_consultados: string[]
+        }
+        Insert: {
+          analizado_hasta?: string | null
+          cerrada?: boolean
+          cerrada_at?: string | null
+          created_at?: string
+          entrada_disponible?: number | null
+          etapa_max?: number
+          forma_pago?: string | null
+          id?: string
+          lead_id?: number | null
+          objecion_evidencia?: string | null
+          objecion_principal?:
+            | Database["public"]["Enums"]["objecion_tipo"]
+            | null
+          objecion_texto?: string | null
+          precio_max_mostrado?: number | null
+          presupuesto_declarado?: string | null
+          presupuesto_monto?: number | null
+          resumen?: string | null
+          segmento_ticket?: string | null
+          seguimiento?: string
+          session_id: string
+          updated_at?: string
+          vehiculos_consultados?: string[]
+        }
+        Update: {
+          analizado_hasta?: string | null
+          cerrada?: boolean
+          cerrada_at?: string | null
+          created_at?: string
+          entrada_disponible?: number | null
+          etapa_max?: number
+          forma_pago?: string | null
+          id?: string
+          lead_id?: number | null
+          objecion_evidencia?: string | null
+          objecion_principal?:
+            | Database["public"]["Enums"]["objecion_tipo"]
+            | null
+          objecion_texto?: string | null
+          precio_max_mostrado?: number | null
+          presupuesto_declarado?: string | null
+          presupuesto_monto?: number | null
+          resumen?: string | null
+          segmento_ticket?: string | null
+          seguimiento?: string
+          session_id?: string
+          updated_at?: string
+          vehiculos_consultados?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_conversation_analysis_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_followup: {
+        Row: {
+          cancelada: string | null
+          created_at: string
+          enviada: string | null
+          id: number
+          lead_id: number | null
+          mensaje: string | null
+          programada: string
+          respondio: boolean
+          retoma: number
+          session_id: string
+        }
+        Insert: {
+          cancelada?: string | null
+          created_at?: string
+          enviada?: string | null
+          id?: number
+          lead_id?: number | null
+          mensaje?: string | null
+          programada: string
+          respondio?: boolean
+          retoma: number
+          session_id: string
+        }
+        Update: {
+          cancelada?: string | null
+          created_at?: string
+          enviada?: string | null
+          id?: number
+          lead_id?: number | null
+          mensaje?: string | null
+          programada?: string
+          respondio?: boolean
+          retoma?: number
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_followup_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_llamada_eventos: {
         Row: {
           created_at: string
@@ -3428,6 +3683,91 @@ export type Database = {
           },
           {
             foreignKeyName: "lead_llamada_eventos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_pendientes_bot: {
+        Row: {
+          atendido_at: string | null
+          contact_id: number | null
+          created_at: string
+          detalle: string | null
+          id: number
+          inventory_id: string | null
+          lead_id: number | null
+          tipo: string
+        }
+        Insert: {
+          atendido_at?: string | null
+          contact_id?: number | null
+          created_at?: string
+          detalle?: string | null
+          id?: never
+          inventory_id?: string | null
+          lead_id?: number | null
+          tipo: string
+        }
+        Update: {
+          atendido_at?: string | null
+          contact_id?: number | null
+          created_at?: string
+          detalle?: string | null
+          id?: never
+          inventory_id?: string | null
+          lead_id?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_pendientes_bot_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_post_fotos: {
+        Row: {
+          cancelada: string | null
+          created_at: string
+          enviada: string | null
+          id: number
+          lead_id: number | null
+          mensaje: string | null
+          paso: number
+          programada: string
+          session_id: string
+        }
+        Insert: {
+          cancelada?: string | null
+          created_at?: string
+          enviada?: string | null
+          id?: number
+          lead_id?: number | null
+          mensaje?: string | null
+          paso: number
+          programada: string
+          session_id: string
+        }
+        Update: {
+          cancelada?: string | null
+          created_at?: string
+          enviada?: string | null
+          id?: number
+          lead_id?: number | null
+          mensaje?: string | null
+          paso?: number
+          programada?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_post_fotos_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
@@ -3610,7 +3950,10 @@ export type Database = {
           assigned_to: string | null
           autos_similares_notificados: number
           behavior_signals: Json | null
+          bot_apagado: boolean
+          bot_apagado_at: string | null
           budget: string | null
+          cedula: string | null
           contact_id: number | null
           created_at: string | null
           day_detected: string | null
@@ -3619,6 +3962,8 @@ export type Database = {
           felicitacion_compra_enviada: boolean | null
           financing: boolean | null
           fotos_enviadas_at: string | null
+          handoff_resumen: string | null
+          handoff_transcript: Json | null
           hour_detected: string | null
           id: number
           lead_id_kommo: number
@@ -3629,6 +3974,8 @@ export type Database = {
           mensaje_post_fotos_enviado: boolean | null
           mensajes_enviados: string[]
           name: string
+          nombre_cedula: string | null
+          origen: string | null
           phone: string
           presupuesto_cliente: string | null
           quiere_llamada: boolean | null
@@ -3640,13 +3987,17 @@ export type Database = {
           status: Database["public"]["Enums"]["lead_status"] | null
           temperature: Database["public"]["Enums"]["lead_temperature"] | null
           time_reference: string | null
+          ultimo_mensaje_ignorado: string | null
           updated_at: string | null
         }
         Insert: {
           assigned_to?: string | null
           autos_similares_notificados?: number
           behavior_signals?: Json | null
+          bot_apagado?: boolean
+          bot_apagado_at?: string | null
           budget?: string | null
+          cedula?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -3655,6 +4006,8 @@ export type Database = {
           felicitacion_compra_enviada?: boolean | null
           financing?: boolean | null
           fotos_enviadas_at?: string | null
+          handoff_resumen?: string | null
+          handoff_transcript?: Json | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo: number
@@ -3665,6 +4018,8 @@ export type Database = {
           mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name: string
+          nombre_cedula?: string | null
+          origen?: string | null
           phone?: string
           presupuesto_cliente?: string | null
           quiere_llamada?: boolean | null
@@ -3676,13 +4031,17 @@ export type Database = {
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
           time_reference?: string | null
+          ultimo_mensaje_ignorado?: string | null
           updated_at?: string | null
         }
         Update: {
           assigned_to?: string | null
           autos_similares_notificados?: number
           behavior_signals?: Json | null
+          bot_apagado?: boolean
+          bot_apagado_at?: string | null
           budget?: string | null
+          cedula?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -3691,6 +4050,8 @@ export type Database = {
           felicitacion_compra_enviada?: boolean | null
           financing?: boolean | null
           fotos_enviadas_at?: string | null
+          handoff_resumen?: string | null
+          handoff_transcript?: Json | null
           hour_detected?: string | null
           id?: number
           lead_id_kommo?: number
@@ -3701,6 +4062,8 @@ export type Database = {
           mensaje_post_fotos_enviado?: boolean | null
           mensajes_enviados?: string[]
           name?: string
+          nombre_cedula?: string | null
+          origen?: string | null
           phone?: string
           presupuesto_cliente?: string | null
           quiere_llamada?: boolean | null
@@ -3712,6 +4075,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
           time_reference?: string | null
+          ultimo_mensaje_ignorado?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -5287,6 +5651,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ofertas_laborales: {
+        Row: {
+          assigned_to: string
+          created_at: string
+          etiqueta: string
+          id: number
+          lead_id_kommo: string
+          phone: string | null
+        }
+        Insert: {
+          assigned_to: string
+          created_at?: string
+          etiqueta: string
+          id?: number
+          lead_id_kommo: string
+          phone?: string | null
+        }
+        Update: {
+          assigned_to?: string
+          created_at?: string
+          etiqueta?: string
+          id?: number
+          lead_id_kommo?: string
+          phone?: string | null
+        }
+        Relationships: []
       }
       pilar1_assignments: {
         Row: {
@@ -7051,6 +7442,12 @@ export type Database = {
           mensaje_confirmado: boolean | null
           observation: string | null
           phone: string | null
+          postvisita_enviado_at: string | null
+          postvisita_error: string | null
+          postvisita_estado: string
+          postvisita_intentos: number
+          postvisita_message_id: string | null
+          postvisita_ultimo_intento_at: string | null
           recordatorio_1h_enviado: boolean | null
           salesperson_id: string | null
           source: Database["public"]["Enums"]["visit_source"] | null
@@ -7070,6 +7467,12 @@ export type Database = {
           mensaje_confirmado?: boolean | null
           observation?: string | null
           phone?: string | null
+          postvisita_enviado_at?: string | null
+          postvisita_error?: string | null
+          postvisita_estado?: string
+          postvisita_intentos?: number
+          postvisita_message_id?: string | null
+          postvisita_ultimo_intento_at?: string | null
           recordatorio_1h_enviado?: boolean | null
           salesperson_id?: string | null
           source?: Database["public"]["Enums"]["visit_source"] | null
@@ -7089,6 +7492,12 @@ export type Database = {
           mensaje_confirmado?: boolean | null
           observation?: string | null
           phone?: string | null
+          postvisita_enviado_at?: string | null
+          postvisita_error?: string | null
+          postvisita_estado?: string
+          postvisita_intentos?: number
+          postvisita_message_id?: string | null
+          postvisita_ultimo_intento_at?: string | null
           recordatorio_1h_enviado?: boolean | null
           salesperson_id?: string | null
           source?: Database["public"]["Enums"]["visit_source"] | null
@@ -8059,9 +8468,13 @@ export type Database = {
           lead_id: number | null
           model: string
           notes: string | null
+          notified_at: string | null
+          notified_unit_id: string | null
           priority: Database["public"]["Enums"]["request_priority"] | null
           requested_by: string | null
+          source: string | null
           status: Database["public"]["Enums"]["request_status"] | null
+          transmission: string | null
           type: Database["public"]["Enums"]["vehicle_request_type"] | null
           updated_at: string | null
           year_max: number | null
@@ -8078,9 +8491,13 @@ export type Database = {
           lead_id?: number | null
           model: string
           notes?: string | null
+          notified_at?: string | null
+          notified_unit_id?: string | null
           priority?: Database["public"]["Enums"]["request_priority"] | null
           requested_by?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["request_status"] | null
+          transmission?: string | null
           type?: Database["public"]["Enums"]["vehicle_request_type"] | null
           updated_at?: string | null
           year_max?: number | null
@@ -8097,9 +8514,13 @@ export type Database = {
           lead_id?: number | null
           model?: string
           notes?: string | null
+          notified_at?: string | null
+          notified_unit_id?: string | null
           priority?: Database["public"]["Enums"]["request_priority"] | null
           requested_by?: string | null
+          source?: string | null
           status?: Database["public"]["Enums"]["request_status"] | null
+          transmission?: string | null
           type?: Database["public"]["Enums"]["vehicle_request_type"] | null
           updated_at?: string | null
           year_max?: number | null
@@ -8121,6 +8542,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vehicle_spec_facts: {
+        Row: {
+          checked_at: string
+          dato: string
+          model_key: string
+          seguro: boolean
+          topic: string
+          year: number
+        }
+        Insert: {
+          checked_at?: string
+          dato: string
+          model_key: string
+          seguro: boolean
+          topic: string
+          year?: number
+        }
+        Update: {
+          checked_at?: string
+          dato?: string
+          model_key?: string
+          seguro?: boolean
+          topic?: string
+          year?: number
+        }
+        Relationships: []
       }
       vehiculos: {
         Row: {
@@ -9137,6 +9585,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      chat_max_price: { Args: { raw: string }; Returns: number }
+      chat_try_jsonb: { Args: { raw: string }; Returns: Json }
       count_leads_for_temperature_filter:
         | {
             Args: {
@@ -9195,9 +9645,91 @@ export type Database = {
         Returns: Json
       }
       fn_capi_internal_secret: { Args: never; Returns: string }
+      fn_capi_normalize_phone: { Args: { p_phone: string }; Returns: string }
+      fn_capi_post_catalog_search: {
+        Args: {
+          p_email?: string
+          p_inventory_id: string
+          p_phone: string
+          p_search_string?: string
+        }
+        Returns: undefined
+      }
+      fn_capi_post_cita_intent: {
+        Args: { p_email?: string; p_inventory_id: string; p_phone: string }
+        Returns: undefined
+      }
+      fn_claim_analysis_lock: { Args: { p_owner: string }; Returns: boolean }
+      fn_conversation_packet: {
+        Args: { p_dedup_minutes: number; p_session_id: string }
+        Returns: {
+          cerrar: boolean
+          cubierto_hasta: string
+          etapa_sql: number
+          lead_id: number
+          precio_max: number
+          resumen_previo: string
+          segmentos: number
+          session_id: string
+          transcript: string
+          vehiculos: string[]
+        }[]
+      }
+      fn_conversation_sql_self_check: { Args: never; Returns: undefined }
       fn_generate_plate_short: {
         Args: { plate_input: string }
         Returns: string
+      }
+      fn_list_conversation_batch: {
+        Args: { p_limit: number }
+        Returns: {
+          session_id: string
+        }[]
+      }
+      fn_list_due_followups: {
+        Args: { p_limit?: number }
+        Returns: {
+          bot_apagado: boolean
+          created_at: string
+          etapa_max: number
+          id: number
+          last_human_at: string
+          lead_id: number
+          lead_id_kommo: number
+          objecion_evidencia: string
+          objecion_principal: Database["public"]["Enums"]["objecion_tipo"]
+          objecion_texto: string
+          presupuesto_declarado: string
+          programada: string
+          resumen: string
+          retoma: number
+          seguimiento: string
+          session_id: string
+          stop: boolean
+          vehiculos_consultados: string[]
+        }[]
+      }
+      fn_list_due_post_fotos: {
+        Args: { p_limit?: number }
+        Returns: {
+          bot_apagado: boolean
+          brand: string
+          color: string
+          contact_id: number
+          fuel_type: string
+          id: number
+          lead_id: number
+          lead_id_kommo: number
+          mileage: number
+          model: string
+          name: string
+          paso: number
+          price: number
+          programada: string
+          respondio_post_fotos: boolean
+          session_id: string
+          year: number
+        }[]
       }
       fn_match_lead_to_ctwa_click: {
         Args: { p_phone: string }
@@ -9208,6 +9740,31 @@ export type Database = {
           matched: boolean
           product_retailer_id: string
         }[]
+      }
+      fn_purge_analyzed_chats: { Args: never; Returns: number }
+      fn_release_analysis_lock: {
+        Args: { p_owner: string }
+        Returns: undefined
+      }
+      fn_save_conversation_analysis: {
+        Args: {
+          p_analizado_hasta: string
+          p_cerrada: boolean
+          p_entrada_disponible?: number
+          p_etapa_max: number
+          p_forma_pago?: string
+          p_lead_id: number
+          p_objecion: Database["public"]["Enums"]["objecion_tipo"]
+          p_objecion_evidencia: string
+          p_objecion_texto: string
+          p_precio: number
+          p_presupuesto: string
+          p_presupuesto_monto?: number
+          p_resumen: string
+          p_session_id: string
+          p_vehiculos: string[]
+        }
+        Returns: undefined
       }
       fn_sha256: { Args: { input: string }; Returns: string }
       get_leads_pager: {
@@ -10210,6 +10767,23 @@ export type Database = {
         | "TRANSFERENCIA"
         | "DEPOSITO"
         | "CHEQUE"
+      objecion_tipo:
+        | "precio"
+        | "entrada"
+        | "rechaza_credito"
+        | "retoma"
+        | "modelo"
+        | "equipamiento"
+        | "km"
+        | "solo_cotiza"
+        | "ubicacion"
+        | "ya_compro"
+        | "sin_conversacion"
+        | "no_responde"
+        | "sin_cierre"
+        | "numero_equivocado"
+        | "fuera_territorio"
+        | "otro"
       objetivo_caso_enum:
         | "recuperar_cartera"
         | "retener_vehiculo"
@@ -10563,6 +11137,24 @@ export const Constants = {
         "TRANSFERENCIA",
         "DEPOSITO",
         "CHEQUE",
+      ],
+      objecion_tipo: [
+        "precio",
+        "entrada",
+        "rechaza_credito",
+        "retoma",
+        "modelo",
+        "equipamiento",
+        "km",
+        "solo_cotiza",
+        "ubicacion",
+        "ya_compro",
+        "sin_conversacion",
+        "no_responde",
+        "sin_cierre",
+        "numero_equivocado",
+        "fuera_territorio",
+        "otro",
       ],
       objetivo_caso_enum: [
         "recuperar_cartera",

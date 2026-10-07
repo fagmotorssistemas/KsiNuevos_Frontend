@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { NoticieroVehicle } from '@/lib/noticiero/types'
 
 const INVENTORY_SELECT =
-  'id, brand, model, year, color, version, price, transmission, fuel_type, engine_displacement, drive_type, passenger_capacity, type_body, horse_power, mileage, img_main_url'
+  'id, brand, model, year, color, version, price, transmission, fuel_type, engine_displacement, passenger_capacity, type_body, mileage, img_main_url'
 
 interface VehicleSelectorProps {
   selectedId: string

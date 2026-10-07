@@ -23,7 +23,6 @@ function parseVehicle(body: Partial<NoticieroVehicle>): NoticieroVehicle | null 
     transmission: String(body.transmission ?? ''),
     fuel_type: String(body.fuel_type ?? ''),
     engine_displacement: String(body.engine_displacement ?? ''),
-    drive_type: String(body.drive_type ?? ''),
     passenger_capacity: body.passenger_capacity ?? null,
     type_body: String(body.type_body ?? ''),
   }

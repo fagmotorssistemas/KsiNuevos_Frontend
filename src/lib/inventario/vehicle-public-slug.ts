@@ -4,7 +4,6 @@ const UUID_RE =
 export const VEHICLES_CATALOG_PATH = '/usados/cuenca'
 
 export type VehicleSlugFields = {
-  slug?: string | null
   brand: string
   model: string
   year: number | string

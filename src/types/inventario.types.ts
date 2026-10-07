@@ -33,6 +33,8 @@ export interface VehiculoInventario {
     combustible: string;
     tonelaje: string;
     capacidad: string;
+    /** En el listado solo viene si el modelo dice TM/TA/CVT; en el detalle viene de ASIS. */
+    transmision?: string;
     nroLlantas: string;
     nroEjes: string;
     paisOrigen: string;

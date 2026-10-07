@@ -13,10 +13,8 @@ type InventoryOracleRow = {
   year: number
   version: string | null
   engine_displacement: string | null
-  engine_type: string | null
   fuel_type: string | null
   transmission: string | null
-  drive_type: string | null
   type: string | null
   type_body: string | null
   price: number | null
@@ -77,7 +75,7 @@ export function NoticieroSchedulePublishModal({
       const { data, error } = await supabase
         .from('inventoryoracle')
         .select(
-          'id, brand, model, year, version, engine_displacement, engine_type, fuel_type, transmission, drive_type, type, type_body, price'
+          'id, brand, model, year, version, engine_displacement, fuel_type, transmission, type, type_body, price'
         )
         .order('updated_at', { ascending: false })
         .limit(400)
@@ -173,7 +171,7 @@ export function NoticieroSchedulePublishModal({
     if (!v) return
     setGenerating(true)
     try {
-      const motorParts = [v.engine_displacement, v.engine_type, v.fuel_type].filter(Boolean).join(' ')
+      const motorParts = [v.engine_displacement, v.fuel_type].filter(Boolean).join(' ')
       const res = await fetch('/api/videos/caption/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,7 +182,6 @@ export function NoticieroSchedulePublishModal({
           año: v.year,
           motor: motorParts || '—',
           transmision: v.transmission ?? '—',
-          traccion: v.drive_type ?? '—',
           tipo: v.type ?? v.type_body ?? '—',
         }),
       })

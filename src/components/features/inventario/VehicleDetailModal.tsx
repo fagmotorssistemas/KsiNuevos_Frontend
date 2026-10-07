@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useHideStaffNav } from '@/hooks/useSidebarShell'
 import { useVehicleLegalDossier } from '@/hooks/inventario/useVehicleLegalDossier'
 import { inventarioService } from '@/services/inventario.service'
+import { normalizeTransmission } from '@/lib/inventario/transmission'
 import { MovimientoKardex, VehiculoInventario, PagoCompraResumen } from '@/types/inventario.types'
 import type { VehicleDocType } from '@/types/vehicleLegal.types'
 import { VehicleLegalSummaryBar } from './legal/VehicleLegalSummaryBar'
@@ -133,6 +134,7 @@ export function VehicleDetailModal({
       setHistorialError(null)
       const data = await inventarioService.getDetalleVehiculo(vehiculo.placa)
       console.log('Datos del vehículo recibidos:', data)
+      void inventarioService.saveFichaExtras(data.fichaTecnica)
       const movimientos = data.historialMovimientos || []
       setHistorial(movimientos)
       
@@ -315,6 +317,8 @@ export function VehicleDetailModal({
                 <ItemDetail label="Chasis" value={vehiculo.chasis} highlight />
                 <ItemDetail label="Cilindraje" value={vehiculo.cilindraje} />
                 <ItemDetail label="Combustible" value={vehiculo.combustible} />
+                <ItemDetail label="Transmisión" value={normalizeTransmission(vehiculo.transmision)} />
+                <ItemDetail label="Pasajeros" value={vehiculo.capacidad} />
                 <ItemDetail label="Ejes" value={vehiculo.nroEjes} />
                 <ItemDetail label="Llantas" value={vehiculo.nroLlantas} />
               </FichaSection>

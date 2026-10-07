@@ -34,7 +34,7 @@ export async function fetchSitemapInventory() {
     const supabase = createServiceRoleClient();
     const { data, error } = await supabase
       .from("inventoryoracle")
-      .select("id, brand, model, year, slug, created_at, status, img_main_url, price")
+      .select("id, brand, model, year, created_at, status, img_main_url, price")
       .eq("status", "disponible")
       .not("brand", "is", null)
       .not("model", "is", null);
@@ -117,16 +117,6 @@ export async function fetchCarByLookupKey(
 
     const normalized = slugifyVehicleText(decoded);
     if (!normalized) return null;
-
-    const { data: slugRows, error: slugError } = await supabase
-      .from("inventoryoracle")
-      .select("*")
-      .eq("slug", normalized)
-      .limit(10);
-
-    if (slugError) throw slugError;
-    const slugMatch = pickBestMatch((slugRows ?? []) as OracleRow[]);
-    if (slugMatch) return slugMatch;
 
     const year = extractYearFromVehicleSlug(normalized);
     const brandGuess = normalized.split("-")[0];

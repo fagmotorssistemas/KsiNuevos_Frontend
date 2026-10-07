@@ -15,7 +15,6 @@ type OracleRow = Pick<
   | "internal_fixed_price"
   | "public_price_reverts_at"
   | "img_main_url"
-  | "slug"
   | "created_at"
   | "registration_place"
 >;
@@ -56,17 +55,10 @@ function toCardCar(car: OracleRow): InventoryCar {
     internal_fixed_price: car.internal_fixed_price,
     public_price_reverts_at: car.public_price_reverts_at,
     img_main_url: car.img_main_url,
-    slug: car.slug,
-    features: null,
-    specs: null,
     fuel_type: null,
-    drive_type: null,
     passenger_capacity: null,
-    cylinder_count: null,
     version: null,
     plate_short: null,
-    aesthetic_condition: null,
-    mechanical_condition: null,
     created_at: car.created_at,
     registration_place: car.registration_place,
     previous_owners: null,
@@ -85,7 +77,7 @@ export function usePopularInventory(limit: number = 4) {
       const { data: inventoryData, error: invError } = await supabase
         .from("inventoryoracle")
         .select(
-          "id, brand, model, year, mileage, price, internal_fixed_price, public_price_reverts_at, img_main_url, slug, created_at, registration_place"
+          "id, brand, model, year, mileage, price, internal_fixed_price, public_price_reverts_at, img_main_url, created_at, registration_place"
         )
         .eq("status", "disponible");
 

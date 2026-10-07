@@ -142,11 +142,11 @@ export async function fetchDriveBadgeForJob(
   if (vehicleId) {
     const { data: inv } = await supabase
       .from('inventoryoracle')
-      .select('model, drive_type')
+      .select('model')
       .eq('id', vehicleId)
       .maybeSingle()
     if (inv?.model) {
-      const badge = driveBadgeFromInventory(inv.model, inv.drive_type)
+      const badge = driveBadgeFromInventory(inv.model, null)
       if (badge) return badge
     }
   }

@@ -21,17 +21,10 @@ export type InventoryCar = Pick<
   | "internal_fixed_price"
   | "public_price_reverts_at"
   | "img_main_url"
-  | "slug"
-  | "features"
-  | "specs"
   | "fuel_type"
-  | "drive_type"
   | "passenger_capacity"
-  | "cylinder_count"
   | "version"
   | "plate_short"
-  | "aesthetic_condition"
-  | "mechanical_condition"
   | "created_at"
   | "registration_place"
   | "previous_owners"
@@ -48,9 +41,9 @@ export function useInventoryData() {
     // 3. Query Selectiva: Debe coincidir con la lista de arriba
     const SELECT_QUERY = `
         id, brand, model, year, color, type_body, transmission, 
-        mileage, price, internal_fixed_price, public_price_reverts_at, img_main_url, slug, features, specs, 
-        fuel_type, drive_type, passenger_capacity, cylinder_count, 
-        version, plate_short, aesthetic_condition, mechanical_condition, created_at,
+        mileage, price, internal_fixed_price, public_price_reverts_at, img_main_url,
+        fuel_type, passenger_capacity,
+        version, plate_short, created_at,
         registration_place, previous_owners
     `;
 

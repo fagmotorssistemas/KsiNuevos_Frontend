@@ -40,7 +40,6 @@ const VEHICLE_ORDER_OPTIONS: { value: NoticieroVehicleOrder; label: string }[] =
   { value: 'price_desc', label: 'Más caros primero' },
   { value: 'price_asc', label: 'Más baratos primero' },
   { value: 'newest', label: 'Recién ingresados' },
-  { value: 'is_featured', label: 'Más destacados' },
   { value: 'mileage_desc', label: 'Mayor kilometraje primero' },
   { value: 'mileage_asc', label: 'Menor kilometraje primero' },
 ]

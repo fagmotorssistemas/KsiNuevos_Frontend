@@ -171,16 +171,6 @@ function normalizeTransmissionField(raw: string | null | undefined): string | nu
   return titleCase(String(raw))
 }
 
-function normalizeDriveField(raw: string | null | undefined): string | null {
-  if (isMissing(raw)) return null
-  const s = String(raw).toLowerCase()
-  if (s.includes('4x4') || s.includes('4wd') || s.includes('awd')) return 'tracción cuatro por cuatro'
-  if (s.includes('4x2')) return 'tracción cuatro por dos'
-  if (s.includes('delan')) return 'tracción delantera'
-  if (s.includes('tras')) return 'tracción trasera'
-  return titleCase(String(raw))
-}
-
 function normalizeFuel(raw: string | null | undefined, isHybrid: boolean): string | null {
   if (isHybrid) return 'híbrido'
   if (isMissing(raw)) return null
@@ -214,7 +204,7 @@ export function buildVehicleScriptFacts(vehicle: NoticieroVehicle): VehicleScrip
 
   const transmission =
     normalizeTransmissionField(vehicle.transmission) ?? parsed.transmission
-  const driveType = normalizeDriveField(vehicle.drive_type) ?? parsed.driveType
+  const driveType = parsed.driveType
   const fuelType = normalizeFuel(vehicle.fuel_type, parsed.isHybrid)
 
   const engineLiters = parsed.engineLiters

@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { InventoryCar } from "../../../hooks/useInventory";
 import type { VehiculoInventario } from "@/types/inventario.types";
 import { inventarioService } from "@/services/inventario.service";
+import { normalizeTransmission } from "@/lib/inventario/transmission";
 import { compressAndConvertToWebP, compressImageForUpload } from "@/lib/image-optimization";
 import { uploadOptimizedMainImage, uploadOptimizedGalleryImage } from "@/lib/vehicle-image-upload";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
@@ -364,7 +365,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
         marketing_in_patio: car.marketing_in_patio || false,
         marketing_posts_count: car.marketing_posts_count || 0,
         marketing_videos_count: car.marketing_videos_count || 0,
-        marketing_stories_count: car.marketing_stories_count || 0,
         img_main_url: car.img_main_url || '', // URL actual
         color: car.color || '',
         plate_short: car.plate_short || '',
@@ -559,6 +559,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
             .getDetalleVehiculo(car.plate)
             .then((data) => {
                 if (!cancelled) setOracleFicha(data.fichaTecnica ?? null);
+                void inventarioService.saveFichaExtras(data.fichaTecnica);
             })
             .catch(() => {
                 if (!cancelled) setOracleFicha(null);
@@ -573,7 +574,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
 
     const ficha = useMemo(() => {
         const o = oracleFicha;
-        const cyl = car.cylinder_count != null ? String(car.cylinder_count) : null;
         return {
             marca: coalesce(car.brand, o?.marca),
             modelo: coalesce(car.model, o?.modelo),
@@ -583,8 +583,10 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
             version: coalesce(car.version, o?.version),
             motor: coalesce(car.engine_number, o?.motor),
             chasis: coalesce(car.vin, o?.chasis),
-            cilindraje: coalesce(car.engine_displacement, cyl, o?.cilindraje),
+            cilindraje: coalesce(car.engine_displacement, o?.cilindraje),
             combustible: coalesce(car.fuel_type, o?.combustible),
+            transmision: coalesce(normalizeTransmission(o?.transmision), car.transmission),
+            capacidad: coalesce(o?.capacidad, car.passenger_capacity),
             ejes: coalesce(car.axles_count, o?.nroEjes),
             llantas: coalesce(car.wheels_count, o?.nroLlantas),
             paisOrigen: coalesce(car.country_origin, o?.paisOrigen),
@@ -807,7 +809,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                 marketing_in_patio: formData.marketing_in_patio,
                 marketing_posts_count: Number(formData.marketing_posts_count),
                 marketing_videos_count: Number(formData.marketing_videos_count),
-                marketing_stories_count: Number(formData.marketing_stories_count),
                 img_main_url: finalMainUrl,
                 img_gallery_urls: finalGalleryUrls,
                 publication_url: formData.publication_url,
@@ -844,7 +845,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                 marketing_in_patio: formData.marketing_in_patio,
                 marketing_posts_count: Number(formData.marketing_posts_count),
                 marketing_videos_count: Number(formData.marketing_videos_count),
-                marketing_stories_count: Number(formData.marketing_stories_count),
                 img_main_url: finalMainUrl,
                 img_gallery_urls: finalGalleryUrls,
                 publication_url: formData.publication_url,
@@ -1237,6 +1237,8 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                             <ItemDetail label="Chasis" value={ficha.chasis} highlight />
                                             <ItemDetail label="Cilindraje" value={ficha.cilindraje} />
                                             <ItemDetail label="Combustible" value={ficha.combustible} />
+                                            <ItemDetail label="Transmisión" value={ficha.transmision} />
+                                            <ItemDetail label="Pasajeros" value={ficha.capacidad} />
                                             <ItemDetail label="Ejes" value={ficha.ejes} />
                                             <ItemDetail label="Llantas" value={ficha.llantas} />
                                         </div>
@@ -1475,7 +1477,7 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                             </div>
 
                             {/* Contadores */}
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
                                     <span className="text-xs font-bold text-slate-500 uppercase">Posts</span>
                                     <Input
@@ -1496,18 +1498,6 @@ export function InventoryDetailModal({ car, onClose, onUpdate, currentUserRole }
                                         className="text-center font-bold text-lg h-12"
                                         value={formData.marketing_videos_count}
                                         onChange={(e) => handleChange('marketing_videos_count', e.target.value)}
-                                        readOnly={!canEdit}
-                                        disabled={!canEdit}
-                                    />
-                                </div>
-                                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-500 uppercase">Historias</span>
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        className="text-center font-bold text-lg h-12"
-                                        value={formData.marketing_stories_count}
-                                        onChange={(e) => handleChange('marketing_stories_count', e.target.value)}
                                         readOnly={!canEdit}
                                         disabled={!canEdit}
                                     />

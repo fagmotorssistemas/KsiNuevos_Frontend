@@ -54,20 +54,6 @@ export function useCarDetail(param: string) {
       const normalized = slugifyVehicleText(decoded)
       if (!normalized) throw new Error('Vehículo no encontrado')
 
-      const { data: slugRows, error: slugError } = await supabase
-        .from('inventoryoracle')
-        .select('*')
-        .eq('slug', normalized)
-        .limit(10)
-
-      if (slugError) throw slugError
-
-      const slugMatch = pickBestMatch((slugRows ?? []) as CarDetail[])
-      if (slugMatch) {
-        setCar(slugMatch)
-        return
-      }
-
       const year = extractYearFromVehicleSlug(normalized)
       const brandGuess = normalized.split('-')[0]
       let query = supabase.from('inventoryoracle').select('*')

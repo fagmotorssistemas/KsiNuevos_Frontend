@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { VehiculoInventario } from "@/types/inventario.types";
+import { normalizeTransmission } from "@/lib/inventario/transmission";
 
 const supabase = createClient();
 
@@ -69,6 +70,7 @@ export const syncService = {
         engine_number: safeLower(v.motor),
         engine_displacement: safeLower(v.cilindraje),
         fuel_type: safeLower(v.combustible),
+        transmission: normalizeTransmission(v.transmision),
         type_body: safeLower(v.tipo),
         country_origin: safeLower(v.paisOrigen),
         tonnage: safeLower(v.tonelaje),
@@ -122,21 +124,36 @@ export const syncService = {
     try {
       const incomingVins = finalPayload.map((item) => item.vin).filter(Boolean) as string[];
       const existingVins = new Set<string>();
+      const existingTransmission = new Map<string, string>();
+      let existingReadOk = true;
       for (let i = 0; i < incomingVins.length; i += 150) {
         const chunk = incomingVins.slice(i, i + 150);
         const { data: existingRows, error: existingErr } = await supabase
           .from('inventoryoracle')
-          .select('vin')
+          .select('vin, transmission')
           .in('vin', chunk);
         if (existingErr) {
           console.warn('⚠️ No se pudieron leer VINs existentes para contraste:', existingErr.message);
+          existingReadOk = false;
           break;
         }
         for (const row of existingRows ?? []) {
-          if (row.vin) existingVins.add(row.vin);
+          if (!row.vin) continue;
+          existingVins.add(row.vin);
+          if (row.transmission) existingTransmission.set(row.vin, row.transmission);
         }
       }
       const newVins = incomingVins.filter((vin) => !existingVins.has(vin));
+
+      // El listado solo trae transmisión si el modelo dice TM/TA/CVT; el detalle (ASIS) la completa.
+      // Si el listado viene vacío no se puede escribir null encima de lo guardado desde el detalle.
+      for (const item of finalPayload) {
+        if (existingReadOk) {
+          item.transmission = item.transmission ?? existingTransmission.get(item.vin) ?? null;
+        } else {
+          delete item.transmission;
+        }
+      }
 
       // --- 5. ENVÍO SEGURO (Upsert) ---
       const { error } = await supabase

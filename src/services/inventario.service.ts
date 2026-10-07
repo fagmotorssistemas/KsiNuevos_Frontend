@@ -6,6 +6,7 @@ import {
     isPromoPublicPriceActive,
     isVehicleAvailableForPriceRules,
 } from "@/lib/inventario/inventory-pricing";
+import { normalizeTransmission } from "@/lib/inventario/transmission";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || ''
 const LOCAL_API_URL = 'http://127.0.0.1:3005/api'
@@ -77,7 +78,7 @@ async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
     const { data, error } = await supabase
         .from('inventoryoracle')
         .select(
-            'id, oracle_id, plate, brand, model, year, color, description, type, type_body, engine_number, vin, engine_displacement, fuel_type, country_origin, tonnage, passenger_capacity, wheels_count, axles_count, registration_year, registration_place, supplier, purchase_date, stock, status, mileage, price, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, created_at, version'
+            'id, oracle_id, plate, brand, model, year, color, description, type, type_body, engine_number, vin, engine_displacement, fuel_type, country_origin, tonnage, passenger_capacity, wheels_count, axles_count, registration_year, registration_place, supplier, purchase_date, stock, status, mileage, price, internal_fixed_price, internal_fixed_price_set_at, public_price_changed_at, public_price_change_reason, public_price_reverts_at, public_price_requested_by, created_at, version, transmission'
         )
         .order('created_at', { ascending: false })
         .limit(2000)
@@ -102,6 +103,7 @@ async function dashboardFromSupabase(): Promise<DashboardInventarioResponse> {
             combustible: row.fuel_type || '',
             tonelaje: row.tonnage || '',
             capacidad: row.passenger_capacity || '',
+            transmision: row.transmission || '',
             nroLlantas: row.wheels_count || '',
             nroEjes: row.axles_count || '',
             paisOrigen: row.country_origin || '',
@@ -268,6 +270,34 @@ export const inventarioService = {
         if (!res.ok) throw new Error('Error fetching vehicle details');
         const response = await res.json();
         return response.data;
+    },
+
+    /** Guarda en inventoryoracle la transmisión (ASIS) y pasajeros que trae el detalle, solo si cambiaron. */
+    async saveFichaExtras(ficha: VehiculoInventario | null | undefined) {
+        if (!ficha) return;
+        const transmission = normalizeTransmission(ficha.transmision);
+        const capacityRaw = ficha.capacidad != null ? String(ficha.capacidad).trim().toLowerCase() : '';
+        const capacity = capacityRaw && capacityRaw !== '.' ? capacityRaw : null;
+        if (!transmission && !capacity) return;
+
+        const vin = ficha.chasis?.trim().toLowerCase();
+        const plate = ficha.placa?.trim().toUpperCase();
+        if (!vin && !plate) return;
+
+        const supabase = createClient();
+        const base = supabase.from('inventoryoracle').select('id, transmission, passenger_capacity');
+        const { data: row, error } = await (vin ? base.eq('vin', vin) : base.eq('plate', plate!)).maybeSingle();
+        if (error || !row) return;
+
+        const update: { transmission?: string; passenger_capacity?: string } = {};
+        if (transmission && row.transmission !== transmission) update.transmission = transmission;
+        if (capacity && row.passenger_capacity !== capacity) update.passenger_capacity = capacity;
+        if (Object.keys(update).length === 0) return;
+
+        const { error: updateError } = await supabase.from('inventoryoracle').update(update).eq('id', row.id);
+        if (updateError) {
+            console.warn('[inventarioService] No se guardó transmisión/pasajeros:', updateError.message);
+        }
     },
 
     // ---------------------------------------------------------
