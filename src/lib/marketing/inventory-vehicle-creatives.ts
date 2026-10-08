@@ -13,6 +13,7 @@ export type VehicleCreativeItem = {
   errorMessage: string | null
   imageUrl: string | null
   images: string[]
+  featuredImageUrl: string | null
   createdAt: string
   updatedAt: string
   kindLabel: string
@@ -95,12 +96,14 @@ type CreativeRow = {
   error_message: string | null
   image_url: string | null
   image_urls: Json | null
+  featured_image_url: string | null
   created_at: string
   updated_at: string
 }
 
 function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
   const images = uniqueUrls(row.image_url, asUrlList(row.image_urls))
+  const featured = row.featured_image_url?.trim() || null
   return {
     id: row.id,
     vehicleId: row.vehicle_id,
@@ -110,6 +113,7 @@ function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
     errorMessage: row.error_message,
     imageUrl: row.image_url ?? images[0] ?? null,
     images,
+    featuredImageUrl: featured && images.includes(featured) ? featured : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     kindLabel: labelCreativeKind(row.creative_kind),
@@ -118,7 +122,7 @@ function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
 }
 
 const CREATIVE_SELECT =
-  'id, vehicle_id, creative_kind, variant, status, error_message, image_url, image_urls, created_at, updated_at'
+  'id, vehicle_id, creative_kind, variant, status, error_message, image_url, image_urls, featured_image_url, created_at, updated_at'
 
 export async function fetchVehicleCreatives(vehicleId: string): Promise<VehicleCreativeItem[]> {
   const id = vehicleId.trim()
@@ -133,7 +137,8 @@ export async function fetchVehicleCreatives(vehicleId: string): Promise<VehicleC
 
   if (error) throw new Error(error.message)
 
-  return (data ?? []).map(mapCreativeRow)
+  const items = (data ?? []).map(mapCreativeRow)
+  return items.sort((a, b) => Number(Boolean(b.featuredImageUrl)) - Number(Boolean(a.featuredImageUrl)))
 }
 
 export async function fetchVehicleCreativeById(creativeId: string): Promise<VehicleCreativeItem | null> {
@@ -223,12 +228,63 @@ export async function deleteVehicleCreativeImage(
     .update({
       image_url: remaining[0],
       image_urls: remaining,
+      featured_image_url: mapped.featuredImageUrl === urlToRemove ? null : mapped.featuredImageUrl,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
 
   if (updErr) throw new Error(updErr.message)
   return { deleted: 'image' }
+}
+
+export async function setVehicleCreativeImageFeatured(
+  creativeId: string,
+  imageIndex: number,
+  featured: boolean
+): Promise<{ featuredImageUrl: string | null }> {
+  const id = creativeId.trim()
+  if (!id) throw new Error('Falta creativeId')
+
+  const supabase = createServiceRoleClient()
+  const { data: row, error } = await supabase
+    .from('inventory_vehicle_creatives')
+    .select(CREATIVE_SELECT)
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!row) throw new Error('Imagen no encontrada')
+
+  const mapped = mapCreativeRow(row)
+  const url = mapped.images[Math.max(0, imageIndex)]
+  if (!url) throw new Error('Imagen no encontrada')
+
+  const now = new Date().toISOString()
+
+  if (!featured) {
+    if (mapped.featuredImageUrl !== url) return { featuredImageUrl: mapped.featuredImageUrl }
+    const { error: clearErr } = await supabase
+      .from('inventory_vehicle_creatives')
+      .update({ featured_image_url: null, updated_at: now })
+      .eq('id', id)
+    if (clearErr) throw new Error(clearErr.message)
+    return { featuredImageUrl: null }
+  }
+
+  const { error: othersErr } = await supabase
+    .from('inventory_vehicle_creatives')
+    .update({ featured_image_url: null, updated_at: now })
+    .eq('vehicle_id', mapped.vehicleId)
+    .neq('id', id)
+    .not('featured_image_url', 'is', null)
+  if (othersErr) throw new Error(othersErr.message)
+
+  const { error: updErr } = await supabase
+    .from('inventory_vehicle_creatives')
+    .update({ featured_image_url: url, updated_at: now })
+    .eq('id', id)
+  if (updErr) throw new Error(updErr.message)
+  return { featuredImageUrl: url }
 }
 
 const CREATIVES_FETCH_BATCH = 1000

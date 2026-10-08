@@ -6,6 +6,7 @@ import {
   deleteVehicleCreativeImage,
   fetchVehicleCreatives,
   resolveCreativeUploadMimeType,
+  setVehicleCreativeImageFeatured,
   uploadManualVehicleCreatives,
 } from '@/lib/marketing/inventory-vehicle-creatives'
 
@@ -88,6 +89,30 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[inventory-creatives POST]', message)
     return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
+  try {
+    const body = (await request.json()) as { creativeId?: string; index?: number; featured?: boolean }
+    const creativeId = body.creativeId?.trim() ?? ''
+    if (!creativeId) {
+      return NextResponse.json({ error: 'Falta creativeId' }, { status: 400 })
+    }
+    if (typeof body.featured !== 'boolean') {
+      return NextResponse.json({ error: 'featured es requerido' }, { status: 400 })
+    }
+    const imageIndex = Math.max(0, Number(body.index ?? 0) || 0)
+    const result = await setVehicleCreativeImageFeatured(creativeId, imageIndex, body.featured)
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno'
+    console.error('[inventory-creatives PATCH]', message)
+    const status = message === 'Imagen no encontrada' ? 404 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }
 

@@ -10,6 +10,7 @@ import {
   Loader2,
   Plus,
   Sparkles,
+  Star,
   Trash2,
   Upload,
   X,
@@ -25,6 +26,7 @@ type VehicleCreativeItem = {
   errorMessage: string | null
   imageUrl: string | null
   images: string[]
+  featuredImageUrl: string | null
   createdAt: string
   updatedAt: string
   kindLabel: string
@@ -39,6 +41,13 @@ type GalleryImage = {
   creativeId: string
   imageIndex: number
   filename: string
+  featured: boolean
+}
+
+function sortFeaturedFirst(list: VehicleCreativeItem[]) {
+  return [...list].sort(
+    (a, b) => Number(Boolean(b.featuredImageUrl)) - Number(Boolean(a.featuredImageUrl))
+  )
 }
 
 function statusLabel(status: string) {
@@ -91,8 +100,10 @@ export function VehicleAiCreativesGallery({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deletingKey, setDeletingKey] = useState<string | null>(null)
+  const [featuringKey, setFeaturingKey] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const restorePreviewUrl = useRef<string | null>(null)
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -198,6 +209,43 @@ export function VehicleAiCreativesGallery({
     [deletingKey, uploading, load, onUploaded]
   )
 
+  const toggleFeatured = useCallback(
+    async (creativeId: string, imageIndex: number, url: string, currentlyFeatured: boolean) => {
+      const key = `${creativeId}:${imageIndex}`
+      if (featuringKey) return
+      const nextFeatured = !currentlyFeatured
+
+      setFeaturingKey(key)
+      try {
+        const res = await fetch('/api/marketing/inventory-creatives', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ creativeId, index: imageIndex, featured: nextFeatured }),
+        })
+        const data = (await res.json()) as { featuredImageUrl?: string | null; error?: string }
+        if (!res.ok) throw new Error(data.error ?? 'No se pudo actualizar el destacado')
+
+        const featuredUrl = data.featuredImageUrl ?? null
+        setCreatives((prev) =>
+          sortFeaturedFirst(
+            prev.map((item) => {
+              if (item.id === creativeId) return { ...item, featuredImageUrl: featuredUrl }
+              return nextFeatured ? { ...item, featuredImageUrl: null } : item
+            })
+          )
+        )
+        if (previewIndex != null) restorePreviewUrl.current = url
+        toast.success(nextFeatured ? 'Imagen destacada' : 'Ya no está destacada')
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'No se pudo actualizar el destacado')
+      } finally {
+        setFeaturingKey(null)
+      }
+    },
+    [featuringKey, previewIndex]
+  )
+
   function openFilePicker() {
     if (uploading) return
     fileInputRef.current?.click()
@@ -236,6 +284,7 @@ export function VehicleAiCreativesGallery({
           creativeId: creative.id,
           imageIndex: 0,
           filename: fileNameFor(creative.kindLabel, creative.variantLabel, 0, 1, ''),
+          featured: false,
         })
         continue
       }
@@ -248,11 +297,20 @@ export function VehicleAiCreativesGallery({
           creativeId: creative.id,
           imageIndex: index,
           filename: fileNameFor(creative.kindLabel, creative.variantLabel, index, urls.length, url),
+          featured: creative.featuredImageUrl === url,
         })
       })
     }
     return items
   }, [creatives])
+
+  useEffect(() => {
+    const url = restorePreviewUrl.current
+    if (!url) return
+    restorePreviewUrl.current = null
+    const idx = images.findIndex((img) => img.url === url)
+    if (idx >= 0) setPreviewIndex(idx)
+  }, [images])
 
   const preview = previewIndex != null ? images[previewIndex] ?? null : null
   const previewableCount = images.filter((img) => img.url).length
@@ -423,10 +481,14 @@ export function VehicleAiCreativesGallery({
         return urls.map((url, index) => {
           const itemKey = `${creative.id}:${index}`
           const deleting = deletingKey === itemKey
+          const featured = creative.featuredImageUrl === url
+          const featuring = featuringKey === itemKey
           return (
           <div
             key={itemKey}
-            className="group relative aspect-[4/5] rounded-[1.6rem] overflow-hidden text-left shadow-[0_18px_40px_-24px_rgba(76,29,149,0.55)] ring-1 ring-black/5 hover:-translate-y-1 hover:shadow-[0_24px_50px_-20px_rgba(76,29,149,0.6)] transition-all duration-300"
+            className={`group relative aspect-[4/5] rounded-[1.6rem] overflow-hidden text-left shadow-[0_18px_40px_-24px_rgba(76,29,149,0.55)] hover:-translate-y-1 hover:shadow-[0_24px_50px_-20px_rgba(76,29,149,0.6)] transition-all duration-300 ${
+              featured ? 'ring-4 ring-amber-400' : 'ring-1 ring-black/5'
+            }`}
           >
             <button
               type="button"
@@ -451,7 +513,25 @@ export function VehicleAiCreativesGallery({
             >
               {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
-            <div className="absolute top-3 right-3 z-30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <button
+              type="button"
+              onClick={() => void toggleFeatured(creative.id, index, url, featured)}
+              disabled={Boolean(featuringKey)}
+              className={`absolute top-3 right-3 z-30 inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm transition disabled:opacity-50 ${
+                featured
+                  ? 'border-amber-300 bg-amber-400 text-white hover:bg-amber-500'
+                  : 'border-white/40 bg-black/55 text-white hover:bg-black/75'
+              }`}
+              title={featured ? 'Quitar destacada' : 'Destacar esta imagen (solo una)'}
+              aria-label={featured ? 'Quitar destacada' : 'Destacar imagen'}
+            >
+              {featuring ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Star className={`w-4 h-4 ${featured ? 'fill-white' : ''}`} />
+              )}
+            </button>
+            <div className="absolute top-3 right-12 z-30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-900 shadow-sm">
                 <Expand className="w-3 h-3" />
                 Ver
@@ -463,6 +543,12 @@ export function VehicleAiCreativesGallery({
               </span>
             ) : null}
             <div className="absolute inset-x-0 bottom-0 z-30 p-4 pointer-events-none">
+              {featured ? (
+                <span className="mb-1.5 mr-1.5 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                  <Star className="w-3 h-3 fill-white" />
+                  Destacada
+                </span>
+              ) : null}
               <span
                 className={`inline-flex rounded-full bg-gradient-to-r ${variantAccent(creative.variantLabel)} px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm`}
               >
@@ -525,6 +611,27 @@ export function VehicleAiCreativesGallery({
                     <Download className="w-3.5 h-3.5" />
                     Descargar
                   </a>
+                ) : null}
+                {preview.url ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void toggleFeatured(preview.creativeId, preview.imageIndex, preview.url, preview.featured)
+                    }
+                    disabled={Boolean(featuringKey)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold disabled:opacity-50 ${
+                      preview.featured
+                        ? 'bg-amber-400 text-white hover:bg-amber-500'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {featuringKey === `${preview.creativeId}:${preview.imageIndex}` ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Star className={`w-3.5 h-3.5 ${preview.featured ? 'fill-white' : ''}`} />
+                    )}
+                    {preview.featured ? 'Destacada' : 'Destacar'}
+                  </button>
                 ) : null}
                 <button
                   type="button"
