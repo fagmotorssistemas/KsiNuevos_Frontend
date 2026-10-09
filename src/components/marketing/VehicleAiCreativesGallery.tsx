@@ -26,7 +26,7 @@ type VehicleCreativeItem = {
   errorMessage: string | null
   imageUrl: string | null
   images: string[]
-  featuredImageUrl: string | null
+  featuredImageUrls: string[]
   createdAt: string
   updatedAt: string
   kindLabel: string
@@ -45,9 +45,7 @@ type GalleryImage = {
 }
 
 function sortFeaturedFirst(list: VehicleCreativeItem[]) {
-  return [...list].sort(
-    (a, b) => Number(Boolean(b.featuredImageUrl)) - Number(Boolean(a.featuredImageUrl))
-  )
+  return [...list].sort((a, b) => b.featuredImageUrls.length - a.featuredImageUrls.length)
 }
 
 function statusLabel(status: string) {
@@ -223,16 +221,13 @@ export function VehicleAiCreativesGallery({
           credentials: 'include',
           body: JSON.stringify({ creativeId, index: imageIndex, featured: nextFeatured }),
         })
-        const data = (await res.json()) as { featuredImageUrl?: string | null; error?: string }
+        const data = (await res.json()) as { featuredImageUrls?: string[]; error?: string }
         if (!res.ok) throw new Error(data.error ?? 'No se pudo actualizar el destacado')
 
-        const featuredUrl = data.featuredImageUrl ?? null
+        const featuredUrls = data.featuredImageUrls ?? []
         setCreatives((prev) =>
           sortFeaturedFirst(
-            prev.map((item) => {
-              if (item.id === creativeId) return { ...item, featuredImageUrl: featuredUrl }
-              return nextFeatured ? { ...item, featuredImageUrl: null } : item
-            })
+            prev.map((item) => (item.id === creativeId ? { ...item, featuredImageUrls: featuredUrls } : item))
           )
         )
         if (previewIndex != null) restorePreviewUrl.current = url
@@ -297,7 +292,7 @@ export function VehicleAiCreativesGallery({
           creativeId: creative.id,
           imageIndex: index,
           filename: fileNameFor(creative.kindLabel, creative.variantLabel, index, urls.length, url),
-          featured: creative.featuredImageUrl === url,
+          featured: creative.featuredImageUrls.includes(url),
         })
       })
     }
@@ -481,7 +476,7 @@ export function VehicleAiCreativesGallery({
         return urls.map((url, index) => {
           const itemKey = `${creative.id}:${index}`
           const deleting = deletingKey === itemKey
-          const featured = creative.featuredImageUrl === url
+          const featured = creative.featuredImageUrls.includes(url)
           const featuring = featuringKey === itemKey
           return (
           <div
@@ -522,7 +517,7 @@ export function VehicleAiCreativesGallery({
                   ? 'border-amber-300 bg-amber-400 text-white hover:bg-amber-500'
                   : 'border-white/40 bg-black/55 text-white hover:bg-black/75'
               }`}
-              title={featured ? 'Quitar destacada' : 'Destacar esta imagen (solo una)'}
+              title={featured ? 'Quitar destacada' : 'Destacar esta imagen (máximo dos)'}
               aria-label={featured ? 'Quitar destacada' : 'Destacar imagen'}
             >
               {featuring ? (

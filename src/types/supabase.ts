@@ -2704,6 +2704,7 @@ export type Database = {
           creative_kind: string
           error_message: string | null
           featured_image_url: string | null
+          featured_image_urls: string[]
           id: string
           image_url: string | null
           image_urls: Json | null
@@ -2717,6 +2718,7 @@ export type Database = {
           creative_kind: string
           error_message?: string | null
           featured_image_url?: string | null
+          featured_image_urls?: string[]
           id?: string
           image_url?: string | null
           image_urls?: Json | null
@@ -2730,6 +2732,7 @@ export type Database = {
           creative_kind?: string
           error_message?: string | null
           featured_image_url?: string | null
+          featured_image_urls?: string[]
           id?: string
           image_url?: string | null
           image_urls?: Json | null

@@ -111,7 +111,8 @@ export async function PATCH(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno'
     console.error('[inventory-creatives PATCH]', message)
-    const status = message === 'Imagen no encontrada' ? 404 : 500
+    const status =
+      message === 'Imagen no encontrada' ? 404 : message.startsWith('Ya hay') ? 409 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

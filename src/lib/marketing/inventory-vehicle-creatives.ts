@@ -13,7 +13,7 @@ export type VehicleCreativeItem = {
   errorMessage: string | null
   imageUrl: string | null
   images: string[]
-  featuredImageUrl: string | null
+  featuredImageUrls: string[]
   createdAt: string
   updatedAt: string
   kindLabel: string
@@ -96,14 +96,16 @@ type CreativeRow = {
   error_message: string | null
   image_url: string | null
   image_urls: Json | null
-  featured_image_url: string | null
+  featured_image_urls: string[] | null
   created_at: string
   updated_at: string
 }
 
+export const MAX_FEATURED_IMAGES_PER_VEHICLE = 2
+
 function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
   const images = uniqueUrls(row.image_url, asUrlList(row.image_urls))
-  const featured = row.featured_image_url?.trim() || null
+  const featured = uniqueUrls(row.featured_image_urls ?? []).filter((url) => images.includes(url))
   return {
     id: row.id,
     vehicleId: row.vehicle_id,
@@ -113,7 +115,7 @@ function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
     errorMessage: row.error_message,
     imageUrl: row.image_url ?? images[0] ?? null,
     images,
-    featuredImageUrl: featured && images.includes(featured) ? featured : null,
+    featuredImageUrls: featured,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     kindLabel: labelCreativeKind(row.creative_kind),
@@ -122,7 +124,7 @@ function mapCreativeRow(row: CreativeRow): VehicleCreativeItem {
 }
 
 const CREATIVE_SELECT =
-  'id, vehicle_id, creative_kind, variant, status, error_message, image_url, image_urls, featured_image_url, created_at, updated_at'
+  'id, vehicle_id, creative_kind, variant, status, error_message, image_url, image_urls, featured_image_urls, created_at, updated_at'
 
 export async function fetchVehicleCreatives(vehicleId: string): Promise<VehicleCreativeItem[]> {
   const id = vehicleId.trim()
@@ -138,7 +140,7 @@ export async function fetchVehicleCreatives(vehicleId: string): Promise<VehicleC
   if (error) throw new Error(error.message)
 
   const items = (data ?? []).map(mapCreativeRow)
-  return items.sort((a, b) => Number(Boolean(b.featuredImageUrl)) - Number(Boolean(a.featuredImageUrl)))
+  return items.sort((a, b) => b.featuredImageUrls.length - a.featuredImageUrls.length)
 }
 
 export async function fetchVehicleCreativeById(creativeId: string): Promise<VehicleCreativeItem | null> {
@@ -228,7 +230,7 @@ export async function deleteVehicleCreativeImage(
     .update({
       image_url: remaining[0],
       image_urls: remaining,
-      featured_image_url: mapped.featuredImageUrl === urlToRemove ? null : mapped.featuredImageUrl,
+      featured_image_urls: mapped.featuredImageUrls.filter((url) => url !== urlToRemove),
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
@@ -241,7 +243,7 @@ export async function setVehicleCreativeImageFeatured(
   creativeId: string,
   imageIndex: number,
   featured: boolean
-): Promise<{ featuredImageUrl: string | null }> {
+): Promise<{ featuredImageUrls: string[] }> {
   const id = creativeId.trim()
   if (!id) throw new Error('Falta creativeId')
 
@@ -259,32 +261,33 @@ export async function setVehicleCreativeImageFeatured(
   const url = mapped.images[Math.max(0, imageIndex)]
   if (!url) throw new Error('Imagen no encontrada')
 
-  const now = new Date().toISOString()
+  const current = mapped.featuredImageUrls
+  const isFeatured = current.includes(url)
+  if (featured === isFeatured) return { featuredImageUrls: current }
 
-  if (!featured) {
-    if (mapped.featuredImageUrl !== url) return { featuredImageUrl: mapped.featuredImageUrl }
-    const { error: clearErr } = await supabase
+  if (featured) {
+    const { data: siblings, error: siblingsErr } = await supabase
       .from('inventory_vehicle_creatives')
-      .update({ featured_image_url: null, updated_at: now })
-      .eq('id', id)
-    if (clearErr) throw new Error(clearErr.message)
-    return { featuredImageUrl: null }
+      .select(CREATIVE_SELECT)
+      .eq('vehicle_id', mapped.vehicleId)
+    if (siblingsErr) throw new Error(siblingsErr.message)
+    const total = (siblings ?? [])
+      .map(mapCreativeRow)
+      .reduce((sum, item) => sum + item.featuredImageUrls.length, 0)
+    if (total >= MAX_FEATURED_IMAGES_PER_VEHICLE) {
+      throw new Error(
+        `Ya hay ${MAX_FEATURED_IMAGES_PER_VEHICLE} imágenes destacadas. Quita una para destacar otra.`
+      )
+    }
   }
 
-  const { error: othersErr } = await supabase
-    .from('inventory_vehicle_creatives')
-    .update({ featured_image_url: null, updated_at: now })
-    .eq('vehicle_id', mapped.vehicleId)
-    .neq('id', id)
-    .not('featured_image_url', 'is', null)
-  if (othersErr) throw new Error(othersErr.message)
-
+  const next = featured ? [...current, url] : current.filter((item) => item !== url)
   const { error: updErr } = await supabase
     .from('inventory_vehicle_creatives')
-    .update({ featured_image_url: url, updated_at: now })
+    .update({ featured_image_urls: next, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (updErr) throw new Error(updErr.message)
-  return { featuredImageUrl: url }
+  return { featuredImageUrls: next }
 }
 
 const CREATIVES_FETCH_BATCH = 1000
