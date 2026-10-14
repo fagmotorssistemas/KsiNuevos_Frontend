@@ -19,6 +19,7 @@ import {
     BadgeDollarSign, // Financiamiento
     TrendingUp,
     PieChart,
+    Funnel,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchRequestStats } from '@/services/leads.service';
@@ -38,6 +39,7 @@ type MenuItem = {
 
 const menuItems: MenuItem[] = [
     { name: 'Progreso', href: '/leads/progreso', icon: TrendingUp },
+    { name: 'Embudo', href: '/leads/embudo', icon: Funnel },
     { name: 'Leads', href: '/leads', icon: UserPlus, exact: true },
     { name: 'Showroom', href: '/showroom', icon: Store },
     { name: 'Agenda', href: '/agenda', icon: CalendarDays },
