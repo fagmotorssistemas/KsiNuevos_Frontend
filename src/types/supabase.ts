@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -32,6 +32,30 @@ export type Database = {
           created_at?: string | null
           id?: number
           name?: string
+        }
+        Relationships: []
+      }
+      agent_prompts_bot: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: number
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: number
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: number
+          name?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1216,6 +1240,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_competitive_vehicle"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       competitive_positioning: {
@@ -1283,6 +1314,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_positioning_inventory_vehicle"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -1495,6 +1533,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_proformas_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -1812,6 +1857,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dev_daily_tracking: {
+        Row: {
+          avances: string
+          bloqueos: string
+          created_at: string
+          created_by: string | null
+          estado: string
+          fecha: string
+          fecha_entrega: string | null
+          id: string
+          pendientes: string
+          proximo_paso: string
+          proyecto: string
+          responsable: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          avances?: string
+          bloqueos?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha?: string
+          fecha_entrega?: string | null
+          id?: string
+          pendientes?: string
+          proximo_paso?: string
+          proyecto: string
+          responsable: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          avances?: string
+          bloqueos?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha?: string
+          fecha_entrega?: string | null
+          id?: string
+          pendientes?: string
+          proximo_paso?: string
+          proyecto?: string
+          responsable?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       diccionario_codigos_inventario: {
         Row: {
@@ -2231,6 +2327,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "interested_cars_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       inventario_ficha_bot: {
@@ -2252,6 +2355,7 @@ export type Database = {
           inventory_id: string
           linea: string | null
           linea_corregida: string | null
+          linea_origen: string | null
           modelo_llm: string | null
           motor: string | null
           puertas: number | null
@@ -2281,6 +2385,7 @@ export type Database = {
           inventory_id: string
           linea?: string | null
           linea_corregida?: string | null
+          linea_origen?: string | null
           modelo_llm?: string | null
           motor?: string | null
           puertas?: number | null
@@ -2310,6 +2415,7 @@ export type Database = {
           inventory_id?: string
           linea?: string | null
           linea_corregida?: string | null
+          linea_origen?: string | null
           modelo_llm?: string | null
           motor?: string | null
           puertas?: number | null
@@ -2328,6 +2434,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_ficha_bot_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: true
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -2553,6 +2666,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_auto_publication_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       inventory_price_history: {
@@ -2593,6 +2713,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_price_history_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -2635,6 +2762,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_ai_informes_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -2696,6 +2830,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_vehicle_contraste_consultas_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       inventory_vehicle_creatives: {
@@ -2749,6 +2890,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_vehicle_creatives_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       inventory_vehicle_debts: {
@@ -2792,6 +2940,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_debts_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -2853,6 +3008,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_activity_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -2933,6 +3095,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_document_ai_reports_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -3042,6 +3211,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "inventory_vehicle_documents_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "inventory_vehicle_documents_uploaded_by_fkey"
             columns: ["uploaded_by"]
             isOneToOne: false
@@ -3101,6 +3277,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_events_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -3207,6 +3390,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_vehicle_fines_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       inventory_vehicle_internal_notes: {
@@ -3251,6 +3441,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_internal_notes_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -3301,6 +3498,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_vehicle_owners_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -3501,6 +3705,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventoryoracle_embeddings_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       kommo_msgs_procesados: {
@@ -3543,6 +3754,7 @@ export type Database = {
           session_id: string
           updated_at: string
           vehiculos_consultados: string[]
+          vehiculos_etapa: Json
         }
         Insert: {
           analizado_hasta?: string | null
@@ -3568,6 +3780,7 @@ export type Database = {
           session_id: string
           updated_at?: string
           vehiculos_consultados?: string[]
+          vehiculos_etapa?: Json
         }
         Update: {
           analizado_hasta?: string | null
@@ -3593,6 +3806,7 @@ export type Database = {
           session_id?: string
           updated_at?: string
           vehiculos_consultados?: string[]
+          vehiculos_etapa?: Json
         }
         Relationships: [
           {
@@ -3867,6 +4081,50 @@ export type Database = {
           },
         ]
       }
+      lead_senales: {
+        Row: {
+          detectada_at: string
+          fragmento: string | null
+          id: number
+          lead_id: number
+          mes: string
+          origen: string
+          senal: string
+          usuario: string | null
+          valor: Json | null
+        }
+        Insert: {
+          detectada_at?: string
+          fragmento?: string | null
+          id?: number
+          lead_id: number
+          mes: string
+          origen?: string
+          senal: string
+          usuario?: string | null
+          valor?: Json | null
+        }
+        Update: {
+          detectada_at?: string
+          fragmento?: string | null
+          id?: number
+          lead_id?: number
+          mes?: string
+          origen?: string
+          senal?: string
+          usuario?: string | null
+          valor?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_senales_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_status_history: {
         Row: {
           assigned_to: string | null
@@ -3922,23 +4180,38 @@ export type Database = {
       lead_temperature_history: {
         Row: {
           campaign_month: string
+          cierre: Database["public"]["Enums"]["lead_temperature"] | null
+          cierre_at: string | null
           id: number
           lead_id: number
+          pico_at: string | null
+          pico_motivo: string | null
           recorded_at: string
+          senales_mes: Json | null
           temperature: Database["public"]["Enums"]["lead_temperature"]
         }
         Insert: {
           campaign_month: string
+          cierre?: Database["public"]["Enums"]["lead_temperature"] | null
+          cierre_at?: string | null
           id?: never
           lead_id: number
+          pico_at?: string | null
+          pico_motivo?: string | null
           recorded_at?: string
+          senales_mes?: Json | null
           temperature: Database["public"]["Enums"]["lead_temperature"]
         }
         Update: {
           campaign_month?: string
+          cierre?: Database["public"]["Enums"]["lead_temperature"] | null
+          cierre_at?: string | null
           id?: never
           lead_id?: number
+          pico_at?: string | null
+          pico_motivo?: string | null
           recorded_at?: string
+          senales_mes?: Json | null
           temperature?: Database["public"]["Enums"]["lead_temperature"]
         }
         Relationships: [
@@ -3960,6 +4233,7 @@ export type Database = {
           bot_apagado_at: string | null
           budget: string | null
           cedula: string | null
+          ciudad_cliente: string | null
           contact_id: number | null
           created_at: string | null
           day_detected: string | null
@@ -3992,6 +4266,7 @@ export type Database = {
           source: Database["public"]["Enums"]["acquisition_source"] | null
           status: Database["public"]["Enums"]["lead_status"] | null
           temperature: Database["public"]["Enums"]["lead_temperature"] | null
+          temperature_motivo: string | null
           time_reference: string | null
           ultimo_mensaje_ignorado: string | null
           updated_at: string | null
@@ -4004,6 +4279,7 @@ export type Database = {
           bot_apagado_at?: string | null
           budget?: string | null
           cedula?: string | null
+          ciudad_cliente?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -4036,6 +4312,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
+          temperature_motivo?: string | null
           time_reference?: string | null
           ultimo_mensaje_ignorado?: string | null
           updated_at?: string | null
@@ -4048,6 +4325,7 @@ export type Database = {
           bot_apagado_at?: string | null
           budget?: string | null
           cedula?: string | null
+          ciudad_cliente?: string | null
           contact_id?: number | null
           created_at?: string | null
           day_detected?: string | null
@@ -4080,6 +4358,7 @@ export type Database = {
           source?: Database["public"]["Enums"]["acquisition_source"] | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           temperature?: Database["public"]["Enums"]["lead_temperature"] | null
+          temperature_motivo?: string | null
           time_reference?: string | null
           ultimo_mensaje_ignorado?: string | null
           updated_at?: string | null
@@ -4382,6 +4661,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "marketing_campaign_vehicles_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       marketing_dev_request_attachments: {
@@ -4623,6 +4909,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "marketing_planner_event_vehicles_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       marketing_planner_events: {
@@ -4703,6 +4996,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_planner_events_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "marketing_planner_events_owner_id_fkey"
@@ -4889,6 +5189,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "marketing_planner_tasks_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "marketing_planner_tasks_linked_event_id_fkey"
             columns: ["linked_event_id"]
             isOneToOne: false
@@ -4977,6 +5284,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "marketing_video_plan_items_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       meta_ad_pause_log: {
@@ -5023,6 +5337,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_ad_pause_log_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -5095,6 +5416,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "meta_ad_vehicle_metrics_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       meta_campaign_metrics: {
@@ -5163,6 +5491,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "meta_campaign_metrics_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       meta_video_metrics: {
@@ -5227,6 +5562,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_video_metrics_inventory_vehicle_id_fkey"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -5481,6 +5823,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "noticiero_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       noticiero_jobs: {
@@ -5567,6 +5916,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "noticiero_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       noticiero_publishing_queue: {
@@ -5617,6 +5973,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "noticiero_publishing_queue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -5737,6 +6100,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pilar1_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "pilar1_assignments_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
@@ -5834,6 +6204,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pilar1_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "pilar1_scripts_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
@@ -5868,6 +6245,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar1_vehicle_requeue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -6200,6 +6584,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pilar4_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "pilar4_assignments_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
@@ -6295,6 +6686,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilar4_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "pilar4_scripts_vendedor_id_fkey"
@@ -6588,11 +6986,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reel_format_assignments_vehicle_id_2_fkey"
+            columns: ["vehicle_id_2"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "reel_format_assignments_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_format_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "reel_format_assignments_vendedor_id_fkey"
@@ -6708,11 +7120,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reel_scripts_vehicle_id_2_fkey"
+            columns: ["vehicle_id_2"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "reel_scripts_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "reel_scripts_vendedor_id_fkey"
@@ -6772,6 +7198,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reel_vehicle_usage_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -7239,6 +7672,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "script_vehicle_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "script_vehicle_assignments_vendedor_id_fkey"
             columns: ["vendedor_id"]
             isOneToOne: false
@@ -7528,6 +7968,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "showroom_visits_inventoryoracle_id_fkey"
+            columns: ["inventoryoracle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "showroom_visits_salesperson_id_fkey"
             columns: ["salesperson_id"]
             isOneToOne: false
@@ -7598,6 +8045,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_weekly_publication_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
         ]
       }
@@ -8801,6 +9255,13 @@ export type Database = {
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "video_automation_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
         ]
       }
       video_jobs_v2: {
@@ -8927,6 +9388,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "video_jobs_v2_inventory_vehicle_id_fkey"
+            columns: ["inventory_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
+          },
+          {
             foreignKeyName: "video_jobs_v2_video_script_id_fkey"
             columns: ["video_script_id"]
             isOneToOne: false
@@ -8976,6 +9444,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_publishing_queue_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "video_publishing_queue_video_id_fkey"
@@ -9164,6 +9639,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inventoryoracle"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_scripts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "v_auditoria_carro"
+            referencedColumns: ["inventory_id"]
           },
           {
             foreignKeyName: "video_scripts_vendedor_id_fkey"
@@ -9536,6 +10018,41 @@ export type Database = {
       }
     }
     Views: {
+      v_auditoria_carro: {
+        Row: {
+          agendo: number | null
+          brand: string | null
+          cambios_precio: number | null
+          conversaciones: number | null
+          dias_en_patio: number | null
+          entrada_prom: number | null
+          gasto_ads: number | null
+          inventory_id: string | null
+          leads_ads: number | null
+          location: string | null
+          model: string | null
+          obj_carro: number | null
+          obj_plata: number | null
+          objecion_top: string | null
+          oferta_bajo_precio_pct: number | null
+          oferta_max: number | null
+          oferta_prom: number | null
+          ofertas: number | null
+          pendientes_bot: number | null
+          pidieron_rebaja: number | null
+          pidio_cuota: number | null
+          presupuesto_prom: number | null
+          price: number | null
+          solo_un_carro: number | null
+          status: string | null
+          test_drives: number | null
+          vio_precio: number | null
+          visitas_patio: number | null
+          visito_embudo: number | null
+          year: number | null
+        }
+        Relationships: []
+      }
       v_capi_health_24h: {
         Row: {
           enviados: number | null
@@ -9679,6 +10196,8 @@ export type Database = {
           session_id: string
           transcript: string
           vehiculos: string[]
+          vehiculos_etapa: Json
+          vehiculos_lista: string
         }[]
       }
       fn_conversation_sql_self_check: { Args: never; Returns: undefined }
@@ -9769,6 +10288,7 @@ export type Database = {
           p_resumen: string
           p_session_id: string
           p_vehiculos: string[]
+          p_vehiculos_etapa?: Json
         }
         Returns: undefined
       }
@@ -9987,27 +10507,6 @@ export type Database = {
         }
         Returns: {
           lead_id: number
-        }[]
-      }
-      reassign_cold_warm_leads_to_juan_vazquez: {
-        Args: never
-        Returns: {
-          leads_transferred: number
-          timestamp_executed: string
-        }[]
-      }
-      reassign_leads_without_resume_to_juan_vazquez: {
-        Args: never
-        Returns: {
-          leads_transferred: number
-          timestamp_executed: string
-        }[]
-      }
-      reassign_vanessa_leads_to_juan_temporal: {
-        Args: never
-        Returns: {
-          leads_transferred: number
-          timestamp_executed: string
         }[]
       }
       refresh_daily_progress_snapshot: {

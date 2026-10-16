@@ -21,6 +21,12 @@ type DevRequestsSchema = {
         Update: Record<string, unknown>
         Relationships: []
       }
+      dev_daily_tracking: {
+        Row: Record<string, unknown>
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+        Relationships: []
+      }
     }
   }
 }

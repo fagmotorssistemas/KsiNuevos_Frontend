@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { twMerge } from 'tailwind-merge'
+import { useAuth } from '@/hooks/useAuth'
+import { devRequestsDb } from '@/lib/marketing-dev-requests/db'
 
 type TrackingStatus = 'pendiente' | 'en_progreso' | 'en_pruebas' | 'bloqueado' | 'terminado'
 
@@ -21,7 +23,9 @@ interface TrackingEntry {
   fechaEntrega: string
 }
 
-const STORAGE_KEY = 'ksi:dev-daily-tracking'
+const TABLE = 'dev_daily_tracking'
+const LEGACY_STORAGE_KEY = 'ksi:dev-daily-tracking'
+const LEGACY_MIN_DATE = '2026-10-15'
 
 const TEAM = [
   { nombre: 'Darwin', proyecto: 'SKYTRACK' },
@@ -52,7 +56,10 @@ const DAILY_QUESTIONS = [
   '¿Qué vas a entregar mañana?',
 ]
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const formatDate = (iso: string) => {
   if (!iso) return '—'
@@ -73,55 +80,43 @@ const emptyEntry = (): Omit<TrackingEntry, 'id'> => ({
   fechaEntrega: '',
 })
 
-const seedEntries = (): TrackingEntry[] => [
-  {
-    id: 'seed-darwin',
-    titulo: 'Respaldo de base de datos',
-    fecha: today(),
-    responsable: 'Darwin',
-    proyecto: 'SKYTRACK',
-    estado: 'en_pruebas',
-    avances: 'Se implementó el respaldo de la base de datos y se verificó la generación del archivo.',
-    pendientes: 'Falta probar la restauración de los datos respaldados.',
-    bloqueos: 'No se puede probar la restauración porque falta acceso al servidor.',
-    proximoPaso: 'Restaurar una copia en un entorno de prueba y documentar el resultado.',
-    fechaEntrega: '',
-  },
-  {
-    id: 'seed-pablo',
-    titulo: 'Secciones de la página',
-    fecha: today(),
-    responsable: 'Pablo',
-    proyecto: 'Página web',
-    estado: 'en_progreso',
-    avances: 'Secciones desarrolladas y cambios visuales realizados.',
-    pendientes: 'Detallar secciones pendientes y errores.',
-    bloqueos: '',
-    proximoPaso: 'Terminar las secciones pendientes.',
-    fechaEntrega: '',
-  },
-  {
-    id: 'seed-carlos',
-    titulo: 'Flujos de automatización',
-    fecha: today(),
-    responsable: 'Carlos',
-    proyecto: 'Automatización',
-    estado: 'en_progreso',
-    avances: 'Flujos desarrollados y pruebas ejecutadas.',
-    pendientes: 'Registrar fallos de integración y pruebas faltantes.',
-    bloqueos: '',
-    proximoPaso: 'Corregir los fallos de integración detectados.',
-    fechaEntrega: '',
-  },
-]
+const fromRow = (r: Record<string, unknown>): TrackingEntry => ({
+  id: String(r.id),
+  titulo: String(r.titulo ?? ''),
+  fecha: String(r.fecha ?? ''),
+  responsable: String(r.responsable ?? ''),
+  proyecto: String(r.proyecto ?? ''),
+  estado: (r.estado as TrackingStatus) ?? 'en_progreso',
+  avances: String(r.avances ?? ''),
+  pendientes: String(r.pendientes ?? ''),
+  bloqueos: String(r.bloqueos ?? ''),
+  proximoPaso: String(r.proximo_paso ?? ''),
+  fechaEntrega: r.fecha_entrega ? String(r.fecha_entrega) : '',
+})
 
-const loadEntries = (): TrackingEntry[] => {
-  if (typeof window === 'undefined') return []
+const toRow = (e: Omit<TrackingEntry, 'id'>) => ({
+  titulo: e.titulo.trim(),
+  fecha: e.fecha || today(),
+  responsable: e.responsable,
+  proyecto: e.proyecto,
+  estado: e.estado,
+  avances: e.avances.trim(),
+  pendientes: e.pendientes.trim(),
+  bloqueos: e.bloqueos.trim(),
+  proximo_paso: e.proximoPaso.trim(),
+  fecha_entrega: e.fechaEntrega || null,
+})
+
+/** Reportes que quedaron solo en el navegador antes de existir la tabla (se omiten los de ejemplo y los del 14). */
+const readLegacyEntries = (): TrackingEntry[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as TrackingEntry[]) : seedEntries()
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (!raw) return []
+    return (JSON.parse(raw) as TrackingEntry[]).filter(
+      (e) => !e.id.startsWith('seed-') && e.fecha >= LEGACY_MIN_DATE && e.titulo?.trim(),
+    )
   } catch {
-    return seedEntries()
+    return []
   }
 }
 
@@ -153,15 +148,52 @@ function CellText({ value, tone = 'default' }: { value: string; tone?: 'default'
 }
 
 export function DailyTracking() {
-  const [entries, setEntries] = useState<TrackingEntry[]>(loadEntries)
+  const { supabase, user } = useAuth()
+  const [entries, setEntries] = useState<TrackingEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [view, setView] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [draft, setDraft] = useState(emptyEntry)
+  const initialized = useRef(false)
+
+  const fetchEntries = useCallback(async () => {
+    if (!supabase) return
+    const { data, error } = await devRequestsDb(supabase)
+      .from(TABLE)
+      .select('*')
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('[dev-daily-tracking]', error)
+      toast.error('No se pudieron cargar los reportes')
+    } else {
+      setEntries((data ?? []).map(fromRow))
+    }
+    setLoading(false)
+  }, [supabase])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
-  }, [entries])
+    if (!supabase || !user || initialized.current) return
+    initialized.current = true
+    const run = async () => {
+      const legacy = readLegacyEntries()
+      if (legacy.length > 0) {
+        const { error } = await devRequestsDb(supabase).from(TABLE).insert(legacy.map(toRow))
+        if (error) {
+          console.error('[dev-daily-tracking legacy]', error)
+        } else {
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+          toast.success(`${legacy.length} reporte(s) guardados en este navegador se subieron a la base`)
+        }
+      } else {
+        localStorage.removeItem(LEGACY_STORAGE_KEY)
+      }
+      await fetchEntries()
+    }
+    void run()
+  }, [supabase, user, fetchEntries])
 
   const filtered = useMemo(
     () =>
@@ -189,22 +221,51 @@ export function DailyTracking() {
     setDraft((d) => ({ ...d, responsable: nombre, proyecto: member?.proyecto ?? d.proyecto }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!supabase) return
     if (!draft.titulo.trim() || !draft.avances.trim()) {
       toast.error('Completa al menos la tarea y los avances de hoy')
       return
     }
-    setEntries((prev) => [{ ...draft, id: crypto.randomUUID() }, ...prev])
+    setSaving(true)
+    const { data, error } = await devRequestsDb(supabase).from(TABLE).insert(toRow(draft)).select('*').single()
+    setSaving(false)
+    if (error || !data) {
+      console.error('[dev-daily-tracking insert]', error)
+      toast.error('No se pudo guardar el reporte')
+      return
+    }
+    setEntries((prev) => [fromRow(data), ...prev])
     setDraft(emptyEntry())
     setShowForm(false)
     toast.success('Reporte registrado')
   }
 
-  const handleStatusChange = (id: string, estado: TrackingStatus) =>
+  const handleStatusChange = async (id: string, estado: TrackingStatus) => {
+    if (!supabase) return
+    const previous = entries
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, estado } : e)))
+    const { error } = await devRequestsDb(supabase).from(TABLE).update({ estado }).eq('id', id)
+    if (error) {
+      console.error('[dev-daily-tracking update]', error)
+      setEntries(previous)
+      toast.error('No se pudo actualizar el estado')
+    }
+  }
 
-  const handleDelete = (id: string) => setEntries((prev) => prev.filter((e) => e.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!supabase) return
+    if (!window.confirm('¿Eliminar este reporte?')) return
+    const previous = entries
+    setEntries((prev) => prev.filter((e) => e.id !== id))
+    const { error } = await devRequestsDb(supabase).from(TABLE).delete().eq('id', id)
+    if (error) {
+      console.error('[dev-daily-tracking delete]', error)
+      setEntries(previous)
+      toast.error('No se pudo eliminar el reporte')
+    }
+  }
 
   const views = [{ id: 'all', label: 'Vista general' }, ...TEAM.map((t) => ({ id: t.nombre, label: t.nombre }))]
 
@@ -408,8 +469,10 @@ export function DailyTracking() {
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-bold text-white hover:bg-violet-700"
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-60"
             >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Guardar reporte
             </button>
           </div>
@@ -433,7 +496,13 @@ export function DailyTracking() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-400">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center text-sm text-slate-400">
                     No hay reportes para esta vista.
