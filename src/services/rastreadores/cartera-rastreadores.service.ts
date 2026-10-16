@@ -1,5 +1,10 @@
+import { limpiarTexto } from '@/utils/rastreo-format';
 import { supabase } from './supabaseClient';
 import { getListaContratosGPS } from './contratos.service';
+
+function normNota(nota: string | null | undefined): string {
+    return limpiarTexto(nota).toLowerCase().replace(/[\s\-_.]/g, '');
+}
 
 export interface ItemCarteraRastreador {
     id: string;
@@ -57,6 +62,7 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
                 gps_id,
                 cliente_id,
                 motivo_baja,
+                es_venta_externa,
                 cliente_externo:clientes_externos(nombre_completo, identificacion),
                 gps_inventario(imei)
             `)
@@ -81,9 +87,20 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
 
         const resultados: ItemCarteraRastreador[] = [];
 
+        // Ventas K-SI: el precio válido es el de Oracle; la fila de ventas_rastreador solo aporta el IMEI.
+        const autos = contratosOracle.filter((c) => c.origen === 'AUTO' && (c.totalRastreador ?? 0) > 0);
+        const notasOracle = new Set(autos.map((c) => normNota(c.notaVenta)).filter(Boolean));
+        const imeiPorNota = new Map<string, string>();
+
         // --- Procesar ventas_rastreador (fuente 1) ---
         for (const v of ventas ?? []) {
             if (String((v as any).motivo_baja ?? '') === 'CONFUSION') continue;
+            const nota = normNota((v as any).nota_venta);
+            if (!(v as any).es_venta_externa && nota && notasOracle.has(nota)) {
+                const gps = Array.isArray((v as any).gps_inventario) ? (v as any).gps_inventario[0] : (v as any).gps_inventario;
+                if (gps?.imei && !imeiPorNota.has(nota)) imeiPorNota.set(nota, gps.imei);
+                continue;
+            }
             const clienteExterno = Array.isArray((v as any).cliente_externo) ? (v as any).cliente_externo[0] : (v as any).cliente_externo;
             const gpsInv = Array.isArray((v as any).gps_inventario) ? (v as any).gps_inventario[0] : (v as any).gps_inventario;
             const nota_venta = (v as any).nota_venta ?? null;
@@ -180,9 +197,7 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
         }
 
         // --- Ventas Oracle (AUTO) — misma lista que RastreoList (fuente 2) ---
-        const autos = contratosOracle.filter((c) => c.origen === 'AUTO');
         for (const c of autos) {
-            if (!c.totalRastreador || c.totalRastreador <= 0) continue;
             const tipoPago = (c.numeroCuotas && c.numeroCuotas > 0) ? 'CREDITO' : 'CONTADO';
             const totalPorCobrar = tipoPago === 'CREDITO' && (c.totalFinal ?? 0) > 0 ? (c.totalFinal ?? 0) : 0;
             resultados.push({
@@ -197,7 +212,7 @@ export async function getCarteraRastreadores(asesorId?: string | null): Promise<
                 cliente_nombre: c.cliente ?? null,
                 nombre_concesionaria: null,
                 modelo: c.modelo ?? null,
-                imei: null,
+                imei: imeiPorNota.get(normNota(c.notaVenta)) ?? null,
                 proxima_cuota_fecha: null,
                 proxima_cuota_valor: c.cuotaMensual ?? null,
                 dias_para_cobro: null,
