@@ -341,10 +341,11 @@ export function AppointmentModal({
 
     useEffect(() => {
         if (!isOpen) return;
-        if (isWalkInNew || isEditing || showVehiclePicker) {
+        const botWithoutVehicle = isFromBotSuggestion && !selectedVehicle && !vehiclesLoading;
+        if (isWalkInNew || isEditing || showVehiclePicker || botWithoutVehicle) {
             loadCatalog();
         }
-    }, [isOpen, isWalkInNew, isEditing, showVehiclePicker, loadCatalog]);
+    }, [isOpen, isWalkInNew, isEditing, showVehiclePicker, isFromBotSuggestion, selectedVehicle, vehiclesLoading, loadCatalog]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -595,7 +596,10 @@ export function AppointmentModal({
         }, 300);
     };
 
-    const showInventorySearch = isWalkInNew || isEditing || (isFromBotSuggestion && showVehiclePicker);
+    const showInventorySearch =
+        isWalkInNew ||
+        isEditing ||
+        (isFromBotSuggestion && (showVehiclePicker || (!selectedVehicle && !vehiclesLoading)));
 
     if (!isOpen) return null;
 
@@ -777,7 +781,7 @@ export function AppointmentModal({
                                                 </div>
                                             )}
                                         </div>
-                                        {isFromBotSuggestion && (
+                                        {isFromBotSuggestion && selectedVehicle && (
                                             <button
                                                 type="button"
                                                 onClick={() => {
