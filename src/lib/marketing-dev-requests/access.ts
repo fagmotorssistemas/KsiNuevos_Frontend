@@ -1,6 +1,8 @@
-/** Admin ve toda la bandeja; el resto solo solicitudes de su área/rol. */
+const DEV_REQUESTS_ADMIN_ROLES = new Set(['admin', 'admin_programacion'])
+
+/** Admin y programación ven toda la bandeja; el resto solo solicitudes de su área/rol. */
 export function isDevRequestsAdmin(role: string | null | undefined): boolean {
-  return (role ?? '').toLowerCase().trim() === 'admin'
+  return DEV_REQUESTS_ADMIN_ROLES.has((role ?? '').toLowerCase().trim())
 }
 
 /** Roles que comparten la misma área operativa (requester_role en BD). */
