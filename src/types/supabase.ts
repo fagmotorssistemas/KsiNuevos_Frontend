@@ -3735,9 +3735,11 @@ export type Database = {
           cerrada: boolean
           cerrada_at: string | null
           created_at: string
+          entrada_declarada: string | null
           entrada_disponible: number | null
           etapa_max: number
           forma_pago: string | null
+          fuente: string
           id: string
           lead_id: number | null
           objecion_evidencia: string | null
@@ -3761,9 +3763,11 @@ export type Database = {
           cerrada?: boolean
           cerrada_at?: string | null
           created_at?: string
+          entrada_declarada?: string | null
           entrada_disponible?: number | null
           etapa_max?: number
           forma_pago?: string | null
+          fuente?: string
           id?: string
           lead_id?: number | null
           objecion_evidencia?: string | null
@@ -3787,9 +3791,11 @@ export type Database = {
           cerrada?: boolean
           cerrada_at?: string | null
           created_at?: string
+          entrada_declarada?: string | null
           entrada_disponible?: number | null
           etapa_max?: number
           forma_pago?: string | null
+          fuente?: string
           id?: string
           lead_id?: number | null
           objecion_evidencia?: string | null
@@ -4231,7 +4237,6 @@ export type Database = {
           behavior_signals: Json | null
           bot_apagado: boolean
           bot_apagado_at: string | null
-          budget: string | null
           cedula: string | null
           ciudad_cliente: string | null
           contact_id: number | null
@@ -4240,7 +4245,6 @@ export type Database = {
           email: string | null
           fecha_ultimo_contacto: string | null
           felicitacion_compra_enviada: boolean | null
-          financing: boolean | null
           fotos_enviadas_at: string | null
           handoff_resumen: string | null
           handoff_transcript: Json | null
@@ -4257,7 +4261,6 @@ export type Database = {
           nombre_cedula: string | null
           origen: string | null
           phone: string
-          presupuesto_cliente: string | null
           quiere_llamada: boolean | null
           recordatorio_sugerencia_enviado: boolean | null
           respondio_post_fotos: boolean | null
@@ -4277,7 +4280,6 @@ export type Database = {
           behavior_signals?: Json | null
           bot_apagado?: boolean
           bot_apagado_at?: string | null
-          budget?: string | null
           cedula?: string | null
           ciudad_cliente?: string | null
           contact_id?: number | null
@@ -4286,7 +4288,6 @@ export type Database = {
           email?: string | null
           fecha_ultimo_contacto?: string | null
           felicitacion_compra_enviada?: boolean | null
-          financing?: boolean | null
           fotos_enviadas_at?: string | null
           handoff_resumen?: string | null
           handoff_transcript?: Json | null
@@ -4303,7 +4304,6 @@ export type Database = {
           nombre_cedula?: string | null
           origen?: string | null
           phone?: string
-          presupuesto_cliente?: string | null
           quiere_llamada?: boolean | null
           recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
@@ -4323,7 +4323,6 @@ export type Database = {
           behavior_signals?: Json | null
           bot_apagado?: boolean
           bot_apagado_at?: string | null
-          budget?: string | null
           cedula?: string | null
           ciudad_cliente?: string | null
           contact_id?: number | null
@@ -4332,7 +4331,6 @@ export type Database = {
           email?: string | null
           fecha_ultimo_contacto?: string | null
           felicitacion_compra_enviada?: boolean | null
-          financing?: boolean | null
           fotos_enviadas_at?: string | null
           handoff_resumen?: string | null
           handoff_transcript?: Json | null
@@ -4349,7 +4347,6 @@ export type Database = {
           nombre_cedula?: string | null
           origen?: string | null
           phone?: string
-          presupuesto_cliente?: string | null
           quiere_llamada?: boolean | null
           recordatorio_sugerencia_enviado?: boolean | null
           respondio_post_fotos?: boolean | null
@@ -4372,6 +4369,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leads_dinero_viejo_respaldo: {
+        Row: {
+          budget: string | null
+          financing: boolean | null
+          lead_id: number | null
+          presupuesto_cliente: string | null
+          respaldado_en: string | null
+        }
+        Insert: {
+          budget?: string | null
+          financing?: boolean | null
+          lead_id?: number | null
+          presupuesto_cliente?: string | null
+          respaldado_en?: string | null
+        }
+        Update: {
+          budget?: string | null
+          financing?: boolean | null
+          lead_id?: number | null
+          presupuesto_cliente?: string | null
+          respaldado_en?: string | null
+        }
+        Relationships: []
       }
       leads_updated_at_audit: {
         Row: {
@@ -10061,6 +10082,28 @@ export type Database = {
         }
         Relationships: []
       }
+      v_lead_dinero: {
+        Row: {
+          entrada_declarada: string | null
+          entrada_disponible: number | null
+          entrada_fuente: string | null
+          forma_pago: string | null
+          forma_pago_fuente: string | null
+          lead_id: number | null
+          presupuesto_declarado: string | null
+          presupuesto_fuente: string | null
+          presupuesto_monto: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_conversation_analysis_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       view_scraper_price_statistics: {
         Row: {
           average_price: number | null
@@ -10165,6 +10208,26 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_auditoria_carro_leads: {
+        Args: { p_inventory_id: string }
+        Returns: {
+          entrada_declarada: string
+          entrada_disponible: number
+          entrada_fuente: string
+          fecha: string
+          forma_pago: string
+          lead_id: number
+          lead_id_kommo: string
+          nombre: string
+          oferta: number
+          oferta_cita: string
+          pidio_rebaja: boolean
+          presupuesto_declarado: string
+          presupuesto_fuente: string
+          presupuesto_monto: number
+          telefono: string
+        }[]
+      }
       fn_capi_internal_secret: { Args: never; Returns: string }
       fn_capi_normalize_phone: { Args: { p_phone: string }; Returns: string }
       fn_capi_post_catalog_search: {
@@ -10200,7 +10263,7 @@ export type Database = {
       }
       fn_conversation_sql_self_check: { Args: never; Returns: undefined }
       fn_count_leads_con_dinero: {
-        Args: { p_assigned_to?: string | null }
+        Args: { p_assigned_to?: string }
         Returns: number
       }
       fn_generate_plate_short: {
@@ -10215,11 +10278,17 @@ export type Database = {
           entrada_fuente: string | null
           forma_pago: string | null
           forma_pago_fuente: string | null
-          lead_id: number
+          lead_id: number | null
           presupuesto_declarado: string | null
           presupuesto_fuente: string | null
           presupuesto_monto: number | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "v_lead_dinero"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       fn_lead_tiene_dinero: { Args: { p_lead_id: number }; Returns: boolean }
       fn_leads_con_dinero: { Args: never; Returns: number[] }
@@ -10289,15 +10358,6 @@ export type Database = {
         Args: { p_owner: string }
         Returns: undefined
       }
-      fn_save_dinero_vendedor: {
-        Args: {
-          p_entrada: number | null
-          p_forma_pago: string | null
-          p_lead_id: number
-          p_presupuesto: number | null
-        }
-        Returns: undefined
-      }
       fn_save_conversation_analysis: {
         Args: {
           p_analizado_hasta: string
@@ -10316,6 +10376,15 @@ export type Database = {
           p_session_id: string
           p_vehiculos: string[]
           p_vehiculos_etapa?: Json
+        }
+        Returns: undefined
+      }
+      fn_save_dinero_vendedor: {
+        Args: {
+          p_entrada: number
+          p_forma_pago: string
+          p_lead_id: number
+          p_presupuesto: number
         }
         Returns: undefined
       }
