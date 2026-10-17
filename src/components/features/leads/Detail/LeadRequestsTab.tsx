@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Car, DollarSign, Loader2, CheckCircle2, AlertCircle, Calendar, Palette, FileText, BarChart3, ChevronDown, LayoutGrid } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, TextArea } from "./ui-components";
@@ -16,11 +16,26 @@ export function LeadRequestsTab({ lead }: { lead: LeadWithDetails }) {
     const [type, setType] = useState(""); // Nuevo campo
     const [yearMin, setYearMin] = useState("");
     const [yearMax, setYearMax] = useState("");
-    const [budgetMax, setBudgetMax] = useState((lead as any).presupuesto_cliente?.toString() || "");
+    const [budgetMax, setBudgetMax] = useState("");
     const [color, setColor] = useState("");
     const [notes, setNotes] = useState("");
     const [priority, setPriority] = useState("media");
     
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const { data } = await supabase.rpc('fn_lead_dinero', { p_lead_id: lead.id });
+            const row = Array.isArray(data) ? data[0] : data;
+            const monto = row?.presupuesto_monto;
+            if (!cancelled && monto != null) {
+                setBudgetMax((prev) => prev || String(monto));
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [lead.id, supabase]);
 
     // Estado de Errores
     const [errors, setErrors] = useState<{ [key: string]: string }>({});

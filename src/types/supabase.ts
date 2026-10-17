@@ -10025,7 +10025,6 @@ export type Database = {
           cambios_precio: number | null
           conversaciones: number | null
           dias_en_patio: number | null
-          entrada_prom: number | null
           gasto_ads: number | null
           inventory_id: string | null
           leads_ads: number | null
@@ -10041,7 +10040,6 @@ export type Database = {
           pendientes_bot: number | null
           pidieron_rebaja: number | null
           pidio_cuota: number | null
-          presupuesto_prom: number | null
           price: number | null
           solo_un_carro: number | null
           status: string | null
@@ -10201,10 +10199,30 @@ export type Database = {
         }[]
       }
       fn_conversation_sql_self_check: { Args: never; Returns: undefined }
+      fn_count_leads_con_dinero: {
+        Args: { p_assigned_to?: string | null }
+        Returns: number
+      }
       fn_generate_plate_short: {
         Args: { plate_input: string }
         Returns: string
       }
+      fn_lead_dinero: {
+        Args: { p_lead_id: number }
+        Returns: {
+          entrada_declarada: string | null
+          entrada_disponible: number | null
+          entrada_fuente: string | null
+          forma_pago: string | null
+          forma_pago_fuente: string | null
+          lead_id: number
+          presupuesto_declarado: string | null
+          presupuesto_fuente: string | null
+          presupuesto_monto: number | null
+        }[]
+      }
+      fn_lead_tiene_dinero: { Args: { p_lead_id: number }; Returns: boolean }
+      fn_leads_con_dinero: { Args: never; Returns: number[] }
       fn_list_conversation_batch: {
         Args: { p_limit: number }
         Returns: {
@@ -10269,6 +10287,15 @@ export type Database = {
       fn_purge_analyzed_chats: { Args: never; Returns: number }
       fn_release_analysis_lock: {
         Args: { p_owner: string }
+        Returns: undefined
+      }
+      fn_save_dinero_vendedor: {
+        Args: {
+          p_entrada: number | null
+          p_forma_pago: string | null
+          p_lead_id: number
+          p_presupuesto: number | null
+        }
         Returns: undefined
       }
       fn_save_conversation_analysis: {

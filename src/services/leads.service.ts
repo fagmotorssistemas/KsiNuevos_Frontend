@@ -130,6 +130,15 @@ const applyLeadIdInFilter = (query: any, ids: number[]) => {
     return query.or(parts.join(','));
 };
 
+/** Leads con presupuesto o entrada (lead_conversation_analysis: chat, rescate o vendedor). */
+const fetchLeadIdsConDinero = async (supabase: any): Promise<number[]> => {
+    const { data, error } = await supabase.rpc('fn_leads_con_dinero');
+    if (error) throw error;
+    return ((data ?? []) as unknown[])
+        .map((row) => Number(row && typeof row === 'object' ? Object.values(row)[0] : row))
+        .filter((id) => Number.isFinite(id));
+};
+
 const applyLeadIdNotInFilter = (query: any, ids: number[]) => {
     if (ids.length === 0) return query;
     if (ids.length <= LEAD_ID_IN_CHUNK) return query.not('id', 'in', `(${ids.join(',')})`);
@@ -821,7 +830,7 @@ export const fetchLeadsAPI = async (
 
         // Sub-filtro de presupuesto
         if (filters.hasBudget) {
-            query = query.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
+            idFilters.push(await fetchLeadIdsConDinero(supabase));
         }
 
         // Solo sin resumen (no respondidos)
@@ -917,9 +926,6 @@ export const fetchLeadsAPI = async (
         }
         if (resolvedTemperatureFilter) {
             respondedQuery = applyResolvedTemperatureFilter(respondedQuery, resolvedTemperatureFilter);
-        }
-        if (filters.hasBudget) {
-            respondedQuery = respondedQuery.not('presupuesto_cliente', 'is', null).gt('presupuesto_cliente', 0);
         }
         respondedQuery = applyCallStatusFilter(respondedQuery, filters);
         if (filters.status && filters.status !== 'all' && filters.status !== 'datos_pedidos' && filters.status !== 'asesoria_financiamiento') {
@@ -1315,19 +1321,11 @@ export const fetchTradeInLeadsCount = async (supabase: any, assignedTo: string) 
 // --- ALERTAS DE PRESUPUESTO ---
 export const fetchBudgetStats = async (supabase: any, assignedTo: string) => {
     try {
-        let query = supabase
-            .from('leads')
-            .select('id', { count: 'exact', head: true })
-            .not('presupuesto_cliente', 'is', null)
-            .gt('presupuesto_cliente', 0); // Opcional: solo mayores a 0 si consideran 0 como sin presupuesto, o quitar si solo not null
-
-        if (assignedTo && assignedTo !== 'all') {
-            query = query.eq('assigned_to', assignedTo);
-        }
-
-        const { count, error } = await query;
+        const { data, error } = await supabase.rpc('fn_count_leads_con_dinero', {
+            p_assigned_to: assignedTo && assignedTo !== 'all' ? assignedTo : null,
+        });
         if (error) return 0;
-        return count || 0;
+        return Number(data) || 0;
     } catch (error) {
         console.error("Error fetching budget stats:", error);
         return 0;

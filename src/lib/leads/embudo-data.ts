@@ -54,12 +54,17 @@ function bool(value: unknown): boolean {
   return value === true
 }
 
-async function fetchAll(db: SupabaseClient, table: string, columns: string): Promise<Row[]> {
+async function fetchAll(
+  db: SupabaseClient,
+  table: string,
+  columns: string,
+  eq?: Record<string, string>
+): Promise<Row[]> {
   const rows: Row[] = []
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await db
-      .from(table)
-      .select(columns)
+    let query = db.from(table).select(columns)
+    for (const [column, value] of Object.entries(eq ?? {})) query = query.eq(column, value)
+    const { data, error } = await query
       .order('id', { ascending: true })
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
@@ -138,7 +143,8 @@ export async function loadEmbudo(): Promise<EmbudoPayload> {
     fetchAll(
       db,
       'lead_conversation_analysis',
-      'id, lead_id, etapa_max, objecion_principal, segmento_ticket, seguimiento, cerrada, vehiculos_consultados, precio_max_mostrado, presupuesto_monto, entrada_disponible, forma_pago, created_at, updated_at'
+      'id, lead_id, etapa_max, objecion_principal, segmento_ticket, seguimiento, cerrada, vehiculos_consultados, precio_max_mostrado, presupuesto_monto, entrada_disponible, forma_pago, created_at, updated_at',
+      { fuente: 'analisis' }
     ),
     fetchAll(db, 'lead_followup', 'id, retoma, programada, enviada, respondio, cancelada'),
     fetchAll(db, 'lead_post_fotos', 'id, paso, programada, enviada, cancelada'),

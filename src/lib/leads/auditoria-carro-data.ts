@@ -6,8 +6,11 @@ import type {
   AuditoriaCarroCaida,
   AuditoriaCarroFilters,
   AuditoriaCarroInsight,
+  AuditoriaCarroLead,
+  AuditoriaCarroLeadsPayload,
   AuditoriaCarroPayload,
   AuditoriaCarroSort,
+  FuenteDinero,
 } from '@/lib/leads/auditoria-carro-types'
 
 type Row = Record<string, unknown>
@@ -197,16 +200,12 @@ function mapRow(row: Row): AuditoriaCarro {
     objecionTopLabel: labelOf(OBJECION_LABELS, objecionTop, 'Sin objeción'),
     objPlata,
     objCarro,
-    presupuestoProm: num(row.presupuesto_prom),
-    entradaProm: num(row.entrada_prom),
     gastoAds,
     leadsAds,
     pendientesBot,
     cambiosPrecio,
     pidieronRebaja,
     ofertas,
-    ofertaProm: num(row.oferta_prom),
-    ofertaMax: num(row.oferta_max),
     ofertaBajoPrecioPct,
     caidas,
     peorCaida: peor,
@@ -330,4 +329,33 @@ export async function loadAuditoriaCarro(filters: AuditoriaCarroFilters = {}): P
     },
     atribucionAproximada: true,
   }
+}
+
+function fuente(value: unknown): FuenteDinero | null {
+  return value === 'analisis' || value === 'rescate' || value === 'vendedor' ? value : null
+}
+
+/** Leads del carro con su dinero y su oferta, uno por fila. Sin promedios. */
+export async function loadAuditoriaCarroLeads(inventoryId: string): Promise<AuditoriaCarroLeadsPayload> {
+  const { data, error } = await admin().rpc('fn_auditoria_carro_leads', { p_inventory_id: inventoryId })
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as Row[]
+  const leads: AuditoriaCarroLead[] = rows.map((row) => ({
+    leadId: int(row.lead_id),
+    leadIdKommo: text(row.lead_id_kommo),
+    nombre: text(row.nombre),
+    telefono: text(row.telefono),
+    presupuesto: num(row.presupuesto_monto),
+    presupuestoFrase: text(row.presupuesto_declarado),
+    presupuestoFuente: fuente(row.presupuesto_fuente),
+    entrada: num(row.entrada_disponible),
+    entradaFrase: text(row.entrada_declarada),
+    entradaFuente: fuente(row.entrada_fuente),
+    formaPago: row.forma_pago === 'credito' || row.forma_pago === 'contado' ? row.forma_pago : null,
+    oferta: num(row.oferta),
+    ofertaFrase: text(row.oferta_cita),
+    pidioRebaja: row.pidio_rebaja === true,
+    fecha: text(row.fecha),
+  }))
+  return { leads, total: leads.length }
 }

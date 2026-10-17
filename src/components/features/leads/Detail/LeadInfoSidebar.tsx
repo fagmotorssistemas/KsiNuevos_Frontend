@@ -29,6 +29,57 @@ const formatTradeInMoney = (n: number | null) => {
     }).format(Number(n));
 };
 
+type CampoDinero = 'presupuesto' | 'entrada' | 'forma_pago';
+type FuenteDinero = 'analisis' | 'rescate' | 'vendedor';
+
+type DineroLead = {
+    presupuesto: string;
+    entrada: string;
+    formaPago: 'contado' | 'credito' | null;
+    presupuestoFrase: string | null;
+    entradaFrase: string | null;
+    fuente: Partial<Record<CampoDinero, FuenteDinero>>;
+};
+
+const DINERO_VACIO: DineroLead = {
+    presupuesto: "",
+    entrada: "",
+    formaPago: null,
+    presupuestoFrase: null,
+    entradaFrase: null,
+    fuente: {},
+};
+
+const FUENTE_LABEL: Record<FuenteDinero, string> = {
+    analisis: "del chat",
+    rescate: "dato antiguo",
+    vendedor: "escrito por vendedor",
+};
+
+const fuenteDe = (v: unknown): FuenteDinero | undefined =>
+    v === 'analisis' || v === 'rescate' || v === 'vendedor' ? v : undefined;
+
+function dineroDesdeFila(row: Record<string, unknown>): DineroLead {
+    const forma = row.forma_pago === 'credito' || row.forma_pago === 'contado' ? row.forma_pago : null;
+    return {
+        presupuesto: row.presupuesto_monto != null ? String(row.presupuesto_monto) : "",
+        entrada: row.entrada_disponible != null ? String(row.entrada_disponible) : "",
+        formaPago: forma,
+        presupuestoFrase: typeof row.presupuesto_declarado === 'string' ? row.presupuesto_declarado : null,
+        entradaFrase: typeof row.entrada_declarada === 'string' ? row.entrada_declarada : null,
+        fuente: {
+            presupuesto: fuenteDe(row.presupuesto_fuente),
+            entrada: fuenteDe(row.entrada_fuente),
+            forma_pago: fuenteDe(row.forma_pago_fuente),
+        },
+    };
+}
+
+const montoONull = (v: string): number | null => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 /** Textos de intercambio / parte de pago guardados en behavior_signals (Kommo, bots, etc.) cuando aún no hay fila en trade_in_cars */
 function tradeInLinesFromBehaviorSignals(signals: Json | null | undefined, depth = 0): string[] {
     if (signals == null || depth > 5) return [];
@@ -116,9 +167,9 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
 
     // ELIMINADO: Estados de Test Drive (testDriveDone, isUpdatingTestDrive)
 
-    // NUEVO: Estados Financieros Editables
-    const [budget, setBudget] = useState((lead as any).presupuesto_cliente?.toString() || "");
-    const [wantsFinancing, setWantsFinancing] = useState(lead.financing || false);
+    // Dinero: uno solo por lead (v_lead_dinero). Lo que escribe el vendedor gana y el análisis no lo pisa.
+    const [dinero, setDinero] = useState<DineroLead>(DINERO_VACIO);
+    const [editados, setEditados] = useState<Set<CampoDinero>>(new Set());
     const [isSavingFinance, setIsSavingFinance] = useState(false);
     const [localCars, setLocalCars] = useState(lead.interested_cars || []);
 
@@ -301,19 +352,52 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
 
     // ELIMINADO: handleToggleTestDrive
 
-    // NUEVO: Guardar Datos Financieros (Al salir del input o cambiar toggle)
-    const handleSaveFinance = async (newBudget?: string, newFinancing?: boolean) => {
-        setIsSavingFinance(true);
-        
-        const budgetToSave = newBudget !== undefined ? String(parseFloat(newBudget) || 0) : String(parseFloat(budget) || 0);
-        const financingToSave = newFinancing !== undefined ? newFinancing : wantsFinancing;
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const { data, error } = await supabase.rpc('fn_lead_dinero', { p_lead_id: lead.id });
+            if (cancelled) return;
+            if (error) {
+                console.warn('fn_lead_dinero:', error.message);
+                return;
+            }
+            const row = Array.isArray(data) ? data[0] : data;
+            setDinero(row ? dineroDesdeFila(row) : DINERO_VACIO);
+            setEditados(new Set());
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [lead.id, supabase]);
 
-        await supabase.from('leads').update({ 
-            presupuesto_cliente: budgetToSave,
-            financing: financingToSave
-        }).eq('id', lead.id);
-        
+    // Solo manda lo que el vendedor tocó o ya era suyo; el resto queda en null para que siga valiendo el chat.
+    const handleSaveFinance = async (next: DineroLead, tocados: Set<CampoDinero>) => {
+        setIsSavingFinance(true);
+        const suyo = (campo: CampoDinero) => tocados.has(campo) || next.fuente[campo] === 'vendedor';
+        const { error } = await supabase.rpc('fn_save_dinero_vendedor', {
+            p_lead_id: lead.id,
+            p_presupuesto: suyo('presupuesto') ? montoONull(next.presupuesto) : null,
+            p_entrada: suyo('entrada') ? montoONull(next.entrada) : null,
+            p_forma_pago: suyo('forma_pago') ? next.formaPago : null,
+        });
+        if (error) console.warn('fn_save_dinero_vendedor:', error.message);
         setIsSavingFinance(false);
+    };
+
+    const cambiarMonto = (campo: 'presupuesto' | 'entrada', valor: string) => {
+        setDinero((prev) => ({ ...prev, [campo]: valor }));
+        setEditados((prev) => new Set(prev).add(campo));
+    };
+
+    const cambiarFormaPago = () => {
+        const next: DineroLead = {
+            ...dinero,
+            formaPago: dinero.formaPago === 'credito' ? 'contado' : 'credito',
+        };
+        const tocados = new Set(editados).add('forma_pago');
+        setDinero(next);
+        setEditados(tocados);
+        handleSaveFinance(next, tocados);
     };
 
 
@@ -480,37 +564,51 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
                 </div>
                 
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                    {/* Input Presupuesto */}
-                    <div>
-                        <label className="text-[10px] text-slate-400 uppercase font-bold mb-1 block">Presupuesto ($)</label>
-                        <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <input
-                                type="number"
-                                value={budget}
-                                onChange={(e) => setBudget(e.target.value)}
-                                onBlur={() => handleSaveFinance(budget)}
-                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-                                placeholder="0.00"
-                            />
+                    {([
+                        ['presupuesto', 'Presupuesto total ($)'],
+                        ['entrada', 'Entrada ($)'],
+                    ] as const).map(([campo, label]) => (
+                        <div key={campo}>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] text-slate-400 uppercase font-bold block">{label}</label>
+                                {dinero.fuente[campo] && !editados.has(campo) && (
+                                    <span className="text-[10px] text-slate-400">{FUENTE_LABEL[dinero.fuente[campo]!]}</span>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="number"
+                                    value={dinero[campo]}
+                                    onChange={(e) => cambiarMonto(campo, e.target.value)}
+                                    onBlur={() => {
+                                        if (editados.has(campo)) handleSaveFinance(dinero, editados);
+                                    }}
+                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                                    placeholder="Sin dato"
+                                />
+                            </div>
+                            {campo === 'presupuesto' && dinero.presupuestoFrase && !editados.has(campo) && (
+                                <p className="mt-1 text-[11px] text-slate-500 italic">“{dinero.presupuestoFrase}”</p>
+                            )}
+                            {campo === 'entrada' && dinero.entradaFrase && !editados.has(campo) && (
+                                <p className="mt-1 text-[11px] text-slate-500 italic">“{dinero.entradaFrase}”</p>
+                            )}
                         </div>
-                    </div>
+                    ))}
 
-                    {/* Switch Financiamiento */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                         <div className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-medium text-slate-700">Solicita Financiamiento</span>
+                            <span className="text-sm font-medium text-slate-700">
+                                {dinero.formaPago === 'credito' ? 'A crédito' : dinero.formaPago === 'contado' ? 'De contado' : 'Forma de pago sin dato'}
+                            </span>
                         </div>
                         <button
-                            onClick={() => {
-                                const newVal = !wantsFinancing;
-                                setWantsFinancing(newVal);
-                                handleSaveFinance(undefined, newVal);
-                            }}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${wantsFinancing ? 'bg-blue-500' : 'bg-slate-200'}`}
+                            onClick={cambiarFormaPago}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${dinero.formaPago === 'credito' ? 'bg-blue-500' : 'bg-slate-200'}`}
                         >
-                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${wantsFinancing ? 'translate-x-4' : 'translate-x-0'}`} />
+                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${dinero.formaPago === 'credito' ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                     </div>
                 </div>

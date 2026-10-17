@@ -60,16 +60,12 @@ export type AuditoriaCarro = {
   objecionTopLabel: string
   objPlata: number
   objCarro: number
-  presupuestoProm: number | null
-  entradaProm: number | null
   gastoAds: number
   leadsAds: number
   pendientesBot: number
   cambiosPrecio: number
   pidieronRebaja: number
   ofertas: number
-  ofertaProm: number | null
-  ofertaMax: number | null
   /** Positivo = ofrecen por debajo del precio publicado */
   ofertaBajoPrecioPct: number | null
   /** Caídas entre etapas del embudo bot */
@@ -84,6 +80,32 @@ export type AuditoriaCarro = {
   sinUbicacion: number
   /** Atribución multi-carro poco fiable hasta que exista vehiculos_etapa */
   atribucionAproximada: boolean
+}
+
+export type FuenteDinero = 'analisis' | 'rescate' | 'vendedor'
+
+/** Un lead que preguntó por el carro. El dinero es del lead; la oferta es de este carro. */
+export type AuditoriaCarroLead = {
+  leadId: number
+  leadIdKommo: string | null
+  nombre: string | null
+  telefono: string | null
+  presupuesto: number | null
+  presupuestoFrase: string | null
+  presupuestoFuente: FuenteDinero | null
+  entrada: number | null
+  entradaFrase: string | null
+  entradaFuente: FuenteDinero | null
+  formaPago: 'contado' | 'credito' | null
+  oferta: number | null
+  ofertaFrase: string | null
+  pidioRebaja: boolean
+  fecha: string | null
+}
+
+export type AuditoriaCarroLeadsPayload = {
+  leads: AuditoriaCarroLead[]
+  total: number
 }
 
 export type AuditoriaCarroPayload = {

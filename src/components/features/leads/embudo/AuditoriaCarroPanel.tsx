@@ -5,9 +5,13 @@ import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronRight, MapPin, Megaphone, Search, X } from 'lucide-react'
 import type {
   AuditoriaCarro,
+  AuditoriaCarroLead,
+  AuditoriaCarroLeadsPayload,
   AuditoriaCarroPayload,
   AuditoriaCarroSort,
+  FuenteDinero,
 } from '@/lib/leads/auditoria-carro-types'
+import { kommoLeadChatUrl } from '@/lib/leads/openKommoChat'
 
 const money = new Intl.NumberFormat('es-EC', {
   style: 'currency',
@@ -185,14 +189,191 @@ function DropBar({ car }: { car: AuditoriaCarro }) {
   )
 }
 
-function DetailPanel({ car, onClose }: { car: AuditoriaCarro; onClose: () => void }) {
-  const alcanza =
-    car.price != null && car.presupuestoProm != null
-      ? car.presupuestoProm >= car.price
-        ? 'El presupuesto alcanza el precio'
-        : `Presupuesto cubre ~${pctLabel(car.presupuestoProm, car.price)} del precio`
-      : null
+const FUENTE_LABEL: Record<FuenteDinero, string> = {
+  analisis: 'del chat',
+  rescate: 'dato antiguo',
+  vendedor: 'vendedor',
+}
 
+const fechaCorta = new Intl.DateTimeFormat('es-EC', { day: 'numeric', month: 'short' })
+
+function LeadNombre({ lead }: { lead: AuditoriaCarroLead }) {
+  return (
+    <div className="flex min-w-0 items-baseline justify-between gap-2">
+      <span className="truncate text-xs font-semibold text-stone-900">
+        {lead.nombre ?? lead.telefono ?? 'Sin nombre'}
+      </span>
+      {lead.leadIdKommo ? (
+        <a
+          href={kommoLeadChatUrl(lead.leadIdKommo)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-[11px] tabular-nums text-red-600 hover:underline"
+        >
+          #{lead.leadIdKommo}
+        </a>
+      ) : null}
+    </div>
+  )
+}
+
+function Frase({ texto }: { texto: string | null }) {
+  if (!texto) return null
+  return <p className="mt-0.5 line-clamp-2 text-[11px] italic text-stone-500">“{texto}”</p>
+}
+
+function LeadsDelCarro({ car }: { car: AuditoriaCarro }) {
+  const [data, setData] = useState<AuditoriaCarroLeadsPayload | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/leads/auditoria-carro/${car.inventoryId}`)
+      .then(async (res) => {
+        const body = await res.json()
+        if (!res.ok) throw new Error(body?.message ?? 'No se pudo cargar')
+        return body as AuditoriaCarroLeadsPayload
+      })
+      .then((body) => {
+        if (!cancelled) setData(body)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'No se pudo cargar')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [car.inventoryId])
+
+  if (error) {
+    return (
+      <Section title="Clientes">
+        <p className="text-xs text-red-600">{error}</p>
+      </Section>
+    )
+  }
+  if (!data) {
+    return (
+      <Section title="Clientes">
+        <p className="text-xs text-stone-400">Cargando…</p>
+      </Section>
+    )
+  }
+
+  const ofertas = data.leads.filter((l) => l.oferta != null || l.pidioRebaja)
+
+  return (
+    <>
+      <Section title="Ofertas por este carro">
+        {ofertas.length === 0 ? (
+          <p className="text-xs text-stone-400">Nadie ha ofrecido un monto ni pedido rebaja por este carro todavía.</p>
+        ) : (
+          <ul className="divide-y divide-stone-900/5">
+            {ofertas.map((lead) => (
+              <li key={lead.leadId} className="py-2">
+                <LeadNombre lead={lead} />
+                <p className="mt-0.5 text-xs text-stone-700">
+                  {lead.oferta != null ? (
+                    <>
+                      Ofreció <span className="font-semibold tabular-nums">{moneyOf(lead.oferta)}</span>
+                      {car.price ? <span className="text-stone-400"> · precio {moneyOf(car.price)}</span> : null}
+                    </>
+                  ) : (
+                    'Pidió rebaja, sin monto'
+                  )}
+                  {lead.fecha ? <span className="text-stone-400"> · {fechaCorta.format(new Date(lead.fecha))}</span> : null}
+                </p>
+                <Frase texto={lead.ofertaFrase} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <DineroTabs leads={data.leads} total={data.total} />
+    </>
+  )
+}
+
+type DineroTab = 'entrada' | 'presupuesto'
+
+function DineroTabs({ leads, total }: { leads: AuditoriaCarroLead[]; total: number }) {
+  const conEntrada = leads.filter((l) => l.entrada != null)
+  const conPresupuesto = leads.filter((l) => l.presupuesto != null)
+  const [tab, setTab] = useState<DineroTab>(conEntrada.length > 0 || conPresupuesto.length === 0 ? 'entrada' : 'presupuesto')
+
+  const tabs: { id: DineroTab; label: string; count: number }[] = [
+    { id: 'entrada', label: 'Entrada', count: conEntrada.length },
+    { id: 'presupuesto', label: 'Presupuesto', count: conPresupuesto.length },
+  ]
+  const lista = tab === 'entrada' ? conEntrada : conPresupuesto
+
+  return (
+    <Section title="Dinero de cada cliente">
+      <div role="tablist" className="mb-3 flex gap-1 rounded-xl bg-stone-900/[0.04] p-1">
+        {tabs.map((t) => {
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(t.id)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs transition-colors ${
+                active ? 'bg-white font-semibold text-red-700 shadow-sm' : 'text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              {t.label}
+              <span
+                className={`rounded-md px-1.5 text-[10px] tabular-nums ${
+                  active ? 'bg-red-50 text-red-700' : 'bg-stone-900/5 text-stone-500'
+                }`}
+              >
+                {t.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {lista.length === 0 ? (
+        <p className="text-xs text-stone-400">
+          {tab === 'entrada'
+            ? 'Ningún cliente de este carro dijo cuánto tiene para la entrada.'
+            : 'Ningún cliente de este carro dijo su presupuesto total.'}
+        </p>
+      ) : (
+        <ul className="divide-y divide-stone-900/5">
+          {lista.map((lead) => {
+            const monto = tab === 'entrada' ? lead.entrada : lead.presupuesto
+            const fuente = tab === 'entrada' ? lead.entradaFuente : lead.presupuestoFuente
+            const frase = tab === 'entrada' ? lead.entradaFrase : lead.presupuestoFrase
+            return (
+              <li key={lead.leadId} className="py-2">
+                <LeadNombre lead={lead} />
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-stone-700">
+                  <span className="font-semibold tabular-nums text-stone-900">{moneyOf(monto)}</span>
+                  {fuente ? <span className="text-stone-400">{FUENTE_LABEL[fuente]}</span> : null}
+                  {lead.formaPago ? (
+                    <span className="text-stone-500">· {lead.formaPago === 'credito' ? 'Crédito' : 'Contado'}</span>
+                  ) : null}
+                </div>
+                <Frase texto={frase} />
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      <p className="mt-2 text-[11px] text-stone-400">
+        {countOf(lista.length)} de {countOf(total)} clientes dijeron{' '}
+        {tab === 'entrada' ? 'cuánto dan de entrada' : 'su presupuesto total'}
+      </p>
+    </Section>
+  )
+}
+
+function DetailPanel({ car, onClose }: { car: AuditoriaCarro; onClose: () => void }) {
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -284,41 +465,7 @@ function DetailPanel({ car, onClose }: { car: AuditoriaCarro; onClose: () => voi
             </Section>
           </div>
 
-          <Section title="Negociación">
-            {car.ofertas === 0 && car.pidieronRebaja === 0 ? (
-              <p className="text-xs text-stone-400">
-                Nadie ha ofrecido un monto ni pedido rebaja por este carro todavía.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-x-4">
-                  <Row label="Pidieron rebaja" value={countOf(car.pidieronRebaja)} />
-                  <Row label="Ofertas" value={countOf(car.ofertas)} />
-                  <Row label="Oferta prom." value={moneyOf(car.ofertaProm)} />
-                  <Row label="Oferta máx." value={moneyOf(car.ofertaMax)} />
-                </div>
-                {car.ofertaBajoPrecioPct != null ? (
-                  <p
-                    className={`mt-2 rounded-xl px-3 py-2 text-xs ${
-                      car.ofertaBajoPrecioPct >= 15 ? 'bg-red-50/80 text-red-700' : 'bg-stone-900/[0.04] text-stone-600'
-                    }`}
-                  >
-                    {car.ofertaBajoPrecioPct > 0
-                      ? `Ofrecen en promedio ${car.ofertaBajoPrecioPct}% por debajo de ${moneyOf(car.price)}`
-                      : `Ofrecen en promedio el precio publicado o más`}
-                  </p>
-                ) : null}
-              </>
-            )}
-          </Section>
-
-          <Section title="Plata del cliente">
-            <div className="grid grid-cols-2 gap-x-4">
-              <Row label="Presupuesto" value={moneyOf(car.presupuestoProm)} />
-              <Row label="Entrada" value={moneyOf(car.entradaProm)} />
-            </div>
-            {alcanza ? <p className="mt-1 text-[11px] text-stone-500">{alcanza}</p> : null}
-          </Section>
+          <LeadsDelCarro key={car.inventoryId} car={car} />
 
           <Section title="Desde dónde escriben">
             {car.conversaciones === 0 ? (
