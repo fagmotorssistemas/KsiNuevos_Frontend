@@ -87,6 +87,7 @@ export function VideoJobList({
           .select(JOB_SELECT)
           .neq('flow_type', 'noticiero')
           .neq('flow_type', 'raw_full')
+          .or('selected_clips->>_v2_library_only.is.null,selected_clips->>_v2_library_only.neq.true')
           .order('is_featured', { ascending: false })
           .order('created_at', { ascending: false })
           .range(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE - 1)

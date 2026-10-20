@@ -24,6 +24,9 @@ interface UploadLibraryClipsModalProps {
     title: string
     clipCount: number
   } | null
+  /** Vehículo fijo (oculta el selector de inventario). */
+  lockedVehicleId?: string | null
+  lockedVehicleTitle?: string | null
 }
 
 export function UploadLibraryClipsModal({
@@ -31,11 +34,13 @@ export function UploadLibraryClipsModal({
   onClose,
   onSaved,
   existingFolder = null,
+  lockedVehicleId = null,
+  lockedVehicleTitle = null,
 }: UploadLibraryClipsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inventoryRows, setInventoryRows] = useState<InventoryPickerRow[]>([])
   const [loadingInventory, setLoadingInventory] = useState(false)
-  const [vehicleId, setVehicleId] = useState('')
+  const [vehicleId, setVehicleId] = useState(lockedVehicleId ?? '')
   const [files, setFiles] = useState<File[]>([])
   const [progress, setProgress] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -46,12 +51,12 @@ export function UploadLibraryClipsModal({
     : VIDEO_MAX_CLIPS
 
   const resetForm = useCallback(() => {
-    setVehicleId('')
+    setVehicleId(lockedVehicleId ?? '')
     setFiles([])
     setProgress(null)
     setSaving(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
-  }, [])
+  }, [lockedVehicleId])
 
   useEffect(() => {
     if (!isOpen) {
@@ -59,7 +64,9 @@ export function UploadLibraryClipsModal({
       return
     }
 
-    if (isAppendMode) {
+    if (lockedVehicleId) setVehicleId(lockedVehicleId)
+
+    if (isAppendMode || lockedVehicleId) {
       setLoadingInventory(false)
       return
     }
@@ -88,7 +95,7 @@ export function UploadLibraryClipsModal({
     return () => {
       cancelled = true
     }
-  }, [isOpen, resetForm, isAppendMode])
+  }, [isOpen, resetForm, isAppendMode, lockedVehicleId])
 
   function handleFilesChange(list: FileList | null) {
     if (!list?.length) return
@@ -322,7 +329,14 @@ export function UploadLibraryClipsModal({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
-          {!isAppendMode ? (
+          {!isAppendMode && lockedVehicleId ? (
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-800">Vehículo del inventario</label>
+            <p className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-800">
+              {lockedVehicleTitle ?? lockedVehicleId}
+            </p>
+          </div>
+          ) : !isAppendMode ? (
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-gray-800">
               Vehículo del inventario <span className="text-red-500">*</span>

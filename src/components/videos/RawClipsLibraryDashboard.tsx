@@ -606,6 +606,8 @@ export type RawClipsLibraryDashboardProps = {
   /** Subtítulo de sección cuando `hideHeader`. */
   sectionTitle?: string
   onBack?: () => void
+  /** Cambiar el valor fuerza recarga de la biblioteca. */
+  refreshKey?: number
 }
 
 export function RawClipsLibraryDashboard({
@@ -615,6 +617,7 @@ export function RawClipsLibraryDashboard({
   hideHeader = false,
   sectionTitle,
   onBack,
+  refreshKey,
 }: RawClipsLibraryDashboardProps = {}) {
   const [folders, setFolders] = useState<RawClipsFolderSummary[]>([])
   const [stats, setStats] = useState<RawClipsLibraryStats | null>(null)
@@ -744,7 +747,7 @@ export function RawClipsLibraryDashboard({
 
   useEffect(() => {
     void loadLibrary()
-  }, [loadLibrary])
+  }, [loadLibrary, refreshKey])
 
   useEffect(() => {
     if (!selectedId) {

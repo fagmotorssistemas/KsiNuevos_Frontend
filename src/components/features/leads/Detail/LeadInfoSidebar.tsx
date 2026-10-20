@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Edit3, Loader2, CheckCircle2, Car, DollarSign, CreditCard, ArrowLeftRight, Gauge, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { TextArea, Input } from "./ui-components";
-import type { Json } from "@/types/supabase";
+import type { Database, Json } from "@/types/supabase";
 import type { LeadWithDetails, TradeInCarRow } from "@/types/leads.types";
 
 // Hemos eliminado la extensión manual de test_drive_done
@@ -374,12 +374,13 @@ export function LeadInfoSidebar({ lead }: { lead: LeadWithExtension }) {
     const handleSaveFinance = async (next: DineroLead, tocados: Set<CampoDinero>) => {
         setIsSavingFinance(true);
         const suyo = (campo: CampoDinero) => tocados.has(campo) || next.fuente[campo] === 'vendedor';
+        // Los tipos generados no reflejan que la función SQL acepta null en estos parámetros.
         const { error } = await supabase.rpc('fn_save_dinero_vendedor', {
             p_lead_id: lead.id,
             p_presupuesto: suyo('presupuesto') ? montoONull(next.presupuesto) : null,
             p_entrada: suyo('entrada') ? montoONull(next.entrada) : null,
             p_forma_pago: suyo('forma_pago') ? next.formaPago : null,
-        });
+        } as unknown as Database['public']['Functions']['fn_save_dinero_vendedor']['Args']);
         if (error) console.warn('fn_save_dinero_vendedor:', error.message);
         setIsSavingFinance(false);
     };

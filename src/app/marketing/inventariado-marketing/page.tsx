@@ -31,6 +31,7 @@ import {
 import { RawClipsLibraryDashboard } from '@/components/videos/RawClipsLibraryDashboard'
 import { RawFullVideosLibraryDashboard } from '@/components/videos/RawFullVideosLibraryDashboard'
 import { UploadFullVideosModal } from '@/components/videos/UploadFullVideosModal'
+import { UploadLibraryClipsModal } from '@/components/videos/UploadLibraryClipsModal'
 import { UploadInboxVideosModal } from '@/components/videos/UploadInboxVideosModal'
 import { MarketingInboxVideosPanel } from '@/components/videos/MarketingInboxVideosPanel'
 import { VideoJobList } from '@/components/videos/VideoJobList'
@@ -323,6 +324,7 @@ export default function InventariadoMarketingPage() {
   const [vehicleDetailTab, setVehicleDetailTab] = useState<VehicleDetailTab>('reels')
   const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [clipsUploadOpen, setClipsUploadOpen] = useState(false)
   const [inboxUploadOpen, setInboxUploadOpen] = useState(false)
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
   const [inboxRefreshKey, setInboxRefreshKey] = useState(0)
@@ -440,6 +442,12 @@ export default function InventariadoMarketingPage() {
   const selectedVehicleTitle = selectedVehicle ? formatVehicleTitle(selectedVehicle) : null
   const uploadVehicleId =
     activeTab === 'vehiculo' && selectedVehicle ? selectedVehicle.id : null
+  const uploadTargetsClips = activeTab === 'vehiculo' && !!selectedVehicle && vehicleDetailTab === 'raw-clips'
+
+  function handleUploadClick() {
+    if (uploadTargetsClips) setClipsUploadOpen(true)
+    else setUploadOpen(true)
+  }
 
   const rawFullEmbed = {
     embedded: true as const,
@@ -468,11 +476,11 @@ export default function InventariadoMarketingPage() {
         <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
           <button
             type="button"
-            onClick={() => setUploadOpen(true)}
+            onClick={handleUploadClick}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold"
           >
             <Plus className="w-4 h-4" />
-            Subir videos
+            {uploadTargetsClips ? 'Subir clips' : 'Subir videos'}
           </button>
           <button
             type="button"
@@ -633,6 +641,7 @@ export default function InventariadoMarketingPage() {
                 hideHeader
                 inventoryVehicleId={selectedVehicle.id}
                 vehicleTitle={selectedVehicleTitle ?? undefined}
+                refreshKey={libraryRefreshKey}
               />
             </section>
           ) : vehicleDetailTab === 'raw-full' ? (
@@ -848,6 +857,16 @@ export default function InventariadoMarketingPage() {
         onScheduled={() => {
           setLibraryRefreshKey((k) => k + 1)
           setActiveTab('cola')
+        }}
+      />
+      <UploadLibraryClipsModal
+        isOpen={clipsUploadOpen}
+        onClose={() => setClipsUploadOpen(false)}
+        lockedVehicleId={selectedVehicle?.id ?? null}
+        lockedVehicleTitle={selectedVehicleTitle}
+        onSaved={() => {
+          setLibraryRefreshKey((k) => k + 1)
+          setVehicleDetailTab('raw-clips')
         }}
       />
       <UploadInboxVideosModal
