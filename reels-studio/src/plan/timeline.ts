@@ -386,7 +386,8 @@ export function buildReelProps(
       brand: opts.brand,
       music: opts.music ?? null,
       watermark: opts.watermark ?? '',
-      videoEngine: 'offthread',
+      // render.ts decide el lector real (y reintenta con el otro); esto es lo que usa el Studio.
+      videoEngine: 'media',
     },
     warnings,
   }

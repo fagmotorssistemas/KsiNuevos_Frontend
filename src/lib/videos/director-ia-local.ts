@@ -24,6 +24,8 @@ const STUDIO_DIR = path.join(process.cwd(), 'reels-studio')
 const TSX_CLI = path.join(STUDIO_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 /** Volumen de la música bajo la voz del asesor. */
 const MUSIC_VOLUME = 0.12
+/** Si reels-studio no termina en este tiempo, se corta (un render colgado no debe dejar el job "rendering" para siempre). */
+const STUDIO_TIMEOUT_MS = 40 * 60 * 1000
 
 function getServiceClient() {
   return createClient<Database>(
@@ -131,7 +133,7 @@ function progressFromLine(line: string, clipCount: number): Progress | null {
   if (line.startsWith('[gemini] estrategia')) return { status: 'analyzing', step: 'Gemini: plan creativo listo', pct: 62 }
   if (line.startsWith('[plan]')) return { status: 'rendering', step: 'Armando la línea de tiempo', pct: 65 }
   if (line.startsWith('[render] reintentando')) {
-    return { status: 'rendering', step: 'Render 3D: reintentando con el lector de video de Chrome', pct: 66 }
+    return { status: 'rendering', step: 'Render 3D: reintentando con otro lector de video', pct: 66 }
   }
   const render = line.match(/^\[render\] (\d+)%/)
   if (render) {
@@ -170,10 +172,15 @@ function runStudio(jobId: string, args: string[], clipCount: number): Promise<vo
       // Remotion avisa por stderr cosas que no son errores (memoria del contenedor, three.js).
       if (!/memory|cgroup|docker|THREE\.Clock/i.test(line)) console.warn(`[DirectorIA][${jobId}][stderr] ${line}`)
     })
+    const watchdog = setTimeout(() => {
+      tail.push(`reels-studio no terminó en ${STUDIO_TIMEOUT_MS / 60000} minutos; se detuvo`)
+      child.kill('SIGKILL')
+    }, STUDIO_TIMEOUT_MS)
     child.on('error', reject)
     child.on('close', (code) => {
+      clearTimeout(watchdog)
       if (code === 0) return resolve()
-      const detail = tail.filter((l) => /error|falta|no se|failed|invalid/i.test(l)).slice(-4).join(' | ')
+      const detail = tail.filter((l) => /error|falta|no se|failed|invalid|se detuvo/i.test(l)).slice(-4).join(' | ')
       reject(new Error(detail || tail.slice(-4).join(' | ') || `reels-studio terminó con código ${code}`))
     })
   })

@@ -55,9 +55,20 @@ const DEFAULT_CONCURRENCY = Math.min(3, Math.max(1, Math.floor(os.cpus().length 
 /** La caché de cuadros de video por defecto usa la mitad de la RAM; con la web corriendo al lado eso tumba al extractor. */
 const VIDEO_CACHE_BYTES = Number(process.env.REMOTION_VIDEO_CACHE_MB ?? 768) * 1024 * 1024
 
-/** Errores del extractor de cuadros que suelen ser por falta de memoria: vale la pena reintentar con menos carga. */
-const isCompositorCrash = (err: unknown) =>
-  /compositor|Request closed|Failed to fetch|Target closed|crashed/i.test(err instanceof Error ? err.message : String(err))
+/**
+ * Lector de video principal: 'media' (WebCodecs dentro de Chrome). El extractor de Remotion ('offthread')
+ * se cayó con "Request closed" en todos los clips en una computadora Linux con Node 26, así que queda de
+ * respaldo. REMOTION_VIDEO_ENGINE=offthread invierte el orden.
+ */
+export const PRIMARY_ENGINE: ReelProps['videoEngine'] = process.env.REMOTION_VIDEO_ENGINE === 'offthread' ? 'offthread' : 'media'
+const OTHER_ENGINE = { media: 'offthread', offthread: 'media' } as const
+
+// Cuando falla un lector de video, Remotion a veces deja promesas internas rechazadas sin manejar y Node
+// cierra el proceso antes de que renderReel pueda reintentar con el otro. renderMedia igual rechaza su propia
+// promesa, así que basta con registrar estas.
+process.on('unhandledRejection', (err) => {
+  console.error(`[render] error interno de Remotion: ${err instanceof Error ? err.message : String(err)}`)
+})
 
 async function composition(props: ReelProps) {
   const serveUrl = await getBundle()
@@ -73,7 +84,7 @@ async function composition(props: ReelProps) {
 
 export async function renderReel(props: ReelProps, outFile: string, opts: { scale?: number } = {}) {
   assertFreeDisk()
-  const { serveUrl, comp } = await composition(props)
+  const { serveUrl, comp } = await composition({ ...props, videoEngine: PRIMARY_ENGINE })
   const attempt = async (inputProps: ReelProps, concurrency: number) => {
     let last = -1
     await renderMedia({
@@ -99,36 +110,43 @@ export async function renderReel(props: ReelProps, outFile: string, opts: { scal
   }
   const concurrency = Number(process.env.REMOTION_CONCURRENCY ?? DEFAULT_CONCURRENCY)
   try {
-    await attempt(props, concurrency)
+    await attempt({ ...props, videoEngine: PRIMARY_ENGINE }, concurrency)
   } catch (err) {
-    if (!isCompositorCrash(err) || props.videoEngine === 'media') throw err
-    // Plan B: leer los clips con WebCodecs dentro de Chrome, sin el extractor de Remotion.
-    console.error(`[render] el extractor de cuadros falló: ${err instanceof Error ? err.message : err}`)
-    console.log('[render] reintentando con el lector de video de Chrome')
-    await attempt({ ...props, videoEngine: 'media' }, Math.min(2, concurrency))
+    const other = OTHER_ENGINE[PRIMARY_ENGINE]
+    console.error(`[render] falló el lector de video '${PRIMARY_ENGINE}': ${err instanceof Error ? err.message : err}`)
+    console.log(`[render] reintentando con el otro lector de video (${other})`)
+    await attempt({ ...props, videoEngine: other }, Math.min(2, concurrency))
   }
   return outFile
 }
 
 /** Cuadros sueltos para revisar el diseño sin renderizar todo el video. */
 export async function renderStills(props: ReelProps, frames: number[], outDir: string, scale = 0.5) {
-  const { serveUrl, comp } = await composition(props)
+  const { serveUrl, comp } = await composition({ ...props, videoEngine: PRIMARY_ENGINE })
   fs.mkdirSync(outDir, { recursive: true })
-  const files: string[] = []
-  for (const frame of frames) {
-    const output = path.join(outDir, `frame-${String(frame).padStart(4, '0')}.jpeg`)
-    await renderStill({
-      serveUrl,
-      composition: comp,
-      inputProps: props,
-      frame,
-      output,
-      imageFormat: 'jpeg',
-      scale,
-      browserExecutable: browserExecutable(),
-      chromiumOptions: { gl: GL },
-    })
-    files.push(output)
+  const stills = async (inputProps: ReelProps) => {
+    const files: string[] = []
+    for (const frame of frames) {
+      const output = path.join(outDir, `frame-${String(frame).padStart(4, '0')}.jpeg`)
+      await renderStill({
+        serveUrl,
+        composition: comp,
+        inputProps,
+        frame,
+        output,
+        imageFormat: 'jpeg',
+        scale,
+        browserExecutable: browserExecutable(),
+        chromiumOptions: { gl: GL },
+      })
+      files.push(output)
+    }
+    return files
   }
-  return files
+  try {
+    return await stills({ ...props, videoEngine: PRIMARY_ENGINE })
+  } catch (err) {
+    console.error(`[render] falló el lector de video '${PRIMARY_ENGINE}': ${err instanceof Error ? err.message : err}`)
+    return stills({ ...props, videoEngine: OTHER_ENGINE[PRIMARY_ENGINE] })
+  }
 }
