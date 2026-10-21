@@ -368,15 +368,24 @@ async function resolveMusicTrackUrlById(musicTrackId: string): Promise<string> {
   return data.public_url
 }
 
-async function getJobStatus(jobId: string): Promise<VideoJobStatus | null> {
+/** El job se borró mientras el pipeline corría: hay que parar antes de gastar en el render. */
+class VideoJobDeletedError extends Error {
+  constructor(jobId: string) {
+    super(`El job ${jobId} ya no existe (se borró mientras se procesaba)`)
+  }
+}
+
+/** `deleted`: el job ya no existe. `null`: no se pudo leer (p. ej. error de red). */
+async function getJobStatus(jobId: string): Promise<VideoJobStatus | 'deleted' | null> {
   const supabase = getServiceClient()
   const { data, error } = await supabase
     .from('video_jobs_v2')
     .select('status')
     .eq('id', jobId)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) return null
+  if (error) return null
+  if (!data) return 'deleted'
   return data.status as VideoJobStatus
 }
 
@@ -497,15 +506,12 @@ async function loadBrandConfigForJob(jobId: string) {
     .from('video_jobs_v2')
     .select(BRAND_CONFIG_SELECT)
     .eq('id', jobId)
-    .single()
+    .maybeSingle()
   if (error) {
     console.error(`[BrandConfig][${jobId}] Error leyendo DB: ${error.message}`)
     return null
   }
-  if (!data) {
-    console.warn(`[BrandConfig][${jobId}] Sin datos de brandConfig en DB`)
-    return null
-  }
+  if (!data) throw new VideoJobDeletedError(jobId)
   console.log(`[BrandConfig][${jobId}] DB row:`, JSON.stringify(data))
   const config = brandConfigFromJobRow(data as BrandConfigJobRow)
   console.log(`[BrandConfig][${jobId}] brandConfigFromJobRow resultado:`, JSON.stringify(config))
@@ -523,6 +529,10 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
     await new Promise((r) => setTimeout(r, POLL_MS))
 
     const current = await getJobStatus(jobId)
+    if (current === 'deleted') {
+      console.warn(`[VideoV2Pipeline][${jobId}][ShotstackMonitor] El job se borró; se deja de esperar el render.`)
+      return
+    }
     if (current === 'completed' || current === 'failed') {
       if (current === 'failed') {
         try {
@@ -591,6 +601,10 @@ async function monitorCreatomateRenderFallback(jobId: string, renderId: string) 
     await new Promise((r) => setTimeout(r, POLL_MS))
 
     const current = await getJobStatus(jobId)
+    if (current === 'deleted') {
+      console.warn(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] El job se borró; se deja de esperar el render.`)
+      return
+    }
     if (current === 'completed' || current === 'failed') {
       console.log(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Job ya cerrado (status=${current}).`)
       return
@@ -906,6 +920,10 @@ export async function runSingleVideoPipelineFromStorage(
 
     console.log(`[VideoV2Pipeline][${jobId}] Pipeline A completado. Esperando Shotstack.`)
   } catch (err) {
+    if (err instanceof VideoJobDeletedError) {
+      console.warn(`[VideoV2Pipeline][${jobId}] ${err.message}: no se envía el render.`)
+      return
+    }
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (single): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
@@ -1726,6 +1744,10 @@ export async function runMultipleClipsPipelineFromStorage(
 
     console.log(`[VideoV2Pipeline][${jobId}] Pipeline B completado. Esperando Shotstack.`)
   } catch (err) {
+    if (err instanceof VideoJobDeletedError) {
+      console.warn(`[VideoV2Pipeline][${jobId}] ${err.message}: no se envía el render.`)
+      return
+    }
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (multiple): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
