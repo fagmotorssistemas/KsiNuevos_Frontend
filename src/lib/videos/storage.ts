@@ -274,3 +274,75 @@ export async function uploadMusicTrack(
 
   return { path, publicUrl: publicData.publicUrl }
 }
+
+/**
+ * Borra los archivos de un job ya borrado: sus clips (`raw-videos-v2/{jobId}/`), el reel final
+ * (`reels-v2/{jobId}.mp4`) y la voz en off (`reel-vo/{jobId}/`). Sin esto quedaban en Storage
+ * para siempre. Un clip que otro job todavía usa no se toca.
+ */
+export async function deleteVideoJobFiles(jobId: string): Promise<{ removed: number; kept: number }> {
+  const supabase = getServiceClient()
+
+  const rawPaths = await listFolderFiles(supabase, RAW_BUCKET, jobId)
+  const inUse = rawPaths.length > 0 ? await rawPathsUsedByOtherJobs(supabase, jobId) : new Set<string>()
+  const rawToRemove = rawPaths.filter((p) => !inUse.has(p))
+  const voPaths = await listFolderFiles(supabase, MUSIC_BUCKET, `reel-vo/${jobId}`)
+
+  let removed = 0
+  removed += await removeInBatches(supabase, RAW_BUCKET, rawToRemove)
+  removed += await removeInBatches(supabase, REELS_FINAL_BUCKET, [finalReelStoragePath(jobId)])
+  removed += await removeInBatches(supabase, MUSIC_BUCKET, voPaths)
+  return { removed, kept: rawPaths.length - rawToRemove.length }
+}
+
+async function listFolderFiles(
+  supabase: ReturnType<typeof getServiceClient>,
+  bucket: string,
+  folder: string
+): Promise<string[]> {
+  const paths: string[] = []
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.storage.from(bucket).list(folder, { limit: 1000, offset })
+    if (error) throw new Error(`[VideoStorage] No se pudo listar ${bucket}/${folder}: ${error.message}`)
+    // Las entradas sin id son subcarpetas; los clips de un job están en un solo nivel.
+    for (const item of data ?? []) if (item.id) paths.push(`${folder}/${item.name}`)
+    if ((data ?? []).length < 1000) return paths
+  }
+}
+
+/** Paths (sin prefijo de bucket) de la carpeta `{jobId}/` que siguen en `raw_video_paths` de otro job. */
+async function rawPathsUsedByOtherJobs(
+  supabase: ReturnType<typeof getServiceClient>,
+  jobId: string
+): Promise<Set<string>> {
+  const used = new Set<string>()
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('video_jobs_v2')
+      .select('raw_video_paths')
+      .neq('id', jobId)
+      .range(from, from + 999)
+    if (error) throw new Error(`[VideoStorage] No se pudo revisar qué clips usan otros jobs: ${error.message}`)
+    for (const row of data ?? []) {
+      for (const p of row.raw_video_paths ?? []) {
+        const path = p.replace(new RegExp(`^${RAW_BUCKET}/`), '')
+        if (path.startsWith(`${jobId}/`)) used.add(path)
+      }
+    }
+    if ((data ?? []).length < 1000) return used
+  }
+}
+
+async function removeInBatches(
+  supabase: ReturnType<typeof getServiceClient>,
+  bucket: string,
+  paths: string[]
+): Promise<number> {
+  let removed = 0
+  for (let i = 0; i < paths.length; i += 100) {
+    const { data, error } = await supabase.storage.from(bucket).remove(paths.slice(i, i + 100))
+    if (error) throw new Error(`[VideoStorage] No se pudo borrar en ${bucket}: ${error.message}`)
+    removed += data?.length ?? 0
+  }
+  return removed
+}

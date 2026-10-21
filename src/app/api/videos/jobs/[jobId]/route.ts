@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
+import { deleteVideoJobFiles } from '@/lib/videos/storage'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -96,7 +97,16 @@ export async function DELETE(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true })
+    // El job ya no existe: si falla el borrado de archivos, quedan como huérfanos (no se revierte).
+    let filesRemoved = 0
+    try {
+      filesRemoved = (await deleteVideoJobFiles(jobId)).removed
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`[DeleteJob][${jobId}] Job borrado, pero sus archivos no: ${message}`)
+    }
+
+    return NextResponse.json({ ok: true, filesRemoved })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno del servidor'
     return NextResponse.json({ error: message }, { status: 500 })
