@@ -30,9 +30,47 @@ function VehicleLoadingShell() {
   );
 }
 
+/**
+ * Sin `onRetry`: el auto no existe (vendido o enlace viejo). Con `onRetry`: falló la carga
+ * (red o Supabase caído) y el auto puede seguir disponible, así que no se dice "no disponible".
+ */
+function VehicleUnavailable({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      <MainNavbar />
+      <div className="flex-grow flex flex-col items-center justify-center text-center px-4">
+        <h2 className="text-3xl font-bold text-gray-900 mb-3">
+          {onRetry ? "No pudimos cargar este vehículo" : "Vehículo no disponible"}
+        </h2>
+        {onRetry ? (
+          <p className="text-gray-600 mb-6">Revisa tu conexión e inténtalo de nuevo.</p>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors shadow-lg"
+            >
+              Reintentar
+            </button>
+          ) : null}
+          <Link
+            href={VEHICLES_CATALOG_PATH}
+            className="px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors shadow-lg"
+          >
+            Ver inventario disponible
+          </Link>
+        </div>
+      </div>
+      <MainFooter />
+    </div>
+  );
+}
+
 export function CarDetailView({ lookupKey }: { lookupKey: string }) {
   const router = useRouter();
-  const { car, isLoading, error } = useCarDetail(lookupKey);
+  const { car, isLoading, error, errorKind, refetch } = useCarDetail(lookupKey);
 
   useEffect(() => {
     if (!car) return;
@@ -49,21 +87,7 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
   }
 
   if (error || !car) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col">
-        <MainNavbar />
-        <div className="flex-grow flex flex-col items-center justify-center text-center px-4">
-          <h2 className="text-3xl font-bold text-gray-900 mb-3">Vehículo no disponible</h2>
-          <Link
-            href={VEHICLES_CATALOG_PATH}
-            className="px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors shadow-lg"
-          >
-            Ver inventario disponible
-          </Link>
-        </div>
-        <MainFooter />
-      </div>
-    );
+    return <VehicleUnavailable onRetry={errorKind === 'load_failed' ? refetch : undefined} />;
   }
 
   const ActionBlock = () => (
@@ -208,7 +232,7 @@ export function CarDetailView({ lookupKey }: { lookupKey: string }) {
 
 export function VehicleLegacyRedirect({ lookupKey }: { lookupKey: string }) {
   const router = useRouter();
-  const { car, isLoading, error } = useCarDetail(lookupKey);
+  const { car, isLoading, error, errorKind, refetch } = useCarDetail(lookupKey);
 
   useEffect(() => {
     if (!car) return;
@@ -216,21 +240,7 @@ export function VehicleLegacyRedirect({ lookupKey }: { lookupKey: string }) {
   }, [car, router]);
 
   if (error && !isLoading) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col">
-        <MainNavbar />
-        <div className="flex-grow flex flex-col items-center justify-center text-center px-4">
-          <h2 className="text-3xl font-bold text-gray-900 mb-3">Vehículo no disponible</h2>
-          <Link
-            href={VEHICLES_CATALOG_PATH}
-            className="px-6 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors shadow-lg"
-          >
-            Ver inventario disponible
-          </Link>
-        </div>
-        <MainFooter />
-      </div>
-    );
+    return <VehicleUnavailable onRetry={errorKind === 'load_failed' ? refetch : undefined} />;
   }
 
   return <VehicleLoadingShell />;
