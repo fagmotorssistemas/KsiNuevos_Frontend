@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Database } from "@/types/supabase";
 import { getEffectivePublicPrice } from "@/lib/inventario/inventory-pricing";
 import {
@@ -8,6 +9,7 @@ import {
   slugifyVehicleText,
 } from "@/lib/inventario/vehicle-public-slug";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { shortQueryError, withQueryRetry } from "@/lib/supabase/query-retry";
 import { SITE_URL } from "@/lib/seo/site";
 
 type OracleRow = Database["public"]["Tables"]["inventoryoracle"]["Row"];
@@ -32,14 +34,16 @@ function publicPrice(car: Pick<OracleRow, "price" | "internal_fixed_price" | "pu
 export async function fetchSitemapInventory() {
   try {
     const supabase = createServiceRoleClient();
-    const { data, error } = await supabase
-      .from("inventoryoracle")
-      .select("id, brand, model, year, created_at, status, img_main_url, price")
-      .eq("status", "disponible")
-      .not("brand", "is", null)
-      .not("model", "is", null);
-
-    if (error) throw error;
+    const result = await withQueryRetry(() =>
+      supabase
+        .from("inventoryoracle")
+        .select("id, brand, model, year, created_at, status, img_main_url, price")
+        .eq("status", "disponible")
+        .not("brand", "is", null)
+        .not("model", "is", null)
+    );
+    if (result.error) throw new Error(shortQueryError(result));
+    const { data } = result;
 
     const cars = (data ?? []).filter(
       (row) => Boolean(row.brand?.trim()) && Boolean(row.model?.trim()) && row.year
@@ -65,7 +69,7 @@ export async function fetchSitemapInventory() {
       })),
     };
   } catch (error) {
-    console.error("fetchSitemapInventory:", error);
+    console.error("fetchSitemapInventory:", error instanceof Error ? error.message : error);
     return { cars: [], brands: [] };
   }
 }
@@ -78,13 +82,11 @@ export async function resolveBrandLabel(brandSlug: string): Promise<string> {
 
   try {
     const supabase = createServiceRoleClient();
-    const { data, error } = await supabase
-      .from("inventoryoracle")
-      .select("brand")
-      .eq("status", "disponible");
-
-    if (error) throw error;
-    const match = (data ?? []).find(
+    const result = await withQueryRetry(() =>
+      supabase.from("inventoryoracle").select("brand").eq("status", "disponible")
+    );
+    if (result.error) throw new Error(shortQueryError(result));
+    const match = (result.data ?? []).find(
       (row) => slugifyVehicleText(row.brand || "") === slug
     );
     return match?.brand?.trim() || fallback;
@@ -93,7 +95,11 @@ export async function resolveBrandLabel(brandSlug: string): Promise<string> {
   }
 }
 
-export async function fetchCarByLookupKey(
+/**
+ * `cache`: generateMetadata y la página piden el mismo auto en un render; así es una sola consulta.
+ * Si Supabase falla (tras reintentos) devuelve null: la página carga igual en el navegador.
+ */
+export const fetchCarByLookupKey = cache(async function fetchCarByLookupKey(
   lookupKey: string
 ): Promise<OracleRow | null> {
   try {
@@ -106,13 +112,11 @@ export async function fetchCarByLookupKey(
     }
 
     if (isVehicleUuid(decoded)) {
-      const { data, error } = await supabase
-        .from("inventoryoracle")
-        .select("*")
-        .eq("id", decoded)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const result = await withQueryRetry(() =>
+        supabase.from("inventoryoracle").select("*").eq("id", decoded).maybeSingle()
+      );
+      if (result.error) throw new Error(shortQueryError(result));
+      return result.data;
     }
 
     const normalized = slugifyVehicleText(decoded);
@@ -120,24 +124,25 @@ export async function fetchCarByLookupKey(
 
     const year = extractYearFromVehicleSlug(normalized);
     const brandGuess = normalized.split("-")[0];
-    let query = supabase.from("inventoryoracle").select("*");
-    if (year) query = query.eq("year", year);
-    if (brandGuess && !/^\d+$/.test(brandGuess)) {
-      query = query.ilike("brand", `${brandGuess}%`);
-    }
+    const result = await withQueryRetry(() => {
+      let query = supabase.from("inventoryoracle").select("*");
+      if (year) query = query.eq("year", year);
+      if (brandGuess && !/^\d+$/.test(brandGuess)) {
+        query = query.ilike("brand", `${brandGuess}%`);
+      }
+      return query.limit(200);
+    });
+    if (result.error) throw new Error(shortQueryError(result));
 
-    const { data: yearRows, error: yearError } = await query.limit(200);
-    if (yearError) throw yearError;
-
-    const computed = ((yearRows ?? []) as OracleRow[]).filter(
+    const computed = ((result.data ?? []) as OracleRow[]).filter(
       (row) => getVehiclePublicSlug(row) === normalized
     );
     return pickBestMatch(computed);
   } catch (error) {
-    console.error("fetchCarByLookupKey:", error);
+    console.error("fetchCarByLookupKey:", error instanceof Error ? error.message : error);
     return null;
   }
-}
+});
 
 export function vehicleOfferPrice(car: OracleRow): number | null {
   return publicPrice(car);
