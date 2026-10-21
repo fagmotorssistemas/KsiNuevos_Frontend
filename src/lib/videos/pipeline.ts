@@ -86,13 +86,7 @@ import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion 
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
 import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
-import {
-  prepareVideoForGemini,
-  prepareMultipleVideosForGemini,
-  cleanupGoogleFile,
-  cleanupMultipleGoogleFiles,
-} from './google-file-api'
-import type { GoogleFileRef } from './google-file-api'
+import { prepareVideoFramesForClaude, type ClipFrames } from './claude-frames'
 
 /**
  * false = pipeline usa solo lo dicho en el audio (Assembly). No enlaza guión de marketing
@@ -229,7 +223,7 @@ function tryAnalysisFromGuionDialogues(
     jobId,
   })
   if (!guionSequence || guionSequence.length === 0) {
-    console.warn(`[VideoV2Pipeline][${jobId}][GuionSeq] No se pudo armar secuencia → fallback Gemini`)
+    console.warn(`[VideoV2Pipeline][${jobId}][GuionSeq] No se pudo armar secuencia → fallback Claude`)
     return null
   }
 
@@ -472,7 +466,7 @@ async function applyShowcaseCaptionHighlights(
       model: brandConfig?.vehicle_line_2 ?? null,
       year: brandConfig?.vehicle_line_4 ?? null,
     },
-    useGemini: true,
+    useAi: true,
   })
 }
 
@@ -657,10 +651,10 @@ export async function runSingleVideoPipelineFromStorage(
   musicTrimStartSecOverride?: number,
   reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
-  let googleFileRef: GoogleFileRef | null = null
+  let clipFrames: ClipFrames[] = []
 
   try {
-    // A1 — EN PARALELO: Transcripción + Preparación visual para Gemini
+    // A1 — EN PARALELO: Transcripción + cuadros del video para Claude
     console.log(`[VideoV2Pipeline][${jobId}][A1] Iniciando transcripción + preparación visual en paralelo`)
     await updateJob(jobId, {
       status: 'transcribing',
@@ -668,9 +662,9 @@ export async function runSingleVideoPipelineFromStorage(
       progress_percentage: 20,
     })
 
-    const [transcriptionResult, fileRefResult] = await Promise.allSettled([
+    const [transcriptionResult, framesResult] = await Promise.allSettled([
       transcribeVideoV2(signedUrl, jobId),
-      prepareVideoForGemini(signedUrl, jobId, 'single'),
+      prepareVideoFramesForClaude([signedUrl], jobId, 1),
     ])
 
     // Transcripción es obligatoria
@@ -696,13 +690,13 @@ export async function runSingleVideoPipelineFromStorage(
 
     // Preparación visual es opcional (fallback a solo-texto)
     let useVisualAnalysis = false
-    if (fileRefResult.status === 'fulfilled') {
-      googleFileRef = fileRefResult.value
+    if (framesResult.status === 'fulfilled') {
+      clipFrames = framesResult.value
       useVisualAnalysis = true
-      console.log(`[VideoV2Pipeline][${jobId}][A1] Video listo en Google File API (visual analysis ON)`)
+      console.log(`[VideoV2Pipeline][${jobId}][A1] Cuadros del video listos para Claude (visual analysis ON)`)
     } else {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar video para Gemini, usando análisis solo de texto como fallback: ${fileRefResult.reason}`
+        `[VideoV2Pipeline][${jobId}][ClaudeFrames] Error al preparar cuadros para Claude, usando análisis solo de texto como fallback: ${framesResult.reason}`
       )
     }
 
@@ -751,18 +745,17 @@ export async function runSingleVideoPipelineFromStorage(
       return
     }
 
-    // A3 — Análisis con Gemini (visual + texto, o solo texto como fallback)
-    console.log(`[VideoV2Pipeline][${jobId}][A3] Analizando con Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+    // A3 — Análisis con Claude (visual + texto, o solo texto como fallback)
+    console.log(`[VideoV2Pipeline][${jobId}][A3] Analizando con Claude (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
     await updateJob(jobId, {
       status: 'analyzing',
       current_step: useVisualAnalysis
-        ? 'Gemini está analizando el video y seleccionando los mejores momentos visualmente...'
-        : 'Gemini IA seleccionando los mejores momentos...',
+        ? 'Claude está analizando el video y seleccionando los mejores momentos visualmente...'
+        : 'Claude IA seleccionando los mejores momentos...',
       progress_percentage: 55,
     })
 
     const formattedMap = formatSegmentMapForPrompt(segments)
-    const googleRefs = googleFileRef ? [googleFileRef] : []
     const ctx = await fetchJobGeminiContext(jobId)
     const scriptGuidanceText = USE_MARKETING_SCRIPT_IN_PIPELINE
       ? (ctx.scriptText ?? undefined)
@@ -788,30 +781,23 @@ export async function runSingleVideoPipelineFromStorage(
       }) ?? null
 
     if (!analysis) {
-      console.log(`[VideoV2Pipeline][${jobId}][A3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+      console.log(`[VideoV2Pipeline][${jobId}][A3] Fallback: Claude (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
       analysis = await analyzeSegments(
         formattedMap,
         segments,
         jobId,
-        googleRefs,
+        clipFrames,
         useVisualAnalysis,
         [],
         Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
       )
     } else {
-      console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada Gemini para orden)`)
+      console.log(`[VideoV2Pipeline][${jobId}][A3] Secuencia por guión (sin llamada a Claude para orden)`)
     }
     await updateJob(jobId, { gemini_analysis: analysis, progress_percentage: 70 })
 
-    // A3b — Limpiar archivo de Google inmediatamente después del análisis
-    if (googleFileRef) {
-      try {
-        await cleanupGoogleFile(googleFileRef, jobId)
-      } catch (cleanupErr) {
-        console.warn(`[VideoV2Pipeline][${jobId}] Error limpiando Google File (non-fatal): ${cleanupErr}`)
-      }
-      googleFileRef = null
-    }
+    // A3b — Soltar los cuadros (pesan varios MB en memoria y ya no se usan)
+    clipFrames = []
 
     // A4 — Construir subtítulos
     console.log(`[VideoV2Pipeline][${jobId}][A4] Construyendo subtítulos`)
@@ -927,11 +913,6 @@ export async function runSingleVideoPipelineFromStorage(
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (single): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
-  } finally {
-    // Garantizar limpieza si el pipeline falló antes de llegar al cleanup normal
-    if (googleFileRef) {
-      cleanupGoogleFile(googleFileRef, jobId).catch(() => {})
-    }
   }
 }
 
@@ -1133,7 +1114,7 @@ export async function runMultipleClipsPipelineFromStorage(
   musicTrimStartSecOverride?: number,
   reelAudioVolumes?: ReelAudioRenderVolumes
 ) {
-  let googleFileRefs: GoogleFileRef[] = []
+  let clipFrames: ClipFrames[] = []
 
   try {
     const paths = files.map((f) => f.path!)
@@ -1170,7 +1151,7 @@ export async function runMultipleClipsPipelineFromStorage(
       return
     }
 
-    // B1 — Transcripción de todos los clips; luego preparación visual para Gemini
+    // B1 — Transcripción de todos los clips; luego cuadros de los videos para Claude
     console.log(`[VideoV2Pipeline][${jobId}][B1] Transcribiendo ${files.length} clips…`)
     await updateJob(jobId, {
       status: 'transcribing',
@@ -1216,15 +1197,15 @@ export async function runMultipleClipsPipelineFromStorage(
     let useVisualAnalysis = false
     try {
       await updateJob(jobId, {
-        current_step: 'Preparando análisis visual (Gemini)…',
+        current_step: 'Preparando análisis visual (Claude)…',
         progress_percentage: 36,
       })
-      googleFileRefs = await prepareMultipleVideosForGemini(signedUrls, jobId, 2)
+      clipFrames = await prepareVideoFramesForClaude(signedUrls, jobId, 2)
       useVisualAnalysis = true
-      console.log(`[VideoV2Pipeline][${jobId}][B1] ${googleFileRefs.length} videos listos en Google File API`)
+      console.log(`[VideoV2Pipeline][${jobId}][B1] Cuadros de ${clipFrames.length} videos listos para Claude`)
     } catch (reason) {
       console.warn(
-        `[VideoV2Pipeline][${jobId}][GoogleFileAPI] Error al preparar videos para Gemini, usando análisis solo de texto como fallback: ${reason}`
+        `[VideoV2Pipeline][${jobId}][ClaudeFrames] Error al preparar cuadros para Claude, usando análisis solo de texto como fallback: ${reason}`
       )
     }
 
@@ -1350,13 +1331,13 @@ export async function runMultipleClipsPipelineFromStorage(
       }
     }
 
-    // B3 — Análisis con Gemini (visual + texto, o solo texto como fallback)
-    console.log(`[VideoV2Pipeline][${jobId}][B3] Analizando con Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
+    // B3 — Análisis con Claude (visual + texto, o solo texto como fallback)
+    console.log(`[VideoV2Pipeline][${jobId}][B3] Analizando con Claude (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`)
     await updateJob(jobId, {
       status: 'analyzing',
       current_step: useVisualAnalysis
-        ? 'Gemini está analizando los videos y seleccionando los mejores momentos visualmente...'
-        : 'Gemini IA seleccionando y ordenando los mejores momentos...',
+        ? 'Claude está analizando los videos y seleccionando los mejores momentos visualmente...'
+        : 'Claude IA seleccionando y ordenando los mejores momentos...',
       progress_percentage: 55,
     })
 
@@ -1460,7 +1441,7 @@ export async function runMultipleClipsPipelineFromStorage(
       }
       console.log(
         `[VideoV2Pipeline][${jobId}][B3] Checklist: ${normClipOrder!.length} clip(s) obligatorios en orden ` +
-          `${normClipOrder!.join(' → ')} (sin recorte ~35s, sin Gemini para montaje)`
+          `${normClipOrder!.join(' → ')} (sin recorte ~35s, sin Claude para montaje)`
       )
       analysis = buildForcedManualOrderClipAnalysis(
         allSegments,
@@ -1483,7 +1464,7 @@ export async function runMultipleClipsPipelineFromStorage(
 
       if (!analysis) {
         console.log(
-          `[VideoV2Pipeline][${jobId}][B3] Fallback: Gemini (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
+          `[VideoV2Pipeline][${jobId}][B3] Fallback: Claude (${useVisualAnalysis ? 'visual+texto' : 'solo texto'})`
         )
         if (escenasMulti.length > 0) {
           logGuionDialogueMatchMatrix(escenasMulti, allSegments, jobId, excludeForGuion)
@@ -1492,13 +1473,13 @@ export async function runMultipleClipsPipelineFromStorage(
           formattedMap,
           allSegments,
           jobId,
-          googleFileRefs,
+          clipFrames,
           useVisualAnalysis,
           kinds,
           Object.keys(geminiOpts).length > 0 ? geminiOpts : undefined
         )
       } else {
-        console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada Gemini para orden)`)
+        console.log(`[VideoV2Pipeline][${jobId}][B3] Secuencia por guión (sin llamada a Claude para orden)`)
       }
     }
     if (voiceOverBaseClipIndex != null) {
@@ -1511,7 +1492,7 @@ export async function runMultipleClipsPipelineFromStorage(
         await updateJob(jobId, {
           status: 'failed',
           error_message:
-            'Gemini devolvió solo segmentos del clip de voz en off/overlays. ' +
+            'Claude devolvió solo segmentos del clip de voz en off/overlays. ' +
             'Sube al menos otro clip con diálogo para armar el resto del Reel.',
         })
         return
@@ -1526,7 +1507,7 @@ export async function runMultipleClipsPipelineFromStorage(
         await updateJob(jobId, {
           status: 'failed',
           error_message:
-            'Gemini devolvió solo segmentos reservados como planos sobre la VO. ' +
+            'Claude devolvió solo segmentos reservados como planos sobre la VO. ' +
             'Deja al menos un clip con diálogo fuera de “clips encima del VO”.',
         })
         return
@@ -1540,20 +1521,13 @@ export async function runMultipleClipsPipelineFromStorage(
       await updateJob(jobId, {
         status: 'failed',
         error_message:
-          'Gemini no devolvió segmentos narrativos (sin el clip de VO). Revisa los clips o inténtalo de nuevo.',
+          'Claude no devolvió segmentos narrativos (sin el clip de VO). Revisa los clips o inténtalo de nuevo.',
       })
       return
     }
 
-    // B3b — Limpiar archivos de Google
-    if (googleFileRefs.length > 0) {
-      try {
-        await cleanupMultipleGoogleFiles(googleFileRefs, jobId)
-      } catch (cleanupErr) {
-        console.warn(`[VideoV2Pipeline][${jobId}] Error limpiando Google Files (non-fatal): ${cleanupErr}`)
-      }
-      googleFileRefs = []
-    }
+    // B3b — Soltar los cuadros (pesan varios MB en memoria y ya no se usan)
+    clipFrames = []
 
     // B4 — Construir subtítulos (incluye bloque VO + overlays manuales si vinieron en el job)
     console.log(`[VideoV2Pipeline][${jobId}][B4] Construyendo subtítulos`)
@@ -1751,10 +1725,6 @@ export async function runMultipleClipsPipelineFromStorage(
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[VideoV2Pipeline][${jobId}] ERROR (multiple): ${msg}`)
     await updateJob(jobId, { status: 'failed', error_message: msg })
-  } finally {
-    if (googleFileRefs.length > 0) {
-      cleanupMultipleGoogleFiles(googleFileRefs, jobId).catch(() => {})
-    }
   }
 }
 

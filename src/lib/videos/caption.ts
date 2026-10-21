@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { askClaudeText } from './claude'
 
 export interface VehicleCaptionInput {
   marca: string
@@ -11,8 +11,6 @@ export interface VehicleCaptionInput {
   tipo: string
 }
 
-
-const MODEL = 'gemini-flash-latest'
 
 function buildPrompt(v: VehicleCaptionInput): string {
   return `Genera un caption para Instagram y Facebook para la venta de un vehículo seminuevo con las siguientes características:
@@ -49,16 +47,10 @@ Responde ÚNICAMENTE con el caption formateado, sin comillas, sin explicación p
 }
 
 /**
- * Genera caption con Gemini (misma dependencia que el análisis V2).
+ * Genera caption con Claude (misma dependencia que el análisis V2).
  */
 export async function generateCaption(vehicle: VehicleCaptionInput): Promise<string> {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) throw new Error('GEMINI_API_KEY no configurada')
-
-  const genAI = new GoogleGenerativeAI(key)
-  const model = genAI.getGenerativeModel({ model: MODEL })
-  const result = await model.generateContent(buildPrompt(vehicle))
-  const text = result.response.text().trim()
-  if (!text) throw new Error('Gemini devolvió caption vacío')
+  const text = await askClaudeText(buildPrompt(vehicle))
+  if (!text) throw new Error('Claude devolvió caption vacío')
   return text.replace(/^["']|["']$/g, '').trim()
 }

@@ -2,10 +2,10 @@ import type { SequenceItem, SubtitleBlock, SubtitleHighlightFx } from './segment
 import { isDriveBadgeText } from './drive-badge'
 import { normalizeForMatch } from './subtitle-screen-text'
 import {
-  fetchGeminiCaptionHighlights,
-  type GeminiHighlightPhrase,
+  fetchAiCaptionHighlights,
+  type AiHighlightPhrase,
   type VehicleHighlightContext,
-} from './gemini-caption-highlights'
+} from './caption-highlights-ai'
 
 export type HighlightKind = 'spec' | 'feature' | 'emotional'
 
@@ -65,7 +65,7 @@ interface PhraseCandidate {
   phrase: string
   kind: HighlightKind
   priority: number
-  source: 'lexicon' | 'inventory' | 'gemini'
+  source: 'lexicon' | 'inventory' | 'ai'
 }
 
 export interface ApplyCaptionHighlightsOpts {
@@ -75,7 +75,7 @@ export interface ApplyCaptionHighlightsOpts {
   brandMentionTimeSec?: number
   vehicleContext?: VehicleHighlightContext
   /** false = solo léxico local */
-  useGemini?: boolean
+  useAi?: boolean
 }
 
 function countClipTransitionOverlapsBefore(clipIndex: number, sequenceLength: number): number {
@@ -161,14 +161,14 @@ function buildLocalCandidates(ctx?: VehicleHighlightContext): PhraseCandidate[] 
   return out
 }
 
-function mergeGeminiCandidates(
+function mergeAiCandidates(
   local: PhraseCandidate[],
-  gemini: GeminiHighlightPhrase[]
+  ai: AiHighlightPhrase[]
 ): PhraseCandidate[] {
   const seen = new Set(local.map((c) => normalizeForMatch(c.phrase)))
   const merged = [...local]
 
-  for (const g of gemini) {
+  for (const g of ai) {
     const norm = normalizeForMatch(g.phrase)
     if (!norm || seen.has(norm)) continue
     seen.add(norm)
@@ -176,7 +176,7 @@ function mergeGeminiCandidates(
       phrase: g.phrase,
       kind: g.kind,
       priority: Math.max(1, g.priority - 1),
-      source: 'gemini',
+      source: 'ai',
     })
   }
 
@@ -247,7 +247,7 @@ interface BlockMatch {
 
 function scoreMatch(block: SubtitleBlock, candidate: PhraseCandidate): number {
   let score = 100 - candidate.priority * 8
-  if (candidate.source === 'gemini') score += 6
+  if (candidate.source === 'ai') score += 6
   if (candidate.kind === 'feature') score += 4
   if (candidate.kind === 'emotional') score += 3
   const lenRatio = blockNorm(candidate.phrase).length / Math.max(1, blockNorm(block.text).length)
@@ -352,26 +352,26 @@ function assignHighlightEffects(
 }
 
 /**
- * Capa híbrida: léxico + inventario + Gemini opcional → metadata en bloques (Assembly timing).
+ * Capa híbrida: léxico + inventario + Claude opcional → metadata en bloques (Assembly timing).
  */
 export async function applyCaptionHighlights(
   opts: ApplyCaptionHighlightsOpts
 ): Promise<SubtitleBlock[]> {
-  const { jobId, blocks, sequence, brandMentionTimeSec, vehicleContext, useGemini = true } = opts
+  const { jobId, blocks, sequence, brandMentionTimeSec, vehicleContext, useAi = true } = opts
 
   if (blocks.length === 0) return blocks
 
   const showcaseStart = computeShowcaseStartSec(sequence, brandMentionTimeSec)
   let candidates = buildLocalCandidates(vehicleContext)
 
-  if (useGemini) {
+  if (useAi) {
     try {
       const transcript = transcriptFromBlocks(blocks)
-      const gemini = await fetchGeminiCaptionHighlights(transcript, vehicleContext ?? {}, jobId)
-      candidates = mergeGeminiCandidates(candidates, gemini)
+      const ai = await fetchAiCaptionHighlights(transcript, vehicleContext ?? {}, jobId)
+      candidates = mergeAiCandidates(candidates, ai)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.warn(`[CaptionHighlight][${jobId}] Gemini falló (solo local): ${msg}`)
+      console.warn(`[CaptionHighlight][${jobId}] Claude falló (solo local): ${msg}`)
     }
   }
 

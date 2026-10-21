@@ -4,7 +4,7 @@ import { applyVideoJobEditorPatch, getVideoJobEditorState } from '@/lib/videos/p
 import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 /**
- * GET — estado para el editor manual: subtítulos (auto vs efectivo), límites de trim por segment_id, análisis Gemini.
+ * GET — estado para el editor manual: subtítulos (auto vs efectivo), límites de trim por segment_id, análisis de la IA.
  * PATCH — guarda `subtitle_blocks_override` y/o `sequence` (cortes) sin re-transcribir.
  */
 export async function GET(

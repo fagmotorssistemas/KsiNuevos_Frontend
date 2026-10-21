@@ -36,7 +36,7 @@ function formatDate(str: string) {
 const PIPELINE_STEPS = [
   { key: 'uploading', label: 'Subida a Storage', icon: Upload },
   { key: 'transcribing', label: 'Transcripción AssemblyAI', icon: Mic2 },
-  { key: 'analyzing', label: 'Análisis Gemini IA', icon: Brain },
+  { key: 'analyzing', label: 'Análisis Claude IA', icon: Brain },
   { key: 'rendering', label: 'Renderizado Creatomate', icon: Clapperboard },
   { key: 'completed', label: 'Completado', icon: CheckCircle2 },
 ]
@@ -366,12 +366,12 @@ export default function JobDetailPage() {
             </div>
           ) : null}
 
-          {/* Análisis Gemini — nuevo formato con secuencia de segmentos */}
+          {/* Análisis IA — nuevo formato con secuencia de segmentos */}
           {segmentAnalysis && (
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <Brain className="w-4 h-4 text-orange-500" />
-                <h2 className="text-base font-bold text-gray-900">Análisis de Gemini IA</h2>
+                <h2 className="text-base font-bold text-gray-900">Análisis de la IA</h2>
               </div>
 
               <div className="space-y-3">

@@ -1,12 +1,10 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { askClaudeText, hasClaudeKey } from './claude'
 
-const MODEL = 'gemini-flash-latest'
+export type AiHighlightKind = 'spec' | 'feature' | 'emotional'
 
-export type GeminiHighlightKind = 'spec' | 'feature' | 'emotional'
-
-export interface GeminiHighlightPhrase {
+export interface AiHighlightPhrase {
   phrase: string
-  kind: GeminiHighlightKind
+  kind: AiHighlightKind
   priority: number
 }
 
@@ -58,7 +56,7 @@ Reglas:
 - NO repitas la misma idea.`
 }
 
-function parseHighlightsJson(raw: string): GeminiHighlightPhrase[] {
+function parseHighlightsJson(raw: string): AiHighlightPhrase[] {
   const trimmed = raw.trim().replace(/^```json?\s*|\s*```$/gi, '')
   let parsed: unknown
   try {
@@ -72,14 +70,14 @@ function parseHighlightsJson(raw: string): GeminiHighlightPhrase[] {
   const arr = (parsed as { caption_highlights?: unknown })?.caption_highlights
   if (!Array.isArray(arr)) return []
 
-  const out: GeminiHighlightPhrase[] = []
+  const out: AiHighlightPhrase[] = []
   for (const item of arr) {
     if (typeof item !== 'object' || item == null) continue
     const o = item as Record<string, unknown>
     const phrase = typeof o.phrase === 'string' ? o.phrase.trim() : ''
     if (phrase.length < 3) continue
     const kindRaw = typeof o.kind === 'string' ? o.kind.toLowerCase() : 'feature'
-    const kind: GeminiHighlightKind =
+    const kind: AiHighlightKind =
       kindRaw === 'spec' || kindRaw === 'emotional' ? kindRaw : 'feature'
     const priority =
       typeof o.priority === 'number' && Number.isFinite(o.priority)
@@ -91,28 +89,24 @@ function parseHighlightsJson(raw: string): GeminiHighlightPhrase[] {
 }
 
 /**
- * Capa 2 opcional: Gemini prioriza frases a destacar (sin timestamps).
+ * Capa 2 opcional: Claude prioriza frases a destacar (sin timestamps).
  */
-export async function fetchGeminiCaptionHighlights(
+export async function fetchAiCaptionHighlights(
   transcript: string,
   ctx: VehicleHighlightContext,
   jobId: string
-): Promise<GeminiHighlightPhrase[]> {
-  const key = process.env.GEMINI_API_KEY?.trim()
-  if (!key) {
-    console.log(`[HighlightGemini][${jobId}] Sin GEMINI_API_KEY — solo léxico local`)
+): Promise<AiHighlightPhrase[]> {
+  if (!hasClaudeKey()) {
+    console.log(`[HighlightClaude][${jobId}] Sin ANTHROPIC_API_KEY — solo léxico local`)
     return []
   }
   if (!transcript.trim()) return []
 
-  const genAI = new GoogleGenerativeAI(key)
-  const model = genAI.getGenerativeModel({ model: MODEL })
-  const result = await model.generateContent(buildPrompt(transcript, ctx))
-  const text = result.response.text().trim()
+  const text = await askClaudeText(buildPrompt(transcript, ctx))
   const highlights = parseHighlightsJson(text)
 
   console.log(
-    `[HighlightGemini][${jobId}] ${highlights.length} frases priorizadas: ` +
+    `[HighlightClaude][${jobId}] ${highlights.length} frases priorizadas: ` +
       highlights.map((h) => `"${h.phrase}"(${h.kind},p${h.priority})`).join(', ')
   )
   return highlights

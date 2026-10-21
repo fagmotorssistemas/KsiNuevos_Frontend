@@ -77,7 +77,7 @@ export default function VideosPage() {
             Generación de Videos
           </h1>
           <p className="text-sm text-gray-500 mt-2 max-w-lg">
-            Fábrica automatizada de Reels. AssemblyAI + Gemini + Creatomate.
+            Fábrica automatizada de Reels. AssemblyAI + Claude + Creatomate.
           </p>
         </div>
 

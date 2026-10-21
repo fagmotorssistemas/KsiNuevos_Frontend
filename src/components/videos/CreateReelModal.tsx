@@ -1150,7 +1150,7 @@ export function CreateReelModal({
                   <p className="text-sm font-semibold text-gray-900">Voz en off</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     Elige cómo va el audio principal del bloque de voz en off. Los clips que marques como planos encima
-                    van en mudo en Creatomate para que no choquen con ese audio. Gemini sigue ordenando el resto del Reel
+                    van en mudo en Creatomate para que no choquen con ese audio. Claude sigue ordenando el resto del Reel
                     y en qué momento entra el bloque de VO.
                   </p>
                   <div className="space-y-2">
@@ -1169,7 +1169,7 @@ export function CreateReelModal({
                       />
                       <span className="text-sm text-gray-800">
                         <span className="font-medium">Automático</span>
-                        <span className="text-gray-500"> — Gemini y AssemblyAI deciden el montaje.</span>
+                        <span className="text-gray-500"> — Claude y AssemblyAI deciden el montaje.</span>
                       </span>
                     </label>
                     <label className="flex items-start gap-2.5 cursor-pointer">
