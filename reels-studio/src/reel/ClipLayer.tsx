@@ -27,16 +27,16 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
     const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, 1.06])
     const punch =
       cut.transitionIn === 'zoom'
-        ? interpolate(frame, [0, 9], [1.22, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
+        ? interpolate(frame, [0, 14], [1.08, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 1
     const whipX =
       cut.transitionIn === 'whip'
-        ? interpolate(frame, [0, 7], [width * 0.35, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.quad) })
+        ? interpolate(frame, [0, 10], [width * 0.15, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 0
     transform = `translateX(${whipX}px) scale(${drift * punch})`
   }
-  const whipBlur = cut.transitionIn === 'whip' ? interpolate(frame, [0, 7], [18, 0], { extrapolateRight: 'clamp' }) : 0
-  const glitch = cut.transitionIn === 'glitch' && frame < 6
+  const whipBlur = cut.transitionIn === 'whip' ? interpolate(frame, [0, 10], [8, 0], { extrapolateRight: 'clamp' }) : 0
+  const glitch = cut.transitionIn === 'glitch' && frame < 4
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000', overflow: 'hidden' }}>
@@ -73,7 +73,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
       {glitch ? (
         <AbsoluteFill
           style={{
-            transform: `translateX(${frame % 2 === 0 ? 14 : -14}px)`,
+            transform: `translateX(${frame % 2 === 0 ? 6 : -6}px)`,
             mixBlendMode: 'screen',
             background: 'linear-gradient(90deg, rgba(255,0,60,0.25), rgba(0,200,255,0.25))',
           }}
@@ -88,7 +88,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
       />
       {cut.transitionIn === 'flash' ? (
         <AbsoluteFill
-          style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 6], [0.95, 0], { extrapolateRight: 'clamp' }) }}
+          style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 9], [0.5, 0], { extrapolateRight: 'clamp' }) }}
         />
       ) : null}
     </AbsoluteFill>

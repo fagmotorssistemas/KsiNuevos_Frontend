@@ -51,10 +51,42 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
 /** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
 const FILLER = new Set(['a', 'y', 'o', 'e', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'en', 'con', 'por', 'para', 'que', 'su', 'es', 'lo', 'al'])
 
-const MAX_TAIL_SEC = 2.5
+const MAX_TAIL_SEC = 3.5
 /** Margen antes de la primera palabra y después de la última al ajustar un corte. */
 const PRE_ROLL_SEC = 0.08
 const POST_ROLL_SEC = 0.18
+/** Fin de frase: puntuación de AssemblyAI o una pausa así de larga entre palabras. */
+const SENTENCE_END = /[.!?…]["»”']?$/
+const SENTENCE_PAUSE_SEC = 0.6
+/** Cuánto se puede alargar un corte para completar la frase (inicio o fin). */
+const MAX_SENTENCE_EXTEND_SEC = 5
+
+/**
+ * Tiempo mínimo en pantalla por tipo (segundos): el equipo pidió gráficos más pausados aunque el Reel
+ * dure más. Las listas crecen con la cantidad de elementos.
+ */
+function minDurationSec(g: Pick<RawGraphic, 'type' | 'items'>): number {
+  const items = g.items?.length ?? 0
+  switch (g.type) {
+    case 'hook_text':
+      return 2.6
+    case 'title_3d':
+      return 3
+    case 'feature_callout':
+      return 2.8
+    case 'spec_counter':
+    case 'price_tag':
+      return 3.2
+    case 'spec_chips':
+      return Math.max(3, 1.2 + items * 0.7)
+    case 'feature_list':
+      return Math.max(3, 1 + items * 1.1)
+    case 'cta_end':
+      return 3.5
+  }
+}
+/** Respiro entre un gráfico y el siguiente. */
+const GRAPHIC_GAP_SEC = 0.5
 
 export function normalizeToken(t: string): string {
   return t
@@ -102,21 +134,57 @@ export function applyTranscriptFixes(words: Word[], fixes: TranscriptFix[]): Wor
   return out
 }
 
-/** Ajusta inicio/fin del corte para no cortar palabras a la mitad. */
-function snapCutToWords(startSec: number, endSec: number, words: Word[], clipDur: number) {
-  let s = startSec
-  let e = Math.min(endSec, clipDur)
-  for (const w of words) {
-    const ws = w.start / 1000
-    const we = w.end / 1000
-    // Palabra partida al inicio: empezar antes de ella (si casi toda queda dentro) o después.
-    if (ws < s && we > s) s = we - s > (we - ws) / 2 ? ws - PRE_ROLL_SEC : we
-    // Palabra partida al final: incluirla completa si la mayor parte queda dentro.
-    if (ws < e && we > e) e = e - ws > (we - ws) / 2 ? we + POST_ROLL_SEC : ws
+/**
+ * Ajusta el corte para que la voz entre y salga con frases completas: si Gemini corta a mitad de una
+ * frase, el corte se alarga hasta su inicio/fin (puntuación o pausa) hasta MAX_SENTENCE_EXTEND_SEC; si la
+ * frase sigue más allá, retrocede al último final de frase dentro del corte. Los silencios que Gemini dejó a
+ * propósito (planos sin voz al inicio o al final) se respetan.
+ */
+function snapCutToSentences(startSec: number, endSec: number, words: Word[], clipDur: number) {
+  const sec = (ms: number) => ms / 1000
+  const n = words.length
+  // Una palabra cuenta como dentro del corte si al menos la mitad de ella lo está.
+  const inside = (w: Word) =>
+    Math.min(sec(w.end), endSec) - Math.max(sec(w.start), startSec) >= (sec(w.end) - sec(w.start)) / 2
+  const first = words.findIndex(inside)
+  let last = -1
+  for (let i = n - 1; i >= 0; i--) {
+    if (inside(words[i])) {
+      last = i
+      break
+    }
   }
-  s = Math.max(0, s)
-  e = Math.min(clipDur, e)
-  return { s, e }
+  if (first === -1 || last < first) return { s: Math.max(0, startSec), e: Math.min(clipDur, endSec) }
+
+  const endsSentence = (i: number) =>
+    i === n - 1 || SENTENCE_END.test(words[i].text) || sec(words[i + 1].start) - sec(words[i].end) >= SENTENCE_PAUSE_SEC
+  const startsSentence = (i: number) => i === 0 || endsSentence(i - 1)
+
+  let a = first
+  while (a > 0 && !startsSentence(a) && startSec - sec(words[a - 1].start) <= MAX_SENTENCE_EXTEND_SEC) a--
+  if (!startsSentence(a)) {
+    // La frase empieza demasiado antes: arrancar en la siguiente frase dentro del corte.
+    let k = first
+    while (k < last && !startsSentence(k)) k++
+    a = startsSentence(k) ? k : first
+  }
+
+  let b = last
+  while (b < n - 1 && !endsSentence(b) && sec(words[b + 1].end) - endSec <= MAX_SENTENCE_EXTEND_SEC) b++
+  if (!endsSentence(b)) {
+    // La frase sigue demasiado después: terminar en el último final de frase dentro del corte.
+    let k = last
+    while (k > a && !endsSentence(k)) k--
+    b = endsSentence(k) ? k : last
+  }
+
+  // Silencio a propósito antes de la primera palabra / después de la última: se conserva.
+  let s = a === first ? Math.min(startSec, sec(words[a].start) - PRE_ROLL_SEC) : sec(words[a].start) - PRE_ROLL_SEC
+  let e = b === last ? Math.max(endSec, sec(words[b].end) + POST_ROLL_SEC) : sec(words[b].end) + POST_ROLL_SEC
+  // Los márgenes nunca se meten en la palabra de al lado (que es de otra frase).
+  if (a > 0) s = Math.max(s, Math.min(sec(words[a].start), sec(words[a - 1].end) + 0.02))
+  if (b < n - 1) e = Math.min(e, Math.max(sec(words[b].end), sec(words[b + 1].start) - 0.02))
+  return { s: Math.max(0, s), e: Math.min(clipDur, e) }
 }
 
 /** Caja normalizada del cuadro fuente → píxeles en el lienzo (video en modo "cover"). */
@@ -206,10 +274,24 @@ export function buildReelProps(
       warnings.push(`Corte ignorado: clip desconocido ${cut.clipId}`)
       continue
     }
-    const { s, e } = snapCutToWords(cut.startSec, cut.endSec, fixedWords.get(clip.id) ?? [], clip.durationSec)
+    let { s, e } = snapCutToSentences(cut.startSec, cut.endSec, fixedWords.get(clip.id) ?? [], clip.durationSec)
+    // Al completar frases, dos cortes seguidos del mismo clip pueden tocarse: se unen en uno.
+    const prev = cuts[cuts.length - 1]
+    if (prev && prev.clipId === clip.id && s <= prev.trimEndSec + 0.3 && e > prev.trimStartSec) {
+      const mergedEnd = Math.max(prev.trimEndSec, e)
+      const added = Math.round((mergedEnd - prev.trimEndSec) * fps)
+      prev.trimEndSec = mergedEnd
+      prev.durationInFrames += added
+      cursor += added
+      continue
+    }
+    // Sin repetir audio: si ya se usó ese tramo del clip en otro corte, se empieza después.
+    for (const used of cuts) {
+      if (used.clipId === clip.id && s < used.trimEndSec && e > used.trimStartSec) s = Math.max(s, used.trimEndSec)
+    }
     const durationInFrames = Math.round((e - s) * fps)
     if (durationInFrames < Math.round(fps * 0.5)) {
-      warnings.push(`Corte ignorado por corto (<0.5s): ${cut.clipId} ${s.toFixed(2)}–${e.toFixed(2)}`)
+      warnings.push(`Corte ignorado por corto o repetido: ${cut.clipId} ${s.toFixed(2)}–${e.toFixed(2)}`)
       continue
     }
     cuts.push({
@@ -260,7 +342,7 @@ export function buildReelProps(
   let laneFree = 0
   for (const [i, { g, fromFrame: rawFrom, cut }] of placed.entries()) {
     let fromFrame = Math.max(rawFrom, laneFree)
-    let durationInFrames = Math.round(g.durationSec * fps)
+    let durationInFrames = Math.round(Math.max(g.durationSec, minDurationSec(g)) * fps)
     if (g.type === 'cta_end') {
       // El CTA siempre cierra el Reel; si hace falta, se congela el último cuadro un momento.
       tailFrames = Math.min(Math.round(MAX_TAIL_SEC * fps), Math.max(0, fromFrame + durationInFrames - cutsEnd))
@@ -268,15 +350,16 @@ export function buildReelProps(
     const reelEnd = cutsEnd + tailFrames
     const nextStart = placed[i + 1]?.fromFrame
     if (nextStart !== undefined && g.type !== 'cta_end' && fromFrame + durationInFrames > nextStart) {
-      // Recorta para dejar entrar al siguiente, pero sin bajar del mínimo legible.
-      durationInFrames = Math.max(minFrames, nextStart - fromFrame)
+      // Recorta para dejar entrar al siguiente, pero sin bajar de ~85% de su tiempo mínimo
+      // (si no alcanza, el siguiente se corre un poco).
+      durationInFrames = Math.max(Math.round(minDurationSec(g) * fps * 0.85), nextStart - fromFrame)
     }
     durationInFrames = Math.min(durationInFrames, reelEnd - fromFrame)
     if (durationInFrames < minFrames) {
       warnings.push(`Gráfico descartado por falta de espacio: ${g.type} "${g.text}"`)
       continue
     }
-    laneFree = fromFrame + durationInFrames + 2
+    laneFree = fromFrame + durationInFrames + Math.round(GRAPHIC_GAP_SEC * fps)
 
     const { focus, focusEnd, clipId: _clipId, atSec: _atSec, durationSec: _durationSec, ...rest } = g
     const tg: TimelineGraphic = { ...rest, id: `g${graphics.length + 1}-${g.type}`, fromFrame, durationInFrames }
@@ -291,7 +374,7 @@ export function buildReelProps(
           continue
         }
         tg.durationInFrames = durationInFrames
-        laneFree = fromFrame + durationInFrames + 2
+        laneFree = fromFrame + durationInFrames + Math.round(GRAPHIC_GAP_SEC * fps)
       }
       const screenFocus = focus ? focusToScreen(focus, cut.srcWidth, cut.srcHeight, width, height) : undefined
       tg.cardAtTop = g.placement ? g.placement === 'arriba' : screenFocus ? screenFocus.cy > height * 0.5 : true

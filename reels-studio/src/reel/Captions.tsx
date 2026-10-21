@@ -13,7 +13,7 @@ export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
   if (!line) return null
 
   const local = frame - line.fromFrame
-  const pop = spring({ frame: local, fps, config: { damping: 13, stiffness: 260, mass: 0.6 } })
+  const pop = spring({ frame: local, fps, config: { damping: 20, stiffness: 150, mass: 0.8 } })
   const top = height * Y_BY_PLACEMENT[line.placement]
 
   return (
@@ -24,7 +24,7 @@ export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
           top,
           left: 60,
           right: 60,
-          transform: `translateY(-50%) scale(${interpolate(pop, [0, 1], [0.78, 1])}) perspective(900px) rotateX(${interpolate(pop, [0, 1], [35, 0])}deg)`,
+          transform: `translateY(-50%) scale(${interpolate(pop, [0, 1], [0.93, 1])}) perspective(900px) rotateX(${interpolate(pop, [0, 1], [12, 0])}deg)`,
           opacity: interpolate(pop, [0, 0.35], [0, 1], { extrapolateRight: 'clamp' }),
           display: 'flex',
           flexWrap: 'wrap',
@@ -36,8 +36,8 @@ export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
         {line.words.map((w, i) => {
           const active = frame >= w.fromFrame && frame < Math.max(w.toFrame, w.fromFrame + 4)
           const spoken = frame >= w.fromFrame
-          const wordPop = spring({ frame: frame - w.fromFrame, fps, config: { damping: 11, stiffness: 300, mass: 0.5 } })
-          const scale = active ? interpolate(wordPop, [0, 1], [1.0, 1.08]) : 1
+          const wordPop = spring({ frame: frame - w.fromFrame, fps, config: { damping: 18, stiffness: 160, mass: 0.7 } })
+          const scale = active ? interpolate(wordPop, [0, 1], [1.0, 1.05]) : 1
           const text = w.text.replace(/[.,;:…]+$/, '').toUpperCase()
           if (w.emphasis) {
             return (

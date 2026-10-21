@@ -8,9 +8,9 @@ import { clamp, delayedSpring, useEnterExit } from './anim'
 
 /** Presentación del vehículo: modelo en 3D metálico, marca arriba y año en bloque rojo. */
 export const Title3D: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, durationInFrames, width, height, enter, exit } = useEnterExit(9)
+  const { frame, fps, durationInFrames, width, height, enter, exit } = useEnterExit(16)
   const brandIn = delayedSpring(frame, fps, 4)
-  const badgeIn = delayedSpring(frame, fps, 10, 11, 150)
+  const badgeIn = delayedSpring(frame, fps, 14)
   const t = frame / fps
   const sweepX = interpolate(frame, [0, durationInFrames], [-7, 7])
   const visible = enter * (1 - exit)
@@ -64,8 +64,8 @@ export const Title3D: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
         <pointLight position={[sweepX, 1.6, 3.2]} intensity={70} distance={14} />
         <group
           position={[0, 0.9, 0]}
-          rotation={[0.06 + Math.cos(t * 1.3) * 0.03 + exit * 1.3, (1 - enter) * -1.5 + Math.sin(t * 1.6) * 0.1, 0]}
-          scale={Math.max(0.001, (0.55 + 0.45 * enter) * (1 - exit))}
+          rotation={[0.06 + Math.cos(t * 1.1) * 0.02 + exit * 0.5, (1 - enter) * -0.9 + Math.sin(t * 1.2) * 0.06, 0]}
+          scale={Math.max(0.001, (0.75 + 0.25 * enter) * (1 - exit * 0.6))}
         >
           <Text3D
             text={g.text.toUpperCase()}
@@ -74,10 +74,10 @@ export const Title3D: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
             size={1.3}
             depth={0.5}
             maxWidth={4.6}
-            position={[0, 0, (1 - enter) * -6]}
+            position={[0, 0, (1 - enter) * -3]}
           />
           {g.badge ? (
-            <group position={[0, -1.25, 0.3]} rotation={[(1 - badgeIn) * -1.7, 0, 0]} scale={Math.max(0.001, badgeIn)}>
+            <group position={[0, -1.25, 0.3]} rotation={[(1 - badgeIn) * -0.8, 0, 0]} scale={Math.max(0.001, badgeIn)}>
               <mesh position={[0, 0, -0.12]}>
                 <boxGeometry args={[Math.max(1.6, g.badge.length * 0.42), 0.85, 0.28]} />
                 <meshStandardMaterial color={COLORS.red} metalness={0.45} roughness={0.3} />

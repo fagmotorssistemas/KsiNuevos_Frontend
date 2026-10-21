@@ -13,7 +13,7 @@ export const CtaEnd: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, bran
   const labelIn = delayedSpring(frame, fps, 2)
   const subIn = delayedSpring(frame, fps, 12)
   const logoIn = delayedSpring(frame, fps, 18)
-  const bounce = Math.abs(Math.sin(t * Math.PI * 2.2)) * 26
+  const bounce = Math.abs(Math.sin(t * Math.PI * 1.3)) * 16
   const keyword = g.text.replace(/^comenta\s+/i, '').replace(/["“”']/g, '')
 
   return (
@@ -35,7 +35,7 @@ export const CtaEnd: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, bran
           fontSize: 86,
           letterSpacing: 12,
           color: COLORS.white,
-          transform: `scale(${interpolate(labelIn, [0, 1], [1.8, 1])})`,
+          transform: `scale(${interpolate(labelIn, [0, 1], [1.15, 1])})`,
           opacity: interpolate(labelIn, [0, 0.3], [0, 1], clamp),
         }}
       >
@@ -48,8 +48,8 @@ export const CtaEnd: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, bran
         <pointLight position={[Math.sin(t * 2) * 5, 1, 3]} intensity={60} distance={14} />
         <group
           position={[0, 1.15, 0]}
-          rotation={[0.08, (1 - enter) * 1.6 + Math.sin(t * 1.8) * 0.12, Math.sin(t * 1.1) * 0.03]}
-          scale={Math.max(0.001, 0.4 + 0.6 * enter)}
+          rotation={[0.08, (1 - enter) * 0.9 + Math.sin(t * 1.2) * 0.07, Math.sin(t * 0.9) * 0.02]}
+          scale={Math.max(0.001, 0.75 + 0.25 * enter)}
         >
           <Text3D text={keyword.toUpperCase()} faceColor={COLORS.red} sideColor="#ffffff" size={1.25} depth={0.5} maxWidth={4.5} metalness={0.12} roughness={0.38} />
         </group>

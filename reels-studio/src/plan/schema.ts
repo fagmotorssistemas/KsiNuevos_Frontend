@@ -77,7 +77,7 @@ export const rawGraphicSchema = z.object({
   type: z.enum(GRAPHIC_TYPES),
   clipId: z.string(),
   atSec: z.number().min(0),
-  durationSec: z.number().min(0.6).max(6),
+  durationSec: z.number().min(0.6).max(8),
   /** Texto principal: modelo, nombre de la característica, frase gancho, CTA... */
   text: z.string(),
   /** Texto secundario: marca, detalle de la característica, "te enviamos la info". */

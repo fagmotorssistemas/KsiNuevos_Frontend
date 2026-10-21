@@ -7,7 +7,7 @@ import { Icon } from './Icons'
 
 /** Datos rápidos en fichas que entran una tras otra: "2.8 DIÉSEL · AUTOMÁTICO · 4x4". */
 export const SpecChips: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, height, exit } = useEnterExit(7)
+  const { frame, fps, height, exit } = useEnterExit()
   const items = g.items ?? []
   const top = g.placement === 'abajo' ? height * 0.6 : g.placement === 'centro' ? height * 0.4 : height * 0.13
 
@@ -20,7 +20,7 @@ export const SpecChips: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
           </div>
         ) : null}
         {items.map((item, i) => {
-          const s = delayedSpring(frame, fps, i * 5, 12, 200)
+          const s = delayedSpring(frame, fps, i * 10)
           const out = interpolate(exit, [0, 1], [0, 1])
           return (
             <div
@@ -32,7 +32,8 @@ export const SpecChips: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
                 borderRadius: 20,
                 overflow: 'hidden',
                 boxShadow: `0 10px 0 rgba(0,0,0,0.35), 0 18px 30px rgba(0,0,0,0.35)`,
-                transform: `translateX(${interpolate(s, [0, 1], [-700, 0]) - out * 900}px) rotateY(${interpolate(s, [0, 1], [-60, -8])}deg)`,
+                transform: `translateX(${interpolate(s, [0, 1], [-220, 0]) - out * 260}px) rotateY(${interpolate(s, [0, 1], [-25, -8])}deg)`,
+                opacity: interpolate(s, [0, 0.6], [0, 1], { extrapolateRight: 'clamp' }) * (1 - out),
                 transformOrigin: '0% 50%',
               }}
             >

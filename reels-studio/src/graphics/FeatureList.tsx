@@ -7,9 +7,10 @@ import { Icon } from './Icons'
 
 /** Lista de equipamiento o beneficios que se va marcando con check. */
 export const FeatureList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, width, height, enter, exit } = useEnterExit(8)
+  const { frame, fps, durationInFrames, width, height, enter, exit } = useEnterExit()
   const items = g.items ?? []
-  const stagger = Math.max(4, Math.min(9, Math.floor((fps * 1.4) / Math.max(1, items.length))))
+  // Los elementos se reparten en ~la mitad del tiempo en pantalla, uno por uno.
+  const stagger = Math.max(10, Math.min(24, Math.floor((durationInFrames * 0.5) / Math.max(1, items.length))))
 
   return (
     <AbsoluteFill>
@@ -32,7 +33,8 @@ export const FeatureList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
             lineHeight: 1,
             color: COLORS.white,
             textShadow: extrudedShadow(14, COLORS.redDeep, 120),
-            transform: `rotateY(${interpolate(enter, [0, 1], [-50, -6])}deg) scale(${interpolate(enter, [0, 1], [0.7, 1])})`,
+            transform: `rotateY(${interpolate(enter, [0, 1], [-20, -6])}deg) scale(${interpolate(enter, [0, 1], [0.9, 1])})`,
+            opacity: enter,
             transformOrigin: '0% 50%',
             textTransform: 'uppercase',
           }}
@@ -42,8 +44,8 @@ export const FeatureList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
         <div style={{ height: 12, width: interpolate(enter, [0, 1], [0, 300]), background: COLORS.red, borderRadius: 6, margin: '26px 0 40px' }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
           {items.map((item, i) => {
-            const s = delayedSpring(frame, fps, 8 + i * stagger, 12, 180)
-            const tick = delayedSpring(frame, fps, 12 + i * stagger, 9, 260)
+            const s = delayedSpring(frame, fps, 10 + i * stagger)
+            const tick = delayedSpring(frame, fps, 16 + i * stagger)
             return (
               <div
                 key={i}
@@ -51,7 +53,7 @@ export const FeatureList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 28,
-                  transform: `rotateX(${interpolate(s, [0, 1], [-90, 0])}deg)`,
+                  transform: `rotateX(${interpolate(s, [0, 1], [-35, 0])}deg) translateY(${interpolate(s, [0, 1], [16, 0])}px)`,
                   transformOrigin: '50% 0%',
                   opacity: s,
                 }}
@@ -67,7 +69,7 @@ export const FeatureList: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     boxShadow: `0 8px 0 ${COLORS.redDeep}`,
-                    transform: `scale(${interpolate(tick, [0, 1], [0.4, 1])})`,
+                    transform: `scale(${interpolate(tick, [0, 1], [0.7, 1])})`,
                   }}
                 >
                   <Icon name="check" size={64} strokeWidth={3.2} />

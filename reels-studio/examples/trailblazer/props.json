@@ -2,7 +2,7 @@
   "fps": 30,
   "width": 1080,
   "height": 1920,
-  "durationInFrames": 892,
+  "durationInFrames": 897,
   "cuts": [
     {
       "clipId": "clip1",
@@ -26,7 +26,7 @@
       "fromFrame": 147,
       "durationInFrames": 163,
       "trimStartSec": 0,
-      "trimEndSec": 5.43,
+      "trimEndSec": 5.433333,
       "role": "presentacion",
       "transitionIn": "flash",
       "captionPlacement": "abajo",
@@ -52,9 +52,9 @@
       "srcWidth": 720,
       "srcHeight": 1280,
       "fromFrame": 467,
-      "durationInFrames": 94,
+      "durationInFrames": 95,
       "trimStartSec": 0,
-      "trimEndSec": 3.14,
+      "trimEndSec": 3.166667,
       "role": "dato",
       "transitionIn": "zoom",
       "captionPlacement": "abajo",
@@ -65,7 +65,7 @@
       "src": "demo/clip5.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 561,
+      "fromFrame": 562,
       "durationInFrames": 79,
       "trimStartSec": 0.6,
       "trimEndSec": 3.233333,
@@ -79,10 +79,10 @@
       "src": "demo/clip6.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 640,
-      "durationInFrames": 132,
-      "trimStartSec": 0.2,
-      "trimEndSec": 4.61,
+      "fromFrame": 641,
+      "durationInFrames": 133,
+      "trimStartSec": 0.186,
+      "trimEndSec": 4.633333,
       "role": "caracteristica",
       "transitionIn": "whip",
       "captionPlacement": "abajo",
@@ -106,7 +106,7 @@
             "y": 768
           },
           "fromFrame": 50,
-          "durationInFrames": 48
+          "durationInFrames": 83
         }
       ]
     },
@@ -115,17 +115,17 @@
       "src": "demo/clip7.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 772,
-      "durationInFrames": 68,
+      "fromFrame": 774,
+      "durationInFrames": 94,
       "trimStartSec": 0,
-      "trimEndSec": 2.255,
+      "trimEndSec": 3.126009,
       "role": "cierre",
       "transitionIn": "zoom",
       "captionPlacement": "abajo",
       "zooms": []
     }
   ],
-  "tailFrames": 52,
+  "tailFrames": 29,
   "graphics": [
     {
       "type": "hook_text",
@@ -134,7 +134,7 @@
       "reason": "Gancho en los primeros 2 segundos.",
       "id": "g1-hook_text",
       "fromFrame": 3,
-      "durationInFrames": 66
+      "durationInFrames": 78
     },
     {
       "type": "title_3d",
@@ -144,7 +144,7 @@
       "reason": "Dice la marca y el modelo.",
       "id": "g2-title_3d",
       "fromFrame": 149,
-      "durationInFrames": 59
+      "durationInFrames": 77
     },
     {
       "type": "spec_chips",
@@ -158,8 +158,8 @@
       "placement": "arriba",
       "reason": "Enumera versión, caja, tracción y puertas.",
       "id": "g3-spec_chips",
-      "fromFrame": 210,
-      "durationInFrames": 99
+      "fromFrame": 241,
+      "durationInFrames": 102
     },
     {
       "type": "feature_list",
@@ -171,8 +171,8 @@
       ],
       "reason": "Dice 'hay tres cosas que mandan' y las enumera.",
       "id": "g4-feature_list",
-      "fromFrame": 343,
-      "durationInFrames": 123
+      "fromFrame": 358,
+      "durationInFrames": 111
     },
     {
       "type": "spec_counter",
@@ -183,8 +183,8 @@
       "unit": "km",
       "reason": "Dice el kilometraje sobre el tablero.",
       "id": "g5-spec_counter",
-      "fromFrame": 469,
-      "durationInFrames": 87
+      "fromFrame": 484,
+      "durationInFrames": 96
     },
     {
       "type": "feature_callout",
@@ -193,8 +193,8 @@
       "icon": "volante",
       "reason": "Se ve el volante con mandos mientras habla del estado real.",
       "id": "g6-feature_callout",
-      "fromFrame": 690,
-      "durationInFrames": 48,
+      "fromFrame": 691,
+      "durationInFrames": 83,
       "cardAtTop": false,
       "zoom": {
         "focus": {
@@ -228,41 +228,22 @@
       "subtext": "y te enviamos toda la información",
       "reason": "Cierre: comenta la palabra clave.",
       "id": "g7-cta_end",
-      "fromFrame": 784,
+      "fromFrame": 789,
       "durationInFrames": 108
     }
   ],
   "captions": [
     {
-      "fromFrame": 69,
-      "toFrame": 94,
+      "fromFrame": 83,
+      "toFrame": 113,
       "placement": "abajo",
       "words": [
-        {
-          "text": "y",
-          "fromFrame": 69,
-          "toFrame": 74,
-          "emphasis": false
-        },
-        {
-          "text": "solo",
-          "fromFrame": 74,
-          "toFrame": 83,
-          "emphasis": false
-        },
         {
           "text": "miras",
           "fromFrame": 83,
           "toFrame": 94,
           "emphasis": false
-        }
-      ]
-    },
-    {
-      "fromFrame": 94,
-      "toFrame": 122,
-      "placement": "abajo",
-      "words": [
+        },
         {
           "text": "el",
           "fromFrame": 94,
@@ -274,20 +255,20 @@
           "fromFrame": 100,
           "toFrame": 113,
           "emphasis": false
-        },
+        }
+      ]
+    },
+    {
+      "fromFrame": 113,
+      "toFrame": 141,
+      "placement": "abajo",
+      "words": [
         {
           "text": "pues",
           "fromFrame": 113,
           "toFrame": 122,
           "emphasis": false
-        }
-      ]
-    },
-    {
-      "fromFrame": 122,
-      "toFrame": 147,
-      "placement": "abajo",
-      "words": [
+        },
         {
           "text": "ya",
           "fromFrame": 122,
@@ -299,7 +280,14 @@
           "fromFrame": 128,
           "toFrame": 141,
           "emphasis": false
-        },
+        }
+      ]
+    },
+    {
+      "fromFrame": 141,
+      "toFrame": 147,
+      "placement": "abajo",
+      "words": [
         {
           "text": "mal.",
           "fromFrame": 141,
@@ -335,7 +323,7 @@
     },
     {
       "fromFrame": 335,
-      "toFrame": 354,
+      "toFrame": 370,
       "placement": "abajo",
       "words": [
         {
@@ -343,168 +331,200 @@
           "fromFrame": 335,
           "toFrame": 342,
           "emphasis": true
+        },
+        {
+          "text": "hay",
+          "fromFrame": 342,
+          "toFrame": 349,
+          "emphasis": false
+        },
+        {
+          "text": "tres",
+          "fromFrame": 349,
+          "toFrame": 358,
+          "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 563,
-      "toFrame": 601,
+      "fromFrame": 470,
+      "toFrame": 501,
       "placement": "abajo",
       "words": [
         {
-          "text": "con",
-          "fromFrame": 563,
-          "toFrame": 573,
-          "emphasis": false
+          "text": "128",
+          "fromFrame": 470,
+          "toFrame": 479,
+          "emphasis": true
         },
         {
-          "text": "la",
-          "fromFrame": 573,
-          "toFrame": 581,
+          "text": "mil",
+          "fromFrame": 479,
+          "toFrame": 489,
           "emphasis": false
-        },
+        }
+      ]
+    },
+    {
+      "fromFrame": 582,
+      "toFrame": 628,
+      "placement": "abajo",
+      "words": [
         {
           "text": "esencia",
-          "fromFrame": 581,
-          "toFrame": 601,
+          "fromFrame": 582,
+          "toFrame": 602,
           "emphasis": false
-        }
-      ]
-    },
-    {
-      "fromFrame": 601,
-      "toFrame": 640,
-      "placement": "abajo",
-      "words": [
+        },
         {
           "text": "propia",
-          "fromFrame": 601,
-          "toFrame": 618,
+          "fromFrame": 602,
+          "toFrame": 619,
           "emphasis": false
         },
         {
           "text": "de",
-          "fromFrame": 618,
-          "toFrame": 627,
+          "fromFrame": 619,
+          "toFrame": 628,
           "emphasis": false
-        },
+        }
+      ]
+    },
+    {
+      "fromFrame": 628,
+      "toFrame": 641,
+      "placement": "abajo",
+      "words": [
         {
           "text": "Chevrolet.",
-          "fromFrame": 627,
-          "toFrame": 640,
+          "fromFrame": 628,
+          "toFrame": 641,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 642,
-      "toFrame": 665,
+      "fromFrame": 643,
+      "toFrame": 666,
       "placement": "abajo",
       "words": [
         {
           "text": "En",
-          "fromFrame": 642,
-          "toFrame": 647,
+          "fromFrame": 643,
+          "toFrame": 648,
           "emphasis": false
         },
         {
           "text": "K-Si",
-          "fromFrame": 647,
-          "toFrame": 654,
+          "fromFrame": 648,
+          "toFrame": 656,
           "emphasis": true
         },
         {
           "text": "Nuevos",
-          "fromFrame": 654,
-          "toFrame": 665,
+          "fromFrame": 656,
+          "toFrame": 666,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 665,
-      "toFrame": 698,
+      "fromFrame": 666,
+      "toFrame": 699,
       "placement": "arriba",
       "words": [
         {
           "text": "seleccionamos",
-          "fromFrame": 665,
-          "toFrame": 690,
+          "fromFrame": 666,
+          "toFrame": 691,
           "emphasis": false
         },
         {
           "text": "SUV",
-          "fromFrame": 690,
-          "toFrame": 698,
+          "fromFrame": 691,
+          "toFrame": 699,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 698,
-      "toFrame": 726,
+      "fromFrame": 699,
+      "toFrame": 727,
       "placement": "arriba",
       "words": [
         {
           "text": "por",
-          "fromFrame": 698,
-          "toFrame": 706,
+          "fromFrame": 699,
+          "toFrame": 708,
           "emphasis": false
         },
         {
           "text": "su",
-          "fromFrame": 706,
-          "toFrame": 713,
+          "fromFrame": 708,
+          "toFrame": 714,
           "emphasis": false
         },
         {
           "text": "estado",
-          "fromFrame": 713,
-          "toFrame": 726,
+          "fromFrame": 714,
+          "toFrame": 727,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 726,
-      "toFrame": 748,
+      "fromFrame": 727,
+      "toFrame": 749,
       "placement": "arriba",
       "words": [
         {
           "text": "real",
-          "fromFrame": 726,
-          "toFrame": 736,
+          "fromFrame": 727,
+          "toFrame": 737,
           "emphasis": true
         },
         {
           "text": "y",
-          "fromFrame": 736,
-          "toFrame": 741,
+          "fromFrame": 737,
+          "toFrame": 742,
           "emphasis": false
         },
         {
           "text": "no",
-          "fromFrame": 741,
-          "toFrame": 748,
+          "fromFrame": 742,
+          "toFrame": 749,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 748,
-      "toFrame": 772,
-      "placement": "abajo",
+      "fromFrame": 749,
+      "toFrame": 774,
+      "placement": "arriba",
       "words": [
         {
           "text": "por",
-          "fromFrame": 748,
-          "toFrame": 756,
+          "fromFrame": 749,
+          "toFrame": 757,
           "emphasis": false
         },
         {
           "text": "vitrina.",
-          "fromFrame": 756,
-          "toFrame": 772,
+          "fromFrame": 757,
+          "toFrame": 774,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 784,
+      "toFrame": 816,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "buscando",
+          "fromFrame": 784,
+          "toFrame": 804,
           "emphasis": false
         }
       ]
@@ -520,7 +540,7 @@
       "kind": "hit"
     },
     {
-      "frame": 210,
+      "frame": 241,
       "kind": "pop"
     },
     {
@@ -528,27 +548,27 @@
       "kind": "whoosh"
     },
     {
-      "frame": 343,
+      "frame": 358,
       "kind": "pop"
     },
     {
-      "frame": 469,
+      "frame": 484,
       "kind": "riser"
     },
     {
-      "frame": 561,
+      "frame": 562,
       "kind": "whoosh"
     },
     {
-      "frame": 640,
+      "frame": 641,
       "kind": "whoosh"
     },
     {
-      "frame": 690,
+      "frame": 691,
       "kind": "whoosh"
     },
     {
-      "frame": 784,
+      "frame": 789,
       "kind": "hit"
     }
   ],
@@ -558,5 +578,6 @@
     "highlight": "#FFE94A"
   },
   "music": null,
-  "watermark": "MUESTRA · plan escrito a mano"
+  "watermark": "MUESTRA · plan escrito a mano",
+  "videoEngine": "media"
 }

@@ -11,18 +11,18 @@ import { Icon } from './Icons'
  * aquí se dibuja el anillo de enfoque sobre él, la línea y la tarjeta 3D con ícono.
  */
 export const FeatureCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, durationInFrames, width, height, enter, exit } = useEnterExit(8)
+  const { frame, fps, durationInFrames, width, height, enter, exit } = useEnterExit()
   const z = g.zoom ? zoomTransform(g.zoom, zoomProgress(frame, durationInFrames, fps), frame / durationInFrames) : null
-  const ringIn = delayedSpring(frame, fps, 8, 12, 200)
-  const lineIn = interpolate(frame, [10, 20], [0, 1], clamp)
-  const subIn = delayedSpring(frame, fps, 9)
+  const ringIn = delayedSpring(frame, fps, 10)
+  const lineIn = interpolate(frame, [12, 30], [0, 1], clamp)
+  const subIn = delayedSpring(frame, fps, 14)
   const visible = 1 - exit
 
   const cardTop = g.cardAtTop ? height * 0.1 : height * 0.64
   const cardHeight = 250
   const anchor = { x: width / 2, y: g.cardAtTop ? cardTop + cardHeight : cardTop }
   const ringR = z ? Math.min(250, Math.max(80, z.radius * 1.15)) : 0
-  const pulse = 1 + Math.sin((frame / fps) * Math.PI * 3) * 0.05
+  const pulse = 1 + Math.sin((frame / fps) * Math.PI * 1.6) * 0.03
 
   let line: { x1: number; y1: number; x2: number; y2: number; len: number } | null = null
   if (z) {
@@ -92,7 +92,8 @@ export const FeatureCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
             background: COLORS.glass,
             border: '3px solid rgba(255,255,255,0.18)',
             boxShadow: `0 24px 0 ${COLORS.redDeep}, 0 40px 60px rgba(0,0,0,0.55)`,
-            transform: `rotateX(${interpolate(enter, [0, 1], [g.cardAtTop ? 95 : -95, 6])}deg) rotateY(${interpolate(enter, [0, 1], [-30, -8])}deg)`,
+            transform: `rotateX(${interpolate(enter, [0, 1], [g.cardAtTop ? 55 : -55, 6])}deg) rotateY(${interpolate(enter, [0, 1], [-18, -8])}deg)`,
+            opacity: interpolate(enter, [0, 0.5], [0, 1], clamp),
             transformOrigin: g.cardAtTop ? '50% 0%' : '50% 100%',
             overflow: 'hidden',
           }}
@@ -108,7 +109,7 @@ export const FeatureCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: 'inset 0 4px 0 rgba(255,255,255,0.35), 0 12px 24px rgba(0,0,0,0.4)',
-              transform: `rotate(${interpolate(enter, [0, 1], [-25, 0])}deg) scale(${interpolate(enter, [0, 1], [0.6, 1])})`,
+              transform: `rotate(${interpolate(enter, [0, 1], [-10, 0])}deg) scale(${interpolate(enter, [0, 1], [0.85, 1])})`,
             }}
           >
             {g.icon ? <Icon name={g.icon} size={112} strokeWidth={1.9} /> : null}
@@ -148,7 +149,7 @@ export const FeatureCallout: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
               top: 0,
               bottom: 0,
               width: 160,
-              left: interpolate(frame, [6, 26], [-200, width], clamp),
+              left: interpolate(frame, [12, 48], [-200, width], clamp),
               background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.28), transparent)',
             }}
           />

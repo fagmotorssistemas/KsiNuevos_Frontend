@@ -7,10 +7,11 @@ import { Icon } from './Icons'
 
 /** Dato numérico grande que cuenta hacia arriba: "128.000 KM", "2.8 L", "200 HP". */
 export const SpecCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, width, height, enter, exit } = useEnterExit(8)
+  const { frame, fps, width, height, enter, exit } = useEnterExit()
   const value = g.value ?? 0
   const decimals = Number.isInteger(value) ? 0 : 1
-  const count = interpolate(frame, [2, Math.round(fps * 0.9)], [0, value], {
+  const countEnd = Math.round(fps * 1.5)
+  const count = interpolate(frame, [4, countEnd], [0, value], {
     ...clamp,
     easing: Easing.out(Easing.cubic),
   })
@@ -18,10 +19,10 @@ export const SpecCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
   const finalLen = `${g.prefix ?? ''}${formatSpecNumber(value, decimals)}`.length
   const fontSize = Math.min(330, 1500 / Math.max(3, finalLen))
   const labelIn = delayedSpring(frame, fps, 3)
-  const unitIn = delayedSpring(frame, fps, Math.round(fps * 0.75), 10, 220)
-  const subIn = delayedSpring(frame, fps, Math.round(fps * 0.9))
-  const landed = frame >= Math.round(fps * 0.9)
-  const thump = landed ? interpolate(frame - Math.round(fps * 0.9), [0, 4, 10], [1, 1.08, 1], clamp) : 1
+  const unitIn = delayedSpring(frame, fps, countEnd - 10)
+  const subIn = delayedSpring(frame, fps, countEnd)
+  const landed = frame >= countEnd
+  const thump = landed ? interpolate(frame - countEnd, [0, 6, 14], [1, 1.035, 1], clamp) : 1
   const visible = enter * (1 - exit)
 
   return (
@@ -30,8 +31,8 @@ export const SpecCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       {/* Líneas de velocidad girando detrás del número */}
       <AbsoluteFill
         style={{
-          opacity: visible * 0.22,
-          background: `repeating-conic-gradient(from ${frame * 1.5}deg at 50% 45%, rgba(255,255,255,0.9) 0deg 2deg, transparent 2deg 14deg)`,
+          opacity: visible * 0.12,
+          background: `repeating-conic-gradient(from ${frame * 0.5}deg at 50% 45%, rgba(255,255,255,0.9) 0deg 2deg, transparent 2deg 14deg)`,
           maskImage: 'radial-gradient(circle at 50% 45%, transparent 18%, black 30%, transparent 70%)',
           WebkitMaskImage: 'radial-gradient(circle at 50% 45%, transparent 18%, black 30%, transparent 70%)',
         }}
@@ -71,7 +72,7 @@ export const SpecCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
             display: 'flex',
             alignItems: 'baseline',
             gap: 22,
-            transform: `rotateX(${interpolate(enter, [0, 1], [70, 12])}deg) rotateY(${interpolate(enter, [0, 1], [-30, -10])}deg) scale(${interpolate(enter, [0, 1], [0.5, 1]) * thump})`,
+            transform: `rotateX(${interpolate(enter, [0, 1], [30, 12])}deg) rotateY(${interpolate(enter, [0, 1], [-18, -10])}deg) scale(${interpolate(enter, [0, 1], [0.85, 1]) * thump})`,
           }}
         >
           <span
@@ -93,7 +94,8 @@ export const SpecCounter: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
                 fontSize: fontSize * 0.42,
                 color: COLORS.red,
                 textShadow: extrudedShadow(10, '#fff', 120),
-                transform: `scale(${unitIn}) rotate(${interpolate(unitIn, [0, 1], [-30, 0])}deg)`,
+                transform: `scale(${interpolate(unitIn, [0, 1], [0.7, 1])}) rotate(${interpolate(unitIn, [0, 1], [-8, 0])}deg)`,
+                opacity: unitIn,
                 display: 'inline-block',
               }}
             >

@@ -13,7 +13,8 @@ import { COLORS, FONT_UI } from '../theme'
 import { Captions } from './Captions'
 import { ClipLayer, resolveSrc } from './ClipLayer'
 
-const SFX_VOLUME = { whoosh: 0.45, pop: 0.5, hit: 0.55, riser: 0.35 } as const
+/** Efectos discretos: acompañan, no tapan la voz del asesor. */
+const SFX_VOLUME = { whoosh: 0.28, pop: 0.3, hit: 0.32, riser: 0.2 } as const
 
 const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, brand }) => {
   switch (g.type) {

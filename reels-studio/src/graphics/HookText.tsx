@@ -6,13 +6,14 @@ import { clamp, delayedSpring, splitEmphasis, useEnterExit } from './anim'
 
 /** Gancho de los primeros segundos: palabras que golpean una a una; las *marcadas* van en rojo. */
 export const HookText: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, width, height, enter, exit } = useEnterExit(7)
+  const { frame, fps, width, height, enter, exit } = useEnterExit()
   const words = splitEmphasis(g.text)
-  const step = Math.max(2, Math.min(5, Math.floor((fps * 0.9) / Math.max(1, words.length))))
+  // Palabra por palabra, pausado: ~1.4 s para la frase completa.
+  const step = Math.max(5, Math.min(9, Math.floor((fps * 1.4) / Math.max(1, words.length))))
   const lastHit = Math.min(frame, (words.length - 1) * step)
   const sinceHit = frame - Math.floor(lastHit / step) * step
   // Sacudida corta cada vez que entra una palabra.
-  const shake = sinceHit < 5 && frame < words.length * step + 4 ? (5 - sinceHit) * 2.4 : 0
+  const shake = sinceHit < 5 && frame < words.length * step + 4 ? (5 - sinceHit) * 0.7 : 0
   const sx = (random(`x${Math.floor(frame)}`) - 0.5) * shake
   const sy = (random(`y${Math.floor(frame)}`) - 0.5) * shake
   const fontSize = g.text.length > 34 ? 118 : g.text.length > 22 ? 138 : 160
@@ -36,7 +37,7 @@ export const HookText: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
         }}
       >
         {words.map((w, i) => {
-          const s = delayedSpring(frame, fps, i * step, 10, 260)
+          const s = delayedSpring(frame, fps, i * step, 18, 130)
           const shown = frame >= i * step
           return (
             <span
@@ -53,8 +54,8 @@ export const HookText: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
                 borderRadius: w.strong ? 18 : 0,
                 boxShadow: w.strong ? `0 14px 0 ${COLORS.redDeep}` : 'none',
                 textShadow: w.strong ? 'none' : extrudedShadow(12, 'rgba(0,0,0,0.9)', 120),
-                transform: `scale(${interpolate(s, [0, 1], [2.2, 1])}) rotateX(${interpolate(s, [0, 1], [-60, 0])}deg) rotate(${w.strong ? -3 : 0}deg)`,
-                opacity: shown ? interpolate(s, [0, 0.25], [0, 1], clamp) : 0,
+                transform: `scale(${interpolate(s, [0, 1], [1.35, 1])}) rotateX(${interpolate(s, [0, 1], [-25, 0])}deg) rotate(${w.strong ? -2 : 0}deg)`,
+                opacity: shown ? interpolate(s, [0, 0.4], [0, 1], clamp) : 0,
               }}
             >
               {w.word}

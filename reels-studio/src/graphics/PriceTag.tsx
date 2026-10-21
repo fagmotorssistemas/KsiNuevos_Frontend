@@ -6,10 +6,10 @@ import { delayedSpring, useEnterExit } from './anim'
 
 /** Etiqueta de precio que cae y se balancea; debajo, financiamiento u oferta. */
 export const PriceTag: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
-  const { frame, fps, width, height, enter, exit } = useEnterExit(8)
+  const { frame, fps, width, height, enter, exit } = useEnterExit()
   const t = frame / fps
-  // Péndulo amortiguado.
-  const swing = Math.sin(t * 7) * 18 * Math.exp(-t * 2.2)
+  // Péndulo amortiguado, suave.
+  const swing = Math.sin(t * 5) * 8 * Math.exp(-t * 2)
   const subIn = delayedSpring(frame, fps, 12)
 
   return (
@@ -17,10 +17,11 @@ export const PriceTag: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       <div
         style={{
           position: 'absolute',
-          top: interpolate(enter, [0, 1], [-700, height * 0.16]),
+          top: interpolate(enter, [0, 1], [height * 0.16 - 220, height * 0.16]),
+          opacity: enter * (1 - exit),
           left: width / 2 - 380,
           width: 760,
-          transform: `rotate(${swing}deg) translateY(${exit * -900}px)`,
+          transform: `rotate(${swing}deg) translateY(${exit * -120}px)`,
           transformOrigin: '50% -120px',
           display: 'flex',
           flexDirection: 'column',
