@@ -1,19 +1,20 @@
 # K-Si Reels Studio
 
-Reels con **Gemini como director de marketing digital**:
+Reels con **Claude o Gemini como director de marketing digital** (mismo plan, mismas reglas; ver
+[Director: Claude o Gemini](#director-claude-o-gemini)):
 
 ```
 clips crudos del asesor
    │
    ├─ AssemblyAI ──► palabras con tiempo exacto (+ keyterms del carro: marca, modelo, versión)
    │
-   ├─ Gemini (ve los clips + lee la transcripción) ──► PLAN CREATIVO (JSON)
+   ├─ Director (ve los clips + lee la transcripción) ──► PLAN CREATIVO (JSON)
    │     · qué tramos usar y en qué orden (gancho → presentación → datos → confianza → CTA)
    │     · qué gráfico va en cada momento y con qué texto
    │     · dónde está en el cuadro lo que se señala (volante, pantalla, rines…) → zoom + mira
    │     · correcciones de la transcripción ("Cebrol eTriBlaser" → "Chevrolet Trailblazer")
    │
-   ├─ Gemini (2ª pasada sobre cuadros fijos) ──► caja exacta de cada objeto señalado
+   ├─ 2ª pasada sobre cuadros fijos (Gemini si hay clave; si no, Claude) ──► caja exacta de cada objeto señalado
    │
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
@@ -24,7 +25,7 @@ de acento, entradas de enfoque (borroso → nítido), cortes secos y acercamient
 `src/graphics/cine/`. El lenguaje anterior (rebotes, cajas de color) sigue disponible con
 `render-plan.ts --look social`.
 
-Gemini **no dibuja**: elige piezas de un catálogo y las llena con datos. Así el resultado es
+El director **no dibuja**: elige piezas de un catálogo y las llena con datos. Así el resultado es
 consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es un JSON legible).
 
 ## Catálogo de gráficos
@@ -77,10 +78,10 @@ zoom sin bordes vacíos.
 cd reels-studio
 npm install
 
-# Variables
-export GEMINI_API_KEY=...            # el mismo de la app
+# Variables (o en reels-studio/.env, ver .env.example)
+export ANTHROPIC_API_KEY=...         # Claude como director
+export GEMINI_API_KEY=...            # Gemini (director o solo la ubicación de objetos)
 export ASSEMBLYAI_API_KEY=...        # el mismo de la app
-export GEMINI_DIRECTOR_MODEL=gemini-3.8-flash   # opcional (p. ej. gemini-3.1-pro-preview)
 
 # Reel completo desde una carpeta de clips (en orden de nombre)
 npx tsx pipeline/run.ts --name trailblazer-2019 --vehicle vehiculo.json --clips ./clips/trailblazer
@@ -88,8 +89,12 @@ npx tsx pipeline/run.ts --name trailblazer-2019 --vehicle vehiculo.json --clips 
 # Retocar el plan a mano y volver a renderizar (reutiliza transcripción y plan)
 npx tsx pipeline/run.ts --name trailblazer-2019 --vehicle vehiculo.json --clips ./clips/trailblazer
 
-# Pedirle a Gemini un plan nuevo
+# Pedirle al director un plan nuevo
 npx tsx pipeline/run.ts ... --replan
+
+# Comparar directores con los mismos clips (la transcripción se reutiliza)
+npx tsx pipeline/run.ts --name ranger-claude --director claude ... --replan
+npx tsx pipeline/run.ts --name ranger-gemini --director gemini ... --replan
 
 # Solo cuadros sueltos para revisar diseño (rápido)
 npx tsx pipeline/run.ts ... --stills 30,180,400 --scale 0.5
@@ -115,7 +120,23 @@ npm run studio
 }
 ```
 
-Todo queda en `out/<name>/`: `transcripts.json`, `plan.gemini-raw.json`, `plan.json`, `props.json`, `reel.mp4`.
+Todo queda en `out/<name>/`: `transcripts.json`, `plan.<director>-raw.json`, `plan.json` (con
+`"director"`), `props.json`, `reel.mp4`.
+
+### Director: Claude o Gemini
+
+Se elige con `--director claude|gemini`, o con `DIRECTOR_PROVIDER` en el `.env`. Si no se indica:
+**Claude cuando hay `ANTHROPIC_API_KEY`**, Gemini si no.
+
+- **Claude** (`pipeline/claude-director.ts`, modelo `CLAUDE_DIRECTOR_MODEL`, por defecto
+  `claude-opus-5-5`, esfuerzo `high`): no recibe video, así que se le mandan hasta 90 cuadros de los
+  clips (2 por segundo, menos si los clips son largos), cada uno con su segundo, más la transcripción.
+  La respuesta sale con el esquema del plan (salida estructurada) y los reintentos reutilizan la caché.
+  Si un filtro de seguridad rechaza el pedido, el servidor reintenta con otro modelo (`fallbacks: "default"`).
+- **Gemini** (`pipeline/gemini-director.ts`, `GEMINI_DIRECTOR_MODEL`, por defecto `gemini-3.8-flash`):
+  ve el video a 4 cuadros por segundo.
+- La caja exacta de lo que se señala la saca **Gemini si hay `GEMINI_API_KEY`** (es muy preciso
+  ubicando objetos en imagen); sin esa clave la saca Claude.
 
 ## Desde la web (local)
 
@@ -125,11 +146,12 @@ en el paso **Música** la casilla **Director IA (beta) · solo local**. Al gener
 1. Los clips se suben a Supabase como siempre.
 2. El servidor local (`src/lib/videos/director-ia-local.ts`) los descarga, toma los datos del carro
    del inventario (o del nombre del trabajo) y corre `pipeline/run.ts` de este proyecto.
-3. El progreso se ve en la lista de videos (AssemblyAI → Gemini → Render 3D) y el MP4 se sube al
+3. El progreso se ve en la lista de videos (AssemblyAI → Claude/Gemini → Render 3D) y el MP4 se sube al
    bucket `reels-v2`, igual que los reels de Shotstack.
 
 Requisitos en esa computadora: `npm install` dentro de `reels-studio`, ffmpeg instalado y
-`GEMINI_API_KEY` + `ASSEMBLYAI_API_KEY` en el `.env.local` de la web. En Vercel la casilla no
+`ASSEMBLYAI_API_KEY` + `ANTHROPIC_API_KEY` (Claude) y/o `GEMINI_API_KEY` en el `.env.local` de la web
+(y `DIRECTOR_PROVIDER` si quieres forzar uno). En Vercel la casilla no
 aparece y el servidor rechaza la opción (todavía no hay servidor de render).
 
 El plan de cada trabajo queda en `reels-studio/out/<jobId>/plan.json`.

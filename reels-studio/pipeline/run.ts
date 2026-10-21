@@ -1,11 +1,14 @@
 /**
- * Reel completo: clips crudos → AssemblyAI → Gemini (director) → Remotion.
+ * Reel completo: clips crudos → AssemblyAI → director (Claude o Gemini) → Remotion.
  *
  *   npx tsx pipeline/run.ts --name trailblazer-2019 --vehicle vehiculo.json --clips ./clips
  *
  * Deja todo en out/<name>/ (transcripts.json, plan.json, props.json, reel.mp4). Si plan.json ya
  * existe se reutiliza: el equipo puede retocarlo a mano y volver a renderizar (usa --replan
- * para pedirle a Gemini uno nuevo).
+ * para pedirle al director uno nuevo).
+ *
+ * Director: --director claude|gemini, o DIRECTOR_PROVIDER en el .env; si no se indica, Claude
+ * cuando hay ANTHROPIC_API_KEY y Gemini si no.
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -17,7 +20,9 @@ import { buildReelProps } from '../src/plan/timeline'
 import type { ClipSource } from '../src/plan/types'
 import { transcribeClip, type TranscribedWord } from './assemblyai'
 import type { VehicleInfo } from './director-prompt'
-import { directReel, refineFocusBoxes, type DirectorClip } from './gemini-director'
+import * as claude from './claude-director'
+import type { DirectorClip } from './director-plan'
+import * as gemini from './gemini-director'
 import { probeVideo } from './probe'
 import { renderReel, renderStills, toPublicSrc } from './render'
 
@@ -42,6 +47,7 @@ const { values } = parseArgs({
     vehicle: { type: 'string' },
     clips: { type: 'string', multiple: true },
     model: { type: 'string' },
+    director: { type: 'string' },
     replan: { type: 'boolean', default: false },
     retranscribe: { type: 'boolean', default: false },
     stills: { type: 'string' },
@@ -155,18 +161,24 @@ if (fs.existsSync(transcriptsFile) && !values.retranscribe) {
 }
 for (const c of clips) c.words = transcripts[c.id] ?? []
 
-// 3) Plan creativo de Gemini (+ ubicación precisa de lo que se señala).
+// 3) Plan creativo del director (+ ubicación precisa de lo que se señala).
+const provider = (values.director ?? process.env.DIRECTOR_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? 'claude' : 'gemini')).toLowerCase()
+if (provider !== 'claude' && provider !== 'gemini') throw new Error(`Director desconocido "${provider}" (usa claude o gemini)`)
+const director = provider === 'claude' ? claude : gemini
+// Gemini ubica objetos en una imagen con mucha precisión: si hay clave, hace esa parte aunque dirija Claude.
+const locator = provider === 'claude' && !process.env.GEMINI_API_KEY ? claude : gemini
 const planFile = path.join(outDir, 'plan.json')
 let plan: CreativePlan
 if (fs.existsSync(planFile) && !values.replan) {
   plan = creativePlanSchema.parse(JSON.parse(fs.readFileSync(planFile, 'utf8')))
-  console.log('[gemini] usando plan.json existente (usa --replan para uno nuevo)')
+  console.log(`[${provider}] usando plan.json existente (usa --replan para uno nuevo)`)
 } else {
-  const { plan: draft, raw } = await directReel({ clips, vehicle, model: values.model })
-  fs.writeFileSync(path.join(outDir, 'plan.gemini-raw.json'), JSON.stringify(raw, null, 2))
-  plan = await refineFocusBoxes({ plan: draft, clips, model: values.model })
-  fs.writeFileSync(planFile, JSON.stringify(plan, null, 2))
-  console.log(`[gemini] estrategia: ${plan.strategy}`)
+  const { plan: draft, raw } = await director.directReel({ clips, vehicle, model: values.model })
+  fs.writeFileSync(path.join(outDir, `plan.${provider}-raw.json`), JSON.stringify(raw, null, 2))
+  // --model es del director; si la ubicación la hace el otro proveedor, usa su modelo por defecto.
+  plan = await locator.refineFocusBoxes({ plan: draft, clips, model: locator === director ? values.model : undefined })
+  fs.writeFileSync(planFile, JSON.stringify({ ...plan, director: provider }, null, 2))
+  console.log(`[${provider}] estrategia: ${plan.strategy}`)
 }
 
 // 4) Línea de tiempo y render.

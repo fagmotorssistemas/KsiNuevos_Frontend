@@ -1,6 +1,6 @@
 /**
  * Director IA (beta, solo local): en vez del pipeline Shotstack, corre `reels-studio`
- * (AssemblyAI → Gemini como director de marketing → gráficos 3D con Remotion) para un job
+ * (AssemblyAI → Claude o Gemini como director de marketing → gráficos 3D con Remotion) para un job
  * de `video_jobs_v2` y sube el MP4 al mismo bucket que el resto de reels.
  *
  * Necesita Chromium + ffmpeg y varios minutos por video, así que no corre en Vercel: solo con
@@ -40,12 +40,15 @@ export function directorIaUnavailableReason(): string | null {
   if (process.env.VERCEL) {
     return 'Director IA solo funciona con la web corriendo en una computadora (npm run dev). En producción todavía no hay servidor de render.'
   }
-  if (!fs.existsSync(TSX_CLI)) {
-    return 'Falta instalar reels-studio: abre una terminal en la carpeta reels-studio y corre "npm install".'
+  if (!fs.existsSync(TSX_CLI) || !fs.existsSync(path.join(STUDIO_DIR, 'node_modules', '@anthropic-ai', 'sdk'))) {
+    return 'Falta instalar o actualizar reels-studio: abre una terminal en la carpeta reels-studio y corre "npm install".'
   }
-  if (!process.env.GEMINI_API_KEY || !process.env.ASSEMBLYAI_API_KEY) {
-    return 'Faltan GEMINI_API_KEY o ASSEMBLYAI_API_KEY en .env.local.'
-  }
+  if (!process.env.ASSEMBLYAI_API_KEY) return 'Falta ASSEMBLYAI_API_KEY en .env.local.'
+  // Misma regla que reels-studio/pipeline/run.ts para elegir director.
+  const provider = (process.env.DIRECTOR_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? 'claude' : 'gemini')).toLowerCase()
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) return 'DIRECTOR_PROVIDER=claude pero falta ANTHROPIC_API_KEY en .env.local.'
+  if (provider === 'gemini' && !process.env.GEMINI_API_KEY) return 'Falta GEMINI_API_KEY (o ANTHROPIC_API_KEY para usar Claude) en .env.local.'
+  if (provider !== 'claude' && provider !== 'gemini') return `DIRECTOR_PROVIDER="${provider}" no existe: usa claude o gemini.`
   try {
     execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
   } catch {
@@ -153,9 +156,13 @@ function progressFromLine(line: string, clipCount: number): Progress | null {
       pct: 30 + Math.round((15 * (n - 1)) / Math.max(1, clipCount)),
     }
   }
-  if (line.startsWith('[gemini] subiendo')) return { status: 'analyzing', step: 'Gemini: viendo los clips', pct: 48 }
-  if (line.includes('pensando el Reel')) return { status: 'analyzing', step: 'Gemini: diseñando el Reel', pct: 55 }
-  if (line.startsWith('[gemini] estrategia')) return { status: 'analyzing', step: 'Gemini: plan creativo listo', pct: 62 }
+  const director = line.match(/^\[(gemini|claude)\] (subiendo|preparando|\S+: pensando el Reel|estrategia)/)
+  if (director) {
+    const who = director[1] === 'claude' ? 'Claude' : 'Gemini'
+    if (director[2] === 'subiendo' || director[2] === 'preparando') return { status: 'analyzing', step: `${who}: viendo los clips`, pct: 48 }
+    if (director[2] === 'estrategia') return { status: 'analyzing', step: `${who}: plan creativo listo`, pct: 62 }
+    return { status: 'analyzing', step: `${who}: diseñando el Reel`, pct: 55 }
+  }
   if (line.startsWith('[plan]')) return { status: 'rendering', step: 'Armando la línea de tiempo', pct: 65 }
   if (line.startsWith('[render] reintentando')) {
     return { status: 'rendering', step: 'Render 3D: reintentando con otro lector de video', pct: 66 }

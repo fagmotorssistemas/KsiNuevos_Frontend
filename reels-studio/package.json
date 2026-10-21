@@ -2,7 +2,7 @@
   "name": "ksi-reels-studio",
   "private": true,
   "version": "0.1.0",
-  "description": "Reels con Gemini como director creativo: AssemblyAI (voz) → Gemini (plan creativo) → Remotion (gráficos 3D).",
+  "description": "Reels con IA como director creativo: AssemblyAI (voz) → Claude o Gemini (plan creativo) → Remotion (gráficos 3D).",
   "type": "module",
   "scripts": {
     "studio": "remotion studio src/index.ts",
@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.0.0",
     "@google/genai": "2.30.0",
     "@react-three/fiber": "9.8.2",
     "@remotion/bundler": "4.0.537",

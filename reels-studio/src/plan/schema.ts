@@ -131,7 +131,7 @@ export const creativePlanSchema = z.object({
   emphasisWords: z.array(z.string()),
   /** Leyenda corta para la publicación (no se renderiza). */
   caption: z.string(),
-  /** Opcional para leer planes viejos; a Gemini se le exige (gemini-director.ts). */
+  /** Opcional para leer planes viejos; al director se le exige (pipeline/director-plan.ts). */
   captionStyle: z.enum(CAPTION_STYLES).optional(),
 })
 export type CreativePlan = z.infer<typeof creativePlanSchema>
