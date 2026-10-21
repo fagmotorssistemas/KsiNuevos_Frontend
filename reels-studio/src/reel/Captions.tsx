@@ -289,34 +289,31 @@ const Palabra: React.FC<LineProps> = ({ words, local, fps, lineIndex }) => {
 
 const SHORT_WORD = /^(EL|LA|LOS|LAS|UN|UNA|DE|DEL|Y|O|EN|CON|POR|PARA|QUE|SU|SUS|ES|AL|LO|SE|TU|MI)$/
 
-/** Camioneta: letra condensada blanca con sombra; una palabra por línea en naranja (la clave o la más larga). */
-const Offroad: React.FC<LineProps> = ({ words, fps }) => {
+/**
+ * Camioneta: la frase entera aparece de una vez (sube un poco, sin rebote), letra condensada blanca con
+ * sombra y una palabra en naranja (la clave o la más larga). Sobrio, como la referencia.
+ */
+const Offroad: React.FC<LineProps> = ({ words, local }) => {
   const marked = words.some(({ w }) => w.emphasis)
   const longest = marked
     ? -1
     : words.reduce((best, cur, i) => (!SHORT_WORD.test(cur.text) && cur.text.length > (words[best]?.text.length ?? 0) ? i : best), -1)
   return (
-    <div style={{ ...row, gap: '6px 24px' }}>
-      {words.map(({ w, text, active, spoken, since }, i) => {
-        const s = spring({ frame: since, fps, config: { damping: 16, stiffness: 220, mass: 0.6 } })
-        const orange = w.emphasis || i === longest
-        return (
-          <span
-            key={i}
-            style={{
-              fontFamily: FONT_DISPLAY,
-              fontSize: 90,
-              lineHeight: 1.05,
-              color: orange ? PALETTES.offroad.accent : COLORS.white,
-              textShadow: '0 5px 0 rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.8)',
-              transform: `scale(${spoken ? interpolate(s, [0, 1], [1.25, 1]) * (active ? 1.04 : 1) : 1})`,
-              opacity: spoken ? interpolate(s, [0, 0.3], [0, 1], clamp) : 0,
-            }}
-          >
-            {text}
-          </span>
-        )
-      })}
+    <div style={{ ...row, gap: '6px 24px', opacity: interpolate(local, [0, 5], [0, 1], clamp), transform: `translateY(${interpolate(local, [0, 5], [18, 0], clamp)}px)` }}>
+      {words.map(({ w, text }, i) => (
+        <span
+          key={i}
+          style={{
+            fontFamily: FONT_DISPLAY,
+            fontSize: 90,
+            lineHeight: 1.05,
+            color: w.emphasis || i === longest ? PALETTES.offroad.accent : COLORS.white,
+            textShadow: '0 5px 0 rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.8)',
+          }}
+        >
+          {text}
+        </span>
+      ))}
     </div>
   )
 }

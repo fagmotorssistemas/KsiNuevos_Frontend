@@ -92,7 +92,7 @@ const Corners: React.FC<{ size: number; inset: number; color: string; stroke: nu
   </>
 )
 
-/** Etiqueta tipo escáner: caja oscura con borde naranja que se despliega de izquierda a derecha. */
+/** Etiqueta tipo escáner: caja oscura con borde naranja que se despliega de izquierda a derecha y se queda quieta. */
 export const Tag: React.FC<{ text: string; label?: string; progress: number; size?: number; style?: React.CSSProperties }> = ({
   text,
   label,
@@ -101,7 +101,6 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
   style,
 }) => {
   const reveal = interpolate(progress, [0, 1], [0, 100], clamp)
-  const scan = interpolate(progress, [0.2, 1], [0, 100], clamp)
   return (
     <div style={{ position: 'relative', display: 'inline-block', ...style }}>
       {label ? (
@@ -146,10 +145,6 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
         >
           {text}
         </span>
-        {/* Línea de escaneo que barre la etiqueta al aparecer */}
-        {scan < 100 ? (
-          <span style={{ position: 'absolute', top: 0, bottom: 0, left: `${scan}%`, width: 6, background: OFFROAD.highlight, boxShadow: `0 0 16px ${OFFROAD.accent}` }} />
-        ) : null}
       </div>
     </div>
   )
@@ -157,7 +152,7 @@ export const Tag: React.FC<{ text: string; label?: string; progress: number; siz
 
 /** Esquinas naranjas que enmarcan lo que se señala (pantalla, volante, palanca). */
 export const CornerFrame: React.FC<{ x: number; y: number; w: number; h: number; progress: number }> = ({ x, y, w, h, progress }) => {
-  const grow = interpolate(progress, [0, 1], [1.35, 1], clamp)
+  const grow = interpolate(progress, [0, 1], [1.12, 1], clamp)
   const arm = Math.min(w, h) * 0.26
   const half = { w: (w / 2) * grow, h: (h / 2) * grow }
   const corners = [
@@ -189,42 +184,45 @@ export const CornerFrame: React.FC<{ x: number; y: number; w: number; h: number;
 
 /** Mancha de barro irregular con gotas alrededor; `seed` la hace distinta pero estable entre renders. */
 const Splat: React.FC<{ seed: string; r: number }> = ({ seed, r }) => {
-  const points = 18
+  // Borde orgánico: muchos puntos con poca variación y algunos lóbulos suaves (nada de picos de estrella).
+  const points = 40
   const path = Array.from({ length: points }, (_, i) => {
     const a = (i / points) * Math.PI * 2
-    const spike = random(`${seed}-s${i}`) > 0.72 ? 1.25 + random(`${seed}-k${i}`) * 0.5 : 0.72 + random(`${seed}-r${i}`) * 0.3
-    return `${(Math.cos(a) * r * spike).toFixed(1)},${(Math.sin(a) * r * spike).toFixed(1)}`
+    const lobe = Math.sin(a * 3 + random(`${seed}-l`) * 6) * 0.08 + Math.sin(a * 7 + random(`${seed}-m`) * 6) * 0.04
+    const k = 0.9 + lobe + random(`${seed}-r${i}`) * 0.06
+    return `${(Math.cos(a) * r * k).toFixed(1)},${(Math.sin(a) * r * k * 0.82).toFixed(1)}`
   })
-  const drops = Array.from({ length: 7 }, (_, i) => {
+  const drops = Array.from({ length: 4 }, (_, i) => {
     const a = random(`${seed}-da${i}`) * Math.PI * 2
-    const d = r * (1.35 + random(`${seed}-dd${i}`) * 0.8)
-    return { x: Math.cos(a) * d, y: Math.sin(a) * d, r: r * (0.06 + random(`${seed}-dr${i}`) * 0.12) }
+    const d = r * (1.15 + random(`${seed}-dd${i}`) * 0.4)
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d * 0.82, r: r * (0.05 + random(`${seed}-dr${i}`) * 0.07) }
   })
   return (
-    <g>
-      <polygon points={path.join(' ')} fill={OFFROAD.mud} stroke={OFFROAD.mudDark} strokeWidth={r * 0.06} strokeLinejoin="round" />
-      <ellipse cx={-r * 0.2} cy={-r * 0.25} rx={r * 0.35} ry={r * 0.22} fill={OFFROAD.mudLight} opacity={0.7} />
+    <g style={{ filter: 'blur(0.8px)' }}>
+      <polygon points={path.join(' ')} fill={OFFROAD.mud} opacity={0.92} />
+      <polygon points={path.join(' ')} fill="none" stroke={OFFROAD.mudDark} strokeWidth={r * 0.05} opacity={0.6} />
+      <ellipse cx={-r * 0.22} cy={-r * 0.2} rx={r * 0.4} ry={r * 0.2} fill={OFFROAD.mudLight} opacity={0.3} />
       {drops.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y} r={d.r} fill={OFFROAD.mud} />
+        <circle key={i} cx={d.x} cy={d.y} r={d.r} fill={OFFROAD.mud} opacity={0.9} />
       ))}
     </g>
   )
 }
 
+/** Pocas manchas, en las orillas: ensucian la pantalla sin tapar el carro. */
 const SPLATS = [
-  { x: 0.86, y: 0.12, r: 70, at: 2 },
-  { x: 0.1, y: 0.5, r: 58, at: 7 },
-  { x: 0.93, y: 0.66, r: 44, at: 11 },
-  { x: 0.14, y: 0.86, r: 76, at: 15 },
+  { x: 0.9, y: 0.09, r: 52, at: 3 },
+  { x: 0.06, y: 0.47, r: 42, at: 6 },
+  { x: 0.1, y: 0.9, r: 58, at: 9 },
 ]
 
-/** Barro que salpica la pantalla en el gancho (entra de golpe y se desvanece al final). */
+/** Barro en el gancho: cada mancha aparece de golpe (como un salpicón) y se desvanece al final. */
 export const MudSplatter: React.FC<{ frame: number; width: number; height: number; fade: number }> = ({ frame, width, height, fade }) => (
   <svg width={width} height={height} style={{ position: 'absolute', inset: 0, opacity: 1 - fade }}>
     {SPLATS.map((s, i) => {
       const t = frame - s.at
       if (t < 0) return null
-      const scale = interpolate(t, [0, 2, 4], [0.2, 1.12, 1], clamp)
+      const scale = interpolate(t, [0, 3], [0.9, 1], clamp)
       return (
         <g key={i} transform={`translate(${s.x * width} ${s.y * height}) scale(${scale}) rotate(${random(`rot${i}`) * 360})`}>
           <Splat seed={`mud${i}`} r={s.r * 2} />

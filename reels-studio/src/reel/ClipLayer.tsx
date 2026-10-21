@@ -9,12 +9,11 @@ export const resolveSrc = (src: string) => (/^https?:\/\//.test(src) ? src : sta
 /** Encuadre más cerrado en los saltos impares: disimula el corte seco al quitar un silencio. */
 const JUMP_SCALE = 1.1
 /**
- * Camionetas: ningún plano queda quieto más de ~2 s; el encuadre alterna (abierto / cerrado) como si
- * fuera un corte nuevo, con un golpe corto entre uno y otro.
+ * Camionetas: cámara sobria, como la referencia. Cortes secos (sin zoom, barrido ni destello), sin
+ * golpes en las palabras y un acercamiento lento y continuo en cada toma para que nada quede quieto.
  */
-const REFRAME_SEC = 2.2
-const REFRAME_SCALE = 1.12
-const REFRAME_EASE_FRAMES = 3
+const OFFROAD_DRIFT = 1.08
+const OFFROAD_JUMP_SCALE = 1.06
 /** Look cálido y contrastado de la referencia de camionetas. */
 const OFFROAD_GRADE = 'contrast(1.12) saturate(1.15) sepia(0.12) brightness(0.98)'
 /** Golpe de cámara en palabras clave: sube rápido y vuelve en ~0.3 s. */
@@ -41,6 +40,8 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
 }) => {
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
+  const offroad = theme === 'offroad'
+  const transitionIn = offroad ? 'corte' : cut.transitionIn
 
   // Zoom activo hacia una característica (tiene prioridad sobre el movimiento suave).
   const zoom = cut.zooms.find((z) => frame >= z.fromFrame && frame < z.fromFrame + z.durationInFrames)
@@ -51,31 +52,22 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
     transform = `translate(${t.translateX}px, ${t.translateY}px) scale(${t.scale})`
   } else {
     // Movimiento de cámara suave para que ninguna toma se sienta estática.
-    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, 1.05])
+    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, offroad ? OFFROAD_DRIFT : 1.05])
     // Transiciones cortas: el cambio se siente inmediato.
     const zoomIn =
-      cut.transitionIn === 'zoom'
+      transitionIn === 'zoom'
         ? interpolate(frame, [0, 8], [1.18, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 1
     const whipX =
-      cut.transitionIn === 'whip'
+      transitionIn === 'whip'
         ? interpolate(frame, [0, 6], [width * 0.18, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 0
-    const jump = cut.jump % 2 === 1 ? JUMP_SCALE : 1
-    let reframe = 1
-    if (theme === 'offroad') {
-      const every = Math.round(REFRAME_SEC * fps)
-      const idx = Math.floor(frame / every)
-      const scaleFor = (k: number) => ((cut.jump + k) % 2 === 1 ? REFRAME_SCALE : 1)
-      const t = frame - idx * every
-      reframe = idx > 0 && t < REFRAME_EASE_FRAMES ? interpolate(t, [0, REFRAME_EASE_FRAMES], [scaleFor(idx - 1), scaleFor(idx)]) : scaleFor(idx)
-      // El salto ya alterna el encuadre: no se aplica dos veces.
-      if (cut.jump % 2 === 1) reframe /= JUMP_SCALE
-    }
-    transform = `translateX(${whipX}px) scale(${drift * zoomIn * jump * reframe * punchAt(frame, cut.punches ?? [])})`
+    const jump = cut.jump % 2 === 1 ? (offroad ? OFFROAD_JUMP_SCALE : JUMP_SCALE) : 1
+    const punch = offroad ? 1 : punchAt(frame, cut.punches ?? [])
+    transform = `translateX(${whipX}px) scale(${drift * zoomIn * jump * punch})`
   }
-  const whipBlur = cut.transitionIn === 'whip' ? interpolate(frame, [0, 6], [10, 0], { extrapolateRight: 'clamp' }) : 0
-  const glitch = cut.transitionIn === 'glitch' && frame < 4
+  const whipBlur = transitionIn === 'whip' ? interpolate(frame, [0, 6], [10, 0], { extrapolateRight: 'clamp' }) : 0
+  const glitch = transitionIn === 'glitch' && frame < 4
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000', overflow: 'hidden' }}>
@@ -129,7 +121,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
               : 'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.45) 100%)',
         }}
       />
-      {cut.transitionIn === 'flash' ? (
+      {transitionIn === 'flash' ? (
         <AbsoluteFill
           style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 6], [0.6, 0], { extrapolateRight: 'clamp' }) }}
         />

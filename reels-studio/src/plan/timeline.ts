@@ -51,6 +51,18 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
   cta_end: 'hit',
   sticker: 'pop',
 }
+/** Camionetas: sonidos graves y secos (golpes y barridos); nada de "pop" de caricatura. */
+const SFX_OFFROAD: Record<GraphicType, SfxCue['kind']> = {
+  hook_text: 'hit',
+  title_3d: 'hit',
+  feature_callout: 'whoosh',
+  spec_counter: 'hit',
+  spec_chips: 'whoosh',
+  feature_list: 'whoosh',
+  price_tag: 'hit',
+  cta_end: 'hit',
+  sticker: 'whoosh',
+}
 
 /** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
 const FILLER = new Set(['a', 'y', 'o', 'e', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'en', 'con', 'por', 'para', 'que', 'su', 'es', 'lo', 'al'])
@@ -573,7 +585,7 @@ export function buildReelProps(
     ...graphics.filter((g) => g.type !== 'feature_callout').map((g) => g.fromFrame),
   ].sort((a, b) => a - b)
   let lastPunch = -Infinity
-  for (const f of punchFrames) {
+  for (const f of theme === 'offroad' ? [] : punchFrames) {
     if (f - lastPunch < PUNCH_MIN_GAP_FRAMES || zoomedAt(f)) continue
     const c = cuts.find((x) => f >= x.fromFrame && f < x.fromFrame + x.durationInFrames)
     if (!c) continue
@@ -587,8 +599,9 @@ export function buildReelProps(
     if (sfx.some((s) => Math.abs(s.frame - frame) < 8)) return
     sfx.push({ frame, kind })
   }
-  for (const g of graphics) pushSfx(g.fromFrame, SFX_BY_TYPE[g.type])
-  for (const c of cuts) if (c.transitionIn === 'flash' || c.transitionIn === 'whip') pushSfx(c.fromFrame, 'whoosh')
+  for (const g of graphics) pushSfx(g.fromFrame, (theme === 'offroad' ? SFX_OFFROAD : SFX_BY_TYPE)[g.type])
+  // Camionetas: cortes secos, sin barrido sonoro en cada cambio de toma.
+  if (theme !== 'offroad') for (const c of cuts) if (c.transitionIn === 'flash' || c.transitionIn === 'whip') pushSfx(c.fromFrame, 'whoosh')
   sfx.sort((a, b) => a.frame - b.frame)
 
   return {

@@ -94,8 +94,8 @@ export const Reel: React.FC<ReelProps> = (props) => {
 
       <Captions lines={props.captions} style={props.captionStyle} theme={theme} />
 
-      {/* Arranque con golpe: destello en los primeros cuadros, junto con el zoom del primer corte. */}
-      {frame < 7 ? (
+      {/* Arranque con golpe: destello en los primeros cuadros, junto con el zoom del primer corte (no en camionetas). */}
+      {frame < 7 && theme !== 'offroad' ? (
         <AbsoluteFill style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 6], [0.65, 0], { extrapolateRight: 'clamp' }) }} />
       ) : null}
 
