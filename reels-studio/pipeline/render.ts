@@ -84,8 +84,9 @@ async function composition(props: ReelProps) {
 
 export async function renderReel(props: ReelProps, outFile: string, opts: { scale?: number } = {}) {
   assertFreeDisk()
-  const { serveUrl, comp } = await composition({ ...props, videoEngine: PRIMARY_ENGINE })
   const attempt = async (inputProps: ReelProps, concurrency: number) => {
+    // La composición se resuelve con estas props: reusar la de otro intento repetiría su lector de video.
+    const { serveUrl, comp } = await composition(inputProps)
     let last = -1
     await renderMedia({
       serveUrl,
@@ -122,9 +123,9 @@ export async function renderReel(props: ReelProps, outFile: string, opts: { scal
 
 /** Cuadros sueltos para revisar el diseño sin renderizar todo el video. */
 export async function renderStills(props: ReelProps, frames: number[], outDir: string, scale = 0.5) {
-  const { serveUrl, comp } = await composition({ ...props, videoEngine: PRIMARY_ENGINE })
   fs.mkdirSync(outDir, { recursive: true })
   const stills = async (inputProps: ReelProps) => {
+    const { serveUrl, comp } = await composition(inputProps)
     const files: string[] = []
     for (const frame of frames) {
       const output = path.join(outDir, `frame-${String(frame).padStart(4, '0')}.jpeg`)
