@@ -4,6 +4,7 @@ import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 import { startPipelineBackground } from '@/lib/videos/pipeline'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 // Aumentar límite de body para uploads de video grandes (hasta 2 GB)
 export const maxDuration = 300 // 5 minutos máximo de ejecución
@@ -27,6 +28,9 @@ function getServiceClient() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const formData = await request.formData()
     const musicTrackId = formData.get('musicTrackId') as string | null

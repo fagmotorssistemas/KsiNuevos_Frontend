@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   return NextResponse.json({
     usage: 'POST /api/videos/test-svg',
     description: 'Envía un render de prueba a Shotstack con SVG feGaussianBlur y retorna { renderId }.',
   })
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   const apiKey = process.env.SHOTSTACK_API_KEY
   const baseUrl = process.env.SHOTSTACK_BASE_URL
 

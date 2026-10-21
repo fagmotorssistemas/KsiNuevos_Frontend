@@ -81,9 +81,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     const supabase = getServiceClient()

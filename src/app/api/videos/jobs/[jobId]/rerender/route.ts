@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { applyVideoJobEditorPatch, rerunCreatomateRenderForJob } from '@/lib/videos/pipeline'
 import { normalizeMusicTrimStartSec } from '@/lib/videos/clip-config'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 /**
  * POST /api/videos/jobs/[jobId]/rerender
@@ -14,6 +15,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     if (!jobId) {

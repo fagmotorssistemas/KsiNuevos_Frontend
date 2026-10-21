@@ -7,6 +7,7 @@ import {
   FALLBACK_DIALOGUE_VOLUME,
   FALLBACK_MUSIC_VOLUME,
 } from '@/lib/videos/audio-balance-core'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 130
@@ -26,6 +27,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(req)
+  if (!auth.ok) return auth.response
+
   const { jobId } = await params
   try {
     const body = await req.json()

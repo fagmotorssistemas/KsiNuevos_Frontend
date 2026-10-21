@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -11,9 +12,12 @@ function getServiceClient() {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { id } = await params
     const supabase = getServiceClient()

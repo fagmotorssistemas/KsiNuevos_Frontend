@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { uploadJobVoiceOverAudioToMusicBucket } from '@/lib/videos/storage'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 const ALLOWED_AUDIO_TYPES = new Set([
   'audio/mpeg',
@@ -37,6 +38,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ): Promise<NextResponse> {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     if (!jobId || typeof jobId !== 'string') {

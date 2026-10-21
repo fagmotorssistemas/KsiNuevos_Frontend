@@ -8,6 +8,7 @@ import {
   resolveAudioMimeType,
 } from '@/lib/videos/music-upload-shared'
 import { buildMusicTrackStoragePath } from '@/lib/videos/storage'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +21,9 @@ function getServiceClient() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const body = (await request.json()) as {
       filename?: unknown

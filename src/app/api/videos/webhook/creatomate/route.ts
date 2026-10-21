@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { CreatomateWebhookPayload } from '@/lib/videos/types'
+import { getCreatomateRenderStatus } from '@/lib/videos/creatomate'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -24,38 +25,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    if (payload.status !== 'succeeded' && payload.status !== 'failed') {
+      return NextResponse.json({ ok: true })
+    }
+
     const supabase = getServiceClient()
+    const { data: job, error: jobError } = await supabase
+      .from('video_jobs_v2')
+      .select('social_publish_stage, creatomate_render_id')
+      .eq('id', jobId)
+      .maybeSingle()
+    if (jobError) {
+      console.error(`[VideoV2Webhook][Creatomate] No se pudo leer el job ${jobId}: ${jobError.message}`)
+      return NextResponse.json({ ok: true })
+    }
+    if (!job) {
+      console.warn(`[VideoV2Webhook][Creatomate] Job ${jobId} ya no existe; se ignora el render.`)
+      return NextResponse.json({ ok: true })
+    }
 
-    if (payload.status === 'succeeded') {
-      const { data: prev } = await supabase
-        .from('video_jobs_v2')
-        .select('social_publish_stage')
-        .eq('id', jobId)
-        .single()
+    // El aviso no viene firmado: solo se acepta para el render vigente del job y el
+    // resultado se pide a Creatomate con nuestra API key.
+    const renderId = payload.id?.trim()
+    if (!renderId || (job.creatomate_render_id && job.creatomate_render_id !== renderId)) {
+      console.warn(
+        `[VideoV2Webhook][Creatomate] Render ${renderId ?? '(sin id)'} no es el del job ${jobId} (${job.creatomate_render_id ?? 'sin render'}); se ignora.`
+      )
+      return NextResponse.json({ ok: true })
+    }
+    const render = await getCreatomateRenderStatus(renderId)
 
+    if (render.status === 'succeeded') {
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({
           status: 'completed',
-          final_video_url: payload.url ?? null,
-          final_video_duration: payload.duration ?? null,
+          final_video_url: render.url ?? null,
+          final_video_duration: render.duration ?? null,
           progress_percentage: 100,
           current_step: 'Video listo',
-          social_publish_stage: prev?.social_publish_stage ?? 'generado',
+          social_publish_stage: job.social_publish_stage ?? 'generado',
         })
         .eq('id', jobId)
 
       if (error) {
         console.error(`[VideoV2Webhook][Creatomate] Error actualizando job ${jobId}: ${error.message}`)
       } else {
-        console.log(`[VideoV2Webhook][Creatomate] Job ${jobId} completado. URL: ${payload.url}`)
+        console.log(`[VideoV2Webhook][Creatomate] Job ${jobId} completado. URL: ${render.url}`)
       }
-    } else if (payload.status === 'failed') {
+    } else if (render.status === 'failed') {
       const { error } = await supabase
         .from('video_jobs_v2')
         .update({
           status: 'failed',
-          error_message: payload.error_message ?? 'Creatomate reportó un error al renderizar',
+          error_message: render.error_message ?? 'Creatomate reportó un error al renderizar',
           current_step: 'Error en renderizado',
         })
         .eq('id', jobId)
@@ -63,8 +86,10 @@ export async function POST(request: NextRequest) {
       if (error) {
         console.error(`[VideoV2Webhook][Creatomate] Error actualizando job fallido ${jobId}: ${error.message}`)
       } else {
-        console.log(`[VideoV2Webhook][Creatomate] Job ${jobId} falló: ${payload.error_message}`)
+        console.log(`[VideoV2Webhook][Creatomate] Job ${jobId} falló: ${render.error_message}`)
       }
+    } else {
+      console.warn(`[VideoV2Webhook][Creatomate] Aviso "${payload.status}" pero Creatomate dice status=${render.status}; se ignora.`)
     }
 
     // Siempre responder 200 para confirmar recepción

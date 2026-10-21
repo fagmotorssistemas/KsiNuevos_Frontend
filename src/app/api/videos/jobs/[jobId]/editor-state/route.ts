@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { SequenceItem } from '@/lib/videos/segmenter'
 import { applyVideoJobEditorPatch, getVideoJobEditorState } from '@/lib/videos/pipeline'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 /**
  * GET — estado para el editor manual: subtítulos (auto vs efectivo), límites de trim por segment_id, análisis Gemini.
  * PATCH — guarda `subtitle_blocks_override` y/o `sequence` (cortes) sin re-transcribir.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     const state = await getVideoJobEditorState(jobId)
@@ -24,6 +28,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     const raw = await request.text()

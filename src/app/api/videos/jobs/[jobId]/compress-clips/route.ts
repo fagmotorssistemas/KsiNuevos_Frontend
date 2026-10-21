@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runNestVideoJob } from '@/lib/videos/nest-video-job'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const maxDuration = 300
 
@@ -7,6 +8,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     const body = (await req.json()) as {

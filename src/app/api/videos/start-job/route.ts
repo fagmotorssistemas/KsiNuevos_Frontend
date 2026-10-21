@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 function getServiceClient() {
   return createClient<Database>(
@@ -11,6 +12,9 @@ function getServiceClient() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const body = (await request.json()) as { jobId: string; musicTrackId: string }
     const { jobId, musicTrackId } = body

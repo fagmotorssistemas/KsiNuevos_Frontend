@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 const flashSvg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">' +
@@ -15,7 +16,10 @@ const flashSvg =
 const TEST_VIDEO_SRC =
   'https://shotstack-assets.s3-ap-southeast-2.amazonaws.com/footage/skater.hls'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   return NextResponse.json({
     endpoint: '/api/videos/test-flash',
     usage: 'POST /api/videos/test-flash',
@@ -36,7 +40,10 @@ export async function GET() {
   })
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   const apiKey = process.env.SHOTSTACK_API_KEY?.trim()
   const baseUrl = process.env.SHOTSTACK_BASE_URL?.trim()
 

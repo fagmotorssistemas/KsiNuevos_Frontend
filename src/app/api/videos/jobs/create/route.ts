@@ -15,6 +15,7 @@ import type { Database } from '@/types/supabase'
 import type { FlowType } from '@/lib/videos/types'
 import { VIDEO_MAX_CLIPS } from '@/lib/videos/clip-config'
 import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 const RAW_BUCKET = 'raw-videos-v2'
 
@@ -107,6 +108,9 @@ function pickBrandInsertFields(
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const body = (await request.json()) as CreateJobBody
     const { flowType, files, musicTrackId, jobName } = body

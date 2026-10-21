@@ -7,10 +7,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { executeJobStart, type StartJobBody } from '@/lib/videos/execute-job-start'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const body = (await request.json()) as StartJobBody
     const result = await executeJobStart(body)
