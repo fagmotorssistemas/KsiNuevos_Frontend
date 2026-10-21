@@ -9,8 +9,8 @@
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
-dotenv.config({ path: path.resolve(process.cwd(), '.env') })
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), quiet: true })
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true })
 
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -224,7 +224,7 @@ async function main() {
 
       const targetPath = finalReelStoragePath(job.id)
       console.log(`  Origen: ${sourceUrl}`)
-      console.log(`  Destino: raw-videos-v2/${targetPath}`)
+      console.log(`  Destino: reels-v2/${targetPath}`)
 
       if (dryRun) {
         console.log('  [DRY-RUN] no descarga / no sube / no actualiza DB')
