@@ -1,0 +1,98 @@
+/**
+ * Props que consume la composición de Remotion. Todo en cuadros (frames) del Reel final
+ * y en píxeles del lienzo vertical. Debe ser JSON serializable (se pasa como inputProps).
+ */
+import type { CUT_ROLES, FocusBox, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
+
+/** Palabra de AssemblyAI: tiempos en milisegundos dentro del clip. */
+export type Word = { text: string; start: number; end: number }
+
+export type ClipSource = {
+  id: string
+  /** Ruta dentro de /public (staticFile) o URL absoluta (p. ej. URL firmada de Supabase). */
+  src: string
+  width: number
+  height: number
+  durationSec: number
+}
+
+export type Placement = (typeof PLACEMENTS)[number]
+
+export type ScreenFocus = { cx: number; cy: number; w: number; h: number }
+
+export type ZoomSpec = {
+  focus: ScreenFocus
+  /** Posición del objeto al final, si la cámara se mueve (seguimiento lineal). */
+  focusEnd?: ScreenFocus
+  /** Punto de la pantalla al que se lleva el objeto cuando el zoom está completo. */
+  target: { x: number; y: number }
+  scale: number
+}
+
+export type TimelineZoom = ZoomSpec & {
+  /** Relativo al inicio del corte. */
+  fromFrame: number
+  durationInFrames: number
+}
+
+export type TimelineCut = {
+  clipId: string
+  src: string
+  srcWidth: number
+  srcHeight: number
+  fromFrame: number
+  durationInFrames: number
+  trimStartSec: number
+  trimEndSec: number
+  role: (typeof CUT_ROLES)[number]
+  transitionIn: (typeof TRANSITIONS)[number]
+  captionPlacement: Placement
+  zooms: TimelineZoom[]
+}
+
+export type TimelineGraphic = Omit<RawGraphic, 'focus' | 'clipId' | 'atSec' | 'durationSec'> & {
+  id: string
+  fromFrame: number
+  durationInFrames: number
+  /** Para feature_callout: zoom hacia el objeto señalado (mismo que aplica el clip). */
+  zoom?: ZoomSpec
+  sourceFocus?: FocusBox
+  /** Para feature_callout: la tarjeta va arriba o abajo (opuesta al objeto). */
+  cardAtTop?: boolean
+}
+
+export type CaptionWord = { text: string; fromFrame: number; toFrame: number; emphasis: boolean }
+
+export type CaptionLine = {
+  fromFrame: number
+  toFrame: number
+  placement: Placement
+  words: CaptionWord[]
+}
+
+export type SfxKind = 'whoosh' | 'pop' | 'hit' | 'riser'
+export type SfxCue = { frame: number; kind: SfxKind }
+
+export type Brand = {
+  logoSrc: string
+  accent: string
+  highlight: string
+  whatsapp?: string
+}
+
+export type ReelProps = {
+  fps: number
+  width: number
+  height: number
+  durationInFrames: number
+  cuts: TimelineCut[]
+  /** Cola final (último cuadro congelado) para que el CTA respire. */
+  tailFrames: number
+  graphics: TimelineGraphic[]
+  captions: CaptionLine[]
+  sfx: SfxCue[]
+  brand: Brand
+  music?: { src: string; volume: number }
+  /** Marca de agua de depuración (p. ej. "MUESTRA"); vacío en producción. */
+  watermark?: string
+}
