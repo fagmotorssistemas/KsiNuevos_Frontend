@@ -1,12 +1,17 @@
+import { Video } from '@remotion/media'
 import React from 'react'
 import { AbsoluteFill, Easing, interpolate, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from 'remotion'
-import type { TimelineCut } from '../plan/types'
+import type { ReelProps, TimelineCut } from '../plan/types'
 import { zoomProgress, zoomTransform } from './zoom'
 
 export const resolveSrc = (src: string) => (/^https?:\/\//.test(src) ? src : staticFile(src))
 
 /** Una toma: recorte del clip + movimiento de cámara + transición de entrada + zoom a lo señalado. */
-export const ClipLayer: React.FC<{ cut: TimelineCut; muted?: boolean }> = ({ cut, muted }) => {
+export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEngine']; muted?: boolean }> = ({
+  cut,
+  engine,
+  muted,
+}) => {
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
 
@@ -42,13 +47,28 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; muted?: boolean }> = ({ cut
           filter: `${whipBlur ? `blur(${whipBlur}px)` : ''} ${glitch ? 'hue-rotate(80deg) saturate(2.2) contrast(1.3)' : ''}`.trim() || undefined,
         }}
       >
-        <OffthreadVideo
-          src={resolveSrc(cut.src)}
-          trimBefore={Math.round(cut.trimStartSec * fps)}
-          durationInFrames={cut.durationInFrames}
-          muted={muted}
-          style={{ width, height, objectFit: 'cover' }}
-        />
+        {engine === 'media' ? (
+          <Video
+            src={resolveSrc(cut.src)}
+            trimBefore={Math.round(cut.trimStartSec * fps)}
+            durationInFrames={cut.durationInFrames}
+            muted={muted}
+            objectFit="cover"
+            // Es el plan B: si volviera al extractor de Remotion, fallaría igual.
+            disallowFallbackToOffthreadVideo
+            style={{ width, height }}
+          />
+        ) : (
+          <OffthreadVideo
+            src={resolveSrc(cut.src)}
+            trimBefore={Math.round(cut.trimStartSec * fps)}
+            durationInFrames={cut.durationInFrames}
+            muted={muted}
+            // Los clips ya vienen convertidos a SDR (run.ts): no hace falta la conversión de color HDR.
+            toneMapped={false}
+            style={{ width, height, objectFit: 'cover' }}
+          />
+        )}
       </AbsoluteFill>
       {glitch ? (
         <AbsoluteFill

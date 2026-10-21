@@ -47,13 +47,13 @@ export const Reel: React.FC<ReelProps> = (props) => {
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       {props.cuts.map((cut, i) => (
         <Sequence key={`cut-${i}`} from={cut.fromFrame} durationInFrames={cut.durationInFrames} name={`${cut.role} · ${cut.clipId}`}>
-          <ClipLayer cut={cut} />
+          <ClipLayer cut={cut} engine={props.videoEngine} />
         </Sequence>
       ))}
       {props.tailFrames > 0 ? (
         <Sequence from={last.fromFrame + last.durationInFrames} durationInFrames={props.tailFrames} name="cola congelada">
           <Freeze frame={last.durationInFrames - 1}>
-            <ClipLayer cut={{ ...last, transitionIn: 'corte', zooms: [] }} muted />
+            <ClipLayer cut={{ ...last, transitionIn: 'corte', zooms: [] }} engine={props.videoEngine} muted />
           </Freeze>
         </Sequence>
       ) : null}

@@ -99,4 +99,9 @@ export type ReelProps = {
   music: { src: string; volume: number; startSec?: number } | null
   /** Marca de agua de depuración (p. ej. "MUESTRA"); '' en producción. Siempre explícito, como `music`. */
   watermark: string
+  /**
+   * Cómo se leen los clips: 'offthread' (extractor de Remotion, el estándar) o 'media'
+   * (WebCodecs dentro de Chrome; plan B si el extractor falla en esa computadora).
+   */
+  videoEngine: 'offthread' | 'media'
 }

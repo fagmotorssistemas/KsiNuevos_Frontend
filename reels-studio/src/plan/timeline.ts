@@ -386,6 +386,7 @@ export function buildReelProps(
       brand: opts.brand,
       music: opts.music ?? null,
       watermark: opts.watermark ?? '',
+      videoEngine: 'offthread',
     },
     warnings,
   }

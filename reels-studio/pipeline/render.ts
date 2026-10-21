@@ -74,12 +74,12 @@ async function composition(props: ReelProps) {
 export async function renderReel(props: ReelProps, outFile: string, opts: { scale?: number } = {}) {
   assertFreeDisk()
   const { serveUrl, comp } = await composition(props)
-  const attempt = async (concurrency: number, cacheBytes: number) => {
+  const attempt = async (inputProps: ReelProps, concurrency: number) => {
     let last = -1
     await renderMedia({
       serveUrl,
       composition: comp,
-      inputProps: props,
+      inputProps,
       codec: 'h264',
       outputLocation: outFile,
       browserExecutable: browserExecutable(),
@@ -87,7 +87,7 @@ export async function renderReel(props: ReelProps, outFile: string, opts: { scal
       scale: opts.scale ?? 1,
       crf: 20,
       concurrency,
-      offthreadVideoCacheSizeInBytes: cacheBytes,
+      offthreadVideoCacheSizeInBytes: VIDEO_CACHE_BYTES,
       onProgress: ({ progress }) => {
         const pct = Math.floor(progress * 100)
         if (pct >= last + 10) {
@@ -97,12 +97,15 @@ export async function renderReel(props: ReelProps, outFile: string, opts: { scal
       },
     })
   }
+  const concurrency = Number(process.env.REMOTION_CONCURRENCY ?? DEFAULT_CONCURRENCY)
   try {
-    await attempt(Number(process.env.REMOTION_CONCURRENCY ?? DEFAULT_CONCURRENCY), VIDEO_CACHE_BYTES)
+    await attempt(props, concurrency)
   } catch (err) {
-    if (!isCompositorCrash(err)) throw err
-    console.log(`[render] reintentando con menos carga (${err instanceof Error ? err.message.slice(0, 120) : err})`)
-    await attempt(1, Math.min(VIDEO_CACHE_BYTES, 384 * 1024 * 1024))
+    if (!isCompositorCrash(err) || props.videoEngine === 'media') throw err
+    // Plan B: leer los clips con WebCodecs dentro de Chrome, sin el extractor de Remotion.
+    console.error(`[render] el extractor de cuadros falló: ${err instanceof Error ? err.message : err}`)
+    console.log('[render] reintentando con el lector de video de Chrome')
+    await attempt({ ...props, videoEngine: 'media' }, Math.min(2, concurrency))
   }
   return outFile
 }

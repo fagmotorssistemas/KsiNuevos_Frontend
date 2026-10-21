@@ -85,16 +85,45 @@ const inputs = values.clips
   .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
 if (inputs.length === 0) throw new Error('No se encontraron clips (.mp4/.mov/.m4v/.webm)')
 
+const HAS_ZSCALE = (() => {
+  try {
+    return execFileSync('ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' }).includes(' zscale ')
+  } catch {
+    return false
+  }
+})()
+
+/** Clips HDR (iPhone: HLG/Dolby Vision, BT.2020). */
+function isHdr(file: string): boolean {
+  try {
+    const out = execFileSync(
+      'ffprobe',
+      ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=color_transfer,color_primaries', '-of', 'csv=p=0', file],
+      { encoding: 'utf8' }
+    )
+    return /smpte2084|arib-std-b67|bt2020/.test(out)
+  } catch {
+    return false
+  }
+}
+
+/** HDR → SDR BT.709 (sin zscale, solo se reetiqueta: colores algo lavados pero el render no falla). */
+const HDR_TO_SDR = 'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p'
+
 const clips: Array<DirectorClip & ClipSource> = inputs.map((input, i) => {
   const id = `clip${i + 1}`
   const file = path.join(publicJobDir, `${id}.mp4`)
   if (!fs.existsSync(file)) {
-    console.log(`[clips] ${path.basename(input)} → ${id}.mp4`)
+    const hdr = isHdr(input)
+    console.log(`[clips] ${path.basename(input)} → ${id}.mp4${hdr ? ' (HDR → SDR)' : ''}`)
+    // 30 cps como el Reel (los del celular suelen venir a 60): la mitad de cuadros que decodificar.
+    const scale = "fps=30,scale='if(gt(iw,ih),-2,min(1080,iw))':'if(gt(iw,ih),min(1080,ih),-2)'"
     execFileSync('ffmpeg', [
       '-v', 'error', '-y', '-i', input,
-      // 30 cps como el Reel (los del celular suelen venir a 60): la mitad de cuadros que decodificar.
-      '-vf', "fps=30,scale='if(gt(iw,ih),-2,min(1080,iw))':'if(gt(iw,ih),min(1080,ih),-2)'",
+      '-vf', hdr && HAS_ZSCALE ? `${HDR_TO_SDR},${scale}` : scale,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
+      // Siempre etiquetado como SDR BT.709: así Remotion no intenta convertir colores HDR.
+      '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
       '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', file,
     ])
   }

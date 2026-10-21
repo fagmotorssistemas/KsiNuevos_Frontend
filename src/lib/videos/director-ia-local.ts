@@ -131,7 +131,7 @@ function progressFromLine(line: string, clipCount: number): Progress | null {
   if (line.startsWith('[gemini] estrategia')) return { status: 'analyzing', step: 'Gemini: plan creativo listo', pct: 62 }
   if (line.startsWith('[plan]')) return { status: 'rendering', step: 'Armando la línea de tiempo', pct: 65 }
   if (line.startsWith('[render] reintentando')) {
-    return { status: 'rendering', step: 'Render 3D: reintentando con menos carga', pct: 66 }
+    return { status: 'rendering', step: 'Render 3D: reintentando con el lector de video de Chrome', pct: 66 }
   }
   const render = line.match(/^\[render\] (\d+)%/)
   if (render) {
@@ -166,8 +166,9 @@ function runStudio(jobId: string, args: string[], clipCount: number): Promise<vo
       }
     })
     readline.createInterface({ input: child.stderr }).on('line', (line) => {
-      // Remotion avisa por stderr cosas que no son errores (memoria, three.js); solo se guardan para el mensaje final.
       remember(line)
+      // Remotion avisa por stderr cosas que no son errores (memoria del contenedor, three.js).
+      if (!/memory|cgroup|docker|THREE\.Clock/i.test(line)) console.warn(`[DirectorIA][${jobId}][stderr] ${line}`)
     })
     child.on('error', reject)
     child.on('close', (code) => {
