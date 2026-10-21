@@ -309,44 +309,6 @@
       ]
     },
     {
-      "fromFrame": 222,
-      "toFrame": 273,
-      "placement": "abajo",
-      "words": [
-        {
-          "text": "automático",
-          "fromFrame": 222,
-          "toFrame": 256,
-          "emphasis": false
-        },
-        {
-          "text": "4x4,",
-          "fromFrame": 256,
-          "toFrame": 273,
-          "emphasis": true
-        }
-      ]
-    },
-    {
-      "fromFrame": 273,
-      "toFrame": 310,
-      "placement": "abajo",
-      "words": [
-        {
-          "text": "5",
-          "fromFrame": 273,
-          "toFrame": 281,
-          "emphasis": true
-        },
-        {
-          "text": "puertas.",
-          "fromFrame": 281,
-          "toFrame": 309,
-          "emphasis": false
-        }
-      ]
-    },
-    {
       "fromFrame": 313,
       "toFrame": 335,
       "placement": "abajo",

@@ -30,7 +30,7 @@ export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
           flexWrap: 'wrap',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: '8px 26px',
+          gap: '10px 38px',
         }}
       >
         {line.words.map((w, i) => {
@@ -71,7 +71,7 @@ export const Captions: React.FC<{ lines: CaptionLine[] }> = ({ lines }) => {
                 lineHeight: 1.05,
                 color: active ? COLORS.yellow : COLORS.white,
                 transform: `scale(${scale})`,
-                WebkitTextStroke: '12px #000',
+                WebkitTextStroke: '10px #000',
                 paintOrder: 'stroke fill',
                 textShadow: '0 8px 18px rgba(0,0,0,0.6)',
               }}

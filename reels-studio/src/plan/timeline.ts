@@ -48,6 +48,9 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
   cta_end: 'hit',
 }
 
+/** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
+const FILLER = new Set(['a', 'y', 'o', 'e', 'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'en', 'con', 'por', 'para', 'que', 'su', 'es', 'lo', 'al'])
+
 const MAX_TAIL_SEC = 2.5
 /** Margen antes de la primera palabra y después de la última al ajustar un corte. */
 const PRE_ROLL_SEC = 0.08
@@ -313,6 +316,19 @@ export function buildReelProps(
   const emphasis = new Set(plan.emphasisWords.flatMap((w) => w.split(/\s+/)).map(normalizeToken).filter(Boolean))
   const blocked = graphics.filter((g) => OWNS_SCREEN.has(g.type)).map((g) => [g.fromFrame, g.fromFrame + g.durationInFrames])
   const isBlocked = (f: number) => blocked.some(([a, b]) => f >= a - 2 && f < b)
+  // Palabras que ya están escritas en un gráfico en pantalla: no se repiten en el subtítulo.
+  const onScreen = graphics.map((g) => ({
+    from: g.fromFrame,
+    to: g.fromFrame + g.durationInFrames,
+    tokens: new Set(
+      [g.text, g.subtext, g.badge, g.unit, ...(g.items ?? []), g.value !== undefined ? String(g.value) : '']
+        .join(' ')
+        .split(/\s+/)
+        .map(normalizeToken)
+        .filter((t) => t && !FILLER.has(t))
+    ),
+  }))
+  const alreadyShown = (f: number, token: string) => onScreen.some((g) => f >= g.from && f < g.to && g.tokens.has(token))
   const capWords: PendingWord[] = []
   for (const c of cuts) {
     for (const w of fixedWords.get(c.clipId) ?? []) {
@@ -323,6 +339,7 @@ export function buildReelProps(
       const toFrame = Math.min(c.fromFrame + c.durationInFrames, c.fromFrame + Math.round((we - c.trimStartSec) * fps))
       if (isBlocked(fromFrame)) continue
       const n = normalizeToken(w.text)
+      if (n && alreadyShown(fromFrame, n)) continue
       capWords.push({
         text: w.text,
         fromFrame,
@@ -341,7 +358,9 @@ export function buildReelProps(
     if (callout) return callout.cardAtTop ? 'abajo' : 'arriba'
     return cut.captionPlacement
   }
-  const captions = groupCaptionLines(capWords, placementFor, fps)
+  const captions = groupCaptionLines(capWords, placementFor, fps).filter((line) =>
+    line.words.some((w) => !FILLER.has(normalizeToken(w.text)))
+  )
 
   // 4) Efectos de sonido: entrada de cada gráfico y transiciones marcadas.
   const sfx: SfxCue[] = []
