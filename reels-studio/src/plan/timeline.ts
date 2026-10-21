@@ -8,7 +8,7 @@
  * lo mismo, y calcular dónde queda en pantalla lo que Gemini señaló en el cuadro.
  */
 import { chooseZoomTarget } from '../reel/zoom'
-import type { CreativePlan, FocusBox, GraphicType, RawGraphic, TranscriptFix } from './schema'
+import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, RawGraphic, TranscriptFix } from './schema'
 import { validateGraphic } from './schema'
 import type {
   Brand,
@@ -46,6 +46,7 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
   feature_list: 'pop',
   price_tag: 'hit',
   cta_end: 'hit',
+  sticker: 'pop',
 }
 
 /** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
@@ -62,31 +63,58 @@ const SENTENCE_PAUSE_SEC = 0.6
 const MAX_SENTENCE_EXTEND_SEC = 5
 
 /**
- * Tiempo mínimo en pantalla por tipo (segundos): el equipo pidió gráficos más pausados aunque el Reel
- * dure más. Las listas crecen con la cantidad de elementos.
+ * Tiempo mínimo en pantalla por tipo (segundos): lo justo para leerlo con calma. El ritmo lo da que
+ * haya más gráficos y menos espera entre ellos, no que duren poco. Las listas crecen con sus elementos.
  */
 function minDurationSec(g: Pick<RawGraphic, 'type' | 'items'>): number {
   const items = g.items?.length ?? 0
   switch (g.type) {
     case 'hook_text':
-      return 2.6
+      return 2.2
     case 'title_3d':
-      return 3
+      return 2.6
     case 'feature_callout':
-      return 2.8
+      return 2.4
     case 'spec_counter':
     case 'price_tag':
-      return 3.2
+      return 2.6
     case 'spec_chips':
-      return Math.max(3, 1.2 + items * 0.7)
+      return Math.max(2.4, 1 + items * 0.6)
     case 'feature_list':
-      return Math.max(3, 1 + items * 1.1)
+      return Math.max(2.6, 0.8 + items * 0.9)
     case 'cta_end':
-      return 3.5
+      return 3.2
+    case 'sticker':
+      return 1.8
   }
 }
 /** Respiro entre un gráfico y el siguiente. */
-const GRAPHIC_GAP_SEC = 0.5
+const GRAPHIC_GAP_SEC = 0.25
+const STICKER_MAX_SEC = 2.6
+/** Cuánto se puede adelantar o atrasar un sticker para encontrar un hueco sin gráficos. */
+const STICKER_MAX_EARLY_SEC = 1.5
+const STICKER_MAX_SHIFT_SEC = 3
+
+/** Silencios dentro de una toma con voz más largos que esto se quitan (corte seco, "jump cut"). */
+const JUMP_GAP_SEC = 0.4
+/** Aire que se deja a cada lado de las palabras al quitar un silencio. */
+const JUMP_KEEP_SEC = 0.07
+/** Un pedazo nunca queda más corto que esto: si no, el silencio se deja (evita parpadeos). */
+const MIN_PIECE_SEC = 0.6
+/** Silencio máximo antes de la primera palabra y después de la última de una toma con voz. */
+const MAX_EDGE_SILENCE_SEC = 1
+/** Golpes de cámara: separación mínima entre dos (cuadros). */
+const PUNCH_MIN_GAP_FRAMES = 12
+
+/** Palabras por línea según el estilo: `palabra` muestra una sola, grande. */
+const CAPTION_LAYOUT: Record<CaptionStyle, { maxWords: number; maxChars: number }> = {
+  impacto: { maxWords: 3, maxChars: 20 },
+  velocidad: { maxWords: 3, maxChars: 18 },
+  elegante: { maxWords: 3, maxChars: 22 },
+  robusto: { maxWords: 2, maxChars: 16 },
+  caja: { maxWords: 3, maxChars: 20 },
+  palabra: { maxWords: 1, maxChars: 14 },
+}
 
 export function normalizeToken(t: string): string {
   return t
@@ -187,6 +215,31 @@ function snapCutToSentences(startSec: number, endSec: number, words: Word[], cli
   return { s: Math.max(0, s), e: Math.min(clipDur, e) }
 }
 
+/**
+ * Parte una toma en pedazos sin los silencios largos entre palabras: la frase sigue completa, solo se
+ * le quita el aire. Los planos sin voz (b-roll) quedan tal cual; los bordes mudos se acortan.
+ */
+function removeSilences(s: number, e: number, words: Word[]): Array<[number, number]> {
+  const inside = words.filter((w) => w.end / 1000 > s + 0.05 && w.start / 1000 < e - 0.05)
+  if (inside.length === 0) return [[s, e]]
+  const start = Math.max(s, inside[0].start / 1000 - MAX_EDGE_SILENCE_SEC)
+  const end = Math.min(e, inside[inside.length - 1].end / 1000 + MAX_EDGE_SILENCE_SEC)
+  const pieces: Array<[number, number]> = []
+  let pieceStart = start
+  for (let i = 1; i < inside.length; i++) {
+    const gapStart = inside[i - 1].end / 1000
+    const gapEnd = inside[i].start / 1000
+    if (gapEnd - gapStart <= JUMP_GAP_SEC) continue
+    const pieceEnd = gapStart + JUMP_KEEP_SEC
+    // Sin pedazos diminutos: ni el que se cierra ni lo que queda de la toma.
+    if (pieceEnd - pieceStart < MIN_PIECE_SEC || end - (gapEnd - JUMP_KEEP_SEC) < MIN_PIECE_SEC) continue
+    pieces.push([pieceStart, pieceEnd])
+    pieceStart = gapEnd - JUMP_KEEP_SEC
+  }
+  pieces.push([pieceStart, end])
+  return pieces
+}
+
 /** Caja normalizada del cuadro fuente → píxeles en el lienzo (video en modo "cover"). */
 export function focusToScreen(box: FocusBox, srcW: number, srcH: number, outW: number, outH: number): ScreenFocus {
   const scale = Math.max(outW / srcW, outH / srcH)
@@ -210,7 +263,8 @@ type PendingWord = CaptionWord & { cutEnd: number }
 function groupCaptionLines(
   words: PendingWord[],
   placementFor: (fromFrame: number, toFrame: number) => CaptionLine['placement'],
-  fps: number
+  fps: number,
+  layout: { maxWords: number; maxChars: number }
 ) {
   const lines: Array<CaptionLine & { cutEnd: number }> = []
   let cur: PendingWord[] = []
@@ -232,7 +286,7 @@ function groupCaptionLines(
     const gap = prev ? (w.fromFrame - prev.toFrame) / fps : 0
     if (
       prev &&
-      (cur.length >= 3 || chars > 20 || gap > 0.35 || /[.,!?;:…]$/.test(prev.text) || w.fromFrame < prev.fromFrame || w.cutEnd !== prev.cutEnd)
+      (cur.length >= layout.maxWords || chars > layout.maxChars || gap > 0.35 || /[.,!?;:…]$/.test(prev.text) || w.fromFrame < prev.fromFrame || w.cutEnd !== prev.cutEnd)
     ) {
       flush()
     }
@@ -265,9 +319,8 @@ export function buildReelProps(
   const fixedWords = new Map<string, Word[]>()
   for (const c of clips) fixedWords.set(c.id, applyTranscriptFixes(transcripts[c.id] ?? [], fixesByClip.get(c.id) ?? []))
 
-  // 1) Cortes → línea de tiempo.
-  const cuts: TimelineCut[] = []
-  let cursor = 0
+  // 1) Cortes del plan → tomas (frases completas, sin repetir audio) → pedazos sin silencios largos.
+  const takes: Array<{ clip: ClipSource; s: number; e: number; cut: Cut }> = []
   for (const cut of plan.cuts) {
     const clip = clipById.get(cut.clipId)
     if (!clip) {
@@ -276,42 +329,52 @@ export function buildReelProps(
     }
     let { s, e } = snapCutToSentences(cut.startSec, cut.endSec, fixedWords.get(clip.id) ?? [], clip.durationSec)
     // Al completar frases, dos cortes seguidos del mismo clip pueden tocarse: se unen en uno.
-    const prev = cuts[cuts.length - 1]
-    if (prev && prev.clipId === clip.id && s <= prev.trimEndSec + 0.3 && e > prev.trimStartSec) {
-      const mergedEnd = Math.max(prev.trimEndSec, e)
-      const added = Math.round((mergedEnd - prev.trimEndSec) * fps)
-      prev.trimEndSec = mergedEnd
-      prev.durationInFrames += added
-      cursor += added
+    const prev = takes[takes.length - 1]
+    if (prev && prev.clip.id === clip.id && s <= prev.e + 0.3 && e > prev.s) {
+      prev.e = Math.max(prev.e, e)
       continue
     }
     // Sin repetir audio: si ya se usó ese tramo del clip en otro corte, se empieza después.
-    for (const used of cuts) {
-      if (used.clipId === clip.id && s < used.trimEndSec && e > used.trimStartSec) s = Math.max(s, used.trimEndSec)
+    for (const used of takes) {
+      if (used.clip.id === clip.id && s < used.e && e > used.s) s = Math.max(s, used.e)
     }
-    const durationInFrames = Math.round((e - s) * fps)
-    if (durationInFrames < Math.round(fps * 0.5)) {
+    if (e - s < 0.5) {
       warnings.push(`Corte ignorado por corto o repetido: ${cut.clipId} ${s.toFixed(2)}–${e.toFixed(2)}`)
       continue
     }
-    cuts.push({
-      clipId: clip.id,
-      src: clip.src,
-      srcWidth: clip.width,
-      srcHeight: clip.height,
-      fromFrame: cursor,
-      durationInFrames,
-      trimStartSec: s,
-      trimEndSec: e,
-      role: cut.role,
-      transitionIn: cuts.length === 0 ? 'zoom' : cut.transitionIn,
-      captionPlacement: cut.captionPlacement,
-      zooms: [],
-    })
-    cursor += durationInFrames
+    takes.push({ clip, s, e, cut })
   }
+
+  const cuts: TimelineCut[] = []
+  let cursor = 0
+  takes.forEach(({ clip, s, e, cut }, take) => {
+    removeSilences(s, e, fixedWords.get(clip.id) ?? []).forEach(([ps, pe], jump) => {
+      const durationInFrames = Math.round((pe - ps) * fps)
+      cuts.push({
+        clipId: clip.id,
+        src: clip.src,
+        srcWidth: clip.width,
+        srcHeight: clip.height,
+        fromFrame: cursor,
+        durationInFrames,
+        trimStartSec: ps,
+        trimEndSec: pe,
+        role: cut.role,
+        // El Reel abre con golpe; los saltos dentro de una toma son cortes secos.
+        transitionIn: cuts.length === 0 ? 'zoom' : jump > 0 ? 'corte' : cut.transitionIn,
+        captionPlacement: cut.captionPlacement,
+        zooms: [],
+        take,
+        jump,
+        punches: [],
+      })
+      cursor += durationInFrames
+    })
+  })
   if (cuts.length === 0) throw new Error('El plan no dejó ningún corte utilizable')
   const cutsEnd = cursor
+  const takeEnd = (take: number) =>
+    Math.max(...cuts.filter((c) => c.take === take).map((c) => c.fromFrame + c.durationInFrames))
 
   const sourceToFrame = (clipId: string, sec: number): { frame: number; cut: TimelineCut } | null => {
     const tolerance = 0.35
@@ -322,10 +385,15 @@ export function buildReelProps(
         return { frame: c.fromFrame + Math.round((clamped - c.trimStartSec) * fps), cut: c }
       }
     }
-    return null
+    // Cayó en un silencio que se quitó: va al inicio del pedazo siguiente de la misma toma.
+    const next = cuts.find(
+      (c, i) => c.clipId === clipId && c.jump > 0 && cuts[i - 1]?.take === c.take && sec > cuts[i - 1].trimEndSec && sec < c.trimStartSec
+    )
+    return next ? { frame: next.fromFrame, cut: next } : null
   }
 
-  // 2) Gráficos → línea de tiempo, en un solo carril (nunca dos gráficos grandes a la vez).
+  // 2) Gráficos → línea de tiempo. Carril principal: nunca dos gráficos grandes a la vez.
+  //    Los stickers de interacción van en su propio carril, encima.
   const placed: Array<{ g: RawGraphic; fromFrame: number; cut: TimelineCut }> = []
   plan.graphics.forEach((g) => {
     const problem = validateGraphic(g)
@@ -335,12 +403,21 @@ export function buildReelProps(
     placed.push({ g, fromFrame: at.frame, cut: at.cut })
   })
   placed.sort((a, b) => a.fromFrame - b.fromFrame)
+  // Animación desde el cuadro 0: el primer gancho abre el Reel aunque Gemini lo haya puesto un poco después.
+  const firstHook = placed.find((p) => p.g.type === 'hook_text')
+  if (firstHook && firstHook.fromFrame < fps * 4) {
+    firstHook.fromFrame = 0
+    firstHook.cut = cuts[0]
+    placed.sort((a, b) => a.fromFrame - b.fromFrame)
+  }
+  const mainLane = placed.filter((p) => p.g.type !== 'sticker')
+  const stickerLane = placed.filter((p) => p.g.type === 'sticker')
 
   const minFrames = Math.round(fps * 0.8)
   let tailFrames = 0
   const graphics: TimelineGraphic[] = []
   let laneFree = 0
-  for (const [i, { g, fromFrame: rawFrom, cut }] of placed.entries()) {
+  for (const [i, { g, fromFrame: rawFrom, cut }] of mainLane.entries()) {
     let fromFrame = Math.max(rawFrom, laneFree)
     let durationInFrames = Math.round(Math.max(g.durationSec, minDurationSec(g)) * fps)
     if (g.type === 'cta_end') {
@@ -348,7 +425,7 @@ export function buildReelProps(
       tailFrames = Math.min(Math.round(MAX_TAIL_SEC * fps), Math.max(0, fromFrame + durationInFrames - cutsEnd))
     }
     const reelEnd = cutsEnd + tailFrames
-    const nextStart = placed[i + 1]?.fromFrame
+    const nextStart = mainLane[i + 1]?.fromFrame
     if (nextStart !== undefined && g.type !== 'cta_end' && fromFrame + durationInFrames > nextStart) {
       // Recorta para dejar entrar al siguiente, pero sin bajar de ~85% de su tiempo mínimo
       // (si no alcanza, el siguiente se corre un poco).
@@ -364,10 +441,10 @@ export function buildReelProps(
     const { focus, focusEnd, clipId: _clipId, atSec: _atSec, durationSec: _durationSec, ...rest } = g
     const tg: TimelineGraphic = { ...rest, id: `g${graphics.length + 1}-${g.type}`, fromFrame, durationInFrames }
     if (g.type === 'feature_callout') {
-      // El señalador pertenece a su toma: no sigue sobre el clip siguiente.
-      const cutEnd = cut.fromFrame + cut.durationInFrames
-      if (fromFrame + durationInFrames > cutEnd) {
-        durationInFrames = cutEnd - fromFrame
+      // El señalador pertenece a su toma (aunque se le hayan quitado silencios): no sigue sobre la siguiente.
+      const end = takeEnd(cut.take)
+      if (fromFrame + durationInFrames > end) {
+        durationInFrames = end - fromFrame
         if (durationInFrames < minFrames) {
           warnings.push(`Señalador descartado: "${g.text}" empieza muy al final de su toma`)
           laneFree = fromFrame
@@ -385,7 +462,11 @@ export function buildReelProps(
         const zoom = { focus: screenFocus, focusEnd: screenFocusEnd, scale, target }
         tg.zoom = zoom
         tg.sourceFocus = focus
-        cut.zooms.push({ ...zoom, fromFrame: fromFrame - cut.fromFrame, durationInFrames })
+        // El zoom sigue a través de los saltos de la toma (cada pedazo lo ve desde su propio inicio).
+        for (const c of cuts) {
+          if (c.take !== cut.take || c.fromFrame >= fromFrame + durationInFrames || c.fromFrame + c.durationInFrames <= fromFrame) continue
+          c.zooms.push({ ...zoom, fromFrame: fromFrame - c.fromFrame, durationInFrames })
+        }
       }
     }
     if (g.type === 'cta_end') fromFrame = Math.min(fromFrame, reelEnd - durationInFrames)
@@ -393,9 +474,37 @@ export function buildReelProps(
     graphics.push(tg)
   }
 
+  // Stickers: van en los huecos entre gráficos (no los tapan). Se busca el primer hueco desde un poco
+  // antes del momento que eligió Gemini, sin alejarse mucho de él.
+  const reelEnd = cutsEnd + tailFrames
+  let stickerFree = 0
+  for (const { g, fromFrame: rawFrom } of stickerLane) {
+    let fromFrame = Math.max(rawFrom - Math.round(STICKER_MAX_EARLY_SEC * fps), stickerFree, 0)
+    const durationInFrames = Math.round(Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDurationSec(g))) * fps)
+    const gap = Math.round(GRAPHIC_GAP_SEC * fps)
+    for (let moved = true; moved; ) {
+      moved = false
+      for (const other of graphics) {
+        if (fromFrame < other.fromFrame + other.durationInFrames + gap && fromFrame + durationInFrames + gap > other.fromFrame) {
+          fromFrame = other.fromFrame + other.durationInFrames + gap
+          moved = true
+        }
+      }
+    }
+    if (fromFrame + durationInFrames > reelEnd || fromFrame - rawFrom > STICKER_MAX_SHIFT_SEC * fps) {
+      warnings.push(`Sticker descartado: no hay hueco libre cerca de su momento ("${g.text}")`)
+      continue
+    }
+    const { focus: _f, focusEnd: _fe, clipId: _c, atSec: _a, durationSec: _d, ...rest } = g
+    graphics.push({ ...rest, id: `s${graphics.length + 1}-sticker`, fromFrame, durationInFrames })
+    stickerFree = fromFrame + durationInFrames + Math.round(fps * 1.5)
+  }
+  graphics.sort((a, b) => a.fromFrame - b.fromFrame)
+
   const durationInFrames = cutsEnd + tailFrames
 
   // 3) Subtítulos desde las palabras (corregidas) que caen dentro de cada corte.
+  const captionStyle: CaptionStyle = plan.captionStyle ?? 'impacto'
   const emphasis = new Set(plan.emphasisWords.flatMap((w) => w.split(/\s+/)).map(normalizeToken).filter(Boolean))
   const blocked = graphics.filter((g) => OWNS_SCREEN.has(g.type)).map((g) => [g.fromFrame, g.fromFrame + g.durationInFrames])
   const isBlocked = (f: number) => blocked.some(([a, b]) => f >= a - 2 && f < b)
@@ -441,11 +550,28 @@ export function buildReelProps(
     if (callout) return callout.cardAtTop ? 'abajo' : 'arriba'
     return cut.captionPlacement
   }
-  const captions = groupCaptionLines(capWords, placementFor, fps).filter((line) =>
+  const captions = groupCaptionLines(capWords, placementFor, fps, CAPTION_LAYOUT[captionStyle]).filter((line) =>
     line.words.some((w) => !FILLER.has(normalizeToken(w.text)))
   )
 
-  // 4) Efectos de sonido: entrada de cada gráfico y transiciones marcadas.
+  // 4) Golpes de cámara: en cada palabra clave que se ve y en la entrada de cada gráfico
+  //    (salvo donde ya hay un zoom a una característica, que manda).
+  const zoomedAt = (f: number) =>
+    cuts.some((c) => c.zooms.some((z) => f >= c.fromFrame + z.fromFrame && f < c.fromFrame + z.fromFrame + z.durationInFrames))
+  const punchFrames = [
+    ...captions.flatMap((l) => l.words.filter((w) => w.emphasis).map((w) => w.fromFrame)),
+    ...graphics.filter((g) => g.type !== 'feature_callout').map((g) => g.fromFrame),
+  ].sort((a, b) => a - b)
+  let lastPunch = -Infinity
+  for (const f of punchFrames) {
+    if (f - lastPunch < PUNCH_MIN_GAP_FRAMES || zoomedAt(f)) continue
+    const c = cuts.find((x) => f >= x.fromFrame && f < x.fromFrame + x.durationInFrames)
+    if (!c) continue
+    c.punches.push(f - c.fromFrame)
+    lastPunch = f
+  }
+
+  // 5) Efectos de sonido: entrada de cada gráfico y transiciones marcadas.
   const sfx: SfxCue[] = []
   const pushSfx = (frame: number, kind: SfxCue['kind']) => {
     if (sfx.some((s) => Math.abs(s.frame - frame) < 8)) return
@@ -465,6 +591,7 @@ export function buildReelProps(
       tailFrames,
       graphics,
       captions,
+      captionStyle,
       sfx,
       brand: opts.brand,
       music: opts.music ?? null,

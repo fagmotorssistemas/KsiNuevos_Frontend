@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import { creativePlanSchema, rawGraphicSchema, type CreativePlan, type FocusBox } from '../src/plan/schema'
+import { CAPTION_STYLES, creativePlanSchema, rawGraphicSchema, type CreativePlan, type FocusBox } from '../src/plan/schema'
 import type { TranscribedWord } from './assemblyai'
 import { DIRECTOR_SYSTEM, formatTranscript, formatVehicle, type VehicleInfo } from './director-prompt'
 
@@ -22,7 +22,10 @@ const geminiGraphicSchema = rawGraphicSchema.omit({ focus: true, focusEnd: true 
   focus_box: box2d.optional(),
   focus_box_end: box2d.optional(),
 })
-const geminiPlanSchema = creativePlanSchema.extend({ graphics: z.array(geminiGraphicSchema) })
+const geminiPlanSchema = creativePlanSchema.extend({
+  graphics: z.array(geminiGraphicSchema),
+  captionStyle: z.enum(CAPTION_STYLES),
+})
 type GeminiPlan = z.infer<typeof geminiPlanSchema>
 
 export type DirectorClip = {

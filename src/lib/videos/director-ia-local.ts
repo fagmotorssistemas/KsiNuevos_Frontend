@@ -68,6 +68,30 @@ type JobRow = Pick<
 >
 
 /** Datos del carro para Gemini y AssemblyAI: inventario si hay, si no lo que se escribió en el modal. */
+/** La carrocería del inventario viene escrita de muchas formas ("jeep" es como se le dice al SUV en Ecuador). */
+function vehicleCategory(typeBody: string | null | undefined): string | undefined {
+  const t = (typeBody ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (/jeep|suv|todoterreno/.test(t)) return 'suv'
+  if (/cabina|camioneta|pick ?up/.test(t)) return 'camioneta'
+  if (/cupe|coupe|convertible|deportiv/.test(t)) return 'deportivo'
+  if (/sedan|automovil/.test(t)) return 'sedan'
+  if (/hatch|hatck/.test(t)) return 'hatchback'
+  if (/\bvan\b|furgon|minibus/.test(t)) return 'van'
+  return undefined
+}
+
+/** Estilos de subtítulo de los últimos Reels del Director IA: Gemini no los repite. */
+async function recentCaptionStyles(jobId: string): Promise<string[]> {
+  const { data } = await getServiceClient()
+    .from('video_jobs_v2')
+    .select('captionStyle:gemini_analysis->plan->>captionStyle')
+    .neq('id', jobId)
+    .not('gemini_analysis->plan->>captionStyle', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(3)
+  return ((data ?? []) as Array<{ captionStyle: string | null }>).flatMap((r) => (r.captionStyle ? [r.captionStyle] : []))
+}
+
 async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> {
   const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
   const vehicleId = job.inventory_vehicle_id ?? meta?.vehicleId ?? null
@@ -88,7 +112,8 @@ async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> 
         transmision: data.transmission ?? undefined,
         kilometraje: data.mileage ?? undefined,
         color: data.color ?? undefined,
-        notas: data.type_body ? `Carrocería: ${data.type_body}` : undefined,
+        categoria: vehicleCategory(data.type_body),
+        carroceria: data.type_body ?? undefined,
       }
     }
   }
@@ -213,7 +238,8 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
     await downloadClips(jobId, paths, clipsDir)
 
     const vehicleFile = path.join(work, 'vehiculo.json')
-    fs.writeFileSync(vehicleFile, JSON.stringify(await vehicleInfoForJob(job), null, 2))
+    const vehicle = { ...(await vehicleInfoForJob(job)), estilosRecientes: await recentCaptionStyles(jobId) }
+    fs.writeFileSync(vehicleFile, JSON.stringify(vehicle, null, 2))
 
     const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
     const args = ['--name', jobId, '--vehicle', vehicleFile, '--clips', clipsDir, '--cleanup']

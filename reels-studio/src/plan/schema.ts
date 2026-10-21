@@ -20,6 +20,7 @@ export const GRAPHIC_TYPES = [
   'feature_list',
   'price_tag',
   'cta_end',
+  'sticker',
 ] as const
 export type GraphicType = (typeof GRAPHIC_TYPES)[number]
 
@@ -41,10 +42,21 @@ export const ICONS = [
   'familia',
   'check',
   'estrella',
+  'comentar',
+  'guardar',
+  'compartir',
+  'fuego',
+  'rayo',
 ] as const
 export type IconName = (typeof ICONS)[number]
 
 export const TRANSITIONS = ['corte', 'flash', 'zoom', 'whip', 'glitch'] as const
+/**
+ * Estilos de subtítulo (tipografía + animación), todos con los colores de la marca. Gemini elige
+ * uno por Reel según el vehículo y el tono; ver CAPTION_STYLE_GUIDE en director-prompt.ts.
+ */
+export const CAPTION_STYLES = ['impacto', 'velocidad', 'elegante', 'robusto', 'caja', 'palabra'] as const
+export type CaptionStyle = (typeof CAPTION_STYLES)[number]
 export const CUT_ROLES = ['gancho', 'presentacion', 'caracteristica', 'dato', 'confianza', 'cierre', 'broll'] as const
 export const PLACEMENTS = ['arriba', 'centro', 'abajo'] as const
 
@@ -118,6 +130,8 @@ export const creativePlanSchema = z.object({
   emphasisWords: z.array(z.string()),
   /** Leyenda corta para la publicación (no se renderiza). */
   caption: z.string(),
+  /** Opcional para leer planes viejos; a Gemini se le exige (gemini-director.ts). */
+  captionStyle: z.enum(CAPTION_STYLES).optional(),
 })
 export type CreativePlan = z.infer<typeof creativePlanSchema>
 
@@ -131,6 +145,8 @@ export function validateGraphic(g: RawGraphic): string | null {
     case 'spec_chips':
     case 'feature_list':
       return g.items && g.items.length >= 2 ? null : `${g.type} necesita al menos 2 items`
+    case 'sticker':
+      return g.text.trim() && g.icon ? null : 'sticker necesita text e icon'
     default:
       return g.text.trim() ? null : `${g.type} necesita text`
   }

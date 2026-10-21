@@ -33,13 +33,30 @@ consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es u
 | `feature_list` | el asesor enumera | Lista que se marca con checks |
 | `price_tag` | se dice precio/cuota | Etiqueta que cae y se balancea |
 | `cta_end` | cierre | "COMENTA <PALABRA>" en 3D + promesa + logo |
+| `sticker` | 1–2 a mitad del Reel | Burbuja de interacción ("Guárdalo", "Comenta", "Compártelo") que late como botón |
 
-Además, siempre: subtítulos karaoke (cifras y palabras clave en bloque rojo), transiciones
-(flash, whip, zoom, glitch), movimiento de cámara suave, barra de progreso, logo y SFX.
+Gemini adapta el tono al **tipo de vehículo** (SUV, sedán, camioneta, deportivo, hatchback, van;
+la web lo saca de `type_body` del inventario) y elige uno de 6 **estilos de subtítulos**
+(`captionStyle`), sin repetir los de los últimos Reels. Todos usan rojo, amarillo y blanco:
 
-Reglas que **no** se le dejan a Gemini (`src/plan/timeline.ts`): cortes ajustados a límites de
-palabra, un solo gráfico grande a la vez, subtítulos ocultos cuando el gráfico ya dice lo mismo,
-subtítulos al lado contrario de la tarjeta, zoom sin bordes vacíos.
+| Estilo | Tipografía | Animación | Para |
+|---|---|---|---|
+| `impacto` | Montserrat Black | Karaoke; palabra clave en bloque rojo | SUV, comodín |
+| `velocidad` | Russo One inclinada | Barrido con desenfoque y estela roja | Deportivos |
+| `elegante` | Bebas Neue espaciada | Sube suave; línea roja que crece | Sedanes |
+| `robusto` | Archivo Black | Sello rojo que cae | Camionetas |
+| `caja` | Poppins | Caja amarilla que salta de palabra en palabra | Hatchbacks, público joven |
+| `palabra` | Teko gigante | Una palabra a la vez, con rebote | Mucha energía |
+
+Además, siempre: gancho animado desde el cuadro 0 (con destello y zoom), golpes de cámara en las
+palabras clave, transiciones cortas (flash, whip, zoom, glitch), movimiento de cámara suave, barra
+de progreso, logo y SFX.
+
+Reglas que **no** se le dejan a Gemini (`src/plan/timeline.ts`): cortes ajustados a frases
+completas, **silencios de más de 0,4 s dentro de una toma se quitan** (corte seco con el encuadre
+alternado para disimularlo), un solo gráfico grande a la vez, stickers solo en los huecos,
+subtítulos ocultos cuando el gráfico ya dice lo mismo, subtítulos al lado contrario de la tarjeta,
+zoom sin bordes vacíos.
 
 ## Uso
 

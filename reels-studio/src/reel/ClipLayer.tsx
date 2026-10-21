@@ -6,6 +6,23 @@ import { zoomProgress, zoomTransform } from './zoom'
 
 export const resolveSrc = (src: string) => (/^https?:\/\//.test(src) ? src : staticFile(src))
 
+/** Encuadre más cerrado en los saltos impares: disimula el corte seco al quitar un silencio. */
+const JUMP_SCALE = 1.1
+/** Golpe de cámara en palabras clave: sube rápido y vuelve en ~0.3 s. */
+const PUNCH_SCALE = 0.07
+const PUNCH_IN = 3
+const PUNCH_OUT = 9
+
+function punchAt(frame: number, punches: number[]): number {
+  let bump = 0
+  for (const p of punches) {
+    const t = frame - p
+    if (t < 0 || t > PUNCH_IN + PUNCH_OUT) continue
+    bump = Math.max(bump, t <= PUNCH_IN ? t / PUNCH_IN : 1 - (t - PUNCH_IN) / PUNCH_OUT)
+  }
+  return 1 + PUNCH_SCALE * Easing.out(Easing.quad)(bump)
+}
+
 /** Una toma: recorte del clip + movimiento de cámara + transición de entrada + zoom a lo señalado. */
 export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEngine']; muted?: boolean }> = ({
   cut,
@@ -24,18 +41,20 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
     transform = `translate(${t.translateX}px, ${t.translateY}px) scale(${t.scale})`
   } else {
     // Movimiento de cámara suave para que ninguna toma se sienta estática.
-    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, 1.06])
-    const punch =
+    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, 1.05])
+    // Transiciones cortas: el cambio se siente inmediato.
+    const zoomIn =
       cut.transitionIn === 'zoom'
-        ? interpolate(frame, [0, 14], [1.08, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
+        ? interpolate(frame, [0, 8], [1.18, 1], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 1
     const whipX =
       cut.transitionIn === 'whip'
-        ? interpolate(frame, [0, 10], [width * 0.15, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
+        ? interpolate(frame, [0, 6], [width * 0.18, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 0
-    transform = `translateX(${whipX}px) scale(${drift * punch})`
+    const jump = cut.jump % 2 === 1 ? JUMP_SCALE : 1
+    transform = `translateX(${whipX}px) scale(${drift * zoomIn * jump * punchAt(frame, cut.punches ?? [])})`
   }
-  const whipBlur = cut.transitionIn === 'whip' ? interpolate(frame, [0, 10], [8, 0], { extrapolateRight: 'clamp' }) : 0
+  const whipBlur = cut.transitionIn === 'whip' ? interpolate(frame, [0, 6], [10, 0], { extrapolateRight: 'clamp' }) : 0
   const glitch = cut.transitionIn === 'glitch' && frame < 4
 
   return (
@@ -88,7 +107,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
       />
       {cut.transitionIn === 'flash' ? (
         <AbsoluteFill
-          style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 9], [0.5, 0], { extrapolateRight: 'clamp' }) }}
+          style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 6], [0.6, 0], { extrapolateRight: 'clamp' }) }}
         />
       ) : null}
     </AbsoluteFill>

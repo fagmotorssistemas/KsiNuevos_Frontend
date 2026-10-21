@@ -7,6 +7,7 @@ import { HookText } from '../graphics/HookText'
 import { PriceTag } from '../graphics/PriceTag'
 import { SpecChips } from '../graphics/SpecChips'
 import { SpecCounter } from '../graphics/SpecCounter'
+import { Sticker } from '../graphics/Sticker'
 import { Title3D } from '../graphics/Title3D'
 import type { Brand, ReelProps, TimelineGraphic } from '../plan/types'
 import { COLORS, FONT_UI } from '../theme'
@@ -34,6 +35,8 @@ const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, brand }) =
       return <PriceTag g={g} />
     case 'cta_end':
       return <CtaEnd g={g} brand={brand} />
+    case 'sticker':
+      return <Sticker g={g} />
   }
 }
 
@@ -65,7 +68,12 @@ export const Reel: React.FC<ReelProps> = (props) => {
         </Sequence>
       ))}
 
-      <Captions lines={props.captions} />
+      <Captions lines={props.captions} style={props.captionStyle} />
+
+      {/* Arranque con golpe: destello en los primeros cuadros, junto con el zoom del primer corte. */}
+      {frame < 7 ? (
+        <AbsoluteFill style={{ backgroundColor: '#fff', opacity: interpolate(frame, [0, 6], [0.65, 0], { extrapolateRight: 'clamp' }) }} />
+      ) : null}
 
       {/* Logo fijo arriba y barra de progreso (retención) */}
       {!ctaActive ? (

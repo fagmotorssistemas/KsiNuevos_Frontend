@@ -2,7 +2,7 @@
  * Props que consume la composición de Remotion. Todo en cuadros (frames) del Reel final
  * y en píxeles del lienzo vertical. Debe ser JSON serializable (se pasa como inputProps).
  */
-import type { CUT_ROLES, FocusBox, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
+import type { CaptionStyle, CUT_ROLES, FocusBox, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
 
 /** Palabra de AssemblyAI: tiempos en milisegundos dentro del clip. */
 export type Word = { text: string; start: number; end: number }
@@ -48,6 +48,12 @@ export type TimelineCut = {
   transitionIn: (typeof TRANSITIONS)[number]
   captionPlacement: Placement
   zooms: TimelineZoom[]
+  /** Toma del plan a la que pertenece: al quitar silencios, una toma se parte en varios cortes. */
+  take: number
+  /** 0 = primer pedazo de la toma; 1, 2… = saltos por silencio quitado (se alterna el encuadre). */
+  jump: number
+  /** Cuadros (relativos al corte) con un golpe de cámara: palabras clave y entradas de gráficos. */
+  punches: number[]
 }
 
 export type TimelineGraphic = Omit<RawGraphic, 'focus' | 'clipId' | 'atSec' | 'durationSec'> & {
@@ -90,6 +96,8 @@ export type ReelProps = {
   tailFrames: number
   graphics: TimelineGraphic[]
   captions: CaptionLine[]
+  /** Tipografía y animación de los subtítulos, elegida por Gemini. Siempre explícito, como `music`. */
+  captionStyle: CaptionStyle
   sfx: SfxCue[]
   brand: Brand
   /**
