@@ -35,6 +35,12 @@ export type DirectorClip = {
 }
 
 /** JSON Schema para `responseJsonSchema`, sin las claves que la API no necesita. */
+function client(apiKey?: string): GoogleGenAI {
+  const key = apiKey ?? process.env.GEMINI_API_KEY
+  if (!key) throw new Error('Falta GEMINI_API_KEY')
+  return new GoogleGenAI({ apiKey: key })
+}
+
 function jsonSchemaFor(schema: z.ZodType): unknown {
   const strip = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(strip)
@@ -104,7 +110,7 @@ export async function directReel(params: {
   model?: string
   apiKey?: string
 }): Promise<{ plan: CreativePlan; raw: unknown }> {
-  const ai = new GoogleGenAI({ apiKey: params.apiKey ?? process.env.GEMINI_API_KEY })
+  const ai = client(params.apiKey)
   const model = params.model ?? DEFAULT_MODEL
 
   console.log(`[gemini] subiendo ${params.clips.length} clips…`)
@@ -173,7 +179,7 @@ export async function refineFocusBoxes(params: {
   model?: string
   apiKey?: string
 }): Promise<CreativePlan> {
-  const ai = new GoogleGenAI({ apiKey: params.apiKey ?? process.env.GEMINI_API_KEY })
+  const ai = client(params.apiKey)
   const model = params.model ?? DEFAULT_MODEL
   const byId = new Map(params.clips.map((c) => [c.id, c]))
 

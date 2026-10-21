@@ -72,19 +72,27 @@ export async function transcribeClip(file: string, keyterms: string[]): Promise<
   const speechModels = (process.env.ASSEMBLYAI_SPEECH_MODELS ?? 'universal-3-pro,universal-2').split(',').map((s) => s.trim())
   const terms = [...new Set([...keyterms, ...DEALER_TERMS].map((t) => t.trim()).filter(Boolean))].slice(0, 200)
 
-  const id = await withRetry('submit', async () => {
-    const res = await fetch(`${BASE}/transcript`, {
+  const submit = (models: string[]) =>
+    fetch(`${BASE}/transcript`, {
       method: 'POST',
       headers: { Authorization: key(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         audio_url: audioUrl,
-        speech_models: speechModels,
+        speech_models: models,
         language_code: process.env.ASSEMBLYAI_LANGUAGE_CODE ?? 'es',
         keyterms_prompt: terms,
         punctuate: true,
         format_text: true,
       }),
     })
+
+  const id = await withRetry('submit', async () => {
+    let res = await submit(speechModels)
+    // Si la cuenta no acepta el modelo nuevo, se usa el mismo que ya usa la app web.
+    if (res.status === 400 && speechModels.join() !== 'universal-2') {
+      console.warn(`[assemblyai] ${speechModels.join(', ')} rechazado (${await res.text()}); se usa universal-2`)
+      res = await submit(['universal-2'])
+    }
     if (!res.ok) throw new Error(`transcript HTTP ${res.status}: ${await res.text()}`)
     return ((await res.json()) as { id: string }).id
   })

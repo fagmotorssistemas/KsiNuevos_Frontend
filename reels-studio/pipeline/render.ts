@@ -1,11 +1,23 @@
 import { bundle } from '@remotion/bundler'
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ReelProps } from '../src/plan/types'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+/** Ruta de un archivo dentro de public/ tal como la espera staticFile (siempre con "/", también en Windows). */
+export function toPublicSrc(file: string): string {
+  const rel = path.relative(path.join(ROOT, 'public'), path.resolve(file))
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`El clip debe estar dentro de reels-studio/public: ${file}`)
+  return rel.split(path.sep).join('/')
+}
+
+type GlRenderer = 'swangle' | 'angle' | 'egl' | 'swiftshader' | 'vulkan' | 'angle-egl'
+/** "swangle" funciona en cualquier servidor sin GPU; en una computadora con GPU, REMOTION_GL=angle es más rápido. */
+const GL = (process.env.REMOTION_GL ?? 'swangle') as GlRenderer
 
 /** Chromium preinstalado (p. ej. Playwright) para no depender de descargas en el servidor. */
 function browserExecutable(): string | null {
@@ -27,7 +39,7 @@ async function composition(props: ReelProps) {
     id: 'Reel',
     inputProps: props,
     browserExecutable: browserExecutable(),
-    chromiumOptions: { gl: 'swangle' },
+    chromiumOptions: { gl: GL },
   })
   return { serveUrl, comp }
 }
@@ -42,10 +54,10 @@ export async function renderReel(props: ReelProps, outFile: string, opts: { scal
     codec: 'h264',
     outputLocation: outFile,
     browserExecutable: browserExecutable(),
-    chromiumOptions: { gl: 'swangle' },
+    chromiumOptions: { gl: GL },
     scale: opts.scale ?? 1,
     crf: 20,
-    concurrency: Number(process.env.REMOTION_CONCURRENCY ?? 4),
+    concurrency: Number(process.env.REMOTION_CONCURRENCY ?? Math.max(1, Math.floor(os.cpus().length / 2))),
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 100)
       if (pct >= last + 10) {
@@ -73,7 +85,7 @@ export async function renderStills(props: ReelProps, frames: number[], outDir: s
       imageFormat: 'jpeg',
       scale,
       browserExecutable: browserExecutable(),
-      chromiumOptions: { gl: 'swangle' },
+      chromiumOptions: { gl: GL },
     })
     files.push(output)
   }

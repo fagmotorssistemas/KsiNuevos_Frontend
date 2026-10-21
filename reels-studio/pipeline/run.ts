@@ -10,6 +10,7 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { creativePlanSchema, type CreativePlan } from '../src/plan/schema'
 import { buildReelProps } from '../src/plan/timeline'
@@ -18,7 +19,22 @@ import { transcribeClip, type TranscribedWord } from './assemblyai'
 import type { VehicleInfo } from './director-prompt'
 import { directReel, refineFocusBoxes, type DirectorClip } from './gemini-director'
 import { probeVideo } from './probe'
-import { renderReel, renderStills } from './render'
+import { renderReel, renderStills, toPublicSrc } from './render'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// Claves en reels-studio/.env (ver .env.example), si existe.
+const envFile = path.join(ROOT, '.env')
+if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
+
+for (const tool of ['ffmpeg', 'ffprobe']) {
+  try {
+    execFileSync(tool, ['-version'], { stdio: 'ignore' })
+  } catch {
+    console.error(`No se encontró ${tool}. Instálalo (Windows: winget install Gyan.FFmpeg · Mac: brew install ffmpeg) y abre una terminal nueva.`)
+    process.exit(1)
+  }
+}
 
 const { values } = parseArgs({
   options: {
@@ -43,8 +59,8 @@ if (!values.name || !values.vehicle || !values.clips?.length) {
 
 const name = values.name.replace(/[^a-z0-9-_]/gi, '-').toLowerCase()
 const vehicle = JSON.parse(fs.readFileSync(values.vehicle, 'utf8')) as VehicleInfo
-const outDir = path.resolve('out', name)
-const publicJobDir = path.resolve('public', 'jobs', name)
+const outDir = path.join(ROOT, 'out', name)
+const publicJobDir = path.join(ROOT, 'public', 'jobs', name)
 fs.mkdirSync(outDir, { recursive: true })
 fs.mkdirSync(publicJobDir, { recursive: true })
 
@@ -68,7 +84,7 @@ const clips: Array<DirectorClip & ClipSource> = inputs.map((input, i) => {
     ])
   }
   const meta = probeVideo(file)
-  return { id, file, src: path.relative(path.resolve('public'), file), words: [], ...meta }
+  return { id, file, src: toPublicSrc(file), words: [], ...meta }
 })
 
 // 2) Transcripción (se guarda para no volver a pagarla).

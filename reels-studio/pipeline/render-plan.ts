@@ -13,7 +13,7 @@ import { creativePlanSchema } from '../src/plan/schema'
 import { buildReelProps } from '../src/plan/timeline'
 import type { ClipSource, Word } from '../src/plan/types'
 import { probeVideo } from './probe'
-import { renderReel, renderStills } from './render'
+import { renderReel, renderStills, toPublicSrc } from './render'
 
 const { values } = parseArgs({
   options: {
@@ -39,12 +39,10 @@ const plan = creativePlanSchema.parse(JSON.parse(fs.readFileSync(values.plan, 'u
 const transcripts = JSON.parse(fs.readFileSync(values.transcripts, 'utf8')) as Record<string, Word[]>
 
 // Los clips viven en /public para que Remotion los sirva (staticFile).
-const publicDir = path.resolve('public')
 const clipIds = [...new Set(plan.cuts.map((c) => c.clipId))]
 const clips: ClipSource[] = clipIds.map((id) => {
   const file = path.resolve(values.clips!, `${id}.mp4`)
-  if (!file.startsWith(publicDir)) throw new Error(`El clip debe estar dentro de public/: ${file}`)
-  return { id, src: path.relative(publicDir, file), ...probeVideo(file) }
+  return { id, src: toPublicSrc(file), ...probeVideo(file) }
 })
 
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
