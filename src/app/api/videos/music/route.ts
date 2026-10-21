@@ -8,6 +8,7 @@ import {
   normalizeTrackName,
   resolveAudioMimeType,
 } from '@/lib/videos/music-upload-shared'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -20,7 +21,10 @@ function getServiceClient() {
   )
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const supabase = getServiceClient()
     const { data: tracks, error } = await supabase
@@ -42,6 +46,9 @@ export async function GET() {
 
 /** Subida legacy vía multipart (puede fallar con HTTP 413 en Vercel si el archivo es grande). Preferir prepare + signed URL. */
 export async function POST(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
@@ -98,6 +105,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')

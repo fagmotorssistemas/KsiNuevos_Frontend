@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { VideoJobStatus, VideoSocialPublishStage } from '@/lib/videos/types'
 import { buildJobNameFromInventory } from '@/lib/videos/resolve-job-vehicle'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 const ALLOWED_STATUS: VideoJobStatus[] = [
   'pending',
@@ -43,6 +44,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await params
     const body = (await request.json()) as PatchBody

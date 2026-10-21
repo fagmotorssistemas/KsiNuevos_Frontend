@@ -14,6 +14,7 @@ import {
   VIDEO_RAW_BUCKET_MAX_BYTES,
   VIDEO_STORAGE_UPLOAD_TARGET_BYTES,
 } from '@/lib/videos/resolve-video-mime'
+import { requireMarketingSession } from '@/lib/videos/api-marketing-auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -52,6 +53,9 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ jobId: string }> }
 ) {
+  const auth = await requireMarketingSession(request)
+  if (!auth.ok) return auth.response
+
   try {
     const { jobId } = await context.params
     if (!jobId?.trim()) {
