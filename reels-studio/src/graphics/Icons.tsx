@@ -119,6 +119,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
   compartir: <path d="M21 3 3 10.5l7 2.5 2.5 7zM10 13l11-10" />,
   fuego: <path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.4 2.4-5.2 3.6-8.3.6 2 1.7 3 2.9 3.6C12.4 7 13.4 4.8 15.5 3c-.2 3.3 3 5.6 3 10.5 0 4.2-2.7 7.5-6.5 7.5z" />,
   rayo: <path d="M13.5 2.5 5 13.5h6l-1.5 8 8.5-11h-6z" />,
+  persona: (
+    <>
+      <circle cx="12" cy="7" r="3.5" />
+      <path d="M5 21v-2.5C5 15.5 8 13 12 13s7 2.5 7 5.5V21z" />
+    </>
+  ),
 }
 
 export const Icon: React.FC<Props> = ({ name, size, color = '#fff', strokeWidth = 2 }) => (

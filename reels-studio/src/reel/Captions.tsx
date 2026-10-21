@@ -1,8 +1,8 @@
 import React from 'react'
 import { AbsoluteFill, interpolate, random, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { CaptionStyle } from '../plan/schema'
-import type { CaptionLine, CaptionWord, Placement } from '../plan/types'
-import { COLORS, FONT_CONDENSED, FONT_HEAVY, FONT_RACE, FONT_SOCIAL, FONT_SPEED, FONT_UI } from '../theme'
+import type { CaptionLine, CaptionWord, Placement, ReelTheme } from '../plan/types'
+import { COLORS, FONT_CONDENSED, FONT_DISPLAY, FONT_HEAVY, FONT_RACE, FONT_SOCIAL, FONT_SPEED, FONT_UI, PALETTES } from '../theme'
 
 const Y_BY_PLACEMENT: Record<Placement, number> = { arriba: 0.2, centro: 0.5, abajo: 0.72 }
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const
@@ -14,7 +14,11 @@ type LineProps = { words: WordState[]; local: number; fps: number; lineIndex: nu
  * Subtítulos: Gemini elige un estilo por Reel (tipografía + animación) para que no todos se vean
  * iguales; todos usan los colores de la marca (rojo, amarillo, blanco).
  */
-export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle }> = ({ lines, style = 'impacto' }) => {
+export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle; theme?: ReelTheme }> = ({
+  lines,
+  style = 'impacto',
+  theme = 'ksi',
+}) => {
   const frame = useCurrentFrame()
   const { fps, height } = useVideoConfig()
   const lineIndex = lines.findIndex((l) => frame >= l.fromFrame && frame < l.toFrame)
@@ -31,7 +35,8 @@ export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle }> 
   const props: LineProps = { words, local, fps, lineIndex }
   // `palabra` es una sola palabra gigante: va al centro salvo que abajo haya algo importante.
   const y = style === 'palabra' && line.placement === 'abajo' ? 0.62 : Y_BY_PLACEMENT[line.placement]
-  const Style = STYLES[style] ?? Impacto
+  // El diseño camioneta tiene un solo estilo de subtítulo, el de la referencia.
+  const Style = theme === 'offroad' ? Offroad : (STYLES[style] ?? Impacto)
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
@@ -278,6 +283,40 @@ const Palabra: React.FC<LineProps> = ({ words, local, fps, lineIndex }) => {
           {text}
         </span>
       ))}
+    </div>
+  )
+}
+
+const SHORT_WORD = /^(EL|LA|LOS|LAS|UN|UNA|DE|DEL|Y|O|EN|CON|POR|PARA|QUE|SU|SUS|ES|AL|LO|SE|TU|MI)$/
+
+/** Camioneta: letra condensada blanca con sombra; una palabra por línea en naranja (la clave o la más larga). */
+const Offroad: React.FC<LineProps> = ({ words, fps }) => {
+  const marked = words.some(({ w }) => w.emphasis)
+  const longest = marked
+    ? -1
+    : words.reduce((best, cur, i) => (!SHORT_WORD.test(cur.text) && cur.text.length > (words[best]?.text.length ?? 0) ? i : best), -1)
+  return (
+    <div style={{ ...row, gap: '6px 24px' }}>
+      {words.map(({ w, text, active, spoken, since }, i) => {
+        const s = spring({ frame: since, fps, config: { damping: 16, stiffness: 220, mass: 0.6 } })
+        const orange = w.emphasis || i === longest
+        return (
+          <span
+            key={i}
+            style={{
+              fontFamily: FONT_DISPLAY,
+              fontSize: 90,
+              lineHeight: 1.05,
+              color: orange ? PALETTES.offroad.accent : COLORS.white,
+              textShadow: '0 5px 0 rgba(0,0,0,0.35), 0 8px 22px rgba(0,0,0,0.8)',
+              transform: `scale(${spoken ? interpolate(s, [0, 1], [1.25, 1]) * (active ? 1.04 : 1) : 1})`,
+              opacity: spoken ? interpolate(s, [0, 0.3], [0, 1], clamp) : 0,
+            }}
+          >
+            {text}
+          </span>
+        )
+      })}
     </div>
   )
 }

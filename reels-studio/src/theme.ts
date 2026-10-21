@@ -10,6 +10,13 @@ export const COLORS = {
   glass: 'rgba(12, 12, 16, 0.72)',
 }
 
+/** Colores de acento por diseño de Reel (ver ReelTheme). */
+export const PALETTES = {
+  ksi: { accent: COLORS.red, accentDeep: COLORS.redDeep, highlight: COLORS.yellow },
+  offroad: { accent: '#FF8A1F', accentDeep: '#9C3E08', highlight: '#FFB34A' },
+} as const
+export type Palette = (typeof PALETTES)[keyof typeof PALETTES]
+
 export const FONT_DISPLAY = 'Anton'
 export const FONT_UI = 'Montserrat'
 /** Tipografías de los estilos de subtítulo (ver Captions.tsx). Licencias en public/fonts/LICENCIAS.md. */

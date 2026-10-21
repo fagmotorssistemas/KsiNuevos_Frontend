@@ -58,10 +58,32 @@ Type R, AMG, M, RS, GR…— o un cupé/convertible, trátalo como deportivo):
 - suv: familia, espacio, seguridad, tecnología, viajes y aventura. Ganchos de practicidad y confianza.
 - sedan: elegancia, confort, consumo, ciudad, trabajo y estatus. Tono sobrio y aspiracional, menos estridente.
 - camioneta (doble cabina, cabina simple): fuerza, trabajo, carga, 4x4, motor, resistencia. Tono rudo y directo.
+  Usa el FORMATO CAMIONETA de abajo.
 - deportivo: velocidad, potencia, sonido del motor, diseño, adrenalina. El más intenso: cortes más rápidos y golpes.
 - hatchback: primer auto, juventud, ciudad, ahorro, fácil de parquear. Tono fresco y cercano.
 - van: pasajeros, negocio, espacio, rendimiento.
 Adapta a eso el gancho, qué características destacar, los íconos y el estilo de subtítulos.
+
+FORMATO CAMIONETA (si "Tipo" es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
+propio diseño (títulos naranjas rústicos, etiquetas tipo escáner, barro, cierre con huella de llanta). Arco fijo en este
+orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
+1. GANCHO (0–5 s): primero la toma con más movimiento o textura (llanta, barro, polvo, contrapicado). hook_text con la
+   pregunta al nicho y un adjetivo marcado ("¿Buscas una pickup *potente*?") y en "subtext" UNA palabra que cae en
+   grande ("IMPONENTE", "OFF-ROAD", "RUDA").
+2. PRESENTACIÓN: title_3d con "text" = MODELO, "subtext" = MARCA, "badge" = versión o año ("XL", "2024").
+3. MOTOR: con el capó abierto, spec_counter con la cilindrada ("value" 2.0, "unit" = combustible en palabra:
+   "DIÉSEL"); el beneficio va en los subtítulos ("diseñado para un trabajo exigente").
+4. INTERIOR: tomas en primera persona con la mano señalando; UN feature_callout por toma (volante, cuadro, pantalla,
+   palanca) con "text" corto en mayúsculas. Si dice las velocidades: spec_counter ("value" 6, "unit" "VELOCIDADES").
+5. ESPACIO Y CARGA: cabina con spec_counter ("value" = puestos, "unit" "OCUPANTES": se dibujan personitas) y balde con
+   feature_list de 2–4 etiquetas cortas ("EQUIPOS", "HERRAMIENTAS", "CARGA") o spec_counter con los kg de carga.
+6. MARCA / CONFIANZA: la toma más imponente (contrapicado, cielo) con la frase de respaldo (trayectoria de la marca,
+   garantía, kilometraje, único dueño). Sin gráfico: que lo digan los subtítulos.
+7. CTA: el asesor a cámara pidiendo comentar. cta_end con "text" = palabra clave en mayúsculas; si el asesor dice una
+   campaña, "MODELO + PALABRA" ("RANGER + MUNDIAL"). La firma final (K-Si Nuevos, Cuenca) la agrega el sistema.
+Los números son los héroes (cilindrada, velocidades, ocupantes, kg de carga, 4x4): siempre con spec_counter. En
+camionetas no uses sticker ni price_tag (salvo que el asesor diga el precio). Si un bloque no tiene tomas, sáltalo y no
+inventes datos. "captionStyle" no se usa en camionetas (tienen su diseño): pon "robusto".
 
 ESTILO DE SUBTÍTULOS ("captionStyle", uno por Reel; todos usan rojo, amarillo y blanco de la marca):
 - impacto: karaoke grueso, la palabra que suena en amarillo y las clave en bloque rojo. Comodín; muy bien para SUV.

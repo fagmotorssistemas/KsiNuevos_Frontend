@@ -176,6 +176,8 @@ const music = values.music
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
+  // Las camionetas llevan su propio diseño (formato de referencia de la Ranger).
+  theme: vehicle.categoria === 'camioneta' ? 'offroad' : 'ksi',
 })
 for (const w of warnings) console.warn(`[plan] ${w}`)
 fs.writeFileSync(path.join(outDir, 'props.json'), JSON.stringify(props, null, 2))

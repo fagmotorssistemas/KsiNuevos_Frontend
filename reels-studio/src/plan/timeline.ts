@@ -16,6 +16,7 @@ import type {
   CaptionWord,
   ClipSource,
   ReelProps,
+  ReelTheme,
   ScreenFocus,
   SfxCue,
   TimelineCut,
@@ -30,6 +31,8 @@ export type BuildOptions = {
   brand: Brand
   music?: { src: string; volume: number; startSec?: number }
   watermark?: string
+  /** Diseño del Reel; `offroad` para camionetas (lo decide run.ts según el tipo de vehículo). */
+  theme?: ReelTheme
 }
 
 export type BuildResult = { props: ReelProps; warnings: string[] }
@@ -105,6 +108,9 @@ const MIN_PIECE_SEC = 0.6
 const MAX_EDGE_SILENCE_SEC = 1
 /** Golpes de cámara: separación mínima entre dos (cuadros). */
 const PUNCH_MIN_GAP_FRAMES = 12
+
+/** Camionetas: el cierre son dos partes (caja de comentario que se escribe + firma con huella de llanta). */
+const OFFROAD_CTA_SEC = 5
 
 /** Palabras por línea según el estilo: `palabra` muestra una sola, grande. */
 const CAPTION_LAYOUT: Record<CaptionStyle, { maxWords: number; maxChars: number }> = {
@@ -311,6 +317,9 @@ export function buildReelProps(
   const fps = opts.fps ?? 30
   const width = opts.width ?? 1080
   const height = opts.height ?? 1920
+  const theme: ReelTheme = opts.theme ?? 'ksi'
+  const minDur = (g: Pick<RawGraphic, 'type' | 'items'>): number =>
+    theme === 'offroad' && g.type === 'cta_end' ? OFFROAD_CTA_SEC : minDurationSec(g)
   const warnings: string[] = []
   const clipById = new Map(clips.map((c) => [c.id, c]))
 
@@ -419,7 +428,7 @@ export function buildReelProps(
   let laneFree = 0
   for (const [i, { g, fromFrame: rawFrom, cut }] of mainLane.entries()) {
     let fromFrame = Math.max(rawFrom, laneFree)
-    let durationInFrames = Math.round(Math.max(g.durationSec, minDurationSec(g)) * fps)
+    let durationInFrames = Math.round(Math.max(g.durationSec, minDur(g)) * fps)
     if (g.type === 'cta_end') {
       // El CTA siempre cierra el Reel; si hace falta, se congela el último cuadro un momento.
       tailFrames = Math.min(Math.round(MAX_TAIL_SEC * fps), Math.max(0, fromFrame + durationInFrames - cutsEnd))
@@ -429,7 +438,7 @@ export function buildReelProps(
     if (nextStart !== undefined && g.type !== 'cta_end' && fromFrame + durationInFrames > nextStart) {
       // Recorta para dejar entrar al siguiente, pero sin bajar de ~85% de su tiempo mínimo
       // (si no alcanza, el siguiente se corre un poco).
-      durationInFrames = Math.max(Math.round(minDurationSec(g) * fps * 0.85), nextStart - fromFrame)
+      durationInFrames = Math.max(Math.round(minDur(g) * fps * 0.85), nextStart - fromFrame)
     }
     durationInFrames = Math.min(durationInFrames, reelEnd - fromFrame)
     if (durationInFrames < minFrames) {
@@ -480,7 +489,7 @@ export function buildReelProps(
   let stickerFree = 0
   for (const { g, fromFrame: rawFrom } of stickerLane) {
     let fromFrame = Math.max(rawFrom - Math.round(STICKER_MAX_EARLY_SEC * fps), stickerFree, 0)
-    const durationInFrames = Math.round(Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDurationSec(g))) * fps)
+    const durationInFrames = Math.round(Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDur(g))) * fps)
     const gap = Math.round(GRAPHIC_GAP_SEC * fps)
     for (let moved = true; moved; ) {
       moved = false
@@ -550,7 +559,8 @@ export function buildReelProps(
     if (callout) return callout.cardAtTop ? 'abajo' : 'arriba'
     return cut.captionPlacement
   }
-  const captions = groupCaptionLines(capWords, placementFor, fps, CAPTION_LAYOUT[captionStyle]).filter((line) =>
+  const layout = theme === 'offroad' ? { maxWords: 3, maxChars: 18 } : CAPTION_LAYOUT[captionStyle]
+  const captions = groupCaptionLines(capWords, placementFor, fps, layout).filter((line) =>
     line.words.some((w) => !FILLER.has(normalizeToken(w.text)))
   )
 
@@ -592,6 +602,7 @@ export function buildReelProps(
       graphics,
       captions,
       captionStyle,
+      theme,
       sfx,
       brand: opts.brand,
       music: opts.music ?? null,

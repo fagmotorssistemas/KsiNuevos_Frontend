@@ -48,6 +48,13 @@ la web lo saca de `type_body` del inventario) y elige uno de 6 **estilos de subt
 | `caja` | Poppins | Caja amarilla que salta de palabra en palabra | Hatchbacks, público joven |
 | `palabra` | Teko gigante | Una palabra a la vez, con rebote | Mucha energía |
 
+**Camionetas** (`categoria: camioneta`) usan su propio diseño (`theme: offroad`, calcado de un Reel
+de referencia de la Ranger): títulos naranjas rústicos con volumen y desgaste, etiquetas tipo escáner
+con esquinas, barro en el gancho, números héroe (con personitas si son ocupantes), caja de comentario
+que se escribe sola y firma final con huella de llanta; color cálido, viñeta y reencuadre cada ~2 s.
+Gemini sigue un arco fijo de 7 bloques (gancho → nombre → motor → interior → espacio/carga → marca →
+CTA). Piezas en `src/graphics/offroad/`; para probarlo con un plan: `render-plan.ts --theme offroad`.
+
 Además, siempre: gancho animado desde el cuadro 0 (con destello y zoom), golpes de cámara en las
 palabras clave, transiciones cortas (flash, whip, zoom, glitch), movimiento de cámara suave, barra
 de progreso, logo y SFX.

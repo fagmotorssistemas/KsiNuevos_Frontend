@@ -47,6 +47,7 @@ export const ICONS = [
   'compartir',
   'fuego',
   'rayo',
+  'persona',
 ] as const
 export type IconName = (typeof ICONS)[number]
 

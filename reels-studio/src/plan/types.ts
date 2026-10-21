@@ -76,6 +76,12 @@ export type CaptionLine = {
   words: CaptionWord[]
 }
 
+/**
+ * Diseño del Reel: `ksi` (general, rojo/amarillo/blanco) u `offroad` (camionetas: títulos naranjas
+ * rústicos, etiquetas tipo escáner, barro, caja de comentario y cierre con huella de llanta).
+ */
+export type ReelTheme = 'ksi' | 'offroad'
+
 export type SfxKind = 'whoosh' | 'pop' | 'hit' | 'riser'
 export type SfxCue = { frame: number; kind: SfxKind }
 
@@ -98,6 +104,8 @@ export type ReelProps = {
   captions: CaptionLine[]
   /** Tipografía y animación de los subtítulos, elegida por Gemini. Siempre explícito, como `music`. */
   captionStyle: CaptionStyle
+  /** Siempre explícito, como `music`. */
+  theme: ReelTheme
   sfx: SfxCue[]
   brand: Brand
   /**
