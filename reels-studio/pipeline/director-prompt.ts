@@ -76,7 +76,9 @@ REGLAS:
 - transitionIn del primer corte da igual; entre cortes usa "flash" o "whip" para cambios de lugar, "zoom" para énfasis, "corte" si es continuo.
 - captionPlacement: "abajo" por defecto; "arriba" si abajo hay algo importante (manos, tablero, el objeto que se muestra).
 - emphasisWords: 5–10 palabras que deben resaltarse en los subtítulos (beneficios, marca, modelo, cifras).
-- Escribe todo en español neutro de Ecuador. "reason" explica brevemente cada decisión (para que el equipo la revise).
+- Escribe todo en español de Ecuador, tuteando al cliente ("te enviamos", "contigo", "tu próximo auto").
+  NUNCA voseo ni regionalismos de otros países: nada de "vos", "querés", "tenés", "escribinos", "vosotros" ni "coche".
+  "reason" explica brevemente cada decisión (para que el equipo la revise).
 - "caption": texto para la publicación (2–3 líneas + CTA), sin hashtags de relleno.`
 
 /** Transcripción compacta: "palabra(seg)" y "?" si la confianza es baja. */
