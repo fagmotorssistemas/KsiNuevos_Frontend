@@ -73,6 +73,11 @@ export interface VideoJobPipelineInputMeta {
    * Si se omite (jobs viejos), el pipeline usa `VIDEO_CAPTION_STYLE_VERSION` o v1.
    */
   captionStyleVersion?: 'v1' | 'v2' | null
+  /**
+   * Director IA (beta, solo local): en vez del pipeline Shotstack, `reels-studio` arma el Reel
+   * (AssemblyAI → Gemini como director → gráficos 3D con Remotion). Ver `director-ia-local.ts`.
+   */
+  directorIa?: boolean | null
 }
 
 export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta {
@@ -102,7 +107,8 @@ export function isPipelineInputMeta(x: unknown): x is VideoJobPipelineInputMeta 
     normalizeReelAudioVolume(o.reelMusicVolume) != null ||
     normalizeReelAudioVolume(o.reelDialogueVolume) != null ||
     o.captionStyleVersion === 'v1' ||
-    o.captionStyleVersion === 'v2'
+    o.captionStyleVersion === 'v2' ||
+    o.directorIa === true
   )
 }
 

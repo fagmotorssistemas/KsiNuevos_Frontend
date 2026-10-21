@@ -63,6 +63,8 @@ export async function POST(
       audioSource = 'client'
     } else if (
       measureAudio &&
+      // El Director IA mezcla su propio audio; no hace falta medir en Nest.
+      rest.directorIa !== true &&
       reelMusicVolume == null &&
       reelDialogueVolume == null
     ) {

@@ -28,7 +28,7 @@ export type BuildOptions = {
   width?: number
   height?: number
   brand: Brand
-  music?: { src: string; volume: number }
+  music?: { src: string; volume: number; startSec?: number }
   watermark?: string
 }
 
@@ -384,8 +384,8 @@ export function buildReelProps(
       captions,
       sfx,
       brand: opts.brand,
-      music: opts.music,
-      watermark: opts.watermark,
+      music: opts.music ?? null,
+      watermark: opts.watermark ?? '',
     },
     warnings,
   }

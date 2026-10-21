@@ -48,6 +48,9 @@ const { values } = parseArgs({
     scale: { type: 'string', default: '1' },
     music: { type: 'string' },
     'music-volume': { type: 'string', default: '0.12' },
+    'music-start': { type: 'string', default: '0' },
+    /** Borra las copias normalizadas de los clips (public/jobs/<name>) al terminar. */
+    cleanup: { type: 'boolean', default: false },
     whatsapp: { type: 'string' },
   },
 })
@@ -126,7 +129,9 @@ if (fs.existsSync(planFile) && !values.replan) {
 }
 
 // 4) Línea de tiempo y render.
-const music = values.music ? { src: values.music, volume: Number(values['music-volume']) } : undefined
+const music = values.music
+  ? { src: values.music, volume: Number(values['music-volume']), startSec: Math.max(0, Number(values['music-start']) || 0) }
+  : undefined
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
@@ -142,4 +147,5 @@ if (values.stills) {
   const out = path.join(outDir, 'reel.mp4')
   await renderReel(props, out, { scale: Number(values.scale) })
   console.log(`[render] listo → ${out}`)
+  if (values.cleanup) fs.rmSync(publicJobDir, { recursive: true, force: true })
 }

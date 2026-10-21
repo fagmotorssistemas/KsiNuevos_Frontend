@@ -108,7 +108,20 @@ export const Reel: React.FC<ReelProps> = (props) => {
           <Audio src={staticFile(`sfx/${s.kind}.wav`)} volume={SFX_VOLUME[s.kind]} />
         </Sequence>
       ))}
-      {props.music ? <Audio src={resolveSrc(props.music.src)} volume={props.music.volume} /> : null}
+      {props.music ? (
+        <Audio
+          src={resolveSrc(props.music.src)}
+          trimBefore={Math.round((props.music.startSec ?? 0) * props.fps)}
+          // Entra suave y se apaga en el último segundo.
+          volume={(f) =>
+            props.music!.volume *
+            interpolate(f, [0, 12, props.durationInFrames - 36, props.durationInFrames], [0, 1, 1, 0], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            })
+          }
+        />
+      ) : null}
     </AbsoluteFill>
   )
 }

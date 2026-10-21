@@ -189,21 +189,10 @@ export function finalReelPublicUrl(jobId: string): string {
   return data.publicUrl
 }
 
-export async function downloadShotstackVideoAndStoreFinalReel(
-  shotstackUrl: string,
-  jobId: string
-): Promise<string> {
+/** Sube el MP4 final del reel a `reels-v2` y devuelve su URL pública. */
+export async function storeFinalReelBuffer(jobId: string, buffer: Buffer): Promise<string> {
   const supabase = getServiceClient()
-  const storagePath = finalReelStoragePath(jobId)
-
-  const response = await fetch(shotstackUrl)
-  if (!response.ok) {
-    throw new Error(`Error descargando video Shotstack: HTTP ${response.status}`)
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer())
-
-  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(storagePath, buffer, {
+  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(finalReelStoragePath(jobId), buffer, {
     contentType: 'video/mp4',
     upsert: true,
     cacheControl: '31536000',
@@ -211,6 +200,18 @@ export async function downloadShotstackVideoAndStoreFinalReel(
   if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
 
   return finalReelPublicUrl(jobId)
+}
+
+export async function downloadShotstackVideoAndStoreFinalReel(
+  shotstackUrl: string,
+  jobId: string
+): Promise<string> {
+  const response = await fetch(shotstackUrl)
+  if (!response.ok) {
+    throw new Error(`Error descargando video Shotstack: HTTP ${response.status}`)
+  }
+
+  return storeFinalReelBuffer(jobId, Buffer.from(await response.arrayBuffer()))
 }
 
 /** Persiste el reel en Storage; si falla, devuelve la URL temporal de Shotstack. */

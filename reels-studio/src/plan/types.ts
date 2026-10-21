@@ -92,7 +92,11 @@ export type ReelProps = {
   captions: CaptionLine[]
   sfx: SfxCue[]
   brand: Brand
-  music?: { src: string; volume: number }
-  /** Marca de agua de depuración (p. ej. "MUESTRA"); vacío en producción. */
-  watermark?: string
+  /**
+   * `startSec`: desde qué segundo de la pista empieza a sonar. Siempre explícito (null = sin música):
+   * Remotion mezcla las props con las de la muestra por defecto y un campo ausente se heredaría.
+   */
+  music: { src: string; volume: number; startSec?: number } | null
+  /** Marca de agua de depuración (p. ej. "MUESTRA"); '' en producción. Siempre explícito, como `music`. */
+  watermark: string
 }

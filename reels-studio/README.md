@@ -87,6 +87,23 @@ npm run studio
 
 Todo queda en `out/<name>/`: `transcripts.json`, `plan.gemini-raw.json`, `plan.json`, `props.json`, `reel.mp4`.
 
+## Desde la web (local)
+
+Con la web corriendo en una computadora (`npm run dev`), *Marketing → Videos → Crear Reel* muestra
+en el paso **Música** la casilla **Director IA (beta) · solo local**. Al generar:
+
+1. Los clips se suben a Supabase como siempre.
+2. El servidor local (`src/lib/videos/director-ia-local.ts`) los descarga, toma los datos del carro
+   del inventario (o del nombre del trabajo) y corre `pipeline/run.ts` de este proyecto.
+3. El progreso se ve en la lista de videos (AssemblyAI → Gemini → Render 3D) y el MP4 se sube al
+   bucket `reels-v2`, igual que los reels de Shotstack.
+
+Requisitos en esa computadora: `npm install` dentro de `reels-studio`, ffmpeg instalado y
+`GEMINI_API_KEY` + `ASSEMBLYAI_API_KEY` en el `.env.local` de la web. En Vercel la casilla no
+aparece y el servidor rechaza la opción (todavía no hay servidor de render).
+
+El plan de cada trabajo queda en `reels-studio/out/<jobId>/plan.json`.
+
 ## Muestra incluida
 
 `examples/trailblazer/` usa el video de Felipe (Chevrolet Trailblazer 2019) cortado en 7 clips.

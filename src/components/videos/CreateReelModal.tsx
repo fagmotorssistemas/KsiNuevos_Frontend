@@ -60,6 +60,9 @@ type FlowType = 'single' | 'multiple'
 
 const STEP_LABELS = ['Tipo', 'Videos', 'Guion', 'Música', 'Procesando', 'Resultado']
 
+/** Director IA (beta) renderiza en la propia computadora: solo se ofrece con `npm run dev`. */
+const DIRECTOR_IA_LOCAL = process.env.NODE_ENV === 'development'
+
 interface UploadInfo {
   path: string
   signedUrl: string
@@ -233,6 +236,8 @@ export function CreateReelModal({
   const [showBrandOverlays, setShowBrandOverlays] = useState(false)
   /** Estilo de subtítulos Shotstack: V2 lineal karaoke (default) o V1 clásico. */
   const [captionStyleVersion, setCaptionStyleVersion] = useState<'v1' | 'v2'>('v2')
+  /** Director IA (beta, local): Gemini dirige el Reel y reels-studio lo renderiza con gráficos 3D. */
+  const [directorIa, setDirectorIa] = useState(false)
   const [vehicleLine1, setVehicleLine1] = useState('')
   const [vehicleLine2, setVehicleLine2] = useState('')
   const [vehicleLine3, setVehicleLine3] = useState('')
@@ -318,6 +323,7 @@ export function CreateReelModal({
     setForceAllManualOrderClips(false)
     setShowBrandOverlays(false)
     setCaptionStyleVersion('v2')
+    setDirectorIa(false)
     setVehicleLine1('')
     setVehicleLine2('')
     setVehicleLine3('')
@@ -683,6 +689,7 @@ export function CreateReelModal({
       ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
       clipOrientations,
       captionStyleVersion,
+      ...(directorIa ? { directorIa: true } : {}),
     }
 
     const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -913,6 +920,7 @@ export function CreateReelModal({
         ...(musicTrimMode === 'manual' ? { musicTrimStartSec: manualMusicTrimStartSec } : {}),
         clipOrientations,
         captionStyleVersion,
+        ...(directorIa ? { directorIa: true } : {}),
       }
 
       const { audioSource } = await finalizeJobPipeline(newJobId, finalizePayload, setUploadProgress)
@@ -1600,7 +1608,7 @@ export function CreateReelModal({
               <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4 space-y-3">
                 <div>
                   <p className="text-sm font-semibold text-violet-950">Estilo de subtítulos</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className={`mt-2 grid grid-cols-2 gap-2 ${directorIa ? 'opacity-40 pointer-events-none' : ''}`}>
                     <button
                       type="button"
                       onClick={() => setCaptionStyleVersion('v2')}
@@ -1631,6 +1639,31 @@ export function CreateReelModal({
                     </button>
                   </div>
                 </div>
+                {DIRECTOR_IA_LOCAL && (
+                  <label
+                    className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                      directorIa ? 'border-violet-500 bg-white ring-2 ring-violet-200' : 'border-gray-200 bg-white/70 hover:border-violet-200'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={directorIa}
+                      onChange={(e) => setDirectorIa(e.target.checked)}
+                      className="mt-1 h-4 w-4 accent-violet-600"
+                    />
+                    <span>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                        <Clapperboard className="w-4 h-4 text-violet-600" />
+                        Director IA (beta) · solo local
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5 leading-relaxed">
+                        Gemini ve los clips, escucha lo que dice el asesor y diseña el Reel: gancho, título 3D del
+                        vehículo, señalador con zoom, contadores, fichas y cierre con CTA. Usa su propio estilo de
+                        subtítulos e ignora el orden manual y la voz en off. Se renderiza en esta computadora.
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
 
               <MusicSelector
