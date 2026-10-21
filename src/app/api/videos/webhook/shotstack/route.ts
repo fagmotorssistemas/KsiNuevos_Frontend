@@ -39,11 +39,16 @@ export async function POST(request: NextRequest) {
     const status = (payload.status ?? '').toLowerCase()
 
     if (status === 'done') {
-      const { data: prev } = await supabase
+      const { data: prev, error: prevError } = await supabase
         .from('video_jobs_v2')
         .select('social_publish_stage')
         .eq('id', jobId)
-        .single()
+        .maybeSingle()
+      if (!prevError && !prev) {
+        // Se borró mientras renderizaba: no bajar ni guardar un video que nadie va a usar.
+        console.warn(`[VideoV2Webhook][Shotstack] Job ${jobId} ya no existe; se ignora el render.`)
+        return NextResponse.json({ ok: true })
+      }
 
       const finalUrl = await resolveFinalReelVideoUrl(payload.url, jobId)
 
