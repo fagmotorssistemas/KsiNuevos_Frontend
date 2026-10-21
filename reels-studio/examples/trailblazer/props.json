@@ -720,6 +720,7 @@
     }
   ],
   "captionStyle": "impacto",
+  "theme": "ksi",
   "sfx": [
     {
       "frame": 0,
