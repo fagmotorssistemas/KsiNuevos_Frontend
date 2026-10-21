@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# respaldos de scripts de migración (src/scripts/migrar-reels-creatomate.ts)
+migracion-creatomate-*.json

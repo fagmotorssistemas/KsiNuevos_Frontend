@@ -193,24 +193,62 @@ export async function downloadShotstackVideoAndStoreFinalReel(
   shotstackUrl: string,
   jobId: string
 ): Promise<string> {
+  return storeRemoteVideoInReelsBucket(shotstackUrl, finalReelStoragePath(jobId))
+}
+
+/**
+ * Descarga un video remoto (Shotstack, Creatomate…) y lo guarda en `reels-v2/{storagePath}`.
+ * Reintenta errores de red: si esto falla, el reel queda apuntando a una URL temporal que vence.
+ */
+export async function storeRemoteVideoInReelsBucket(
+  sourceUrl: string,
+  storagePath: string
+): Promise<string> {
   const supabase = getServiceClient()
-  const storagePath = finalReelStoragePath(jobId)
+  const buffer = await downloadVideoWithRetry(sourceUrl)
 
-  const response = await fetch(shotstackUrl)
-  if (!response.ok) {
-    throw new Error(`Error descargando video Shotstack: HTTP ${response.status}`)
+  const maxAttempts = 4
+  let lastMessage = 'sin respuesta'
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await sleep(1000 * 2 ** (attempt - 1))
+    }
+    const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(storagePath, buffer, {
+      contentType: 'video/mp4',
+      upsert: true,
+      cacheControl: '31536000',
+    })
+    if (!error) {
+      return supabase.storage.from(REELS_FINAL_BUCKET).getPublicUrl(storagePath).data.publicUrl
+    }
+    lastMessage = error.message
+    if (!isRetryableStorageNetworkMessage(lastMessage)) break
+    console.warn(`[VideoStorage] Subida de ${storagePath} falló (${lastMessage}), intento ${attempt + 1}/${maxAttempts}`)
   }
+  throw new Error(`Error subiendo reel a Storage: ${lastMessage}`)
+}
 
-  const buffer = Buffer.from(await response.arrayBuffer())
-
-  const { error } = await supabase.storage.from(REELS_FINAL_BUCKET).upload(storagePath, buffer, {
-    contentType: 'video/mp4',
-    upsert: true,
-    cacheControl: '31536000',
-  })
-  if (error) throw new Error(`Error subiendo reel a Storage: ${error.message}`)
-
-  return finalReelPublicUrl(jobId)
+async function downloadVideoWithRetry(url: string): Promise<Buffer> {
+  const maxAttempts = 3
+  let lastMessage = 'sin respuesta'
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await sleep(1000 * 2 ** (attempt - 1))
+    }
+    try {
+      const response = await fetch(url)
+      const type = response.headers.get('content-type') ?? ''
+      if (response.ok && !/^(text\/|application\/(json|xml))/i.test(type)) {
+        return Buffer.from(await response.arrayBuffer())
+      }
+      lastMessage = response.ok ? `respuesta no es video (${type})` : `HTTP ${response.status}`
+      // 403/404: la URL ya venció o no existe; reintentar no ayuda.
+      if (response.status < 500) break
+    } catch (err) {
+      lastMessage = err instanceof Error ? err.message : String(err)
+    }
+  }
+  throw new Error(`Error descargando video: ${lastMessage}`)
 }
 
 /** Persiste el reel en Storage; si falla, devuelve la URL temporal de Shotstack. */
