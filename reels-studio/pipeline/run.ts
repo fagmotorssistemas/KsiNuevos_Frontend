@@ -7,8 +7,8 @@
  * existe se reutiliza: el equipo puede retocarlo a mano y volver a renderizar (usa --replan
  * para pedirle al director uno nuevo).
  *
- * Director: --director claude|gemini, o DIRECTOR_PROVIDER en el .env; si no se indica, Claude
- * cuando hay ANTHROPIC_API_KEY y Gemini si no.
+ * Director: Claude (todo: plan y ubicación de objetos). Gemini queda de respaldo con
+ * --director gemini o DIRECTOR_PROVIDER=gemini.
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -162,11 +162,9 @@ if (fs.existsSync(transcriptsFile) && !values.retranscribe) {
 for (const c of clips) c.words = transcripts[c.id] ?? []
 
 // 3) Plan creativo del director (+ ubicación precisa de lo que se señala).
-const provider = (values.director ?? process.env.DIRECTOR_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? 'claude' : 'gemini')).toLowerCase()
+const provider = (values.director ?? process.env.DIRECTOR_PROVIDER ?? 'claude').toLowerCase()
 if (provider !== 'claude' && provider !== 'gemini') throw new Error(`Director desconocido "${provider}" (usa claude o gemini)`)
 const director = provider === 'claude' ? claude : gemini
-// Gemini ubica objetos en una imagen con mucha precisión: si hay clave, hace esa parte aunque dirija Claude.
-const locator = provider === 'claude' && !process.env.GEMINI_API_KEY ? claude : gemini
 const planFile = path.join(outDir, 'plan.json')
 let plan: CreativePlan
 if (fs.existsSync(planFile) && !values.replan) {
@@ -175,8 +173,7 @@ if (fs.existsSync(planFile) && !values.replan) {
 } else {
   const { plan: draft, raw } = await director.directReel({ clips, vehicle, model: values.model })
   fs.writeFileSync(path.join(outDir, `plan.${provider}-raw.json`), JSON.stringify(raw, null, 2))
-  // --model es del director; si la ubicación la hace el otro proveedor, usa su modelo por defecto.
-  plan = await locator.refineFocusBoxes({ plan: draft, clips, model: locator === director ? values.model : undefined })
+  plan = await director.refineFocusBoxes({ plan: draft, clips, model: values.model })
   fs.writeFileSync(planFile, JSON.stringify({ ...plan, director: provider }, null, 2))
   console.log(`[${provider}] estrategia: ${plan.strategy}`)
 }

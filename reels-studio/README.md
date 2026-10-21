@@ -1,6 +1,6 @@
 # K-Si Reels Studio
 
-Reels con **Claude o Gemini como director de marketing digital** (mismo plan, mismas reglas; ver
+Reels con **Claude como director de marketing digital** (Gemini queda de respaldo; ver
 [Director: Claude o Gemini](#director-claude-o-gemini)):
 
 ```
@@ -14,7 +14,7 @@ clips crudos del asesor
    │     · dónde está en el cuadro lo que se señala (volante, pantalla, rines…) → zoom + mira
    │     · correcciones de la transcripción ("Cebrol eTriBlaser" → "Chevrolet Trailblazer")
    │
-   ├─ 2ª pasada sobre cuadros fijos (Gemini si hay clave; si no, Claude) ──► caja exacta de cada objeto señalado
+   ├─ Director (2ª pasada sobre cuadros fijos) ──► caja exacta de cada objeto señalado
    │
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
@@ -80,7 +80,6 @@ npm install
 
 # Variables (o en reels-studio/.env, ver .env.example)
 export ANTHROPIC_API_KEY=...         # Claude como director
-export GEMINI_API_KEY=...            # Gemini (director o solo la ubicación de objetos)
 export ASSEMBLYAI_API_KEY=...        # el mismo de la app
 
 # Reel completo desde una carpeta de clips (en orden de nombre)
@@ -125,8 +124,8 @@ Todo queda en `out/<name>/`: `transcripts.json`, `plan.<director>-raw.json`, `pl
 
 ### Director: Claude o Gemini
 
-Se elige con `--director claude|gemini`, o con `DIRECTOR_PROVIDER` en el `.env`. Si no se indica:
-**Claude cuando hay `ANTHROPIC_API_KEY`**, Gemini si no.
+**Claude por defecto**, para todo: plan creativo y ubicación de objetos. Gemini queda de respaldo con
+`--director gemini` o `DIRECTOR_PROVIDER=gemini` (necesita `GEMINI_API_KEY`).
 
 - **Claude** (`pipeline/claude-director.ts`, modelo `CLAUDE_DIRECTOR_MODEL`, por defecto
   `claude-opus-5-5`, esfuerzo `high`): no recibe video, así que se le mandan hasta 90 cuadros de los
@@ -135,8 +134,7 @@ Se elige con `--director claude|gemini`, o con `DIRECTOR_PROVIDER` en el `.env`.
   Si un filtro de seguridad rechaza el pedido, el servidor reintenta con otro modelo (`fallbacks: "default"`).
 - **Gemini** (`pipeline/gemini-director.ts`, `GEMINI_DIRECTOR_MODEL`, por defecto `gemini-3.8-flash`):
   ve el video a 4 cuadros por segundo.
-- La caja exacta de lo que se señala la saca **Gemini si hay `GEMINI_API_KEY`** (es muy preciso
-  ubicando objetos en imagen); sin esa clave la saca Claude.
+- La caja exacta de lo que se señala la saca el mismo director, en una 2ª pasada sobre cuadros fijos.
 
 ## Desde la web (local)
 
@@ -150,8 +148,7 @@ en el paso **Música** la casilla **Director IA (beta) · solo local**. Al gener
    bucket `reels-v2`, igual que los reels de Shotstack.
 
 Requisitos en esa computadora: `npm install` dentro de `reels-studio`, ffmpeg instalado y
-`ASSEMBLYAI_API_KEY` + `ANTHROPIC_API_KEY` (Claude) y/o `GEMINI_API_KEY` en el `.env.local` de la web
-(y `DIRECTOR_PROVIDER` si quieres forzar uno). En Vercel la casilla no
+`ASSEMBLYAI_API_KEY` + `ANTHROPIC_API_KEY` en el `.env.local` de la web. En Vercel la casilla no
 aparece y el servidor rechaza la opción (todavía no hay servidor de render).
 
 El plan de cada trabajo queda en `reels-studio/out/<jobId>/plan.json`.

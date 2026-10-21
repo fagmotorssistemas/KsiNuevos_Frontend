@@ -1,7 +1,7 @@
 /**
  * Claude como director: mismo trabajo y mismo Plan Creativo que Gemini, pero Claude no recibe
  * video, así que se le mandan cuadros fijos de cada clip (con su segundo) junto a la transcripción.
- * Activo con DIRECTOR_PROVIDER=claude (o si solo hay ANTHROPIC_API_KEY); ver run.ts.
+ * Es el director por defecto (ver run.ts); Gemini queda de respaldo con DIRECTOR_PROVIDER=gemini.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
@@ -173,7 +173,7 @@ export async function directReel(params: {
   throw new Error('Claude no devolvió un plan válido tras 3 intentos')
 }
 
-/** Segunda pasada con Claude (ver `refineFocusBoxesWith`); se usa cuando no hay GEMINI_API_KEY. */
+/** Segunda pasada con Claude (ver `refineFocusBoxesWith`). */
 export async function refineFocusBoxes(params: {
   plan: CreativePlan
   clips: DirectorClip[]

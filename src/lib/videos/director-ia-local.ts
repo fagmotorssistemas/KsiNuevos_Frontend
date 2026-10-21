@@ -1,6 +1,6 @@
 /**
  * Director IA (beta, solo local): en vez del pipeline Shotstack, corre `reels-studio`
- * (AssemblyAI → Claude o Gemini como director de marketing → gráficos 3D con Remotion) para un job
+ * (AssemblyAI → Claude como director de marketing → gráficos 3D con Remotion) para un job
  * de `video_jobs_v2` y sube el MP4 al mismo bucket que el resto de reels.
  *
  * Necesita Chromium + ffmpeg y varios minutos por video, así que no corre en Vercel: solo con
@@ -45,9 +45,9 @@ export function directorIaUnavailableReason(): string | null {
   }
   if (!process.env.ASSEMBLYAI_API_KEY) return 'Falta ASSEMBLYAI_API_KEY en .env.local.'
   // Misma regla que reels-studio/pipeline/run.ts para elegir director.
-  const provider = (process.env.DIRECTOR_PROVIDER ?? (process.env.ANTHROPIC_API_KEY ? 'claude' : 'gemini')).toLowerCase()
-  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) return 'DIRECTOR_PROVIDER=claude pero falta ANTHROPIC_API_KEY en .env.local.'
-  if (provider === 'gemini' && !process.env.GEMINI_API_KEY) return 'Falta GEMINI_API_KEY (o ANTHROPIC_API_KEY para usar Claude) en .env.local.'
+  const provider = (process.env.DIRECTOR_PROVIDER ?? 'claude').toLowerCase()
+  if (provider === 'claude' && !process.env.ANTHROPIC_API_KEY) return 'Falta ANTHROPIC_API_KEY en .env.local (Claude dirige los reels).'
+  if (provider === 'gemini' && !process.env.GEMINI_API_KEY) return 'DIRECTOR_PROVIDER=gemini pero falta GEMINI_API_KEY en .env.local.'
   if (provider !== 'claude' && provider !== 'gemini') return `DIRECTOR_PROVIDER="${provider}" no existe: usa claude o gemini.`
   try {
     execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
