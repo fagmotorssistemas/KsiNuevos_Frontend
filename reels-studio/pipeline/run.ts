@@ -67,6 +67,17 @@ const publicJobDir = path.join(ROOT, 'public', 'jobs', name)
 fs.mkdirSync(outDir, { recursive: true })
 fs.mkdirSync(publicJobDir, { recursive: true })
 
+if (values.cleanup) {
+  // Copias de trabajos viejos que quedaron por un fallo: ocupan GB y se arrastran a cada render.
+  const jobsDir = path.dirname(publicJobDir)
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+  for (const dir of fs.readdirSync(jobsDir)) {
+    const full = path.join(jobsDir, dir)
+    if (full !== publicJobDir && fs.statSync(full).mtimeMs < dayAgo) fs.rmSync(full, { recursive: true, force: true })
+  }
+  process.on('exit', () => fs.rmSync(publicJobDir, { recursive: true, force: true }))
+}
+
 // 1) Clips en orden de nombre, normalizados a MP4 H.264 vertical (también endereza videos rotados del celular).
 const inputs = values.clips
   .flatMap((p) => (fs.statSync(p).isDirectory() ? fs.readdirSync(p).map((f) => path.join(p, f)) : [p]))
@@ -81,8 +92,9 @@ const clips: Array<DirectorClip & ClipSource> = inputs.map((input, i) => {
     console.log(`[clips] ${path.basename(input)} → ${id}.mp4`)
     execFileSync('ffmpeg', [
       '-v', 'error', '-y', '-i', input,
-      '-vf', "scale='if(gt(iw,ih),-2,min(1080,iw))':'if(gt(iw,ih),min(1080,ih),-2)'",
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p',
+      // 30 cps como el Reel (los del celular suelen venir a 60): la mitad de cuadros que decodificar.
+      '-vf', "fps=30,scale='if(gt(iw,ih),-2,min(1080,iw))':'if(gt(iw,ih),min(1080,ih),-2)'",
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', file,
     ])
   }
@@ -147,5 +159,4 @@ if (values.stills) {
   const out = path.join(outDir, 'reel.mp4')
   await renderReel(props, out, { scale: Number(values.scale) })
   console.log(`[render] listo → ${out}`)
-  if (values.cleanup) fs.rmSync(publicJobDir, { recursive: true, force: true })
 }

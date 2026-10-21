@@ -130,6 +130,9 @@ function progressFromLine(line: string, clipCount: number): Progress | null {
   if (line.includes('pensando el Reel')) return { status: 'analyzing', step: 'Gemini: diseñando el Reel', pct: 55 }
   if (line.startsWith('[gemini] estrategia')) return { status: 'analyzing', step: 'Gemini: plan creativo listo', pct: 62 }
   if (line.startsWith('[plan]')) return { status: 'rendering', step: 'Armando la línea de tiempo', pct: 65 }
+  if (line.startsWith('[render] reintentando')) {
+    return { status: 'rendering', step: 'Render 3D: reintentando con menos carga', pct: 66 }
+  }
   const render = line.match(/^\[render\] (\d+)%/)
   if (render) {
     const n = Number(render[1])
@@ -156,7 +159,8 @@ function runStudio(jobId: string, args: string[], clipCount: number): Promise<vo
       console.log(`[DirectorIA][${jobId}] ${line}`)
       remember(line)
       const p = progressFromLine(line, clipCount)
-      if (p && (!last || p.status !== last.status || p.step !== last.step) && (!last || p.pct >= last.pct)) {
+      const retry = p?.step.includes('reintentando')
+      if (p && (!last || p.status !== last.status || p.step !== last.step) && (!last || retry || p.pct >= last.pct)) {
         last = p
         void updateJob(jobId, { status: p.status, current_step: p.step, progress_percentage: p.pct })
       }
@@ -191,7 +195,12 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
     const paths = job.raw_video_paths ?? []
     if (paths.length === 0) throw new Error('El job no tiene clips en Storage')
 
-    await updateJob(jobId, { status: 'transcribing', current_step: 'Director IA: descargando clips', progress_percentage: 22 })
+    await updateJob(jobId, {
+      status: 'transcribing',
+      current_step: 'Director IA: descargando clips',
+      progress_percentage: 22,
+      error_message: null,
+    })
     const clipsDir = path.join(work, 'clips')
     await downloadClips(jobId, paths, clipsDir)
 

@@ -28,9 +28,36 @@ function browserExecutable(): string | null {
 
 let bundled: Promise<string> | null = null
 function getBundle() {
-  bundled ??= bundle({ entryPoint: path.join(ROOT, 'src/index.ts'), publicDir: path.join(ROOT, 'public') })
+  bundled ??= bundle({
+    entryPoint: path.join(ROOT, 'src/index.ts'),
+    publicDir: path.join(ROOT, 'public'),
+    // Enlaza public/ en vez de copiarlo: ahí están los clips del trabajo (varios GB). Windows siempre copia.
+    symlinkPublicDir: true,
+  })
   return bundled
 }
+
+const MIN_FREE_DISK_GB = 3
+/** Falla temprano y con un mensaje claro si no hay espacio (si no, Chrome/Remotion fallan a mitad del render). */
+function assertFreeDisk() {
+  try {
+    const st = fs.statfsSync(os.tmpdir())
+    const freeGb = (st.bavail * st.bsize) / 1024 ** 3
+    if (freeGb < MIN_FREE_DISK_GB) {
+      throw new Error(`Poco espacio en disco: quedan ${freeGb.toFixed(1)} GB libres; libera al menos ${MIN_FREE_DISK_GB} GB y reintenta`)
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Poco espacio')) throw err
+  }
+}
+
+const DEFAULT_CONCURRENCY = Math.min(3, Math.max(1, Math.floor(os.cpus().length / 2)))
+/** La caché de cuadros de video por defecto usa la mitad de la RAM; con la web corriendo al lado eso tumba al extractor. */
+const VIDEO_CACHE_BYTES = Number(process.env.REMOTION_VIDEO_CACHE_MB ?? 768) * 1024 * 1024
+
+/** Errores del extractor de cuadros que suelen ser por falta de memoria: vale la pena reintentar con menos carga. */
+const isCompositorCrash = (err: unknown) =>
+  /compositor|Request closed|Failed to fetch|Target closed|crashed/i.test(err instanceof Error ? err.message : String(err))
 
 async function composition(props: ReelProps) {
   const serveUrl = await getBundle()
@@ -45,27 +72,38 @@ async function composition(props: ReelProps) {
 }
 
 export async function renderReel(props: ReelProps, outFile: string, opts: { scale?: number } = {}) {
+  assertFreeDisk()
   const { serveUrl, comp } = await composition(props)
-  let last = -1
-  await renderMedia({
-    serveUrl,
-    composition: comp,
-    inputProps: props,
-    codec: 'h264',
-    outputLocation: outFile,
-    browserExecutable: browserExecutable(),
-    chromiumOptions: { gl: GL },
-    scale: opts.scale ?? 1,
-    crf: 20,
-    concurrency: Number(process.env.REMOTION_CONCURRENCY ?? Math.max(1, Math.floor(os.cpus().length / 2))),
-    onProgress: ({ progress }) => {
-      const pct = Math.floor(progress * 100)
-      if (pct >= last + 10) {
-        last = pct
-        console.log(`[render] ${pct}%`)
-      }
-    },
-  })
+  const attempt = async (concurrency: number, cacheBytes: number) => {
+    let last = -1
+    await renderMedia({
+      serveUrl,
+      composition: comp,
+      inputProps: props,
+      codec: 'h264',
+      outputLocation: outFile,
+      browserExecutable: browserExecutable(),
+      chromiumOptions: { gl: GL },
+      scale: opts.scale ?? 1,
+      crf: 20,
+      concurrency,
+      offthreadVideoCacheSizeInBytes: cacheBytes,
+      onProgress: ({ progress }) => {
+        const pct = Math.floor(progress * 100)
+        if (pct >= last + 10) {
+          last = pct
+          console.log(`[render] ${pct}%`)
+        }
+      },
+    })
+  }
+  try {
+    await attempt(Number(process.env.REMOTION_CONCURRENCY ?? DEFAULT_CONCURRENCY), VIDEO_CACHE_BYTES)
+  } catch (err) {
+    if (!isCompositorCrash(err)) throw err
+    console.log(`[render] reintentando con menos carga (${err instanceof Error ? err.message.slice(0, 120) : err})`)
+    await attempt(1, Math.min(VIDEO_CACHE_BYTES, 384 * 1024 * 1024))
+  }
   return outFile
 }
 
