@@ -550,7 +550,10 @@ export function CreateReelModal({
     }
 
     // Compresión Nest → entrega H.264 .mp4; usar remappedPaths en finalize (Shotstack).
-    const { remappedPaths } = await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
+    // El Director IA prepara los clips él mismo (ffmpeg en reels-studio): no depende del backend de video.
+    const { remappedPaths } = directorIa
+      ? { remappedPaths: destPaths }
+      : await compressJobClipsOrThrow(newJobId, destPaths, setUploadProgress)
 
     setUploadProgress('Leyendo orientación de clips…')
     const clipOrientations: ClipOrientationMeta[] = []
@@ -845,11 +848,14 @@ export function CreateReelModal({
       }
 
       // ── PASO 2.5: Nest → MP4 de entrega; finalize debe usar remappedPaths ──
-      const { remappedPaths } = await compressJobClipsOrThrow(
-        newJobId,
-        uploads.map((u) => u.path),
-        setUploadProgress
-      )
+      // El Director IA prepara los clips él mismo (ffmpeg en reels-studio): no depende del backend de video.
+      const { remappedPaths } = directorIa
+        ? { remappedPaths: uploads.map((u) => u.path) }
+        : await compressJobClipsOrThrow(
+            newJobId,
+            uploads.map((u) => u.path),
+            setUploadProgress
+          )
 
       // ── PASO 3: Duración de cada clip en el navegador (clasificación B-roll + respaldo sin ffprobe)
       let clipDurations: (number | null)[] | undefined
