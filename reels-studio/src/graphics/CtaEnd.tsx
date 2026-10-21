@@ -51,7 +51,7 @@ export const CtaEnd: React.FC<{ g: TimelineGraphic; brand: Brand }> = ({ g, bran
           rotation={[0.08, (1 - enter) * 1.6 + Math.sin(t * 1.8) * 0.12, Math.sin(t * 1.1) * 0.03]}
           scale={Math.max(0.001, 0.4 + 0.6 * enter)}
         >
-          <Text3D text={keyword.toUpperCase()} faceColor={COLORS.red} sideColor="#ffffff" size={1.25} depth={0.5} maxWidth={4.5} metalness={0.35} roughness={0.3} />
+          <Text3D text={keyword.toUpperCase()} faceColor={COLORS.red} sideColor="#ffffff" size={1.25} depth={0.5} maxWidth={4.5} metalness={0.12} roughness={0.38} />
         </group>
       </ThreeCanvas>
       {g.subtext ? (

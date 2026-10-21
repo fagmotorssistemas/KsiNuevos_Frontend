@@ -136,7 +136,11 @@ export function focusToScreen(box: FocusBox, srcW: number, srcH: number, outW: n
 /** Palabra con el último cuadro de su toma: una línea nunca cruza a la toma siguiente. */
 type PendingWord = CaptionWord & { cutEnd: number }
 
-function groupCaptionLines(words: PendingWord[], placementAt: (frame: number) => CaptionLine['placement'], fps: number) {
+function groupCaptionLines(
+  words: PendingWord[],
+  placementFor: (fromFrame: number, toFrame: number) => CaptionLine['placement'],
+  fps: number
+) {
   const lines: Array<CaptionLine & { cutEnd: number }> = []
   let cur: PendingWord[] = []
   const flush = () => {
@@ -145,7 +149,7 @@ function groupCaptionLines(words: PendingWord[], placementAt: (frame: number) =>
     lines.push({
       fromFrame,
       toFrame: cur[cur.length - 1].toFrame,
-      placement: placementAt(fromFrame),
+      placement: 'abajo',
       words: cur.map(({ cutEnd: _cutEnd, ...w }) => w),
       cutEnd: cur[0].cutEnd,
     })
@@ -168,7 +172,8 @@ function groupCaptionLines(words: PendingWord[], placementAt: (frame: number) =>
   return lines.map(({ cutEnd, ...line }, i) => {
     const next = lines[i + 1]
     const maxEnd = Math.min(cutEnd, line.toFrame + Math.round(fps * 0.4))
-    return { ...line, toFrame: next ? Math.min(next.fromFrame, maxEnd) : maxEnd }
+    const toFrame = next ? Math.min(next.fromFrame, maxEnd) : maxEnd
+    return { ...line, toFrame, placement: placementFor(line.fromFrame, toFrame) }
   })
 }
 
@@ -327,17 +332,16 @@ export function buildReelProps(
       })
     }
   }
-  const placementAt = (frame: number) => {
-    const cut = cuts.find((c) => frame >= c.fromFrame && frame < c.fromFrame + c.durationInFrames) ?? cuts[cuts.length - 1]
-    // Si hay un señalador abajo, los subtítulos suben (y viceversa).
+  const placementFor = (from: number, to: number) => {
+    const cut = cuts.find((c) => from >= c.fromFrame && from < c.fromFrame + c.durationInFrames) ?? cuts[cuts.length - 1]
+    // Si la línea coincide en algún momento con un señalador, va al lado contrario de la tarjeta.
     const callout = graphics.find(
-      (g) => g.type === 'feature_callout' && frame >= g.fromFrame && frame < g.fromFrame + g.durationInFrames
+      (g) => g.type === 'feature_callout' && from < g.fromFrame + g.durationInFrames && to > g.fromFrame
     )
-    // Durante un señalador, los subtítulos van al lado contrario de la tarjeta.
     if (callout) return callout.cardAtTop ? 'abajo' : 'arriba'
     return cut.captionPlacement
   }
-  const captions = groupCaptionLines(capWords, placementAt, fps)
+  const captions = groupCaptionLines(capWords, placementFor, fps)
 
   // 4) Efectos de sonido: entrada de cada gráfico y transiciones marcadas.
   const sfx: SfxCue[] = []
