@@ -18,6 +18,12 @@ clips crudos del asesor
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
 
+**Modo cine** (por defecto, `look: cine`): franjas negras, grano de película, viñeta, color de cine,
+logo en blanco dentro de la franja, títulos grandes con textos pequeños muy espaciados y líneas finas
+de acento, entradas de enfoque (borroso → nítido), cortes secos y acercamiento lento. Piezas en
+`src/graphics/cine/`. El lenguaje anterior (rebotes, cajas de color) sigue disponible con
+`render-plan.ts --look social`.
+
 Gemini **no dibuja**: elige piezas de un catálogo y las llena con datos. Así el resultado es
 consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es un JSON legible).
 

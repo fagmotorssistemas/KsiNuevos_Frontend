@@ -4,7 +4,7 @@
  *
  *   npx tsx pipeline/render-plan.ts --plan examples/trailblazer/plan.demo.json \
  *     --transcripts examples/trailblazer/transcripts.local.json --clips public/demo \
- *     --out out/trailblazer.mp4 [--stills 30,90,150] [--props-only] [--watermark "MUESTRA"] [--theme offroad]
+ *     --out out/trailblazer.mp4 [--stills 30,90,150] [--props-only] [--watermark "MUESTRA"] [--theme offroad] [--look social]
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -28,6 +28,7 @@ const { values } = parseArgs({
     watermark: { type: 'string' },
     whatsapp: { type: 'string' },
     theme: { type: 'string', default: 'ksi' },
+    look: { type: 'string', default: 'cine' },
   },
 })
 
@@ -50,6 +51,7 @@ const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   watermark: values.watermark,
   theme: values.theme === 'offroad' ? 'offroad' : 'ksi',
+  look: values.look === 'social' ? 'social' : 'cine',
 })
 for (const w of warnings) console.warn(`[plan] ${w}`)
 console.log(`[plan] ${props.cuts.length} cortes, ${props.graphics.length} gráficos, ${props.captions.length} líneas de subtítulos, ${(props.durationInFrames / props.fps).toFixed(1)}s`)

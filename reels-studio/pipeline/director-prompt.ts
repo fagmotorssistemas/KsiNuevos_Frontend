@@ -64,9 +64,14 @@ Type R, AMG, M, RS, GR…— o un cupé/convertible, trátalo como deportivo):
 - van: pasajeros, negocio, espacio, rendimiento.
 Adapta a eso el gancho, qué características destacar, los íconos y el estilo de subtítulos.
 
+ESTÉTICA DE CINE (todos los Reels): se ven como un comercial de autos profesional: franjas negras, color de cine,
+títulos grandes y sobrios, cortes secos (el sistema hace todos los cortes secos; "transitionIn" solo marca intención).
+Menos es más: cada gráfico con intención, textos cortos y con peso; nada infantil ni exagerado. Máximo 1 sticker por
+Reel y solo si suma (nunca en camionetas).
+
 FORMATO CAMIONETA (si "Tipo" es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
-propio diseño (títulos naranjas rústicos, etiquetas tipo escáner, barro, cierre con huella de llanta). Arco fijo en este
-orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
+propio diseño, más robusto (letra gruesa gastada tipo metal, acento naranja, cierre con huella de llanta). Arco fijo en
+este orden; un dato por plano, un corte cada 1.5–3 s, ningún plano quieto más de 4 s:
 1. GANCHO (0–5 s): primero la toma con más movimiento o textura (llanta, barro, polvo, contrapicado). hook_text con la
    pregunta al nicho y un adjetivo marcado ("¿Buscas una pickup *potente*?") y en "subtext" UNA palabra que cae en
    grande ("IMPONENTE", "OFF-ROAD", "RUDA").
@@ -116,10 +121,10 @@ CATÁLOGO DE GRÁFICOS (campo "type"):
   ("PRECIO", "DESDE", "ENTRADA"), "items" opcional (p. ej. ["Financiamiento", "Recibimos tu auto"]).
 - cta_end: cierre. "text" = la palabra a comentar (una sola palabra, normalmente el modelo), "subtext" = promesa
   ("y te enviamos toda la información"). Siempre al final, sobre el último corte.
-- sticker: burbuja pequeña de INTERACCIÓN que convive con los subtítulos (no tapa la pantalla). "text" corto (máx. 5
+- sticker: cápsula discreta de INTERACCIÓN que convive con los subtítulos (no tapa la pantalla). "text" corto (máx. 5
   palabras, puedes marcar 1 con *asteriscos*), "icon" obligatorio (comentar, guardar, compartir, fuego, rayo, check,
   estrella…), "placement" arriba o abajo. Ejemplos: "Comenta *TIGGO*" (comentar), "Guárdalo para después" (guardar),
-  "Mándaselo a tu pana" (compartir), "¿Rojo o negro?" (comentar). 1–2 por Reel, a mitad del video, nunca al final.
+  "Mándaselo a tu pana" (compartir), "¿Rojo o negro?" (comentar). Máximo 1 por Reel, a mitad del video, nunca al final.
 
 ÍCONOS disponibles: volante, motor, pantalla, camara, asiento, rin, velocimetro, transmision, traccion, combustible, aire,
 seguridad, maletero, luces, familia, check, estrella, comentar, guardar, compartir, fuego, rayo.
@@ -132,8 +137,8 @@ REGLAS:
   sticker 1.8–2.5 s.
 - ANIMACIÓN DESDE EL SEGUNDO 0: el hook_text va OBLIGATORIO en el primer corte, en su primer segundo (atSec = inicio del
   corte). Nunca arranques con el asesor saludando: arranca con lo más llamativo.
-- Ritmo: dinámico, que siempre pase algo. Un gráfico o sticker cada 2.5–4 s, sin huecos largos sin animación. Entre
-  tomas, "corte" seco casi siempre; "zoom", "whip" o "flash" para cambiar de tema o lugar (no en todos los cortes).
+- Ritmo: dinámico pero profesional, que siempre pase algo. Un gráfico cada 3–5 s, sin huecos largos sin información.
+  Entre tomas, "corte" seco.
 - NO inventes datos: solo lo que se dice, se ve o viene en los datos del vehículo. Nada de precios ni promesas no dichas.
 - transitionIn del primer corte da igual; entre cortes usa "flash" o "whip" para cambios de lugar, "zoom" para énfasis, "corte" si es continuo.
 - captionPlacement: "abajo" por defecto; "arriba" si abajo hay algo importante (manos, tablero, el objeto que se muestra).

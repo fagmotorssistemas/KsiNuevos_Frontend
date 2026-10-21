@@ -15,6 +15,7 @@ import type {
   CaptionLine,
   CaptionWord,
   ClipSource,
+  ReelLook,
   ReelProps,
   ReelTheme,
   ScreenFocus,
@@ -33,6 +34,8 @@ export type BuildOptions = {
   watermark?: string
   /** Diseño del Reel; `offroad` para camionetas (lo decide run.ts según el tipo de vehículo). */
   theme?: ReelTheme
+  /** Lenguaje visual; por defecto `cine`. */
+  look?: ReelLook
 }
 
 export type BuildResult = { props: ReelProps; warnings: string[] }
@@ -330,6 +333,9 @@ export function buildReelProps(
   const width = opts.width ?? 1080
   const height = opts.height ?? 1920
   const theme: ReelTheme = opts.theme ?? 'ksi'
+  const look: ReelLook = opts.look ?? 'cine'
+  // Cine y camionetas: sin golpes de cámara ni "pop"; sonidos graves y secos.
+  const sober = look === 'cine' || theme === 'offroad'
   const minDur = (g: Pick<RawGraphic, 'type' | 'items'>): number =>
     theme === 'offroad' && g.type === 'cta_end' ? OFFROAD_CTA_SEC : minDurationSec(g)
   const warnings: string[] = []
@@ -585,7 +591,7 @@ export function buildReelProps(
     ...graphics.filter((g) => g.type !== 'feature_callout').map((g) => g.fromFrame),
   ].sort((a, b) => a - b)
   let lastPunch = -Infinity
-  for (const f of theme === 'offroad' ? [] : punchFrames) {
+  for (const f of sober ? [] : punchFrames) {
     if (f - lastPunch < PUNCH_MIN_GAP_FRAMES || zoomedAt(f)) continue
     const c = cuts.find((x) => f >= x.fromFrame && f < x.fromFrame + x.durationInFrames)
     if (!c) continue
@@ -599,9 +605,9 @@ export function buildReelProps(
     if (sfx.some((s) => Math.abs(s.frame - frame) < 8)) return
     sfx.push({ frame, kind })
   }
-  for (const g of graphics) pushSfx(g.fromFrame, (theme === 'offroad' ? SFX_OFFROAD : SFX_BY_TYPE)[g.type])
-  // Camionetas: cortes secos, sin barrido sonoro en cada cambio de toma.
-  if (theme !== 'offroad') for (const c of cuts) if (c.transitionIn === 'flash' || c.transitionIn === 'whip') pushSfx(c.fromFrame, 'whoosh')
+  for (const g of graphics) pushSfx(g.fromFrame, (sober ? SFX_OFFROAD : SFX_BY_TYPE)[g.type])
+  // Cine y camionetas: cortes secos, sin barrido sonoro en cada cambio de toma.
+  if (!sober) for (const c of cuts) if (c.transitionIn === 'flash' || c.transitionIn === 'whip') pushSfx(c.fromFrame, 'whoosh')
   sfx.sort((a, b) => a.frame - b.frame)
 
   return {
@@ -616,6 +622,7 @@ export function buildReelProps(
       captions,
       captionStyle,
       theme,
+      look,
       sfx,
       brand: opts.brand,
       music: opts.music ?? null,

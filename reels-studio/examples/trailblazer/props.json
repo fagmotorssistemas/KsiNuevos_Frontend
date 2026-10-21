@@ -19,9 +19,7 @@
       "zooms": [],
       "take": 0,
       "jump": 0,
-      "punches": [
-        0
-      ]
+      "punches": []
     },
     {
       "clipId": "clip2",
@@ -38,10 +36,7 @@
       "zooms": [],
       "take": 1,
       "jump": 0,
-      "punches": [
-        2,
-        76
-      ]
+      "punches": []
     },
     {
       "clipId": "clip3",
@@ -58,11 +53,7 @@
       "zooms": [],
       "take": 2,
       "jump": 0,
-      "punches": [
-        25,
-        174,
-        197
-      ]
+      "punches": []
     },
     {
       "clipId": "clip3",
@@ -96,9 +87,7 @@
       "zooms": [],
       "take": 3,
       "jump": 0,
-      "punches": [
-        2
-      ]
+      "punches": []
     },
     {
       "clipId": "clip5",
@@ -115,10 +104,7 @@
       "zooms": [],
       "take": 4,
       "jump": 0,
-      "punches": [
-        37,
-        66
-      ]
+      "punches": []
     },
     {
       "clipId": "clip6",
@@ -157,9 +143,7 @@
       ],
       "take": 5,
       "jump": 0,
-      "punches": [
-        7
-      ]
+      "punches": []
     },
     {
       "clipId": "clip7",
@@ -176,9 +160,7 @@
       "zooms": [],
       "take": 6,
       "jump": 0,
-      "punches": [
-        12
-      ]
+      "punches": []
     }
   ],
   "tailFrames": 26,
@@ -721,6 +703,7 @@
   ],
   "captionStyle": "impacto",
   "theme": "ksi",
+  "look": "cine",
   "sfx": [
     {
       "frame": 0,
@@ -732,34 +715,22 @@
     },
     {
       "frame": 223,
-      "kind": "pop"
-    },
-    {
-      "frame": 310,
       "kind": "whoosh"
     },
     {
       "frame": 343,
-      "kind": "pop"
-    },
-    {
-      "frame": 484,
-      "kind": "pop"
-    },
-    {
-      "frame": 597,
-      "kind": "riser"
-    },
-    {
-      "frame": 690,
       "kind": "whoosh"
     },
     {
-      "frame": 727,
-      "kind": "pop"
+      "frame": 484,
+      "kind": "whoosh"
     },
     {
-      "frame": 769,
+      "frame": 597,
+      "kind": "hit"
+    },
+    {
+      "frame": 727,
       "kind": "whoosh"
     },
     {

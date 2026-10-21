@@ -82,6 +82,12 @@ export type CaptionLine = {
  */
 export type ReelTheme = 'ksi' | 'offroad'
 
+/**
+ * Lenguaje visual: `cine` (por defecto: franjas negras, grano, color de cine, tipografía de comercial de
+ * autos, cortes secos) o `social` (el anterior: rebotes, cajas de color, stickers que laten).
+ */
+export type ReelLook = 'cine' | 'social'
+
 export type SfxKind = 'whoosh' | 'pop' | 'hit' | 'riser'
 export type SfxCue = { frame: number; kind: SfxKind }
 
@@ -106,6 +112,8 @@ export type ReelProps = {
   captionStyle: CaptionStyle
   /** Siempre explícito, como `music`. */
   theme: ReelTheme
+  /** Siempre explícito, como `music`. */
+  look: ReelLook
   sfx: SfxCue[]
   brand: Brand
   /**

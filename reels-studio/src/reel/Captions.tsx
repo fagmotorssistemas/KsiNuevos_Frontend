@@ -1,7 +1,8 @@
 import React from 'react'
 import { AbsoluteFill, interpolate, random, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { CaptionStyle } from '../plan/schema'
-import type { CaptionLine, CaptionWord, Placement, ReelTheme } from '../plan/types'
+import type { CaptionLine, CaptionWord, Placement, ReelLook, ReelTheme } from '../plan/types'
+import { usePalette } from './palette'
 import { COLORS, FONT_CONDENSED, FONT_DISPLAY, FONT_HEAVY, FONT_RACE, FONT_SOCIAL, FONT_SPEED, FONT_UI, PALETTES } from '../theme'
 
 const Y_BY_PLACEMENT: Record<Placement, number> = { arriba: 0.2, centro: 0.5, abajo: 0.72 }
@@ -14,10 +15,11 @@ type LineProps = { words: WordState[]; local: number; fps: number; lineIndex: nu
  * Subtítulos: Gemini elige un estilo por Reel (tipografía + animación) para que no todos se vean
  * iguales; todos usan los colores de la marca (rojo, amarillo, blanco).
  */
-export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle; theme?: ReelTheme }> = ({
+export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle; theme?: ReelTheme; look?: ReelLook }> = ({
   lines,
   style = 'impacto',
   theme = 'ksi',
+  look = 'social',
 }) => {
   const frame = useCurrentFrame()
   const { fps, height } = useVideoConfig()
@@ -35,8 +37,9 @@ export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle; th
   const props: LineProps = { words, local, fps, lineIndex }
   // `palabra` es una sola palabra gigante: va al centro salvo que abajo haya algo importante.
   const y = style === 'palabra' && line.placement === 'abajo' ? 0.62 : Y_BY_PLACEMENT[line.placement]
-  // El diseño camioneta tiene un solo estilo de subtítulo, el de la referencia.
-  const Style = theme === 'offroad' ? Offroad : (STYLES[style] ?? Impacto)
+  // El diseño camioneta tiene un solo estilo de subtítulo, el de la referencia. En modo cine, cada estilo
+  // conserva su tipografía (para que no todos los Reels se vean iguales) pero se dibuja sobrio.
+  const Style = theme === 'offroad' ? Offroad : look === 'cine' ? CINE_STYLES[style] : (STYLES[style] ?? Impacto)
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
@@ -317,6 +320,50 @@ const Offroad: React.FC<LineProps> = ({ words, local }) => {
     </div>
   )
 }
+
+/** Modo cine: la tipografía de cada estilo, sin cajas, contornos ni rebotes. */
+const CINE_FONT: Record<CaptionStyle, { family: string; weight: number; size: number; spacing: number }> = {
+  impacto: { family: FONT_UI, weight: 800, size: 66, spacing: 0.02 },
+  velocidad: { family: FONT_SPEED, weight: 400, size: 62, spacing: 0.03 },
+  elegante: { family: FONT_CONDENSED, weight: 400, size: 90, spacing: 0.08 },
+  robusto: { family: FONT_HEAVY, weight: 400, size: 60, spacing: 0.02 },
+  caja: { family: FONT_SOCIAL, weight: 800, size: 64, spacing: 0.01 },
+  palabra: { family: FONT_RACE, weight: 700, size: 104, spacing: 0.04 },
+}
+
+/** Modo cine: la frase entera aparece de borroso a nítido; blanca, con la palabra clave en el acento. */
+function cineStyle(style: CaptionStyle): React.FC<LineProps> {
+  const font = CINE_FONT[style]
+  const CineLine: React.FC<LineProps> = ({ words, local }) => {
+    const { accent } = usePalette()
+    const t = interpolate(local, [0, 6], [0, 1], clamp)
+    return (
+      <div style={{ ...row, gap: `4px ${Math.round(font.size * 0.3)}px`, opacity: t, filter: t < 1 ? `blur(${(1 - t) * 5}px)` : undefined }}>
+        {words.map(({ w, text }, i) => (
+          <span
+            key={i}
+            style={{
+              fontFamily: font.family,
+              fontWeight: font.weight,
+              fontSize: font.size,
+              letterSpacing: `${font.spacing}em`,
+              lineHeight: 1.08,
+              color: w.emphasis ? accent : COLORS.white,
+              textShadow: '0 3px 16px rgba(0,0,0,0.75), 0 1px 3px rgba(0,0,0,0.6)',
+            }}
+          >
+            {text}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  return CineLine
+}
+
+const CINE_STYLES = Object.fromEntries(
+  (['impacto', 'velocidad', 'elegante', 'robusto', 'caja', 'palabra'] as const).map((s) => [s, cineStyle(s)])
+) as Record<CaptionStyle, React.FC<LineProps>>
 
 const STYLES: Record<CaptionStyle, React.FC<LineProps>> = {
   impacto: Impacto,

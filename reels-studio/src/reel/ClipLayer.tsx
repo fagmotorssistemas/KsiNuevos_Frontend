@@ -16,6 +16,9 @@ const OFFROAD_DRIFT = 1.08
 const OFFROAD_JUMP_SCALE = 1.06
 /** Look cálido y contrastado de la referencia de camionetas. */
 const OFFROAD_GRADE = 'contrast(1.12) saturate(1.15) sepia(0.12) brightness(0.98)'
+/** Modo cine: contraste de película, color algo apagado; camionetas un poco más cálidas y duras. */
+const CINE_GRADE = 'contrast(1.1) saturate(0.88) brightness(0.97)'
+const CINE_GRADE_OFFROAD = 'contrast(1.16) saturate(0.92) sepia(0.08) brightness(0.95)'
 /** Golpe de cámara en palabras clave: sube rápido y vuelve en ~0.3 s. */
 const PUNCH_SCALE = 0.07
 const PUNCH_IN = 3
@@ -32,16 +35,21 @@ function punchAt(frame: number, punches: number[]): number {
 }
 
 /** Una toma: recorte del clip + movimiento de cámara + transición de entrada + zoom a lo señalado. */
-export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEngine']; muted?: boolean; theme?: ReelProps['theme'] }> = ({
-  cut,
-  engine,
-  muted,
-  theme = 'ksi',
-}) => {
+export const ClipLayer: React.FC<{
+  cut: TimelineCut
+  engine: ReelProps['videoEngine']
+  muted?: boolean
+  theme?: ReelProps['theme']
+  look?: ReelProps['look']
+}> = ({ cut, engine, muted, theme = 'ksi', look = 'social' }) => {
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
   const offroad = theme === 'offroad'
-  const transitionIn = offroad ? 'corte' : cut.transitionIn
+  const cine = look === 'cine'
+  // Cine y camionetas: cortes secos, sin golpes de cámara.
+  const sober = cine || offroad
+  const transitionIn = sober ? 'corte' : cut.transitionIn
+  const grade = cine ? (offroad ? CINE_GRADE_OFFROAD : CINE_GRADE) : offroad ? OFFROAD_GRADE : ''
 
   // Zoom activo hacia una característica (tiene prioridad sobre el movimiento suave).
   const zoom = cut.zooms.find((z) => frame >= z.fromFrame && frame < z.fromFrame + z.durationInFrames)
@@ -52,7 +60,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
     transform = `translate(${t.translateX}px, ${t.translateY}px) scale(${t.scale})`
   } else {
     // Movimiento de cámara suave para que ninguna toma se sienta estática.
-    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, offroad ? OFFROAD_DRIFT : 1.05])
+    const drift = interpolate(frame, [0, cut.durationInFrames], [1.0, sober ? OFFROAD_DRIFT : 1.05])
     // Transiciones cortas: el cambio se siente inmediato.
     const zoomIn =
       transitionIn === 'zoom'
@@ -62,8 +70,8 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
       transitionIn === 'whip'
         ? interpolate(frame, [0, 6], [width * 0.18, 0], { extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) })
         : 0
-    const jump = cut.jump % 2 === 1 ? (offroad ? OFFROAD_JUMP_SCALE : JUMP_SCALE) : 1
-    const punch = offroad ? 1 : punchAt(frame, cut.punches ?? [])
+    const jump = cut.jump % 2 === 1 ? (sober ? OFFROAD_JUMP_SCALE : JUMP_SCALE) : 1
+    const punch = sober ? 1 : punchAt(frame, cut.punches ?? [])
     transform = `translateX(${whipX}px) scale(${drift * zoomIn * jump * punch})`
   }
   const whipBlur = transitionIn === 'whip' ? interpolate(frame, [0, 6], [10, 0], { extrapolateRight: 'clamp' }) : 0
@@ -76,7 +84,7 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
           transform,
           transformOrigin: zoom ? '0 0' : '50% 50%',
           filter:
-            `${theme === 'offroad' ? OFFROAD_GRADE : ''} ${whipBlur ? `blur(${whipBlur}px)` : ''} ${glitch ? 'hue-rotate(80deg) saturate(2.2) contrast(1.3)' : ''}`.trim() ||
+            `${grade} ${whipBlur ? `blur(${whipBlur}px)` : ''} ${glitch ? 'hue-rotate(80deg) saturate(2.2) contrast(1.3)' : ''}`.trim() ||
             undefined,
         }}
       >
@@ -111,6 +119,10 @@ export const ClipLayer: React.FC<{ cut: TimelineCut; engine: ReelProps['videoEng
             background: 'linear-gradient(90deg, rgba(255,0,60,0.25), rgba(0,200,255,0.25))',
           }}
         />
+      ) : null}
+      {/* Cine: sombras frías y luces cálidas, como en un comercial. */}
+      {cine ? (
+        <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,80,100,0.16), rgba(255,140,60,0.08))', mixBlendMode: 'soft-light' }} />
       ) : null}
       {/* Viñeta para que los textos se lean sobre cualquier fondo (más marcada en camionetas, como la referencia). */}
       <AbsoluteFill
