@@ -11,6 +11,7 @@ import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import { defaultClipKinds } from './clip-config'
 import { requestReelEditPlan, type AiHighlightPhrase, type ReelEditorUsage } from './claude-editor'
 import type { SegmentFrame } from './segment-frames'
+import type { VisualPlan } from './visual-plan'
 
 // ─── Tipos de respuesta ──────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ export interface GeminiSegmentAnalysis {
   voice_over_insert_after_count?: number
   /** Frases del diálogo a destacar en subtítulos (misma llamada a Claude; el re-render las reutiliza). */
   caption_highlights?: AiHighlightPhrase[]
+  /** Estilo visual del Reel (gancho, tarjetas, transiciones…) que dibuja shotstack.ts. */
+  visual_plan?: VisualPlan
   /** Tokens y costo aproximado de la llamada a Claude. */
   editor_usage?: ReelEditorUsage
 }
@@ -1011,6 +1014,16 @@ const BROLL_PROMPT_BLOCK = `PLANOS SIN HABLA (visual_overlay):
 - Puedes ponerlos encima de un corte con habla: "visual_overlay": { "clip_index": N, "trim_start": X, "trim_end": Y }, con X/Y en segundos dentro de ese clip y la misma duración que el corte. Si no aporta, usa null.
 `
 
+const VISUAL_PLAN_BLOCK = `DIRECCIÓN VISUAL ("visual_plan") — tú decides el estilo de este Reel:
+- El segundo 0 tiene que detener el scroll. "hook_text" es un texto grande en pantalla desde el inicio (2 a 6 palabras, máx. 42 caracteres): pregunta, dato fuerte o promesa; no tiene que ser lo que dice el asesor. Elige cómo entra ("hook_animation": impacto = rebote grande, deslizar_izquierda/deslizar_derecha = entra de lado, caer = baja desde arriba, girar = entra girando, revelar = se descubre de izquierda a derecha) y su sonido ("hook_sfx").
+- "spec_cards": hasta 4 datos cortos (1 a 3 palabras, ej. "2.8 DIÉSEL", "7 PASAJEROS") que aparecen al inicio del corte de tu "sequence" (segment_id) donde el asesor lo dice. Solo datos que de verdad se mencionan. "card_animation" usa las mismas entradas que el gancho.
+- "transitions": cómo se pasa de una toma a otra (deslizar, barrido, carrusel = empuja la toma, giro, zoom, fundido, revelar).
+- "camera_motion": movimiento sobre cada toma (acercar, alejar, alternar, paneo = desliza la cámara, quieto).
+- "palette": color de los textos en pantalla. "color_filter": tono de la imagen (ninguno, contraste, intenso = más saturado, suave = menos saturado).
+- "style_name": un nombre corto para este estilo.
+Combínalos para que este Reel tenga personalidad propia.
+`
+
 function voiceOverBlock(voClipIndex: number | null): string {
   const source =
     voClipIndex != null ? `El audio completo del clip ${voClipIndex}` : 'Un audio de voz en off subido aparte (MP3)'
@@ -1140,6 +1153,7 @@ ${opts.formattedSegmentMap}
 REGLAS TÉCNICAS:
 - Usa solo segment_id del mapa, cada uno una vez, con trim_start = start_s y trim_end = end_s (el sistema ajusta los bordes para no cortar palabras).
 ${brollBlock}${voBlock}
+${VISUAL_PLAN_BLOCK}
 ${buildOutputBlock(manual)}`
 }
 
@@ -1232,7 +1246,18 @@ export async function analyzeSegments(
   })
 
   const plan = await requestReelEditPlan(prompt, frames, jobId)
-  const validated = validateSequence(plan, allSegments, jobId, clipKinds, validateOpts)
+  const validated = validateSequence(
+    {
+      sequence: plan.sequence,
+      total_duration: plan.total_duration,
+      overall_strategy: plan.overall_strategy,
+      voice_over_insert_after_count: plan.voice_over_insert_after_count,
+    },
+    allSegments,
+    jobId,
+    clipKinds,
+    validateOpts
+  )
 
   const voIns = validated.voice_over_insert_after_count
   const voInsNote = typeof voIns === 'number' ? `, voice_over_insert_after_count=${voIns}` : ''
@@ -1240,7 +1265,12 @@ export async function analyzeSegments(
     `[VideoV2Pipeline][${jobId}][Claude] Secuencia validada: ${validated.sequence.length} segmentos, ${validated.total_duration.toFixed(1)}s total${voInsNote}`
   )
 
-  return { ...validated, caption_highlights: plan.caption_highlights, editor_usage: plan.usage }
+  return {
+    ...validated,
+    caption_highlights: plan.caption_highlights,
+    ...(plan.visual_plan ? { visual_plan: plan.visual_plan } : {}),
+    editor_usage: plan.usage,
+  }
 }
 
 /**

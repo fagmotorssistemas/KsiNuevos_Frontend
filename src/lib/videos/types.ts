@@ -1,4 +1,5 @@
 import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
+import type { VisualPlan } from './visual-plan'
 import type { SequenceItem } from './segmenter'
 
 export type { VideoClipKind, VideoJobPipelineInputMeta } from './clip-config'
@@ -59,6 +60,8 @@ export interface GeminiSegmentAnalysisResult {
   voice_over_insert_after_count?: number
   /** Frases a destacar en subtítulos elegidas por Claude (el re-render las reutiliza sin otra llamada). */
   caption_highlights?: AiHighlightPhrase[]
+  /** Estilo visual elegido por Claude; el re-render lo reutiliza. */
+  visual_plan?: VisualPlan
   /** Tokens y costo aproximado de la llamada a Claude que armó el montaje. */
   editor_usage?: ReelEditorUsage
 }

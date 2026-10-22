@@ -82,6 +82,7 @@ import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from '.
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import { extractSegmentFrames } from './segment-frames'
 import { buildPreviousReelsBlock } from './previous-reels'
+import { normalizeVisualPlan } from './visual-plan'
 import type { AiHighlightPhrase, ReelEditorUsage } from './claude-editor'
 
 /**
@@ -808,6 +809,7 @@ export async function runSingleVideoPipelineFromStorage(
       comentaOverlayText: comentaOverlayTextA,
       clipRotateAngles,
       captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
+      visualPlan: analysis.visual_plan ?? null,
     })
     await updateJob(jobId, {
       creatomate_render_id: renderId,
@@ -1591,6 +1593,7 @@ export async function runMultipleClipsPipelineFromStorage(
         comentaOverlayText,
         clipRotateAngles,
         captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
+        visualPlan: analysis.visual_plan ?? null,
       }
     )
     await updateJob(jobId, {
@@ -1677,6 +1680,7 @@ function coerceGeminiAnalysisFromUnknown(raw: unknown, jobId: string): GeminiSeg
     ...(o.editor_usage && typeof o.editor_usage === 'object'
       ? { editor_usage: o.editor_usage as ReelEditorUsage }
       : {}),
+    ...(normalizeVisualPlan(o.visual_plan) ? { visual_plan: normalizeVisualPlan(o.visual_plan)! } : {}),
   }
 }
 
@@ -2373,6 +2377,7 @@ export async function rerunRenderForJob(
       comentaOverlayText: comentaOverlayTextRerun,
       clipRotateAngles: clipRotateAnglesFromPipelineMeta(sc, paths),
       captionStyleVersion: resolveCaptionStyleVersion(captionStyleVersion),
+      visualPlan: analysis.visual_plan ?? null,
     }
   )
 

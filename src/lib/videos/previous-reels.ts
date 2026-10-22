@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { isPipelineInputMeta } from './clip-config'
+import { normalizeVisualPlan } from './visual-plan'
 
 const MAX_PREVIOUS_REELS = 3
 const MAX_CUTS_PER_REEL = 12
@@ -16,6 +17,7 @@ type StoredAnalysis = {
   sequence?: { segment_id?: unknown }[]
   overall_strategy?: unknown
   total_duration?: unknown
+  visual_plan?: unknown
 }
 
 type StoredSegment = { segment_id?: unknown; text?: unknown }
@@ -54,6 +56,13 @@ function describeReel(createdAt: string, analysis: StoredAnalysis, segmentMap: u
       : ''
   const lines = cuts.slice(0, MAX_CUTS_PER_REEL).map((t, i) => `  ${i + 1}. «${clip(t)}»`)
   if (cuts.length > MAX_CUTS_PER_REEL) lines.push(`  … (${cuts.length - MAX_CUTS_PER_REEL} cortes más)`)
+  const plan = normalizeVisualPlan(analysis.visual_plan)
+  if (plan) {
+    lines.push(
+      `  Estilo visual «${plan.style_name}»: gancho «${plan.hook_text}» (${plan.hook_animation}), ` +
+        `transiciones ${plan.transitions}, cámara ${plan.camera_motion}, paleta ${plan.palette}, filtro ${plan.color_filter}`
+    )
+  }
   return `Reel del ${createdAt.slice(0, 10)}${duration}${strategy}:\n${lines.join('\n')}`
 }
 
@@ -94,7 +103,7 @@ export async function buildPreviousReelsBlock(
 
   return `=== REELS ANTERIORES DE ESTE MISMO AUTO (no los repitas) ===
 ${reels.join('\n\n')}
-Este Reel tiene que sentirse claramente distinto a esos: que no abra igual, que no siga el mismo orden y que tenga otro enfoque. Puedes repetir datos del auto, pero no la misma secuencia.
+Este Reel tiene que sentirse claramente distinto a esos: que no abra igual, que no siga el mismo orden, que tenga otro enfoque y otro estilo visual (gancho, transiciones, cámara y paleta). Puedes repetir datos del auto, pero no la misma secuencia ni la misma animación.
 === FIN REELS ANTERIORES ===
 
 `

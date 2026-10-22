@@ -10,6 +10,16 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { SequenceItem } from './segmenter'
 import type { SegmentFrame } from './segment-frames'
+import {
+  CAMERA_MOTIONS,
+  COLOR_FILTERS,
+  HOOK_ANIMATIONS,
+  HOOK_SFX,
+  PALETTES,
+  TRANSITION_STYLES,
+  normalizeVisualPlan,
+  type VisualPlan,
+} from './visual-plan'
 
 const DEFAULT_MODEL = 'claude-opus-5-5'
 const DEFAULT_EFFORT: Effort = 'medium'
@@ -48,6 +58,7 @@ export interface ReelEditorResult {
   overall_strategy: string
   voice_over_insert_after_count?: number
   caption_highlights: AiHighlightPhrase[]
+  visual_plan: VisualPlan | null
   usage: ReelEditorUsage
 }
 
@@ -62,6 +73,43 @@ const OVERLAY_SCHEMA = {
   },
 }
 
+const VISUAL_PLAN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'style_name',
+    'hook_text',
+    'hook_animation',
+    'hook_sfx',
+    'palette',
+    'transitions',
+    'camera_motion',
+    'color_filter',
+    'spec_cards',
+    'card_animation',
+  ],
+  properties: {
+    style_name: { type: 'string' },
+    hook_text: { type: 'string' },
+    hook_animation: { type: 'string', enum: [...HOOK_ANIMATIONS] },
+    hook_sfx: { type: 'string', enum: [...HOOK_SFX] },
+    palette: { type: 'string', enum: [...PALETTES] },
+    transitions: { type: 'string', enum: [...TRANSITION_STYLES] },
+    camera_motion: { type: 'string', enum: [...CAMERA_MOTIONS] },
+    color_filter: { type: 'string', enum: [...COLOR_FILTERS] },
+    spec_cards: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['segment_id', 'text'],
+        properties: { segment_id: { type: 'string' }, text: { type: 'string' } },
+      },
+    },
+    card_animation: { type: 'string', enum: [...HOOK_ANIMATIONS] },
+  },
+}
+
 const EDIT_PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -71,6 +119,7 @@ const EDIT_PLAN_SCHEMA = {
     'overall_strategy',
     'voice_over_insert_after_count',
     'caption_highlights',
+    'visual_plan',
   ],
   properties: {
     sequence: {
@@ -116,6 +165,7 @@ const EDIT_PLAN_SCHEMA = {
         },
       },
     },
+    visual_plan: VISUAL_PLAN_SCHEMA,
   },
 }
 
@@ -127,6 +177,7 @@ interface RawEditPlan {
   overall_strategy: string
   voice_over_insert_after_count: number | null
   caption_highlights: AiHighlightPhrase[]
+  visual_plan: unknown
 }
 
 let client: Anthropic | null = null
@@ -219,6 +270,7 @@ export async function requestReelEditPlan(
       ? { voice_over_insert_after_count: raw.voice_over_insert_after_count }
       : {}),
     caption_highlights: raw.caption_highlights.slice(0, 8),
+    visual_plan: normalizeVisualPlan(raw.visual_plan),
     usage,
   }
 }

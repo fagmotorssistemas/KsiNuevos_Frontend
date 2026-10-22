@@ -7,6 +7,16 @@ import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
 import type { BrandConfig, VoiceOverIntroRenderInput } from './reel-render-inputs'
 import {
+  CUT_TRANSITIONS,
+  ENTRANCE_TRANSITION,
+  PALETTE_COLORS,
+  SHOTSTACK_FILTER,
+  cameraEffects,
+  type HookAnimation,
+  type PaletteColors,
+  type VisualPlan,
+} from './visual-plan'
+import {
   clampShotstackAssetVolume,
   computeReelAudioBalance,
   FALLBACK_DIALOGUE_VOLUME,
@@ -130,18 +140,58 @@ const CLIP_FLASH_FADE_IN_SEC = 0.12
 const CLIP_FLASH_HOLD_SEC = 0.08
 const CLIP_FLASH_FADE_OUT_SEC = 0.35
 const CLIP_FLASH_PEAK_OPACITY = 0.65
+const CLIP_FLASH_COLORS: [string, string, string] = ['#FFE94A', '#FF8C00', '#FF4500']
 /** Shotstack exige type "svg" con markup inline; una URL .svg como type "image" falla el render. */
-const CLIP_FLASH_SVG_MARKUP =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
-  '<defs>' +
-  '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
-  '<stop offset="0%" stop-color="#FFE94A" stop-opacity="1"/>' +
-  '<stop offset="60%" stop-color="#FF8C00" stop-opacity="1"/>' +
-  '<stop offset="100%" stop-color="#FF4500" stop-opacity="0.8"/>' +
-  '</radialGradient>' +
-  '</defs>' +
-  '<rect width="1080" height="1920" fill="url(#flash)"/>' +
-  '</svg>'
+function clipFlashSvgMarkup([center, mid, edge]: [string, string, string]): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
+    '<defs>' +
+    '<radialGradient id="flash" cx="50%" cy="50%" r="60%">' +
+    `<stop offset="0%" stop-color="${center}" stop-opacity="1"/>` +
+    `<stop offset="60%" stop-color="${mid}" stop-opacity="1"/>` +
+    `<stop offset="100%" stop-color="${edge}" stop-opacity="0.8"/>` +
+    '</radialGradient>' +
+    '</defs>' +
+    '<rect width="1080" height="1920" fill="url(#flash)"/>' +
+    '</svg>'
+  )
+}
+
+/** Cómo se ven los cortes: el estilo de siempre o el que eligió Claude en el plan visual. */
+interface CutLook {
+  /** Mismas claves que CLIP_BOUNDARY_TRANSITIONS (los tiempos de subtítulos dependen de ellas). */
+  boundaryOuts: Record<number, string>
+  clip6In: string
+  introEffect: string | null
+  cutEffect: (sequenceIndex: number) => string | null
+  filter: string | null
+}
+
+const LEGACY_CUT_LOOK: CutLook = {
+  boundaryOuts: CLIP_BOUNDARY_TRANSITIONS,
+  clip6In: CLIP_6_ENTER_TRANSITION_IN,
+  introEffect: FIRST_CLIP_INTRO_EFFECT,
+  cutEffect: () => 'zoomIn',
+  filter: null,
+}
+
+function cutLookFromPlan(plan: VisualPlan | null): CutLook {
+  if (!plan) return LEGACY_CUT_LOOK
+  const { outs, clip6In } = CUT_TRANSITIONS[plan.transitions]
+  const boundaries = Object.keys(CLIP_BOUNDARY_TRANSITIONS).map(Number).sort((x, y) => x - y)
+  const boundaryOuts: Record<number, string> = {}
+  boundaries.forEach((b, k) => {
+    boundaryOuts[b] = outs[k] ?? outs[0]
+  })
+  const camera = cameraEffects(plan.camera_motion)
+  return {
+    boundaryOuts,
+    clip6In,
+    introEffect: camera.intro,
+    cutEffect: camera.forCut,
+    filter: SHOTSTACK_FILTER[plan.color_filter],
+  }
+}
 
 function buildTimelineFonts(): { src: string }[] {
   return [
@@ -247,6 +297,7 @@ function buildFirstClipIntroClips(
   src: string,
   withSlideOut: boolean,
   dialogueVolume: number,
+  look: CutLook,
   rotateAngle?: number | null
 ): ShotstackClip[] {
   const trimStart = Number(item.trim_start.toFixed(3))
@@ -271,11 +322,12 @@ function buildFirstClipIntroClips(
     length: Number(Math.max(0.05, playLength).toFixed(3)),
     fit: 'cover',
     ...orient,
+    ...(look.filter ? { filter: look.filter } : {}),
     ...extra,
   })
 
   const clips: ShotstackClip[] = [
-    mk(0, introDur, 0, { effect: FIRST_CLIP_INTRO_EFFECT }),
+    mk(0, introDur, 0, look.introEffect ? { effect: look.introEffect } : {}),
   ]
 
   const remain = Number((totalLen - introDur).toFixed(3))
@@ -285,7 +337,7 @@ function buildFirstClipIntroClips(
 
   if (withSlideOut) {
     const last = clips[clips.length - 1]!
-    last.transition = { out: CLIP_BOUNDARY_TRANSITIONS[0]! }
+    last.transition = { out: look.boundaryOuts[0]! }
   }
 
   return clips
@@ -328,6 +380,7 @@ function buildClipFlashTransitionTrack(
     holdSec?: number
     fadeOutSec?: number
     peakOpacity?: number
+    colors?: [string, string, string]
   }
 ): ShotstackTrack | null {
   if (sequence.length <= clipIndex) return null
@@ -351,7 +404,7 @@ function buildClipFlashTransitionTrack(
   return {
     clips: [
       {
-        asset: { type: 'svg', src: CLIP_FLASH_SVG_MARKUP },
+        asset: { type: 'svg', src: clipFlashSvgMarkup(opts?.colors ?? CLIP_FLASH_COLORS) },
         start,
         length: lengthSec,
         position: 'center',
@@ -377,9 +430,10 @@ function buildClipFlashTransitionTrack(
 
 function buildClipBoundaryTransition(
   clipIndex: number,
-  sequenceLength: number
+  sequenceLength: number,
+  look: CutLook
 ): { out?: string } {
-  const out = CLIP_BOUNDARY_TRANSITIONS[clipIndex]
+  const out = look.boundaryOuts[clipIndex]
   if (out && clipIndex + 1 < sequenceLength) {
     return { out }
   }
@@ -390,6 +444,7 @@ function buildVideoTracks(
   sequence: SequenceItem[],
   clipUrls: string[],
   dialogueVolume: number,
+  look: CutLook,
   clipRotateAngles?: Array<number | null | undefined>
 ): ShotstackTrack[] {
   const overlap = CLIP_TRANSITION_OVERLAP_SEC
@@ -418,7 +473,8 @@ function buildVideoTracks(
       length,
       fit: 'cover',
       ...shotstackOrientationTransform(angleFor(item.clip_index)),
-      ...(i > 0 ? { effect: 'zoomIn' as const } : {}),
+      ...(look.filter ? { filter: look.filter } : {}),
+      ...(i > 0 && look.cutEffect(i) ? { effect: look.cutEffect(i) } : {}),
       ...extra,
     }
   }
@@ -433,6 +489,7 @@ function buildVideoTracks(
           src,
           false,
           dialogueVolume,
+          look,
           angleFor(item.clip_index)
         ),
       },
@@ -448,8 +505,9 @@ function buildVideoTracks(
     ...buildFirstClipIntroClips(
       item0,
       src0,
-      !!CLIP_BOUNDARY_TRANSITIONS[0],
+      !!look.boundaryOuts[0],
       dialogueVolume,
+      look,
       angleFor(item0.clip_index)
     )
   )
@@ -463,7 +521,7 @@ function buildVideoTracks(
     }
 
     let extras: Partial<ShotstackClip> = {}
-    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length)
+    const boundaryTransition = buildClipBoundaryTransition(i, sequence.length, look)
     if (Object.keys(boundaryTransition).length > 0) {
       extras.transition = boundaryTransition
     }
@@ -494,8 +552,9 @@ function buildVideoTracks(
         length: CLIP_6_WIPE_UNDERLAY_SEC,
         fit: 'cover',
         ...shotstackOrientationTransform(angleFor(clip5Item.clip_index)),
+        ...(look.filter ? { filter: look.filter } : {}),
       })
-      extras.transition = { in: CLIP_6_ENTER_TRANSITION_IN }
+      extras.transition = { in: look.clip6In }
     }
 
     const clip = buildMainClip(i, start, extras)
@@ -512,6 +571,7 @@ function buildVideoTracks(
 function buildBrollOverlayTracks(
   sequence: SequenceItem[],
   clipUrls: string[],
+  filter: string | null,
   clipRotateAngles?: Array<number | null | undefined>
 ): ShotstackTrack[] {
   const starts = computeLinearStarts(sequence)
@@ -534,6 +594,7 @@ function buildBrollOverlayTracks(
       length: Number(item.trim_duration.toFixed(3)),
       fit: 'cover',
       ...shotstackOrientationTransform(clipRotateAngles?.[ov.clip_index]),
+      ...(filter ? { filter } : {}),
     })
   }
   return clips.length > 0 ? [{ clips }] : []
@@ -771,6 +832,141 @@ function buildClipTransitionWhooshTrack(
   }
 
   return { clips }
+}
+
+// ─── Plan visual: gancho del segundo 0 y tarjetas de datos ────────────────────
+
+const HOOK_LENGTH_SEC = 2.4
+/** Debajo de la barra superior de Instagram/TikTok y lejos de los subtítulos (abajo). */
+const HOOK_OFFSET_Y = -0.2
+const CARD_LENGTH_SEC = 1.9
+const CARD_OFFSET_Y = -0.27
+const CARD_OFFSET_X = 0.2
+const HOOK_SFX_VOLUME = 0.45
+const HOOK_SFX_LENGTH_SEC = 0.55
+
+function overlayBoxHtml(text: string, colors: PaletteColors, fontPx: number): string {
+  const padV = s720(16)
+  const padH = s720(30)
+  const radius = s720(22)
+  return (
+    `<div style="background:${colors.background};border-radius:${radius}px;padding:${padV}px ${padH}px;` +
+    `font-family:'Montserrat',sans-serif;font-weight:900;font-size:${fontPx}px;` +
+    `color:${colors.text};text-transform:uppercase;text-align:center;line-height:1.1;">` +
+    `${htmlEscape(text)}</div>`
+  )
+}
+
+/** Entrada elegida en el plan; "impacto" es un rebote de escala en vez de transición. */
+function entranceAnimation(anim: HookAnimation, length: number): Partial<ShotstackClip> {
+  const transitionIn = ENTRANCE_TRANSITION[anim]
+  if (transitionIn) return { transition: { in: transitionIn, out: 'fadeFast' } }
+  const pop = 0.35
+  return {
+    transition: { out: 'fadeFast' },
+    scale: [
+      { from: 1.6, to: 1, start: 0, length: pop, interpolation: 'bezier', easing: 'easeOutBack' },
+      { from: 1, to: 1, start: pop, length: Number(Math.max(0.05, length - pop).toFixed(3)) },
+    ],
+  }
+}
+
+function hookFontPx(text: string): number {
+  if (text.length <= 12) return s720(64)
+  if (text.length <= 22) return s720(54)
+  return s720(44)
+}
+
+/** Ventanas [inicio, fin] donde ya hay texto arriba (marca en V1, "comenta" al final). */
+type BusyWindow = [number, number]
+
+function overlapsAny(start: number, end: number, busy: BusyWindow[]): boolean {
+  return busy.some(([a, b]) => start < b && end > a)
+}
+
+function buildVisualPlanOverlayTracks(
+  plan: VisualPlan,
+  sequence: SequenceItem[],
+  totalDuration: number,
+  busy: BusyWindow[],
+  jobId: string
+): ShotstackTrack[] {
+  const colors = PALETTE_COLORS[plan.palette]
+  const tracks: ShotstackTrack[] = []
+  const taken: BusyWindow[] = [...busy]
+
+  const hookLen = Number(Math.min(HOOK_LENGTH_SEC, totalDuration).toFixed(3))
+  if (plan.hook_text && hookLen >= 0.8 && !overlapsAny(0, hookLen, busy)) {
+    tracks.push({
+      clips: [
+        {
+          asset: {
+            type: 'html',
+            html: overlayBoxHtml(plan.hook_text, colors, hookFontPx(plan.hook_text)),
+            width: s720(620),
+            height: s720(240),
+            background: 'transparent',
+          },
+          start: 0,
+          length: hookLen,
+          position: 'top',
+          offset: { x: 0, y: HOOK_OFFSET_Y },
+          ...entranceAnimation(plan.hook_animation, hookLen),
+        },
+      ],
+    })
+    taken.push([0, hookLen])
+  } else if (plan.hook_text) {
+    console.log(`[Shotstack][${jobId}] Gancho omitido: choca con otro texto arriba al inicio`)
+  }
+
+  const cardClips: ShotstackClip[] = []
+  plan.spec_cards.forEach((card) => {
+    const idx = sequence.findIndex((it) => it.segment_id === card.segment_id)
+    if (idx < 0) return
+    const start = computeClipVideoStartSec(sequence, idx)
+    const length = Number(Math.min(CARD_LENGTH_SEC, sequence[idx]!.trim_duration, totalDuration - start).toFixed(3))
+    if (length < 0.8 || overlapsAny(start, start + length, taken)) return
+    const side = cardClips.length % 2 === 0 ? -1 : 1
+    cardClips.push({
+      asset: {
+        type: 'html',
+        html: overlayBoxHtml(card.text, colors, s720(42)),
+        width: s720(380),
+        height: s720(140),
+        background: 'transparent',
+      },
+      start,
+      length,
+      position: 'top',
+      offset: { x: side * CARD_OFFSET_X, y: CARD_OFFSET_Y },
+      ...entranceAnimation(plan.card_animation, length),
+    })
+    taken.push([start, start + length])
+  })
+  if (cardClips.length > 0) tracks.push({ clips: cardClips })
+
+  console.log(
+    `[Shotstack][${jobId}] Plan visual «${plan.style_name}»: gancho "${plan.hook_text}" (${plan.hook_animation}), ` +
+      `${cardClips.length}/${plan.spec_cards.length} tarjetas, transiciones ${plan.transitions}, cámara ${plan.camera_motion}, ` +
+      `paleta ${plan.palette}, filtro ${plan.color_filter}`
+  )
+  return tracks
+}
+
+function buildHookSfxTrack(plan: VisualPlan): ShotstackTrack | null {
+  if (!plan.hook_text || plan.hook_sfx === 'ninguno') return null
+  const url = plan.hook_sfx === 'pop' ? resolveBrandTitlePopSfxUrl() : resolveClipTransitionWhooshUrl()
+  if (!url) return null
+  return {
+    clips: [
+      {
+        asset: { type: 'audio', src: url, trim: 0, volume: HOOK_SFX_VOLUME },
+        start: 0,
+        length: HOOK_SFX_LENGTH_SEC,
+      },
+    ],
+  }
 }
 
 function resolveBrandTitlePopSfxUrl(): string {
@@ -1613,6 +1809,8 @@ export async function renderSegmentsV2(
      * Versión de captions del job. Si se omite, usa env o v1.
      */
     captionStyleVersion?: CaptionStyleVersion | null
+    /** Estilo elegido por Claude; sin plan (Reels viejos) se usa el estilo de siempre. */
+    visualPlan?: VisualPlan | null
   }
 ): Promise<string> {
   if (voiceOverIntro != null) {
@@ -1836,6 +2034,14 @@ export async function renderSegmentsV2(
     }
   }
 
+  const visualPlan = opts?.visualPlan ?? null
+  if (visualPlan) {
+    const busy: BusyWindow[] = []
+    if (hasBrandOverlays) busy.push([brandStart, brandStart + brandLength])
+    if (opts?.comentaMentionTimeSec != null) busy.push([opts.comentaMentionTimeSec, totalDuration])
+    tracks.push(...buildVisualPlanOverlayTracks(visualPlan, sequence, totalDuration, busy, jobId))
+  }
+
   const logoUrl = resolveClosingLogoUrl(callbackBase, opts?.brandConfig ?? null)
   const openingLogo = buildOpeningLogoTrack(logoUrl, totalDuration)
   if (openingLogo) {
@@ -1856,11 +2062,13 @@ export async function renderSegmentsV2(
       clipRotateAngles.map((a, i) => (a != null && a !== 0 ? `clip${i}=${a}°` : `clip${i}=skip`)).join(', ')
     )
   }
-  tracks.push(...buildBrollOverlayTracks(sequence, clipUrls, clipRotateAngles))
-  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume, clipRotateAngles))
+  const cutLook = cutLookFromPlan(visualPlan)
+  tracks.push(...buildBrollOverlayTracks(sequence, clipUrls, cutLook.filter, clipRotateAngles))
+  tracks.push(...buildVideoTracks(sequence, clipUrls, dialogueVolume, cutLook, clipRotateAngles))
 
   const flashTrack = buildClipFlashTransitionTrack(sequence, CLIP_FLASH_AT_CLIP_INDEX, jobId, {
     label: 'clip 4',
+    ...(visualPlan ? { colors: PALETTE_COLORS[visualPlan.palette].flash } : {}),
   })
   if (flashTrack) tracks.unshift(flashTrack)
 
@@ -1884,6 +2092,9 @@ export async function renderSegmentsV2(
 
   const comentaSfxTrack = buildComentaMentionSfxTrack(opts?.comentaMentionTimeSec, totalDuration, jobId)
   if (comentaSfxTrack) tracks.push(comentaSfxTrack)
+
+  const hookSfxTrack = visualPlan ? buildHookSfxTrack(visualPlan) : null
+  if (hookSfxTrack) tracks.push(hookSfxTrack)
 
   const callbackUrl = `${callbackBase}/api/videos/webhook/shotstack?jobId=${encodeURIComponent(jobId)}`
   const edit = {
