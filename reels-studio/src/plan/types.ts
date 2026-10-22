@@ -126,6 +126,8 @@ export type ReelProps = {
   tailFrames: number
   graphics: TimelineGraphic[]
   captions: CaptionLine[]
+  /** Tramos en que habla el asesor (todas sus palabras, con o sin subtítulo), para bajar la música debajo de la voz. */
+  speech: Array<{ fromFrame: number; toFrame: number }>
   /** Reglas de tiempos con que se armó: `offroad` (camionetas: cierre más largo, subtítulos más cortos) o `ksi`. */
   theme: ReelTheme
   /** Golpes de sonido sugeridos por el montaje (el director de motion graphics pone los suyos). */

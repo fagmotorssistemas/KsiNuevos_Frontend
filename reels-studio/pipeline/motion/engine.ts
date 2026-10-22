@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ReelProps } from '../../src/plan/types'
 import type { VehicleInfo } from '../director-prompt'
+import { archetypeFor, type Archetype } from '../reel-skill'
 import { briefText, designDirections, keyMoments, momentFrames, motionDesignFor, offerDirections } from './brief'
 import { assemble, fetchMusic, MOTION_DESIGNS, prepareProject, skeletonHtml, type MotionDesign } from './compose'
 import { MotionDirector, MOTION_MODEL, type MotionResult } from './director'
@@ -34,6 +35,8 @@ export type MotionOptions = {
 
 export type MotionSummary = {
   design: MotionDesign
+  /** Arquetipo de la skill del equipo (SUV, camioneta, sedán o deportivo). */
+  arquetipo: Archetype
   /** Dirección creativa que eligió Claude (para no repetirla en el próximo Reel). */
   direccion: string | null
   notas: string
@@ -43,13 +46,14 @@ export type MotionSummary = {
 export async function runMotion(o: MotionOptions): Promise<MotionSummary> {
   const { props, vehicle, dir } = o
   const design = (o.design && (MOTION_DESIGNS as readonly string[]).includes(o.design) ? o.design : motionDesignFor(vehicle)) as MotionDesign
+  const archetype = archetypeFor(vehicle.categoria)
   fs.mkdirSync(dir, { recursive: true })
-  console.log(`[motion] ${vehicle.marca} ${vehicle.modelo} · diseño ${design} · ${(props.durationInFrames / props.fps).toFixed(1)} s`)
+  console.log(`[motion] ${vehicle.marca} ${vehicle.modelo} · diseño ${design} · arquetipo ${archetype} · ${(props.durationInFrames / props.fps).toFixed(1)} s`)
   hfEnsureBrowser(dir)
 
   // 1) Proyecto HyperFrames: kit, clips y la base del index.html.
   const media = prepareProject(dir, props, await fetchMusic(dir, props.music?.src))
-  const skeleton = skeletonHtml(props, media, design)
+  const skeleton = skeletonHtml(props, media, design, archetype)
   // Fuera del proyecto: un segundo .html con data-composition-id en la carpeta confunde a HyperFrames.
   fs.writeFileSync(`${dir}.skeleton.html`, skeleton)
   const save = (r: MotionResult, label: string) => {
@@ -87,7 +91,7 @@ export async function runMotion(o: MotionOptions): Promise<MotionSummary> {
   ].filter((id) => known.has(id))
   const offered = offerDirections(design, recent)
   console.log(`[motion] direcciones ofrecidas: ${offered.map((d) => d.id).join(', ')}${recent.length ? ` (recientes: ${recent.join(', ')})` : ''}`)
-  const brief = briefText(props, vehicle, design, offered, recent)
+  const brief = briefText(props, vehicle, design, archetype, offered, recent)
   fs.writeFileSync(path.join(dir, 'brief.txt'), brief)
   const moments = keyMoments(props)
   const frames = momentFrames(props, moments)
@@ -134,5 +138,5 @@ export async function runMotion(o: MotionOptions): Promise<MotionSummary> {
     console.log(`[render] listo → ${o.out}`)
   }
   const direccion = result.notes.match(/direcci[oó]n:\s*([a-z0-9-]+)/i)?.[1] ?? null
-  return { design, direccion, notas: result.notes, usd }
+  return { design, arquetipo: archetype, direccion, notas: result.notes, usd }
 }

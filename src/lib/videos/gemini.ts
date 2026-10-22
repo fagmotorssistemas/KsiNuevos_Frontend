@@ -12,6 +12,7 @@ import type { ClipFrames } from './claude-frames'
 import type { VideoClipKind, CanonicalVehicleMeta } from './clip-config'
 import { defaultClipKinds } from './clip-config'
 import { CLAUDE_REELS_MODEL, claudeFallbackParams, claudeResponseText, explainClaudeError, getClaude } from './claude'
+import { reelSkillSystem } from './reel-skill'
 
 /** Esfuerzo de razonamiento: "medium" deja margen dentro de los 300 s de la función en Vercel. */
 const CLAUDE_EFFORT = (process.env.CLAUDE_REELS_EFFORT?.trim() || 'medium') as 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -2015,6 +2016,11 @@ export async function analyzeSegments(
 
   const client = getClaude()
   const frameBlocks = visual ? framesToContent(clipFrames) : []
+  const skill = reelSkillSystem()
+  const system = [
+    ...(skill ? [{ type: 'text' as const, text: skill }] : []),
+    ...(visual ? [{ type: 'text' as const, text: FRAMES_NOTE }] : []),
+  ]
 
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     try {
@@ -2063,7 +2069,7 @@ export async function analyzeSegments(
               model: CLAUDE_REELS_MODEL,
               max_tokens: 32000,
               output_config: { effort: CLAUDE_EFFORT },
-              ...(visual ? { system: FRAMES_NOTE } : {}),
+              ...(system.length ? { system } : {}),
               messages: [{ role: 'user', content: [...frameBlocks, { type: 'text', text: prompt }] }],
               ...claudeFallbackParams(CLAUDE_REELS_MODEL),
             },

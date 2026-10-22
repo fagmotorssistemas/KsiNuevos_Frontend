@@ -1,11 +1,12 @@
 /**
- * Instrucciones de Claude como director de motion graphics: su papel, las reglas oficiales de HyperFrames (leídas
- * de la skill que trae el paquete instalado, así siempre coinciden con la versión del renderizador), el kit de
- * K-SI, las reglas de la casa y el diseño de la categoría.
+ * Instrucciones de Claude como director de motion graphics: su papel, la skill del equipo para Reels
+ * (ai-reel-generator), las reglas oficiales de HyperFrames (leídas de la skill que trae el paquete instalado, así
+ * siempre coinciden con la versión del renderizador), el kit de K-SI, las reglas de la casa y el diseño de la categoría.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { reelSkill } from '../reel-skill'
 import type { MotionDesign } from './compose'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -46,7 +47,8 @@ CÓMO TRABAJAS
 4. Mueve la cámara de cada toma (#cam-N): deriva lenta, golpes en las palabras clave y acercamientos a lo que se señala con las
    cajas en px del guion. Pasa de una toma a otra con transiciones que tengan una causa.
 5. Dale estilo y animación a los subtítulos: cada palabra aparece cuando se dice.
-6. Agrega sonidos de apoyo (whoosh, hit, riser) en los cortes y golpes que se ven, con poco volumen.
+6. Agrega sonidos de apoyo (whoosh, hit, riser) en los cortes y golpes que se ven, con poco volumen. El del segundo 0 ya
+   está en la base (#sfx-hook).
 
 CALIDAD
 - Algo cambia en pantalla cada 1–2 s, pero un texto se queda quieto el tiempo suficiente para leerse (0,5 s más 0,3 s por palabra).
@@ -76,6 +78,17 @@ LO QUE ENTREGAS: exactamente estas cinco etiquetas, sin texto fuera de ellas.
 - <three>: solo JavaScript del módulo 3D; ya existen THREE, K3 y stage. No importes nada ni llames bindSeek. Déjalo vacío si
   no usas 3D.`
 
+const TEAM_SKILL_NOTE = `SKILL DEL EQUIPO: ai-reel-generator. Es la guía creativa de todos los Reels de K-SI (en inglés; su
+"Aplicación en K-SI Nuevos" del final manda cuando choca). A ti te tocan los pasos 2 y 4, dentro de esta composición:
+- El guion dice el ARQUETIPO del Reel. Su sección de la skill marca la intención, el tema, las piezas (al menos una en el
+  Reel), el gancho y el ritmo. La dirección creativa elegida manda en tipografía, paleta y materiales; las reglas de la
+  casa mandan sobre las dos.
+- Triple gancho en el segundo 0: movimiento fuerte o una pieza 3D ya en pantalla en el cuadro 0, el texto gancho en el
+  tercio medio-alto (entre 380 y 900 px de alto) con alto contraste, y el sonido del gancho (ya está en la base: #sfx-hook).
+- La imagen cambia cada 2–3 s (1,5–2 s en deportivos): toma nueva, acercamiento marcado, cambio de encuadre o un gráfico.
+- Subtítulos palabra por palabra, siempre dentro de la zona segura.
+- La música ya trae el ducking (#music baja sola bajo la voz); no le cambies el volumen.`
+
 const SKILL_NOTE = `REGLAS OFICIALES DE HYPERFRAMES (de su skill, en inglés). Aplican a todo lo que escribes. Ignora lo que habla de Studio,
 la app de escritorio, los comandos de la CLI, las sub-composiciones (aquí todo va en un solo index.html cuya base ya cumple las
 reglas de estructura) y el trabajo con una persona: tú solo escribes los bloques. Las medidas para vertical (1080×1920) son las
@@ -86,6 +99,7 @@ export function motionSystem(design: MotionDesign): string[] {
   const skill = [skillContract(), ...SKILL_REFERENCES.map((f) => fs.readFileSync(path.join(SKILL, f), 'utf8'))].join('\n\n---\n\n')
   return [
     ROLE,
+    `${TEAM_SKILL_NOTE}\n\n${reelSkill()}`,
     `${SKILL_NOTE}\n\n${skill}`,
     fs.readFileSync(path.join(MOTION, 'KIT.md'), 'utf8'),
     fs.readFileSync(path.join(MOTION, 'BRAND.md'), 'utf8'),

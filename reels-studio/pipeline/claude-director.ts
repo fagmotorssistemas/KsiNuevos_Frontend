@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { CreativePlan } from '../src/plan/schema'
-import { DIRECTOR_SYSTEM, formatTranscript, formatVehicle, type VehicleInfo } from './director-prompt'
+import { DIRECTOR_SYSTEM, directorSkill, formatTranscript, formatVehicle, type VehicleInfo } from './director-prompt'
 import {
   boxToFocus,
   checkPlan,
@@ -132,6 +132,7 @@ export async function directReel(params: {
           max_tokens: 64000,
           system: [
             { type: 'text', text: DIRECTOR_SYSTEM },
+            { type: 'text', text: directorSkill() },
             { type: 'text', text: FRAMES_NOTE },
           ],
           messages,

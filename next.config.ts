@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ['@react-pdf/renderer'],
 
+  // Skill del equipo para Reels: Claude la lee en el análisis editorial (src/lib/videos/reel-skill.ts).
+  outputFileTracingIncludes: {
+    '/api/videos/**': ['./.claude/skills/ai-reel-generator/SKILL.md'],
+  },
+
   // Aumentar límite de body para uploads de video en API routes y Server Actions
   experimental: {
     serverActions: {

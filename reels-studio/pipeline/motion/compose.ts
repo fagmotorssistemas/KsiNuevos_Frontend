@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ReelProps } from '../../src/plan/types'
+import type { Archetype } from '../reel-skill'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const KIT_SRC = path.join(ROOT, 'motion/kit')
@@ -184,6 +185,43 @@ function captionsHtml(props: ReelProps): string {
     .join('\n')
 }
 
+/** Sonido del gancho en el cuadro 0 (skill del equipo): golpe grave en camionetas y deportivos, whoosh en el resto. */
+export const HOOK_SFX: Record<Archetype, { file: string; volume: number }> = {
+  camioneta: { file: 'hit', volume: 0.55 },
+  deportivo: { file: 'hit', volume: 0.55 },
+  suv: { file: 'whoosh', volume: 0.5 },
+  sedan: { file: 'whoosh', volume: 0.5 },
+}
+
+/**
+ * Ducking (skill del equipo): la música baja mientras habla el asesor y sube en las pausas largas y en la cola.
+ * Los tramos con voz los calcula el montaje (`props.speech`, con todas las palabras: al arranque el gancho tapa los
+ * subtítulos pero el asesor ya habla). Con `data-automation` HyperFrames ignora `data-volume`, así que la curva lleva
+ * los niveles completos. Devuelve null si no hay voz (queda el volumen fijo).
+ */
+function duckingAutomation(props: ReelProps, underVoice: number): string | null {
+  const ATTACK = 0.2 // baja un poco antes de que hable
+  const HOLD = 0.15
+  const RELEASE = 0.35
+  const fps = props.fps
+  const end = props.durationInFrames / fps
+  const speech = (props.speech ?? []).map((t) => [t.fromFrame / fps, t.toFrame / fps] as const)
+  if (!speech.length) return null
+  const open = Math.min(underVoice * 2.5, 0.5)
+  const points: Array<{ t: number; v: number }> = [{ t: 0, v: speech[0][0] <= ATTACK ? underVoice : open }]
+  for (const [start, stop] of speech) {
+    if (start > ATTACK) points.push({ t: start - ATTACK, v: open })
+    points.push({ t: Math.max(start, 0.001), v: underVoice })
+    if (stop + HOLD < end) points.push({ t: stop + HOLD, v: underVoice })
+    if (stop + HOLD + RELEASE < end) points.push({ t: stop + HOLD + RELEASE, v: open })
+  }
+  const lane = points
+    .filter((p, i) => i === 0 || p.t > points[i - 1].t)
+    .slice(0, 512)
+    .map((p) => ({ t: Number(p.t.toFixed(3)), v: Number(p.v.toFixed(3)) }))
+  return JSON.stringify({ version: 1, lanes: [{ target: 'volume', points: lane }] })
+}
+
 export const SLOT = {
   css: '/*CLAUDE:CSS*/',
   markup: '<!--CLAUDE:MARKUP-->',
@@ -192,7 +230,7 @@ export const SLOT = {
 } as const
 
 /** Base del index.html con los cuatro huecos que llena Claude. */
-export function skeletonHtml(props: ReelProps, media: ProjectMedia, design: MotionDesign): string {
+export function skeletonHtml(props: ReelProps, media: ProjectMedia, design: MotionDesign, archetype: Archetype): string {
   const fps = props.fps
   const duration = sec(props.durationInFrames, fps)
   const fontFaces = FONTS.map(
@@ -216,10 +254,14 @@ export function skeletonHtml(props: ReelProps, media: ProjectMedia, design: Moti
     props.tailFrames > 0
       ? `  <div id="tail-shot" class="shot" style="z-index:${props.cuts.length + 1}"><div id="cam-tail" class="cam"><img id="tail" class="clip" src="assets/media/tail.jpg" data-start="${tailStart.toFixed(3)}" data-duration="${sec(props.tailFrames, fps)}" data-track-index="3" alt=""></div></div>`
       : ''
+  const ducking = props.music ? duckingAutomation(props, props.music.volume) : null
+  const level = ducking ? `data-automation='${ducking}'` : `data-volume="${props.music?.volume}"`
   const music =
     media.music && props.music
-      ? `  <audio id="music" class="clip" src="${media.music}" data-start="0" data-duration="${duration}" data-media-start="${(props.music.startSec ?? 0).toFixed(3)}" data-volume="${props.music.volume}" data-fade-out="1.5" data-track-index="4"></audio>`
+      ? `  <audio id="music" class="clip" src="${media.music}" data-start="0" data-duration="${duration}" data-media-start="${(props.music.startSec ?? 0).toFixed(3)}" ${level} data-fade-out="1.5" data-track-index="4"></audio>`
       : ''
+  const hook = HOOK_SFX[archetype]
+  const hookSfx = `  <audio id="sfx-hook" class="clip" src="assets/kit/sfx/${hook.file}.wav" data-start="0" data-volume="${hook.volume}" data-track-index="5"></audio>`
   const fonts3d = Object.keys(FONTS_3D)
     .map((n) => `<script src="assets/kit/fonts3d/${n}.js"></script>`)
     .join('\n')
@@ -256,6 +298,7 @@ ${shots}
 ${inserts}
 ${tail}
 ${music}
+${hookSfx}
   <canvas id="stage3d" width="1080" height="1920" data-layout-ignore></canvas>
   <div id="gfx">
 ${SLOT.markup}

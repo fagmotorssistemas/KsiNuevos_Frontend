@@ -80,6 +80,8 @@ const POST_ROLL_SEC = 0.18
 /** Fin de frase: puntuación de AssemblyAI o una pausa así de larga entre palabras. */
 const SENTENCE_END = /[.!?…]["»”']?$/
 const SENTENCE_PAUSE_SEC = 0.6
+/** Pausa en la voz a partir de la cual la música vuelve a subir (ducking). */
+const SPEECH_GAP_SEC = 0.9
 /** Cuánto se puede alargar un corte para completar la frase (inicio o fin). */
 const MAX_SENTENCE_EXTEND_SEC = 5
 
@@ -605,6 +607,9 @@ export function buildReelProps(
   }))
   const alreadyShown = (f: number, token: string) => onScreen.some((g) => f >= g.from && f < g.to && g.tokens.has(token))
   const capWords: PendingWord[] = []
+  // Tramos con voz: todas las palabras dentro de los cortes, aunque no lleven subtítulo (el gancho los tapa).
+  const speech: ReelProps['speech'] = []
+  const speechGap = Math.round(SPEECH_GAP_SEC * fps)
   for (const c of cuts) {
     for (const w of fixedWords.get(c.clipId) ?? []) {
       const ws = w.start / 1000
@@ -612,6 +617,9 @@ export function buildReelProps(
       if (we <= c.trimStartSec + 0.05 || ws >= c.trimEndSec - 0.05) continue
       const fromFrame = c.fromFrame + Math.max(0, Math.round((ws - c.trimStartSec) * fps))
       const toFrame = Math.min(c.fromFrame + c.durationInFrames, c.fromFrame + Math.round((we - c.trimStartSec) * fps))
+      const open = speech[speech.length - 1]
+      if (open && fromFrame - open.toFrame < speechGap) open.toFrame = Math.max(open.toFrame, toFrame)
+      else speech.push({ fromFrame, toFrame })
       if (isBlocked(fromFrame)) continue
       const n = normalizeToken(w.text)
       if (n && alreadyShown(fromFrame, n)) continue
@@ -690,6 +698,7 @@ export function buildReelProps(
       tailFrames,
       graphics,
       captions,
+      speech,
       theme,
       sfx,
       brand: opts.brand,

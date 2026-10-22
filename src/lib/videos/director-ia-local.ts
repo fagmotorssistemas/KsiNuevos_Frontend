@@ -344,7 +344,7 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
     // Diseño y dirección creativa del motion graphics: el próximo Reel de este auto no la repite.
     const motionFile = path.join(outDir, 'motion.json')
     const motion = fs.existsSync(motionFile)
-      ? (JSON.parse(fs.readFileSync(motionFile, 'utf8')) as { design?: string; direccion?: string | null; notas?: string })
+      ? (JSON.parse(fs.readFileSync(motionFile, 'utf8')) as { design?: string; arquetipo?: string; direccion?: string | null; notas?: string })
       : null
 
     const { data: prev } = await supabase.from('video_jobs_v2').select('social_publish_stage').eq('id', jobId).single()
@@ -362,7 +362,9 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
         overall_strategy: plan.strategy ?? null,
         caption: plan.caption ?? null,
         plan,
-        motion: motion ? { diseno: motion.design ?? null, direccion: motion.direccion ?? null, notas: motion.notas ?? null } : null,
+        motion: motion
+          ? { diseno: motion.design ?? null, arquetipo: motion.arquetipo ?? null, direccion: motion.direccion ?? null, notas: motion.notas ?? null }
+          : null,
       },
       social_publish_stage: prev?.social_publish_stage ?? 'generado',
     })

@@ -3,6 +3,7 @@
  * Aquí está el criterio creativo; las reglas mecánicas (tiempos, choques) las aplica timeline.ts.
  */
 import type { TranscribedWord } from './assemblyai'
+import { reelSkill } from './reel-skill'
 import { CATALOG_GUIDE, type VehicleTier } from './vehicle-catalog'
 
 /** Tipo de vehículo normalizado (la carrocería del inventario viene escrita de muchas formas). */
@@ -42,6 +43,26 @@ export type VehicleInfo = {
   reelsAnteriores?: string[]
   /** Direcciones creativas usadas en los últimos Reels de la misma categoría (motion graphics). */
   direccionesRecientes?: string[]
+}
+
+/** La skill del equipo con lo que le toca al director del montaje (va en el system, después de DIRECTOR_SYSTEM). */
+export function directorSkill(): string {
+  return `SKILL DEL EQUIPO: ai-reel-generator. Es la guía creativa de todos los Reels de K-SI (en inglés; su "Aplicación en K-SI
+Nuevos" del final manda cuando choca, y en el formato del plan mandan tus reglas de arriba). A ti te toca el paso 1:
+clasificar el arquetipo y armar el triple gancho y el ritmo en el montaje.
+- ARQUETIPO según el tipo que identificaste (tabla de la skill): de ahí salen el tono del gancho, qué destacar y el ritmo.
+- TRIPLE GANCHO en el segundo 0:
+  · visual: el teaser con las tomas más espectaculares para su arquetipo (camioneta: llanta en contrapicado, parrilla,
+    motor; SUV: el auto completo, el paisaje, el espacio interior; sedán: reflejos sobre la carrocería, el auto en
+    movimiento; deportivo: escape, faros, el auto acelerando). Solo tomas que existen en los clips.
+  · texto: el hook_text del primer corte con el tono del arquetipo, en una frase nueva (las de la skill son ejemplos).
+  · audio: la frase gancho del asesor desde el cuadro 0 (el sonido del gancho y el ducking de la música los pone el sistema).
+- RITMO: la imagen cambia cada 2–3 s (1,5–2 s en deportivos) sin cortar frases. Si una toma tiene varias frases, divídela
+  en un corte por frase con transición "corte": el director de motion graphics cambia el encuadre en cada uno. SUV y
+  sedán, transiciones fluidas; camioneta, cortes secos que golpean; deportivo, energía 3 y cortes rápidos.
+- CERO TIEMPO MUERTO: cada segundo tiene voz, una toma con acción o un gráfico.
+
+${reelSkill()}`
 }
 
 export const DIRECTOR_SYSTEM = `Eres el Director de Marketing Digital de K-Si Nuevos, concesionario de autos seminuevos en Ecuador.

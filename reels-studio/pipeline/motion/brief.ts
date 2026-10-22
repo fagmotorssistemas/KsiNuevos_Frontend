@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url'
 import type { ReelProps, ScreenFocus, TimelineGraphic } from '../../src/plan/types'
 import { formatVehicle, type VehicleInfo } from '../director-prompt'
 import { classifyVehicle } from '../vehicle-catalog'
-import type { MotionDesign } from './compose'
+import { ARCHETYPE_LABEL, type Archetype } from '../reel-skill'
+import { HOOK_SFX, type MotionDesign } from './compose'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const s = (frames: number, fps: number) => (frames / fps).toFixed(2)
@@ -78,7 +79,14 @@ function graphicLine(g: TimelineGraphic, fps: number): string {
 }
 
 /** Texto del guion: vehículo, diseño, dirección creativa, tomas, teaser, gráficos y subtítulos. */
-export function briefText(props: ReelProps, vehicle: VehicleInfo, design: MotionDesign, offered: Direction[], recent: string[]): string {
+export function briefText(
+  props: ReelProps,
+  vehicle: VehicleInfo,
+  design: MotionDesign,
+  archetype: Archetype,
+  offered: Direction[],
+  recent: string[]
+): string {
   const fps = props.fps
   const cuts = props.cuts.map((c, i) => {
     const n = i + 1
@@ -110,6 +118,9 @@ export function briefText(props: ReelProps, vehicle: VehicleInfo, design: Motion
     'VEHÍCULO',
     formatVehicle(vehicle),
     '',
+    `ARQUETIPO (skill del equipo): ${ARCHETYPE_LABEL[archetype]}. Aplica su sección de la skill: intención, tema, al menos una de sus`,
+    `piezas, gancho y ritmo (la imagen cambia cada ${archetype === 'deportivo' ? '1,5–2' : '2–3'} s). La dirección creativa manda en tipografía, paleta y materiales.`,
+    '',
     'DIRECCIÓN CREATIVA',
     `Elige UNA de estas direcciones del diseño "${design}": ${offered.map((d) => `${d.id} (${d.name})`).join(' o ')}.`,
     recent.length ? `Ya se usaron hace poco (no las repitas): ${recent.join(', ')}.` : 'Es el primer Reel de esta categoría: cualquiera de las ofrecidas.',
@@ -120,7 +131,10 @@ export function briefText(props: ReelProps, vehicle: VehicleInfo, design: Motion
     ...cuts,
     props.tailFrames > 0 ? `- cola · ${tailStart.toFixed(2)}–${(props.durationInFrames / fps).toFixed(2)} s · foto del último cuadro (#cam-tail)` : '',
     '',
-    props.music ? `MÚSICA: hay música de fondo ya montada (#music, volumen ${props.music.volume}) debajo de la voz; tus golpes y transiciones pueden ir con su ritmo.` : 'MÚSICA: no hay; solo la voz y tus sonidos de apoyo.',
+    props.music
+      ? 'MÚSICA: hay música de fondo ya montada (#music) con ducking: baja sola mientras habla el asesor y sube en las pausas. No toques su volumen; tus golpes y transiciones pueden ir con su ritmo.'
+      : 'MÚSICA: no hay; solo la voz y tus sonidos de apoyo.',
+    `SONIDO DEL GANCHO: #sfx-hook (${HOOK_SFX[archetype].file === 'hit' ? 'golpe grave' : 'whoosh'}) ya suena en el segundo 0 junto con la primera palabra; no agregues otro sonido en ese segundo.`,
     '',
     inserts.length ? 'TEASER (planos del auto encima de la voz del arranque, ya montados)' : 'TEASER: no hay.',
     ...inserts,

@@ -14,6 +14,27 @@ clips crudos del asesor
    └─ HyperFrames render ──► MP4 vertical 1080×1920
 ```
 
+## La skill del equipo
+
+`.claude/skills/ai-reel-generator/SKILL.md` es la guía creativa que siguen todos los Claude de Reels:
+- el arquetipo de cada tipo de vehículo (SUV, camioneta, sedán, deportivo) con su tema, piezas, gancho y ritmo;
+- el triple gancho de los primeros 3 s (visual, texto y audio);
+- cero tiempo muerto, zonas seguras y ducking de la música.
+
+Al final tiene cómo se aplica en K-SI y qué reglas del equipo mandan cuando choca (nada de barro, ningún texto con
+contorno, frases completas).
+
+| Quién la usa | Dónde |
+|---|---|
+| Director del montaje | `pipeline/director-prompt.ts` (`directorSkill`) |
+| Director de motion graphics | `pipeline/motion/prompt.ts` |
+| Análisis editorial del flujo Shotstack (web) | `src/lib/videos/reel-skill.ts` |
+
+Lo que el sistema garantiza sin depender de Claude:
+- **Sonido del gancho** en el cuadro 0: golpe grave en camionetas y deportivos, whoosh en el resto.
+- **Ducking:** la música baja mientras habla el asesor y sube en las pausas y en el cierre. Los tramos con voz los
+  calcula el montaje (`props.speech`) y HyperFrames los aplica con `data-automation`.
+
 ## Qué decide cada uno
 
 **El sistema** (`pipeline/vehicle-catalog.ts`) da la primera respuesta sobre qué es el vehículo, por marca y modelo.
