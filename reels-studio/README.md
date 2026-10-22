@@ -146,9 +146,15 @@ Requisitos en esa computadora:
 tenía subtítulos quemados (Claude lo nota y apaga los suyos para no duplicarlos).
 
 ```bash
-./examples/trailblazer/make-clips.sh
+./examples/trailblazer/make-clips.sh     # deja los clips en public/demo
+
+# Solo el motion graphics, con el plan y la transcripción ya hechos (sin AssemblyAI ni director)
 npx tsx pipeline/render-plan.ts --plan examples/trailblazer/plan.demo.json \
-  --transcripts examples/trailblazer/transcripts.local.json --vehicle vehiculo.json --name trailblazer-muestra
+  --transcripts examples/trailblazer/transcripts.local.json --vehicle examples/trailblazer/vehiculo.json \
+  --name trailblazer-muestra
+
+# Reel completo desde los clips (AssemblyAI → director → motion graphics → render)
+npx tsx pipeline/run.ts --name trailblazer-completo --vehicle examples/trailblazer/vehiculo.json --clips public/demo
 ```
 
 ## Render en producción

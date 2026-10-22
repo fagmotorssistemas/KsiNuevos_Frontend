@@ -1,0 +1,13 @@
+{
+  "marca": "Chevrolet",
+  "modelo": "Trailblazer",
+  "carroceria": "jeep",
+  "anio": 2019,
+  "motor": "2.8 diésel",
+  "transmision": "Automática",
+  "traccion": "4x4",
+  "kilometraje": 128000,
+  "precio": "$24.990",
+  "equipamiento": ["Volante multifunción", "Cámara de retro"],
+  "palabraClave": "Trailblazer"
+}

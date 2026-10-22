@@ -5,7 +5,7 @@
  *
  *   npx tsx pipeline/render-plan.ts --plan examples/trailblazer/plan.demo.json \
  *     --transcripts examples/trailblazer/transcripts.local.json --clips public/demo \
- *     --vehicle vehiculo.json --name trailblazer [--design suv] [--quality draft] [--no-review] [--props-only --props-out p.json]
+ *     --vehicle examples/trailblazer/vehiculo.json --name trailblazer [--design suv] [--quality draft] [--no-review] [--props-only --props-out p.json]
  */
 import fs from 'node:fs'
 import path from 'node:path'
