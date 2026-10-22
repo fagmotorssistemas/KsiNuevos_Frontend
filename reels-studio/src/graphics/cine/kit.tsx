@@ -170,13 +170,20 @@ const Grain: React.FC = () => {
   )
 }
 
+/** Apertura: en el primer instante las franjas casi se tocan y se abren como un telón (0.3 s). */
+const OPEN_FRAMES = 8
+const OPEN_FROM = 0.3
+
 /**
  * Marco de cine encima de todo: viñeta, grano, franjas negras y el logo en blanco dentro de la franja de
  * arriba (se oculta en el cierre, que ya lo muestra grande).
  */
 export const CineFrame: React.FC<{ logoSrc: string; showLogo: boolean; watermark?: string }> = ({ logoSrc, showLogo, watermark }) => {
+  const frame = useCurrentFrame()
   const { height } = useVideoConfig()
-  const bar = Math.round(height * LETTERBOX)
+  const finalBar = Math.round(height * LETTERBOX)
+  const bar = Math.round(height * interpolate(frame, [0, OPEN_FRAMES], [OPEN_FROM, LETTERBOX], { ...clamp, easing: Easing.inOut(Easing.cubic) }))
+  const settled = ease(frame, OPEN_FRAMES - 2, 8)
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
       <AbsoluteFill style={{ background: 'radial-gradient(ellipse 90% 75% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%)' }} />
@@ -186,11 +193,11 @@ export const CineFrame: React.FC<{ logoSrc: string; showLogo: boolean; watermark
       {showLogo ? (
         <Img
           src={staticFile(logoSrc)}
-          style={{ position: 'absolute', top: bar / 2 - 15, right: 56, height: 30, filter: 'brightness(0) invert(1)', opacity: 0.85 }}
+          style={{ position: 'absolute', top: finalBar / 2 - 15, right: 56, height: 30, filter: 'brightness(0) invert(1)', opacity: 0.85 * settled }}
         />
       ) : null}
       {watermark ? (
-        <div style={{ position: 'absolute', top: bar / 2 - 14, left: 50, fontFamily: FONT_UI, fontWeight: 800, fontSize: 24, letterSpacing: 4, color: 'rgba(255,255,255,0.55)' }}>
+        <div style={{ position: 'absolute', top: finalBar / 2 - 14, left: 50, fontFamily: FONT_UI, fontWeight: 800, fontSize: 24, letterSpacing: 4, color: 'rgba(255,255,255,0.55)', opacity: settled }}>
           {watermark}
         </div>
       ) : null}

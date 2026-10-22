@@ -12,20 +12,30 @@ import { OffroadCallout, OffroadCounter, OffroadCta, OffroadHook, OffroadList, O
 import { CineCallout, CineCounter, CineCta, CineHook, CineList, CinePrice, CineSticker, CineTitle } from '../graphics/cine/CineGraphics'
 import { CineFrame } from '../graphics/cine/kit'
 import { Title3D } from '../graphics/Title3D'
+import { Brillo } from '../graphics/Brillo'
+import type { HookStyle } from '../plan/schema'
 import type { Brand, ReelLook, ReelProps, ReelTheme, TimelineGraphic } from '../plan/types'
 import { FONT_UI, PALETTES } from '../theme'
 import { Captions } from './Captions'
-import { ClipLayer, resolveSrc } from './ClipLayer'
+import { BARRIDO_FRAMES, ClipLayer, resolveSrc } from './ClipLayer'
 import { PaletteProvider } from './palette'
 
 /** Efectos discretos: acompañan, no tapan la voz del asesor. */
 const SFX_VOLUME = { whoosh: 0.28, pop: 0.3, hit: 0.32, riser: 0.2 } as const
 
-const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; look: ReelLook }> = ({ g, brand, theme, look }) => {
+const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; look: ReelLook; hookStyle: HookStyle }> = ({
+  g,
+  brand,
+  theme,
+  look,
+  hookStyle,
+}) => {
+  // El brillo es solo luz sobre el auto: igual en todos los diseños.
+  if (g.type === 'brillo') return <Brillo g={g} theme={theme} />
   if (look === 'cine') {
     switch (g.type) {
       case 'hook_text':
-        return <CineHook g={g} theme={theme} />
+        return <CineHook g={g} theme={theme} style={hookStyle} />
       case 'title_3d':
         return <CineTitle g={g} theme={theme} />
       case 'feature_callout':
@@ -82,6 +92,7 @@ const Graphic: React.FC<{ g: TimelineGraphic; brand: Brand; theme: ReelTheme; lo
     case 'sticker':
       return <Sticker g={g} />
   }
+  return null
 }
 
 export const Reel: React.FC<ReelProps> = (props) => {
@@ -98,11 +109,25 @@ export const Reel: React.FC<ReelProps> = (props) => {
   return (
     <PaletteProvider theme={theme}>
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {props.cuts.map((cut, i) => (
-        <Sequence key={`cut-${i}`} from={cut.fromFrame} durationInFrames={cut.durationInFrames} name={`${cut.role} · ${cut.clipId}`}>
-          <ClipLayer cut={cut} engine={props.videoEngine} theme={theme} look={look} />
-        </Sequence>
-      ))}
+      {props.cuts.map((cut, i) => {
+        const prev = props.cuts[i - 1]
+        // Barrido de marca: debajo de la toma nueva se queda la última imagen de la anterior mientras pasa la franja.
+        const wipeUnder = prev && cut.transitionIn === 'barrido' && cut.jump === 0 && theme !== 'offroad'
+        return (
+          <React.Fragment key={`cut-${i}`}>
+            {wipeUnder ? (
+              <Sequence from={cut.fromFrame} durationInFrames={Math.min(BARRIDO_FRAMES, cut.durationInFrames)} name="barrido: toma anterior">
+                <Freeze frame={prev.durationInFrames - 1}>
+                  <ClipLayer cut={{ ...prev, transitionIn: 'corte', zooms: [], punches: [] }} engine={props.videoEngine} muted theme={theme} look={look} />
+                </Freeze>
+              </Sequence>
+            ) : null}
+            <Sequence from={cut.fromFrame} durationInFrames={cut.durationInFrames} name={`${cut.teaser ? 'teaser' : cut.role} · ${cut.clipId}`}>
+              <ClipLayer cut={cut} engine={props.videoEngine} muted={cut.teaser} theme={theme} look={look} />
+            </Sequence>
+          </React.Fragment>
+        )
+      })}
       {props.tailFrames > 0 ? (
         <Sequence from={last.fromFrame + last.durationInFrames} durationInFrames={props.tailFrames} name="cola congelada">
           <Freeze frame={last.durationInFrames - 1}>
@@ -113,7 +138,7 @@ export const Reel: React.FC<ReelProps> = (props) => {
 
       {props.graphics.map((g) => (
         <Sequence key={g.id} from={g.fromFrame} durationInFrames={g.durationInFrames} name={`${g.type}: ${g.text}`}>
-          <Graphic g={g} brand={props.brand} theme={theme} look={look} />
+          <Graphic g={g} brand={props.brand} theme={theme} look={look} hookStyle={props.hookStyle ?? 'enfoque'} />
         </Sequence>
       ))}
 

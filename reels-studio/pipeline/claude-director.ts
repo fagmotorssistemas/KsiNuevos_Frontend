@@ -143,7 +143,9 @@ export async function directReel(params: {
       throw explain(err)
     }
     const u = message.usage
-    console.log(`[claude] tokens: entrada ${u.input_tokens} (+${u.cache_read_input_tokens ?? 0} de caché), salida ${u.output_tokens}`)
+    const cacheRead = u.cache_read_input_tokens ?? 0
+    const totalIn = u.input_tokens + (u.cache_creation_input_tokens ?? 0) + cacheRead
+    console.log(`[claude] tokens: entrada ${totalIn} (${cacheRead} desde caché), salida ${u.output_tokens}`)
     if (message.stop_reason === 'refusal') {
       throw new Error(`Claude no quiso hacer el plan (${message.stop_details?.category ?? 'sin categoría'}): ${message.stop_details?.explanation ?? ''}`)
     }

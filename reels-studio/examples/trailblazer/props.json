@@ -2,48 +2,113 @@
   "fps": 30,
   "width": 1080,
   "height": 1920,
-  "durationInFrames": 1022,
+  "durationInFrames": 1061,
   "cuts": [
+    {
+      "clipId": "clip2",
+      "src": "demo/clip2.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 0,
+      "durationInFrames": 13,
+      "trimStartSec": 1.2,
+      "trimEndSec": 1.6333333333333333,
+      "role": "gancho",
+      "transitionIn": "zoom",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": -1,
+      "jump": 0,
+      "punches": [],
+      "energy": 3,
+      "teaser": true
+    },
+    {
+      "clipId": "clip5",
+      "src": "demo/clip5.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 13,
+      "durationInFrames": 13,
+      "trimStartSec": 1,
+      "trimEndSec": 1.4333333333333333,
+      "role": "gancho",
+      "transitionIn": "flash",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": -1,
+      "jump": 0,
+      "punches": [],
+      "energy": 3,
+      "teaser": true
+    },
+    {
+      "clipId": "clip6",
+      "src": "demo/clip6.mp4",
+      "srcWidth": 720,
+      "srcHeight": 1280,
+      "fromFrame": 26,
+      "durationInFrames": 13,
+      "trimStartSec": 2.4,
+      "trimEndSec": 2.833333333333333,
+      "role": "gancho",
+      "transitionIn": "flash",
+      "captionPlacement": "abajo",
+      "zooms": [],
+      "take": -1,
+      "jump": 0,
+      "punches": [],
+      "energy": 3,
+      "teaser": true
+    },
     {
       "clipId": "clip1",
       "src": "demo/clip1.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 0,
+      "fromFrame": 39,
       "durationInFrames": 147,
       "trimStartSec": 0,
       "trimEndSec": 4.9,
       "role": "gancho",
-      "transitionIn": "zoom",
+      "transitionIn": "flash",
       "captionPlacement": "abajo",
       "zooms": [],
       "take": 0,
       "jump": 0,
-      "punches": []
+      "punches": [
+        38,
+        61
+      ],
+      "energy": 3
     },
     {
       "clipId": "clip2",
       "src": "demo/clip2.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 147,
+      "fromFrame": 186,
       "durationInFrames": 163,
       "trimStartSec": 0,
       "trimEndSec": 5.433333,
       "role": "presentacion",
-      "transitionIn": "flash",
+      "transitionIn": "barrido",
       "captionPlacement": "abajo",
       "zooms": [],
       "take": 1,
       "jump": 0,
-      "punches": []
+      "punches": [
+        2,
+        76
+      ],
+      "energy": 3
     },
     {
       "clipId": "clip3",
       "src": "demo/clip3.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 310,
+      "fromFrame": 349,
       "durationInFrames": 206,
       "trimStartSec": 0,
       "trimEndSec": 6.882000000000001,
@@ -53,14 +118,19 @@
       "zooms": [],
       "take": 2,
       "jump": 0,
-      "punches": []
+      "punches": [
+        25,
+        174,
+        197
+      ],
+      "energy": 2
     },
     {
       "clipId": "clip3",
       "src": "demo/clip3.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 516,
+      "fromFrame": 555,
       "durationInFrames": 79,
       "trimStartSec": 7.172,
       "trimEndSec": 9.8,
@@ -70,14 +140,15 @@
       "zooms": [],
       "take": 2,
       "jump": 1,
-      "punches": []
+      "punches": [],
+      "energy": 2
     },
     {
       "clipId": "clip4",
       "src": "demo/clip4.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 595,
+      "fromFrame": 634,
       "durationInFrames": 95,
       "trimStartSec": 0,
       "trimEndSec": 3.166667,
@@ -87,14 +158,17 @@
       "zooms": [],
       "take": 3,
       "jump": 0,
-      "punches": []
+      "punches": [
+        2
+      ],
+      "energy": 3
     },
     {
       "clipId": "clip5",
       "src": "demo/clip5.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 690,
+      "fromFrame": 729,
       "durationInFrames": 79,
       "trimStartSec": 0.6,
       "trimEndSec": 3.233333,
@@ -104,14 +178,15 @@
       "zooms": [],
       "take": 4,
       "jump": 0,
-      "punches": []
+      "punches": [],
+      "energy": 1
     },
     {
       "clipId": "clip6",
       "src": "demo/clip6.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 769,
+      "fromFrame": 808,
       "durationInFrames": 133,
       "trimStartSec": 0.186,
       "trimEndSec": 4.633333,
@@ -143,14 +218,17 @@
       ],
       "take": 5,
       "jump": 0,
-      "punches": []
+      "punches": [
+        7
+      ],
+      "energy": 2
     },
     {
       "clipId": "clip7",
       "src": "demo/clip7.mp4",
       "srcWidth": 720,
       "srcHeight": 1280,
-      "fromFrame": 902,
+      "fromFrame": 941,
       "durationInFrames": 94,
       "trimStartSec": 0,
       "trimEndSec": 3.126009,
@@ -160,7 +238,10 @@
       "zooms": [],
       "take": 6,
       "jump": 0,
-      "punches": []
+      "punches": [
+        12
+      ],
+      "energy": 2
     }
   ],
   "tailFrames": 26,
@@ -181,8 +262,16 @@
       "badge": "2019",
       "reason": "Dice la marca y el modelo.",
       "id": "g2-title_3d",
-      "fromFrame": 149,
+      "fromFrame": 188,
       "durationInFrames": 66
+    },
+    {
+      "type": "brillo",
+      "text": "",
+      "reason": "prueba",
+      "id": "b9-brillo",
+      "fromFrame": 255,
+      "durationInFrames": 30
     },
     {
       "type": "spec_chips",
@@ -196,7 +285,7 @@
       "placement": "arriba",
       "reason": "Enumera versión, caja, tracción y puertas.",
       "id": "g3-spec_chips",
-      "fromFrame": 223,
+      "fromFrame": 262,
       "durationInFrames": 102
     },
     {
@@ -209,7 +298,7 @@
       ],
       "reason": "Dice 'hay tres cosas que mandan' y las enumera.",
       "id": "g4-feature_list",
-      "fromFrame": 343,
+      "fromFrame": 382,
       "durationInFrames": 123
     },
     {
@@ -219,7 +308,7 @@
       "placement": "arriba",
       "reason": "Invita a guardar justo cuando habla de viajes largos.",
       "id": "s8-sticker",
-      "fromFrame": 484,
+      "fromFrame": 523,
       "durationInFrames": 66
     },
     {
@@ -229,20 +318,11 @@
       "icon": "velocimetro",
       "value": 128000,
       "unit": "km",
+      "variant": "medidor",
       "reason": "Dice el kilometraje sobre el tablero.",
       "id": "g5-spec_counter",
-      "fromFrame": 597,
+      "fromFrame": 636,
       "durationInFrames": 87
-    },
-    {
-      "type": "sticker",
-      "text": "Mándaselo a tu *pana*",
-      "icon": "compartir",
-      "placement": "arriba",
-      "reason": "Compartir a mitad del Reel, antes del señalador.",
-      "id": "s9-sticker",
-      "fromFrame": 727,
-      "durationInFrames": 60
     },
     {
       "type": "feature_callout",
@@ -251,7 +331,7 @@
       "icon": "volante",
       "reason": "Se ve el volante con mandos mientras habla del estado real.",
       "id": "g6-feature_callout",
-      "fromFrame": 819,
+      "fromFrame": 858,
       "durationInFrames": 72,
       "cardAtTop": false,
       "zoom": {
@@ -286,422 +366,467 @@
       "subtext": "y te enviamos toda la información",
       "reason": "Cierre: comenta la palabra clave.",
       "id": "g7-cta_end",
-      "fromFrame": 914,
+      "fromFrame": 953,
       "durationInFrames": 108
     }
   ],
   "captions": [
     {
-      "fromFrame": 69,
-      "toFrame": 94,
+      "fromFrame": 71,
+      "toFrame": 97,
       "placement": "abajo",
       "words": [
         {
-          "text": "y",
-          "fromFrame": 69,
-          "toFrame": 74,
+          "text": "un",
+          "fromFrame": 71,
+          "toFrame": 77,
           "emphasis": false
         },
         {
-          "text": "solo",
-          "fromFrame": 74,
-          "toFrame": 83,
-          "emphasis": false
+          "text": "SUV",
+          "fromFrame": 77,
+          "toFrame": 85,
+          "emphasis": true
         },
         {
-          "text": "miras",
-          "fromFrame": 83,
-          "toFrame": 94,
+          "text": "grande",
+          "fromFrame": 85,
+          "toFrame": 97,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 94,
-      "toFrame": 122,
+      "fromFrame": 97,
+      "toFrame": 113,
       "placement": "abajo",
       "words": [
         {
-          "text": "el",
-          "fromFrame": 94,
+          "text": "a",
+          "fromFrame": 97,
           "toFrame": 100,
           "emphasis": false
         },
         {
-          "text": "diseño",
+          "text": "diésel",
           "fromFrame": 100,
+          "toFrame": 108,
+          "emphasis": true
+        },
+        {
+          "text": "y",
+          "fromFrame": 108,
           "toFrame": 113,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 113,
+      "toFrame": 139,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "solo",
+          "fromFrame": 113,
+          "toFrame": 122,
+          "emphasis": false
+        },
+        {
+          "text": "miras",
+          "fromFrame": 122,
+          "toFrame": 133,
+          "emphasis": false
+        },
+        {
+          "text": "el",
+          "fromFrame": 133,
+          "toFrame": 139,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 139,
+      "toFrame": 167,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "diseño",
+          "fromFrame": 139,
+          "toFrame": 152,
           "emphasis": false
         },
         {
           "text": "pues",
-          "fromFrame": 113,
-          "toFrame": 122,
+          "fromFrame": 152,
+          "toFrame": 161,
+          "emphasis": false
+        },
+        {
+          "text": "ya",
+          "fromFrame": 161,
+          "toFrame": 167,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 122,
-      "toFrame": 147,
+      "fromFrame": 167,
+      "toFrame": 186,
       "placement": "abajo",
       "words": [
         {
-          "text": "ya",
-          "fromFrame": 122,
-          "toFrame": 128,
-          "emphasis": false
-        },
-        {
           "text": "empezaste",
-          "fromFrame": 128,
-          "toFrame": 141,
+          "fromFrame": 167,
+          "toFrame": 180,
           "emphasis": false
         },
         {
           "text": "mal.",
-          "fromFrame": 141,
-          "toFrame": 147,
+          "fromFrame": 180,
+          "toFrame": 186,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 222,
-      "toFrame": 268,
+      "fromFrame": 261,
+      "toFrame": 307,
       "placement": "abajo",
       "words": [
         {
           "text": "automático",
-          "fromFrame": 222,
-          "toFrame": 256,
+          "fromFrame": 261,
+          "toFrame": 295,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 313,
-      "toFrame": 335,
+      "fromFrame": 352,
+      "toFrame": 374,
       "placement": "abajo",
       "words": [
         {
           "text": "este",
-          "fromFrame": 313,
-          "toFrame": 321,
+          "fromFrame": 352,
+          "toFrame": 360,
           "emphasis": false
         },
         {
           "text": "tipo",
-          "fromFrame": 321,
-          "toFrame": 330,
+          "fromFrame": 360,
+          "toFrame": 369,
           "emphasis": false
         },
         {
           "text": "de",
-          "fromFrame": 330,
-          "toFrame": 335,
+          "fromFrame": 369,
+          "toFrame": 374,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 335,
-      "toFrame": 354,
+      "fromFrame": 374,
+      "toFrame": 382,
       "placement": "abajo",
       "words": [
         {
           "text": "SUV",
-          "fromFrame": 335,
-          "toFrame": 342,
+          "fromFrame": 374,
+          "toFrame": 381,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 485,
-      "toFrame": 507,
+      "fromFrame": 524,
+      "toFrame": 546,
       "placement": "abajo",
       "words": [
         {
           "text": "define",
-          "fromFrame": 485,
-          "toFrame": 496,
+          "fromFrame": 524,
+          "toFrame": 535,
           "emphasis": false
         },
         {
           "text": "si",
-          "fromFrame": 496,
-          "toFrame": 502,
+          "fromFrame": 535,
+          "toFrame": 541,
           "emphasis": false
         },
         {
           "text": "un",
-          "fromFrame": 502,
-          "toFrame": 507,
+          "fromFrame": 541,
+          "toFrame": 546,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 507,
-      "toFrame": 516,
+      "fromFrame": 546,
+      "toFrame": 555,
       "placement": "abajo",
       "words": [
         {
           "text": "SUV",
-          "fromFrame": 507,
-          "toFrame": 514,
+          "fromFrame": 546,
+          "toFrame": 553,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 518,
-      "toFrame": 544,
+      "fromFrame": 557,
+      "toFrame": 583,
       "placement": "abajo",
       "words": [
         {
           "text": "sirve",
-          "fromFrame": 518,
-          "toFrame": 527,
+          "fromFrame": 557,
+          "toFrame": 566,
           "emphasis": false
         },
         {
           "text": "para",
-          "fromFrame": 527,
-          "toFrame": 534,
-          "emphasis": false
-        },
-        {
-          "text": "viajes",
-          "fromFrame": 534,
-          "toFrame": 544,
-          "emphasis": false
-        }
-      ]
-    },
-    {
-      "fromFrame": 544,
-      "toFrame": 555,
-      "placement": "abajo",
-      "words": [
-        {
-          "text": "largos,",
-          "fromFrame": 544,
-          "toFrame": 555,
-          "emphasis": false
-        }
-      ]
-    },
-    {
-      "fromFrame": 555,
-      "toFrame": 577,
-      "placement": "abajo",
-      "words": [
-        {
-          "text": "para",
-          "fromFrame": 555,
-          "toFrame": 562,
-          "emphasis": false
-        },
-        {
-          "text": "familia",
-          "fromFrame": 562,
+          "fromFrame": 566,
           "toFrame": 573,
           "emphasis": false
         },
         {
-          "text": "o",
+          "text": "viajes",
           "fromFrame": 573,
-          "toFrame": 577,
+          "toFrame": 583,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 577,
-      "toFrame": 595,
+      "fromFrame": 583,
+      "toFrame": 594,
       "placement": "abajo",
       "words": [
         {
-          "text": "para",
-          "fromFrame": 577,
-          "toFrame": 584,
-          "emphasis": false
-        },
-        {
-          "text": "cariño",
-          "fromFrame": 584,
+          "text": "largos,",
+          "fromFrame": 583,
           "toFrame": 594,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 692,
-      "toFrame": 730,
+      "fromFrame": 594,
+      "toFrame": 616,
       "placement": "abajo",
       "words": [
         {
-          "text": "con",
-          "fromFrame": 692,
-          "toFrame": 702,
+          "text": "para",
+          "fromFrame": 594,
+          "toFrame": 601,
           "emphasis": false
         },
         {
-          "text": "la",
-          "fromFrame": 702,
-          "toFrame": 710,
+          "text": "familia",
+          "fromFrame": 601,
+          "toFrame": 612,
           "emphasis": false
         },
         {
-          "text": "esencia",
-          "fromFrame": 710,
-          "toFrame": 730,
+          "text": "o",
+          "fromFrame": 612,
+          "toFrame": 616,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 730,
+      "fromFrame": 616,
+      "toFrame": 634,
+      "placement": "abajo",
+      "words": [
+        {
+          "text": "para",
+          "fromFrame": 616,
+          "toFrame": 623,
+          "emphasis": false
+        },
+        {
+          "text": "cariño",
+          "fromFrame": 623,
+          "toFrame": 633,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 731,
       "toFrame": 769,
       "placement": "abajo",
       "words": [
         {
+          "text": "con",
+          "fromFrame": 731,
+          "toFrame": 741,
+          "emphasis": false
+        },
+        {
+          "text": "la",
+          "fromFrame": 741,
+          "toFrame": 749,
+          "emphasis": false
+        },
+        {
+          "text": "esencia",
+          "fromFrame": 749,
+          "toFrame": 769,
+          "emphasis": false
+        }
+      ]
+    },
+    {
+      "fromFrame": 769,
+      "toFrame": 808,
+      "placement": "abajo",
+      "words": [
+        {
           "text": "propia",
-          "fromFrame": 730,
-          "toFrame": 747,
+          "fromFrame": 769,
+          "toFrame": 786,
           "emphasis": false
         },
         {
           "text": "de",
-          "fromFrame": 747,
-          "toFrame": 756,
+          "fromFrame": 786,
+          "toFrame": 795,
           "emphasis": false
         },
         {
           "text": "Chevrolet.",
-          "fromFrame": 756,
-          "toFrame": 769,
+          "fromFrame": 795,
+          "toFrame": 808,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 771,
-      "toFrame": 794,
+      "fromFrame": 810,
+      "toFrame": 833,
       "placement": "abajo",
       "words": [
         {
           "text": "En",
-          "fromFrame": 771,
-          "toFrame": 776,
+          "fromFrame": 810,
+          "toFrame": 815,
           "emphasis": false
         },
         {
           "text": "K-Si",
-          "fromFrame": 776,
-          "toFrame": 784,
+          "fromFrame": 815,
+          "toFrame": 823,
           "emphasis": true
         },
         {
           "text": "Nuevos",
-          "fromFrame": 784,
-          "toFrame": 794,
+          "fromFrame": 823,
+          "toFrame": 833,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 794,
-      "toFrame": 827,
+      "fromFrame": 833,
+      "toFrame": 866,
       "placement": "arriba",
       "words": [
         {
           "text": "seleccionamos",
-          "fromFrame": 794,
-          "toFrame": 819,
+          "fromFrame": 833,
+          "toFrame": 858,
           "emphasis": false
         },
         {
           "text": "SUV",
-          "fromFrame": 819,
-          "toFrame": 827,
+          "fromFrame": 858,
+          "toFrame": 866,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 827,
-      "toFrame": 855,
+      "fromFrame": 866,
+      "toFrame": 894,
       "placement": "arriba",
       "words": [
         {
           "text": "por",
-          "fromFrame": 827,
-          "toFrame": 836,
+          "fromFrame": 866,
+          "toFrame": 875,
           "emphasis": false
         },
         {
           "text": "su",
-          "fromFrame": 836,
-          "toFrame": 842,
+          "fromFrame": 875,
+          "toFrame": 881,
           "emphasis": false
         },
         {
           "text": "estado",
-          "fromFrame": 842,
-          "toFrame": 855,
+          "fromFrame": 881,
+          "toFrame": 894,
           "emphasis": true
         }
       ]
     },
     {
-      "fromFrame": 855,
-      "toFrame": 877,
+      "fromFrame": 894,
+      "toFrame": 916,
       "placement": "arriba",
       "words": [
         {
           "text": "real",
-          "fromFrame": 855,
-          "toFrame": 865,
+          "fromFrame": 894,
+          "toFrame": 904,
           "emphasis": true
         },
         {
           "text": "y",
-          "fromFrame": 865,
-          "toFrame": 870,
+          "fromFrame": 904,
+          "toFrame": 909,
           "emphasis": false
         },
         {
           "text": "no",
-          "fromFrame": 870,
-          "toFrame": 877,
+          "fromFrame": 909,
+          "toFrame": 916,
           "emphasis": false
         }
       ]
     },
     {
-      "fromFrame": 877,
-      "toFrame": 902,
+      "fromFrame": 916,
+      "toFrame": 941,
       "placement": "arriba",
       "words": [
         {
           "text": "por",
-          "fromFrame": 877,
-          "toFrame": 885,
+          "fromFrame": 916,
+          "toFrame": 924,
           "emphasis": false
         },
         {
           "text": "vitrina.",
-          "fromFrame": 885,
-          "toFrame": 902,
+          "fromFrame": 924,
+          "toFrame": 941,
           "emphasis": false
         }
       ]
     }
   ],
   "captionStyle": "impacto",
+  "hookStyle": "golpe",
   "theme": "ksi",
   "look": "cine",
   "sfx": [
@@ -710,35 +835,51 @@
       "kind": "hit"
     },
     {
-      "frame": 149,
+      "frame": 13,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 26,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 39,
       "kind": "hit"
     },
     {
-      "frame": 223,
-      "kind": "whoosh"
-    },
-    {
-      "frame": 343,
-      "kind": "whoosh"
-    },
-    {
-      "frame": 484,
-      "kind": "whoosh"
-    },
-    {
-      "frame": 597,
+      "frame": 188,
       "kind": "hit"
     },
     {
-      "frame": 727,
+      "frame": 255,
       "kind": "whoosh"
     },
     {
-      "frame": 819,
+      "frame": 349,
       "kind": "whoosh"
     },
     {
-      "frame": 914,
+      "frame": 382,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 523,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 636,
+      "kind": "hit"
+    },
+    {
+      "frame": 808,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 858,
+      "kind": "whoosh"
+    },
+    {
+      "frame": 953,
       "kind": "hit"
     }
   ],

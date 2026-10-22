@@ -8,13 +8,14 @@
  * lo mismo, y calcular dónde queda en pantalla lo que el director señaló en el cuadro.
  */
 import { chooseZoomTarget } from '../reel/zoom'
-import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, RawGraphic, TranscriptFix } from './schema'
+import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, HookStyle, RawGraphic, TranscriptFix } from './schema'
 import { validateGraphic } from './schema'
 import type {
   Brand,
   CaptionLine,
   CaptionWord,
   ClipSource,
+  Energy,
   ReelLook,
   ReelProps,
   ReelTheme,
@@ -53,6 +54,7 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
   price_tag: 'hit',
   cta_end: 'hit',
   sticker: 'pop',
+  brillo: 'whoosh',
 }
 /** Camionetas: sonidos graves y secos (golpes y barridos); nada de "pop" de caricatura. */
 const SFX_OFFROAD: Record<GraphicType, SfxCue['kind']> = {
@@ -65,6 +67,7 @@ const SFX_OFFROAD: Record<GraphicType, SfxCue['kind']> = {
   price_tag: 'hit',
   cta_end: 'hit',
   sticker: 'whoosh',
+  brillo: 'whoosh',
 }
 
 /** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
@@ -104,6 +107,8 @@ function minDurationSec(g: Pick<RawGraphic, 'type' | 'items'>): number {
       return 3.2
     case 'sticker':
       return 1.8
+    case 'brillo':
+      return BRILLO_SEC
   }
 }
 /** Respiro entre un gráfico y el siguiente. */
@@ -123,6 +128,13 @@ const MIN_PIECE_SEC = 0.6
 const MAX_EDGE_SILENCE_SEC = 1
 /** Golpes de cámara: separación mínima entre dos (cuadros). */
 const PUNCH_MIN_GAP_FRAMES = 12
+
+/** Teaser de apertura: cada plano dura esto (rápido, como un adelanto) y hay como máximo estos planos. */
+const TEASER_BEAT_SEC = 0.42
+const MAX_TEASER_BEATS = 4
+/** Brillo sobre el auto: el reflejo cruza la pantalla en este tiempo; máximo estos por Reel. */
+const BRILLO_SEC = 1
+const MAX_BRILLOS = 2
 
 /** Camionetas: el cierre son dos partes (caja de comentario que se escribe + firma con huella de llanta). */
 const OFFROAD_CTA_SEC = 5
@@ -374,9 +386,46 @@ export function buildReelProps(
 
   const cuts: TimelineCut[] = []
   let cursor = 0
+  // Teaser: 2–4 instantes muy visuales que se adelantan al segundo 0 (sin voz), con el gancho encima.
+  const beatFrames = Math.round(TEASER_BEAT_SEC * fps)
+  const teaserBeats = (plan.teaser ?? [])
+    .map((b) => ({ clip: clipById.get(b.clipId), atSec: b.atSec }))
+    .filter((b): b is { clip: ClipSource; atSec: number } => Boolean(b.clip) && b.clip!.durationSec >= TEASER_BEAT_SEC + 0.1)
+    .slice(0, MAX_TEASER_BEATS)
+  if (teaserBeats.length >= 2) {
+    teaserBeats.forEach(({ clip, atSec }, i) => {
+      const s = Math.min(Math.max(0, atSec), clip.durationSec - TEASER_BEAT_SEC - 0.05)
+      cuts.push({
+        clipId: clip.id,
+        src: clip.src,
+        srcWidth: clip.width,
+        srcHeight: clip.height,
+        fromFrame: cursor,
+        durationInFrames: beatFrames,
+        trimStartSec: s,
+        trimEndSec: s + beatFrames / fps,
+        role: 'gancho',
+        transitionIn: i === 0 ? 'zoom' : 'flash',
+        captionPlacement: 'abajo',
+        zooms: [],
+        take: -1,
+        jump: 0,
+        punches: [],
+        energy: 3,
+        teaser: true,
+      })
+      cursor += beatFrames
+    })
+  } else if (plan.teaser?.length) {
+    warnings.push('Teaser ignorado: hacen falta al menos 2 planos válidos')
+  }
+  const teaserFrames = cursor
+  const teaserCount = cuts.length
+  const clampEnergy = (e: number | undefined): Energy => (e === 1 || e === 3 ? e : 2)
   takes.forEach(({ clip, s, e, cut }, take) => {
     removeSilences(s, e, fixedWords.get(clip.id) ?? []).forEach(([ps, pe], jump) => {
       const durationInFrames = Math.round((pe - ps) * fps)
+      const first = cuts.length > teaserCount ? null : teaserCount > 0 ? 'afterTeaser' : 'opening'
       cuts.push({
         clipId: clip.id,
         src: clip.src,
@@ -387,18 +436,19 @@ export function buildReelProps(
         trimStartSec: ps,
         trimEndSec: pe,
         role: cut.role,
-        // El Reel abre con golpe; los saltos dentro de una toma son cortes secos.
-        transitionIn: cuts.length === 0 ? 'zoom' : jump > 0 ? 'corte' : cut.transitionIn,
+        // El Reel abre con golpe (o con destello al salir del teaser); los saltos dentro de una toma son cortes secos.
+        transitionIn: first === 'opening' ? 'zoom' : first === 'afterTeaser' ? 'flash' : jump > 0 ? 'corte' : cut.transitionIn,
         captionPlacement: cut.captionPlacement,
         zooms: [],
         take,
         jump,
         punches: [],
+        energy: clampEnergy(cut.energy),
       })
       cursor += durationInFrames
     })
   })
-  if (cuts.length === 0) throw new Error('El plan no dejó ningún corte utilizable')
+  if (cuts.length === teaserCount) throw new Error('El plan no dejó ningún corte utilizable')
   const cutsEnd = cursor
   const takeEnd = (take: number) =>
     Math.max(...cuts.filter((c) => c.take === take).map((c) => c.fromFrame + c.durationInFrames))
@@ -406,7 +456,7 @@ export function buildReelProps(
   const sourceToFrame = (clipId: string, sec: number): { frame: number; cut: TimelineCut } | null => {
     const tolerance = 0.35
     for (const c of cuts) {
-      if (c.clipId !== clipId) continue
+      if (c.teaser || c.clipId !== clipId) continue
       if (sec >= c.trimStartSec - tolerance && sec <= c.trimEndSec + tolerance) {
         const clamped = Math.min(Math.max(sec, c.trimStartSec), c.trimEndSec)
         return { frame: c.fromFrame + Math.round((clamped - c.trimStartSec) * fps), cut: c }
@@ -437,8 +487,9 @@ export function buildReelProps(
     firstHook.cut = cuts[0]
     placed.sort((a, b) => a.fromFrame - b.fromFrame)
   }
-  const mainLane = placed.filter((p) => p.g.type !== 'sticker')
+  const mainLane = placed.filter((p) => p.g.type !== 'sticker' && p.g.type !== 'brillo')
   const stickerLane = placed.filter((p) => p.g.type === 'sticker')
+  const brilloLane = placed.filter((p) => p.g.type === 'brillo').slice(0, MAX_BRILLOS)
 
   const minFrames = Math.round(fps * 0.8)
   let tailFrames = 0
@@ -526,6 +577,17 @@ export function buildReelProps(
     graphics.push({ ...rest, id: `s${graphics.length + 1}-sticker`, fromFrame, durationInFrames })
     stickerFree = fromFrame + durationInFrames + Math.round(fps * 1.5)
   }
+  // Brillo: un reflejo que cruza el plano del auto. Es solo luz: puede pasar sobre otros gráficos, no sobre el cierre.
+  const ctaStart = graphics.find((g) => g.type === 'cta_end')?.fromFrame ?? reelEnd
+  for (const { g, fromFrame } of brilloLane) {
+    const durationInFrames = Math.round(BRILLO_SEC * fps)
+    if (fromFrame + durationInFrames > ctaStart) {
+      warnings.push('Brillo descartado: cae sobre el cierre')
+      continue
+    }
+    const { focus: _f, focusEnd: _fe, clipId: _c, atSec: _a, durationSec: _d, ...rest } = g
+    graphics.push({ ...rest, id: `b${graphics.length + 1}-brillo`, fromFrame, durationInFrames })
+  }
   graphics.sort((a, b) => a.fromFrame - b.fromFrame)
 
   const durationInFrames = cutsEnd + tailFrames
@@ -550,6 +612,7 @@ export function buildReelProps(
   const alreadyShown = (f: number, token: string) => onScreen.some((g) => f >= g.from && f < g.to && g.tokens.has(token))
   const capWords: PendingWord[] = []
   for (const c of cuts) {
+    if (c.teaser) continue
     for (const w of fixedWords.get(c.clipId) ?? []) {
       const ws = w.start / 1000
       const we = w.end / 1000
@@ -578,23 +641,31 @@ export function buildReelProps(
     return cut.captionPlacement
   }
   const layout = theme === 'offroad' ? { maxWords: 3, maxChars: 18 } : CAPTION_LAYOUT[captionStyle]
-  const captions = groupCaptionLines(capWords, placementFor, fps, layout).filter((line) =>
-    line.words.some((w) => !FILLER.has(normalizeToken(w.text)))
-  )
+  // Una línea que empezó antes de un gráfico grande se corta cuando el gráfico entra (no quedan encimados).
+  const trimForBigGraphics = (line: CaptionLine): CaptionLine => {
+    const cutAt = blocked.find(([a]) => a > line.fromFrame && a < line.toFrame)?.[0]
+    if (cutAt === undefined) return line
+    return { ...line, toFrame: cutAt, words: line.words.filter((w) => w.fromFrame < cutAt).map((w) => ({ ...w, toFrame: Math.min(w.toFrame, cutAt) })) }
+  }
+  const captions = groupCaptionLines(capWords, placementFor, fps, layout)
+    .map(trimForBigGraphics)
+    .filter((line) => line.toFrame - line.fromFrame >= 6 && line.words.some((w) => !FILLER.has(normalizeToken(w.text))))
 
   // 4) Golpes de cámara: en cada palabra clave que se ve y en la entrada de cada gráfico
-  //    (salvo donde ya hay un zoom a una característica, que manda).
+  //    (salvo donde ya hay un zoom a una característica, que manda). En cine dependen de la energía del
+  //    tramo que eligió el director (1 = calmado, sin golpes); en camionetas solo en los de energía 3.
   const zoomedAt = (f: number) =>
     cuts.some((c) => c.zooms.some((z) => f >= c.fromFrame + z.fromFrame && f < c.fromFrame + z.fromFrame + z.durationInFrames))
   const punchFrames = [
     ...captions.flatMap((l) => l.words.filter((w) => w.emphasis).map((w) => w.fromFrame)),
-    ...graphics.filter((g) => g.type !== 'feature_callout').map((g) => g.fromFrame),
+    ...graphics.filter((g) => g.type !== 'feature_callout' && g.type !== 'brillo').map((g) => g.fromFrame),
   ].sort((a, b) => a - b)
+  const minEnergy: Energy = !sober ? 1 : theme === 'offroad' ? 3 : 2
   let lastPunch = -Infinity
-  for (const f of sober ? [] : punchFrames) {
+  for (const f of punchFrames) {
     if (f - lastPunch < PUNCH_MIN_GAP_FRAMES || zoomedAt(f)) continue
     const c = cuts.find((x) => f >= x.fromFrame && f < x.fromFrame + x.durationInFrames)
-    if (!c) continue
+    if (!c || c.teaser || c.energy < minEnergy) continue
     c.punches.push(f - c.fromFrame)
     lastPunch = f
   }
@@ -606,8 +677,16 @@ export function buildReelProps(
     sfx.push({ frame, kind })
   }
   for (const g of graphics) pushSfx(g.fromFrame, (sober ? SFX_OFFROAD : SFX_BY_TYPE)[g.type])
-  // Cine y camionetas: cortes secos, sin barrido sonoro en cada cambio de toma.
-  if (!sober) for (const c of cuts) if (c.transitionIn === 'flash' || c.transitionIn === 'whip') pushSfx(c.fromFrame, 'whoosh')
+  // Teaser: un barrido por plano y un golpe cuando entra la voz.
+  for (const c of cuts) if (c.teaser) pushSfx(c.fromFrame, 'whoosh')
+  if (teaserFrames > 0) pushSfx(teaserFrames, 'hit')
+  // Transiciones entre tomas (no en los saltos por silencio): barrido sonoro en los barridos; golpe en los
+  // zooms de los tramos de impacto. En look social, también en los destellos.
+  for (const c of cuts) {
+    if (c.teaser || c.jump > 0) continue
+    if (c.transitionIn === 'whip' || c.transitionIn === 'barrido' || (!sober && c.transitionIn === 'flash')) pushSfx(c.fromFrame, 'whoosh')
+    else if (c.transitionIn === 'zoom' && c.energy === 3 && c.fromFrame > 0) pushSfx(c.fromFrame, 'hit')
+  }
   sfx.sort((a, b) => a.frame - b.frame)
 
   return {
@@ -621,6 +700,7 @@ export function buildReelProps(
       graphics,
       captions,
       captionStyle,
+      hookStyle: plan.hookStyle ?? ('enfoque' satisfies HookStyle),
       theme,
       look,
       sfx,

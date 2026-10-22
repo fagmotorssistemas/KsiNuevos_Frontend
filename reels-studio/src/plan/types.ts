@@ -2,7 +2,7 @@
  * Props que consume la composición de Remotion. Todo en cuadros (frames) del Reel final
  * y en píxeles del lienzo vertical. Debe ser JSON serializable (se pasa como inputProps).
  */
-import type { CaptionStyle, CUT_ROLES, FocusBox, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
+import type { CaptionStyle, CUT_ROLES, FocusBox, HookStyle, PLACEMENTS, RawGraphic, TRANSITIONS } from './schema'
 
 /** Palabra de AssemblyAI: tiempos en milisegundos dentro del clip. */
 export type Word = { text: string; start: number; end: number }
@@ -54,7 +54,13 @@ export type TimelineCut = {
   jump: number
   /** Cuadros (relativos al corte) con un golpe de cámara: palabras clave y entradas de gráficos. */
   punches: number[]
+  /** Intensidad del tramo (1–3): cuánto se mueve la cámara y qué tan fuertes son los golpes. */
+  energy: Energy
+  /** Plano del teaser de apertura: sin voz (solo música y efectos). */
+  teaser?: boolean
 }
+
+export type Energy = 1 | 2 | 3
 
 export type TimelineGraphic = Omit<RawGraphic, 'focus' | 'clipId' | 'atSec' | 'durationSec'> & {
   id: string
@@ -110,6 +116,8 @@ export type ReelProps = {
   captions: CaptionLine[]
   /** Tipografía y animación de los subtítulos, elegida por el director. Siempre explícito, como `music`. */
   captionStyle: CaptionStyle
+  /** Cómo entra el texto del gancho, elegido por el director. Siempre explícito, como `music`. */
+  hookStyle: HookStyle
   /** Siempre explícito, como `music`. */
   theme: ReelTheme
   /** Siempre explícito, como `music`. */

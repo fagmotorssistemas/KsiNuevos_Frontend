@@ -18,11 +18,21 @@ clips crudos del asesor
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
 
-**Modo cine** (por defecto, `look: cine`): franjas negras, grano de película, viñeta, color de cine,
-logo en blanco dentro de la franja, títulos grandes con textos pequeños muy espaciados y líneas finas
-de acento, entradas de enfoque (borroso → nítido), cortes secos y acercamiento lento. Piezas en
-`src/graphics/cine/`. El lenguaje anterior (rebotes, cajas de color) sigue disponible con
-`render-plan.ts --look social`.
+**Modo cine** (por defecto, `look: cine`): franjas negras que se abren como un telón en el primer
+instante, grano de película, viñeta, color de cine, logo en blanco dentro de la franja, títulos grandes
+con textos pequeños muy espaciados y líneas finas de acento. Piezas en `src/graphics/cine/`. El lenguaje
+anterior (rebotes, cajas de color) sigue disponible con `render-plan.ts --look social`.
+
+**Animación dirigida por Claude** (campos del plan; ver DIRECCIÓN DE ANIMACIÓN en `pipeline/director-prompt.ts`):
+
+| Campo | Qué decide Claude | Cómo se ve |
+| --- | --- | --- |
+| `teaser` | 2–4 instantes muy visuales del material | Adelanto de 0.4 s cada uno antes de que hable el asesor (sin voz, con el gancho encima) |
+| `hookStyle` | `golpe`, `revelado`, `cruce` o `enfoque` | Cómo entra el texto del gancho: palabra por palabra con sacudón, desde detrás de una línea, desde los dos lados, o de borroso a nítido |
+| `cuts[].transitionIn` | `corte`, `whip`, `zoom`, `flash`, `barrido` | Seco, barrido con desenfoque, zoom de impacto, destello de luz cálida, franja de color de marca (camionetas: solo corte, zoom, whip) |
+| `cuts[].energy` | 1 calmado · 2 normal · 3 impacto | Velocidad del acercamiento continuo y golpes de cámara en las palabras clave |
+| `brillo` (gráfico) | Tomas donde el auto llena el cuadro | Reflejo de luz que cruza la carrocería, con un destello |
+| `spec_counter.variant` | `medidor` o `numero` | Medidor con aguja (potencia, torque, velocidad, cilindrada) o número que cuenta |
 
 El director **no dibuja**: elige piezas de un catálogo y las llena con datos. Así el resultado es
 consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es un JSON legible).
@@ -34,12 +44,13 @@ consistente, se ve con la marca de K-Si y se puede corregir a mano (el plan es u
 | `hook_text` | primeros 0–2 s | Palabras que golpean una a una; las `*marcadas*` en bloque rojo |
 | `title_3d` | al presentar el carro | Modelo en texto 3D metálico (three.js), marca arriba, año en bloque rojo 3D |
 | `feature_callout` | se ve una característica | Zoom al objeto (lo sigue si la cámara se mueve) + mira + tarjeta 3D con ícono |
-| `spec_counter` | un dato numérico | Número que cuenta hacia arriba con extrusión 3D ("128.000 KM") |
+| `spec_counter` | un dato numérico | Número que cuenta hacia arriba ("128.000 KM"), o medidor con aguja (`variant: medidor`) |
 | `spec_chips` | datos rápidos | Fichas que entran en cascada ("2.8 DIÉSEL · AUTOMÁTICO · 4x4") |
 | `feature_list` | el asesor enumera | Lista que se marca con checks |
 | `price_tag` | se dice precio/cuota | Etiqueta que cae y se balancea |
 | `cta_end` | cierre | "COMENTA <PALABRA>" en 3D + promesa + logo |
 | `sticker` | 1–2 a mitad del Reel | Burbuja de interacción ("Guárdalo", "Comenta", "Compártelo") que late como botón |
+| `brillo` | el auto llena el cuadro | Reflejo de luz que cruza la carrocería (puede coincidir con otro gráfico) |
 
 Claude adapta el tono al **tipo de vehículo** (SUV, sedán, camioneta, deportivo, hatchback, van;
 la web lo saca de `type_body` del inventario) y elige uno de 6 **estilos de subtítulos**

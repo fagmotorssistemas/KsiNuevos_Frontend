@@ -4,39 +4,43 @@
   "cuts": [
     {
       "clipId": "clip1",
-      "startSec": 0.0,
+      "startSec": 0,
       "endSec": 4.9,
       "role": "gancho",
       "transitionIn": "zoom",
       "captionPlacement": "abajo",
-      "reason": "El asesor plantea el problema mirando a cámara."
+      "reason": "El asesor plantea el problema mirando a cámara.",
+      "energy": 3
     },
     {
       "clipId": "clip2",
-      "startSec": 0.0,
+      "startSec": 0,
       "endSec": 5.43,
       "role": "presentacion",
-      "transitionIn": "flash",
+      "transitionIn": "barrido",
       "captionPlacement": "abajo",
-      "reason": "Frente del vehículo mientras dice modelo y versión."
+      "reason": "Frente del vehículo mientras dice modelo y versión.",
+      "energy": 3
     },
     {
       "clipId": "clip3",
-      "startSec": 0.0,
+      "startSec": 0,
       "endSec": 9.8,
       "role": "caracteristica",
       "transitionIn": "whip",
       "captionPlacement": "abajo",
-      "reason": "Los 3 pilares que importan en un SUV."
+      "reason": "Los 3 pilares que importan en un SUV.",
+      "energy": 2
     },
     {
       "clipId": "clip4",
-      "startSec": 0.0,
+      "startSec": 0,
       "endSec": 3.14,
       "role": "dato",
       "transitionIn": "zoom",
       "captionPlacement": "abajo",
-      "reason": "Tablero: prueba del kilometraje."
+      "reason": "Tablero: prueba del kilometraje.",
+      "energy": 3
     },
     {
       "clipId": "clip5",
@@ -45,7 +49,8 @@
       "role": "confianza",
       "transitionIn": "flash",
       "captionPlacement": "abajo",
-      "reason": "Exterior lateral, respaldo de marca."
+      "reason": "Exterior lateral, respaldo de marca.",
+      "energy": 1
     },
     {
       "clipId": "clip6",
@@ -54,23 +59,25 @@
       "role": "caracteristica",
       "transitionIn": "whip",
       "captionPlacement": "abajo",
-      "reason": "Interior: volante multifunción a la vista."
+      "reason": "Interior: volante multifunción a la vista.",
+      "energy": 2
     },
     {
       "clipId": "clip7",
-      "startSec": 0.0,
+      "startSec": 0,
       "endSec": 2.3,
       "role": "cierre",
       "transitionIn": "zoom",
       "captionPlacement": "abajo",
-      "reason": "Llamado a comentar."
+      "reason": "Llamado a comentar.",
+      "energy": 2
     }
   ],
   "graphics": [
     {
       "type": "hook_text",
       "clipId": "clip1",
-      "atSec": 0.0,
+      "atSec": 0,
       "durationSec": 2.2,
       "text": "¿Buscas un *SUV* a *diésel*?",
       "subtext": "No cometas este error",
@@ -80,7 +87,7 @@
       "type": "title_3d",
       "clipId": "clip2",
       "atSec": 0.05,
-      "durationSec": 2.0,
+      "durationSec": 2,
       "text": "Trailblazer",
       "subtext": "Chevrolet",
       "badge": "2019",
@@ -124,7 +131,8 @@
       "unit": "km",
       "subtext": "Perfectos para su año",
       "icon": "velocimetro",
-      "reason": "Dice el kilometraje sobre el tablero."
+      "reason": "Dice el kilometraje sobre el tablero.",
+      "variant": "medidor"
     },
     {
       "type": "feature_callout",
@@ -168,14 +176,12 @@
       "reason": "Invita a guardar justo cuando habla de viajes largos."
     },
     {
-      "type": "sticker",
-      "clipId": "clip6",
-      "atSec": 0.3,
-      "durationSec": 2.0,
-      "text": "Mándaselo a tu *pana*",
-      "icon": "compartir",
-      "placement": "arriba",
-      "reason": "Compartir a mitad del Reel, antes del señalador."
+      "type": "brillo",
+      "clipId": "clip2",
+      "atSec": 2.3,
+      "durationSec": 1,
+      "text": "",
+      "reason": "Reflejo sobre la parrilla cuando el auto llena el cuadro en la presentación."
     }
   ],
   "transcriptFixes": [
@@ -240,5 +246,20 @@
     "K-Si"
   ],
   "caption": "¿Buscas un SUV a diésel? Mira primero lo que de verdad importa 👀 Chevrolet Trailblazer 2019, 2.8 diésel 4x4. Comenta TRAILBLAZER y te enviamos toda la información.",
-  "captionStyle": "impacto"
+  "captionStyle": "impacto",
+  "teaser": [
+    {
+      "clipId": "clip2",
+      "atSec": 1.2
+    },
+    {
+      "clipId": "clip5",
+      "atSec": 1
+    },
+    {
+      "clipId": "clip6",
+      "atSec": 2.4
+    }
+  ],
+  "hookStyle": "golpe"
 }

@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, Easing, Img, interpolate, staticFile } from 'remotion'
+import type { HookStyle } from '../../plan/schema'
 import type { Brand, ReelTheme, TimelineGraphic } from '../../plan/types'
 import { usePalette } from '../../reel/palette'
 import { zoomProgress, zoomTransform } from '../../reel/zoom'
@@ -18,9 +19,58 @@ type Props = { g: TimelineGraphic; theme: ReelTheme }
 const safeTop = (height: number) => height * LETTERBOX + 60
 const safeBottom = (height: number) => height * (1 - LETTERBOX) - 60
 
-/** Gancho: la frase centrada, de borroso a nítido, con la palabra clave en el color de acento y una línea fina. */
-export const CineHook: React.FC<Props> = ({ g, theme }) => {
-  const { frame, height, exit } = useEnterExit(12)
+/** Cuadro en que entra cada palabra del gancho y cuánto tarda en asentarse, según el estilo. */
+const HOOK_TIMING: Record<HookStyle, { stagger: number; dur: number }> = {
+  enfoque: { stagger: 0, dur: 16 },
+  golpe: { stagger: 5, dur: 6 },
+  revelado: { stagger: 3, dur: 12 },
+  cruce: { stagger: 3, dur: 10 },
+}
+
+/** Entrada de una palabra del gancho según el estilo que eligió el director. */
+function hookWordStyle(style: HookStyle, t: number, i: number, width: number): React.CSSProperties {
+  switch (style) {
+    case 'golpe':
+      // Cae de golpe: aparece grande y desenfocada y se clava en su lugar.
+      return {
+        opacity: t > 0 ? 1 : 0,
+        transform: `scale(${interpolate(t, [0, 1], [1.9, 1])})`,
+        filter: t < 1 ? `blur(${((1 - t) * 10).toFixed(2)}px)` : undefined,
+      }
+    case 'revelado':
+      // Sube desde detrás de una línea (máscara): el contenedor de la palabra recorta.
+      return { transform: `translateY(${((1 - t) * 105).toFixed(2)}%)` }
+    case 'cruce': {
+      // Las palabras entran alternadas desde los dos lados, con desenfoque de movimiento.
+      const dir = i % 2 === 0 ? -1 : 1
+      return {
+        opacity: t,
+        transform: `translateX(${((1 - t) * dir * width * 0.55).toFixed(1)}px)`,
+        filter: t < 1 ? `blur(${((1 - t) * 18).toFixed(2)}px)` : undefined,
+      }
+    }
+    default:
+      return {}
+  }
+}
+
+/** Temblor de cámara que se apaga solo: un sacudón por cada palabra que cae en el estilo "golpe". */
+function slamShake(frame: number, starts: number[]): string {
+  let amp = 0
+  for (const s of starts) {
+    const d = frame - s
+    if (d >= 0 && d < 9) amp = Math.max(amp, 16 * (1 - d / 9))
+  }
+  return amp ? `translate(${(Math.sin(frame * 2.3) * amp).toFixed(1)}px, ${(Math.cos(frame * 3.1) * amp * 0.6).toFixed(1)}px)` : 'none'
+}
+
+/**
+ * Gancho: la frase centrada con la palabra clave en el color de acento y una línea fina. Cómo entra lo decide el
+ * director: `enfoque` (de borroso a nítido), `golpe` (palabra por palabra, clavándose con un sacudón), `revelado`
+ * (sube desde detrás de la línea) o `cruce` (entra desde los dos lados).
+ */
+export const CineHook: React.FC<Props & { style?: HookStyle }> = ({ g, theme, style = 'enfoque' }) => {
+  const { frame, width, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
   const type = CINE_TYPE[theme]
   const words = splitEmphasis(g.text)
@@ -28,24 +78,58 @@ export const CineHook: React.FC<Props> = ({ g, theme }) => {
   // En camionetas el "subtext" es un adjetivo de una palabra ("IMPONENTE"): va grande, debajo.
   const bigSub = theme === 'offroad' && sub && !/\s/.test(sub)
   const size = Math.round((g.text.length > 30 ? 104 : g.text.length > 20 ? 124 : 144) * type.displayScale)
+  const { stagger, dur } = HOOK_TIMING[style]
+  const starts = words.map((_, i) => i * stagger)
+  const textDone = (starts[starts.length - 1] ?? 0) + dur
+  // En "revelado" la línea se dibuja primero y el texto sube desde ella; en los demás, la línea cierra la frase.
+  const lineAt = style === 'revelado' ? 0 : Math.max(10, textDone - 6)
+  const subAt = Math.max(14, textDone)
 
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'radial-gradient(ellipse 80% 45% at 50% 42%, rgba(0,0,0,0.5), rgba(0,0,0,0) 75%)' }} />
-      <div style={{ position: 'absolute', top: height * 0.3, left: 70, right: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: `0 ${Math.round(size * 0.26)}px`, textAlign: 'center', ...focusIn(ease(frame, 0, 16)) }}>
-          {words.map(({ word, strong }, i) => (
-            <CineText key={i} text={word} size={size} family={type.display} worn={theme === 'offroad'} color={strong ? accent : '#FFFFFF'} />
-          ))}
+      <div
+        style={{
+          position: 'absolute',
+          top: height * 0.3,
+          left: 70,
+          right: 70,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 26,
+          transform: style === 'golpe' ? slamShake(frame, starts) : undefined,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: `0 ${Math.round(size * 0.26)}px`,
+            textAlign: 'center',
+            ...(style === 'enfoque' ? focusIn(ease(frame, 0, dur)) : {}),
+          }}
+        >
+          {words.map(({ word, strong }, i) => {
+            const t = ease(frame, starts[i], dur)
+            const text = <CineText text={word} size={size} family={type.display} worn={theme === 'offroad'} color={strong ? accent : '#FFFFFF'} />
+            if (style === 'enfoque') return <React.Fragment key={i}>{text}</React.Fragment>
+            return (
+              <span key={i} style={{ display: 'inline-block', overflow: style === 'revelado' ? 'hidden' : 'visible', paddingTop: style === 'revelado' ? 6 : 0 }}>
+                <span style={{ display: 'inline-block', ...hookWordStyle(style, t, i, width) }}>{text}</span>
+              </span>
+            )
+          })}
         </div>
-        <AccentLine t={ease(frame, 10, 14)} width={180} color={accent} align="center" />
+        <AccentLine t={ease(frame, lineAt, style === 'revelado' ? 8 : 14)} width={style === 'revelado' ? 260 : 180} color={accent} align="center" />
         {sub ? (
           bigSub ? (
-            <div style={focusIn(ease(frame, 14, 16), { scale: 1.08 })}>
+            <div style={focusIn(ease(frame, subAt, 16), { scale: 1.08 })}>
               <CineText text={sub} size={Math.round(190 * type.displayScale)} family={type.display} worn color={accent} />
             </div>
           ) : (
-            <div style={focusIn(ease(frame, 14, 14), { blur: 6, scale: 1 })}>
+            <div style={focusIn(ease(frame, subAt, 14), { blur: 6, scale: 1 })}>
               <CineLabel text={sub} />
             </div>
           )
@@ -86,8 +170,91 @@ export const CineTitle: React.FC<Props> = ({ g, theme }) => {
   )
 }
 
+/** Tope "redondo" del medidor: un poco más que el valor, para que la aguja no quede pegada al final. */
+function gaugeMax(value: number): number {
+  const target = value * 1.25
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, target)))
+  const step = [1, 2, 2.5, 5, 10].find((m) => m * magnitude >= target) ?? 10
+  return step * magnitude
+}
+
+/**
+ * Medidor: arco de 240° con marcas finas; la aguja barre hasta el valor mientras el número cuenta al centro.
+ * Para potencia, torque, velocidad o cilindrada.
+ */
+const CineGauge: React.FC<Props> = ({ g, theme }) => {
+  const { frame, fps, width, height, exit } = useEnterExit(12)
+  const { accent } = usePalette()
+  const type = CINE_TYPE[theme]
+  const value = g.value ?? 0
+  const max = gaugeMax(value)
+  const decimals = Number.isInteger(value) ? 0 : 1
+  const sweep = interpolate(frame, [6, 6 + Math.round(fps * 0.9)], [0, value / max], { ...clamp, easing: Easing.out(Easing.cubic) })
+  const R = 300
+  const cx = width / 2
+  const cy = (g.placement === 'abajo' ? height * 0.62 : height * 0.4) + 20
+  const START = -210 // grados (0 = derecha); el arco va de -210° a 30°
+  const SPAN = 240
+  const angle = (START + SPAN * sweep) * (Math.PI / 180)
+  const point = (deg: number, r: number) => ({ x: cx + Math.cos((deg * Math.PI) / 180) * r, y: cy + Math.sin((deg * Math.PI) / 180) * r })
+  const arc = (from: number, to: number, r: number) => {
+    const a = point(from, r)
+    const b = point(to, r)
+    return `M ${a.x} ${a.y} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${b.x} ${b.y}`
+  }
+  const appear = ease(frame, 0, 12)
+  const ticks = Array.from({ length: 25 }, (_, i) => START + (SPAN * i) / 24)
+
+  return (
+    <AbsoluteFill style={{ opacity: 1 - exit }}>
+      <AbsoluteFill style={{ background: `radial-gradient(circle at 50% ${(cy / height) * 100}%, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 30%, rgba(0,0,0,0) 55%)` }} />
+      {/* Disco de vidrio oscuro: separa el medidor de lo que haya detrás (p. ej. el tablero del auto). */}
+      <div
+        style={{
+          position: 'absolute',
+          left: cx - R - 50,
+          top: cy - R - 50,
+          width: (R + 50) * 2,
+          height: (R + 50) * 2,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(8,8,10,0.62) 0%, rgba(8,8,10,0.5) 70%, rgba(8,8,10,0) 100%)',
+          backdropFilter: 'blur(10px)',
+          opacity: appear,
+        }}
+      />
+      <svg width={width} height={height} style={{ position: 'absolute', inset: 0, opacity: appear, transform: `scale(${1 + (1 - appear) * 0.06})`, transformOrigin: `${cx}px ${cy}px` }}>
+        <path d={arc(START, START + SPAN, R)} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={10} strokeLinecap="round" />
+        {sweep > 0.002 ? (
+          <path d={arc(START, START + SPAN * sweep, R)} fill="none" stroke={accent} strokeWidth={10} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 14px ${accent})` }} />
+        ) : null}
+        {ticks.map((deg, i) => {
+          const a = point(deg, R - 26)
+          const b = point(deg, R - (i % 6 === 0 ? 62 : 44))
+          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={i / 24 <= sweep ? '#fff' : 'rgba(255,255,255,0.35)'} strokeWidth={i % 6 === 0 ? 5 : 3} />
+        })}
+        <line x1={cx} y1={cy} x2={cx + Math.cos(angle) * (R - 70)} y2={cy + Math.sin(angle) * (R - 70)} stroke={accent} strokeWidth={8} strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 10px rgba(0,0,0,0.6))' }} />
+        <circle cx={cx} cy={cy} r={18} fill="#fff" />
+      </svg>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: cy + 40, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, ...focusIn(ease(frame, 4, 14), { blur: 6, scale: 1.04 }) }}>
+          <CineText text={`${g.prefix ?? ''}${formatSpecNumber(sweep * max, decimals)}`} size={Math.round(150 * type.displayScale)} family={type.display} worn={theme === 'offroad'} />
+          {g.unit ? <CineText text={g.unit} size={Math.round(64 * type.displayScale)} family={type.display} color={accent} /> : null}
+        </div>
+        <div style={focusIn(ease(frame, 10, 12), { blur: 6, scale: 1 })}>
+          <CineLabel text={g.text} size={34} />
+        </div>
+      </div>
+    </AbsoluteFill>
+  )
+}
+
 /** Dato: etiqueta espaciada, número grande que cuenta rápido y la unidad en color de acento. */
 export const CineCounter: React.FC<Props> = ({ g, theme }) => {
+  if (g.variant === 'medidor' && typeof g.value === 'number' && g.value > 0) return <CineGauge g={g} theme={theme} />
+  return <CineNumber g={g} theme={theme} />
+}
+
+const CineNumber: React.FC<Props> = ({ g, theme }) => {
   const { frame, fps, height, exit } = useEnterExit(12)
   const { accent } = usePalette()
   const type = CINE_TYPE[theme]

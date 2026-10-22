@@ -21,6 +21,7 @@ export const GRAPHIC_TYPES = [
   'price_tag',
   'cta_end',
   'sticker',
+  'brillo',
 ] as const
 export type GraphicType = (typeof GRAPHIC_TYPES)[number]
 
@@ -51,7 +52,16 @@ export const ICONS = [
 ] as const
 export type IconName = (typeof ICONS)[number]
 
-export const TRANSITIONS = ['corte', 'flash', 'zoom', 'whip', 'glitch'] as const
+/**
+ * Entrada de cada toma. En modo cine: `whip` barrido con desenfoque, `zoom` acercamiento de impacto, `flash` destello
+ * de luz cálida y `barrido` franja de color de marca que descubre la toma nueva. `glitch` solo en look social.
+ */
+export const TRANSITIONS = ['corte', 'flash', 'zoom', 'whip', 'barrido', 'glitch'] as const
+/** Cómo entra el texto del gancho (lo elige el director según el vehículo y el tono). */
+export const HOOK_STYLES = ['enfoque', 'golpe', 'revelado', 'cruce'] as const
+export type HookStyle = (typeof HOOK_STYLES)[number]
+/** spec_counter: número grande que cuenta, o medidor con aguja (potencia, torque, velocidad, cilindrada). */
+export const COUNTER_VARIANTS = ['numero', 'medidor'] as const
 /**
  * Estilos de subtítulo (tipografía + animación), todos con los colores de la marca. El director elige
  * uno por Reel según el vehículo y el tono; ver CAPTION_STYLE_GUIDE en director-prompt.ts.
@@ -77,9 +87,18 @@ export const cutSchema = z.object({
   role: z.enum(CUT_ROLES),
   transitionIn: z.enum(TRANSITIONS),
   captionPlacement: z.enum(PLACEMENTS),
+  /** Intensidad del tramo: 1 calmado, 2 normal, 3 de impacto (golpes de cámara y movimiento más rápido). */
+  energy: z.number().int().min(1).max(3).optional(),
   reason: z.string(),
 })
 export type Cut = z.infer<typeof cutSchema>
+
+/** Plano del teaser de apertura: un instante muy visual de un clip que se adelanta al segundo 0. */
+export const teaserBeatSchema = z.object({
+  clipId: z.string(),
+  atSec: z.number().min(0),
+})
+export type TeaserBeat = z.infer<typeof teaserBeatSchema>
 
 /**
  * Gráfico tal como lo devuelve el director: objeto plano con campos opcionales según el tipo
@@ -109,6 +128,8 @@ export const rawGraphicSchema = z.object({
   /** Si la cámara se mueve: dónde está el objeto al TERMINAR el gráfico (el zoom lo sigue). */
   focusEnd: focusBoxSchema.optional(),
   placement: z.enum(PLACEMENTS).optional(),
+  /** Para spec_counter: "medidor" dibuja una aguja que sube hasta el valor. */
+  variant: z.enum(COUNTER_VARIANTS).optional(),
   reason: z.string(),
 })
 export type RawGraphic = z.infer<typeof rawGraphicSchema>
@@ -133,6 +154,9 @@ export const creativePlanSchema = z.object({
   caption: z.string(),
   /** Opcional para leer planes viejos; al director se le exige (pipeline/director-plan.ts). */
   captionStyle: z.enum(CAPTION_STYLES).optional(),
+  /** 2–4 planos de 0.4 s que abren el Reel antes de la primera toma (vacío = sin teaser). */
+  teaser: z.array(teaserBeatSchema).optional(),
+  hookStyle: z.enum(HOOK_STYLES).optional(),
 })
 export type CreativePlan = z.infer<typeof creativePlanSchema>
 
@@ -148,6 +172,8 @@ export function validateGraphic(g: RawGraphic): string | null {
       return g.items && g.items.length >= 2 ? null : `${g.type} necesita al menos 2 items`
     case 'sticker':
       return g.text.trim() && g.icon ? null : 'sticker necesita text e icon'
+    case 'brillo':
+      return null
     default:
       return g.text.trim() ? null : `${g.type} necesita text`
   }
