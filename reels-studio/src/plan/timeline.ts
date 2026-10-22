@@ -551,9 +551,13 @@ export function buildReelProps(
       (poll ? Math.min(POLL_MAX_SEC, Math.max(g.durationSec, POLL_MIN_SEC)) : Math.min(STICKER_MAX_SEC, Math.max(g.durationSec, minDur(g)))) * fps
     )
     const gap = Math.round(GRAPHIC_GAP_SEC * fps)
+    // La encuesta va arriba: puede convivir con lo que se dibuja abajo (título 3D, precio, señalador con tarjeta abajo).
+    const clashes = poll
+      ? graphics.filter((o) => !(o.type === 'title_3d' || o.type === 'price_tag' || o.type === 'brillo' || (o.type === 'feature_callout' && !o.cardAtTop)))
+      : graphics
     for (let moved = true; moved; ) {
       moved = false
-      for (const other of graphics) {
+      for (const other of clashes) {
         if (fromFrame < other.fromFrame + other.durationInFrames + gap && fromFrame + durationInFrames + gap > other.fromFrame) {
           fromFrame = other.fromFrame + other.durationInFrames + gap
           moved = true
