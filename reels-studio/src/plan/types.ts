@@ -92,10 +92,10 @@ export type CaptionLine = {
 }
 
 /**
- * Diseño del Reel: `ksi` (general, rojo/amarillo/blanco) u `offroad` (camionetas: títulos naranjas
- * rústicos, etiquetas tipo escáner, caja de comentario y cierre con huella de llanta).
+ * Diseño del Reel: `ksi` (general, rojo/amarillo/blanco), `offroad` (camionetas: metal oxidado en 3D, llanta 3D,
+ * etiquetas tipo escáner) o `suv` (elegante: acento champán, cromo con cantos dorados y tipografías propias).
  */
-export type ReelTheme = 'ksi' | 'offroad'
+export type ReelTheme = 'ksi' | 'offroad' | 'suv'
 
 /**
  * Lenguaje visual: `cine` (por defecto: franjas negras, grano, color de cine, tipografía de comercial de

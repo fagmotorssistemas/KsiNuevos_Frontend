@@ -11,7 +11,11 @@ import { Font, type FontData } from 'three/addons/loaders/FontLoader.js'
 import antonData from './anton.typeface.json'
 import archivoData from './archivo.typeface.json'
 import bebasData from './bebas.typeface.json'
+import cinzelData from './cinzel.typeface.json'
+import josefinData from './josefin.typeface.json'
+import michromaData from './michroma.typeface.json'
 import montserratData from './montserrat-black.typeface.json'
+import playfairData from './playfair.typeface.json'
 import russoData from './russo.typeface.json'
 import tekoData from './teko.typeface.json'
 
@@ -22,6 +26,10 @@ export const FONTS = {
   russo: new Font(russoData as unknown as FontData),
   archivo: new Font(archivoData as unknown as FontData),
   teko: new Font(tekoData as unknown as FontData),
+  cinzel: new Font(cinzelData as unknown as FontData),
+  playfair: new Font(playfairData as unknown as FontData),
+  michroma: new Font(michromaData as unknown as FontData),
+  josefin: new Font(josefinData as unknown as FontData),
 }
 export type FontKey = keyof typeof FONTS
 

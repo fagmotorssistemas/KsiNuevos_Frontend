@@ -19,10 +19,10 @@ export const TypefaceProvider: React.FC<{ typeface?: TypefaceName; children: Rea
   <TypefaceContext.Provider value={typeface ?? null}>{children}</TypefaceContext.Provider>
 )
 
-/** Tipografía de los títulos: la del Reel, o la de siempre del diseño (general alta y elegante; camionetas gruesa). */
+/** Tipografía de los títulos: la del Reel, o la de siempre del diseño (general alta; camionetas gruesa; SUV de lujo). */
 export function useCineType(theme: ReelTheme) {
   const chosen = React.useContext(TypefaceContext)
-  const t = TYPEFACES[chosen ?? (theme === 'offroad' ? 'potente' : 'clasica')]
+  const t = TYPEFACES[chosen ?? (theme === 'offroad' ? 'potente' : theme === 'suv' ? 'lujo' : 'clasica')]
   return { display: t.family, displayScale: t.scale, font3d: t.font3d, label: FONT_UI }
 }
 

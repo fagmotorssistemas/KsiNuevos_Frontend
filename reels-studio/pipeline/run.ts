@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { creativePlanSchema, type CreativePlan } from '../src/plan/schema'
+import { creativePlanSchema, typefaceFor, type CreativePlan } from '../src/plan/schema'
 import { buildReelProps } from '../src/plan/timeline'
 import type { ClipSource } from '../src/plan/types'
 import { transcribeClip, type TranscribedWord } from './assemblyai'
@@ -169,6 +169,16 @@ if (fs.existsSync(planFile) && !values.replan) {
   fs.writeFileSync(planFile, JSON.stringify({ ...plan, director: 'claude' }, null, 2))
   console.log(`[claude] estrategia: ${plan.strategy}`)
 }
+// SUV: solo sus tipografías elegantes (sin repetir las recientes); el resto nunca las usa. Se guarda en el plan para
+// que los próximos Reels sepan cuál salió.
+const isSuv = vehicle.categoria === 'suv'
+const typeface = typefaceFor(isSuv, plan.typeface, vehicle.tipografiasRecientes)
+if (typeface !== plan.typeface) {
+  console.warn(`[plan] tipografía ${plan.typeface ?? '(ninguna)'} → ${typeface}: ${isSuv ? 'los SUV usan sus letras elegantes' : 'las elegantes son solo para SUV'}`)
+  plan = { ...plan, typeface }
+  const saved = JSON.parse(fs.readFileSync(planFile, 'utf8'))
+  fs.writeFileSync(planFile, JSON.stringify({ ...saved, typeface }, null, 2))
+}
 
 // 4) Línea de tiempo y render.
 const music = values.music
@@ -177,9 +187,10 @@ const music = values.music
 const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
-  // Camionetas: su propio diseño offroad completo (formato de referencia de la Ranger: títulos rústicos en 3D, escáner
-  // K-SI SCAN, caja de comentario y firma con huella de llanta). Todos los demás: modo cine.
-  theme: vehicle.categoria === 'camioneta' ? 'offroad' : 'ksi',
+  // Camionetas: su propio diseño offroad completo (formato de referencia de la Ranger: metal oxidado en 3D, llanta 3D,
+  // escáner K-SI SCAN, caja de comentario). SUV: modo cine elegante (champán, cromo dorado y letras propias). Todos
+  // los demás: modo cine.
+  theme: vehicle.categoria === 'camioneta' ? 'offroad' : isSuv ? 'suv' : 'ksi',
   look: vehicle.categoria === 'camioneta' ? 'social' : 'cine',
 })
 for (const w of warnings) console.warn(`[plan] ${w}`)

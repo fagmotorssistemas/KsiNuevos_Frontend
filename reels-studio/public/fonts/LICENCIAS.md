@@ -12,5 +12,9 @@ Archivos `.woff2` del subconjunto latino (incluye tildes y ñ), tomados de los p
 | BebasNeue-Regular.woff2 | Bebas Neue | The Bebas Neue Project Authors (Dharma Type) |
 | ArchivoBlack-Regular.woff2 | Archivo Black | The Archivo Black Project Authors (Omnibus-Type) |
 | Poppins-ExtraBold.woff2 | Poppins | The Poppins Project Authors (Indian Type Foundry) |
+| Cinzel-Bold.woff2 | Cinzel (solo SUV) | The Cinzel Project Authors (Natanael Gama) |
+| PlayfairDisplay-Bold/BoldItalic.woff2 | Playfair Display (solo SUV) | The Playfair Display Project Authors (Claus Eggers Sørensen) |
+| Michroma-Regular.woff2 | Michroma (solo SUV) | The Michroma Project Authors (Vernon Adams) |
+| JosefinSans-Bold.woff2 | Josefin Sans (solo SUV) | The Josefin Sans Project Authors (Santiago Orozco) |
 
 Texto de la licencia: https://openfontlicense.org/open-font-license-official-text/

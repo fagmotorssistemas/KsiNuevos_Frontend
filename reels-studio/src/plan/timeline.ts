@@ -9,7 +9,7 @@
  */
 import { chooseZoomTarget } from '../reel/zoom'
 import type { CaptionStyle, CreativePlan, Cut, FocusBox, GraphicType, HookStyle, RawGraphic, TranscriptFix, TypefaceName } from './schema'
-import { validateGraphic } from './schema'
+import { typefaceFor, validateGraphic } from './schema'
 import type {
   Brand,
   CaptionLine,
@@ -693,7 +693,8 @@ export function buildReelProps(
       captions,
       captionStyle,
       hookStyle: plan.hookStyle ?? ('enfoque' satisfies HookStyle),
-      typeface: plan.typeface ?? ((theme === 'offroad' ? 'potente' : 'clasica') satisfies TypefaceName),
+      // Los SUV solo con sus letras elegantes, y esas solo en SUV (si el plan trae otra, se corrige aquí).
+      typeface: typefaceFor(theme === 'suv', plan.typeface) ?? ((theme === 'offroad' ? 'potente' : 'clasica') satisfies TypefaceName),
       theme,
       look,
       sfx,

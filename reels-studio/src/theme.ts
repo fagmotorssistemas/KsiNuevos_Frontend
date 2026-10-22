@@ -14,6 +14,8 @@ export const COLORS = {
 export const PALETTES = {
   ksi: { accent: COLORS.red, accentDeep: COLORS.redDeep, highlight: COLORS.yellow },
   offroad: { accent: '#FF8A1F', accentDeep: '#9C3E08', highlight: '#FFB34A' },
+  /** SUV: champán sobre negro, como los comerciales de autos de lujo. */
+  suv: { accent: '#CDAE72', accentDeep: '#7A5C2E', highlight: '#EAD9B0' },
 } as const
 export type Palette = (typeof PALETTES)[keyof typeof PALETTES]
 
@@ -25,6 +27,11 @@ export const FONT_CONDENSED = 'Bebas Neue'
 export const FONT_HEAVY = 'Archivo Black'
 export const FONT_SOCIAL = 'Poppins'
 export const FONT_RACE = 'Teko'
+/** Tipografías exclusivas de los SUV (diseño elegante): ninguna otra categoría las usa. */
+export const FONT_LUXE = 'Cinzel'
+export const FONT_EDITORIAL = 'Playfair Display'
+export const FONT_PREMIUM = 'Michroma'
+export const FONT_REFINED = 'Josefin Sans'
 
 void loadFont({ family: FONT_DISPLAY, url: staticFile('fonts/Anton-Regular.woff2'), weight: '400' })
 void loadFont({ family: FONT_UI, url: staticFile('fonts/Montserrat-ExtraBold.woff2'), weight: '800' })
@@ -34,6 +41,11 @@ void loadFont({ family: FONT_CONDENSED, url: staticFile('fonts/BebasNeue-Regular
 void loadFont({ family: FONT_HEAVY, url: staticFile('fonts/ArchivoBlack-Regular.woff2'), weight: '400' })
 void loadFont({ family: FONT_SOCIAL, url: staticFile('fonts/Poppins-ExtraBold.woff2'), weight: '800' })
 void loadFont({ family: FONT_RACE, url: staticFile('fonts/Teko-Bold.woff2'), weight: '700' })
+void loadFont({ family: FONT_LUXE, url: staticFile('fonts/Cinzel-Bold.woff2'), weight: '700' })
+void loadFont({ family: FONT_EDITORIAL, url: staticFile('fonts/PlayfairDisplay-Bold.woff2'), weight: '700' })
+void loadFont({ family: FONT_EDITORIAL, url: staticFile('fonts/PlayfairDisplay-BoldItalic.woff2'), weight: '700', style: 'italic' })
+void loadFont({ family: FONT_PREMIUM, url: staticFile('fonts/Michroma-Regular.woff2'), weight: '400' })
+void loadFont({ family: FONT_REFINED, url: staticFile('fonts/JosefinSans-Bold.woff2'), weight: '700' })
 
 /**
  * Juegos tipográficos de los títulos: familia en pantalla, la misma en 3D (src/three) y un factor de tamaño (las
@@ -46,6 +58,11 @@ export const TYPEFACES = {
   deportiva: { family: FONT_SPEED, font3d: 'russo', scale: 0.68, weight: 400 },
   moderna: { family: FONT_HEAVY, font3d: 'archivo', scale: 0.66, weight: 400 },
   geometrica: { family: FONT_UI, font3d: 'montserrat', scale: 0.68, weight: 900 },
+  // Solo SUV (ver SUV_TYPEFACES en plan/schema.ts).
+  lujo: { family: FONT_LUXE, font3d: 'cinzel', scale: 0.64, weight: 700 },
+  editorial: { family: FONT_EDITORIAL, font3d: 'playfair', scale: 0.68, weight: 700 },
+  premium: { family: FONT_PREMIUM, font3d: 'michroma', scale: 0.48, weight: 400 },
+  refinada: { family: FONT_REFINED, font3d: 'josefin', scale: 0.66, weight: 700 },
 } as const
 
 /** Extrusión "3D" por capas de sombra: da volumen a texto HTML sin WebGL. */

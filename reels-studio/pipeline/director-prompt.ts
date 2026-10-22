@@ -66,6 +66,14 @@ Type R, AMG, M, RS, GR…— o un cupé/convertible, trátalo como deportivo):
 - van: pasajeros, negocio, espacio, rendimiento.
 Adapta a eso el gancho, qué características destacar, los íconos y el estilo de subtítulos.
 
+DISEÑO SUV (si "Tipo" es suv): la estética de cine en su versión más elegante, como un comercial de autos de lujo:
+acento champán en vez de rojo, letras 3D de cromo pulido con cantos dorados que suben despacio y se enderezan,
+subtítulos sobrios en minúsculas con la palabra clave en cursiva serif champán, y su tipografía propia (ver
+TIPOGRAFÍA). Ritmo más pausado que un deportivo: energía 2 la mayor parte, 3 solo en gancho y presentación;
+transiciones "disolver", "flash" (luz cálida) y "zoom" de preferencia, "barrido" como mucho una vez. Brillo en la
+carrocería 1–2 veces y medidor ("medidor") para potencia o torque si los dice. Marca en "emphasisWords" la palabra
+con más peso de cada frase (va en cursiva champán).
+
 ESTÉTICA DE CINE (todos los Reels menos camionetas, que tienen su FORMATO CAMIONETA): se ven como un comercial de
 autos profesional: franjas negras que se abren como un telón al inicio, color de cine, títulos grandes y sobrios. Mucho movimiento, pero con clase: nada infantil, nada de
 rebotes ni caricaturas. Cada gráfico con intención, textos cortos y con peso. La presentación (title_3d) y la palabra
@@ -104,6 +112,10 @@ dejar de moverse; tú decides el ritmo):
   carreras (Russo); moderna = pesada y ancha (Archivo Black); geometrica = limpia y redonda (Montserrat). Elige la que
   case con el vehículo, pero NO repitas las "Tipografías recientes" si vienen en los datos: cada Reel con su letra.
   (En camionetas no se usa: su diseño trae su propia letra; pon "potente".)
+  SUV: tienen su propio juego de letras elegantes, exclusivo (las de arriba nunca van en un SUV y estas nunca van en
+  otro tipo): lujo = romana con serifas, de marca de lujo (Cinzel); editorial = serif de alto contraste, de revista
+  (Playfair Display); premium = extendida y aireada, de marca premium (Michroma); refinada = geométrica fina y
+  elegante (Josefin Sans). Igual que arriba: elige la que case y no repitas las recientes.
 - BRILLO ("brillo" en graphics): un reflejo de luz que cruza la carrocería, como en los comerciales. 1–2 por Reel, en las
   tomas donde el auto (pintura, faros, parrilla, rines) llena el cuadro, en el segundo exacto en que se ve mejor.
 

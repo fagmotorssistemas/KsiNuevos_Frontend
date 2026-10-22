@@ -6,12 +6,19 @@
 import React from 'react'
 import { AbsoluteFill, Easing, interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { ReelTheme } from '../../plan/types'
-import { Letters3D, staggered } from '../../three/Letters3D'
+import { type Entrance, type Finish, Letters3D, staggered } from '../../three/Letters3D'
 import { Stage3D, UNITS_PER_PX } from '../../three/Stage3D'
 import type { FontKey } from '../../three/Text3D'
 import { clamp } from '../anim'
 
 export { UNITS_PER_PX }
+
+/** Metal y entrada de las letras 3D según el diseño: camionetas oxidado, SUV cromo champán que sube, el resto cromo. */
+export function metalFor(theme: ReelTheme): { finish: Finish; entrance: Entrance } {
+  if (theme === 'offroad') return { finish: 'rust', entrance: 'depth' }
+  if (theme === 'suv') return { finish: 'champagne', entrance: 'rise' }
+  return { finish: 'chrome', entrance: 'depth' }
+}
 
 /**
  * Texto de cromo en 3D. `y` es la altura en píxeles del centro del texto; las letras empiezan a llegar en el cuadro
@@ -35,7 +42,9 @@ export const Chrome3D: React.FC<{
   const sweep = interpolate(frame, [0, durationInFrames], [-7, 7])
   const sceneY = (height / 2 - y) * UNITS_PER_PX
   const turn = (1 - enter) * -0.35 + 0.1 - t * 0.035
-  const letter = staggered(frame, delay, 3, 20)
+  const metal = metalFor(theme)
+  // SUV: más pausado, cada letra sube con calma.
+  const letter = theme === 'suv' ? staggered(frame, delay, 2, 24) : staggered(frame, delay, 3, 20)
 
   return (
     <Stage3D sweep={[sweep, sceneY + 1.2]}>
@@ -47,8 +56,8 @@ export const Chrome3D: React.FC<{
         <Letters3D
           text={text}
           font={font}
-          finish={theme === 'offroad' ? 'rust' : 'chrome'}
-          entrance="depth"
+          finish={metal.finish}
+          entrance={metal.entrance}
           progress={letter}
           size={size}
           maxWidth={maxWidthPx * UNITS_PER_PX}

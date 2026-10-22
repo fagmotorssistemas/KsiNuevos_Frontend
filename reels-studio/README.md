@@ -18,6 +18,13 @@ clips crudos del asesor
    └─ Remotion ──► MP4 vertical 1080×1920 con gráficos 3D, subtítulos karaoke y efectos de sonido
 ```
 
+**SUV** (`theme: suv`, `look: cine`; lo decide `run.ts` cuando el tipo es suv): el modo cine en su versión más
+elegante, de comercial de lujo: acento champán, letras 3D de cromo pulido con cantos dorados que suben despacio,
+subtítulos sobrios en minúsculas con la palabra clave en cursiva serif champán, color de cine suave y cálido. Tienen
+cuatro tipografías exclusivas (`lujo` Cinzel, `editorial` Playfair Display, `premium` Michroma, `refinada` Josefin
+Sans): ningún otro tipo las usa y los SUV no usan las demás (`typefaceFor` en `src/plan/schema.ts` lo corrige si el
+plan trae otra).
+
 **Camionetas** (`theme: offroad`, `look: social`; lo decide `run.ts` cuando el tipo es camioneta): diseño offroad
 completo como la referencia de la Ranger, todo en 3D real (three.js): títulos de metal naranja oxidado que se arman
 letra por letra (el modelo se levanta al paso de una llanta 3D que cruza rodando), cifras que caen y cuentan (con llanta

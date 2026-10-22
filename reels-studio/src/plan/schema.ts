@@ -62,8 +62,21 @@ export const TRANSITIONS = ['corte', 'disolver', 'flash', 'zoom', 'whip', 'barri
  * Juego tipográfico de los títulos (gancho, presentación 3D, cifras, cierre). El director lo cambia de un Reel a otro
  * para que no se vean todos iguales (ver TYPEFACES en theme.ts).
  */
-export const TYPEFACE_NAMES = ['clasica', 'potente', 'tecnica', 'deportiva', 'moderna', 'geometrica'] as const
+export const TYPEFACE_NAMES = ['clasica', 'potente', 'tecnica', 'deportiva', 'moderna', 'geometrica', 'lujo', 'editorial', 'premium', 'refinada'] as const
 export type TypefaceName = (typeof TYPEFACE_NAMES)[number]
+/** Las elegantes son exclusivas de los SUV, y los SUV solo usan estas (no comparten letra con camionetas ni el resto). */
+export const SUV_TYPEFACES = ['lujo', 'editorial', 'premium', 'refinada'] as const satisfies readonly TypefaceName[]
+const SUV_SET: ReadonlySet<TypefaceName> = new Set(SUV_TYPEFACES)
+
+/**
+ * Tipografía final del Reel: la que eligió el director si corresponde a su categoría; si no, la primera de su grupo
+ * que no se haya usado en los Reels recientes.
+ */
+export function typefaceFor(isSuv: boolean, chosen: TypefaceName | undefined, recent: readonly string[] = []): TypefaceName | undefined {
+  if (chosen && SUV_SET.has(chosen) === isSuv) return chosen
+  if (!isSuv) return chosen ? 'clasica' : undefined
+  return SUV_TYPEFACES.find((t) => !recent.includes(t)) ?? SUV_TYPEFACES[0]
+}
 /** Cómo entra el texto del gancho (lo elige el director según el vehículo y el tono). */
 export const HOOK_STYLES = ['enfoque', 'golpe', 'revelado', 'cruce'] as const
 export type HookStyle = (typeof HOOK_STYLES)[number]

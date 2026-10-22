@@ -3,7 +3,7 @@ import { AbsoluteFill, interpolate, random, spring, useCurrentFrame, useVideoCon
 import type { CaptionStyle } from '../plan/schema'
 import type { CaptionLine, CaptionWord, Placement, ReelLook, ReelTheme } from '../plan/types'
 import { usePalette } from './palette'
-import { COLORS, FONT_CONDENSED, FONT_DISPLAY, FONT_HEAVY, FONT_RACE, FONT_SOCIAL, FONT_SPEED, FONT_UI, PALETTES } from '../theme'
+import { COLORS, FONT_CONDENSED, FONT_DISPLAY, FONT_EDITORIAL, FONT_HEAVY, FONT_RACE, FONT_SOCIAL, FONT_SPEED, FONT_UI, PALETTES } from '../theme'
 
 const Y_BY_PLACEMENT: Record<Placement, number> = { arriba: 0.2, centro: 0.5, abajo: 0.72 }
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const
@@ -37,9 +37,9 @@ export const Captions: React.FC<{ lines: CaptionLine[]; style?: CaptionStyle; th
   const props: LineProps = { words, local, fps, lineIndex }
   // `palabra` es una sola palabra gigante: va al centro salvo que abajo haya algo importante.
   const y = style === 'palabra' && line.placement === 'abajo' ? 0.62 : Y_BY_PLACEMENT[line.placement]
-  // El diseño camioneta tiene un solo estilo de subtítulo, el de la referencia. En modo cine, cada estilo
+  // El diseño camioneta tiene un solo estilo de subtítulo, el de la referencia, y el SUV el suyo, elegante. En modo cine, cada estilo
   // conserva su tipografía (para que no todos los Reels se vean iguales) pero se dibuja sobrio.
-  const Style = theme === 'offroad' ? Offroad : look === 'cine' ? CINE_STYLES[style] : (STYLES[style] ?? Impacto)
+  const Style = theme === 'offroad' ? Offroad : theme === 'suv' ? SuvLine : look === 'cine' ? CINE_STYLES[style] : (STYLES[style] ?? Impacto)
 
   return (
     <AbsoluteFill style={{ pointerEvents: 'none' }}>
@@ -357,6 +357,31 @@ function cineStyle(style: CaptionStyle): React.FC<LineProps> {
     )
   }
   return CineLine
+}
+
+/**
+ * SUV (diseño elegante): la frase en minúsculas, limpia y sin mayúsculas gritadas; la palabra clave en cursiva serif
+ * color champán, como un aviso de revista de autos de lujo. Aparece subiendo apenas, de borroso a nítido.
+ */
+const SuvLine: React.FC<LineProps> = ({ words, local }) => {
+  const { accent } = usePalette()
+  const t = interpolate(local, [0, 7], [0, 1], clamp)
+  return (
+    <div style={{ ...row, alignItems: 'baseline', gap: '2px 16px', opacity: t, transform: `translateY(${((1 - t) * 10).toFixed(1)}px)`, filter: t < 1 ? `blur(${(1 - t) * 4}px)` : undefined }}>
+      {words.map(({ w }, i) => {
+        const text = w.text.replace(/[.,;:…]+$/, '')
+        return w.emphasis ? (
+          <span key={i} style={{ fontFamily: FONT_EDITORIAL, fontStyle: 'italic', fontWeight: 700, fontSize: 72, lineHeight: 1.05, color: accent }}>
+            {text}
+          </span>
+        ) : (
+          <span key={i} style={{ fontFamily: FONT_UI, fontWeight: 800, fontSize: 56, letterSpacing: '0.01em', lineHeight: 1.1, color: COLORS.white }}>
+            {text}
+          </span>
+        )
+      })}
+    </div>
+  )
 }
 
 const CINE_STYLES = Object.fromEntries(

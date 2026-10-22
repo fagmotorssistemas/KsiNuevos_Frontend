@@ -22,6 +22,8 @@ const OFFROAD_GRADE = 'contrast(1.12) saturate(1.15) sepia(0.12) brightness(0.98
 /** Modo cine: contraste de película, color algo apagado; camionetas un poco más cálidas y duras. */
 const CINE_GRADE = 'contrast(1.1) saturate(0.88) brightness(0.97)'
 const CINE_GRADE_OFFROAD = 'contrast(1.16) saturate(0.92) sepia(0.08) brightness(0.95)'
+/** SUV: suave y cálido, de comercial de lujo. */
+const CINE_GRADE_SUV = 'contrast(1.08) saturate(0.9) sepia(0.07) brightness(0.99)'
 /** Golpe de cámara en palabras clave: sube rápido y vuelve en ~0.3 s. */
 const PUNCH_SCALE = 0.07
 const PUNCH_IN = 3
@@ -74,7 +76,7 @@ export const ClipLayer: React.FC<{
   // Cine: transiciones de comercial (las que eligió el director); camionetas solo las más secas.
   const allowed = offroad ? OFFROAD_TRANSITIONS : cine ? CINE_TRANSITIONS : null
   const transitionIn = !allowed || allowed.has(cut.transitionIn) ? cut.transitionIn : 'corte'
-  const grade = cine ? (offroad ? CINE_GRADE_OFFROAD : CINE_GRADE) : offroad ? OFFROAD_GRADE : ''
+  const grade = cine ? (offroad ? CINE_GRADE_OFFROAD : theme === 'suv' ? CINE_GRADE_SUV : CINE_GRADE) : offroad ? OFFROAD_GRADE : ''
 
   // Zoom activo hacia una característica (tiene prioridad sobre el movimiento suave).
   const zoom = cut.zooms.find((z) => frame >= z.fromFrame && frame < z.fromFrame + z.durationInFrames)

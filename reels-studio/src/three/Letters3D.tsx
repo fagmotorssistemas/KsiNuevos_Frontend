@@ -3,6 +3,7 @@
  * (caen y se asientan, se levantan al paso de una llanta o llegan desde el fondo). Dos acabados:
  * - "rust": metal naranja con degradado de sol y manchas de óxido (camionetas, como la referencia de la Ranger).
  * - "chrome": cromo blanco con cantos oscuros (el resto de los autos).
+ * - "champagne": cromo pulido con cantos dorados champán (SUV, diseño elegante).
  *
  * Las geometrías se guardan por letra: una cifra que cuenta (0 → 2.500) reutiliza los mismos diez dígitos.
  */
@@ -12,9 +13,12 @@ import * as THREE from 'three'
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js'
 import { FONTS, type FontKey } from './Text3D'
 
-export type Finish = 'rust' | 'chrome'
-/** drop: cae desde arriba girando y rebota apenas · flip: estaba acostada y se levanta · depth: llega desde el fondo. */
-export type Entrance = 'drop' | 'flip' | 'depth'
+export type Finish = 'rust' | 'chrome' | 'champagne'
+/**
+ * drop: cae desde arriba girando y rebota apenas · flip: estaba acostada y se levanta · depth: llega desde el fondo ·
+ * rise: sube despacio desde abajo inclinada hacia la cámara y se endereza (la más elegante, sin rebote).
+ */
+export type Entrance = 'drop' | 'flip' | 'depth' | 'rise'
 
 const DEPTH_RATIO = 0.34
 
@@ -155,10 +159,15 @@ function materials(finish: Finish): THREE.Material[] {
           new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, map: grunge(), metalness: 0.5, roughness: 0.38, clearcoat: 0.35, clearcoatRoughness: 0.3 }),
           new THREE.MeshStandardMaterial({ color: '#6B2C07', map: grunge(), metalness: 0.45, roughness: 0.55 }),
         ]
-      : [
-          new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', metalness: 0.78, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.12 }),
-          new THREE.MeshStandardMaterial({ color: '#2A2A30', metalness: 0.35, roughness: 0.4 }),
-        ]
+      : finish === 'champagne'
+        ? [
+            new THREE.MeshPhysicalMaterial({ color: '#F6F2EA', metalness: 0.85, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.08 }),
+            new THREE.MeshStandardMaterial({ color: '#B08A4E', metalness: 0.9, roughness: 0.26 }),
+          ]
+        : [
+            new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', metalness: 0.78, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.12 }),
+            new THREE.MeshStandardMaterial({ color: '#2A2A30', metalness: 0.35, roughness: 0.4 }),
+          ]
   materialCache.set(finish, made)
   return made
 }
@@ -217,6 +226,14 @@ function pose(entrance: Entrance, p: number, i: number, size: number) {
       position: [0, 0, 0] as const,
       rotation: [-(1 - up) * (Math.PI / 2), 0, 0] as const,
       scale: [1, Math.max(0.001, Math.min(1, p * 4)), 1] as const,
+    }
+  }
+  if (entrance === 'rise') {
+    const up = Easing.out(Easing.poly(4))(p)
+    return {
+      position: [0, (1 - up) * -0.9 * size, (1 - up) * 0.6 * size] as const,
+      rotation: [(1 - up) * 1.1, 0, 0] as const,
+      scale: [1, Math.max(0.001, Math.min(1, p * 2.5)), 1] as const,
     }
   }
   const come = cubicOut(p)

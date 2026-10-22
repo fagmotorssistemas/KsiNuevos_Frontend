@@ -14,7 +14,7 @@ import { Icon } from '../Icons'
 import { TreadBackground } from '../offroad/kit'
 import { Letters3D, measureLetters, staggered } from '../../three/Letters3D'
 import { Stage3D, toScene, UNITS_PER_PX } from '../../three/Stage3D'
-import { Chrome3D, Particles } from './Cine3D'
+import { Chrome3D, metalFor, Particles } from './Cine3D'
 import { AccentLine, CineCorners, CineLabel, CineText, ease, focusIn, LETTERBOX, useCineType } from './kit'
 
 type Props = { g: TimelineGraphic; theme: ReelTheme }
@@ -91,7 +91,7 @@ export const CineHook: React.FC<Props & { style?: HookStyle }> = ({ g, theme, st
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'radial-gradient(ellipse 80% 45% at 50% 42%, rgba(0,0,0,0.5), rgba(0,0,0,0) 75%)' }} />
-      <Particles seed={g.id} strength={0.55} warm={theme === 'offroad'} />
+      <Particles seed={g.id} strength={0.55} warm={theme !== 'ksi'} />
       <div
         style={{
           position: 'absolute',
@@ -156,7 +156,7 @@ export const CineTitle: React.FC<Props> = ({ g, theme }) => {
   return (
     <AbsoluteFill style={{ opacity: 1 - exit }}>
       <AbsoluteFill style={{ background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 38%, rgba(0,0,0,0) 56%)' }} />
-      <Particles seed={g.id} strength={0.85} warm={theme === 'offroad'} />
+      <Particles seed={g.id} strength={0.85} warm={theme !== 'ksi'} />
       {g.subtext ? (
         <div style={{ position: 'absolute', top: titleY - 200, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...focusIn(ease(frame, 6, 14), { blur: 6, scale: 1 }) }}>
           <CineLabel text={g.subtext} size={38} spacing={0.55} />
@@ -275,7 +275,7 @@ const CineNumber: React.FC<Props> = ({ g, theme }) => {
   const sameWord = wordUnit && wordUnit.toLowerCase() === g.text.trim().toLowerCase()
   const finalLength = `${finalNumber}${shortUnit}`.length
   const low = g.placement === 'abajo'
-  const finish = theme === 'offroad' ? 'rust' : 'chrome'
+  const { finish, entrance } = metalFor(theme)
 
   // Tamaño por alto de mayúscula; si la cifra final con su unidad no entra a lo ancho, se achica todo junto.
   const capPerSize = measureLetters('H', type.font3d, 1).cap
@@ -308,13 +308,13 @@ const CineNumber: React.FC<Props> = ({ g, theme }) => {
       )}
       <Stage3D sweep={[sweep, baselineU + capU / 2 + 1.2]}>
         <group position={[leftU, baselineU, 0]} rotation={[0.04, turn, 0]}>
-          <Letters3D text={number} font={type.font3d} finish={finish} entrance="depth" progress={() => (frame - 2) / 16} size={numberSize} align="left" position={[0, capU / 2, 0]} />
+          <Letters3D text={number} font={type.font3d} finish={finish} entrance={entrance} progress={() => (frame - 2) / 16} size={numberSize} align="left" position={[0, capU / 2, 0]} />
           {shortUnit ? (
             <Letters3D
               text={shortUnit}
               font={type.font3d}
               finish={finish}
-              entrance="depth"
+              entrance={entrance}
               progress={staggered(frame, 10, 2, 16)}
               size={unitSize}
               align="left"
@@ -478,7 +478,7 @@ export const CineCta: React.FC<Props & { brand: Brand }> = ({ g, theme, brand })
       ) : (
         <AbsoluteFill style={{ background: 'radial-gradient(ellipse 90% 70% at 50% 45%, #1A1A1D 0%, #050506 100%)' }} />
       )}
-      <Particles seed={g.id} strength={0.7} warm={theme === 'offroad'} />
+      <Particles seed={g.id} strength={0.7} warm={theme !== 'ksi'} />
       <div style={{ position: 'absolute', top: y0 - 210, left: 0, right: 0, display: 'flex', justifyContent: 'center', ...focusIn(ease(frame, 4, 14), { blur: 6, scale: 1 }) }}>
         <CineLabel text="Comenta" size={40} spacing={0.6} />
       </div>
