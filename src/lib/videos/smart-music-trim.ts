@@ -289,7 +289,7 @@ export interface PickSmartMusicTrimOptions {
 }
 
 /**
- * Segundos desde el inicio del archivo de música donde conviene `trim_start` en Creatomate.
+ * Segundos desde el inicio del archivo de música donde conviene empezar la pista en el render.
  */
 export async function pickSmartMusicTrimStartSec(opts: PickSmartMusicTrimOptions): Promise<number> {
   const { jobId, musicUrl, reelDurationSec, cutStartTimesSec } = opts

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Compara metadatos de color entre dos MP4 (fuente vs salida de Creatomate).
+ * Compara metadatos de color entre dos MP4 (fuente vs salida del render).
  * Requiere `ffprobe` en PATH (instalar con Homebrew: brew install ffmpeg).
  *
  * Uso:
@@ -61,7 +61,7 @@ const b = process.argv[3]
 if (!a) {
   console.error(
     'Uso: node scripts/ffprobe-stream-color.mjs <archivo-o-url-1> [archivo-o-url-2]\n' +
-      'Ejemplo: node scripts/ffprobe-stream-color.mjs ./fuente.mp4 ./creatomate-out.mp4'
+      'Ejemplo: node scripts/ffprobe-stream-color.mjs ./fuente.mp4 ./render-out.mp4'
   )
   process.exit(1)
 }
@@ -75,7 +75,7 @@ if (b) {
   const s1 = pickVideoStream(d1)
   const s2 = pickVideoStream(d2)
   if (s1 && s2) {
-    console.log('\n── Comparación (útiles para ticket Creatomate) ──')
+    console.log('\n── Comparación (útiles para diagnosticar color) ──')
     const keys = ['color_space', 'color_primaries', 'color_transfer', 'color_range', 'pix_fmt']
     for (const k of keys) {
       const v1 = s1[k] ?? '—'

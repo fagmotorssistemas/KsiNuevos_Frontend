@@ -119,17 +119,6 @@ export interface MusicTrack {
   is_active: boolean
 }
 
-export interface CreatomateWebhookPayload {
-  id: string
-  status: 'succeeded' | 'failed' | 'planned' | 'rendering'
-  url?: string
-  snapshot_url?: string
-  metadata?: string
-  error_message?: string
-  duration?: number
-  file_size?: number
-}
-
 export interface PipelineContext {
   jobId: string
   flowType: FlowType

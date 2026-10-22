@@ -21,7 +21,7 @@ export interface InstagramPublishResult {
 }
 
 /**
- * Publica un Reel en Instagram desde URL pública del MP4 (Creatomate).
+ * Publica un Reel en Instagram desde URL pública del MP4 renderizado.
  */
 export async function publishInstagramReel(videoUrl: string, caption: string): Promise<InstagramPublishResult> {
   const userId = process.env.INSTAGRAM_USER_ID

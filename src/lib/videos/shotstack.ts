@@ -1,13 +1,11 @@
 /**
- * Shotstack — motor de render (reemplazo de Creatomate en pipeline).
- *
- * Misma firma pública de `renderSegmentsV2` que creatomate.ts para pipeline.ts.
+ * Shotstack — motor de render de Reels del pipeline (`renderSegmentsV2`).
  */
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import type { SequenceItem, SubtitleBlock } from './segmenter'
-import type { BrandConfig, VoiceOverIntroRenderInput } from './creatomate'
+import type { BrandConfig, VoiceOverIntroRenderInput } from './reel-render-inputs'
 import {
   clampShotstackAssetVolume,
   computeReelAudioBalance,
@@ -118,7 +116,7 @@ const CLIP_BOUNDARY_TRANSITIONS: Record<number, string> = {
 const CLIP_6_AT_INDEX = 5
 const CLIP_6_ENTER_TRANSITION_IN = 'wipeLeft'
 const CLIP_6_WIPE_UNDERLAY_SEC = 1.0
-/** Intro clip 1: zoomOut (empieza cerca, se aleja) — igual que Creatomate índice par */
+/** Intro clip 1: zoomOut (empieza cerca, se aleja) */
 const FIRST_CLIP_INTRO_EFFECT = 'zoomOutFast' as const
 const FIRST_CLIP_INTRO_PULL_SEC = 0.28
 

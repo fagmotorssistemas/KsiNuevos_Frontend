@@ -37,7 +37,7 @@ const PIPELINE_STEPS = [
   { key: 'uploading', label: 'Subida a Storage', icon: Upload },
   { key: 'transcribing', label: 'Transcripción AssemblyAI', icon: Mic2 },
   { key: 'analyzing', label: 'Análisis Gemini IA', icon: Brain },
-  { key: 'rendering', label: 'Renderizado Creatomate', icon: Clapperboard },
+  { key: 'rendering', label: 'Renderizado Shotstack', icon: Clapperboard },
   { key: 'completed', label: 'Completado', icon: CheckCircle2 },
 ]
 
@@ -457,7 +457,7 @@ export default function JobDetailPage() {
               { label: 'Creado', value: formatDate(job.created_at) },
               { label: 'Actualizado', value: formatDate(job.updated_at) },
               ...(job.assemblyai_transcript_id ? [{ label: 'AssemblyAI ID', value: job.assemblyai_transcript_id }] : []),
-              ...(job.creatomate_render_id ? [{ label: 'Creatomate ID', value: job.creatomate_render_id }] : []),
+              ...(job.creatomate_render_id ? [{ label: 'Render ID', value: job.creatomate_render_id }] : []),
               ...(job.final_video_duration ? [{ label: 'Duración final', value: `${Math.round(job.final_video_duration)}s` }] : []),
             ].map(({ label, value }) => (
               <div key={label}>

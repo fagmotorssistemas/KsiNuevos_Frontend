@@ -1,7 +1,7 @@
 /**
  * Segmentador V2 — Pre-procesa palabras crudas de AssemblyAI,
  * detecta silencios y construye un mapa de segmentos hablados continuos.
- * También genera el SRT ajustado desde cero para inyección directa en Creatomate.
+ * También genera el SRT ajustado desde cero para el render.
  */
 
 import type { RawWord } from './assemblyai'
@@ -291,7 +291,7 @@ export function buildAdjustedSRT(
   return srtBlocks.join('\n\n')
 }
 
-// ─── Bloques de subtítulos estructurados para Creatomate ──────────────────────
+// ─── Bloques de subtítulos estructurados para el render ───────────────────────
 
 export interface SubtitleWordTiming {
   text: string
@@ -316,7 +316,7 @@ export interface SubtitleBlock {
 /**
  * Construye bloques de subtítulos estructurados (NO formato SRT).
  * Cada bloque tiene time, duration y texto listo para ser un elemento
- * independiente en la composición de Creatomate.
+ * independiente en la composición del render.
  */
 export function buildSubtitleBlocks(
   sequence: SequenceItem[],

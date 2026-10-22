@@ -57,7 +57,7 @@ import { fetchDriveBadgeForJob } from './drive-badge'
 import { normalizeDriveSubtitleBlocks } from './normalize-drive-subtitles'
 import { applyComentaFromAssembly } from './detect-comenta-from-assembly'
 import { applyCaptionHighlights } from './highlight-engine'
-import type { BrandConfig } from './creatomate'
+import type { BrandConfig } from './reel-render-inputs'
 import { formatAssemblyTranscriptDumpForPrompt } from './assembly-transcript-prompt'
 import { tryProbeVideoDurationSecondsFromUrl } from './probe-video'
 import {
@@ -72,19 +72,13 @@ import {
 } from './guion-sequence'
 import { dialogueLinesFromGuionEscenas, type GuionEscena } from '@/types/video-script'
 import {
-  buildCreatomateRenderScript,
-  computeReelTimelineMeta,
-  getCreatomateRenderStatus,
-  submitCreatomateRenderForJob,
   brandConfigFromJobRow,
   type BrandConfigJobRow,
-  type CreatomateFlatRenderScript,
   VOICE_OVER_EXTERNAL_CLIP_INDEX,
   type VoiceOverIntroRenderInput,
-} from './creatomate'
+} from './reel-render-inputs'
 import { renderSegmentsV2, getShotstackRenderStatus, resolveCaptionStyleVersion } from './shotstack'
 import { reelAudioVolumesFromPipelineMeta, type ReelAudioRenderVolumes } from './audio-balance'
-import { pickSmartMusicTrimStartSec } from './smart-music-trim'
 import { buildSemanticVoiceOverBrollTiles, planLinearBrollTiling } from './vo-broll-semantics'
 import {
   prepareVideoForGemini,
@@ -576,57 +570,6 @@ async function monitorShotstackRenderFallback(jobId: string, renderId: string) {
   await updateJob(jobId, {
     status: 'failed',
     error_message: 'Timeout esperando confirmación final de Shotstack (20 minutos).',
-    current_step: 'Timeout de renderizado',
-  })
-}
-
-async function monitorCreatomateRenderFallback(jobId: string, renderId: string) {
-  const MAX_WAIT_MS = 20 * 60 * 1000
-  const POLL_MS = 15_000
-  const started = Date.now()
-
-  console.log(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Iniciando fallback monitor para render ${renderId}`)
-
-  while (Date.now() - started < MAX_WAIT_MS) {
-    await new Promise((r) => setTimeout(r, POLL_MS))
-
-    const current = await getJobStatus(jobId)
-    if (current === 'completed' || current === 'failed') {
-      console.log(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Job ya cerrado (status=${current}).`)
-      return
-    }
-
-    try {
-      const render = await getCreatomateRenderStatus(renderId)
-      console.log(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] status=${render.status}`)
-
-      if (render.status === 'succeeded') {
-        await updateJob(jobId, {
-          status: 'completed',
-          final_video_url: render.url ?? undefined,
-          final_video_duration: render.duration ?? undefined,
-          progress_percentage: 100,
-          current_step: 'Video listo (confirmado por polling)',
-        })
-        return
-      }
-
-      if (render.status === 'failed') {
-        await updateJob(jobId, {
-          status: 'failed',
-          error_message: render.error_message ?? 'Creatomate reportó fallo (polling fallback).',
-          current_step: 'Error en renderizado',
-        })
-        return
-      }
-    } catch (err) {
-      console.warn(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error consultando render: ${err}`)
-    }
-  }
-
-  await updateJob(jobId, {
-    status: 'failed',
-    error_message: 'Timeout esperando confirmación final de Creatomate (20 minutos).',
     current_step: 'Timeout de renderizado',
   })
 }
@@ -2254,194 +2197,10 @@ export async function getVideoJobEditorState(jobId: string): Promise<{
 }
 
 /**
- * Nuevo envío a Creatomate usando el `segment_map` ya guardado y un `gemini_analysis`
+ * Nuevo render en Shotstack usando el `segment_map` ya guardado y un `gemini_analysis`
  * (el del job o uno editado). Útil para corregir cortes/subtítulos sin re-transcribir.
  */
-/**
- * Misma composición que se enviaría a Creatomate en un re-render, sin mutar el job ni iniciar render.
- * Sirve para el Preview SDK (`setSource`) y para inspección.
- */
-export async function getCreatomateRenderScriptForJob(
-  jobId: string,
-  geminiAnalysisOverride?: unknown
-): Promise<CreatomateFlatRenderScript> {
-  const supabase = getServiceClient()
-  const { data: job, error } = await supabase
-    .from('video_jobs_v2')
-    .select('*')
-    .eq('id', jobId)
-    .single()
-
-  if (error || !job) {
-    throw new Error('Job no encontrado')
-  }
-  const paths = job.raw_video_paths ?? []
-  if (paths.length === 0) {
-    throw new Error('Job sin raw_video_paths')
-  }
-  if (!job.music_track_url) {
-    throw new Error('Job sin música asignada')
-  }
-  if (!job.segment_map) {
-    throw new Error('Job sin segment_map')
-  }
-
-  const allSegments = parseSegmentMapJson(job.segment_map)
-  const rawAnalysis = geminiAnalysisOverride ?? job.gemini_analysis
-  const analysis = coerceGeminiAnalysisFromUnknown(rawAnalysis, jobId)
-  assertSequenceMatchesStoredSegments(analysis, allSegments, jobId)
-
-  let kinds = defaultClipKinds(paths.length)
-  let clipDurationsSecInput: (number | null)[] | undefined
-  let voiceOverBaseClipIndex: number | undefined
-  let voiceOverOverlayClipIndicesFromMeta: number[] | undefined
-  let voiceOverAudioPathFromMeta: string | undefined
-  let voiceOverMp3DurationSecFromMeta: number | undefined
-  let musicTrimStartSecFromMeta: number | undefined
-  const sc = job.selected_clips
-  if (isPipelineInputMeta(sc)) {
-    if (Array.isArray(sc.clipKinds) && sc.clipKinds.length === paths.length) {
-      kinds = normalizeClipKindsInput(sc.clipKinds, paths.length)
-    }
-    if (Array.isArray(sc.clipDurationsSec) && sc.clipDurationsSec.length === paths.length) {
-      clipDurationsSecInput = normalizeClipDurationsInput(sc.clipDurationsSec, paths.length)
-    }
-    if (typeof sc.voiceOverBaseClipIndex === 'number') {
-      voiceOverBaseClipIndex = sc.voiceOverBaseClipIndex
-    }
-    if (typeof sc.voiceOverAudioPath === 'string' && sc.voiceOverAudioPath.trim().length > 0) {
-      voiceOverAudioPathFromMeta = sc.voiceOverAudioPath.trim()
-    }
-    if (
-      typeof sc.voiceOverMp3DurationSec === 'number' &&
-      Number.isFinite(sc.voiceOverMp3DurationSec) &&
-      sc.voiceOverMp3DurationSec > 0.2
-    ) {
-      voiceOverMp3DurationSecFromMeta = Number(sc.voiceOverMp3DurationSec.toFixed(3))
-    }
-    musicTrimStartSecFromMeta = normalizeMusicTrimStartSec(sc.musicTrimStartSec)
-    if (
-      voiceOverAudioPathFromMeta &&
-      Array.isArray(sc.voiceOverOverlayClipIndices) &&
-      sc.voiceOverOverlayClipIndices.length > 0
-    ) {
-      const normMp3 = normalizeVoiceOverMp3OverlayIndices(sc.voiceOverOverlayClipIndices, paths.length)
-      if (normMp3 && normMp3.length > 0) voiceOverOverlayClipIndicesFromMeta = normMp3
-    } else if (
-      typeof sc.voiceOverBaseClipIndex === 'number' &&
-      Array.isArray(sc.voiceOverOverlayClipIndices) &&
-      sc.voiceOverOverlayClipIndices.length > 0
-    ) {
-      const norm = normalizeVoiceOverOverlayClipIndices(
-        sc.voiceOverOverlayClipIndices,
-        paths.length,
-        sc.voiceOverBaseClipIndex
-      )
-      if (norm && norm.length > 0) voiceOverOverlayClipIndicesFromMeta = norm
-    }
-  }
-  if (voiceOverBaseClipIndex != null && paths.length < 2) {
-    voiceOverBaseClipIndex = undefined
-  }
-
-  const clipFilenames = paths.map((p) => decodeURIComponent(p.split('/').pop() || 'clip.mp4'))
-
-  const freshClipUrls = await Promise.all(paths.map((p) => getSignedUrlForPath(p)))
-
-  const scriptStPreview =
-    typeof job.script_text === 'string' && job.script_text.trim().length > 0 ? job.script_text : null
-  const { subtitleBlocks: autoSubtitleBlocks, voiceOverIntro } = await computeAutomaticSubtitlePayload({
-    jobId,
-    paths,
-    analysis,
-    allSegments,
-    kinds,
-    clipDurationsSecInput,
-    voiceOverBaseClipIndex,
-    voiceOverOverlayClipIndices: voiceOverOverlayClipIndicesFromMeta,
-    voiceOverAudioPath: voiceOverAudioPathFromMeta,
-    voiceOverMp3DurationSec: voiceOverMp3DurationSecFromMeta,
-    clipFilenames,
-    signedClipUrls: freshClipUrls,
-    scriptTextForSubtitles: scriptStPreview,
-  })
-
-  let subtitleBlocks = autoSubtitleBlocks
-  try {
-    const ovr = parseSubtitleBlocksOverride(job.subtitle_blocks_override)
-    if (ovr && ovr.length > 0) {
-      subtitleBlocks = ovr
-    }
-  } catch (e) {
-    console.warn(
-      `[VideoV2Pipeline][${jobId}] subtitle_blocks_override inválido, se usan subtítulos automáticos: ${e}`
-    )
-  }
-
-  const voIntroFresh = await refreshVoiceOverIntroAudioUrl(voiceOverIntro)
-
-  const timeline = computeReelTimelineMeta(analysis.sequence, voIntroFresh)
-  const musicTrimStartSec =
-    musicTrimStartSecFromMeta ??
-    (await pickSmartMusicTrimStartSec({
-      jobId,
-      musicUrl: job.music_track_url,
-      reelDurationSec: timeline.totalDurationSec,
-      cutStartTimesSec: timeline.cutStartTimesSec,
-    }))
-
-  return buildCreatomateRenderScript(
-    jobId,
-    analysis.sequence,
-    freshClipUrls,
-    subtitleBlocks,
-    job.music_track_url,
-    voIntroFresh,
-    musicTrimStartSec
-  )
-}
-
-/**
- * Inicia un render en Creatomate con el JSON editado en el Preview SDK (mismo formato que la API).
- */
-export async function startCreatomateRenderFromClientScript(
-  jobId: string,
-  script: CreatomateFlatRenderScript
-): Promise<{ renderId: string }> {
-  const supabase = getServiceClient()
-  const { data: job, error } = await supabase.from('video_jobs_v2').select('id').eq('id', jobId).single()
-  if (error || !job) {
-    throw new Error('Job no encontrado')
-  }
-
-  await updateJob(jobId, {
-    status: 'rendering',
-    current_step: 'Render desde editor Creatomate (Preview SDK)…',
-    progress_percentage: 82,
-    final_video_url: null,
-    final_video_duration: null,
-    error_message: null,
-  })
-
-  const renderId = await submitCreatomateRenderForJob(jobId, script)
-
-  await updateJob(jobId, {
-    creatomate_render_id: renderId,
-    progress_percentage: 85,
-    current_step: `Render enviado a Creatomate (ID: ${renderId}). Esperando resultado…`,
-  })
-
-  setImmediate(() => {
-    monitorCreatomateRenderFallback(jobId, renderId).catch((e) =>
-      console.error(`[VideoV2Pipeline][${jobId}][CreatomateMonitor] Error fatal (preview export): ${e}`)
-    )
-  })
-
-  console.log(`[VideoV2Pipeline][${jobId}] Render desde Preview SDK. Creatomate ID=${renderId}`)
-  return { renderId }
-}
-
-export async function rerunCreatomateRenderForJob(
+export async function rerunRenderForJob(
   jobId: string,
   geminiAnalysisOverride?: unknown,
   opts?: { musicTrackIdOverride?: string; musicTrimStartSecOverride?: number | null }

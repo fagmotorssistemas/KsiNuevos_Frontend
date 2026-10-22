@@ -623,11 +623,11 @@ export function JobManualEditor({ jobId, onSaved }: Props) {
                   ) : (
                     <Clapperboard className="w-4 h-4" />
                   )}
-                  Re-renderizar video (Creatomate)
+                  Re-renderizar video
                 </button>
                 <span className="text-[11px] text-gray-500">
                   Los subtítulos se guardan solos al editar. Los cortes siguen requiriendo «Guardar cortes». Este botón
-                  envía a Creatomate el análisis en BD y, si hay filas de subtítulos cargadas, también las persiste antes
+                  envía a renderizar el análisis en BD y, si hay filas de subtítulos cargadas, también las persiste antes
                   del render. Si activas “Cambiar música”, también actualiza la pista de fondo del job.
                 </span>
               </div>

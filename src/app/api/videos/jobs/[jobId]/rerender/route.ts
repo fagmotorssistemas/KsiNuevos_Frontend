@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { applyVideoJobEditorPatch, rerunCreatomateRenderForJob } from '@/lib/videos/pipeline'
+import { applyVideoJobEditorPatch, rerunRenderForJob } from '@/lib/videos/pipeline'
 import { normalizeMusicTrimStartSec } from '@/lib/videos/clip-config'
 
 /**
@@ -8,7 +8,7 @@ import { normalizeMusicTrimStartSec } from '@/lib/videos/clip-config'
  * - `gemini_analysis` — si se omite, usa el análisis ya guardado en el job.
  * - `subtitle_blocks_override` — si viene en el JSON, se persiste antes del render (evita perder
  *   ediciones si el cliente aún no había hecho PATCH o hubo lectura desfasada en BD).
- * Reconstruye subtítulos y vuelve a enviar a Creatomate (mismo segment_map y vídeos en Storage).
+ * Reconstruye subtítulos y vuelve a enviar a Shotstack (mismo segment_map y vídeos en Storage).
  */
 export async function POST(
   request: NextRequest,
@@ -50,14 +50,14 @@ export async function POST(
           subtitle_blocks_override: body.subtitle_blocks_override,
         })
       }
-      const { renderId } = await rerunCreatomateRenderForJob(jobId, geminiOverride, {
+      const { renderId } = await rerunRenderForJob(jobId, geminiOverride, {
         musicTrackIdOverride: musicTrackId,
         musicTrimStartSecOverride,
       })
       return NextResponse.json({ ok: true, renderId })
     }
 
-    const { renderId } = await rerunCreatomateRenderForJob(jobId, geminiOverride)
+    const { renderId } = await rerunRenderForJob(jobId, geminiOverride)
     return NextResponse.json({ ok: true, renderId })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al re-renderizar'

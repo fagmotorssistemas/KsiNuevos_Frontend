@@ -81,7 +81,7 @@ export async function uploadJobVoiceOverAudioToMusicBucket(
   return { path, publicUrl: data.publicUrl }
 }
 
-/** URL para Creatomate: clips en raw bucket (firmada) o VO en bucket música (pública). */
+/** URL para el render: clips en raw bucket (firmada) o VO en bucket música (pública). */
 export async function resolveVoiceOverAudioUrl(storagePath: string): Promise<string> {
   const p = storagePath.trim()
   if (p.startsWith('reel-vo/')) {

@@ -67,7 +67,7 @@ const marketingCards: DashboardCard[] = [
     {
         href: '/marketing/videos',
         title: 'Videos',
-        description: 'Fábrica automatizada de Reels (AssemblyAI + Gemini + Creatomate).',
+        description: 'Fábrica automatizada de Reels (AssemblyAI + Gemini + Shotstack).',
         icon: Sparkles,
         iconClassName: 'bg-gradient-to-br from-violet-500 to-violet-700 shadow-violet-500/20',
         arrowClassName: 'text-violet-600',

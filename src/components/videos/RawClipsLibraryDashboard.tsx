@@ -226,7 +226,7 @@ function InfoSidebar({
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Clips en bruto</p>
             <p className="mt-1 text-sm text-gray-600">
-              Material fuente subido para la fábrica de Reels, antes de Creatomate.
+              Material fuente subido para la fábrica de Reels, antes del render.
             </p>
           </div>
         </div>

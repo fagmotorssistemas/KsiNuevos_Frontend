@@ -1138,7 +1138,7 @@ export function CreateReelModal({
                   <p className="font-semibold text-amber-950">Sobre el color del resultado</p>
                   <p className="mt-1">
                     Los .MOV de iPhone suelen ser HDR (Dolby Vision / HLG). El render automático puede verse más
-                    &quot;lavado&quot; que si exportas a mano en Creatomate. Para colores más fieles, sube versiones en{' '}
+                    &quot;lavado&quot; que el original. Para colores más fieles, sube versiones en{' '}
                     <strong>H.264 / SDR</strong> (por ejemplo desde Fotos: compartir → guardar como &quot;Más
                     compatible&quot;, o exportar MP4 desde DaVinci / HandBrake con perfil Rec.709).
                   </p>
@@ -1150,7 +1150,7 @@ export function CreateReelModal({
                   <p className="text-sm font-semibold text-gray-900">Voz en off</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     Elige cómo va el audio principal del bloque de voz en off. Los clips que marques como planos encima
-                    van en mudo en Creatomate para que no choquen con ese audio. Gemini sigue ordenando el resto del Reel
+                    van en mudo en el render para que no choquen con ese audio. Gemini sigue ordenando el resto del Reel
                     y en qué momento entra el bloque de VO.
                   </p>
                   <div className="space-y-2">
