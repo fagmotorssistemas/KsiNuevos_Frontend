@@ -10,22 +10,48 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ReelProps, ScreenFocus, TimelineGraphic } from '../../src/plan/types'
 import { formatVehicle, type VehicleInfo } from '../director-prompt'
+import { classifyVehicle } from '../vehicle-catalog'
 import type { MotionDesign } from './compose'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const s = (frames: number, fps: number) => (frames / fps).toFixed(2)
 const box = (f: ScreenFocus) => `centro (${Math.round(f.cx)}, ${Math.round(f.cy)}) px, ${Math.round(f.w)}×${Math.round(f.h)} px`
 
-/** Marcas que van con el diseño súper premium, sin importar la carrocería. */
-const PREMIUM_BRANDS = /mercedes|bmw|audi|porsche|lexus|land ?rover|range ?rover|volvo|jaguar|maserati|tesla|genesis|infiniti|cadillac|lincoln|alfa ?romeo|bentley|ferrari|lamborghini/i
-
-/** Diseño de motion graphics según el vehículo: marca de lujo → premium; si no, por tipo. */
+/**
+ * Diseño de motion graphics según lo que el vehículo ES (tipo y gama que identificó Claude, o los del catálogo):
+ * la gama manda (súper premium, premium) y después el tipo. Nunca se decide por la carrocería del inventario.
+ */
 export function motionDesignFor(v: VehicleInfo): MotionDesign {
-  if (PREMIUM_BRANDS.test(v.marca ?? '')) return 'premium'
-  if (v.categoria === 'camioneta') return 'camioneta'
-  if (v.categoria === 'suv') return 'suv'
-  if (v.categoria === 'deportivo') return 'deportivo'
+  const known = classifyVehicle({ marca: v.marca, modelo: `${v.modelo} ${v.notas ?? ''}`, carroceria: v.carroceria })
+  const gama = v.gama ?? known.gama
+  const tipo = v.categoria ?? known.tipo
+  if (gama === 'super_premium') return 'superpremium'
+  if (gama === 'premium') return 'premium'
+  if (tipo === 'camioneta') return 'camioneta'
+  if (tipo === 'suv') return 'suv'
+  if (tipo === 'deportivo') return 'deportivo'
   return 'general'
+}
+
+export type Direction = { id: string; name: string }
+
+/** Direcciones creativas de un diseño (los "### id · Nombre" de motion/designs/<diseño>.md). */
+export function designDirections(design: MotionDesign): Direction[] {
+  const md = fs.readFileSync(path.join(ROOT, 'motion/designs', `${design}.md`), 'utf8')
+  return [...md.matchAll(/^### ([a-z0-9-]+) · (.+)$/gm)].map((m) => ({ id: m[1], name: m[2].trim() }))
+}
+
+/**
+ * Las direcciones que Claude puede elegir en este Reel: las que no se usaron hace poco (en este mismo auto y en la
+ * categoría), en orden aleatorio, hasta dos. Si todas se usaron, todas menos la última.
+ */
+export function offerDirections(design: MotionDesign, recent: string[], random = Math.random): Direction[] {
+  const all = designDirections(design)
+  let pool = all.filter((d) => !recent.includes(d.id))
+  if (!pool.length) pool = all.filter((d) => d.id !== recent[0])
+  if (!pool.length) pool = all
+  const shuffled = pool.map((d) => ({ d, k: random() })).sort((a, b) => a.k - b.k).map((x) => x.d)
+  return shuffled.slice(0, 2)
 }
 
 function graphicLine(g: TimelineGraphic, fps: number): string {
@@ -51,8 +77,8 @@ function graphicLine(g: TimelineGraphic, fps: number): string {
   return `- ${g.id} · ${g.type} · ${start.toFixed(2)}–${end.toFixed(2)} s · ${fields.join(' · ')}`
 }
 
-/** Texto del guion: vehículo, diseño, tomas, teaser, gráficos y subtítulos. */
-export function briefText(props: ReelProps, vehicle: VehicleInfo, design: MotionDesign): string {
+/** Texto del guion: vehículo, diseño, dirección creativa, tomas, teaser, gráficos y subtítulos. */
+export function briefText(props: ReelProps, vehicle: VehicleInfo, design: MotionDesign, offered: Direction[], recent: string[]): string {
   const fps = props.fps
   const cuts = props.cuts.map((c, i) => {
     const n = i + 1
@@ -83,6 +109,12 @@ export function briefText(props: ReelProps, vehicle: VehicleInfo, design: Motion
     '',
     'VEHÍCULO',
     formatVehicle(vehicle),
+    '',
+    'DIRECCIÓN CREATIVA',
+    `Elige UNA de estas direcciones del diseño "${design}": ${offered.map((d) => `${d.id} (${d.name})`).join(' o ')}.`,
+    recent.length ? `Ya se usaron hace poco (no las repitas): ${recent.join(', ')}.` : 'Es el primer Reel de esta categoría: cualquiera de las ofrecidas.',
+    'Escríbela al empezar <notas> como "dirección: <id>". Dentro de la dirección decide tú el detalle (tipografía, gancho visual,',
+    'piezas, transiciones), distinto de lo que se hizo antes con este auto si hay Reels anteriores.',
     '',
     'TOMAS (ya montadas en el HTML con su audio; tú mueves su cámara #cam-N y diseñas cómo se pasa de una a otra)',
     ...cuts,

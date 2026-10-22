@@ -162,7 +162,26 @@ export const transcriptFixSchema = z.object({
 })
 export type TranscriptFix = z.infer<typeof transcriptFixSchema>
 
+/** Tipo real del vehículo y su gama (ver pipeline/vehicle-catalog.ts). */
+export const VEHICLE_TYPES = ['camioneta', 'suv', 'sedan', 'hatchback', 'deportivo', 'van'] as const
+export const VEHICLE_TIERS = ['normal', 'premium', 'super_premium'] as const
+/** Qué vehículo es de verdad, según lo que Claude ve en los clips, oye al asesor y sabe del modelo. */
+export const vehicleIdSchema = z.object({
+  marca: z.string(),
+  /** Nombre comercial, sin los códigos del inventario ("Hilux SR", "Trailblazer Premier"). */
+  modelo: z.string(),
+  tipo: z.enum(VEHICLE_TYPES),
+  gama: z.enum(VEHICLE_TIERS),
+  blindado: z.boolean(),
+  hibrido: z.boolean(),
+  /** Si lo que se ve no cuadra con los datos del inventario, en una frase. */
+  observacion: z.string().optional(),
+})
+export type VehicleId = z.infer<typeof vehicleIdSchema>
+
 export const creativePlanSchema = z.object({
+  /** Identificación del vehículo (planes viejos no la traen). */
+  vehiculo: vehicleIdSchema.optional(),
   strategy: z.string(),
   hookIdea: z.string(),
   cuts: z.array(cutSchema).min(1),

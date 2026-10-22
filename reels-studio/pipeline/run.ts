@@ -17,6 +17,7 @@ import { buildReelProps } from '../src/plan/timeline'
 import type { ClipSource } from '../src/plan/types'
 import { transcribeClip, type TranscribedWord } from './assemblyai'
 import type { VehicleInfo } from './director-prompt'
+import { classifyVehicle } from './vehicle-catalog'
 import { directReel, refineFocusBoxes } from './claude-director'
 import type { DirectorClip } from './director-plan'
 import { probeVideo } from './probe'
@@ -63,6 +64,17 @@ if (!values.name || !values.vehicle || !values.clips?.length) {
 
 const name = values.name.replace(/[^a-z0-9-_]/gi, '-').toLowerCase()
 const vehicle = JSON.parse(fs.readFileSync(values.vehicle, 'utf8')) as VehicleInfo
+// Qué es el vehículo por su modelo (no por la carrocería del inventario, que viene mal escrita); Claude lo confirma.
+{
+  const known = classifyVehicle({ marca: vehicle.marca, modelo: `${vehicle.modelo} ${vehicle.notas ?? ''}`, carroceria: vehicle.carroceria })
+  vehicle.marca = known.marca || vehicle.marca
+  if (known.tipo) vehicle.categoria = known.tipo
+  vehicle.tipoFuente = known.fuente
+  vehicle.gama = known.gama
+  vehicle.blindado = vehicle.blindado || known.blindado
+  vehicle.hibrido = vehicle.hibrido || known.hibrido
+  console.log(`[vehículo] ${vehicle.marca} ${vehicle.modelo}: ${vehicle.categoria ?? 'sin tipo'} · gama ${known.gama} (${known.fuente})`)
+}
 const outDir = path.join(ROOT, 'out', name)
 const publicJobDir = path.join(ROOT, 'public', 'jobs', name)
 fs.mkdirSync(outDir, { recursive: true })
@@ -171,6 +183,17 @@ if (fs.existsSync(planFile) && !values.replan) {
 }
 // SUV: solo sus tipografías elegantes (sin repetir las recientes); el resto nunca las usa. Se guarda en el plan para
 // que los próximos Reels sepan cuál salió.
+// Manda lo que Claude identificó en los clips; si el plan es viejo y no lo trae, lo del catálogo.
+if (plan.vehiculo) {
+  const id = plan.vehiculo
+  if (id.tipo !== vehicle.categoria || id.gama !== vehicle.gama) console.log(`[vehículo] Claude: ${id.marca} ${id.modelo} es ${id.tipo} · gama ${id.gama}`)
+  if (id.observacion) console.warn(`[vehículo] ${id.observacion}`)
+  vehicle.categoria = id.tipo
+  vehicle.gama = id.gama
+  vehicle.blindado = id.blindado
+  vehicle.hibrido = id.hibrido
+}
+fs.writeFileSync(path.join(outDir, 'vehicle.json'), JSON.stringify(vehicle, null, 2))
 const isSuv = vehicle.categoria === 'suv'
 const typeface = typefaceFor(isSuv, plan.typeface, vehicle.tipografiasRecientes)
 if (typeface !== plan.typeface) {

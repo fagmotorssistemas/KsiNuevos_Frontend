@@ -61,8 +61,47 @@ export class MotionDirector {
     this.client = new Anthropic({ apiKey })
   }
 
-  private async turn(step: string, content: Anthropic.Beta.BetaContentBlockParam[]): Promise<string> {
+  /**
+   * Marca de caché (1 hora: escribir la composición puede tardar más de 5 minutos) en el último bloque de este turno.
+   * Quedan marcados el system, el primer turno (guion y cuadros) y el último; las marcas intermedias se quitan para no
+   * pasar de 4.
+   */
+  private pushUser(content: Anthropic.Beta.BetaContentBlockParam[]) {
+    const last = content[content.length - 1] as { cache_control?: unknown }
+    last.cache_control = { type: 'ephemeral', ttl: '1h' }
+    const users = this.messages.filter((m) => m.role === 'user')
+    for (const m of users.slice(1)) {
+      if (!Array.isArray(m.content)) continue
+      for (const b of m.content) delete (b as { cache_control?: unknown }).cache_control
+    }
     this.messages.push({ role: 'user', content })
+  }
+
+  /** Retoma una conversación con una composición ya escrita (para corregir o revisar sin volver a escribirla). */
+  resume(brief: string, frames: Array<{ t: number; label: string; data: string }>, result: MotionResult) {
+    this.pushUser(this.firstTurn(brief, frames))
+    const text = [
+      `<notas>${result.notes}</notas>`,
+      `<css>\n${result.css}\n</css>`,
+      `<markup>\n${result.markup}\n</markup>`,
+      `<timeline>\n${result.timeline}\n</timeline>`,
+      `<three>\n${result.three}\n</three>`,
+    ].join('\n')
+    this.messages.push({ role: 'assistant', content: [{ type: 'text', text }] })
+  }
+
+  private firstTurn(brief: string, frames: Array<{ t: number; label: string; data: string }>): Anthropic.Beta.BetaContentBlockParam[] {
+    const content: Anthropic.Beta.BetaContentBlockParam[] = [{ type: 'text', text: `GUION DEL REEL\n\n${brief}\n\nCUADROS DEL VIDEO (sin gráficos), en orden:` }]
+    for (const f of frames) {
+      content.push({ type: 'text', text: `t = ${f.t.toFixed(2)} s · ${f.label}` })
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f.data } })
+    }
+    content.push({ type: 'text', text: 'Diseña y escribe la capa de motion graphics de este Reel.' })
+    return content
+  }
+
+  private async turn(step: string, content: Anthropic.Beta.BetaContentBlockParam[]): Promise<string> {
+    this.pushUser(content)
     console.log(`[motion] ${this.model}: ${step}…`)
     let message: Anthropic.Beta.BetaMessage
     try {
@@ -73,7 +112,7 @@ export class MotionDirector {
           system: this.system.map((text, i) => ({
             type: 'text' as const,
             text,
-            ...(i === this.system.length - 1 ? { cache_control: { type: 'ephemeral' as const } } : {}),
+            ...(i === this.system.length - 1 ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}),
           })),
           messages: this.messages,
           output_config: { effort: EFFORT },
@@ -110,13 +149,7 @@ export class MotionDirector {
 
   /** Primera versión: guion + cuadros del video crudo. */
   write(brief: string, frames: Array<{ t: number; label: string; data: string }>): Promise<MotionResult> {
-    const content: Anthropic.Beta.BetaContentBlockParam[] = [{ type: 'text', text: `GUION DEL REEL\n\n${brief}\n\nCUADROS DEL VIDEO (sin gráficos), en orden:` }]
-    for (const f of frames) {
-      content.push({ type: 'text', text: `t = ${f.t.toFixed(2)} s · ${f.label}` })
-      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f.data } })
-    }
-    content.push({ type: 'text', text: 'Diseña y escribe la capa de motion graphics de este Reel.' })
-    return this.blocks('escribiendo la composición', content)
+    return this.blocks('escribiendo la composición', this.firstTurn(brief, frames))
   }
 
   /** Corrige los errores de `hyperframes check`. */

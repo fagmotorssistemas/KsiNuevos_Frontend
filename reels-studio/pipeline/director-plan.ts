@@ -15,6 +15,7 @@ import {
   rawGraphicSchema,
   teaserBeatSchema,
   TYPEFACE_NAMES,
+  vehicleIdSchema,
   type CreativePlan,
   type FocusBox,
 } from '../src/plan/schema'
@@ -29,6 +30,7 @@ const directorGraphicSchema = rawGraphicSchema.omit({ focus: true, focusEnd: tru
 })
 /** Lo que en planes viejos era opcional, al director se le exige: así siempre decide el ritmo y la apertura. */
 export const directorPlanSchema = creativePlanSchema.extend({
+  vehiculo: vehicleIdSchema,
   cuts: z.array(cutSchema.extend({ energy: z.number().int().min(1).max(3) })).min(1),
   graphics: z.array(directorGraphicSchema),
   captionStyle: z.enum(CAPTION_STYLES),

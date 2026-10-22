@@ -1,43 +1,50 @@
-# Diseño: camioneta (offroad)
+# Diseño: camioneta
 
-Para pickups, doble cabina y cabina simple. Robusto, rudo, de taller y de campo, como la referencia de la Ford Ranger. Todo se siente pesado y mecánico.
+Para pickups, doble cabina, cabina simple y de trabajo (Hilux, Ranger, D-Max, L200, F-150, RAM, Amarok…). Es robusto, rudo y mecánico: todo se siente pesado.
 
-## Paleta
+## Base de todas las direcciones
 
-- Naranja `#FF8A1F` (acento), óxido `#9C3E08`, ámbar `#FFB34A`.
-- Negro carbón `#121212` en placas: `rgba(16,13,10,.84)` con borde naranja de 3 px.
+- **Tipografías permitidas:** Russo One, Anton, Archivo Black y Teko. Las etiquetas pequeñas van en Montserrat 900, muy espaciada. Las letras de los SUV (Cinzel, Playfair, Michroma, Josefin) y las de premium nunca van aquí.
+- **K-SI SCAN:** cada cosa que el asesor nombra o señala (volante, pantalla, palanca, cámara, balde) se marca. Los objetos chicos con `scanRing3D`; los grandes con esquinas y una línea de escaneo. Además, una etiqueta con número ("01 K-SI SCAN") y el nombre.
+- **Cifras héroe en 3D:** `counter3D` para cilindrada, velocidades, ocupantes y kg de carga. Si el dato es de 4x4, tracción o aros, entra una llanta 3D al lado.
+- **Llanta gigante:** `K3.tireWipe` una o dos veces por Reel, justo en un corte de cambio de bloque, con un `whoosh`.
+- **Movimiento:** seco y con peso. Las cosas caen y se asientan, sin rebotes de caricatura.
+- **Si es blindada:** se destaca con un sello o una etiqueta "BLINDADA".
 
-## Tipografía
+## Direcciones creativas
 
-- **Títulos y cifras:** Russo One. En 3D va con `font: 'russo'` y `finish: 'rust'`.
-- **Frases del gancho y subtítulos:** Anton, en mayúsculas y blanco, con la palabra clave en naranja.
-- **Etiquetas pequeñas:** Montserrat 900, muy espaciada (letter-spacing 0.3–0.5em).
+Cada Reel usa UNA dirección; el guion dice entre cuáles puedes elegir. Dentro de ella decides el detalle, así no hay dos Reels iguales.
 
-## Piezas que la hacen camioneta
+### oxido-ranger · Óxido Ranger
+Calcado de la referencia de la Ford Ranger.
+- **Color:** naranja `#FF8A1F`, óxido `#9C3E08`, ámbar `#FFB34A` y placas carbón `rgba(16,13,10,.84)` con borde naranja.
+- **Títulos:** en 3D `finish: 'rust'` con Russo One.
+- **Gancho:** la pregunta en Anton y UNA palabra oxidada en 3D que cae (`drop`).
+- **Presentación:** una llanta 3D cruza por delante del modelo y cada letra se levanta a su paso (`flip` con `letterStart`).
+- **Fichas:** con franja de peligro naranja y negra.
+- **Cierre:** placa negra con huellas de llanta y una llanta 3D girando; debajo, "K-SI NUEVOS" en 3D.
 
-- **Gancho:** la pregunta al nicho en Anton y, encima, UNA palabra en metal oxidado 3D que cae letra por letra ("IMPONENTE", "RUDA", "BESTIA").
-- **Presentación:**
-  - Una llanta 3D cruza rodando por delante del modelo y cada letra 3D se levanta a su paso (entrada `flip` con `letterStart` según `tire.centerAt`).
-  - La marca va arriba en blanco espaciado.
-  - Después cae la versión o el año.
-- **Cifras héroe:**
-  - `counter3D` en oxidado (cilindrada, velocidades, ocupantes, kg de carga).
-  - Si el dato es de 4x4, tracción o aros, entra rodando una llanta 3D al lado y se queda girando.
-  - Para ocupantes, una fila de siluetas naranjas.
-- **K-SI SCAN:** cada cosa que el asesor nombra o señala (volante, pantalla, palanca, cámara, balde) se marca.
-  - Objetos chicos: `scanRing3D`.
-  - Objetos grandes: esquinas naranjas en L alrededor, con una línea de escaneo que baja una vez.
-  - Además una etiqueta oscura con borde naranja, con "01 K-SI SCAN" chiquito encima y el nombre en Russo One.
-  - La etiqueta cae girando sobre su borde superior (rotationX con perspectiva).
-- **Fichas:** etiquetas apiladas que caen escalonadas, con franja de peligro naranja y negra debajo.
-- **Transiciones:**
-  - Casi siempre corte seco con un golpe de cámara en `#cam-N`.
-  - Una o dos veces por Reel, en un cambio de bloque grande, la llanta gigante (`K3.tireWipe`) justo en el corte, con un `whoosh`.
-- **Cierre:**
-  - "COMENTA" en metal oxidado 3D y una caja de comentario blanca que se escribe sola con la palabra clave.
-  - Al final, una placa negra con huellas de llanta y una llanta 3D que entra rodando y se queda girando.
-  - Debajo, "K-SI NUEVOS" en 3D, franja de peligro, "CUENCA · ECUADOR" y el logo sobre una placa clara.
+### expedicion-nocturna · Expedición nocturna
+La camioneta como un equipo de expedición de noche.
+- **Color:** imagen más oscura y fría (degradados azul noche `#0B1A2A`), con acento ámbar de faros `#FFB000` y blanco hielo `#D8F1FF`.
+- **Títulos:** 3D `finish: 'carbon'` con cantos ámbar (`edge: '#FFB000'`) y Teko.
+- **HUD:** coordenadas GPS de Cuenca (2°54'S 79°00'W) que corren, altitud y rumbo de brújula. Líneas finas de interfaz que se dibujan, y un haz de luz que barre la pantalla como faros.
+- **Escáneres:** en ámbar.
+- **Transiciones:** destellos de faros y la llanta gigante.
 
-## Movimiento
+### taller-industrial · Taller industrial
+La camioneta en un taller de herramientas pesadas.
+- **Color:** acero cepillado y gris grafito, con acento amarillo de seguridad `#FFC400` y negro.
+- **Placas:** metálicas con remaches (degradados y puntos), tipografía Archivo Black en mayúsculas, estilo stencil.
+- **Títulos:** 3D `finish: 'chrome'` que entran como una prensa hidráulica (`slam`), con chispas cortas en CSS al impacto.
+- **Datos:** con regla o cinta métrica que se despliega.
+- **Etiquetas:** de inspección ("INSPECCIONADO ✓ K-SI").
+- **Transiciones:** golpe de cámara con sacudida corta y `hit`.
 
-Seco y con peso: las cosas caen y se asientan, sin rebotes de caricatura. Cámara con golpes cortos en las palabras fuertes y deriva lenta (1.0 → 1.06) en cada toma.
+### mapa-topografico · Mapa topográfico
+La camioneta como herramienta de aventura.
+- **Color:** arena `#E8D3A8`, oliva `#6B7A3A` y naranja `#FF7A1A`.
+- **Mapa:** curvas de nivel en SVG que se dibujan (stroke-dashoffset) detrás de los títulos. Cada característica es un "punto de ruta" unido al anterior por una línea punteada que avanza.
+- **Más piezas:** rosa de los vientos y cifras como cotas de altura.
+- **Títulos:** 3D `finish: 'rust'` o `'red'` con Russo One y entrada `flip`.
+- **Cierre:** la ruta completa termina en "K-SI NUEVOS · Cuenca".

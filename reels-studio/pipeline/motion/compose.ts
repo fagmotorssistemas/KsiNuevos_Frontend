@@ -28,6 +28,11 @@ const FONTS: Array<{ family: string; weight: number; style?: 'italic'; file: str
   { family: 'Playfair Display', weight: 700, style: 'italic', file: 'PlayfairDisplay-BoldItalic.woff2' },
   { family: 'Michroma', weight: 400, file: 'Michroma-Regular.woff2' },
   { family: 'Josefin Sans', weight: 700, file: 'JosefinSans-Bold.woff2' },
+  { family: 'Syncopate', weight: 700, file: 'Syncopate-Bold.woff2' },
+  { family: 'Bodoni Moda', weight: 700, file: 'BodoniModa-Bold.woff2' },
+  { family: 'Bodoni Moda', weight: 700, style: 'italic', file: 'BodoniModa-BoldItalic.woff2' },
+  { family: 'Cormorant Garamond', weight: 700, file: 'CormorantGaramond-Bold.woff2' },
+  { family: 'Cormorant Garamond', weight: 700, style: 'italic', file: 'CormorantGaramond-BoldItalic.woff2' },
 ]
 
 /** Fuentes 3D (typeface de three.js en src/three) con el nombre que usa el kit. */
@@ -42,16 +47,21 @@ const FONTS_3D: Record<string, string> = {
   playfair: 'playfair',
   michroma: 'michroma',
   josefin: 'josefin',
+  syncopate: 'syncopate',
+  bodoni: 'bodoni',
+  cormorant: 'cormorant',
 }
 
-export type MotionDesign = 'camioneta' | 'suv' | 'deportivo' | 'premium' | 'general'
+export const MOTION_DESIGNS = ['camioneta', 'suv', 'deportivo', 'premium', 'superpremium', 'general'] as const
+export type MotionDesign = (typeof MOTION_DESIGNS)[number]
 
 /** Color de acento por diseño (luz de acento del 3D y llanta). */
 export const DESIGN_ACCENT: Record<MotionDesign, string> = {
   camioneta: '#FF8A1F',
   suv: '#CDAE72',
   deportivo: '#E81C2A',
-  premium: '#D4AF6A',
+  premium: '#C9D2DC',
+  superpremium: '#D4AF6A',
   general: '#E81C2A',
 }
 

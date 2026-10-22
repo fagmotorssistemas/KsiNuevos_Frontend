@@ -1,37 +1,33 @@
 # Diseño: deportivo
 
-Velocidad, potencia y adrenalina: el más intenso de todos. Cortes rápidos, golpes y motion blur.
+Para cupés y deportivos de verdad (Camaro, Mustang, MX-5, GTI…). Velocidad, potencia y adrenalina: el más intenso de todos.
 
-## Paleta
+## Base de todas las direcciones
 
-- Rojo K-SI `#E81C2A`, blanco y negro carbono `#0B0B0F`.
-- Destellos blancos.
+- **Tipografías:** Russo One en itálica (con `skewX(-10deg)`), Teko 700 y Anton; rota entre ellas y no repitas las recientes. Etiquetas en Montserrat 900.
+- **Subtítulos:** en mayúsculas, rápidos, una o dos palabras a la vez.
+- **3D:** entradas `slam` o `spin`, con un destello y un `hit` en cada impacto.
+- **Movimiento:** entradas de 0,2–0,35 s, cámara con golpes y sacudidas cortas en los impactos, y cortes más rápidos.
 
-## Tipografía
+## Direcciones creativas
 
-Rota entre estas y no repitas las recientes:
+Cada Reel usa UNA dirección; el guion dice entre cuáles puedes elegir. Dentro de ella decides el detalle, así no hay dos Reels iguales.
 
-| Estilo | 2D | 3D (`font`) |
-|---|---|---|
-| carreras | Russo One en itálica con `skewX(-10deg)` | `russo` |
-| tablero | Teko 700 | `teko` |
-| impacto | Anton | `anton` |
+### pista-carreras · Día de pista
+- **Color:** rojo K-SI `#E81C2A`, blanco y carbono `#0B0B0F`.
+- **Gancho:** semáforo de largada de cinco luces rojas que se encienden y se apagan.
+- **Piezas:** franjas de carreras que cruzan, cronómetro de vuelta que corre y bandera a cuadros en el cierre.
+- **3D:** `finish: 'red'` con `slam`.
 
-- **Etiquetas:** Montserrat 900.
-- **Subtítulos:** en mayúsculas, rápidos, una o dos palabras a la vez, con la palabra clave en rojo.
+### neon-nocturno · Neón nocturno
+- **Color:** negro profundo con neón rojo `#FF2A4D` y magenta `#FF3DF2`.
+- **Piso:** cuadrícula synthwave en perspectiva (CSS con `perspective`) que avanza.
+- **Piezas:** líneas de neón que se dibujan alrededor de los títulos.
+- **3D:** `finish: 'carbon'` con cantos de neón.
+- **Transiciones:** glitch corto y barridos de luz.
 
-## Piezas
-
-- **Gancho:** frase que entra de golpe (`slam`) con sacudida de cámara y líneas de velocidad horizontales que cruzan la pantalla.
-- **Presentación:** el modelo en 3D `finish: 'carbon'` con cantos rojos (`edge: '#E81C2A'`) o `finish: 'red'`, con entrada `slam`. Lo acompaña un destello y un `hit`.
-- **Cifras:**
-  - Medidor de RPM o velocímetro con aguja que barre hasta el valor.
-  - O `counter3D` rojo con `slam`.
-- **Características:** marcos rojos agresivos (cortes en diagonal) y etiquetas con fondo negro y franja roja.
-- **Transiciones:** whip con desenfoque horizontal, zoom de impacto y destellos.
-- **Cierre:** fondo negro con líneas de velocidad y la palabra clave en 3D roja.
-
-## Movimiento
-
-- Rápido: entradas de 0.2–0.35 s.
-- Cámara con golpes en cada palabra fuerte y pequeñas sacudidas en los impactos.
+### telemetria · Telemetría
+- **Color:** negro, blanco y verde datos `#3DFF8A`, con rojo en las alertas.
+- **HUD:** tablero de telemetría con tacómetro que barre hasta la línea roja, velocímetro, fuerza G y gráficas de datos que se dibujan.
+- **3D:** cifras `finish: 'chrome'`.
+- **Transiciones:** zoom de impacto y whip con desenfoque.

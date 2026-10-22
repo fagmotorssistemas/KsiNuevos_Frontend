@@ -1,6 +1,6 @@
 # Tipografías
 
-Todas bajo la SIL Open Font License 1.1 (uso comercial libre; no se venden por separado).
+Todas bajo la SIL Open Font License 1.1, salvo Syncopate (Apache 2.0); en ambos casos el uso comercial es libre y no se venden por separado.
 Archivos `.woff2` del subconjunto latino (incluye tildes y ñ), tomados de los paquetes `@fontsource`.
 
 | Archivo | Familia | Autores |
@@ -16,5 +16,8 @@ Archivos `.woff2` del subconjunto latino (incluye tildes y ñ), tomados de los p
 | PlayfairDisplay-Bold/BoldItalic.woff2 | Playfair Display (solo SUV) | The Playfair Display Project Authors (Claus Eggers Sørensen) |
 | Michroma-Regular.woff2 | Michroma (solo SUV) | The Michroma Project Authors (Vernon Adams) |
 | JosefinSans-Bold.woff2 | Josefin Sans (solo SUV) | The Josefin Sans Project Authors (Santiago Orozco) |
+| Syncopate-Bold.woff2 | Syncopate (premium) | Astigmatic (licencia Apache 2.0) |
+| BodoniModa-Bold/BoldItalic.woff2 | Bodoni Moda (súper premium) | The Bodoni Moda Project Authors (indestructible type*) |
+| CormorantGaramond-Bold/BoldItalic.woff2 | Cormorant Garamond (súper premium) | The Cormorant Project Authors (Christian Thalmann) |
 
 Texto de la licencia: https://openfontlicense.org/open-font-license-official-text/

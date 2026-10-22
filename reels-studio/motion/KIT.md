@@ -77,7 +77,7 @@ K3.sweep3D(stage, { start: 5, end: 7, y: 420 })
 
 ### Opciones de las piezas
 
-- **Fuentes 3D (`font`):** `russo`, `anton`, `bebas`, `teko`, `archivo`, `montserrat`, `cinzel`, `playfair`, `michroma`, `josefin`. Usa la misma familia que en 2D.
+- **Fuentes 3D (`font`):** `russo`, `anton`, `bebas`, `teko`, `archivo`, `montserrat`, `cinzel`, `playfair`, `michroma`, `josefin`, `syncopate`, `bodoni`, `cormorant`. Usa la misma familia que en 2D.
 - **Acabados (`finish`):**
   - `rust`: naranja oxidado.
   - `chrome`: cromo blanco con cantos oscuros.
@@ -104,4 +104,4 @@ El render es por software. Una o dos piezas 3D a la vez van bien. La llanta giga
 
 - **Logo:** `assets/kit/logo/ksi-logo.png`, en rojo y negro sobre transparente. Sobre fondo oscuro, ponlo sobre una placa clara o en blanco con `filter: brightness(0) invert(1)`.
 - **Sonidos:** `assets/kit/sfx/whoosh.wav` (barrido), `hit.wav` (golpe), `pop.wav` (aparición corta) y `riser.wav` (subida antes de un remate). Cada `<audio>` lleva `id`, `class="clip"`, `data-start`, `data-duration` (1–2 s) y `data-volume` (0.3–0.7), y va dentro de `#gfx`. Que suenen en los cortes y golpes que se ven, no en todo.
-- **Fuentes 2D (`font-family`):** `Anton`, `Montserrat` (800/900), `Russo One`, `Bebas Neue`, `Archivo Black`, `Poppins` (800), `Teko` (700), `Cinzel` (700), `Playfair Display` (700 e itálica 700), `Michroma` y `Josefin Sans` (700).
+- **Fuentes 2D (`font-family`):** `Anton`, `Montserrat` (800/900), `Russo One`, `Bebas Neue`, `Archivo Black`, `Poppins` (800), `Teko` (700), `Cinzel` (700), `Playfair Display` (700 e itálica 700), `Michroma`, `Josefin Sans` (700), `Syncopate` (700), `Bodoni Moda` (700 e itálica 700) y `Cormorant Garamond` (700 e itálica 700). Cada diseño dice cuáles puede usar.

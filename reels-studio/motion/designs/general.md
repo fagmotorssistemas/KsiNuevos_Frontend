@@ -1,40 +1,39 @@
-# Diseño: general (sedán, hatchback, van y otros)
+# Diseño: general
 
-Un comercial de autos profesional con la marca K-SI: dinámico, limpio y con clase.
+Para sedanes, hatchbacks y vans (Corolla, Sentra, Picanto, Swift, Onix, H1…). Es un comercial de autos profesional con la marca K-SI: dinámico, limpio y cercano.
 
-## Paleta
+## Base de todas las direcciones
 
-- Rojo K-SI `#E81C2A` (acento) y amarillo `#FFE94A` (resaltado puntual).
-- Blanco y negro.
+- **Tipografías:** Bebas Neue, Anton, Teko, Archivo Black, Montserrat 900 y Poppins 800. Rota entre ellas y no repitas las recientes.
+- **3D:** el modelo y la cifra principal en 3D (`chrome` o `red`).
+- **Interacción:** encuesta de dos opciones si conviene, para invitar a comentar.
+- **Movimiento:** llegadas con `expo.out`, salidas cortas, cámara con deriva y golpes suaves en las palabras clave.
 
-## Tipografía
+## Direcciones creativas
 
-Rota entre estas y no repitas las recientes:
+Cada Reel usa UNA dirección; el guion dice entre cuáles puedes elegir. Dentro de ella decides el detalle, así no hay dos Reels iguales.
 
-| Estilo | 2D | 3D (`font`) |
-|---|---|---|
-| clásica | Bebas Neue | `bebas` |
-| potente | Anton | `anton` |
-| técnica | Teko 700 | `teko` |
-| moderna | Archivo Black | `archivo` |
-| geométrica | Montserrat 900 | `montserrat` |
-
-- **Subtítulos:** blancos, con la palabra clave en rojo y un estilo coherente con la tipografía elegida.
-
-## Piezas
-
+### cine-ksi · Cine K-SI
+- **Color:** rojo K-SI `#E81C2A` con amarillo `#FFE94A` puntual.
 - **Apertura:** franjas negras de cine que se abren.
-- **Gancho:** la frase con la palabra clave en rojo.
-- **Interacción:** si conviene, una encuesta de dos opciones (barras que se llenan) para invitar a comentar.
-- **Presentación:** el modelo en 3D `finish: 'chrome'`, entrada `depth`, con una luz que lo recorre.
-- **Cifras:**
-  - `counter3D` cromado.
-  - O un medidor con aguja para potencia y consumo.
-- **Características:** esquinas finas y tarjeta inferior con una línea roja.
-- **Transiciones:** fundido, destello cálido, zoom o barrido con desenfoque.
-- **Cierre:** placa oscura, "COMENTA" espaciado, la palabra clave en cromo 3D y el logo.
+- **3D:** cromo con `depth`.
+- **Piezas:** esquinas finas en las características y una tarjeta con línea roja.
+- **Transiciones:** fundido, destello cálido y zoom.
 
-## Movimiento
+### pop-dinamico · Pop dinámico
+- **Color:** bloques de color sólidos (rojo K-SI, amarillo, negro) que entran y salen como cortinas.
+- **Tipografía:** cinética, con palabras que crecen y rebotan apenas (spring 0.8).
+- **Piezas:** stickers redondos con datos y una encuesta con barras grandes.
+- **3D:** `finish: 'red'` con `spin`.
 
-- Llegadas con `expo.out` y salidas cortas.
-- Cámara con deriva y golpes suaves en las palabras clave.
+### tecnico-limpio · Plano técnico
+- **Estilo:** plano de ingeniería, con cuadrícula fina azul `#4FA3FF` sobre la imagen.
+- **Piezas:** cotas con flechas que miden el auto, fichas técnicas que se escriben y números en Teko.
+- **3D:** cromo con `rise`.
+- **Transiciones:** máscaras de cuadrícula.
+
+### lifestyle-calido · Lifestyle cálido
+- **Estilo:** cercano y cálido, con tarjetas redondeadas blancas, Poppins y emojis de íconos dibujados en SVG simple.
+- **Color:** acento coral `#FF6B4A`.
+- **Contenido:** cada dato contado como un beneficio del día a día ("cabe todo el mercado").
+- **3D:** `finish: 'red'` con `rise`.

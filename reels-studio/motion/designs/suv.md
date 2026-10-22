@@ -1,41 +1,58 @@
-# Diseño: SUV (elegante)
+# Diseño: SUV
 
-Un comercial de autos de lujo: sobrio, aireado y pulido. La elegancia viene del espacio vacío, la tipografía y la luz.
+Para todo lo alto con portón (Trailblazer, Fortuner, Tucson, Sportage, CX-5, RAV4, Tiggo, Jetour…). Es elegante y aireado: la elegancia viene del espacio vacío, la tipografía y la luz.
 
-## Paleta
+## Base de todas las direcciones
 
-- Champán `#CDAE72` (acento), bronce `#7A5C2E`, marfil `#EAD9B0`.
-- Blanco y negro profundos.
-- Nada de rojo salvo el logo.
+- **Tipografías:** exclusivas de los SUV; elige UNA por Reel sin repetir las recientes.
 
-## Tipografía
+  | Estilo | 2D | 3D (`font`) | Carácter |
+  |---|---|---|---|
+  | lujo | Cinzel | `cinzel` | romana de lujo |
+  | editorial | Playfair Display | `playfair` | serif de revista |
+  | premium | Michroma | `michroma` | extendida |
+  | refinada | Josefin Sans | `josefin` | geométrica fina |
 
-Es exclusiva de los SUV: no uses Russo One, Anton ni Bebas Neue. Elige UNA por Reel y no repitas las recientes:
+  Nunca uses Russo One, Anton ni Bebas Neue. Las etiquetas van en Montserrat 800, muy espaciadas.
+- **Subtítulos:** en minúsculas (Montserrat 800). La palabra clave cambia según la dirección.
+- **3D:** el modelo y las cifras en 3D, con entrada `rise` o `depth`. Nada de llantas ni escáner offroad.
+- **Movimiento:** llegadas largas y suaves (`expo.out`), salidas cortas y cámara que deriva despacio.
+- **Si es híbrido o blindado:** se destaca con una etiqueta fina.
 
-| Estilo | 2D | 3D (`font`) | Carácter |
-|---|---|---|---|
-| lujo | Cinzel | `cinzel` | romana con serifas, de marca de lujo |
-| editorial | Playfair Display | `playfair` | serif de alto contraste, de revista |
-| premium | Michroma | `michroma` | extendida y aireada |
-| refinada | Josefin Sans | `josefin` | geométrica fina |
+## Direcciones creativas
 
-- **Etiquetas:** Montserrat 800, muy espaciadas (0.4–0.6em).
-- **Subtítulos:** en minúsculas, Montserrat 800 blanco. La palabra clave va en Playfair Display itálica color champán, un poco más grande.
+Cada Reel usa UNA dirección; el guion dice entre cuáles puedes elegir. Dentro de ella decides el detalle, así no hay dos Reels iguales.
 
-## Piezas
+### champan-lujo · Champán de lujo
+Un comercial de autos de lujo.
+- **Color:** champán `#CDAE72`, bronce `#7A5C2E` y marfil `#EAD9B0`.
+- **Apertura:** franjas negras de cine que se abren como un telón.
+- **3D:** `finish: 'champagne'` que sube despacio, con una luz que recorre el cromo.
+- **Tarjetas:** de vidrio oscuro con borde champán de 1 px.
+- **Subtítulos:** la palabra clave en Playfair itálica champán.
+- **Transiciones:** fundido corto y destello cálido.
 
-- **Apertura:** franjas negras de cine (unos 140 px) que se abren como un telón. El gancho en la tipografía elegida, palabra por palabra de borroso a nítido, con una línea champán fina debajo.
-- **Presentación:** el modelo en 3D con `finish: 'champagne'` y `entrance: 'rise'`, letras que suben despacio y se enderezan (stagger 0.05, dur 0.7). La marca espaciada encima y el año entre dos líneas champán. Una luz recorre el cromo.
-- **Cifras:**
-  - `counter3D` champán con entrada `rise`, la etiqueta pequeña encima y la palabra debajo.
-  - Para potencia o torque, un medidor fino con aguja.
-- **Características:** esquinas finas champán sobre el objeto y una tarjeta de vidrio oscuro (`rgba(15,16,22,.78)` con `backdrop-filter: blur(22px)`, borde de 1 px champán) que se inclina en 3D al entrar.
-- **Brillo:** una o dos veces, una banda de luz cálida diagonal que cruza la carrocería.
-- **Transiciones:** fundido corto, destello de luz cálida o acercamiento suave. Nada de llantas.
-- **Cierre:** placa negra con partículas doradas lentas. "Comenta" pequeño y espaciado, la palabra clave en 3D champán, la promesa en Montserrat y el logo en blanco.
+### ruta-familiar · Ruta en familia
+El SUV como el auto de los viajes en familia por Ecuador.
+- **Color:** luz de atardecer cálida (degradados dorados suaves), crema `#F6E7C8`, terracota `#C8643B` y verde bosque `#2F5D50`.
+- **Ruta:** una línea fina se dibuja de Cuenca a la costa y a la sierra (Montañita, Baños, el Cajas) y cada dato aparece en una parada.
+- **Personas:** íconos de pasajeros y maletas para el espacio.
+- **3D:** `finish: 'champagne'` o `'chrome'`.
+- **Subtítulos:** la palabra clave en terracota.
+- **Transiciones:** suaves, con la ruta que sigue avanzando.
 
-## Movimiento
+### urbano-nocturno · Urbano nocturno
+El SUV en la ciudad de noche.
+- **Color:** imagen más fría y profunda, acento hielo `#9ADBFF` y blanco.
+- **Paneles:** de vidrio esmerilado con `backdrop-filter: blur`, reflejos y líneas de luz que cruzan la pantalla como faros de autos en movimiento.
+- **3D:** `finish: 'chrome'` con entrada `depth`, de preferencia con Michroma o Josefin Sans.
+- **Subtítulos:** la palabra clave en hielo.
+- **Transiciones:** barridos de luz horizontales y fundidos.
 
-- Llegadas largas y suaves (`expo.out`, `power4.out`); salidas más cortas.
-- Cámara que deriva despacio (1.0 → 1.05).
-- Nada de golpes fuertes ni sacudidas.
+### editorial-revista · Portada de revista
+El SUV como portada de revista de autos.
+- **Color:** blanco, negro y un color de acento sacado del auto.
+- **Maquetación:** de revista, con titulares enormes en Playfair Display o Cinzel, números de sección ("Nº 01", "Nº 02") y reglas finas.
+- **Piezas:** columnas y pies de foto para cada dato, y un momento de la toma en blanco y negro con el título encima.
+- **3D:** `finish: 'champagne'` con `rise`.
+- **Transiciones:** como pasar de página (máscara que avanza) y cortes limpios.

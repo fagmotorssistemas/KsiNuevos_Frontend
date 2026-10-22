@@ -359,7 +359,8 @@ function pose(entrance, p, i, size) {
  *
  * Opciones (px = píxeles del video, s = segundos del Reel):
  *   text            texto (se pasa a mayúsculas salvo `keepCase: true`)
- *   font            russo | anton | bebas | teko | archivo | montserrat | cinzel | playfair | michroma | josefin
+ *   font            russo | anton | bebas | teko | archivo | montserrat | cinzel | playfair | michroma | josefin |
+ *                   syncopate | bodoni | cormorant
  *   finish          rust | chrome | champagne | gold | carbon | red      (edge: color de cantos para carbon)
  *   x, y            ancla en px; y = centro de la altura de las mayúsculas
  *   capPx           alto de las mayúsculas en px (por defecto 150)

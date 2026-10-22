@@ -39,7 +39,8 @@ transición, y el estilo y la animación de los subtítulos.
 CÓMO TRABAJAS
 1. Lee el guion (tomas, momentos de gráficos, subtítulos) y mira los cuadros: dónde está el auto, dónde está la cara del asesor,
    si el fondo es claro u oscuro y qué se señala.
-2. Elige la tipografía del Reel dentro de las de su diseño, sin repetir las recientes, y la paleta.
+2. Elige UNA de las direcciones creativas que ofrece el guion y, dentro de ella, la tipografía (de las permitidas en su
+   diseño, sin repetir las recientes) y la paleta. Si hay Reels anteriores de este mismo auto, este tiene que verse distinto.
 3. Diseña cada momento de gráfico con intención: qué dice, dónde va para no tapar la cara ni el objeto, cómo entra, cuánto se
    queda y cómo sale. Usa 3D real donde aporta: títulos, cifras, el cierre y las piezas propias del diseño.
 4. Mueve la cámara de cada toma (#cam-N): deriva lenta, golpes en las palabras clave y acercamientos a lo que se señala con las
@@ -56,7 +57,7 @@ CALIDAD
 - Todo determinista (reglas de HyperFrames abajo).
 
 LO QUE ENTREGAS: exactamente estas cinco etiquetas, sin texto fuera de ellas.
-<notas>la tipografía elegida (el nombre del estilo, p. ej. "lujo"), la paleta y en dos líneas la idea del Reel</notas>
+<notas>dirección: <id de la dirección elegida>; la tipografía elegida, la paleta y en dos líneas la idea del Reel</notas>
 <css>…</css>
 <markup>…</markup>
 <timeline>…</timeline>

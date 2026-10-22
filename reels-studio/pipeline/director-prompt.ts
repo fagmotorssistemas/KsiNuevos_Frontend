@@ -3,6 +3,7 @@
  * Aquí está el criterio creativo; las reglas mecánicas (tiempos, choques) las aplica timeline.ts.
  */
 import type { TranscribedWord } from './assemblyai'
+import { CATALOG_GUIDE, type VehicleTier } from './vehicle-catalog'
 
 /** Tipo de vehículo normalizado (la carrocería del inventario viene escrita de muchas formas). */
 export const VEHICLE_CATEGORIES = ['suv', 'sedan', 'camioneta', 'deportivo', 'hatchback', 'van'] as const
@@ -31,6 +32,16 @@ export type VehicleInfo = {
   /** Palabra que se pide comentar al final (por defecto, el modelo). */
   palabraClave?: string
   notas?: string
+  /** Gama según el catálogo (la confirma Claude). */
+  gama?: VehicleTier
+  blindado?: boolean
+  hibrido?: boolean
+  /** De dónde salió el tipo: el modelo (confiable) o la carrocería del inventario (dudosa). */
+  tipoFuente?: 'modelo' | 'carroceria' | 'desconocido'
+  /** Reels anteriores de ESTE mismo auto (fecha, gancho, dirección, tipografía): el nuevo tiene que ser distinto. */
+  reelsAnteriores?: string[]
+  /** Direcciones creativas usadas en los últimos Reels de la misma categoría (motion graphics). */
+  direccionesRecientes?: string[]
 }
 
 export const DIRECTOR_SYSTEM = `Eres el Director de Marketing Digital de K-Si Nuevos, concesionario de autos seminuevos en Ecuador.
@@ -55,8 +66,16 @@ Tu trabajo es pensar como editor y como director creativo:
    ("Cebrol eTriBlaser" → "Chevrolet Trailblazer", "a 10" → "a diésel", "28 mil" → "128 mil" si el tablero o los datos lo confirman).
    Usa los datos del vehículo, el audio y lo que ves. Las palabras marcadas con "?" tienen baja confianza.
 
-SEGÚN EL TIPO DE VEHÍCULO (viene en "Tipo"; si dice que es sedán pero es un modelo deportivo —Mustang, Camaro, GTI,
-Type R, AMG, M, RS, GR…— o un cupé/convertible, trátalo como deportivo):
+IDENTIFICA EL VEHÍCULO antes de editar (va en "vehiculo" y manda en todo el Reel):
+- Mira los cuadros y escucha al asesor: marca, modelo comercial y qué es de verdad. Los datos del inventario ayudan, pero
+  su carrocería suele estar mal escrita: manda lo que ves y lo que sabes del modelo.
+- "tipo": camioneta | suv | sedan | hatchback | deportivo | van. "gama": normal | premium | super_premium.
+- "blindado" e "hibrido": true si se dice, se ve o viene en los datos. Es una característica para destacar, no un tipo.
+- Si lo que ves no cuadra con el inventario (otro modelo, otro tipo, otro color), dilo en una frase en "observacion".
+${CATALOG_GUIDE}
+
+SEGÚN EL TIPO DE VEHÍCULO (el que identificaste; si es un modelo deportivo —Mustang, Camaro, GTI, Type R, AMG, M, RS,
+GR…— o un cupé/convertible de verdad, trátalo como deportivo):
 - suv: familia, espacio, seguridad, tecnología, viajes y aventura. Ganchos de practicidad y confianza.
 - sedan: elegancia, confort, consumo, ciudad, trabajo y estatus. Tono sobrio y aspiracional, menos estridente.
 - camioneta (doble cabina, cabina simple): fuerza, trabajo, carga, 4x4, motor, resistencia. Tono rudo y directo.
@@ -66,7 +85,11 @@ Type R, AMG, M, RS, GR…— o un cupé/convertible, trátalo como deportivo):
 - van: pasajeros, negocio, espacio, rendimiento.
 Adapta a eso el gancho, qué características destacar, los íconos y el estilo de subtítulos.
 
-DISEÑO SUV (si "Tipo" es suv): la estética de cine en su versión más elegante, como un comercial de autos de lujo:
+VARIEDAD: si en los datos vienen "Reels anteriores de este mismo auto", este Reel tiene que ser claramente distinto aunque
+los clips sean los mismos: otro gancho (otra frase, otro adjetivo y otro ángulo de venta), otro teaser, otro orden de
+bloques cuando se pueda, otros datos héroe, otra tipografía y otro estilo de subtítulos. Nunca la misma plantilla dos veces.
+
+DISEÑO SUV (si el tipo es suv): la estética de cine en su versión más elegante, como un comercial de autos de lujo:
 acento champán en vez de rojo, letras 3D de cromo pulido con cantos dorados que suben despacio y se enderezan,
 subtítulos sobrios en minúsculas con la palabra clave en cursiva serif champán, y su tipografía propia (ver
 TIPOGRAFÍA). Ritmo más pausado que un deportivo: energía 2 la mayor parte, 3 solo en gancho y presentación;
@@ -119,7 +142,7 @@ dejar de moverse; tú decides el ritmo):
 - BRILLO ("brillo" en graphics): un reflejo de luz que cruza la carrocería, como en los comerciales. 1–2 por Reel, en las
   tomas donde el auto (pintura, faros, parrilla, rines) llena el cuadro, en el segundo exacto en que se ve mejor.
 
-FORMATO CAMIONETA (si "Tipo" es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
+FORMATO CAMIONETA (si el tipo que identificaste es camioneta, este formato manda sobre las reglas generales de ritmo y orden). Tiene su
 propio diseño offroad completo, robusto y todo en 3D real: títulos de metal naranja oxidado que se arman letra por
 letra (la palabra del gancho cae, el modelo se levanta al paso de una LLANTA 3D que cruza rodando, las cifras caen y
 cuentan, "COMENTA"), un escáner holográfico 3D que gira sobre los objetos chicos (botón, palanca) y esquinas con línea
@@ -227,8 +250,11 @@ export function formatVehicle(v: VehicleInfo): string {
   const rows: Array<[string, unknown]> = [
     ['Marca', v.marca],
     ['Modelo', v.modelo],
-    ['Tipo', v.categoria],
-    ['Carrocería (inventario)', v.carroceria],
+    ['Tipo según el catálogo de K-SI', v.categoria ? `${v.categoria}${v.tipoFuente === 'carroceria' ? ' (sacado de la carrocería del inventario: confírmalo)' : ''}` : 'no está en el catálogo: identifícalo tú'],
+    ['Gama según el catálogo', v.gama],
+    ['Blindado', v.blindado ? 'sí' : undefined],
+    ['Híbrido', v.hibrido ? 'sí' : undefined],
+    ['Carrocería (inventario, no confiable)', v.carroceria],
     ['Año', v.anio],
     ['Versión', v.version],
     ['Motor', v.motor],
@@ -243,6 +269,7 @@ export function formatVehicle(v: VehicleInfo): string {
     ['Notas', v.notas],
     ['Estilos recientes (no repetir)', v.estilosRecientes?.length ? v.estilosRecientes.join(', ') : undefined],
     ['Tipografías recientes (no repetir)', v.tipografiasRecientes?.length ? v.tipografiasRecientes.join(', ') : undefined],
+    ['Reels anteriores de este mismo auto (haz uno distinto)', v.reelsAnteriores?.length ? `\n  · ${v.reelsAnteriores.join('\n  · ')}` : undefined],
   ]
   return rows
     .filter(([, val]) => val !== undefined && val !== '')

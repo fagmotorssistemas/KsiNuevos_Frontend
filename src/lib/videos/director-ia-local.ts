@@ -113,6 +113,54 @@ export function commercialModel(raw: string): string {
   return name || raw.trim()
 }
 
+type PreviousPlan = {
+  hookIdea?: string
+  typeface?: string
+  captionStyle?: string
+  graphics?: Array<{ type?: string; text?: string }>
+}
+
+/**
+ * Reels anteriores de ESTE mismo auto (por su vehículo del inventario o, si no está ligado, por el nombre del
+ * trabajo): con qué gancho, tipografía y dirección creativa se hicieron. Claude hace uno distinto aunque los clips
+ * sean los mismos. También devuelve las direcciones creativas de los últimos Reels en general (para rotarlas).
+ */
+async function previousReels(jobId: string, job: JobRow): Promise<{ reelsAnteriores: string[]; direccionesRecientes: string[] }> {
+  const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
+  const vehicleId = job.inventory_vehicle_id ?? meta?.vehicleId ?? null
+  const fields = 'created_at, plan:gemini_analysis->plan, direccion:gemini_analysis->motion->>direccion'
+  type Row = { created_at: string | null; plan: PreviousPlan | null; direccion: string | null }
+  let sameCar: Row[] = []
+  if (vehicleId || job.job_name) {
+    const base = getServiceClient().from('video_jobs_v2').select(fields).neq('id', jobId).not('gemini_analysis->plan', 'is', null)
+    const { data } = await (vehicleId ? base.eq('inventory_vehicle_id', vehicleId) : base.eq('job_name', job.job_name!))
+      .order('created_at', { ascending: false })
+      .limit(5)
+    sameCar = (data ?? []) as unknown as Row[]
+  }
+  const { data: latest } = await getServiceClient()
+    .from('video_jobs_v2')
+    .select('direccion:gemini_analysis->motion->>direccion')
+    .neq('id', jobId)
+    .not('gemini_analysis->motion->>direccion', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(6)
+  const reelsAnteriores = sameCar.map((r) => {
+    const hook = r.plan?.graphics?.find((g) => g.type === 'hook_text')?.text ?? r.plan?.hookIdea
+    return [
+      r.created_at ? r.created_at.slice(0, 10) : 'sin fecha',
+      hook ? `gancho "${hook}"` : '',
+      r.plan?.typeface ? `tipografía ${r.plan.typeface}` : '',
+      r.plan?.captionStyle ? `subtítulos ${r.plan.captionStyle}` : '',
+      r.direccion ? `dirección ${r.direccion}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  })
+  const direccionesRecientes = ((latest ?? []) as Array<{ direccion: string | null }>).flatMap((r) => (r.direccion ? [r.direccion] : []))
+  return { reelsAnteriores, direccionesRecientes }
+}
+
 async function vehicleInfoForJob(job: JobRow): Promise<Record<string, unknown>> {
   const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
   const vehicleId = job.inventory_vehicle_id ?? meta?.vehicleId ?? null
@@ -265,7 +313,7 @@ export async function runDirectorIaForJob(jobId: string): Promise<void> {
     await downloadClips(jobId, paths, clipsDir)
 
     const vehicleFile = path.join(work, 'vehiculo.json')
-    const vehicle = { ...(await vehicleInfoForJob(job)), ...(await recentStyles(jobId)) }
+    const vehicle = { ...(await vehicleInfoForJob(job)), ...(await recentStyles(jobId)), ...(await previousReels(jobId, job)) }
     fs.writeFileSync(vehicleFile, JSON.stringify(vehicle, null, 2))
 
     const meta = isPipelineInputMeta(job.selected_clips) ? job.selected_clips : undefined
