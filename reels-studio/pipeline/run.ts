@@ -178,7 +178,7 @@ const { props, warnings } = buildReelProps(plan, clips, transcripts, {
   brand: { logoSrc: 'ksi-logo.png', accent: '#E81C2A', highlight: '#FFE94A', whatsapp: values.whatsapp },
   music,
   // Camionetas: su propio diseño offroad completo (formato de referencia de la Ranger: títulos rústicos en 3D, escáner
-  // K-SI SCAN, barro, caja de comentario y firma con huella de llanta). Todos los demás: modo cine.
+  // K-SI SCAN, caja de comentario y firma con huella de llanta). Todos los demás: modo cine.
   theme: vehicle.categoria === 'camioneta' ? 'offroad' : 'ksi',
   look: vehicle.categoria === 'camioneta' ? 'social' : 'cine',
 })

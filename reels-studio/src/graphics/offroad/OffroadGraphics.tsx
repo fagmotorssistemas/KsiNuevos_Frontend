@@ -11,7 +11,7 @@ import type { Brand, TimelineGraphic } from '../../plan/types'
 import { zoomProgress, zoomTransform } from '../../reel/zoom'
 import { formatSpecNumber } from '../../theme'
 import { clamp, splitEmphasis, useEnterExit } from '../anim'
-import { CornerFrame, FONT_CAPTION, FONT_LABEL, MudSplatter, OFFROAD, RustyText, Tag, TargetRing, TreadBackground } from './kit'
+import { CornerFrame, FONT_CAPTION, FONT_LABEL, OFFROAD, RustyText, Tag, TargetRing, TreadBackground } from './kit'
 
 const graphicNumber = (g: TimelineGraphic) => Number(g.id.match(/\d+/)?.[0] ?? 1)
 
@@ -58,15 +58,6 @@ export const OffroadHook: React.FC<{ g: TimelineGraphic }> = ({ g }) => {
       </div>
     </AbsoluteFill>
   )
-}
-
-/**
- * Barro: salpicón de lodo en pantalla en el instante en que se ve la camioneta (como si pisara un charco). Lo pone el
- * director solo en tomas del vehículo, nunca sobre una persona.
- */
-export const OffroadMud: React.FC = () => {
-  const { frame, width, height, exit } = useEnterExit(12)
-  return <MudSplatter frame={frame} width={width} height={height} fade={exit} />
 }
 
 /** Presentación: marca en blanco, modelo rústico grande y la versión/año debajo, entrando en ese orden. */

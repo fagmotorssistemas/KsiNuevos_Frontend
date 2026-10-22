@@ -93,7 +93,7 @@ export type CaptionLine = {
 
 /**
  * Diseño del Reel: `ksi` (general, rojo/amarillo/blanco) u `offroad` (camionetas: títulos naranjas
- * rústicos, etiquetas tipo escáner, barro, caja de comentario y cierre con huella de llanta).
+ * rústicos, etiquetas tipo escáner, caja de comentario y cierre con huella de llanta).
  */
 export type ReelTheme = 'ksi' | 'offroad'
 

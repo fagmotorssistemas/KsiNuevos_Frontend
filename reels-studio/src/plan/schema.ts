@@ -22,7 +22,6 @@ export const GRAPHIC_TYPES = [
   'cta_end',
   'sticker',
   'brillo',
-  'barro',
 ] as const
 export type GraphicType = (typeof GRAPHIC_TYPES)[number]
 
@@ -183,7 +182,6 @@ export function validateGraphic(g: RawGraphic): string | null {
       // Encuesta (2 opciones en "items") o cápsula con ícono.
       return g.text.trim() && (g.icon || (g.items?.length ?? 0) >= 2) ? null : 'sticker necesita text e icon (o 2 opciones)'
     case 'brillo':
-    case 'barro':
       return null
     default:
       return g.text.trim() ? null : `${g.type} necesita text`

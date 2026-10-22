@@ -1,10 +1,10 @@
 /**
  * Piezas del diseño "camioneta" (tema offroad), calcado del formato de referencia de la Ranger:
- * títulos naranjas rústicos con volumen, etiquetas tipo escáner, esquinas naranjas, barro y huella
+ * títulos naranjas rústicos con volumen, etiquetas tipo escáner, esquinas naranjas y huella
  * de llanta. Todo en CSS/SVG (sin WebGL) para que renderice igual en cualquier máquina.
  */
 import React from 'react'
-import { interpolate, random } from 'remotion'
+import { interpolate } from 'remotion'
 import { extrudedShadow, FONT_DISPLAY, FONT_SPEED, FONT_UI, PALETTES } from '../../theme'
 
 export const OFFROAD = {
@@ -222,63 +222,6 @@ export const CornerFrame: React.FC<{ x: number; y: number; w: number; h: number;
     </svg>
   )
 }
-
-/** Mancha de barro irregular con gotas alrededor; `seed` la hace distinta pero estable entre renders. */
-const Splat: React.FC<{ seed: string; r: number }> = ({ seed, r }) => {
-  // Borde orgánico: muchos puntos con poca variación y algunos lóbulos suaves (nada de picos de estrella).
-  const points = 40
-  const path = Array.from({ length: points }, (_, i) => {
-    const a = (i / points) * Math.PI * 2
-    const lobe = Math.sin(a * 3 + random(`${seed}-l`) * 6) * 0.08 + Math.sin(a * 7 + random(`${seed}-m`) * 6) * 0.04
-    const k = 0.9 + lobe + random(`${seed}-r${i}`) * 0.06
-    return `${(Math.cos(a) * r * k).toFixed(1)},${(Math.sin(a) * r * k * 0.82).toFixed(1)}`
-  })
-  const drops = Array.from({ length: 4 }, (_, i) => {
-    const a = random(`${seed}-da${i}`) * Math.PI * 2
-    const d = r * (1.15 + random(`${seed}-dd${i}`) * 0.4)
-    return { x: Math.cos(a) * d, y: Math.sin(a) * d * 0.82, r: r * (0.05 + random(`${seed}-dr${i}`) * 0.07) }
-  })
-  return (
-    <g style={{ filter: 'blur(0.8px)' }}>
-      <polygon points={path.join(' ')} fill={OFFROAD.mud} opacity={0.92} />
-      <polygon points={path.join(' ')} fill="none" stroke={OFFROAD.mudDark} strokeWidth={r * 0.05} opacity={0.6} />
-      <ellipse cx={-r * 0.22} cy={-r * 0.2} rx={r * 0.4} ry={r * 0.2} fill={OFFROAD.mudLight} opacity={0.3} />
-      {drops.map((d, i) => (
-        <circle key={i} cx={d.x} cy={d.y} r={d.r} fill={OFFROAD.mud} opacity={0.9} />
-      ))}
-    </g>
-  )
-}
-
-/**
- * Salpicón de barro como si la camioneta pisara un charco frente a la cámara: casi todo sale desde abajo (la altura de
- * la llanta) hacia las orillas, en cadena rápida, sin tapar el centro donde va el vehículo.
- */
-const SPLATS = [
-  { x: 0.12, y: 0.86, r: 64, at: 0 },
-  { x: 0.86, y: 0.82, r: 56, at: 2 },
-  { x: 0.3, y: 0.95, r: 46, at: 3 },
-  { x: 0.95, y: 0.6, r: 40, at: 5 },
-  { x: 0.05, y: 0.62, r: 36, at: 6 },
-  { x: 0.7, y: 0.97, r: 50, at: 7 },
-  { x: 0.9, y: 0.12, r: 30, at: 9 },
-]
-
-/** Cada mancha aparece de golpe (como un salpicón) y todas se desvanecen con `fade`. */
-export const MudSplatter: React.FC<{ frame: number; width: number; height: number; fade: number }> = ({ frame, width, height, fade }) => (
-  <svg width={width} height={height} style={{ position: 'absolute', inset: 0, opacity: 1 - fade }}>
-    {SPLATS.map((s, i) => {
-      const t = frame - s.at
-      if (t < 0) return null
-      const scale = interpolate(t, [0, 3], [0.9, 1], clamp)
-      return (
-        <g key={i} transform={`translate(${s.x * width} ${s.y * height}) scale(${scale}) rotate(${random(`rot${i}`) * 360})`}>
-          <Splat seed={`mud${i}`} r={s.r * 2} />
-        </g>
-      )
-    })}
-  </svg>
-)
 
 /** Fondo del cierre: dos huellas de llanta (chevrones) sobre negro, avanzando hacia abajo. */
 export const TreadBackground: React.FC<{ frame: number; width: number; height: number }> = ({ frame, width, height }) => {

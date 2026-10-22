@@ -56,7 +56,6 @@ const SFX_BY_TYPE: Record<GraphicType, SfxCue['kind']> = {
   cta_end: 'hit',
   sticker: 'pop',
   brillo: 'whoosh',
-  barro: 'hit',
 }
 /** Camionetas: sonidos graves y secos (golpes y barridos); nada de "pop" de caricatura. */
 const SFX_OFFROAD: Record<GraphicType, SfxCue['kind']> = {
@@ -70,7 +69,6 @@ const SFX_OFFROAD: Record<GraphicType, SfxCue['kind']> = {
   cta_end: 'hit',
   sticker: 'whoosh',
   brillo: 'whoosh',
-  barro: 'hit',
 }
 
 /** Palabras que solas no dicen nada: una línea que solo tiene estas no se muestra. */
@@ -112,8 +110,6 @@ function minDurationSec(g: Pick<RawGraphic, 'type' | 'items'>): number {
       return 1.8
     case 'brillo':
       return BRILLO_SEC
-    case 'barro':
-      return BARRO_SEC
   }
 }
 /** Respiro entre un gráfico y el siguiente. */
@@ -143,9 +139,6 @@ const MAX_INSERTS = 3
 /** Brillo sobre el auto: el reflejo cruza la pantalla en este tiempo; máximo estos por Reel. */
 const BRILLO_SEC = 1
 const MAX_BRILLOS = 2
-/** Barro (solo camionetas): el salpicón se queda un momento en pantalla y se desvanece; máximo estos por Reel. */
-const BARRO_SEC = 1.6
-const MAX_BARROS = 2
 
 /** Camionetas: el cierre son dos partes (caja de comentario que se escribe + firma con huella de llanta). */
 const OFFROAD_CTA_SEC = 5
@@ -482,11 +475,9 @@ export function buildReelProps(
     firstHook.cut = cuts[0]
     placed.sort((a, b) => a.fromFrame - b.fromFrame)
   }
-  const mainLane = placed.filter((p) => p.g.type !== 'sticker' && p.g.type !== 'brillo' && p.g.type !== 'barro')
+  const mainLane = placed.filter((p) => p.g.type !== 'sticker' && p.g.type !== 'brillo')
   const stickerLane = placed.filter((p) => p.g.type === 'sticker')
   const brilloLane = placed.filter((p) => p.g.type === 'brillo').slice(0, MAX_BRILLOS)
-  // El barro es del diseño de camionetas: en los demás no se dibuja.
-  const barroLane = theme === 'offroad' ? placed.filter((p) => p.g.type === 'barro').slice(0, MAX_BARROS) : []
 
   const minFrames = Math.round(fps * 0.8)
   let tailFrames = 0
@@ -581,16 +572,16 @@ export function buildReelProps(
     graphics.push({ ...rest, id: `s${graphics.length + 1}-sticker`, fromFrame, durationInFrames })
     stickerFree = fromFrame + durationInFrames + Math.round(fps * 1.5)
   }
-  // Brillo y barro: efectos sobre el plano del vehículo. Pueden pasar sobre otros gráficos, no sobre el cierre.
+  // Brillo: un reflejo que cruza el plano del auto. Es solo luz: puede pasar sobre otros gráficos, no sobre el cierre.
   const ctaStart = graphics.find((g) => g.type === 'cta_end')?.fromFrame ?? reelEnd
-  for (const { g, fromFrame } of [...brilloLane, ...barroLane]) {
-    const durationInFrames = Math.round((g.type === 'barro' ? BARRO_SEC : BRILLO_SEC) * fps)
+  for (const { g, fromFrame } of brilloLane) {
+    const durationInFrames = Math.round(BRILLO_SEC * fps)
     if (fromFrame + durationInFrames > ctaStart) {
-      warnings.push(`${g.type === 'barro' ? 'Barro' : 'Brillo'} descartado: cae sobre el cierre`)
+      warnings.push('Brillo descartado: cae sobre el cierre')
       continue
     }
     const { focus: _f, focusEnd: _fe, clipId: _c, atSec: _a, durationSec: _d, ...rest } = g
-    graphics.push({ ...rest, id: `b${graphics.length + 1}-${g.type}`, fromFrame, durationInFrames })
+    graphics.push({ ...rest, id: `b${graphics.length + 1}-brillo`, fromFrame, durationInFrames })
   }
   graphics.sort((a, b) => a.fromFrame - b.fromFrame)
 
